@@ -111,7 +111,17 @@ int main(int argc, char *argv[])
 					default: if (mpi_id==0) usage_error(mpi_id); break;
 				}
 			}
-		} else usage_error(mpi_id);
+		} else {
+			read_from_file = true;
+			if (sscanf(argv[i], "%s", input_filename)==1)
+				argv[i] += (1 + strlen(input_filename));
+			argv[i] = advance(argv[i]);
+			ifstream test_open(input_filename);
+			if (!test_open.good()) {
+				cerr << "Error: specified input file '" << input_filename << "' does not exist" << endl;
+				usage_error(mpi_id);
+			}
+		}
 	}
 	if ((load_cosmology_file) and (cosmology.load_params(cosmology_filename)==false)) die();
 
@@ -246,8 +256,7 @@ char *advance(char *p)
 void usage_error(const int mpi_id)
 {
 	if (mpi_id==0) {
-		cout << "QLENS by Quinn Minor (2016)\n\n";
-		cout << "Argument options:\n"
+		cout << "\nArgument options:\n"
 				"  -f:<file> Read commands from input file with filename <file>\n"
 				"  -c:<file> Load cosmology parameters from input file (default: 'planck.csm')\n"
 				"  -s        Run qlens in nonverbal mode (does not echo commands read from file, etc.)\n"

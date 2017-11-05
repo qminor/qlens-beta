@@ -9,7 +9,6 @@ from pylab import *
 class GetDistPlotSettings:
     """Default sizes, font, styles etc settings for use by plots"""
 
-
     def __init__(self, subplot_size_inch=2, fig_width_inch=None):
         # if fig_width_inch set, forces fixed size, subplot_size_inch then just determines font sizes etc
         # otherwise width as wide as neccessary to show all subplots at specified size
@@ -36,15 +35,6 @@ class GetDistPlotSettings:
         self.colormap_scatter = cm.jet
         self.colorbar_rotation = None  # e.g. -90
 
-        self.param_filename = 'paramnames_latex.dat'
-        self.found_param_names_file = False
-        for i in range(len(sys.path)):
-            self.param_names_for_labels = sys.path[i] + "/" + self.param_filename
-            if os.path.exists(self.param_names_for_labels):
-                self.found_param_names_file = True
-                break
-        if (self.found_param_names_file == False):
-            sys.exit("Error: Could not find file '" + self.param_filename + "'")
         self.tick_prune = None  # 'lower' or 'upper'
         self.tight_gap_fraction = 0.13  # space between ticks and the edge
 
@@ -67,6 +57,19 @@ class GetDistPlotSettings:
         self.axis_marker_color = 'gray'
         self.axis_marker_ls = '--'
         self.axis_marker_lw = 0.5
+
+    def plot_data_file(self, root):
+        # find first match to roots that exist in list of plot_data paths
+        if os.sep in root: return root
+        path = dict()
+        path = self.paths.get(root, None)
+        if path is not None: return path
+        for datadir in self.plot_data:
+            path = datadir + os.sep + root
+            if os.path.exists(path + '.py_paramnames'):
+                self.paths[root] = path
+                return path
+        return self.plot_data[0] + os.sep + root
 
     def setWithSubplotSize(self, size_inch):
         self.subplot_size_inch = size_inch
@@ -152,7 +155,9 @@ class SampleAnalysisGetDist():
 
     def paramsForRoot(self, root, labelParams=None):
         names = paramNames.paramNames(self.plot_data_file(root) + '.py_paramnames')
-        if labelParams is not None: names.setLabelsAndDerivedFromParamNames(labelParams)
+        if labelParams is not None:
+            labelParams = self.plot_data_file(root) + "." + labelParams
+            names.setLabelsAndDerivedFromParamNames(labelParams)
         return names
 
     def boundsForRoot(self, root):
@@ -260,7 +265,8 @@ class GetDistPlotter():
         return args.get('alpha', default)
 
     def paramNamesForRoot(self, root):
-        if not root in self.param_name_sets: self.param_name_sets[root] = self.sampleAnalyser.paramsForRoot(root, labelParams=self.settings.param_names_for_labels)
+        labelParams = 'latex_paramnames'
+        if not root in self.param_name_sets: self.param_name_sets[root] = self.sampleAnalyser.paramsForRoot(root, labelParams)
         return self.param_name_sets[root]
 
     def paramBoundsForRoot(self, root):

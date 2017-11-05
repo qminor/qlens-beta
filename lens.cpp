@@ -3469,7 +3469,8 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
 	param_settings->transform_parameters(fitparams.array());
 	transformed_parameter_names.resize(n_fit_parameters);
-	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data());
+	transformed_latex_parameter_names.resize(n_fit_parameters);
+	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
 	//if (mpi_id==0) {
 		//cout << "Initial parameters: ";
@@ -3555,9 +3556,11 @@ void Lens::get_parameter_names()
 {
 	get_n_fit_parameters(n_fit_parameters);
 	fit_parameter_names.clear();
+	latex_parameter_names.clear();
+	vector<string> latex_parameter_subscripts;
 	int i,j;
 	for (i=0; i < nlens; i++) {
-		lens_list[i]->get_fit_parameter_names(fit_parameter_names);
+		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
@@ -3574,6 +3577,8 @@ void Lens::get_parameter_names()
 					countstr << count;
 					countstr >> countstring;
 					new_parameter_names[i] += countstring;
+					if (latex_parameter_subscripts[i]=="") latex_parameter_subscripts[i] = countstring;
+					else latex_parameter_subscripts[i] += "," + countstring;
 					count++;
 				}
 				stringstream countstr;
@@ -3581,6 +3586,8 @@ void Lens::get_parameter_names()
 				countstr << count;
 				countstr >> countstring;
 				fit_parameter_names[j] += countstring;
+				if (latex_parameter_subscripts[j]=="") latex_parameter_subscripts[j] = countstring;
+				else latex_parameter_subscripts[j] += "," + countstring;
 				count++;
 			}
 		}
@@ -3590,8 +3597,16 @@ void Lens::get_parameter_names()
 	if (source_fit_mode==Point_Source) {
 		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
 			if (n_sourcepts_fit==1) {
-				if (vary_sourcepts_x[0]) fit_parameter_names.push_back("xsrc");
-				if (vary_sourcepts_y[0]) fit_parameter_names.push_back("ysrc");
+				if (vary_sourcepts_x[0]) {
+					fit_parameter_names.push_back("xsrc");
+					latex_parameter_names.push_back("x");
+					latex_parameter_subscripts.push_back("src");
+				}
+				if (vary_sourcepts_y[0]) {
+					fit_parameter_names.push_back("ysrc");
+					latex_parameter_names.push_back("y");
+					latex_parameter_subscripts.push_back("src");
+				}
 			} else {
 				for (i=0; i < n_sourcepts_fit; i++) {
 					stringstream srcpt_num_str;
@@ -3599,12 +3614,14 @@ void Lens::get_parameter_names()
 					srcpt_num_str << i;
 					srcpt_num_str >> srcpt_num_string;
 					if (vary_sourcepts_x[i]) {
-						string beta_x_name = "xsrc" + srcpt_num_string;
-						fit_parameter_names.push_back(beta_x_name);
+						fit_parameter_names.push_back("xsrc" + srcpt_num_string);
+						latex_parameter_names.push_back("x");
+						latex_parameter_subscripts.push_back("src,"+srcpt_num_string);
 					}
 					if (vary_sourcepts_y[i]) {
-						string beta_y_name = "ysrc" + srcpt_num_string;
-						fit_parameter_names.push_back(beta_y_name);
+						fit_parameter_names.push_back("ysrc" + srcpt_num_string);
+						latex_parameter_names.push_back("y");
+						latex_parameter_subscripts.push_back("src,"+srcpt_num_string);
 					}
 				}
 			}
@@ -3612,11 +3629,29 @@ void Lens::get_parameter_names()
 	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) {
 		fit_parameter_names.push_back("lambda");
+		latex_parameter_names.push_back("\\lambda");
+		latex_parameter_subscripts.push_back("");
 	}
-	if (vary_pixel_fraction) fit_parameter_names.push_back("pixel_fraction");
-	if (vary_magnification_threshold) fit_parameter_names.push_back("mag_threshold");
-	if (vary_hubble_parameter) fit_parameter_names.push_back("h0");
+	if (vary_pixel_fraction) {
+		fit_parameter_names.push_back("pixel_fraction");
+		latex_parameter_names.push_back("f");
+		latex_parameter_subscripts.push_back("pixel");
+	}
+	if (vary_magnification_threshold) {
+		fit_parameter_names.push_back("mag_threshold");
+		latex_parameter_names.push_back("m");
+		latex_parameter_subscripts.push_back("split");
+	}
+	if (vary_hubble_parameter) {
+		fit_parameter_names.push_back("h0");
+		latex_parameter_names.push_back("H");
+		latex_parameter_subscripts.push_back("0");
+	}
 	if (fit_parameter_names.size() != n_fit_parameters) die("get_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
+	for (i=0; i < n_fit_parameters; i++) {
+		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
+		//cout << latex_parameter_names[i] << endl;
+	}
 }
 
 void Lens::fit_set_optimizations()
@@ -3889,6 +3924,7 @@ double Lens::chi_square_fit_simplex()
 		}
 		cout << "Best-fit model: chi-square = " << chisq_bestfit << endl;
 		//cout << "Number of iterations: " << iterations << endl;
+		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		fitmodel->print_lens_list(false);
 
 		if (source_fit_mode == Point_Source) {
@@ -4032,6 +4068,7 @@ double Lens::chi_square_fit_powell()
 
 		cout << "\nBest-fit model: chi-square = " << chisq_bestfit << endl;
 		update_fitmodel(fitparams.array());
+		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		fitmodel->print_lens_list(false);
 
 		if (source_fit_mode == Point_Source) {
@@ -4109,13 +4146,15 @@ void Lens::chi_square_nested_sampling()
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
 	}
 
-	string *transformed_names = new string[n_fit_parameters];
-	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_names);
 	if (mpi_id==0) {
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_names[i] << endl;
+		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
 		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
 		for (int i=0; i < n_fit_parameters; i++)
@@ -4176,14 +4215,13 @@ void Lens::chi_square_nested_sampling()
 
 		cout << "\nBest-fit parameters and errors:\n";
 		for (int i=0; i < n_fit_parameters; i++) {
-			cout << transformed_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
+			cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
 		}
 		cout << endl;
 		if (auto_save_bestfit) output_bestfit_model();
 	}
 	delete[] param_errors;
 
-	delete[] transformed_names;
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
@@ -4224,13 +4262,15 @@ void Lens::chi_square_twalk()
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
 	}
 
-	string *transformed_names = new string[n_fit_parameters];
-	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_names);
 	if (mpi_id==0) {
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_names[i] << endl;
+		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
 		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
 		for (int i=0; i < n_fit_parameters; i++)
@@ -4267,7 +4307,6 @@ void Lens::chi_square_twalk()
 		if (auto_save_bestfit) output_bestfit_model();
 	}
 
-	delete[] transformed_names;
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
@@ -4284,6 +4323,7 @@ void Lens::use_bestfit_model()
 	bool status;
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(transformed_params,index,status);
+		lens_list[i]->reset_angle_modulo_2pi();
 	}
 	update_anchored_parameters();
 	reset_grid(); // this will force it to redraw the critical curves if needed
@@ -4412,6 +4452,10 @@ void Lens::output_bestfit_model()
 	ofstream pnamefile(pnamefile_str.c_str());
 	for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
 	pnamefile.close();
+	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+	ofstream lpnamefile(lpnamefile_str.c_str());
+	for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+	lpnamefile.close();
 
 	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
 	int n,i,j;

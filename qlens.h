@@ -293,14 +293,10 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	SourceFitMode source_fit_mode;
 	int lensmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	vector<string> fit_parameter_names, transformed_parameter_names;
-	//vector<lensvector> test_sourcepts_fit;
-	//vector<bool> test_vary_sourcepts_x;
-	//vector<bool> test_vary_sourcepts_y;
+	vector<string> latex_parameter_names, transformed_latex_parameter_names;
 	lensvector *sourcepts_fit;
 	bool *vary_sourcepts_x;
 	bool *vary_sourcepts_y;
-	//vector<lensvector> test_sourcepts_lower_limit;
-	//vector<lensvector> test_sourcepts_upper_limit;
 	lensvector *sourcepts_lower_limit;
 	lensvector *sourcepts_upper_limit;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
@@ -1144,16 +1140,18 @@ struct ParamSettings
 	{
 		inverse_transform_parameters(params,params);
 	}
-	void transform_parameter_names(string *names, string *transformed_names)
+	void transform_parameter_names(string *names, string *transformed_names, string *latex_names, string *transformed_latex_names)
 	{
 		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) transformed_names[i] = names[i];
-			else if (transforms[i]->transform==LOG_TRANSFORM) transformed_names[i] = "log(" + names[i] + ")";
+			if (transforms[i]->transform==NONE) { transformed_names[i] = names[i]; transformed_latex_names[i] = latex_names[i]; }
+			else if (transforms[i]->transform==LOG_TRANSFORM) { transformed_names[i] = "log(" + names[i] + ")"; transformed_latex_names[i] = "\\ln " + latex_names[i]; }
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
 				transformed_names[i] = "u{" + names[i] + "}";
+				transformed_latex_names[i] = "u\{" + latex_names[i] + "\}";
 			}
 			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_names[i] = "L{" + names[i] + "}";
+				transformed_latex_names[i] = "L\{" + latex_names[i] + "\}";
 			}
 		}
 	}

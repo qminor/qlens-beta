@@ -69,19 +69,21 @@ Alpha::Alpha(const Alpha* lens_in)
 void Alpha::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "b";
-	paramnames[1] = "alpha";
-	paramnames[2] = "s";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
+	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1";
-		paramnames[4] = "e2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
 	} else {
-		paramnames[3] = "q";
-		paramnames[4] = "theta";
+		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
+		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
 	if (!anchored) {
-		paramnames[5] = "xc";
-		paramnames[6] = "yc";
+		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
+		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
 }
 
@@ -476,19 +478,22 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 void PseudoJaffe::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "b";
-	paramnames[1] = "a";
-	paramnames[2] = "s";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	paramnames[1] = "a"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "";
+	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
+
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1";
-		paramnames[4] = "e2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
 	} else {
-		paramnames[3] = "q";
-		paramnames[4] = "theta";
+		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
+		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
 	if (!anchored) {
-		paramnames[5] = "xc";
-		paramnames[6] = "yc";
+		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
+		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
 }
 
@@ -802,18 +807,20 @@ NFW::NFW(const NFW* lens_in)
 void NFW::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "ks";
-	paramnames[1] = "rs";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1";
-		paramnames[3] = "e2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
 	} else {
-		paramnames[2] = "q";
-		paramnames[3] = "theta";
+		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
+		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
 	if (!anchored) {
-		paramnames[4] = "xc";
-		paramnames[5] = "yc";
+		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
+		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
 	}
 }
 
@@ -1033,20 +1040,23 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 void Truncated_NFW::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "ks";
-	paramnames[1] = "rs";
-	paramnames[2] = "rt";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1";
-		paramnames[4] = "e2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
 	} else {
-		paramnames[3] = "q";
-		paramnames[4] = "theta";
+		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
+		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
 	if (!anchored) {
-		paramnames[5] = "xc";
-		paramnames[6] = "yc";
+		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
+		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
+
 }
 
 void Truncated_NFW::get_parameters(double* params)
@@ -1302,18 +1312,20 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 void Hernquist::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "ks";
-	paramnames[1] = "rs";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1";
-		paramnames[3] = "e2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
 	} else {
-		paramnames[2] = "q";
-		paramnames[3] = "theta";
+		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
+		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
 	if (!anchored) {
-		paramnames[4] = "xc";
-		paramnames[5] = "yc";
+		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
+		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
 	}
 }
 
@@ -1509,19 +1521,22 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 void ExpDisk::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "k0";
-	paramnames[1] = "R_d";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "R_d"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "d";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1";
-		paramnames[3] = "e2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
 	} else {
-		paramnames[2] = "q";
-		paramnames[3] = "theta";
+		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
+		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
 	if (!anchored) {
-		paramnames[4] = "xc";
-		paramnames[5] = "yc";
+		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
+		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
 	}
+
 }
 
 void ExpDisk::get_parameters(double* params)
@@ -1761,16 +1776,18 @@ void Shear::update_parameters(const double* params)
 void Shear::assign_paramnames()
 {
 	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
 	if (use_shear_component_params) {
-		paramnames[0] = "shear1";
-		paramnames[1] = "shear2";
+		paramnames[0] = "shear1"; latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "1";
+		paramnames[1] = "shear2"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "2";
 	} else {
-		paramnames[0] = "shear";
-		paramnames[1] = "theta";
+		paramnames[0] = "shear"; latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "";
+		paramnames[1] = "theta_shear"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "\\gamma";
 	}
 	if (!anchored) {
-		paramnames[2] = "xc";
-		paramnames[3] = "yc";
+		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
+		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
 	}
 }
 
@@ -1955,25 +1972,26 @@ Multipole::Multipole(const Multipole* lens_in)
 void Multipole::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	string aname, mstring;
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	string mstring;
 	stringstream mstr;
 	mstr << m;
 	mstr >> mstring;
 	if (sine_term) {
-		aname = "B_" + mstring;
-		paramnames[0] = aname;
+		paramnames[0] = "B_" + mstring; latex_paramnames[0] = "B"; latex_param_subscripts[0] = mstring;
 	} else {
-		aname = "A_" + mstring;
-		paramnames[0] = aname;
+		paramnames[0] =  "A_" + mstring; latex_paramnames[0] = "A"; latex_param_subscripts[0] = mstring;
 	}
-	if (kappa_multipole)
-		paramnames[1] = "beta";
-	else 
-		paramnames[1] = "n";
-	paramnames[2] = "theta";
+	if (kappa_multipole) {
+		paramnames[1] = "beta"; latex_paramnames[1] = "\\beta"; latex_param_subscripts[1] = "";
+	} else {
+		paramnames[1] = "n"; latex_paramnames[1] = "n"; latex_param_subscripts[1] = "";
+	}
+	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
 	if (!anchored) {
-		paramnames[3] = "xc";
-		paramnames[4] = "yc";
+		paramnames[3] = "xc"; latex_paramnames[3] = "x"; latex_param_subscripts[3] = "c";
+		paramnames[4] = "yc"; latex_paramnames[4] = "y"; latex_param_subscripts[4] = "c";
 	}
 }
 
@@ -2299,10 +2317,12 @@ PointMass::PointMass(const PointMass* lens_in)
 void PointMass::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "b";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
 	if (!anchored) {
-		paramnames[1] = "xc";
-		paramnames[2] = "yc";
+		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
+		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
 	}
 }
 
@@ -2461,22 +2481,24 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 void CoreCusp::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	if (set_k0_by_einstein_radius) paramnames[0] = "Re";
-	else paramnames[0] = "k0";
-	paramnames[1] = "gamma";
-	paramnames[2] = "n";
-	paramnames[3] = "a";
-	paramnames[4] = "s";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "e"; }
+	else { paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0"; }
+	paramnames[1] = "gamma"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "";
+	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
+	paramnames[3] = "a"; latex_paramnames[3] = "a"; latex_param_subscripts[3] = "";
+	paramnames[4] = "s"; latex_paramnames[4] = "s"; latex_param_subscripts[4] = "";
 	if (use_ellipticity_components) {
-		paramnames[5] = "e1";
-		paramnames[6] = "e2";
+		paramnames[5] = "e1"; latex_paramnames[5] = "e"; latex_param_subscripts[5] = "1";
+		paramnames[6] = "e2"; latex_paramnames[6] = "e"; latex_param_subscripts[6] = "2";
 	} else {
-		paramnames[5] = "q";
-		paramnames[6] = "theta";
+		paramnames[5] = "q"; latex_paramnames[5] = "q"; latex_param_subscripts[5] = "";
+		paramnames[6] = "theta"; latex_paramnames[6] = "\\theta"; latex_param_subscripts[6] = "";
 	}
 	if (!anchored) {
-		paramnames[7] = "xc";
-		paramnames[8] = "yc";
+		paramnames[7] = "xc"; latex_paramnames[7] = "x"; latex_param_subscripts[7] = "c";
+		paramnames[8] = "yc"; latex_paramnames[8] = "y"; latex_param_subscripts[8] = "c";
 	}
 }
 
@@ -2885,19 +2907,21 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 void SersicLens::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "kappa0";
-	paramnames[1] = "R_eff";
-	paramnames[2] = "n";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "R_eff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
+	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1";
-		paramnames[4] = "e2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
 	} else {
-		paramnames[3] = "q";
-		paramnames[4] = "theta";
+		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
+		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
 	if (!anchored) {
-		paramnames[5] = "xc";
-		paramnames[6] = "yc";
+		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
+		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
 }
 
@@ -3091,10 +3115,12 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 void MassSheet::assign_paramnames()
 {
 	paramnames.resize(n_params);
-	paramnames[0] = "kext";
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "kext"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
 	if (!anchored) {
-		paramnames[1] = "xc";
-		paramnames[2] = "yc";
+		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
+		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
 	}
 }
 

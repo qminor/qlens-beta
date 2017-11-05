@@ -52,6 +52,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	int n_params, n_vary_params;
 	boolvector vary_params;
 	vector<string> paramnames;
+	vector<string> latex_paramnames, latex_param_subscripts;
 	bool include_limits;
 	bool defined_spherical_kappa_profile; // indicates whether there is a function for a spherical (q=1) kappa profile (which is not true for e.g. external shear)
 	dvector lower_limits, upper_limits;
@@ -115,10 +116,11 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void transform_center_coordinates();
 	void shift_angle_90();
 	void shift_angle_minus_90();
+	void reset_angle_modulo_2pi();
 
 	virtual void get_auto_stepsizes(dvector& stepsizes, int &index);
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames);
+	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);
