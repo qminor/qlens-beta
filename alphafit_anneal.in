@@ -1,0 +1,82 @@
+# The correct lens model for the simulated data used here is as follows:
+# alpha (b=5, s=0, q=0.7, theta=90, center=(0.9,0.3)
+# external shear (gamma=0.1, theta=40 degrees)
+# Source point: (0.5, 0.7)
+#
+# In this script we show how to infer these parameters by fitting a lens model
+# to the simulated data using the downhill simplex method with simulated annealing.
+
+lens clear              # Just in case we were doing something else before this
+imgdata clear           # Just in case we already had image data loaded before this
+
+fit label alpha_anneal  # This labels the files that will be produced by the lens fitting
+fit method simplex      # This is the default fit method (downhill simplex method), which minimizes the chi-square function
+auto_save_bestfit off   # if turned on, automatically saves the best-fit model after running the fit (turned off by default)
+chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
+sci_notation off        # This is just up to your personal preference
+central_image off       # The image data does not include a central image, so this tells QLens not to search for one.
+imgdata read alphafit.dat    # Loads in the image data
+imgdata                      # Shows the image data so you can see what it looks like
+
+# Simulated annealing increases your odds of success even if your initial guess is not a very good fit; however, the
+#    initial guess can still make a difference, and you may need to play around with it before doing the fit.
+# Here are some tips for deciding your initial guess for the lens parameters:
+# Use the scale of the images to guess the Einstein radius.
+# Always fix alpha=1 and s=0 (singular isothermal ellipsoid model). These parameters usually cannot be
+#    constrained well unless we have time delays or multiple source points.
+# The center of the lens can often be guessed at by averaging the image positions (or using the center of the
+#    lens galaxy in the image if it is visible).
+# It may only be possible to constrain both the external shear and axis ratio q if image fluxes or time delays
+#    can be used in addition to the image positions. If you do model the external shear, guess a small
+#    but nonzero value for both gamma and the angle, as we do here.
+
+# Here, we choose an initial model that is not a great fit, and will fail utterly if no simulated annealing is used
+
+fit lens alpha 4.5 1 0 0.5 120 0.7 0.2 shear=0.05 20 # Now we put our initial guess for the lens parameters
+1 0 0 1 1 1 1 1 1                                    #vary flags; here we vary everything except for alpha and s (core size)
+
+fit sourcept 0.6 0.5   # Here, we put our initial guess for where the source point is located.
+						 # You can use 'fit plotimg' to see if the resulting images are roughly in the correct regions.
+                   # If the fit doesn't converge even after simulated annealing, play around with qlens further and find a
+						 # lens model and source point that fits the images more closely before trying again
+fit
+
+# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+# This is usually best for a first-run fit; then we refine it by using the image plane chi-square function, which is slower
+chisqflux on            # This means we use the image fluxes in the fit (very useful if you can use them)
+time_delays off
+chisq_time_delays off   # Don't use time delays (this is the default; time delays are only available for certain quasar lenses)
+chisqtol 1e-6   # Sets the convergence criterion for finding the minimum chi-square. Bigger chisqtol --> less accuracy, but runs faster
+
+simplex_temp0 = 1000000    # initial temperature should be chosen based on how much you expect the function (e.g. chi-square function)
+                           #    to vary; when in doubt, start higher. If set to zero (the default), no simulated annealing is done
+simplex_tempf = 10         # final temperature; after this is reached, a final minimization with zero temperature will be performed
+simplex_nmax_anneal = 1000 # this is the number of iterations at each temperature setting (not including the final temp=0 run)
+simplex_nmax = 10000       # this is the number of iterations for the final run, where the temperature will be set to zero
+simplex_tfac = 0.9         # the temperature is multiplied by this factor after each run, continuing until final temperature is reached;
+                           #    when in doubt, set closer to 1 for slower cooling
+simplex_minchisq = 20      # optional, if specified the simplex will skip to zero temperature if the chi-square falls below this specified value
+
+# For this example, I recommend that you play with simplex_temp0 to get a feel for how high a starting temperature is needed for success
+
+# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+#fit run                  # for the first run, you might want to use the source plane chi-square to find the right region of
+                          #   parameter space (which is faster and sometimes less prone to getting stuck in a rut, but not always accurate)
+#fit use_bestfit          # adopt the best fit parameters so they can be used as initial parameters for the next run
+
+imgplane_chisq on  # now we will do the fit using the image plane chi-square for a more accurate fit
+nimgs_penalty off  # If on, penalizes chi-square if the number of images produced is larger than the number of data images (off by default)
+cc_splitlevels 2   # Number of times the cells split around critical curves (default = 2)
+nrepeat 2          # this tells it to minimize the chi-square again twice (at T=0) after converging to a best-fit point, just to ensure
+                   # we are really at a minimum (default = 1)
+
+pause
+         # FYI: you can interrupt downhill simplex at any time by pressing CTRL-C, in which case it will skip to the final
+fit run  # zero-temperature run. This can be useful, e.g. if the chi-square is not converging well (or is converging very well!)
+
+fit use_bestfit
+fit findimg # you can also do 'fit plotimg' to see the best-fit model image positions compared to the data
+
+pause
+fit save_bestfit     # if you like the resulting fit, save the best-fit model (or do this automatically if 'auto_save_bestfit' is on)
+

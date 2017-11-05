@@ -1,0 +1,29 @@
+# Deleting current lens configuration, if any:
+lens clear
+# We create our primary lens galaxy with an isothermal ellipsoid profile (axis ratio=0.7):
+lens alpha 10 1 5e-1 0.7 90
+grid -18 18 -18 18
+#autogrid
+# Now we create a satellite galaxy with a PseudoJaffe profile (which is isothermal with
+# a tidal break radius):
+lens pjaffe 0.05 1 0.001 1 0 -0.3 0.4
+lens pjaffe 0.05 1 0.001 1 0 0.2 -0.2
+lens pjaffe 1.0 1.9 1e-1 1 0 5 1
+lens pjaffe 0.2 1 0.01 1 0 2 4.3
+lens pjaffe 0.1 1 0.01 1 0 0.9 -3
+lens pjaffe 0.06 1 0.01 1 0 -7 2
+lens pjaffe 0.4 1 0.01 1 0 -10 7
+galsub_min_cellsize 0.5
+# Plot the grid so you can see what it looks like:
+plotgrid
+plotimg -1.2 0.1
+# Now we create a "source galaxy" which consists of a series of source points in concentric ellipsoidal arrays:
+mksrcgal -1.4 -0.7 1 0.7 0 15 200
+# Now we plot the images (this will take several seconds):
+plotimgs
+# Now let's show the same thing but for a surface brightness map:
+img_npixels 300 300
+source gaussian 1 1 0.7 0 -1.4 -0.7
+adaptive_grid on
+sbmap makesrc
+sbmap plotimg

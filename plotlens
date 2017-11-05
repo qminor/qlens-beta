@@ -1,0 +1,505 @@
+#!/bin/bash
+# This script interfaces with gnuplot to produce plots (either to the screen, or to a file)
+# from within qlens.
+
+PTSIZE=0.3 # default point size
+PTTYPE=7 # default point type
+LINEWIDTH=2 # default line width
+FONTSIZE=14 # default font size for postscript plots
+COLORBOX=1 # show color bar for pixel map plots
+TITLE=""
+SETTERM=""
+FILENAME=""
+RANGE=""
+TERM=""
+
+COMMAND=$1
+shift
+
+for VAR in "$@"; do
+	if [[ $VAR == "nocb" ]]; then
+		COLORBOX=0
+	fi
+
+	if [[ $VAR == *'title='* ]]; then
+		TITLE=${VAR#title=}
+		if [[ $TITLE == *'"'* ]]; then
+			TITLE=${VAR##\"}
+		fi
+	fi
+
+	if [[ $VAR == *'term='* ]]; then
+		TERM=${VAR#term=}
+	fi
+
+	if [[ $VAR == *'file='* ]]; then
+		FILENAME=${VAR#file=}
+	fi
+
+	if [[ $VAR == *'ps='* ]]; then
+		PTSIZE=${VAR#ps=}
+	fi
+
+	if [[ $VAR == *'pt='* ]]; then
+		PTTYPE=${VAR#pt=}
+	fi
+
+	if [[ $VAR == *'fs='* ]]; then
+		FONTSIZE=${VAR#fs=}
+	fi
+
+	if [[ $VAR == *'lw='* ]]; then
+		LINEWIDTH=${VAR#lw=}
+	fi
+
+	if [[ "$VAR" == *'['* ]]; then
+		RANGE="$VAR"
+	fi
+done
+
+if [[ $TERM != "" ]]; then
+	if [[ $FILENAME == "" ]]; then
+		echo "Error: filename required for terminal $TERM"
+		exit
+	else
+		if [[ $TERM == "postscript" ]]; then TERM="$TERM eps"; fi
+		SETTERM="set terminal $TERM enhanced dashed color font 'Arial,$FONTSIZE'; set output '$FILENAME'";
+	fi
+fi
+
+#SETTERM="$SETTERM; set size ratio -1"  # perhaps make an option to do this (equal size axis scales)
+
+if [[ $COLORBOX == "0" ]]; then
+	SETTERM="$SETTERM; unset colorbox";
+fi
+
+if [[ $TITLE != "" ]]; then
+	if [[ $SETTERM == "" ]]; then
+		SETTERM="set title '$TITLE'"
+	else
+		SETTERM="$SETTERM; set title '$TITLE'"
+	fi
+fi
+
+SETTERM="$SETTERM; set sample 30000"
+
+if [[ $COMMAND == "crit" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	if [[ $TERM != "" ]]; then
+		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+		PLOTLINE="$SETTERM; set multiplot; unset key"
+		PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		PLOTLINE="$PLOTLINE; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "caust" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
+	if [[ $TERM != "" ]]; then
+		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgdat" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "image" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE lc 1 ps $PTSIZE t 'images'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "image_grid" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgfit" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE  'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt 6 ps $PTSIZE lc 2 t 'data'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgfit_nocc" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "image_nocc" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "image_nocc_grid" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "source" ]]
+then
+	PTSIZE=1
+	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'src.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'src.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "images" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+
+	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+	if [[ `head -1 images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+	if [[ `head -1 images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+	if [[ `head -1 images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "images_nocc" ]]
+then
+	PLOTCOMMAND="plot $RANGE "
+	KEYPLOT="set title ' '; plot [][1e12:2e12] "
+	JUSTPLOTTED=0
+
+	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND 'images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+		KEYPLOT="set title ' '; $KEYPLOT 'images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; JUSTPLOTTED=1; fi
+	if [[ `head -1 images.doubles` != "" ]]; then
+		if [[ "$JUSTPLOTTED" == 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+		PLOTCOMMAND="$PLOTCOMMAND 'images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+		KEYPLOT="set title ' '; $KEYPLOT 'images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"
+		JUSTPLOTTED=1; fi
+	if [[ `head -1 images.quads` != "" ]]; then
+		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+		PLOTCOMMAND="$PLOTCOMMAND 'images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+		KEYPLOT="set title ' '; $KEYPLOT 'images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"
+		JUSTPLOTTED=1; fi
+	if [[ `head -1 images.cusps` != "" ]]; then
+		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+		PLOTCOMMAND="$PLOTCOMMAND 'images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+		KEYPLOT="set title ' '; $KEYPLOT 'images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"
+		JUSTPLOTTED=1; fi
+	if [[ `head -1 images.weird` != "" ]]; then
+		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+		PLOTCOMMAND="$PLOTCOMMAND 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+		KEYPLOT="set title ' '; $KEYPLOT 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"
+		JUSTPLOTTED=1; fi
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "sources" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
+
+	if [[ `head -1 sources.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'sources.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+	if [[ `head -1 sources.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'sources.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+	if [[ `head -1 sources.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'sources.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+	if [[ `head -1 sources.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'sources.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+	if [[ `head -1 sources.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'sources.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "grid" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lc 1 lt 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'xgrid.dat' w lines lc 1 lt 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
+
+	#PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+	if [[ $TERM != "" ]]; then
+		#KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "lenseq" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'lx.dat' w dots lc 1 t 'x-roots', 'ly.dat' w dots lc 3 t 'y-roots'" >tempplot.in
+	if [[ $TERM != "" ]]; then
+		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'lx.dat' w lines lc 1 t 'x-roots', 'ly.dat' w lines lc 3 t 'y-roots'"
+		PLOTLINE="$SETTERM; set multiplot; unset key"
+		PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		PLOTLINE="$PLOTLINE; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "lenseq_grid" ]]
+then
+	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lc 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'lx.dat' w dots lc 4 t 'x-roots', 'ly.dat' w dots lc 3 t 'y-roots'"
+	PLOTLINE="$SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "imgpixel" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel" ]]
+then
+	set -- $(head -2 src_pixel.x && head -2 src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "imgpixel_nocc" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "datapixel" ]]
+then
+	set -- $(head -2 data_pixel.x && head -2 data_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_nocc" ]]
+then
+	set -- $(head -2 src_pixel.x && head -2 src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "imgpixel_imgpts" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'images'"
+	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	fi
+
+elif [[ $COMMAND == "imgpixel_imgpts_nocc" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'imgs.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'images'"
+	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	fi
+
+elif [[ $COMMAND == "imgpixel_imgpts_plural" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+
+	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+	if [[ `head -1 images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+	if [[ `head -1 images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+	if [[ `head -1 images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgpixel_imgpts_plural_nocc" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] "
+
+	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+	if [[ `head -1 images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+	if [[ `head -1 images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+	if [[ `head -1 images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgpixel_imgdat" ]]
+then
+	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'imgdat.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'data'"
+	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "lensmap_kappalog" ]]
+then
+	set -- $(head -2 lensmap.x && head -2 lensmap.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+	set -- $(tail -1 lensmap.x && tail -1 lensmap.y)
+	Xf=`bc <<< "scale=15; $1-0.5*$DX"`
+	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
+	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=0; i < NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.kappalog`
+	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=0; i < NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.kappalog`
+	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/12"`
+	C0=`bc <<< "scale=15; $MIN+$STEP"`
+	Cf=`bc <<< "scale=15; $MAX-$STEP"`
+
+	PLOTCOMMAND="set contour; unset surface; set cntrparam levels incr $C0,$STEP,$Cf; set view map; set dgrid3d 100,100,4; set table 'contour.txt'; splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
+	PLOTCOMMAND="$PLOTCOMMAND; unset contour; set surface; set table 'dgrid.txt';splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
+	PLOTCOMMAND="$PLOTCOMMAND; reset; set pm3d map; unset key; set palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e'); set autoscale fix; set grid"
+	PLOTCOMMAND="$PLOTCOMMAND; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf]; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
+	PLOTLINE="set key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "lensmap_maglog" ]]
+then
+	set -- $(head -2 lensmap.x && head -2 lensmap.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'lensmap.maglog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+elif [[ $COMMAND == "lensmap_maglog_nocc" ]]
+then
+	set -- $(head -2 lensmap.x && head -2 lensmap.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE 'lensmap.maglog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+else
+	echo "Error: unknown argument"
+	exit
+fi
+
+#PLOTLINE="$PLOTLINE, sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0, -sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0"
+
+echo "$PLOTLINE" >tempplot.in
+
+gnuplot -persist tempplot.in
+rm tempplot.in
+
