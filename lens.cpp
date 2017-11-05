@@ -1,4 +1,3 @@
-// DOES THIS WORK?
 #include "qlens.h"
 #include "pixelgrid.h"
 #include "profile.h"
