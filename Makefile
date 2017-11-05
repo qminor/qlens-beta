@@ -1,4 +1,3 @@
-# HELLO!
 #topdir = ./MUMPS_5.0.1
 #libdir = $(topdir)/lib
 #include $(topdir)/Makefile.inc
