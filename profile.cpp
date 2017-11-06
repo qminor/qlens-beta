@@ -254,13 +254,15 @@ void LensProfile::get_auto_stepsizes(dvector& stepsizes, int &index)
 	}
 }
 
-void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary)
+void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
 {
 	assign_paramnames(); // just in case a setting has been changed that might have altered the parameter names
 	int i;
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
 			paramnames_vary.push_back(paramnames[i]);
+			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
+			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
 		}
 	}
 }
@@ -289,16 +291,18 @@ void LensProfile::set_n_params(const int &n_params_in)
 void LensProfile::assign_paramnames()
 {
 	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
 	if (use_ellipticity_components) {
-		paramnames[0] = "e1";
-		paramnames[1] = "e2";
+		paramnames[0] = "e1"; latex_paramnames[0] = "e"; latex_param_subscripts[0] = "1";
+		paramnames[1] = "e2"; latex_paramnames[1] = "e"; latex_param_subscripts[1] = "2";
 	} else {
-		paramnames[0] = "q";
-		paramnames[1] = "theta";
+		paramnames[0] = "q"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "";
+		paramnames[1] = "theta"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "";
 	}
 	if (!anchored) {
-		paramnames[2] = "xc";
-		paramnames[3] = "yc";
+		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
+		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
 	}
 }
 
@@ -402,6 +406,12 @@ void LensProfile::shift_angle_minus_90()
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
 	theta -= M_HALFPI;
 	while (theta <= -M_PI) theta += M_PI;
+}
+
+void LensProfile::reset_angle_modulo_2pi()
+{
+	while (theta < -M_PI/2) theta += M_PI;
+	while (theta > 2*M_PI) theta -= M_PI;
 }
 
 void LensProfile::set_angle(const double &theta_degrees)

@@ -52,6 +52,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	int n_params, n_vary_params;
 	boolvector vary_params;
 	vector<string> paramnames;
+	vector<string> latex_paramnames, latex_param_subscripts;
 	bool include_limits;
 	bool defined_spherical_kappa_profile; // indicates whether there is a function for a spherical (q=1) kappa profile (which is not true for e.g. external shear)
 	dvector lower_limits, upper_limits;
@@ -115,10 +116,11 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void transform_center_coordinates();
 	void shift_angle_90();
 	void shift_angle_minus_90();
+	void reset_angle_modulo_2pi();
 
 	virtual void get_auto_stepsizes(dvector& stepsizes, int &index);
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames);
+	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);
@@ -548,6 +550,7 @@ class SersicLens : public LensProfile
 	private:
 	double kappa0, k, n; // sig_x is the dispersion along the major axis
 	double re; // effective radius
+	double kappa0_frac; // used if we are anchoring to another Sersic profile, so that a shared mass-to-light ratio can be constrained
 
 	double kappa_rsq(const double rsq);
 	double kappa_rsq_deriv(const double rsq);
@@ -558,8 +561,14 @@ class SersicLens : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void assign_anchored_parameters(LensProfile*);
+	void update_extra_anchored_params();
+	void delete_parameter_anchor();
 
 	public:
+	LensProfile* primary_lens;
+	int get_parameter_anchor_number() { return primary_lens->lens_number; } // no extra parameters can be anchored for the base class
+
 	SersicLens() : LensProfile() {}
 	SersicLens(const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
 	SersicLens(const SersicLens* lens_in);
