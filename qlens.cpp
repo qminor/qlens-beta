@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
 		cout << "QLens by Quinn Minor (2017)\n";
-		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos.\n\n";
+		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
 	double wtime0;
@@ -256,8 +256,9 @@ char *advance(char *p)
 void usage_error(const int mpi_id)
 {
 	if (mpi_id==0) {
-		cout << "\nArgument options:\n"
-				"  -f:<file> Read commands from input file with filename <file>\n"
+		cout << "Usage: qlens [args] [script_filename]    (all arguments are optional)\n\n"
+				"Argument options:\n"
+				"  -f:<file> Read commands from input script with filename <file>\n"
 				"  -c:<file> Load cosmology parameters from input file (default: 'planck.csm')\n"
 				"  -s        Run qlens in nonverbal mode (does not echo commands read from file, etc.)\n"
 				"  -q        Quit after reading input file (rather than enter interactive mode)\n"

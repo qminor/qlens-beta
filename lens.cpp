@@ -2948,7 +2948,7 @@ void Lens::update_anchored_parameters()
 {
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->anchored) lens_list[i]->update_anchor_center();
-		if (lens_list[i]->anchor_extra_parameter) lens_list[i]->update_extra_anchored_params(); // PJAFFE and CORECUSP are the only lens so far that have a parameter that can be anchored (tidal radius)
+		if (lens_list[i]->anchor_extra_parameter) lens_list[i]->update_extra_anchored_params();
 	}
 }
 
