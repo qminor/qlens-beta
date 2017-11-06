@@ -4379,7 +4379,7 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 	dvector xlo(params);
 	double x0, curvature;
 	int i,j;
-	double step;
+	double step, derivlo, derivhi;
 	for (i=0; i < n_fit_parameters; i++) {
 		x0 = params[i];
 		xhi[i] += increment2*stepsizes[i];
@@ -4388,7 +4388,12 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 		if ((param_settings->use_penalty_limits[i]==true) and (xlo[i] < param_settings->penalty_limits_lo[i])) xlo[i] = x0;
 		step = xhi[i] - xlo[i];
 		for (j=0; j < n_fit_parameters; j++) {
-			fisher[i][j] = (loglike_deriv(xhi,j,stepsizes[j]) - loglike_deriv(xlo,j,stepsizes[j])) / step;
+			derivlo = loglike_deriv(xlo,j,stepsizes[j]);
+			derivhi = loglike_deriv(xhi,j,stepsizes[j]);
+			fisher[i][j] = (derivhi - derivlo) / step;
+			if (fisher[i][j]*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
+			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher[i][j])) << endl;
+			if ((i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
 			signal(SIGABRT, &fisher_sighandler);
 			signal(SIGTERM, &fisher_sighandler);
 			signal(SIGINT, &fisher_sighandler);
