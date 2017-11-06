@@ -1,3 +1,4 @@
+# hi
 #!/bin/bash
 # This script interfaces with gnuplot to produce plots (either to the screen, or to a file)
 # from within qlens.
