@@ -2962,6 +2962,32 @@ void SersicLens::update_parameters(const double* params)
 	//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
 }
 
+void SersicLens::assign_anchored_parameters(LensProfile *primary_lens_in)
+{
+	anchor_extra_parameter = true;
+	primary_lens = primary_lens_in;
+	double params[7];
+	primary_lens->get_parameters(params);
+	kappa0_frac = kappa0/params[0]; // this is the slope for the Alpha profile
+}
+
+void SersicLens::update_extra_anchored_params()
+{
+	if (anchor_extra_parameter) {
+		double params[7];
+		primary_lens->get_parameters(params);
+		kappa0 = kappa0_frac*params[0]; // this is the slope for the Alpha profile
+	}
+}
+
+void SersicLens::delete_parameter_anchor()
+{
+	if (anchor_extra_parameter) {
+		anchor_extra_parameter = false;
+		primary_lens = NULL;
+	}
+}
+
 void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {

@@ -2372,11 +2372,25 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="sersic")
 			{
+				bool anchor_kappa0 = false;
+				int primary_lens_num;
 				if (nwords > 9) Complain("more than 7 parameters not allowed for model sersic");
 				if (nwords >= 6) {
 					double kappa0, re, n;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> kappa0)) Complain("invalid kappa0 parameter for model sersic");
+					int pos;
+					if ((pos = words[2].find("/lens=")) != string::npos) {
+						string primary_lensstr = words[2].substr(pos+6);
+						string kappa0_str = words[2].substr(0,pos);
+						stringstream primary_lensstream;
+						primary_lensstream << primary_lensstr;
+						if (!(primary_lensstream >> primary_lens_num)) Complain("invalid lens number for anchoring relative kappa0 to primary lens");
+						if (primary_lens_num >= nlens) Complain("lens number does not exist for anchoring relative kappa0 to primary lens");
+						stringstream k0stream;
+						k0stream << kappa0_str;
+						if (!(k0stream >> kappa0)) Complain("invalid kappa0 parameter for model sersic");
+						anchor_kappa0 = true;
+					} else if (!(ws[2] >> kappa0)) Complain("invalid kappa0 parameter for model sersic");
 					if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
@@ -2421,6 +2435,7 @@ void Lens::process_commands(bool read_file)
 						bool invalid_params = false;
 						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if ((anchor_kappa0==true) and (vary_flags[0]==true)) Complain("kappa0 parameter cannot be varied if it is anchored to another lens");
 						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
@@ -2432,6 +2447,9 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_lens(SERSIC_LENS, kappa0, re, n, q, theta, xc, yc);
 						if (anchor_lens) lens_list[nlens-1]->anchor_to_lens(lens_list,anchornum);
+						if (anchor_kappa0) {
+							lens_list[nlens-1]->assign_anchored_parameters(lens_list[primary_lens_num]);
+						}
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
 					}
 				}
