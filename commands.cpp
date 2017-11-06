@@ -2379,8 +2379,8 @@ void Lens::process_commands(bool read_file)
 					double kappa0, re, n;
 					double q, theta = 0, xc = 0, yc = 0;
 					int pos;
-					if ((pos = words[2].find("/lens=")) != string::npos) {
-						string primary_lensstr = words[2].substr(pos+6);
+					if ((pos = words[2].find("/anchor=")) != string::npos) {
+						string primary_lensstr = words[2].substr(pos+8);
 						string kappa0_str = words[2].substr(0,pos);
 						stringstream primary_lensstream;
 						primary_lensstream << primary_lensstr;
