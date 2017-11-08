@@ -18,7 +18,7 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 {
 	lenstype=ALPHA;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(7);
 	assign_paramnames();
 	set_default_base_values(nn,acc);
@@ -42,7 +42,7 @@ Alpha::Alpha(const Alpha* lens_in)
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	anchor_lens = lens_in->anchor_lens;
 	n_params = lens_in->n_params;
 	assign_paramnames();
@@ -428,7 +428,7 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 {
 	lenstype = PJAFFE;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(7);
 	set_default_base_values(nn,acc);
 
@@ -452,7 +452,7 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
 	n_params = lens_in->n_params;
 	assign_paramnames();
@@ -499,7 +499,7 @@ void PseudoJaffe::assign_paramnames()
 
 void PseudoJaffe::assign_anchored_parameters(LensProfile *host_in)
 {
-	anchor_extra_parameter = true;
+	anchor_special_parameter = true;
 	tidal_host = host_in;
 	double rm, ravg;
 	tidal_host->get_einstein_radius(rm,ravg,1.0);
@@ -507,9 +507,9 @@ void PseudoJaffe::assign_anchored_parameters(LensProfile *host_in)
 	asq = a*a;
 }
 
-void PseudoJaffe::update_extra_anchored_params()
+void PseudoJaffe::update_special_anchored_params()
 {
-	if (anchor_extra_parameter) {
+	if (anchor_special_parameter) {
 		double rm, ravg;
 		tidal_host->get_einstein_radius(rm,ravg,1.0);
 		a = sqrt(ravg*b/sqrt(q)); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
@@ -519,8 +519,8 @@ void PseudoJaffe::update_extra_anchored_params()
 
 void PseudoJaffe::delete_parameter_anchor()
 {
-	if (anchor_extra_parameter) {
-		anchor_extra_parameter = false;
+	if (anchor_special_parameter) {
+		anchor_special_parameter = false;
 		tidal_host = NULL;
 	}
 }
@@ -552,7 +552,7 @@ void PseudoJaffe::update_parameters(const double* params)
 		set_angle(params[4]);
 	}
 	b = params[0]/sqrt(q);
-	if (!anchor_extra_parameter) a = params[1]/sqrt(q);
+	if (!anchor_special_parameter) a = params[1]/sqrt(q);
 	else a = a/sqrt(q); // the average tidal radius (a') may not have changed, but q has changed, so update a
 	s = params[2]/sqrt(q);
 	if (!anchored) {
@@ -753,7 +753,7 @@ void PseudoJaffe::print_parameters()
 	} else {
 		cout << "pjaffe: b=" << b_prime << ", a=" << a_prime << ", s=" << s_prime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchor_extra_parameter) cout << " (tidal radius a set by lens " << tidal_host->lens_number << ")";
+	if (anchor_special_parameter) cout << " (tidal radius a set by lens " << tidal_host->lens_number << ")";
 	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
 	cout << endl;
 }
@@ -765,7 +765,7 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 {
 	lenstype = nfw;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(6);
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
@@ -783,7 +783,7 @@ NFW::NFW(const NFW* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
@@ -997,7 +997,7 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 {
 	lenstype = TRUNCATED_nfw;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(7);
 	ks = ks_in; rs = rs_in; rt = rt_in;
 	set_default_base_values(nn,acc);
@@ -1015,7 +1015,7 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
@@ -1273,7 +1273,7 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 {
 	lenstype = HERNQUIST;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(6);
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
@@ -1290,7 +1290,7 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
@@ -1483,7 +1483,7 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 {
 	lenstype = EXPDISK;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(6);
 	k0 = k0_in; R_d = R_d_in;
 	set_default_base_values(nn,acc);
@@ -1499,7 +1499,7 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
@@ -1689,7 +1689,7 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 	lenstype=SHEAR;
 	defined_spherical_kappa_profile = false;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(4);
 	assign_paramnames();
 	if (use_shear_component_params) {
@@ -1731,7 +1731,7 @@ Shear::Shear(const Shear* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
@@ -1930,7 +1930,7 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 	lenstype=MULTIPOLE;
 	defined_spherical_kappa_profile = false;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(5); // Note, m cannot be varied since it must be an integer, so it is not counted as a parameter here
 	n = n_in; m = m_in;
 	q=A_m_in;
@@ -1952,7 +1952,7 @@ Multipole::Multipole(const Multipole* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -1997,16 +1997,16 @@ void Multipole::assign_paramnames()
 
 void Multipole::assign_anchored_parameters(LensProfile *primary_lens_in)
 {
-	anchor_extra_parameter = true;
+	anchor_special_parameter = true;
 	primary_lens = primary_lens_in;
 	double params[7];
 	primary_lens->get_parameters(params);
 	n = params[1]; // this is the slope for the Alpha profile
 }
 
-void Multipole::update_extra_anchored_params()
+void Multipole::update_special_anchored_params()
 {
-	if (anchor_extra_parameter) {
+	if (anchor_special_parameter) {
 		double params[7];
 		primary_lens->get_parameters(params);
 		n = params[1]; // this is the slope for the Alpha profile
@@ -2015,8 +2015,8 @@ void Multipole::update_extra_anchored_params()
 
 void Multipole::delete_parameter_anchor()
 {
-	if (anchor_extra_parameter) {
-		anchor_extra_parameter = false;
+	if (anchor_special_parameter) {
+		anchor_special_parameter = false;
 		primary_lens = NULL;
 	}
 }
@@ -2278,7 +2278,7 @@ void Multipole::print_parameters()
 	} else {
 		cout << "potential multipole (" << sintype << ", m=" << m << "): " << normstring << "=" << q << ", n=" << n << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchor_extra_parameter) cout << " (slope anchored to lens " << primary_lens->lens_number << ")";
+	if (anchor_special_parameter) cout << " (slope anchored to lens " << primary_lens->lens_number << ")";
 	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
 	cout << endl;
 }
@@ -2289,7 +2289,7 @@ PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 {
 	lenstype = PTMASS;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(3);
 	b = bb;
 	x_center = xc_in; y_center = yc_in;
@@ -2302,7 +2302,7 @@ PointMass::PointMass(const PointMass* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -2418,7 +2418,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	lenstype=CORECUSP;
 	set_n_params(9);
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_k0_by_einstein_radius = parametrize_einstein_radius;
@@ -2449,9 +2449,9 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
 	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
 	n_params = lens_in->n_params;
@@ -2504,7 +2504,7 @@ void CoreCusp::assign_paramnames()
 
 void CoreCusp::assign_anchored_parameters(LensProfile *host_in)
 {
-	anchor_extra_parameter = true;
+	anchor_special_parameter = true;
 	tidal_host = host_in;
 	double rm, ravg;
 	tidal_host->get_einstein_radius(rm,ravg,1.0);
@@ -2520,9 +2520,9 @@ void CoreCusp::assign_anchored_parameters(LensProfile *host_in)
 	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 }
 
-void CoreCusp::update_extra_anchored_params()
+void CoreCusp::update_special_anchored_params()
 {
-	if (anchor_extra_parameter) {
+	if (anchor_special_parameter) {
 		double rm, ravg;
 		tidal_host->get_einstein_radius(rm,ravg,1.0);
 		if (set_k0_by_einstein_radius) {
@@ -2541,8 +2541,8 @@ void CoreCusp::update_extra_anchored_params()
 
 void CoreCusp::delete_parameter_anchor()
 {
-	if (anchor_extra_parameter) {
-		anchor_extra_parameter = false;
+	if (anchor_special_parameter) {
+		anchor_special_parameter = false;
 		tidal_host = NULL;
 	}
 }
@@ -2591,7 +2591,7 @@ void CoreCusp::update_parameters(const double* params)
 	if (set_k0_by_einstein_radius) {
 		einstein_radius = params[0];
 		double a_new = a;
-		if ((anchor_extra_parameter) and (a==0)) a = a_old; // the tidal radius will be updated (assuming it is set by host, otherwise a should not be set to zero!)
+		if ((anchor_special_parameter) and (a==0)) a = a_old; // the tidal radius will be updated (assuming it is set by host, otherwise a should not be set to zero!)
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kappa_avg_spherical_rsq(einstein_radius*einstein_radius);
 		a = a_new;
@@ -2785,7 +2785,7 @@ double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const do
 
 double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const double aprime, const double n_stepsize)
 {
-	// This uses Richardson extrapolation to calculate the enclosed mass, required for the n=3 case
+	// This uses Richardson specialpolation to calculate the enclosed mass, required for the n=3 case
 	const double CON=1.4, CON2=(CON*CON);
 	const double BIG=1.0e100;
 	const double SAFE=2.0;
@@ -2861,7 +2861,7 @@ SersicLens::SersicLens(const double &kappa0_in, const double &Re_in, const doubl
 {
 	lenstype=SERSIC_LENS;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(7);
 	assign_paramnames();
 	set_default_base_values(nn,acc);
@@ -2883,7 +2883,7 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	anchor_lens = lens_in->anchor_lens;
 	n_params = lens_in->n_params;
 	assign_paramnames();
@@ -2964,16 +2964,16 @@ void SersicLens::update_parameters(const double* params)
 
 void SersicLens::assign_anchored_parameters(LensProfile *primary_lens_in)
 {
-	anchor_extra_parameter = true;
+	anchor_special_parameter = true;
 	primary_lens = primary_lens_in;
 	double params[7];
 	primary_lens->get_parameters(params);
 	kappa0_frac = kappa0/params[0]; // this is the slope for the Alpha profile
 }
 
-void SersicLens::update_extra_anchored_params()
+void SersicLens::update_special_anchored_params()
 {
-	if (anchor_extra_parameter) {
+	if (anchor_special_parameter) {
 		double params[7];
 		primary_lens->get_parameters(params);
 		kappa0 = kappa0_frac*params[0]; // this is the slope for the Alpha profile
@@ -2982,8 +2982,8 @@ void SersicLens::update_extra_anchored_params()
 
 void SersicLens::delete_parameter_anchor()
 {
-	if (anchor_extra_parameter) {
-		anchor_extra_parameter = false;
+	if (anchor_special_parameter) {
+		anchor_special_parameter = false;
 		primary_lens = NULL;
 	}
 }
@@ -3113,7 +3113,7 @@ MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &y
 {
 	lenstype = SHEET;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(3);
 	kext = kext_in;
 	x_center = xc_in; y_center = yc_in;
@@ -3126,7 +3126,7 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 	lens_number = lens_in->lens_number;
 	anchored = lens_in->anchored;
 	anchor_lens = lens_in->anchor_lens;
-	anchor_extra_parameter = lens_in->anchor_extra_parameter;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);

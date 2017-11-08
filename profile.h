@@ -86,7 +86,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	public:
 	int lens_number;
 	bool anchored;
-	bool anchor_extra_parameter;
+	bool anchor_special_parameter;
 	LensProfile* anchor_lens;
 	static IntegrationMethod integral_method;
 	static bool orient_major_axis_north;
@@ -126,7 +126,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_anchor_center();
-	virtual void update_extra_anchored_params() {}
+	virtual void update_special_anchored_params() {}
 	virtual void assign_anchored_parameters(LensProfile*) {}
 	virtual void delete_parameter_anchor() {}
 
@@ -160,7 +160,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	int get_n_params() { return n_params; }
 	int get_n_vary_params() { return n_vary_params; }
 	int get_anchor_number() { return anchor_lens->lens_number; }
-	virtual int get_parameter_anchor_number() { return -1; } // no extra parameters can be anchored for the base class
+	virtual int get_parameter_anchor_number() { return -1; } // no special parameters can be anchored for the base class
 	virtual void get_extra_params(dvector& params) { }
 	void set_include_limits(bool inc) { include_limits = inc; }
 	void set_romberg_accuracy(const double acc) { romberg_accuracy = acc; }
@@ -259,7 +259,7 @@ class PseudoJaffe : public LensProfile
 	public:
 	bool calculate_tidal_radius;
 	LensProfile* tidal_host;
-	int get_parameter_anchor_number() { return tidal_host->lens_number; } // no extra parameters can be anchored for the base class
+	int get_parameter_anchor_number() { return tidal_host->lens_number; } // no special parameters can be anchored for the base class
 
 	PseudoJaffe() : LensProfile() {}
 	PseudoJaffe(const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
@@ -273,7 +273,7 @@ class PseudoJaffe : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void assign_anchored_parameters(LensProfile*);
-	void update_extra_anchored_params();
+	void update_special_anchored_params();
 	void delete_parameter_anchor();
 
 	void print_parameters();
@@ -436,7 +436,7 @@ class Multipole : public LensProfile
 
 	public:
 	LensProfile* primary_lens;
-	int get_parameter_anchor_number() { return primary_lens->lens_number; } // no extra parameters can be anchored for the base class
+	int get_parameter_anchor_number() { return primary_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	Multipole() : LensProfile() { defined_spherical_kappa_profile = false; }
 	Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine=false);
@@ -457,7 +457,7 @@ class Multipole : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void assign_anchored_parameters(LensProfile*);
-	void update_extra_anchored_params();
+	void update_special_anchored_params();
 	void delete_parameter_anchor();
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor);
@@ -502,7 +502,7 @@ class CoreCusp : public LensProfile
 	private:
 	double n, gamma, a, s, k0;
 	//double Rsq; // for numerically integrating the 3d density profile (used to test the formulas)
-	const double nstep=0.2; // this is for calculating the n=3 case, which requires extrapolation since F21 is singular for n=3
+	const double nstep=0.2; // this is for calculating the n=3 case, which requires specialpolation since F21 is singular for n=3
 	bool set_k0_by_einstein_radius;
 	double einstein_radius;
 	double core_enclosed_mass;
@@ -523,7 +523,7 @@ class CoreCusp : public LensProfile
 	public:
 	bool calculate_tidal_radius;
 	LensProfile* tidal_host;
-	int get_parameter_anchor_number() { return tidal_host->lens_number; } // no extra parameters can be anchored for the base class
+	int get_parameter_anchor_number() { return tidal_host->lens_number; } // no special parameters can be anchored for the base class
 
 	CoreCusp() : LensProfile() {}
 	CoreCusp(const double &k0_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, bool parametrize_einstein_radius = true);
@@ -537,7 +537,7 @@ class CoreCusp : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void assign_anchored_parameters(LensProfile*);
-	void update_extra_anchored_params();
+	void update_special_anchored_params();
 	void delete_parameter_anchor();
 
 	void get_extra_params(dvector& params) { params.input(5); params[0] = k0; params[1] = a; params[2] = s; params[3] = gamma; params[4] = n; }
@@ -562,12 +562,12 @@ class SersicLens : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void assign_anchored_parameters(LensProfile*);
-	void update_extra_anchored_params();
+	void update_special_anchored_params();
 	void delete_parameter_anchor();
 
 	public:
 	LensProfile* primary_lens;
-	int get_parameter_anchor_number() { return primary_lens->lens_number; } // no extra parameters can be anchored for the base class
+	int get_parameter_anchor_number() { return primary_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	SersicLens() : LensProfile() {}
 	SersicLens(const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);

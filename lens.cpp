@@ -572,7 +572,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
-void Lens::add_lens(LensProfileName name, const double mass_parameter, const double scale1, const double scale2, const double q, const double theta, const double xc, const double yc, const double extra_param1, const double extra_param2, const bool optional_setting)
+void Lens::add_lens(LensProfileName name, const double mass_parameter, const double scale1, const double scale2, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
@@ -602,8 +602,8 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 		case HERNQUIST:
 			newlist[nlens] = new Hernquist(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case CORECUSP:
-			if ((extra_param1==-1000) or (extra_param2==-1000)) die("extra parameters need to be passed to add_lens(...) function for model CORECUSP");
-			newlist[nlens] = new CoreCusp(mass_parameter, extra_param1, extra_param2, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy, optional_setting); break;
+			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
+			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy, optional_setting); break;
 		case SERSIC_LENS:
 			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TESTMODEL: // Model for testing purposes
@@ -672,7 +672,7 @@ void Lens::remove_lens(int lensnumber)
 	int i,j;
 	for (i=0; i < nlens; i++) {
 		if ((i != lensnumber) and (lens_list[i]->anchored==true) and (lens_list[i]->get_anchor_number()==lensnumber)) lens_list[i]->delete_anchor();
-		if ((i != lensnumber) and (lens_list[i]->anchor_extra_parameter==true) and (lens_list[i]->get_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_parameter_anchor();
+		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_parameter_anchor();
 	}
 	for (i=0,j=0; i < nlens; i++)
 		if (i != lensnumber) { newlist[j] = lens_list[i]; j++; }
@@ -2922,7 +2922,7 @@ void Lens::initialize_fitmodel()
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
 		// lens in fitmodel (the lens whose parameters will be varied)
 		if (fitmodel->lens_list[i]->anchored==true) fitmodel->lens_list[i]->anchor_to_lens(fitmodel->lens_list, lens_list[i]->get_anchor_number());
-		if (fitmodel->lens_list[i]->anchor_extra_parameter==true) {
+		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
 			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_parameter_anchor_number()];
 			fitmodel->lens_list[i]->assign_anchored_parameters(parameter_anchor_lens);
 		}
@@ -2948,7 +2948,7 @@ void Lens::update_anchored_parameters()
 {
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->anchored) lens_list[i]->update_anchor_center();
-		if (lens_list[i]->anchor_extra_parameter) lens_list[i]->update_extra_anchored_params();
+		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
 	}
 }
 

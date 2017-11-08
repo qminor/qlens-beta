@@ -1666,14 +1666,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for five parameters (b,alpha,s,q,theta) in model alpha";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for five parameters (b,alpha,s,q,theta) in model alpha";
+							}
 							else complain_str = "Must specify vary flags for seven parameters (b,alpha,s,q,theta,xc,yc) in model alpha";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -1741,15 +1746,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for five parameters (b,a,s,q,theta) in model pjaffe";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for five parameters (b,a,s,q,theta) in model pjaffe";
+							}
 							else complain_str = "Must specify vary flags for seven parameters (b,a,s,q,theta,xc,yc) in model pjaffe";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -1853,15 +1862,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for three parameters (A_m,n,theta) in model " + words[1];
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[3] != "0") or (words[4] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for three parameters (A_m,n,theta) in model " + words[1];
+							}
 							else complain_str = "Must specify vary flags for six parameters (A_m,n,theta,xc,yc) in model " + words[1];
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -1922,15 +1935,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model nfw";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model nfw";
+							}
 							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model nfw";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -1988,15 +2005,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for five parameters (ks,rs,rt,q,theta) in model tnfw";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for five parameters (ks,rs,rt,q,theta) in model tnfw";
+							}
 							else complain_str = "Must specify vary flags for seven parameters (ks,rs,rt,q,theta,xc,yc) in model tnfw";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2053,14 +2074,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for four parameters (k0,R_d,q,theta) in model expdisk";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for four parameters (k0,R_d,q,theta) in model expdisk";
+							}
 							else complain_str = "Must specify vary flags for six parameters (k0,R_d,q,theta,xc,yc) in model expdisk";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2120,14 +2146,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for two parameters (q,theta) in model kspline";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[2] != "0") or (words[3] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for two parameters (q,theta) in model kspline";
+							}
 							else complain_str = "Must specify vary flags for four parameters (q,theta,xc,yc) in model kspline";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2184,14 +2215,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model hern";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model hern";
+							}
 							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model hern";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2276,15 +2312,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for seven parameters (k0,gamma,n,a,s,q,theta) in model corecusp";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[7] != "0") or (words[8] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for seven parameters (k0,gamma,n,a,s,q,theta) in model corecusp";
+							}
 							else complain_str = "Must specify vary flags for nine parameters (k0,gamma,n,a,s,q,theta,xc,yc) in model corecusp";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2340,14 +2380,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for one parameter (b) in model ptmass";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[1] != "0") or (words[2] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for one parameter (b) in model ptmass";
+							}
 							else complain_str = "Must specify vary flags for three parameters (b,xc,yc) in model ptmass";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2420,15 +2465,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for five parameters (kappa0,R_eff,n,q,theta) in model sersic";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for five parameters (kappa0,R_eff,n,q,theta) in model sersic";
+							}
 							else complain_str = "Must specify vary flags for seven parameters (kappa0,R_eff,n,q,theta,xc,yc) in model sersic";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2485,15 +2534,19 @@ void Lens::process_commands(bool read_file)
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
-							string complain_str;
-							if (anchor_lens) complain_str = "Must specify vary flags for one parameter (kappa) in model sheet";
+							string complain_str = "";
+							if (anchor_lens) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[1] != "0") or (words[2] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for one parameter (kappa) in model sheet";
+							}
 							else complain_str = "Must specify vary flags for three parameters (kappa,xc,yc) in model sheet";
-							if (add_shear) {
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 							}
-
-							Complain(complain_str);
+							if (complain_str != "") Complain(complain_str);
 						}
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
@@ -2539,7 +2592,7 @@ void Lens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_lens = true;
-							}
+							} else Complain("x-coordinate entered for center, but not y-coordinate");
 						}
 						if (nwords == 6) {
 							if ((update_parameters) and (lens_list[lens_number]->anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
@@ -2553,7 +2606,11 @@ void Lens::process_commands(bool read_file)
 						nparams_to_vary = (anchor_lens) ? 2 : 4;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) {
-							if (anchor_lens) { Complain("Must specify vary flags for two parameters (shear,shear_p2) in model shear"); }
+							if (anchor_lens) {
+								if (nwords==4) {
+									if ((words[2] != "0") or (words[3] != "0")) Complain("center coordinates cannot be varied as free parameters if anchored to another lens");
+								} else Complain("Must specify vary flags for two parameters (shear,shear_p2) in model shear");
+							}
 							else Complain("Must specify vary flags for four parameters (shear,shear_p2,xc,yc) in model shear");
 						}
 						vary_flags.input(nparams_to_vary);

@@ -18,7 +18,7 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 	lenstype = KSPLINE;
 	defined_spherical_kappa_profile = true;
 	anchored = false;
-	anchor_extra_parameter = false;
+	anchor_special_parameter = false;
 	set_n_params(4);
 	assign_paramnames();
 	set_default_base_values(nn,acc);
@@ -90,7 +90,11 @@ void LensProfile::delete_anchor()
 
 void LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
-	if (vary_params_in.size() != n_params) die("number of parameters to vary does not match total number of parameters");
+	if (vary_params_in.size() != n_params) {
+		// if the lens is anchored to another lens, it's ok to have vary params of zero entered for these parameters (they'll just be ignored)
+		if ((anchored) and (vary_params_in.size() == n_params + 2) and (vary_params_in[n_params]==0) and (vary_params_in[n_params+1]==0)) ;
+		else die("number of parameters to vary does not match total number of parameters");
+	}
 	n_vary_params=0;
 	int i;
 	for (i=0; i < n_params; i++) {
