@@ -17,9 +17,10 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype=ALPHA;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(7);
+	assign_param_pointers();
 	assign_paramnames();
 	set_default_base_values(nn,acc);
 
@@ -41,11 +42,13 @@ Alpha::Alpha(const Alpha* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
+	center_anchored = lens_in->center_anchored;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
 	assign_paramnames();
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -81,9 +84,22 @@ void Alpha::assign_paramnames()
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
 		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
+	}
+}
+
+void Alpha::assign_param_pointers()
+{
+	param[0] = &b;
+	param[1] = &alpha;
+	param[2] = &s;
+	param[3] = &q;
+	param[4] = &theta;
+	if (!center_anchored) {
+		param[5] = &x_center;
+		param[6] = &y_center;
 	}
 }
 
@@ -116,7 +132,7 @@ void Alpha::update_parameters(const double* params)
 	}
 	b = params[0]/sqrt(q);
 	s = params[2]/sqrt(q);
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
@@ -172,7 +188,7 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[5]) x_center = fitparams[index++];
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
@@ -226,7 +242,7 @@ void Alpha::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[3]) fitparams[index++] = q;
 		if (vary_params[4]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) fitparams[index++] = x_center;
 		if (vary_params[6]) fitparams[index++] = y_center;
 	}
@@ -244,7 +260,7 @@ void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) stepsizes[index++] = 0.1*b*sqrt(q);
 		if (vary_params[6]) stepsizes[index++] = 0.1*b*sqrt(q);
 	}
@@ -417,7 +433,7 @@ void Alpha::print_parameters()
 	} else {
 		cout << "alpha: b=" << b_prime << ", alpha=" << alpha << ", s=" << s_prime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -427,9 +443,10 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = PJAFFE;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(7);
+	assign_param_pointers();
 	set_default_base_values(nn,acc);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -450,11 +467,13 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -491,13 +510,26 @@ void PseudoJaffe::assign_paramnames()
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
 		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
 }
 
-void PseudoJaffe::assign_anchored_parameters(LensProfile *host_in)
+void PseudoJaffe::assign_param_pointers()
+{
+	param[0] = &b;
+	param[1] = &a;
+	param[2] = &s;
+	param[3] = &q;
+	param[4] = &theta;
+	if (!center_anchored) {
+		param[5] = &x_center;
+		param[6] = &y_center;
+	}
+}
+
+void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
 	tidal_host = host_in;
@@ -514,14 +546,6 @@ void PseudoJaffe::update_special_anchored_params()
 		tidal_host->get_einstein_radius(rm,ravg,1.0);
 		a = sqrt(ravg*b/sqrt(q)); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
 		asq = a*a;
-	}
-}
-
-void PseudoJaffe::delete_parameter_anchor()
-{
-	if (anchor_special_parameter) {
-		anchor_special_parameter = false;
-		tidal_host = NULL;
 	}
 }
 
@@ -555,7 +579,7 @@ void PseudoJaffe::update_parameters(const double* params)
 	if (!anchor_special_parameter) a = params[1]/sqrt(q);
 	else a = a/sqrt(q); // the average tidal radius (a') may not have changed, but q has changed, so update a
 	s = params[2]/sqrt(q);
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
@@ -600,7 +624,7 @@ void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, boo
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[5]) x_center = fitparams[index++];
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
@@ -652,7 +676,7 @@ void PseudoJaffe::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[3]) fitparams[index++] = q;
 		if (vary_params[4]) fitparams[index++] = radians_to_degrees(theta);
 		}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) fitparams[index++] = x_center;
 		if (vary_params[6]) fitparams[index++] = y_center;
 	}
@@ -670,7 +694,7 @@ void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[3]) stepsizes[index++] = 0.2;
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) stepsizes[index++] = 0.5*b*sqrt(q);
 		if (vary_params[6]) stepsizes[index++] = 0.5*b*sqrt(q);
 	}
@@ -754,7 +778,7 @@ void PseudoJaffe::print_parameters()
 		cout << "pjaffe: b=" << b_prime << ", a=" << a_prime << ", s=" << s_prime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
 	if (anchor_special_parameter) cout << " (tidal radius a set by lens " << tidal_host->lens_number << ")";
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -764,9 +788,10 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = nfw;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(6);
+	assign_param_pointers();
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
@@ -781,10 +806,12 @@ NFW::NFW(const NFW* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -818,9 +845,21 @@ void NFW::assign_paramnames()
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
 		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
+	}
+}
+
+void NFW::assign_param_pointers()
+{
+	param[0] = &ks;
+	param[1] = &rs;
+	param[2] = &q;
+	param[3] = &theta;
+	if (!center_anchored) {
+		param[4] = &x_center;
+		param[5] = &y_center;
 	}
 }
 
@@ -851,7 +890,7 @@ void NFW::update_parameters(const double* params)
 		q=params[2];
 		set_angle(params[3]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
@@ -899,7 +938,7 @@ void NFW::update_fit_parameters(const double* fitparams, int &index, bool& statu
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[4]) x_center = fitparams[index++];
 			if (vary_params[5]) y_center = fitparams[index++];
 		}
@@ -926,7 +965,7 @@ void NFW::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[2]) fitparams[index++] = q;
 		if (vary_params[3]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) fitparams[index++] = x_center;
 		if (vary_params[5]) fitparams[index++] = y_center;
 	}
@@ -943,7 +982,7 @@ void NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[2]) stepsizes[index++] = 0.2;
 		if (vary_params[3]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[5]) stepsizes[index++] = 1.0;
 	}
@@ -986,7 +1025,7 @@ void NFW::print_parameters()
 	} else {
 		cout << "nfw: ks=" << ks << ", rs=" << rs << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -996,9 +1035,10 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = TRUNCATED_nfw;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(7);
+	assign_param_pointers();
 	ks = ks_in; rs = rs_in; rt = rt_in;
 	set_default_base_values(nn,acc);
 	assign_paramnames();
@@ -1013,10 +1053,12 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -1052,11 +1094,24 @@ void Truncated_NFW::assign_paramnames()
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
 		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
 	}
 
+}
+
+void Truncated_NFW::assign_param_pointers()
+{
+	param[0] = &ks;
+	param[1] = &rs;
+	param[2] = &rt;
+	param[3] = &q;
+	param[4] = &theta;
+	if (!center_anchored) {
+		param[5] = &x_center;
+		param[6] = &y_center;
+	}
 }
 
 void Truncated_NFW::get_parameters(double* params)
@@ -1088,7 +1143,7 @@ void Truncated_NFW::update_parameters(const double* params)
 		q=params[3];
 		set_angle(params[4]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
@@ -1134,7 +1189,7 @@ void Truncated_NFW::update_fit_parameters(const double* fitparams, int &index, b
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[5]) x_center = fitparams[index++];
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
@@ -1162,7 +1217,7 @@ void Truncated_NFW::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[3]) fitparams[index++] = q;
 		if (vary_params[4]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) fitparams[index++] = x_center;
 		if (vary_params[6]) fitparams[index++] = y_center;
 	}
@@ -1180,7 +1235,7 @@ void Truncated_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[6]) stepsizes[index++] = 1.0;
 	}
@@ -1262,7 +1317,7 @@ void Truncated_NFW::print_parameters()
 	} else {
 		cout << "tnfw: ks=" << ks << ", rs=" << rs << ", rt=" << rt << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -1272,9 +1327,10 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = HERNQUIST;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(6);
+	assign_param_pointers();
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -1288,10 +1344,12 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -1323,9 +1381,21 @@ void Hernquist::assign_paramnames()
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
 		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
+	}
+}
+
+void Hernquist::assign_param_pointers()
+{
+	param[0] = &ks;
+	param[1] = &rs;
+	param[2] = &q;
+	param[3] = &theta;
+	if (!center_anchored) {
+		param[4] = &x_center;
+		param[5] = &y_center;
 	}
 }
 
@@ -1356,7 +1426,7 @@ void Hernquist::update_parameters(const double* params)
 		q=params[2];
 		set_angle(params[3]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
@@ -1394,7 +1464,7 @@ void Hernquist::update_fit_parameters(const double* fitparams, int &index, bool&
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[4]) x_center = fitparams[index++];
 			if (vary_params[5]) y_center = fitparams[index++];
 		}
@@ -1420,7 +1490,7 @@ void Hernquist::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[2]) fitparams[index++] = q;
 		if (vary_params[3]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) fitparams[index++] = x_center;
 		if (vary_params[5]) fitparams[index++] = y_center;
 	}
@@ -1437,7 +1507,7 @@ void Hernquist::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[2]) stepsizes[index++] = 0.2;
 		if (vary_params[3]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[5]) stepsizes[index++] = 1.0;
 	}
@@ -1472,7 +1542,7 @@ void Hernquist::print_parameters()
 	} else {
 		cout << "hern: ks=" << ks << ", rs=" << rs << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -1482,9 +1552,10 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = EXPDISK;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(6);
+	assign_param_pointers();
 	k0 = k0_in; R_d = R_d_in;
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -1497,10 +1568,12 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -1532,11 +1605,23 @@ void ExpDisk::assign_paramnames()
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
 		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
 	}
 
+}
+
+void ExpDisk::assign_param_pointers()
+{
+	param[0] = &k0;
+	param[1] = &R_d;
+	param[2] = &q;
+	param[3] = &theta;
+	if (!center_anchored) {
+		param[4] = &x_center;
+		param[5] = &y_center;
+	}
 }
 
 void ExpDisk::get_parameters(double* params)
@@ -1566,7 +1651,7 @@ void ExpDisk::update_parameters(const double* params)
 		q=params[2];
 		set_angle(params[3]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
@@ -1607,7 +1692,7 @@ void ExpDisk::update_fit_parameters(const double* fitparams, int &index, bool& s
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[4]) x_center = fitparams[index++];
 			if (vary_params[5]) y_center = fitparams[index++];
 		}
@@ -1633,7 +1718,7 @@ void ExpDisk::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[2]) fitparams[index++] = q;
 		if (vary_params[3]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) fitparams[index++] = x_center;
 		if (vary_params[5]) fitparams[index++] = y_center;
 	}
@@ -1650,7 +1735,7 @@ void ExpDisk::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[2]) stepsizes[index++] = 0.2;
 		if (vary_params[3]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[5]) stepsizes[index++] = 1.0;
 	}
@@ -1678,7 +1763,7 @@ void ExpDisk::print_parameters()
 	} else {
 		cout << "expdisk: k0=" << k0 << ", R_d=" << R_d << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -1688,9 +1773,10 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 {
 	lenstype=SHEAR;
 	defined_spherical_kappa_profile = false;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(4);
+	assign_param_pointers();
 	assign_paramnames();
 	if (use_shear_component_params) {
 		double shear, angle;
@@ -1729,10 +1815,12 @@ Shear::Shear(const Shear* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -1767,7 +1855,7 @@ void Shear::update_parameters(const double* params)
 		q=params[0];
 		set_angle(params[1]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[2];
 		y_center = params[3];
 	}
@@ -1785,9 +1873,19 @@ void Shear::assign_paramnames()
 		paramnames[0] = "shear"; latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "";
 		paramnames[1] = "theta_shear"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "\\gamma";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
 		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
+	}
+}
+
+void Shear::assign_param_pointers()
+{
+	param[0] = &q;
+	param[1] = &theta;
+	if (!center_anchored) {
+		param[2] = &x_center;
+		param[3] = &y_center;
 	}
 }
 
@@ -1813,7 +1911,7 @@ void Shear::update_fit_parameters(const double* fitparams, int &index, bool& sta
 			}
 			if (vary_params[1]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[2]) x_center = fitparams[index++];
 			if (vary_params[3]) y_center = fitparams[index++];
 		}
@@ -1836,7 +1934,7 @@ void Shear::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[0]) fitparams[index++] = q;
 		if (vary_params[1]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[2]) fitparams[index++] = x_center;
 		if (vary_params[3]) fitparams[index++] = y_center;
 	}
@@ -1851,9 +1949,9 @@ void Shear::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[0]) stepsizes[index++] = 0.05;
 		if (vary_params[1]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
-		if (vary_params[2]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually anchored anyway
-		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually anchored anyway
+	if (!center_anchored) {
+		if (vary_params[2]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
+		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
 	}
 }
 
@@ -1919,7 +2017,7 @@ void Shear::print_parameters()
 	} else {
 		cout << "external shear: shear=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -1929,9 +2027,10 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 {
 	lenstype=MULTIPOLE;
 	defined_spherical_kappa_profile = false;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(5); // Note, m cannot be varied since it must be an integer, so it is not counted as a parameter here
+	assign_param_pointers();
 	n = n_in; m = m_in;
 	q=A_m_in;
 	set_angle(theta_degrees);
@@ -1950,10 +2049,12 @@ Multipole::Multipole(const Multipole* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -1989,35 +2090,20 @@ void Multipole::assign_paramnames()
 		paramnames[1] = "n"; latex_paramnames[1] = "n"; latex_param_subscripts[1] = "";
 	}
 	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[3] = "xc"; latex_paramnames[3] = "x"; latex_param_subscripts[3] = "c";
 		paramnames[4] = "yc"; latex_paramnames[4] = "y"; latex_param_subscripts[4] = "c";
 	}
 }
 
-void Multipole::assign_anchored_parameters(LensProfile *primary_lens_in)
+void Multipole::assign_param_pointers()
 {
-	anchor_special_parameter = true;
-	primary_lens = primary_lens_in;
-	double params[7];
-	primary_lens->get_parameters(params);
-	n = params[1]; // this is the slope for the Alpha profile
-}
-
-void Multipole::update_special_anchored_params()
-{
-	if (anchor_special_parameter) {
-		double params[7];
-		primary_lens->get_parameters(params);
-		n = params[1]; // this is the slope for the Alpha profile
-	}
-}
-
-void Multipole::delete_parameter_anchor()
-{
-	if (anchor_special_parameter) {
-		anchor_special_parameter = false;
-		primary_lens = NULL;
+	param[0] = &q;
+	param[1] = &n;
+	param[2] = &theta;
+	if (!center_anchored) {
+		param[3] = &x_center;
+		param[4] = &y_center;
 	}
 }
 
@@ -2035,7 +2121,7 @@ void Multipole::update_parameters(const double* params)
 	q=params[0];
 	n=params[1];
 	set_angle(params[2]);
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[3];
 		y_center = params[4];
 	}
@@ -2047,7 +2133,7 @@ void Multipole::update_fit_parameters(const double* fitparams, int &index, bool&
 		if (vary_params[0]) q = fitparams[index++];
 		if (vary_params[1]) n = fitparams[index++];
 		if (vary_params[2]) set_angle(fitparams[index++]);
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[3]) x_center = fitparams[index++];
 			if (vary_params[4]) y_center = fitparams[index++];
 		}
@@ -2059,7 +2145,7 @@ void Multipole::get_fit_parameters(dvector& fitparams, int &index)
 	if (vary_params[0]) fitparams[index++] = q;
 	if (vary_params[1]) fitparams[index++] = n;
 	if (vary_params[2]) fitparams[index++] = radians_to_degrees(theta);
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[3]) fitparams[index++] = x_center;
 		if (vary_params[4]) fitparams[index++] = y_center;
 	}
@@ -2070,9 +2156,9 @@ void Multipole::get_auto_stepsizes(dvector& stepsizes, int &index)
 	if (vary_params[0]) stepsizes[index++] = 0.05;
 	if (vary_params[1]) stepsizes[index++] = 0.1;
 	if (vary_params[2]) stepsizes[index++] = 20;
-	if (!anchored) {
-		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually anchored anyway
-		if (vary_params[4]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually anchored anyway
+	if (!center_anchored) {
+		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
+		if (vary_params[4]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
 	}
 }
 
@@ -2278,8 +2364,7 @@ void Multipole::print_parameters()
 	} else {
 		cout << "potential multipole (" << sintype << ", m=" << m << "): " << normstring << "=" << q << ", n=" << n << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchor_special_parameter) cout << " (slope anchored to lens " << primary_lens->lens_number << ")";
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -2288,9 +2373,10 @@ void Multipole::print_parameters()
 PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 {
 	lenstype = PTMASS;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(3);
+	assign_param_pointers();
 	b = bb;
 	x_center = xc_in; y_center = yc_in;
 	assign_paramnames();
@@ -2300,10 +2386,12 @@ PointMass::PointMass(const PointMass* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -2320,9 +2408,18 @@ void PointMass::assign_paramnames()
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
 		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
+	}
+}
+
+void PointMass::assign_param_pointers()
+{
+	param[0] = &b;
+	if (!center_anchored) {
+		param[1] = &x_center;
+		param[2] = &y_center;
 	}
 }
 
@@ -2337,7 +2434,7 @@ void PointMass::update_parameters(const double* params)
 {
 	b=params[0];
 	if (b < 0) b=-b;
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[1];
 		y_center = params[2];
 	}
@@ -2347,7 +2444,7 @@ void PointMass::update_fit_parameters(const double* fitparams, int &index, bool&
 {
 	if (n_vary_params > 0) {
 		if (vary_params[0]) b = fitparams[index++];
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[1]) x_center = fitparams[index++];
 			if (vary_params[2]) y_center = fitparams[index++];
 		}
@@ -2357,7 +2454,7 @@ void PointMass::update_fit_parameters(const double* fitparams, int &index, bool&
 void PointMass::get_fit_parameters(dvector& fitparams, int &index)
 {
 	if (vary_params[0]) fitparams[index++] = b;
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[1]) fitparams[index++] = x_center;
 		if (vary_params[2]) fitparams[index++] = y_center;
 	}
@@ -2366,7 +2463,7 @@ void PointMass::get_fit_parameters(dvector& fitparams, int &index)
 void PointMass::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
 	if (vary_params[0]) stepsizes[index++] = 0.1*b;
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[1]) stepsizes[index++] = 0.1*b;
 		if (vary_params[2]) stepsizes[index++] = 0.1*b;
 	}
@@ -2407,7 +2504,7 @@ void PointMass::hessian(double x, double y, lensmatrix& hess)
 void PointMass::print_parameters()
 {
 	cout << "point mass: b=" << b << ", center=(" << x_center << "," << y_center << ")";
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -2417,7 +2514,8 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 {
 	lenstype=CORECUSP;
 	set_n_params(9);
-	anchored = false;
+	assign_param_pointers();
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -2447,14 +2545,16 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
 	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -2496,13 +2596,28 @@ void CoreCusp::assign_paramnames()
 		paramnames[5] = "q"; latex_paramnames[5] = "q"; latex_param_subscripts[5] = "";
 		paramnames[6] = "theta"; latex_paramnames[6] = "\\theta"; latex_param_subscripts[6] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[7] = "xc"; latex_paramnames[7] = "x"; latex_param_subscripts[7] = "c";
 		paramnames[8] = "yc"; latex_paramnames[8] = "y"; latex_param_subscripts[8] = "c";
 	}
 }
 
-void CoreCusp::assign_anchored_parameters(LensProfile *host_in)
+void CoreCusp::assign_param_pointers()
+{
+	param[0] = &k0;
+	param[1] = &gamma;
+	param[2] = &n;
+	param[3] = &a;
+	param[4] = &s;
+	param[5] = &q;
+	param[6] = &theta;
+	if (!center_anchored) {
+		param[7] = &x_center;
+		param[8] = &y_center;
+	}
+}
+
+void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
 	tidal_host = host_in;
@@ -2536,14 +2651,6 @@ void CoreCusp::update_special_anchored_params()
 			else a = ravg*k0/(3-gamma); // we have ignored the core in this formula, but should be reasonable as long as a >> s
 		}
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-	}
-}
-
-void CoreCusp::delete_parameter_anchor()
-{
-	if (anchor_special_parameter) {
-		anchor_special_parameter = false;
-		tidal_host = NULL;
 	}
 }
 
@@ -2583,7 +2690,7 @@ void CoreCusp::update_parameters(const double* params)
 		q = params[5];
 		set_angle(params[6]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[7];
 		y_center = params[8];
 	}
@@ -2639,7 +2746,7 @@ void CoreCusp::update_fit_parameters(const double* fitparams, int &index, bool& 
 			}
 			if (vary_params[6]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[7]) x_center = fitparams[index++];
 			if (vary_params[8]) y_center = fitparams[index++];
 		}
@@ -2682,7 +2789,7 @@ void CoreCusp::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[5]) fitparams[index++] = q;
 		if (vary_params[6]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[7]) fitparams[index++] = x_center;
 		if (vary_params[8]) fitparams[index++] = y_center;
 	}
@@ -2705,7 +2812,7 @@ void CoreCusp::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[5]) stepsizes[index++] = 0.1;
 		if (vary_params[6]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[7]) stepsizes[index++] = 0.1*k0;
 		if (vary_params[8]) stepsizes[index++] = 0.1*k0;
 	}
@@ -2850,7 +2957,7 @@ void CoreCusp::print_parameters()
 	} else {
 		cout << ", gamma=" << gamma << ", n=" << n << ", a=" << a << ", s=" << s << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -2860,9 +2967,10 @@ void CoreCusp::print_parameters()
 SersicLens::SersicLens(const double &kappa0_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype=SERSIC_LENS;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(7);
+	assign_param_pointers();
 	assign_paramnames();
 	set_default_base_values(nn,acc);
 
@@ -2872,7 +2980,7 @@ SersicLens::SersicLens(const double &kappa0_in, const double &Re_in, const doubl
 	n = n_in;
 	re = Re_in;
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	k = b*pow(sqrt(q)/Re_in,1.0/n);
+	k = b*pow(sqrt(q)/re,1.0/n);
 	kappa0 = kappa0_in;
 	set_default_base_values(nn,acc);
 	set_integration_pointers();
@@ -2882,10 +2990,12 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
+	center_anchored = lens_in->center_anchored;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	assign_paramnames();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
@@ -2919,9 +3029,22 @@ void SersicLens::assign_paramnames()
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[5] = "xc"; latex_paramnames[5] = "x"; latex_param_subscripts[5] = "c";
 		paramnames[6] = "yc"; latex_paramnames[6] = "y"; latex_param_subscripts[6] = "c";
+	}
+}
+
+void SersicLens::assign_param_pointers()
+{
+	param[0] = &kappa0;
+	param[1] = &re;
+	param[2] = &n;
+	param[3] = &q;
+	param[4] = &theta;
+	if (!center_anchored) {
+		param[5] = &x_center;
+		param[6] = &y_center;
 	}
 }
 
@@ -2954,38 +3077,14 @@ void SersicLens::update_parameters(const double* params)
 		q=params[3];
 		set_angle(params[4]);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
+	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	k = b*pow(sqrt(q)/re,1.0/n);
 	set_integration_pointers();
 	//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
-}
-
-void SersicLens::assign_anchored_parameters(LensProfile *primary_lens_in)
-{
-	anchor_special_parameter = true;
-	primary_lens = primary_lens_in;
-	double params[7];
-	primary_lens->get_parameters(params);
-	kappa0_frac = kappa0/params[0]; // this is the slope for the Alpha profile
-}
-
-void SersicLens::update_special_anchored_params()
-{
-	if (anchor_special_parameter) {
-		double params[7];
-		primary_lens->get_parameters(params);
-		kappa0 = kappa0_frac*params[0]; // this is the slope for the Alpha profile
-	}
-}
-
-void SersicLens::delete_parameter_anchor()
-{
-	if (anchor_special_parameter) {
-		anchor_special_parameter = false;
-		primary_lens = NULL;
-	}
 }
 
 void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool& status)
@@ -3029,11 +3128,13 @@ void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[5]) x_center = fitparams[index++];
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
 
+		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+		k = b*pow(sqrt(q)/re,1.0/n);
 		set_integration_pointers();
 		//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
 	}
@@ -3057,7 +3158,7 @@ void SersicLens::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[3]) fitparams[index++] = q;
 		if (vary_params[4]) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) fitparams[index++] = x_center;
 		if (vary_params[6]) fitparams[index++] = y_center;
 	}
@@ -3075,7 +3176,7 @@ void SersicLens::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[3]) stepsizes[index++] = 0.2;
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[5]) stepsizes[index++] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[6]) stepsizes[index++] = 0.3;
 	}
@@ -3102,7 +3203,7 @@ void SersicLens::print_parameters()
 	} else {
 		cout << "sersic: kappa0=" << kappa0 << ", R_eff=" << re << ", n=" << n << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 
 }
@@ -3112,9 +3213,10 @@ void SersicLens::print_parameters()
 MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &yc_in)
 {
 	lenstype = SHEET;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(3);
+	assign_param_pointers();
 	kext = kext_in;
 	x_center = xc_in; y_center = yc_in;
 	assign_paramnames();
@@ -3124,10 +3226,12 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -3144,9 +3248,18 @@ void MassSheet::assign_paramnames()
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "kext"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
 		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
+	}
+}
+
+void MassSheet::assign_param_pointers()
+{
+	param[0] = &kext;
+	if (!center_anchored) {
+		param[1] = &x_center;
+		param[2] = &y_center;
 	}
 }
 
@@ -3161,7 +3274,7 @@ void MassSheet::update_parameters(const double* params)
 {
 	kext=params[0];
 	if (kext < 0) kext=-kext;
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[1];
 		y_center = params[2];
 	}
@@ -3171,7 +3284,7 @@ void MassSheet::update_fit_parameters(const double* fitparams, int &index, bool&
 {
 	if (n_vary_params > 0) {
 		if (vary_params[0]) kext = fitparams[index++];
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[1]) x_center = fitparams[index++];
 			if (vary_params[2]) y_center = fitparams[index++];
 		}
@@ -3181,7 +3294,7 @@ void MassSheet::update_fit_parameters(const double* fitparams, int &index, bool&
 void MassSheet::get_fit_parameters(dvector& fitparams, int &index)
 {
 	if (vary_params[0]) fitparams[index++] = kext;
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[1]) fitparams[index++] = x_center;
 		if (vary_params[2]) fitparams[index++] = y_center;
 	}
@@ -3190,7 +3303,7 @@ void MassSheet::get_fit_parameters(dvector& fitparams, int &index)
 void MassSheet::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
 	if (vary_params[0]) stepsizes[index++] = 0.1*kext;
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[1]) stepsizes[index++] = 0.1; // arbitrary! really, the center should never be independently varied
 		if (vary_params[2]) stepsizes[index++] = 0.1;
 	}
@@ -3229,7 +3342,7 @@ void MassSheet::hessian(double x, double y, lensmatrix& hess)
 void MassSheet::print_parameters()
 {
 	cout << "mass sheet: kext=" << kext << ", center=(" << x_center << "," << y_center << ")";
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -3240,7 +3353,7 @@ void MassSheet::print_parameters()
 TestModel::TestModel(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype=TESTMODEL;
-	anchored = false;
+	center_anchored = false;
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
@@ -3276,7 +3389,7 @@ double TestModel::kappa_rsq(const double rsq)
 void TestModel::print_parameters()
 {
 	cout << "test: q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 

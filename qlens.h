@@ -700,6 +700,7 @@ public:
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_pixellated_source(double* params);
 	double fitmodel_loglike_pixellated_source_test(double* params);
+	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();

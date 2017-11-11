@@ -17,10 +17,11 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 {
 	lenstype = KSPLINE;
 	defined_spherical_kappa_profile = true;
-	anchored = false;
+	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(4);
 	assign_paramnames();
+	assign_param_pointers();
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
@@ -34,10 +35,12 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
-	anchored = lens_in->anchored;
-	anchor_lens = lens_in->anchor_lens;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
 	assign_paramnames();
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -54,10 +57,10 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	zfac = lens_in->zfac;
 }
 
-void LensProfile::anchor_to_lens(LensProfile** anchor_list, const int &anchor_lens_number)
+void LensProfile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
 {
-	if (!anchored) {
-		anchored = true;
+	if (!center_anchored) {
+		center_anchored = true;
 		n_params -= 2;
 		boolvector temp_vary_params;
 		temp_vary_params.input(vary_params);
@@ -68,16 +71,16 @@ void LensProfile::anchor_to_lens(LensProfile** anchor_list, const int &anchor_le
 			if (vary_params[i]==true) n_vary_params++;
 		}
 	}
-	anchor_lens = anchor_list[anchor_lens_number];
-	x_center = anchor_lens->x_center;
-	y_center = anchor_lens->y_center;
+	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
+	x_center = center_anchor_lens->x_center;
+	y_center = center_anchor_lens->y_center;
 }
 
-void LensProfile::delete_anchor()
+void LensProfile::delete_center_anchor()
 {
-	if (anchored) {
-		anchored = false;
-		anchor_lens = NULL;
+	if (center_anchored) {
+		center_anchored = false;
+		center_anchor_lens = NULL;
 		n_params += 2;
 		boolvector temp_vary_params;
 		temp_vary_params.input(vary_params);
@@ -88,11 +91,16 @@ void LensProfile::delete_anchor()
 	}
 }
 
+void LensProfile::delete_special_parameter_anchor()
+{
+	if (anchor_special_parameter) anchor_special_parameter = false;
+}
+
 void LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
 	if (vary_params_in.size() != n_params) {
-		// if the lens is anchored to another lens, it's ok to have vary params of zero entered for these parameters (they'll just be ignored)
-		if ((anchored) and (vary_params_in.size() == n_params + 2) and (vary_params_in[n_params]==0) and (vary_params_in[n_params+1]==0)) ;
+		// if the lens is center_anchored to another lens, it's ok to have vary params of zero entered for these parameters (they'll just be ignored)
+		if ((center_anchored) and (vary_params_in.size() == n_params + 2) and (vary_params_in[n_params]==0) and (vary_params_in[n_params+1]==0)) ;
 		else die("number of parameters to vary does not match total number of parameters");
 	}
 	n_vary_params=0;
@@ -162,7 +170,7 @@ void LensProfile::update_parameters(const double* params)
 	}
 	qx_parameter=params[2];
 	f_parameter=params[3];
-	if (!anchored) {
+	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
@@ -206,18 +214,25 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 			}
 			if (vary_params[1]==true) set_angle(fitparams[index++]);
 		}
-		if (!anchored) {
+		if (!center_anchored) {
 			if (vary_params[2]==true) x_center = fitparams[index++];
 			if (vary_params[3]==true) y_center = fitparams[index++];
 		}
 	}
 }
 
+void LensProfile::update_anchored_parameters()
+{
+	for (int i=0; i < n_params; i++) {
+		if (anchor_parameter[i]) (*param[i]) = parameter_anchor_ratio[i]*(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]));
+	}
+}
+
 void LensProfile::update_anchor_center()
 {
-	if (anchored) {
-		x_center = anchor_lens->x_center;
-		y_center = anchor_lens->y_center;
+	if (center_anchored) {
+		x_center = center_anchor_lens->x_center;
+		y_center = center_anchor_lens->y_center;
 	}
 }
 
@@ -237,7 +252,7 @@ void LensProfile::get_fit_parameters(dvector& fitparams, int &index)
 		if (vary_params[0]==true) fitparams[index++] = q;
 		if (vary_params[1]==true) fitparams[index++] = radians_to_degrees(theta);
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[2]==true) fitparams[index++] = x_center;
 		if (vary_params[3]==true) fitparams[index++] = y_center;
 	}
@@ -252,7 +267,7 @@ void LensProfile::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[0]==true) stepsizes[index++] = 0.2;
 		if (vary_params[1]==true) stepsizes[index++] = 10;
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		if (vary_params[2]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 		if (vary_params[3]==true) stepsizes[index++] = 1.0;
 	}
@@ -289,7 +304,62 @@ void LensProfile::set_n_params(const int &n_params_in)
 	n_params = n_params_in;
 	n_vary_params = 0;
 	vary_params.input(n_params);
-	for (int i=0; i < n_params; i++) vary_params[i] = false;
+	anchor_parameter = new bool[n_params];
+	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	param = new double*[n_params];
+	for (int i=0; i < n_params; i++) {
+		vary_params[i] = false;
+		anchor_parameter[i] = false;
+		parameter_anchor_lens[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+	}
+}
+
+void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
+{
+	// n_params *must* already be set before running this
+	anchor_parameter = new bool[n_params];
+	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	param = new double*[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter[i] = lens_in->anchor_parameter[i];
+		parameter_anchor_lens[i] = lens_in->parameter_anchor_lens[i];
+		parameter_anchor_paramnum[i] = lens_in->parameter_anchor_paramnum[i];
+		parameter_anchor_ratio[i] = lens_in->parameter_anchor_ratio[i];
+	}
+}
+
+void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens)
+{
+	if (paramnum >= n_params) die("Parameter does not exist for this lens");
+	if (anchor_paramnum >= param_anchor_lens->n_params) die("Parameter does not exist for lens you are anchoring to");
+	anchor_parameter[paramnum] = true;
+	parameter_anchor_lens[paramnum] = param_anchor_lens;
+	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
+	if (!use_anchor_ratio) {
+		parameter_anchor_ratio[paramnum] = 1.0;
+		(*param[paramnum]) = *(param_anchor_lens->param[anchor_paramnum]);
+	}
+	else parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_lens->param[anchor_paramnum]));
+
+}
+
+void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
+{
+	// if any parameters are anchored to the lens in question, unanchor them (use this when you are deleting a lens, in case others are anchored to it)
+	for (int i=0; i < n_params; i++) {
+		if ((anchor_parameter[i]) and (parameter_anchor_lens[i] = param_anchor_lens)) {
+			parameter_anchor_lens[i] = NULL;
+			anchor_parameter[i] = false;
+			parameter_anchor_paramnum[i] = -1;
+			parameter_anchor_ratio[i] = 1.0;
+		}
+	}
 }
 
 void LensProfile::assign_paramnames()
@@ -304,9 +374,19 @@ void LensProfile::assign_paramnames()
 		paramnames[0] = "q"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "";
 		paramnames[1] = "theta"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "";
 	}
-	if (!anchored) {
+	if (!center_anchored) {
 		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
 		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
+	}
+}
+
+void LensProfile::assign_param_pointers()
+{
+	param[0] = &q;
+	param[1] = &theta;
+	if (!center_anchored) {
+		param[2] = &x_center;
+		param[3] = &y_center;
 	}
 }
 
@@ -414,8 +494,8 @@ void LensProfile::shift_angle_minus_90()
 
 void LensProfile::reset_angle_modulo_2pi()
 {
-	while (theta < -M_PI/2) theta += M_PI;
-	while (theta > 2*M_PI) theta -= M_PI;
+	while (theta < -M_PI/2) theta += 2*M_PI;
+	while (theta > 2*M_PI) theta -= 2*M_PI;
 }
 
 void LensProfile::set_angle(const double &theta_degrees)
@@ -658,30 +738,51 @@ void LensProfile::print_parameters()
 	} else {
 		cout << "kspline: q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
-	if (anchored) cout << " (anchored to lens " << anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
 void LensProfile::print_vary_parameters()
 {
-	if (n_vary_params==0) { cout << "   parameters: none\n"; return; }
-	vector<string> paramnames_vary;
-	get_fit_parameter_names(paramnames_vary);
-	if (include_limits) {
-		if (lower_limits_initial.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
-		else {
-			cout << "   parameter limits:\n";
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-					cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
-				else
-					cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "], initial range: [" << lower_limits_initial[i] << ":" << upper_limits_initial[i] << "]\n";
+	if (n_vary_params==0) {
+		cout << "   parameters: none\n";
+	} else {
+		vector<string> paramnames_vary;
+		get_fit_parameter_names(paramnames_vary);
+		if (include_limits) {
+			if (lower_limits_initial.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
+			else {
+				cout << "   parameter limits:\n";
+				for (int i=0; i < n_vary_params; i++) {
+					if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
+						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
+					else
+						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "], initial range: [" << lower_limits_initial[i] << ":" << upper_limits_initial[i] << "]\n";
+				}
+			}
+		} else {
+			cout << "   parameters: ";
+			cout << paramnames_vary[0];
+			for (int i=1; i < n_vary_params; i++) cout << ", " << paramnames_vary[i];
+			cout << endl;
+		}
+	}
+	bool parameter_anchored = false;
+	for (int i=0; i < n_params; i++) {
+		if (anchor_parameter[i]) parameter_anchored = true;
+	}
+	if (parameter_anchored) {
+		cout << "   anchored parameters: ";
+		int j=0;
+		for (int i=0; i < n_params; i++) {
+			if (anchor_parameter[i]) {
+				if (j > 0) cout << ", ";
+				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": " << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
+				if (parameter_anchor_ratio[i] != 1.0) cout << "*" << parameter_anchor_ratio[i];
+				cout << ")";
+				j++;
 			}
 		}
-	} else {
-		cout << "   parameters: ";
-		cout << paramnames_vary[0];
-		for (int i=1; i < n_vary_params; i++) cout << ", " << paramnames_vary[i];
 		cout << endl;
 	}
 }

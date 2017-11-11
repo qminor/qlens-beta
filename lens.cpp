@@ -671,8 +671,9 @@ void Lens::remove_lens(int lensnumber)
 	LensProfile** newlist = new LensProfile*[nlens-1];
 	int i,j;
 	for (i=0; i < nlens; i++) {
-		if ((i != lensnumber) and (lens_list[i]->anchored==true) and (lens_list[i]->get_anchor_number()==lensnumber)) lens_list[i]->delete_anchor();
-		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_parameter_anchor();
+		if ((i != lensnumber) and (lens_list[i]->center_anchored==true) and (lens_list[i]->get_center_anchor_number()==lensnumber)) lens_list[i]->delete_center_anchor();
+		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_special_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_special_parameter_anchor();
+		if (i != lensnumber) lens_list[i]->unanchor_parameter(lens_list[lensnumber]); // this unanchors the lens if any of its parameters are anchored to the lens being deleted
 	}
 	for (i=0,j=0; i < nlens; i++)
 		if (i != lensnumber) { newlist[j] = lens_list[i]; j++; }
@@ -1188,16 +1189,16 @@ void Lens::calculate_critical_curve_deformation_radius(int lens_number, bool ver
 	bool is_pjaffe;
 	if (lens_list[lens_number]->get_lenstype()==PJAFFE) {
 		is_pjaffe = true;
-		dvector params;
-		lens_list[lens_number]->get_extra_params(params);
+		double params[10];
+		lens_list[lens_number]->get_parameters(params);
 		bs = params[0];
 		rt = params[1];
 	} else {
 		is_pjaffe = false;
 		lens_list[lens_number]->get_einstein_radius(dum,bs,reference_zfactor);
 	}
-	dvector host_params;
-	lens_list[0]->get_extra_params(host_params);
+	double host_params[10];
+	lens_list[0]->get_parameters(host_params);
 	alpha = host_params[1];
 	lens_list[0]->get_einstein_radius(dum,b,reference_zfactor);
 	lens_list[0]->get_q_theta(q,phi_0);
@@ -1347,8 +1348,8 @@ void Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	}
 
 	lens_list[0]->get_einstein_radius(dum,b,reference_zfactor);
-	dvector host_params;
-	lens_list[0]->get_extra_params(host_params);
+	double host_params[10];
+	lens_list[0]->get_parameters(host_params);
 	alpha = host_params[1];
 
 	if (lens_list[1]->get_lenstype()==SHEAR) lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
@@ -2494,8 +2495,12 @@ bool Lens::load_image_data(string filename)
 			}
 		}
 	}
+	if (auto_zsource_scaling) {
+		source_redshift = reference_source_redshift = source_redshifts[0];
+	}
 	for (i=0; i < n_sourcepts_fit; i++) {
 		zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
+		cout << "zfactor = " << zfactors[i] << endl;
 	}
 
 	int ncombs, max_combinations = -1;
@@ -2921,10 +2926,18 @@ void Lens::initialize_fitmodel()
 	for (int i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
 		// lens in fitmodel (the lens whose parameters will be varied)
-		if (fitmodel->lens_list[i]->anchored==true) fitmodel->lens_list[i]->anchor_to_lens(fitmodel->lens_list, lens_list[i]->get_anchor_number());
+		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(fitmodel->lens_list, lens_list[i]->get_center_anchor_number());
 		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
-			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_parameter_anchor_number()];
-			fitmodel->lens_list[i]->assign_anchored_parameters(parameter_anchor_lens);
+			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
+			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens);
+		}
+		for (int j=0; j < fitmodel->lens_list[i]->get_n_params(); j++) {
+			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
+				LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->parameter_anchor_lens[j]->lens_number];
+				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
+				double param_ratio = fitmodel->lens_list[i]->parameter_anchor_ratio[j];
+				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,param_ratio,parameter_anchor_lens);
+			}
 		}
 	}
 	if (open_chisq_logfile) {
@@ -2947,8 +2960,9 @@ void Lens::initialize_fitmodel()
 void Lens::update_anchored_parameters()
 {
 	for (int i=0; i < nlens; i++) {
-		if (lens_list[i]->anchored) lens_list[i]->update_anchor_center();
+		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
 		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
+		lens_list[i]->update_anchored_parameters();
 	}
 }
 
@@ -3930,10 +3944,14 @@ double Lens::chi_square_fit_simplex()
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
 			double *bestfit_flux;
+			bool found_bestfit_flux = true;
 			if (include_flux_chisq) {
 				bestfit_flux = new double[n_sourcepts_fit];
 				fitmodel->output_model_source_flux(bestfit_flux);
+				for (int i=0; i < n_sourcepts_fit; i++) if (bestfit_flux[i] == -1) found_bestfit_flux = false;
 			};
+			if (!found_bestfit_flux) warn("Not all best-fit source fluxes could be calculated. If there are no measured fluxes in your\ndata, turn 'chisqflux' off.");
+
 			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
 				fitmodel->output_analytic_srcpos(bestfit_src);
 			} else {
@@ -3941,7 +3959,9 @@ double Lens::chi_square_fit_simplex()
 			}
 			for (int i=0; i < n_sourcepts_fit; i++) {
 				cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
-				if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+				if ((include_flux_chisq) and (found_bestfit_flux)) {
+					cout << " src" << i << "_flux=" << bestfit_flux[i];
+				}
 				cout << endl;
 			}
 			delete[] bestfit_src;
@@ -4569,6 +4589,76 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	return loglike;
 }
 
+double Lens::loglike_point_source(double* params)
+{
+	// can use this version for testing purposes in case there is any doubt about whether the fitmodel version is faithfully reproducing the original
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (param_settings->use_penalty_limits[i]==true) {
+			if ((params[i] < param_settings->penalty_limits_lo[i]) or (params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
+		}
+	}
+	double transformed_params[n_fit_parameters];
+	param_settings->inverse_transform_parameters(params,transformed_params);
+	if (update_fitmodel(transformed_params)==false) return 1e30;
+	if (group_id==0) {
+		if (logfile.is_open()) {
+			for (int i=0; i < n_fit_parameters; i++) logfile << params[i] << " ";
+		}
+		logfile << flush;
+	}
+
+	double loglike, chisq_total=0, chisq;
+	if (use_image_plane_chisq) {
+		chisq = chisq_pos_image_plane();
+		if ((display_chisq_status) and (mpi_id==0)) {
+			int tot_data_images = 0;
+			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
+			cout << "# images found: " << n_visible_images << " vs. " << tot_data_images << " data, ";
+			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
+		}
+	}
+	else if (use_image_plane_chisq2) {
+		chisq = chisq_pos_image_plane2();
+		if ((display_chisq_status) and (mpi_id==0)) {
+			cout << "# images found: " << n_visible_images << " vs. " << image_data[0].n_images << " data, ";
+			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
+		}
+	}
+	else {
+		chisq = chisq_pos_source_plane();
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
+		}
+	}
+	chisq_total += chisq;
+	if (include_flux_chisq) {
+		chisq = chisq_flux();
+		chisq_total += chisq;
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_flux=" << chisq;
+		}
+	}
+	if (include_time_delay_chisq) {
+		chisq = chisq_time_delays();
+		chisq_total += chisq;
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_td=" << chisq;
+		}
+	}
+	if ((display_chisq_status) and (mpi_id==0)) {
+		if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "               ";
+		cout << endl;
+		cout << "\033[1A";
+	}
+
+	loglike = chisq_total/2.0;
+
+	param_settings->add_prior_terms_to_loglike(params,loglike);
+	param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	chisq_it++;
+	return loglike;
+}
+
 double Lens::fitmodel_loglike_pixellated_source(double* params)
 {
 	for (int i=0; i < n_fit_parameters; i++) {
@@ -4588,8 +4678,8 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	double loglike, chisq=0;
 	for (int i=0; i < nlens; i++) {
 		if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
-			dvector subparams;
-			lens_list[i]->get_extra_params(subparams);
+			double subparams[10];
+			lens_list[i]->get_parameters(subparams);
 			if (subparams[2] > subparams[1]) chisq=2e30; // don't allow s to be larger than a
 		}
 	}
@@ -5511,7 +5601,7 @@ void Lens::generate_solution_chain_sdp81()
 			auto_sourcegrid = true;
 			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
-			lens_list[1]->anchor_to_lens(lens_list,0);
+			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
 			for (int i=0; i < 7; i++) vary_flags[i] = true;
 			vary_flags[2] = false; // not varying core
@@ -5522,7 +5612,7 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
 				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_anchored_parameters(lens_list[0]); // calculates tidal radius
+				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 				pjaffe_vary_flags[0] = true;
@@ -5539,9 +5629,9 @@ void Lens::generate_solution_chain_sdp81()
 				calculate_critical_curve_deformation_radius_numerical(2,false,rmax,menc);
 			}
 
-			dvector host_params;
+			double host_params[10];
 			double dum;
-			lens_list[0]->get_extra_params(host_params);
+			lens_list[0]->get_parameters(host_params);
 			b_fit = host_params[0];
 			alpha_fit = host_params[1];
 			lens_list[0]->get_q_theta(q_fit,theta_fit);
@@ -5552,8 +5642,8 @@ void Lens::generate_solution_chain_sdp81()
 			shear_x_fit = -shear_ext*cos(2*phi_p+M_PI);
 			shear_y_fit = -shear_ext*sin(2*phi_p+M_PI);
 			if (include_subhalo) {
-				dvector sub_params;
-				lens_list[2]->get_extra_params(sub_params);
+				double sub_params[10];
+				lens_list[2]->get_parameters(sub_params);
 				bs_fit = sub_params[0];
 				a_fit = sub_params[1];
 				lens_list[2]->get_center_coords(xs_fit,ys_fit);
@@ -5623,7 +5713,7 @@ void Lens::generate_solution_chain_sdp81()
 			auto_sourcegrid = true;
 			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
-			lens_list[1]->anchor_to_lens(lens_list,0);
+			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
 			for (int i=0; i < 7; i++) vary_flags[i] = true;
 			vary_flags[2] = false; // not varying core
@@ -5634,7 +5724,7 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
 				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_anchored_parameters(lens_list[0]); // calculates tidal radius
+				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 				pjaffe_vary_flags[0] = true;
@@ -5650,9 +5740,9 @@ void Lens::generate_solution_chain_sdp81()
 				calculate_critical_curve_deformation_radius_numerical(2,false,rmax,menc);
 			}
 
-			dvector host_params;
+			double host_params[10];
 			double dum;
-			lens_list[0]->get_extra_params(host_params);
+			lens_list[0]->get_parameters(host_params);
 			b_fit = host_params[0];
 			alpha_fit = host_params[1];
 			lens_list[0]->get_q_theta(q_fit,theta_fit);
@@ -5662,8 +5752,8 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
 			shear_x_fit = -shear_ext*cos(2*phi_p+M_PI);
 			shear_y_fit = -shear_ext*sin(2*phi_p+M_PI);
-			dvector sub_params;
-			lens_list[2]->get_extra_params(sub_params);
+			double sub_params[10];
+			lens_list[2]->get_parameters(sub_params);
 			bs_fit = sub_params[0];
 			a_fit = sub_params[1];
 			lens_list[2]->get_center_coords(xs_fit,ys_fit);
@@ -5764,7 +5854,7 @@ void Lens::generate_solution_chain_sdp81()
 			auto_sourcegrid = true;
 			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
-			lens_list[1]->anchor_to_lens(lens_list,0);
+			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
 			for (int i=0; i < 7; i++) vary_flags[i] = true;
 			vary_flags[2] = false; // not varying core
@@ -5775,7 +5865,7 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
 				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_anchored_parameters(lens_list[0]); // calculates tidal radius
+				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 				pjaffe_vary_flags[0] = true;
@@ -5791,9 +5881,9 @@ void Lens::generate_solution_chain_sdp81()
 				calculate_critical_curve_deformation_radius_numerical(2,false,rmax,menc);
 			}
 
-			dvector host_params;
+			double host_params[10];
 			double dum;
-			lens_list[0]->get_extra_params(host_params);
+			lens_list[0]->get_parameters(host_params);
 			b_fit = host_params[0];
 			alpha_fit = host_params[1];
 			lens_list[0]->get_q_theta(q_fit,theta_fit);
@@ -5804,8 +5894,8 @@ void Lens::generate_solution_chain_sdp81()
 			shear_x_fit = -shear_ext*cos(2*phi_p+M_PI);
 			shear_y_fit = -shear_ext*sin(2*phi_p+M_PI);
 			if (include_subhalo) {
-				dvector sub_params;
-				lens_list[2]->get_extra_params(sub_params);
+				double sub_params[10];
+				lens_list[2]->get_parameters(sub_params);
 				bs_fit = sub_params[0];
 				a_fit = sub_params[1];
 				lens_list[2]->get_center_coords(xs_fit,ys_fit);
