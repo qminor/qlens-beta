@@ -19,7 +19,7 @@ Upgrades in new version (Nov. 11, 2017):
 	fit lens kmpole 0.1 2 anchor=0,4 0 0  
 	1 0 0 1 1
 
-	The "anchor=0,4" means we are anchoring this parameter (the angle) to lens 0, parameter 4 which is the angle (remember the first parameter is indexed as zero!). The vary flag must be turned off for the parameter being anchored, or else qlens will complain.
+	The "anchor=0,4" means we are anchoring this parameter (the angle) to lens 0, parameter 4 which is the angle of the first lens (remember the first parameter is indexed as zero!). The vary flag must be turned off for the parameter being anchored, or else qlens will complain.
 
 	Anchor type 2: Suppose I want to add a model where I want a parameter to keep the same *ratio* with a parameter in another lens that I started with. You can do this using the following format:
 

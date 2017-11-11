@@ -14,7 +14,7 @@ Upgrades in new version (Nov. 11, 2017):
 
 	so that this now becomes listed as lens "0".
 
-	Anchor type 1: Now suppose I add another lens, e.g. an external shear term, where I want the angle to always be equal to that of lens 0. Then I enter this as
+	Anchor type 1: Now suppose I add another model, e.g. a kappa multipole, where I want the angle to always be equal to that of lens 0. Then I enter this as
 
 	fit lens kmpole 0.1 2 anchor=0,4 0 0  
 	1 0 0 1 1
