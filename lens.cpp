@@ -2223,6 +2223,7 @@ int Lens::find_zero_curves(Vector<lensvector>& cell, double xmin, double ymin, d
 	return ncfound; // Returns number of boxes that contained a critical curve
 }
 
+/*
 double Lens::make_satellite_population(const double number_density, const double rmax, const double b, const double a)
 {
 	int N = (int) (number_density*M_PI*rmax*rmax);
@@ -2266,6 +2267,7 @@ void Lens::plot_satellite_deflection_vs_area()
 		cout << r << " " << log(r) << " " << defsqr_avg << endl;
 	}
 }
+*/
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
@@ -3428,7 +3430,34 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters");
+	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes");
+}
+
+void Lens::set_default_plimits()
+{
+	boolvector use_penalty_limits;
+	dvector lower, upper;
+	param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
+	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
+	int i, index=0;
+	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	if (source_fit_mode==Point_Source) {
+		if (source_plane_rscale==0.0) autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+			for (i=0; i < n_sourcepts_fit; i++) {
+				if (vary_sourcepts_x[i]) index++;
+				if (vary_sourcepts_y[i]) index++;
+			}
+		}
+	}
+	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) {
+		index++;
+	}
+	if (vary_pixel_fraction) index++;
+	if (vary_magnification_threshold) index++;
+	if (vary_hubble_parameter) index++;
+	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges");
+	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
 
 void Lens::get_n_fit_parameters(int &nparams)
@@ -3481,6 +3510,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	dvector stepsizes(n_fit_parameters);
 	get_automatic_initial_stepsizes(stepsizes);
 	param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
+	set_default_plimits();
 	param_settings->transform_parameters(fitparams.array());
 	transformed_parameter_names.resize(n_fit_parameters);
 	transformed_latex_parameter_names.resize(n_fit_parameters);
@@ -4518,6 +4548,16 @@ void Lens::output_bestfit_model()
 		}
 		outfile << endl;
 	}
+	string prange_str = fit_output_dir + "/" + fit_output_filename + ".pranges";
+	ofstream prangefile(prange_str.c_str());
+	for (int i=0; i < n_fit_parameters; i++)
+	{
+		if (param_settings->use_penalty_limits[i])
+			prangefile << param_settings->penalty_limits_lo[i] << " " << param_settings->penalty_limits_hi[i] << endl;
+		else
+			prangefile << "-1e30 1e30" << endl;
+	}
+	prangefile.close();
 }
 
 double Lens::fitmodel_loglike_point_source(double* params)
@@ -4543,14 +4583,14 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		if ((display_chisq_status) and (mpi_id==0)) {
 			int tot_data_images = 0;
 			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-			cout << "# images found: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data, ";
+			cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data, ";
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
 	else if (use_image_plane_chisq2) {
 		chisq = fitmodel->chisq_pos_image_plane2();
 		if ((display_chisq_status) and (mpi_id==0)) {
-			cout << "# images found: " << fitmodel->n_visible_images << " vs. " << image_data[0].n_images << " data, ";
+			cout << "# images: " << fitmodel->n_visible_images << " vs. " << image_data[0].n_images << " data, ";
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
@@ -4613,14 +4653,14 @@ double Lens::loglike_point_source(double* params)
 		if ((display_chisq_status) and (mpi_id==0)) {
 			int tot_data_images = 0;
 			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-			cout << "# images found: " << n_visible_images << " vs. " << tot_data_images << " data, ";
+			cout << "# images: " << n_visible_images << " vs. " << tot_data_images << " data, ";
 			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
 	else if (use_image_plane_chisq2) {
 		chisq = chisq_pos_image_plane2();
 		if ((display_chisq_status) and (mpi_id==0)) {
-			cout << "# images found: " << n_visible_images << " vs. " << image_data[0].n_images << " data, ";
+			cout << "# images: " << n_visible_images << " vs. " << image_data[0].n_images << " data, ";
 			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
@@ -5499,6 +5539,7 @@ double Lens::set_required_data_pixel_window(bool verbal)
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in window required for fit: " << count << endl;
 }
 
+/*
 void Lens::generate_solution_chain_sdp81()
 {
 	double b_true, q_true, theta_true, xc_true, yc_true;
@@ -5791,152 +5832,151 @@ void Lens::generate_solution_chain_sdp81()
 		params_out.close();
 	}
 
-	/*
 	// Now re-set and vary ks instead...
-	if (!include_subhalo) {
-		b_fit = b_true; alpha_fit = 1.0; q_fit = q_true; theta_fit = theta_true; xc_fit = xc_true; yc_fit = yc_true;
-		shear_x_fit = shear_x_true; shear_y_fit = shear_y_true;
-	} else {
-		//b_fit = 1.607432701; alpha_fit = 1.38045557; q_fit = 0.7201057458; theta_fit = 7.769220326; xc_fit = -0.04439526632; yc_fit = -0.1574250004;
-		//shear_x_fit = 0.06842352955; shear_y_fit = 0.01062479437;
-		//bs_fit = 0.04560161822; xs_fit = -1.500479158; ys_fit = -0.3724162998;
-		b_fit = b_true; alpha_fit = 1.0; q_fit = q_true; theta_fit = theta_true; xc_fit = xc_true; yc_fit = yc_true;
-		shear_x_fit = shear_x_true; shear_y_fit = shear_y_true;
-		bs_fit = 0.001; xs_fit = -1.5; ys_fit = -0.37;
-	}
-
-	double ks, ks_initial, ks_final, kstep;
-	int kspoints = 30;
-	ks_initial = 0.001;
-	ks_final = 0.015;
-	kstep = (ks_final-ks_initial)/(kspoints-1);
-
-	for (int l=1; l < 2; l++) {
-		if (l==1) include_subhalo = true;
-
-		string kfilename = "rmax_fit_ks";
-		if (!include_subhalo) kfilename += "_nosub";
-		else kfilename += "_sub";
-		ofstream kfitout((kfilename + ".dat").c_str());
-		ofstream kparams_out((kfilename + "_params.dat").c_str());
-
-		for (i=0, ks=ks_initial; i < kspoints; i++, ks += kstep)
-		{
-			ks_true = ks;
-			clear_lenses();
-			auto_srcgrid_npixels = false;
-			auto_sourcegrid = false;
-			sourcegrid_xmin=-0.4;
-			sourcegrid_xmax=0.3;
-			sourcegrid_ymin=-0.6;
-			sourcegrid_ymax=0.1999;
-			srcgrid_npixels_x = 150;
-			srcgrid_npixels_y = 150;
-
-			xs_true = -r_initial*cos(theta_sub);
-			ys_true = -r_initial*sin(theta_sub);
-			a_true = SQR(21.6347)*ks_true/1.606; // from formula for tidal radius of Munoz profile, see Minor et al. (2016)
-			add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
-			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-			add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
-			//calculate_critical_curve_deformation_radius_numerical(2,true,rmax,menc);
-			//cout << endl;
-			create_source_surface_brightness_grid(false);
-			system(rmstring.c_str());
-			plot_lensed_surface_brightness(temp_data_filename,true,false);
-			load_image_surface_brightness_grid(temp_data_filename);
-			image_pixel_data->set_no_required_data_pixels();
-			image_pixel_data->set_required_data_annulus(-0.4,-0.2,0.97,1.43,90,270);
-			image_pixel_data->set_required_data_pixels(1.75,2.05,-0.5,0.33);
-			clear_lenses();
-
-			auto_srcgrid_npixels = true;
-			auto_sourcegrid = true;
-			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
-			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
-			lens_list[1]->anchor_center_to_lens(lens_list,0);
-			boolvector vary_flags(7);
-			for (int i=0; i < 7; i++) vary_flags[i] = true;
-			vary_flags[2] = false; // not varying core
-			lens_list[0]->vary_parameters(vary_flags);
-			boolvector shear_vary_flags(2);
-			shear_vary_flags[0] = true;
-			shear_vary_flags[1] = true;
-			lens_list[1]->vary_parameters(shear_vary_flags);
-			if (include_subhalo) {
-				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
-				boolvector pjaffe_vary_flags(7);
-				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
-				pjaffe_vary_flags[0] = true;
-				pjaffe_vary_flags[5] = true;
-				pjaffe_vary_flags[6] = true;
-				lens_list[2]->vary_parameters(pjaffe_vary_flags);
-			}
-			max_sb_prior_unselected_pixels = true;
-			chisq = chi_square_fit_simplex();
-			use_bestfit_model();
-
-			if (include_subhalo) {
-				calculate_critical_curve_deformation_radius_numerical(2,false,rmax,menc);
-			}
-
-			double host_params[10];
-			double dum;
-			lens_list[0]->get_parameters(host_params);
-			b_fit = host_params[0];
-			alpha_fit = host_params[1];
-			lens_list[0]->get_q_theta(q_fit,theta_fit);
-			theta_fit *= 180.0/M_PI;
-			lens_list[0]->get_center_coords(xc_fit,yc_fit);
-			double shear_ext,phi_p;
-			lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
-			shear_x_fit = -shear_ext*cos(2*phi_p+M_PI);
-			shear_y_fit = -shear_ext*sin(2*phi_p+M_PI);
-			if (include_subhalo) {
-				double sub_params[10];
-				lens_list[2]->get_parameters(sub_params);
-				bs_fit = sub_params[0];
-				a_fit = sub_params[1];
-				lens_list[2]->get_center_coords(xs_fit,ys_fit);
-			}
-			print_lens_list(false);
-			cout << endl;
-			invert_surface_brightness_map_from_data(false);
-			plotcrit("crit.dat");
-			if (plot_lensed_surface_brightness("img_pixel")==true) {
-				if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
-				run_plotter_range("srcpixel","");
-				run_plotter_range("imgpixel","");
-			}
-
-			double avg_kappa, menc_true;
-			if (include_subhalo) {
-				clear_lenses();
-				add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
-				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-				add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
-				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
-				menc_true = avg_kappa*M_PI*SQR(rmax)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
-				mtot_fit = M_PI*a_fit*bs_fit*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
-				mtot_true = M_PI*SQR(a_true)*ks_true*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
-				cout << "rmax = " << rmax << ", mass_enclosed_fit = " << menc << ", mass_enclosed_true = " << menc_true << endl;
-				kfitout << ks_true << " " << xs_fit << " " << bs_fit << " " << chisq << " " << rmax << " " << menc << " " << menc_true << " " << (menc_true-menc)/menc_true << " " << mtot_fit << " " << (mtot_true-mtot_fit)/mtot_true << endl;
-			} else {
-				kfitout << ks_true << " " << chisq << " " << endl;
-			}
-			kparams_out << "xs_true=" << xs_true << " ks_true=" << ks_true << " ";
-			if (include_subhalo)
-				kparams_out << bs_fit << " " << xs_fit << " " << ys_fit << " ";
-			kparams_out << b_fit << " " << alpha_fit << " " << q_fit << " " << theta_fit << " " << xc_fit << " " << yc_fit << " " << shear_x_fit << " " << shear_y_fit << endl;
-
-		}
-		kfitout.close();
-		kparams_out.close();
-	}
-	*/
+//	if (!include_subhalo) {
+//		b_fit = b_true; alpha_fit = 1.0; q_fit = q_true; theta_fit = theta_true; xc_fit = xc_true; yc_fit = yc_true;
+//		shear_x_fit = shear_x_true; shear_y_fit = shear_y_true;
+//	} else {
+//		//b_fit = 1.607432701; alpha_fit = 1.38045557; q_fit = 0.7201057458; theta_fit = 7.769220326; xc_fit = -0.04439526632; yc_fit = -0.1574250004;
+//		//shear_x_fit = 0.06842352955; shear_y_fit = 0.01062479437;
+//		//bs_fit = 0.04560161822; xs_fit = -1.500479158; ys_fit = -0.3724162998;
+//		b_fit = b_true; alpha_fit = 1.0; q_fit = q_true; theta_fit = theta_true; xc_fit = xc_true; yc_fit = yc_true;
+//		shear_x_fit = shear_x_true; shear_y_fit = shear_y_true;
+//		bs_fit = 0.001; xs_fit = -1.5; ys_fit = -0.37;
+//	}
+//
+//	double ks, ks_initial, ks_final, kstep;
+//	int kspoints = 30;
+//	ks_initial = 0.001;
+//	ks_final = 0.015;
+//	kstep = (ks_final-ks_initial)/(kspoints-1);
+//
+//	for (int l=1; l < 2; l++) {
+//		if (l==1) include_subhalo = true;
+//
+//		string kfilename = "rmax_fit_ks";
+//		if (!include_subhalo) kfilename += "_nosub";
+//		else kfilename += "_sub";
+//		ofstream kfitout((kfilename + ".dat").c_str());
+//		ofstream kparams_out((kfilename + "_params.dat").c_str());
+//
+//		for (i=0, ks=ks_initial; i < kspoints; i++, ks += kstep)
+//		{
+//			ks_true = ks;
+//			clear_lenses();
+//			auto_srcgrid_npixels = false;
+//			auto_sourcegrid = false;
+//			sourcegrid_xmin=-0.4;
+//			sourcegrid_xmax=0.3;
+//			sourcegrid_ymin=-0.6;
+//			sourcegrid_ymax=0.1999;
+//			srcgrid_npixels_x = 150;
+//			srcgrid_npixels_y = 150;
+//
+//			xs_true = -r_initial*cos(theta_sub);
+//			ys_true = -r_initial*sin(theta_sub);
+//			a_true = SQR(21.6347)*ks_true/1.606; // from formula for tidal radius of Munoz profile, see Minor et al. (2016)
+//			add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
+//			add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+//			//calculate_critical_curve_deformation_radius_numerical(2,true,rmax,menc);
+//			//cout << endl;
+//			create_source_surface_brightness_grid(false);
+//			system(rmstring.c_str());
+//			plot_lensed_surface_brightness(temp_data_filename,true,false);
+//			load_image_surface_brightness_grid(temp_data_filename);
+//			image_pixel_data->set_no_required_data_pixels();
+//			image_pixel_data->set_required_data_annulus(-0.4,-0.2,0.97,1.43,90,270);
+//			image_pixel_data->set_required_data_pixels(1.75,2.05,-0.5,0.33);
+//			clear_lenses();
+//
+//			auto_srcgrid_npixels = true;
+//			auto_sourcegrid = true;
+//			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+//			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
+//			lens_list[1]->anchor_center_to_lens(lens_list,0);
+//			boolvector vary_flags(7);
+//			for (int i=0; i < 7; i++) vary_flags[i] = true;
+//			vary_flags[2] = false; // not varying core
+//			lens_list[0]->vary_parameters(vary_flags);
+//			boolvector shear_vary_flags(2);
+//			shear_vary_flags[0] = true;
+//			shear_vary_flags[1] = true;
+//			lens_list[1]->vary_parameters(shear_vary_flags);
+//			if (include_subhalo) {
+//				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+//				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
+//				boolvector pjaffe_vary_flags(7);
+//				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
+//				pjaffe_vary_flags[0] = true;
+//				pjaffe_vary_flags[5] = true;
+//				pjaffe_vary_flags[6] = true;
+//				lens_list[2]->vary_parameters(pjaffe_vary_flags);
+//			}
+//			max_sb_prior_unselected_pixels = true;
+//			chisq = chi_square_fit_simplex();
+//			use_bestfit_model();
+//
+//			if (include_subhalo) {
+//				calculate_critical_curve_deformation_radius_numerical(2,false,rmax,menc);
+//			}
+//
+//			double host_params[10];
+//			double dum;
+//			lens_list[0]->get_parameters(host_params);
+//			b_fit = host_params[0];
+//			alpha_fit = host_params[1];
+//			lens_list[0]->get_q_theta(q_fit,theta_fit);
+//			theta_fit *= 180.0/M_PI;
+//			lens_list[0]->get_center_coords(xc_fit,yc_fit);
+//			double shear_ext,phi_p;
+//			lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
+//			shear_x_fit = -shear_ext*cos(2*phi_p+M_PI);
+//			shear_y_fit = -shear_ext*sin(2*phi_p+M_PI);
+//			if (include_subhalo) {
+//				double sub_params[10];
+//				lens_list[2]->get_parameters(sub_params);
+//				bs_fit = sub_params[0];
+//				a_fit = sub_params[1];
+//				lens_list[2]->get_center_coords(xs_fit,ys_fit);
+//			}
+//			print_lens_list(false);
+//			cout << endl;
+//			invert_surface_brightness_map_from_data(false);
+//			plotcrit("crit.dat");
+//			if (plot_lensed_surface_brightness("img_pixel")==true) {
+//				if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
+//				run_plotter_range("srcpixel","");
+//				run_plotter_range("imgpixel","");
+//			}
+//
+//			double avg_kappa, menc_true;
+//			if (include_subhalo) {
+//				clear_lenses();
+//				add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
+//				add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+//				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
+//				menc_true = avg_kappa*M_PI*SQR(rmax)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
+//				mtot_fit = M_PI*a_fit*bs_fit*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
+//				mtot_true = M_PI*SQR(a_true)*ks_true*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
+//				cout << "rmax = " << rmax << ", mass_enclosed_fit = " << menc << ", mass_enclosed_true = " << menc_true << endl;
+//				kfitout << ks_true << " " << xs_fit << " " << bs_fit << " " << chisq << " " << rmax << " " << menc << " " << menc_true << " " << (menc_true-menc)/menc_true << " " << mtot_fit << " " << (mtot_true-mtot_fit)/mtot_true << endl;
+//			} else {
+//				kfitout << ks_true << " " << chisq << " " << endl;
+//			}
+//			kparams_out << "xs_true=" << xs_true << " ks_true=" << ks_true << " ";
+//			if (include_subhalo)
+//				kparams_out << bs_fit << " " << xs_fit << " " << ys_fit << " ";
+//			kparams_out << b_fit << " " << alpha_fit << " " << q_fit << " " << theta_fit << " " << xc_fit << " " << yc_fit << " " << shear_x_fit << " " << shear_y_fit << endl;
+//
+//		}
+//		kfitout.close();
+//		kparams_out.close();
+//	}
 
 }
+*/
 
 void Lens::create_output_directory()
 {

@@ -138,6 +138,8 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void reset_angle_modulo_2pi();
 
 	virtual void get_auto_stepsizes(dvector& stepsizes, int &index);
+	virtual void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
@@ -249,6 +251,7 @@ class Alpha : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -290,6 +293,7 @@ class PseudoJaffe : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -322,6 +326,7 @@ class NFW : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -351,6 +356,7 @@ class Truncated_NFW : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -377,6 +383,7 @@ class Hernquist : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -401,6 +408,7 @@ class ExpDisk : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -427,6 +435,7 @@ class Shear : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -470,6 +479,7 @@ class Multipole : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -496,6 +506,7 @@ class PointMass : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -547,6 +558,7 @@ class CoreCusp : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -571,6 +583,7 @@ class SersicLens : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -602,6 +615,7 @@ class MassSheet : public LensProfile
 	void assign_param_pointers();
 	void get_fit_parameters(dvector& fitparams, int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);

@@ -152,11 +152,6 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		for (i=0; i < a; i++) {
 			if (!(paramranges_file >> lowcut[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
 			if (!(paramranges_file >> highcut[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
-			//if (i==1) {
-				//double tmp = lowcut[1];
-				//lowcut[1] = 2 - highcut[1];
-				//highcut[1] = 2 - tmp;
-			//}
 			if (lowcut[i] > highcut[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
 
 		}
@@ -3530,6 +3525,19 @@ void FisherEval::input(const char *file_root, const bool silent)
 		//cout << endl;
 	}
 	pcov_file.close();
+	string paramranges_filename = string(file_root) + ".pranges";
+	ifstream paramranges_file(paramranges_filename.c_str());
+	lower = new double[numOfParam];
+	upper = new double[numOfParam];
+	if (paramranges_file.is_open()) {
+		for (i=0; i < a; i++) {
+			if (!(paramranges_file >> lower[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (!(paramranges_file >> upper[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (lower[i] > upper[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
+
+		}
+		paramranges_file.close();
+	} else die("parameter range file '%s' not found",paramranges_filename.c_str());
 }
 
 void FisherEval::MkDist(const int N, const char *name, const int iin)
@@ -3539,6 +3547,8 @@ void FisherEval::MkDist(const int N, const char *name, const int iin)
 	mean = bestfitpt[iin];
 	xmin = mean - 3.5*sig;
 	xmax = mean + 3.5*sig;
+	if (xmin < lower[iin]) xmin = lower[iin];
+	if (xmax > upper[iin]) xmax = upper[iin];
 	xstep = (xmax-xmin)/(N-1);
 
 	double distval;
@@ -3569,6 +3579,8 @@ void FisherEval::MkDist2D(const int xN, const int yN, const char *name, const in
 	xmean = bestfitpt[iin];
 	xmin = xmean - 3.5*sigx;
 	xmax = xmean + 3.5*sigx;
+	if (xmin < lower[iin]) xmin = lower[iin];
+	if (xmax > upper[iin]) xmax = upper[iin];
 	xstep = (xmax-xmin)/(xN-1);
 
 	double sigy, ymean, y, ymin, ymax, ystep;
@@ -3576,6 +3588,8 @@ void FisherEval::MkDist2D(const int xN, const int yN, const char *name, const in
 	ymean = bestfitpt[jin];
 	ymin = ymean - 3.5*sigy;
 	ymax = ymean + 3.5*sigy;
+	if (ymin < lower[jin]) ymin = lower[jin];
+	if (ymax > upper[jin]) ymax = upper[jin];
 	ystep = (ymax-ymin)/(yN-1);
 
 	int i,j;
@@ -3609,6 +3623,8 @@ void FisherEval::MkDist2D(const int xN, const int yN, const char *name, const in
 FisherEval::~FisherEval()
 {
 	if (bestfitpt != NULL) delete[] bestfitpt;
+	if (lower != NULL) delete[] lower;
+	if (upper != NULL) delete[] upper;
 	if (pcov != NULL) {
 		for (int i=0; i < numOfParam; i++) delete[] pcov[i];
 		delete[] pcov;

@@ -268,8 +268,32 @@ void LensProfile::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[1]==true) stepsizes[index++] = 10;
 	}
 	if (!center_anchored) {
-		if (vary_params[2]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+		if (vary_params[2]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
 		if (vary_params[3]==true) stepsizes[index++] = 1.0;
+	}
+}
+
+void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+{
+	if (use_ellipticity_components) {
+		if (vary_params[0]==true) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
+			index++;
+		}
+		if (vary_params[1]==true) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
+			index++;
+		}
+	} else {
+		if (vary_params[0]==true) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
+			index++;
+		}
+		if (vary_params[1]==true) index++;
+	}
+	if (!center_anchored) {
+		if (vary_params[2]==true) index++;
+		if (vary_params[3]==true) index++;
 	}
 }
 

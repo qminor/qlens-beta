@@ -121,10 +121,11 @@ class FisherEval
 {
 	int numOfParam;
 	double *bestfitpt;
+	double *lower, *upper;
 	double **pcov;
 
 	public:
-	FisherEval() { bestfitpt = NULL; pcov = NULL; numOfParam = 0; }
+	FisherEval() { bestfitpt = NULL; pcov = NULL; lower = NULL; upper = NULL; numOfParam = 0; }
 	void input(const char *file_root, const bool silent);
 	~FisherEval();
 

@@ -695,6 +695,7 @@ public:
 	void get_parameter_names();
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
+	void set_default_plimits();
 	void initialize_fitmodel();
 	bool update_fitmodel(const double* params);
 	double fitmodel_loglike_point_source(double* params);
@@ -821,10 +822,10 @@ public:
 	double caust0_interpolate(double theta);
 	double caust1_interpolate(double theta);
 
-	double make_satellite_population(const double number_density, const double rmax, const double a, const double b);
-	void plot_satellite_deflection_vs_area();
+	//double make_satellite_population(const double number_density, const double rmax, const double a, const double b);
+	//void plot_satellite_deflection_vs_area();
 
-	void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
+	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
 };
 
 struct ImageData
@@ -1061,8 +1062,16 @@ struct ParamSettings
 			extra_length = max_length - param_names[i].length();
 			for (int j=0; j < extra_length; j++) cout << " ";
 			if ((nparams > 10) and (i < 10)) cout << " ";
-			if (use_penalty_limits[i]==false) cout << "none" << endl;
-			else cout << "[" << penalty_limits_lo[i] << ":" << penalty_limits_hi[i] << "]" << endl;
+			if ((use_penalty_limits[i]==false) or ((penalty_limits_lo[i]==-1e30) and (penalty_limits_hi[i]==1e30))) cout << "none" << endl;
+			else {
+				cout << "[";
+				if (penalty_limits_lo[i]==-1e30) cout << "-inf";
+				else cout << penalty_limits_lo[i];
+				cout << ":";
+				if (penalty_limits_hi[i]==1e30) cout << "inf";
+				else cout << penalty_limits_hi[i];
+				cout << "]" << endl;
+			}
 		}
 	}
 	void scale_stepsizes(const double fac)
@@ -1092,10 +1101,34 @@ struct ParamSettings
 		penalty_limits_lo[i] = lo;
 		penalty_limits_hi[i] = hi;
 	}
+	void get_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	{
+		use_plimits.input(nparams);
+		lower.input(nparams);
+		upper.input(nparams);
+		for (int i=0; i < nparams; i++) {
+			use_plimits[i] = use_penalty_limits[i];
+			lower[i] = penalty_limits_lo[i];
+			upper[i] = penalty_limits_hi[i];
+		}
+	}
+	void update_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	{
+		for (int i=0; i < nparams; i++) {
+			if ((use_penalty_limits[i]==false) and (use_plimits[i]==true))
+			{
+				use_penalty_limits[i] = true;
+				penalty_limits_lo[i] = lower[i];
+				penalty_limits_hi[i] = upper[i];
+			}
+		}
+	}
 	void clear_penalty_limit(const int i)
 	{
 		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		use_penalty_limits[i] = false;
+		use_penalty_limits[i] = true; // this ensures that it won't be overwritten by default values
+		penalty_limits_lo[i] = -1e30;
+		penalty_limits_hi[i] = 1e30;
 	}
 	void transform_parameters(double *params)
 	{

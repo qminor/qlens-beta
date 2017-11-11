@@ -574,8 +574,8 @@ void Lens::process_commands(bool read_file)
 							"Define limits on the allowed parameter space by imposing a steep penalty in the chi-square if the\n"
 							"fit strays outside the limits. Type 'fit plimits' to see the current list of fit parameters.\n"
 							"For example, 'fit plimits 0 0.5 1.5' limits parameter 0 to the range [0.5:1.5]. To disable the\n"
-							"limits for a specific parameter, type 'none' instead of giving limits. (To disable all the parameter\n"
-							"limits, type 'fit plimits clear'.) Setting parameter limits this way is useful when doing a chi-square\n"
+							"limits for a specific parameter, type 'none' instead of giving limits. (To revert to the default parameter\n"
+							"limits, type 'fit plimits reset'.) Setting parameter limits this way is useful when doing a chi-square\n"
 							"minimization with downhill simplex or Powell's method, but is unnecessary for the Monte Carlo samplers\n"
 							"(twalk or nest) since limits must be entered for all parameters when the fit model is defined.\n";
 					else if (words[2]=="stepsizes")
@@ -3365,9 +3365,13 @@ void Lens::process_commands(bool read_file)
 					get_parameter_names();
 					get_automatic_initial_stepsizes(stepsizes);
 					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					set_default_plimits();
 					if (nwords==2) { if (mpi_id==0) param_settings->print_penalty_limits(); }
 					else if (nwords == 3) {
-						if (words[2]=="clear") param_settings->clear_penalty_limits();
+						if (words[2]=="reset") {
+							param_settings->clear_penalty_limits();
+							set_default_plimits();
+						}
 						else Complain("command not recognized for 'fit plimits'");
 					}
 					else if (nwords == 4) {
@@ -3382,8 +3386,10 @@ void Lens::process_commands(bool read_file)
 						double lo, hi;
 						if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit plimits'");
-						if (!(ws[3] >> lo)) Complain("Invalid lower limit");
-						if (!(ws[4] >> hi)) Complain("Invalid higher limit");
+						if (words[3]=="-inf") lo=-1e30;
+						else if (!(ws[3] >> lo)) Complain("Invalid lower limit");
+						if (words[4]=="inf") hi=1e30;
+						else if (!(ws[4] >> hi)) Complain("Invalid higher limit");
 						param_settings->set_penalty_limit(param_num,lo,hi);
 					}
 					else Complain("command 'fit plimits' requires either zero or three arguments (see 'help fit plimits')");
