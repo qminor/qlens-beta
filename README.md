@@ -14,7 +14,7 @@ Upgrades in new version (Nov. 11, 2017):
 
 	so that this now becomes listed as lens "0".
 
-	  a) Anchor type 1: Now suppose I add another model, e.g. a kappa multipole, where I want the angle to always be equal to that of lens 0. Then I enter this as
+	1. Anchor type 1: Now suppose I add another model, e.g. a kappa multipole, where I want the angle to always be equal to that of lens 0. Then I enter this as
 
 	  fit lens kmpole 0.1 2 anchor=0,4 0 0  
 	  1 0 0 1 1
@@ -23,7 +23,7 @@ Upgrades in new version (Nov. 11, 2017):
 
 	  NOTE: Keep in mind that as long as you use the correct format, qlens will not complain no matter how absurd the choice of anchoring is; so make sure you have indexed it correctly! To test it out, you can use "lens update ..." to update the lens you are anchoring to, and make sure that the anchored parameter changes accordingly.
 
-	  b) Anchor type 2: Suppose I want to add a model where I want a parameter to keep the same *ratio* with a parameter in another lens that I started with. You can do this using the following format:
+	2. Anchor type 2: Suppose I want to add a model where I want a parameter to keep the same *ratio* with a parameter in another lens that I started with. You can do this using the following format:
 
 	  fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 0 0  
 	  1 0 0 1 1 1 1
