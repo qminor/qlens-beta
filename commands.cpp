@@ -1639,8 +1639,8 @@ void Lens::process_commands(bool read_file)
 						if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
 						pnumstr << pnumstring;
 						if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						if (lnum >= nlens) Complain("specified lens number to anchor to does not exist");
-						if (pnum >= lens_list[lnum]->get_n_params()) Complain("specified parameter number to anchor to does not exist for given lens");
+						if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+						if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
 						parameter_anchors[parameter_anchor_i].anchor_param = true;
 						parameter_anchors[parameter_anchor_i].use_anchor_ratio = true;
 						parameter_anchors[parameter_anchor_i].paramnum = i-2;
@@ -1670,8 +1670,8 @@ void Lens::process_commands(bool read_file)
 						if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
 						pnumstr << pnumstring;
 						if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						if (lnum >= nlens) Complain("specified lens number to anchor to does not exist");
-						if (pnum >= lens_list[lnum]->get_n_params()) Complain("specified parameter number to anchor to does not exist for given lens");
+						if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+						if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
 						parameter_anchors[parameter_anchor_i].anchor_param = true;
 						parameter_anchors[parameter_anchor_i].paramnum = i-2;
 						parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
@@ -1741,6 +1741,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(7);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=b; param_vals[1]=alpha; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
@@ -1823,6 +1824,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(7);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=b; param_vals[1]=a; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
@@ -1934,6 +1936,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(5);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=a_m; param_vals[1]=n; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 3 : 5;
@@ -2005,6 +2008,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(6);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
@@ -2077,6 +2081,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(7);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=rt; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
@@ -2148,6 +2153,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(6);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=k0; param_vals[1]=R_d; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
@@ -2222,6 +2228,7 @@ void Lens::process_commands(bool read_file)
 						} else if (nwords == 6) Complain("must specify qx and f parameters together");
 					}
 					param_vals.input(5);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=q; param_vals[1]=theta; param_vals[2]=qx; param_vals[3]=f; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 2 : 4;
@@ -2293,6 +2300,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(6);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
@@ -2393,6 +2401,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(9);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=k0; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 7 : 9;
@@ -2463,6 +2472,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(3);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=b; param_vals[1]=xc; param_vals[2]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 1 : 3;
@@ -2538,6 +2548,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(7);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=kappa0; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
@@ -2605,6 +2616,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(3);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=kappa; param_vals[1]=xc; param_vals[2]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 1 : 3;
@@ -2680,6 +2692,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					param_vals.input(4);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=shear_p1; param_vals[1]=shear_p2; param_vals[2]=xc; param_vals[3]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 2 : 4;

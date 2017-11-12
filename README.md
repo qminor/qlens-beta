@@ -28,9 +28,9 @@ Upgrades in new version (Nov. 11, 2017):
 		fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 0 0  
 		1 0 0 1 1 1 1
 
-	The "2.5/anchor=0,0" enters the initial value in as 2.5, and since this is half of the parameter we are anchoring to (b=5 for lens 0), they will always keep this ratio. Again, the vary flag *must* be off for the parameter being anchored.
+	The "2.5/anchor=0,0" enters the initial value in as 2.5, and since this is half of the parameter we are anchoring to (b=5 for lens 0), they will always keep this ratio. It is even possible to anchor a parameter to another parameter in the *same* lens model, if you use the lens number that will be assigned to the lens you are creating. Again, the vary flag *must* be off for the parameter being anchored.
 
-	We can still anchor the lens center to another lens the old way, but in order to distinguish from the above anchoring, now the command is "anchor\_center=...". So in the previous example, if we wanted to also anchor the center of the lens to lens 0, we do
+	We can still anchor the lens's center coordinates to another lens the old way, but in order to distinguish from the above anchoring, now the command is "anchor\_center=...". So in the previous example, if we wanted to also anchor the center of the lens to lens 0, we do
 
 		fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 anchor_center=0  
 		1 0 0 1 1 0 0
