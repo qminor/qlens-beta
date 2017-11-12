@@ -9,8 +9,8 @@ Optional packages:
 * OpenMP -- used for multithreading likelihood evaluations, useful esp. for lens models that require numerical integration for lensing calculations or if source pixel reconstruction is being used.
 * MPI -- for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling
 * CFitsio library -- for reading and writing FITS files
-* MUMPS package -- for sparse matrix inversion in pixel image modeling
-* UMFPACK -- alternative to MUMPS; easier to install but not quite as fast or parallelized
+* MUMPS package -- for sparse matrix inversion in pixel image modeling (often painful to install however)
+* UMFPACK -- alternative to MUMPS; much easier to install but not quite as fast or parallelized
 
 # change log
 
