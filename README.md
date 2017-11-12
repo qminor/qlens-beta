@@ -32,7 +32,7 @@ Upgrades in new version (Nov. 11, 2017):
 
 	We can still anchor the lens center to another lens the old way, but in order to distinguish from the above anchoring, now the command is "anchor\_center=...". So in the previous example, if we wanted to also anchor the center of the lens to lens 0, we do
 
-		fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 anchor\_center=0  
+		fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 anchor_center=0  
 		1 0 0 1 1 0 0
 
 	The vary flags for the center coordinates must be entered as zeroes, or they can be left off altogether.
