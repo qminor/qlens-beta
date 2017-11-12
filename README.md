@@ -2,15 +2,15 @@
 QLens is a software package for modeling and simulating strong gravitational lens systems. Both point image modeling (with option to include fluxes and time delays) and pixel image modeling (using pixellated source reconstruction) are supported. QLens includes 13 different analytic lens models to choose from for model fitting, with an option to load a numerically generated kappa profile using interpolation over a table of kappa values. Chi-square optimization can be performed with the downhill simplex method (plus optional simulated annealing) or Powell's method; for Bayesian parameter estimation, nested sampling or an adaptive Metropolis-Hastings MCMC algorithm (T-Walk) can be used to infer the Bayesian evidence and posteriors. An additional tool, mkdist, generates 1d and 2d posterior plots in each parameter, or if an optimization was done, approximate posteriors can be plotted using the Fisher matrix. The QLens package includes an introductory tutorial (qlens\_tutorial.pdf) that is meant to be readable for undergraduates and beginning graduate students with little or no experience with gravitational lensing concepts.
 
 Required packages for basic, out-of-the-box configuration:
-* GNU Readline --- for command-line interface
-* gnuplot --- for generating and viewing plots from within QLens
+* GNU Readline -- for command-line interface
+* gnuplot -- for generating and viewing plots from within QLens
 
 Optional packages:
-* OpenMP --- used for multithreading likelihood evaluations, useful esp. for lens models that require numerical integration for lensing calculations or if source pixel reconstruction is being used.
-* MPI --- for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling
-* CFitsio library --- for reading and writing FITS files
-* MUMPS package --- for sparse matrix inversion in pixel image modeling
-* UMFPACK --- alternative to MUMPS; easier to install but not quite as fast or parallelized
+* OpenMP -- used for multithreading likelihood evaluations, useful esp. for lens models that require numerical integration for lensing calculations or if source pixel reconstruction is being used.
+* MPI -- for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling
+* CFitsio library -- for reading and writing FITS files
+* MUMPS package -- for sparse matrix inversion in pixel image modeling
+* UMFPACK -- alternative to MUMPS; easier to install but not quite as fast or parallelized
 
 # change log
 
