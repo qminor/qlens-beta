@@ -2801,8 +2801,8 @@ void Lens::process_commands(bool read_file)
 					dvector lower(nvary_shear), upper(nvary_shear), lower_initial(nvary_shear), upper_initial(nvary_shear);
 					vector<string> paramnames;
 					lens_list[nlens-1]->get_fit_parameter_names(paramnames);
-					int i,j;
-					for (i=0, j=0; j < 2; j++) {
+					int i=0,j;
+					for (j=0; j < 2; j++) {
 						if (shear_vary_flags[j]) {
 							if ((mpi_id==0) and (verbal_mode)) cout << "Limits for parameter " << paramnames[i] << ":\n";
 							if (read_command(false)==false) { remove_lens(nlens-1); Complain("parameter limits could not be read"); }
