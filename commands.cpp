@@ -5550,7 +5550,7 @@ bool Lens::read_command(bool show_prompt)
 		}
 	}
 	words.clear();
-	//if (line=="") { nwords = 0; if (ws != NULL) { delete[] ws; ws = NULL; } return true; }
+	if ((line.empty()) or (line=="\r")) return read_command(show_prompt); // skip to the next line if this one is blank (you get carriage return "\r" from Mac or Windows editors)
 	remove_comments(line);
 	
 	istringstream linestream(line);
@@ -5558,7 +5558,7 @@ bool Lens::read_command(bool show_prompt)
 	while (linestream >> word)
 		words.push_back(word);
 	nwords = words.size();
-	if (nwords==0) return read_command(show_prompt); // if the whole line was a comment, go to the next line
+	if (nwords==0) return read_command(show_prompt); // if the whole line was a comment, or full of spaces, go to the next line
 	if (ws != NULL) delete[] ws;
 	ws = new stringstream[nwords];
 	for (int i=0; i < nwords; i++) ws[i] << words[i];
