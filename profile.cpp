@@ -377,7 +377,7 @@ void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 {
 	// if any parameters are anchored to the lens in question, unanchor them (use this when you are deleting a lens, in case others are anchored to it)
 	for (int i=0; i < n_params; i++) {
-		if ((anchor_parameter[i]) and (parameter_anchor_lens[i] = param_anchor_lens)) {
+		if ((anchor_parameter[i]) and (parameter_anchor_lens[i] == param_anchor_lens)) {
 			parameter_anchor_lens[i] = NULL;
 			anchor_parameter[i] = false;
 			parameter_anchor_paramnum[i] = -1;
