@@ -354,9 +354,8 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 	while (!transform_file.eof()) {
 		bool transform_name = false;
 		getline(transform_file,line);
-		//cout << line << endl;
 		words.clear();
-		if (line=="") continue;
+		if (line.empty()) continue;
 		istringstream linestream(line);
 		string word;
 		while (linestream >> word)

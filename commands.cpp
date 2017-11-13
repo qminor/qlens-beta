@@ -3579,7 +3579,7 @@ void Lens::process_commands(bool read_file)
 			string range1, range2;
 			extract_word_starts_with('[',2,2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',3,3,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((!plot_srcplane) and (range2=="")) { range2 = range1; range1 = ""; }
+			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			if (nwords == 3) {
 				if (terminal == TEXT) Complain("only one filename is required for text plotting of critical curves");
 				if (plotcrit("crit.dat")==true) {
@@ -3748,7 +3748,7 @@ void Lens::process_commands(bool read_file)
 			string range1, range2;
 			extract_word_starts_with('[',4,4,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',5,5,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((!plot_srcplane) and (range2=="")) { range2 = range1; range1 = ""; }
+			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			bool show_grid = false;
 			if (words[nwords-1]=="grid") {
 				show_grid = true;
@@ -3933,7 +3933,7 @@ void Lens::process_commands(bool read_file)
 			string range1, range2;
 			extract_word_starts_with('[',1,3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',1,4,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((!plot_srcplane) and (range2=="")) { range2 = range1; range1 = ""; }
+			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			if (nwords == 1) {
 				if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {	// default source file
 					if (plot_srcplane) run_plotter_range("sources",range1);
@@ -3975,7 +3975,7 @@ void Lens::process_commands(bool read_file)
 			string range1, range2;
 			extract_word_starts_with('[',1,3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',1,4,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((!plot_srcplane) and (range2=="")) { range2 = range1; range1 = ""; }
+			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			if (nwords == 1) {
 				if (plot_srcplane) run_plotter_range("sources",range1);
 				if (show_cc) run_plotter_range("images",range2);
@@ -4115,7 +4115,7 @@ void Lens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				string range;
 				extract_word_starts_with('[',1,nwords-1,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
-				if (range=="") {
+				if (range.empty()) {
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
 					xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
@@ -4227,7 +4227,7 @@ void Lens::process_commands(bool read_file)
 				string range1, range2;
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-				if ((!plot_srcplane) and (range2=="")) { range2 = range1; range1 = ""; }
+				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 				if ((!show_cc) or (plotcrit("crit.dat")==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
@@ -4462,7 +4462,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="plot_title")
 		{
 			if (nwords==1) {
-				if (plot_title=="") Complain("plot title has not been set");
+				if (plot_title.empty()) Complain("plot title has not been set");
 				cout << "Plot title: '" << plot_title << "'\n";
 			} else {
 				remove_word(0);

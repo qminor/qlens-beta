@@ -3621,7 +3621,7 @@ void Lens::get_parameter_names()
 					countstr << count;
 					countstr >> countstring;
 					new_parameter_names[i] += countstring;
-					if (latex_parameter_subscripts[i]=="") latex_parameter_subscripts[i] = countstring;
+					if (latex_parameter_subscripts[i].empty()) latex_parameter_subscripts[i] = countstring;
 					else latex_parameter_subscripts[i] += "," + countstring;
 					count++;
 				}
@@ -3630,7 +3630,7 @@ void Lens::get_parameter_names()
 				countstr << count;
 				countstr >> countstring;
 				fit_parameter_names[j] += countstring;
-				if (latex_parameter_subscripts[j]=="") latex_parameter_subscripts[j] = countstring;
+				if (latex_parameter_subscripts[j].empty()) latex_parameter_subscripts[j] = countstring;
 				else latex_parameter_subscripts[j] += "," + countstring;
 				count++;
 			}
