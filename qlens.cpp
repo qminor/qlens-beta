@@ -1,18 +1,6 @@
-// QLENS: Strong gravitational lensing software with a command-line interface
+// QLENS: Strong gravitational lensing software with a command-line interface (beta version)
+//        by Quinn Minor (qeminor@gmail.com)
 //
-// TO DO: 
-// 		 1) Develop Python bindings!
-// 		 2) Implement analytic source profile mode (as opposed to pixellated source mode)
-// 		 3) Implement command to write best-fit lens/source model to script (should be relatively easy)
-//
-// 		 LONG-TERM:
-//	       1) Include full covariance matrix as an option
-//	       2) Instead of re-allocating grid with every likelihood evaluation, just allocate all cells up to some max # of levels,
-//	          then "activate" cells as needed...this will save time and it will be more parallelizable (less memory access)
-//	       3) Searching for point images: make 'catalog' by ray-tracing image plane grid to a
-//	            source plane grid, find and record which cells overlap. Then when searching for
-//	            images, from a large number of sources, use catalog and ONLY search the image plane cells that are in catalog
-//	            for the given source plane cell. (This is low priority; only important when large numbers of source points are used)
 
 #include "qlens.h"
 #include "pixelgrid.h"

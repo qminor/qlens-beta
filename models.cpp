@@ -255,8 +255,8 @@ void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
 	if (vary_params[1]) stepsizes[index++] = 0.1;
 	if (vary_params[2]) stepsizes[index++] = 0.02*b*sqrt(q); // this one is a bit arbitrary, but hopefully reasonable enough
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) stepsizes[index++] = 0.1;
-		if (vary_params[4]==true) stepsizes[index++] = 0.1;
+		if (vary_params[3]) stepsizes[index++] = 0.1;
+		if (vary_params[4]) stepsizes[index++] = 0.1;
 	} else {
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 20;
@@ -269,37 +269,37 @@ void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void Alpha::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 2; }
 		index++;
 	}
-	if (vary_params[2]==true) {
+	if (vary_params[2]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) {
+		if (vary_params[4]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) index++;
+		if (vary_params[4]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]==true) index++;
-		if (vary_params[6]==true) index++;
+		if (vary_params[5]) index++;
+		if (vary_params[6]) index++;
 	}
 }
 
@@ -725,8 +725,8 @@ void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
 	if (vary_params[1]) stepsizes[index++] = 0.2*b*sqrt(q);
 	if (vary_params[2]) stepsizes[index++] = 0.02*b*sqrt(q); // this one is a bit arbitrary, but hopefully reasonable enough
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) stepsizes[index++] = 0.1;
-		if (vary_params[4]==true) stepsizes[index++] = 0.1;
+		if (vary_params[3]) stepsizes[index++] = 0.1;
+		if (vary_params[4]) stepsizes[index++] = 0.1;
 	} else {
 		if (vary_params[3]) stepsizes[index++] = 0.2;
 		if (vary_params[4]) stepsizes[index++] = 20;
@@ -739,37 +739,37 @@ void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void PseudoJaffe::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[2]==true) {
+	if (vary_params[2]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) {
+		if (vary_params[4]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) index++;
+		if (vary_params[4]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]==true) index++;
-		if (vary_params[6]==true) index++;
+		if (vary_params[5]) index++;
+		if (vary_params[6]) index++;
 	}
 }
 
@@ -1063,33 +1063,33 @@ void NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) index++;
+		if (vary_params[3]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[4]==true) index++;
-		if (vary_params[5]==true) index++;
+		if (vary_params[4]) index++;
+		if (vary_params[5]) index++;
 	}
 }
 
@@ -1334,8 +1334,8 @@ void Truncated_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
 	if (vary_params[2]) stepsizes[index++] = 0.2*rt;
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) stepsizes[index++] = 0.1;
-		if (vary_params[4]==true) stepsizes[index++] = 0.1;
+		if (vary_params[3]) stepsizes[index++] = 0.1;
+		if (vary_params[4]) stepsizes[index++] = 0.1;
 	} else {
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 20;
@@ -1348,37 +1348,37 @@ void Truncated_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void Truncated_NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[2]==true) {
+	if (vary_params[2]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) {
+		if (vary_params[4]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) index++;
+		if (vary_params[4]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]==true) index++;
-		if (vary_params[6]==true) index++;
+		if (vary_params[5]) index++;
+		if (vary_params[6]) index++;
 	}
 }
 
@@ -1656,33 +1656,33 @@ void Hernquist::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void Hernquist::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) index++;
+		if (vary_params[3]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[4]==true) index++;
-		if (vary_params[5]==true) index++;
+		if (vary_params[4]) index++;
+		if (vary_params[5]) index++;
 	}
 }
 
@@ -1916,33 +1916,33 @@ void ExpDisk::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void ExpDisk::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[2]==true) {
+		if (vary_params[2]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[3]==true) index++;
+		if (vary_params[3]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[4]==true) index++;
-		if (vary_params[5]==true) index++;
+		if (vary_params[4]) index++;
+		if (vary_params[5]) index++;
 	}
 }
 
@@ -2163,18 +2163,18 @@ void Shear::get_auto_stepsizes(dvector& stepsizes, int &index)
 void Shear::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
 	if (use_shear_component_params) {
-		if (vary_params[0]==true) index++;
-		if (vary_params[1]==true) index++;
+		if (vary_params[0]) index++;
+		if (vary_params[1]) index++;
 	} else {
-		if (vary_params[0]==true) {
+		if (vary_params[0]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 			index++;
 		}
-		if (vary_params[1]==true) index++;
+		if (vary_params[1]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[2]==true) index++;
-		if (vary_params[3]==true) index++;
+		if (vary_params[2]) index++;
+		if (vary_params[3]) index++;
 	}
 }
 
@@ -2387,12 +2387,12 @@ void Multipole::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void Multipole::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) index++;
-	if (vary_params[1]==true) index++;
-	if (vary_params[2]==true) index++;
+	if (vary_params[0]) index++;
+	if (vary_params[1]) index++;
+	if (vary_params[2]) index++;
 	if (!center_anchored) {
-		if (vary_params[3]==true) index++;
-		if (vary_params[4]==true) index++;
+		if (vary_params[3]) index++;
+		if (vary_params[4]) index++;
 	}
 }
 
@@ -2705,13 +2705,13 @@ void PointMass::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void PointMass::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[1]==true) index++;
-		if (vary_params[2]==true) index++;
+		if (vary_params[1]) index++;
+		if (vary_params[2]) index++;
 	}
 }
 
@@ -3052,8 +3052,8 @@ void CoreCusp::get_auto_stepsizes(dvector& stepsizes, int &index)
 	if (vary_params[3]) stepsizes[index++] = 0.1*a;
 	if (vary_params[4]) stepsizes[index++] = 0.01*a; // this one is a bit arbitrary, but hopefully reasonable enough
 	if (use_ellipticity_components) {
-		if (vary_params[5]==true) stepsizes[index++] = 0.1;
-		if (vary_params[6]==true) stepsizes[index++] = 0.1;
+		if (vary_params[5]) stepsizes[index++] = 0.1;
+		if (vary_params[6]) stepsizes[index++] = 0.1;
 	} else {
 		if (vary_params[5]) stepsizes[index++] = 0.1;
 		if (vary_params[6]) stepsizes[index++] = 20;
@@ -3066,39 +3066,39 @@ void CoreCusp::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void CoreCusp::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) index++;
-	if (vary_params[2]==true) index++;
-	if (vary_params[3]==true) {
+	if (vary_params[1]) index++;
+	if (vary_params[2]) index++;
+	if (vary_params[3]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[4]==true) {
+	if (vary_params[4]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
 	if (use_ellipticity_components) {
-		if (vary_params[5]==true) {
+		if (vary_params[5]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[6]==true) {
+		if (vary_params[6]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[5]==true) {
+		if (vary_params[5]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[6]==true) index++;
+		if (vary_params[6]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[7]==true) index++;
-		if (vary_params[8]==true) index++;
+		if (vary_params[7]) index++;
+		if (vary_params[8]) index++;
 	}
 }
 
@@ -3420,6 +3420,7 @@ void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool
 		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
 		k = b*pow(sqrt(q)/re,1.0/n);
 		set_integration_pointers();
+		// Note, there *is* an analytic deflection formula for spherical Sersic profile...could be useful for time delays where we need potential. Implement this!!!
 		//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
 	}
 }
@@ -3468,34 +3469,34 @@ void SersicLens::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void SersicLens::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) {
+	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[1]==true) {
+	if (vary_params[1]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
 		index++;
 	}
-	if (vary_params[2]==true) index++;
+	if (vary_params[2]) index++;
 	if (use_ellipticity_components) {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) {
+		if (vary_params[4]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[3]==true) {
+		if (vary_params[3]) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[4]==true) index++;
+		if (vary_params[4]) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]==true) index++;
-		if (vary_params[6]==true) index++;
+		if (vary_params[5]) index++;
+		if (vary_params[6]) index++;
 	}
 }
 
@@ -3628,10 +3629,10 @@ void MassSheet::get_auto_stepsizes(dvector& stepsizes, int &index)
 
 void MassSheet::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) index++;
+	if (vary_params[0]) index++;
 	if (!center_anchored) {
-		if (vary_params[1]==true) index++;
-		if (vary_params[2]==true) index++;
+		if (vary_params[1]) index++;
+		if (vary_params[2]) index++;
 	}
 }
 
