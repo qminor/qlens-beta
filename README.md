@@ -14,7 +14,7 @@ Optional packages:
 
 # change log
 
-Upgrades in new version (Nov. 11, 2017):
+Upgrades in new version (Nov. 13, 2017):
 
 1. General lens parameter anchoring
 
