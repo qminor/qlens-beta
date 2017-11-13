@@ -1848,11 +1848,11 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
 						if ((set_tidal_host==true) and (vary_flags[1]==true)) Complain("parameter a cannot be varied if calculated from tidal host");
 
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -1960,9 +1960,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2032,9 +2032,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2105,9 +2105,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2177,9 +2177,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2252,9 +2252,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2324,9 +2324,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2496,9 +2496,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2640,9 +2640,9 @@ void Lens::process_commands(bool read_file)
 						vary_flags.input(nparams_to_vary);
 						if (add_shear) shear_vary_flags.input(2);
 						bool invalid_params = false;
-						int i;
+						int i,j;
 						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary; i < tot_nparams_to_vary; i++) if (!(ws[i] >> shear_vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 					}
@@ -2801,8 +2801,8 @@ void Lens::process_commands(bool read_file)
 					dvector lower(nvary_shear), upper(nvary_shear), lower_initial(nvary_shear), upper_initial(nvary_shear);
 					vector<string> paramnames;
 					lens_list[nlens-1]->get_fit_parameter_names(paramnames);
-					int i=0,j;
-					for (j=0; j < 2; j++) {
+					int i,j;
+					for (j=0, i=0; j < 2; j++) {
 						if (shear_vary_flags[j]) {
 							if ((mpi_id==0) and (verbal_mode)) cout << "Limits for parameter " << paramnames[i] << ":\n";
 							if (read_command(false)==false) { remove_lens(nlens-1); Complain("parameter limits could not be read"); }

@@ -9,7 +9,7 @@
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
 CCOMP = g++
-#CCOMP = mpicxx.openmpi -DUSE_MPI
+#CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
 OPTS = -w -O3
@@ -23,7 +23,7 @@ LINKLIBS = $(OTHERLIBS)
 
 # Version with MUMPS
 #default: qlens mkdist cosmocalc
-#CCOMP = mpicxx.openmpi -DUSE_MPI
+#CCOMP = mpicxx -DUSE_MPI
 ##OPTS = -w -O3 -fopenmp
 #OPTS = -w -O3 -fopenmp
 #FLAGS = -DUSE_OPENMP -DUSE_MUMPS -DUSE_FITS -DUSE_UMFPACK

@@ -51,3 +51,5 @@ Upgrades in new version (Nov. 11, 2017):
 2. Fit parameter limits are now assigned default values for certain parameters. For example, in any lens, when you type "fit plimits" you will see that by default, the 'q' parameters have limits from 0 to 1, and so on. This used to be done "under the hood" but now is made explicit using plimits. The plimits are also used to define ranges when plotting approximate posteriors using the Fisher matrix (with 'mkdist ... -fP').
 
 3. You no longer have to load an input script by prefacing with '-f:' before writing the file name. Now you can simply type "qlens script.in" (or whatever you call your script).
+
+4. Bug fix: the vary flags for external shear (when added with "shear=# #" at the end of lens models) were not being set properly for NFW and several other lenses. This has been fixed.
