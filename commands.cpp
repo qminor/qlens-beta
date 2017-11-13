@@ -401,7 +401,7 @@ void Lens::process_commands(bool read_file)
 							"fit vary_sourcept ...\n"
 							"fit regularization <method>\n\n"
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
-							"current fit model (including lens \& source) is listed along with the free parameters.\n"
+							"current fit model (including lens and source) is listed along with the free parameters.\n"
 							"For help with the specific fit commands, type 'help fit <command>'. To run the chi-square fit,\n"
 							"routine, use the 'fit run' command.\n";
 					else if (words[2]=="lens") 
@@ -5550,7 +5550,7 @@ bool Lens::read_command(bool show_prompt)
 		}
 	}
 	words.clear();
-	if (line=="") { nwords = 0; if (ws != NULL) { delete[] ws; ws = NULL; } return true; }
+	//if (line=="") { nwords = 0; if (ws != NULL) { delete[] ws; ws = NULL; } return true; }
 	remove_comments(line);
 	
 	istringstream linestream(line);

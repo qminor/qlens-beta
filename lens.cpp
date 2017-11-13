@@ -1,5 +1,4 @@
 #include "qlens.h"
-#include "powell.h"
 #include "pixelgrid.h"
 #include "profile.h"
 #include "sbprofile.h"
