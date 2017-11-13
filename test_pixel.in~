@@ -2,7 +2,7 @@
 lens clear
 #sci_notation off
 fit label test_fit
-fit method simplex
+fit method powell
 fit source_mode pixel
 inversion_method cg
 raytrace_method interpolate

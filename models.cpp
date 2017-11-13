@@ -10,6 +10,7 @@
 using namespace std;
 
 bool Shear::use_shear_component_params;
+const double CoreCusp::nstep = 0.2;
 
 /***************************** Generalized Isothermal Ellipsoid (alpha) *****************************/
 

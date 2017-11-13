@@ -527,7 +527,7 @@ class CoreCusp : public LensProfile
 	private:
 	double n, gamma, a, s, k0;
 	//double Rsq; // for numerically integrating the 3d density profile (used to test the formulas)
-	const double nstep=0.2; // this is for calculating the n=3 case, which requires extrapolation since F21 is singular for n=3
+	static const double nstep; // this is for calculating the n=3 case, which requires extrapolation since F21 is singular for n=3
 	bool set_k0_by_einstein_radius;
 	double einstein_radius;
 	double core_enclosed_mass;

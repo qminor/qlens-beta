@@ -1181,11 +1181,11 @@ struct ParamSettings
 			else if (transforms[i]->transform==LOG_TRANSFORM) { transformed_names[i] = "log(" + names[i] + ")"; transformed_latex_names[i] = "\\ln " + latex_names[i]; }
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
 				transformed_names[i] = "u{" + names[i] + "}";
-				transformed_latex_names[i] = "u\{" + latex_names[i] + "\}";
+				transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";
 			}
 			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_names[i] = "L{" + names[i] + "}";
-				transformed_latex_names[i] = "L\{" + latex_names[i] + "\}";
+				transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
 			}
 		}
 	}
