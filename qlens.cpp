@@ -1,6 +1,5 @@
 // QLENS: Strong gravitational lensing software with a command-line interface (beta version)
 //        by Quinn Minor (qeminor@gmail.com)
-//
 
 #include "qlens.h"
 #include "pixelgrid.h"
