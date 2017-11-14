@@ -4181,7 +4181,7 @@ void Lens::chi_square_nested_sampling()
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		system(rmstring.c_str()); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
@@ -4300,7 +4300,7 @@ void Lens::chi_square_twalk()
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		system(rmstring.c_str()); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		create_output_directory();
 	}
 	initialize_fitmodel();

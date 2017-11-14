@@ -835,7 +835,7 @@ struct ImageData
 	double *flux;
 	double *time_delays;
 	double *sigma_pos, *sigma_f, *sigma_t;
-	int max_distsqr; // maximum squared distance between any pair of images
+	double max_distsqr; // maximum squared distance between any pair of images
 	ImageData() { n_images = 0; }
 	void input(const int &nn);
 	void input(const ImageData& imgs_in);

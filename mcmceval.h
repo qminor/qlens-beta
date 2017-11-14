@@ -45,13 +45,14 @@ struct ParamTransform
 	void transform_param_name(string &name_in) { transform_name = true; transformed_param_name = name_in; }
 	void transform_parameter(double& param)
 	{
+		double p = param;
 		if (transform==NONE) return;
-		else if (transform==LOG_TRANSFORM) param = log(param)/M_LN10;
-		else if (transform==EXP_TRANSFORM) param = pow(10.0,param);
+		else if (transform==LOG_TRANSFORM) param = log(p)/M_LN10;
+		else if (transform==EXP_TRANSFORM) param = pow(10.0,p);
 		else if (transform==GAUSS_TRANSFORM)
-			param = erff((param - gaussian_pos)/(M_SQRT2*gaussian_sig));
+			param = erff((p - gaussian_pos)/(M_SQRT2*gaussian_sig));
 		else if (transform==INVERSE_GAUSS_TRANSFORM)
-			param = (gaussian_pos + M_SQRT2*gaussian_sig*erfinv(param));
+			param = (gaussian_pos + M_SQRT2*gaussian_sig*erfinv(p));
 	}
 };
 

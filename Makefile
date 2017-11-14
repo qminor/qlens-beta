@@ -12,8 +12,8 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -w -O3
-OPTS_NO_OPT = -w
+OPTS = -Wno-write-strings -O3
+OPTS_NO_OPT = -Wno-write-strings
 #OPTS = -w -g
 #FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK
 #FLAGS = -DUSE_FITS -DUSE_OPENMP
@@ -36,7 +36,7 @@ LINKLIBS = $(OTHERLIBS)
 CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
-GCC   := g++ -w -O3
+GCC   := g++ -Wno-write-strings -O3
 
 objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				profile.o models.o sbprofile.o errors.o brent.o sort.o rand.o gauss.o \

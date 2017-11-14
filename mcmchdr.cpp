@@ -11,6 +11,7 @@
 #include "GregsMathHdr.h"
 #include "mcmchdr.h"
 #include "random.h"
+#include "errors.h"
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -3369,7 +3370,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		}
 	}
 	
-	system((string("rm -f ") + string(name) + string(".temp")).c_str());
+	if (system((string("rm -f ") + string(name) + string(".temp")).c_str()) != 0) warn("could not delete temporary files for nested sampling output");
 	
 	signal(SIGABRT, SIG_DFL);
 	signal(SIGTERM, SIG_DFL);

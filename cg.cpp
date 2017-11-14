@@ -803,7 +803,7 @@ void CG_sparse::indexx(int* arr, int* indx, int nn)
 	}
 	delete[] istack;
 }
-#undef SWAP(a,b)
+#undef SWAP
 
 CG_sparse::~CG_sparse()
 {
