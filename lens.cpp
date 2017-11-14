@@ -5540,6 +5540,7 @@ double Lens::set_required_data_pixel_window(bool verbal)
 }
 
 /*
+// these functions are custom-made and thus should go in a separate file
 void Lens::generate_solution_chain_sdp81()
 {
 	double b_true, q_true, theta_true, xc_true, yc_true;
