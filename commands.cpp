@@ -4374,6 +4374,15 @@ void Lens::process_commands(bool read_file)
 				} else Complain("only one argument allowed for command 'pttype' (point type)");
 			}
 		}
+		else if (words[0]=="show_wtime")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Display wall time during likelihood evaluations: " << display_switch(show_wtime) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'show_wtime' command; must specify 'on' or 'off'");
+				set_switch(show_wtime,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="warnings")
 		{
 			if (nwords==1) {

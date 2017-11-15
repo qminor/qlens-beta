@@ -1007,10 +1007,10 @@ bool Lens::create_grid(bool verbal, const double zfac)
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
 #ifdef USE_OPENMP
-	if (show_wtime) {
-		mytime=omp_get_wtime() - mytime0;
-		if (mpi_id==0) cout << "Wall time for creating grid: " << mytime << endl;
-	}
+		if (show_wtime) {
+			mytime=omp_get_wtime() - mytime0;
+			if (mpi_id==0) cout << "Wall time for creating grid: " << mytime << endl;
+		}
 #endif
 	}
 
@@ -1020,7 +1020,7 @@ bool Lens::create_grid(bool verbal, const double zfac)
 void Lens::subgrid_around_satellite_galaxies(const double zfac)
 {
 	if (grid==NULL) {
-		if (create_grid(true,zfac)==false) die("Could not create recursive grid");
+		if (create_grid(false,zfac)==false) die("Could not create recursive grid");
 	}
 	if (nlens==0) { warn(warnings,"No galaxies in lens lens_list"); return; }
 	double largest_einstein_radius = 0, xch, ych;
@@ -3145,23 +3145,12 @@ double Lens::chisq_pos_image_plane()
 {
 	double chisq=0;
 
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
 	int n_images, n_tot_images=0;
 	double chisq_each_srcpt;
 	int i,j,k,n;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		create_grid(false,zfactors[i]);
 		chisq_each_srcpt = 0;
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime0 = omp_get_wtime();
-		}
-#endif
 		image *img = get_images(sourcepts_fit[i], n_images, false);
 		n_visible_images = n_images;
 		n_tot_images += n_visible_images;
@@ -3229,23 +3218,12 @@ double Lens::chisq_pos_image_plane2()
 {
 	double chisq=0;
 
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
 	int n_images, n_visible_images, n_tot_images=0;
 	double chisq_each_srcpt;
 	int i,j,k;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		create_grid(false,zfactors[i]);
 		chisq_each_srcpt = 0;
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime0 = omp_get_wtime();
-		}
-#endif
 		image *img = get_images(sourcepts_fit[i], n_images, false);
 		n_visible_images = n_images;
 		if (!include_central_image) { for (j=0; j < n_images; j++) if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) n_visible_images--; }
@@ -3742,11 +3720,22 @@ void Lens::chisq_single_evaluation()
 	if (chisq_initial==1e30) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	fitmodel->chisq_it = 0;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (mpi_id==0) {
 		if (display_chisq_status) cout << endl;
 		cout << "loglike: " << chisqval/2 << endl;
 	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for likelihood evaluation: " << wtime << endl;
+	}
+#endif
 	if (source_fit_mode==Point_Source) display_chisq_status = false;
 
 	fit_restore_defaults();
