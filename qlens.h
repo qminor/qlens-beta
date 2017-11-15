@@ -310,6 +310,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	bool display_chisq_status;
 	int n_visible_images;
 	int chisq_display_frequency;
+	double chisq_magnification_threshold, chisq_imgsep_threshold;
 	bool use_magnification_in_chisq;
 	bool use_magnification_in_chisq_during_repeats;
 	bool include_parity_in_chisq;

@@ -4632,6 +4632,26 @@ void Lens::process_commands(bool read_file)
 				set_switch(use_magnification_in_chisq_during_repeats,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="chisq_mag_threshold")
+		{
+			double magthresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> magthresh)) Complain("invalid magnification threshold for image plane chi-square");
+				chisq_magnification_threshold = magthresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "magnification threshold for including image in chi-square function = " << chisq_magnification_threshold << endl;
+			} else Complain("must specify either zero or one argument (chi-square magnification threshold)");
+		}
+		else if (words[0]=="chisq_imgsep_threshold")
+		{
+			double imgsepthresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> imgsepthresh)) Complain("invalid image separation threshold for image plane chi-square");
+				chisq_imgsep_threshold = imgsepthresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "image separation threshold for including image in chi-square function = " << chisq_imgsep_threshold << endl;
+			} else Complain("must specify either zero or one argument (chi-square image separation threshold)");
+		}
 		else if (words[0]=="chisqflux")
 		{
 			if (nwords==1) {
@@ -4641,12 +4661,12 @@ void Lens::process_commands(bool read_file)
 				set_switch(include_flux_chisq,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="nimgs_penalty")
+		else if (words[0]=="nimg_penalty")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Include penalty function in chi-square for wrong number of images: " << display_switch(n_images_penalty) << endl;
+				if (mpi_id==0) cout << "Include penalty function in chi-square for producing too many images: " << display_switch(n_images_penalty) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'nimgs_penalty' command; must specify 'on' or 'off'");
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'nimg_penalty' command; must specify 'on' or 'off'");
 				set_switch(n_images_penalty,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

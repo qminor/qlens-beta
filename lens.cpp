@@ -211,6 +211,8 @@ Lens::Lens() : UCMC()
 
 	source_fit_mode = Point_Source;
 	chisq_tolerance = 1e-3;
+	chisq_magnification_threshold = 0;
+	chisq_imgsep_threshold = 0;
 	n_repeats = 1;
 	calculate_parameter_errors = true;
 	use_image_plane_chisq2 = false;
@@ -424,6 +426,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&Lens::fitmodel_loglike_point_source); // is this line necessary?
 	source_fit_mode = lens_in->source_fit_mode;
 	chisq_tolerance = lens_in->chisq_tolerance;
+	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
+	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
 	n_repeats = lens_in->n_repeats;
 	calculate_parameter_errors = lens_in->calculate_parameter_errors;
 	use_image_plane_chisq2 = lens_in->use_image_plane_chisq;
@@ -2502,7 +2506,6 @@ bool Lens::load_image_data(string filename)
 	}
 	for (i=0; i < n_sourcepts_fit; i++) {
 		zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
-		cout << "zfactor = " << zfactors[i] << endl;
 	}
 
 	int ncombs, max_combinations = -1;
@@ -3146,19 +3149,45 @@ double Lens::chisq_pos_image_plane()
 	double chisq=0;
 
 	int n_images, n_tot_images=0;
-	double chisq_each_srcpt;
+	double chisq_each_srcpt, dist;
 	int i,j,k,n;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		create_grid(false,zfactors[i]);
 		chisq_each_srcpt = 0;
 		image *img = get_images(sourcepts_fit[i], n_images, false);
 		n_visible_images = n_images;
-		n_tot_images += n_visible_images;
+		bool *ignore = new bool[n_images];
+		for (j=0; j < n_images; j++) ignore[j] = false;
 
-		if (!include_central_image) { for (j=0; j < n_images; j++) if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) n_visible_images--; }
-		if ((n_images_penalty==true) and (n_visible_images != image_data[i].n_images)) {
+		for (j=0; j < n_images; j++) {
+			if (!include_central_image) {
+				if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
+					ignore[j] = true;
+					n_visible_images--;
+				}
+			}
+			if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
+				ignore[j] = true;
+				n_visible_images--;
+			}
+			if ((chisq_imgsep_threshold > 0) and (!ignore[j])) {
+				for (k=j+1; k < n_images; k++) {
+					if (!ignore[k]) {
+						dist = sqrt(SQR(img[k].pos[0] - img[j].pos[0]) + SQR(img[k].pos[1] - img[j].pos[1]));
+						if (dist < chisq_imgsep_threshold) {
+							ignore[k] = true;
+							n_visible_images--;
+						}
+					}
+				}
+			}
+		}
+
+		if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+			delete[] ignore;
 			return 1e30;
 		}
+		n_tot_images += n_visible_images;
 
 		int n_dists = n_visible_images*image_data[i].n_images;
 		double *distsqrs = new double[n_dists];
@@ -3167,8 +3196,8 @@ double Lens::chisq_pos_image_plane()
 		n=0;
 		for (k=0; k < image_data[i].n_images; k++) {
 			for (j=0; j < n_images; j++) {
+				if (ignore[j]) continue;
 				distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
-				if ((!include_central_image) and (img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) continue;
 				data_k[n] = k;
 				model_j[n] = j;
 				n++;
@@ -3202,6 +3231,7 @@ double Lens::chisq_pos_image_plane()
 			}
 		}
 		chisq += chisq_each_srcpt;
+		delete[] ignore;
 		delete[] distsqrs;
 		delete[] data_k;
 		delete[] model_j;
