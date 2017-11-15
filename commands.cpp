@@ -3002,7 +3002,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
 							if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
 							if (xmin > xmax) Complain("lower limit cannot be greater than upper limit");
-							cout << "Limits for y-coordinate of source point:\n";
+							if (mpi_id==0) cout << "Limits for y-coordinate of source point:\n";
 							if (read_command(false)==false) return;
 							if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
 							if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
@@ -4802,7 +4802,7 @@ void Lens::process_commands(bool read_file)
 				hubble = h0;
 				set_cosmology(omega_matter,0.04,hubble,2.215);
 				if ((vary_hubble_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
-					cout << "Limits for Hubble parameter:\n";
+					if (mpi_id==0) cout << "Limits for Hubble parameter:\n";
 					if (read_command(false)==false) return;
 					double hmin,hmax;
 					if (nwords != 2) Complain("Must specify two arguments for Hubble parameter limits: hmin, hmax");

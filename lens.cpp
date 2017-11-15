@@ -3146,12 +3146,23 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 
 double Lens::chisq_pos_image_plane()
 {
-	double chisq=0;
+	int mpi_chunk, mpi_start, mpi_end;
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+#endif
 
-	int n_images, n_tot_images=0;
+	mpi_chunk = n_sourcepts_fit / group_np;
+	mpi_start = group_id*mpi_chunk;
+	if (group_id == group_np-1) mpi_chunk += (n_sourcepts_fit % group_np); // assign the remainder elements to the last mpi process
+	mpi_end = mpi_start + mpi_chunk;
+
+	double chisq=0, chisq_part=0;
+
+	int n_images, n_tot_images=0, n_tot_images_part;
 	double chisq_each_srcpt, dist;
 	int i,j,k,n;
-	for (i=0; i < n_sourcepts_fit; i++) {
+	for (i=mpi_start; i < mpi_end; i++) {
 		create_grid(false,zfactors[i]);
 		chisq_each_srcpt = 0;
 		image *img = get_images(sourcepts_fit[i], n_images, false);
@@ -3187,7 +3198,7 @@ double Lens::chisq_pos_image_plane()
 			delete[] ignore;
 			return 1e30;
 		}
-		n_tot_images += n_visible_images;
+		n_tot_images_part += n_visible_images;
 
 		int n_dists = n_visible_images*image_data[i].n_images;
 		double *distsqrs = new double[n_dists];
@@ -3230,7 +3241,7 @@ double Lens::chisq_pos_image_plane()
 				chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
 			}
 		}
-		chisq += chisq_each_srcpt;
+		chisq_part += chisq_each_srcpt;
 		delete[] ignore;
 		delete[] distsqrs;
 		delete[] data_k;
@@ -3239,6 +3250,14 @@ double Lens::chisq_pos_image_plane()
 		delete[] closest_image_k;
 		delete[] closest_distsqrs;
 	}
+#ifdef USE_MPI
+	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
+	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
+#else
+	chisq = chisq_part;
+	n_tot_images = n_tot_images_part;
+#endif
+
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	if (n_sourcepts_fit > 1) n_visible_images = n_tot_images; // save the total number of visible images produced
 	return chisq;

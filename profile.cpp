@@ -38,7 +38,10 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	center_anchored = lens_in->center_anchored;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
+
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
@@ -299,7 +302,6 @@ void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 
 void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
 {
-	assign_paramnames(); // just in case a setting has been changed that might have altered the parameter names
 	int i;
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {

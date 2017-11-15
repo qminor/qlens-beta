@@ -47,7 +47,9 @@ Alpha::Alpha(const Alpha* lens_in)
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
@@ -511,7 +513,9 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -885,7 +889,9 @@ NFW::NFW(const NFW* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -1164,7 +1170,10 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
+
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -1491,7 +1500,9 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -1747,7 +1758,9 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -1983,6 +1996,7 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 	set_n_params(4);
 	assign_param_pointers();
 	assign_paramnames();
+
 	if (use_shear_component_params) {
 		double shear, angle;
 		shear = sqrt(SQR(shear_p1_in) + SQR(shear_p2_in));
@@ -2026,7 +2040,9 @@ Shear::Shear(const Shear* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -2290,7 +2306,10 @@ Multipole::Multipole(const Multipole* lens_in)
 	y_center = lens_in->y_center;
 	kappa_multipole = lens_in->kappa_multipole;
 	sine_term = lens_in->sine_term;
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
+
 }
 
 void Multipole::assign_paramnames()
@@ -2633,7 +2652,9 @@ PointMass::PointMass(const PointMass* lens_in)
 	b = lens_in->b;
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 }
 
 void PointMass::assign_paramnames()
@@ -2821,7 +2842,9 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 
 	set_integration_pointers();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::deflection_spherical_r);
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 }
 
 void CoreCusp::assign_paramnames()
@@ -3280,7 +3303,9 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	n_params = lens_in->n_params;
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
@@ -3557,7 +3582,9 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 	kext = lens_in->kext;
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	assign_paramnames();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
 }
 
 void MassSheet::assign_paramnames()
