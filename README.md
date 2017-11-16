@@ -16,9 +16,9 @@ Optional packages:
 
 Upgrades since Nov. 12:
 
-1. There are two new variables that are relevant to using the image plane chi-square: 'chisq\_mag\_threshold' and 'chisq\_imgsep\_threshold'. The latter tells the chi-square to ignore duplicate images with separations smaller than the given threshold, while the former ignores images fainter than the given magnification threshold. Both are zero by default, but probably chisq\_imgsep\_threshold = 1e-3 is a reasonable value in most cases--I find that the duplicate images always seem to have separations smaller than this. Usually increasing the number of splittings around critical curves (using 'cc\_splitlevels) will get rid of duplicate "phantom" images, but it slows down the image searching. So setting the above threshold may be a useful alternative.
+1. There are two new variables that are relevant to using the image plane chi-square: 'chisq\_mag\_threshold' and 'chisq\_imgsep\_threshold'. The latter tells the chi-square to ignore duplicate images with separations smaller than the given threshold, while the former ignores images fainter than the given magnification threshold. Both are zero by default, but probably chisq\_imgsep\_threshold = 1e-3 is a reasonable value in most cases&mdash;I find that the duplicate images always seem to have separations smaller than this. Usually increasing the number of splittings around critical curves (using 'cc\_splitlevels) will get rid of duplicate "phantom" images, but it slows down the image searching. So setting the above threshold may be a useful alternative.
 
-2. The image plane chi-square function (for point image modeling) can now be parallelized with MPI if multiple source points are being fit to. This can significantly reduce the time for each chi-square evaluation if you lens model requires integration (which is true for the NFW or Sersic models, e.g.). As an example, if you are modeling four source points, you can split the work among up to four MPI processes. To do this, e.g. with four processes, run qlens as follows:
+2. The image plane chi-square function (for point image modeling) can now be parallelized with MPI if multiple source points are being fit to. This can significantly reduce the time for each chi-square evaluation if you lens model requires numerical integration to calculate deflections (which is true for the NFW or Sersic models, e.g.). As an example, if you are modeling four source points, you can split the work among up to four MPI processes. To do this, e.g. with four processes, run qlens as follows:
 
 		mpirun -n 4 qlens script.in -g1
 
@@ -30,7 +30,7 @@ Upgrades since Nov. 12:
 
 		mpirun -n 8 qlens script.in -g4
 
-	By default, if you don't specify the number of groups with the '-g' argument, QLens will assume the same number of groups as processes (which would be eight in the above example); in other words, it assumes only one process per group unless you tell it otherwise. On a computing cluster you have a lot more processors, hence more freedom to do a combination of all these approaches &mdash; parallelizing the chi-square evaluations, running parallel chains, and multithreading the image searching with OpenMP.
+	By default, if you don't specify the number of groups with the '-g' argument, QLens will assume the same number of groups as processes (which would be eight in the above example); in other words, it assumes only one process per group unless you tell it otherwise. On a computing cluster you have a lot more processors, hence more freedom to do a combination of all these approaches&mdash;parallelizing the chi-square evaluations, running parallel chains, and multithreading the image searching with OpenMP.
 
 Previous upgrades from Nov. 13 version:
 
