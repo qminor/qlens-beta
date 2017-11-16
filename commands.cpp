@@ -3013,7 +3013,7 @@ void Lens::process_commands(bool read_file)
 							sourcepts_lower_limit[0][1] = ymin;
 							sourcepts_upper_limit[0][1] = ymax;
 						}
-						if ((!use_image_plane_chisq) and (!use_image_plane_chisq2) and (use_analytic_bestfit_src)) {
+						if ((!use_image_plane_chisq) and (use_analytic_bestfit_src)) {
 							if (mpi_id==0) warn(warnings,"for source plane chi-square, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
 						}
 					} else if ((nwords==2) or (nwords==3)) {
@@ -3053,7 +3053,7 @@ void Lens::process_commands(bool read_file)
 							sourcepts_fit[i][0] = xs;
 							sourcepts_fit[i][1] = ys;
 						}
-						if ((!use_image_plane_chisq) and (!use_image_plane_chisq2) and (use_analytic_bestfit_src)) {
+						if ((!use_image_plane_chisq) and (use_analytic_bestfit_src)) {
 							if (mpi_id==0) warn(warnings,"for source plane chi-square, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
 						}
 					} else Complain("Must specify either zero or two arguments (sourcept_x, sourcept_y)");
@@ -3117,7 +3117,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
-					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 						output_analytic_srcpos(srcpts);
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
@@ -3196,7 +3196,7 @@ void Lens::process_commands(bool read_file)
 					}
 
 					if (fix_source_flux) srcflux[0] = source_flux;
-					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 						output_analytic_srcpos(srcpts);
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
@@ -4594,15 +4594,6 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'imgplane_chisq' command; must specify 'on' or 'off'");
 				set_switch(use_image_plane_chisq,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="imgplane_chisq2")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use image plane chi-square function(2): " << display_switch(use_image_plane_chisq2) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'imgplane_chisq2' command; must specify 'on' or 'off'");
-				set_switch(use_image_plane_chisq2,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="analytic_bestfit_src")

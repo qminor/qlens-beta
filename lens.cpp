@@ -215,7 +215,6 @@ Lens::Lens() : UCMC()
 	chisq_imgsep_threshold = 0;
 	n_repeats = 1;
 	calculate_parameter_errors = true;
-	use_image_plane_chisq2 = false;
 	use_image_plane_chisq = false;
 	use_magnification_in_chisq = false;
 	use_magnification_in_chisq_during_repeats = true;
@@ -430,8 +429,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
 	n_repeats = lens_in->n_repeats;
 	calculate_parameter_errors = lens_in->calculate_parameter_errors;
-	use_image_plane_chisq2 = lens_in->use_image_plane_chisq;
-	use_image_plane_chisq = lens_in->use_image_plane_chisq2;
+	use_image_plane_chisq = lens_in->use_image_plane_chisq;
 	use_magnification_in_chisq = lens_in->use_magnification_in_chisq;
 	use_magnification_in_chisq_during_repeats = lens_in->use_magnification_in_chisq_during_repeats;
 	include_central_image = lens_in->include_central_image;
@@ -2980,7 +2978,7 @@ bool Lens::update_fitmodel(const double* params)
 	}
 	fitmodel->update_anchored_parameters();
 	if (source_fit_mode==Point_Source) {
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (fitmodel->vary_sourcepts_x[i]) fitmodel->sourcepts_fit[i][0] = params[index++];
 				if (fitmodel->vary_sourcepts_y[i]) fitmodel->sourcepts_fit[i][1] = params[index++];
@@ -2998,6 +2996,57 @@ bool Lens::update_fitmodel(const double* params)
 	}
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
 	return status;
+}
+
+void Lens::output_analytic_srcpos(lensvector *beta_i)
+{
+	// Note: beta_i needs to have the same size as the number of image sets being fit, or else a segmentation fault will occur
+	int i,j;
+	lensvector beta_ji;
+	lensmatrix mag, magsqr;
+	lensmatrix amatrix, ainv;
+	lensvector bvec;
+	lensmatrix jac;
+
+	double siginv, src_norm;
+	for (i=0; i < n_sourcepts_fit; i++) {
+		amatrix[0][0] = amatrix[0][1] = amatrix[1][0] = amatrix[1][1] = 0;
+		bvec[0] = bvec[1] = 0;
+		beta_i[i][0] = beta_i[i][1] = 0;
+		src_norm=0;
+		for (j=0; j < image_data[i].n_images; j++) {
+			find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
+			if (use_magnification_in_chisq) {
+				hessian(image_data[i].pos[j],jac,zfactors[i]);
+				jac[0][0] = 1 - jac[0][0];
+				jac[1][1] = 1 - jac[1][1];
+				jac[0][1] = -jac[0][1];
+				jac[1][0] = -jac[1][0];
+				mag = jac.inverse();
+				lensmatsqr(mag,magsqr);
+				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+				amatrix[0][0] += magsqr[0][0]*siginv;
+				amatrix[1][0] += magsqr[1][0]*siginv;
+				amatrix[0][1] += magsqr[0][1]*siginv;
+				amatrix[1][1] += magsqr[1][1]*siginv;
+				bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
+				bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
+			} else {
+				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+				beta_i[i][0] += beta_ji[0]*siginv;
+				beta_i[i][1] += beta_ji[1]*siginv;
+				src_norm += siginv;
+			}
+		}
+		if (use_magnification_in_chisq) {
+			if (amatrix.invert(ainv)==false) return;
+			beta_i[i] = ainv*bvec;
+		} else {
+			beta_i[i][0] /= src_norm;
+			beta_i[i][1] /= src_norm;
+		}
+	}
+	return;
 }
 
 double Lens::chisq_pos_source_plane()
@@ -3083,7 +3132,6 @@ double Lens::chisq_pos_source_plane()
 				chisq += delta_beta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
 			}
 		}
-		//cout << "source_bf: " << src_bf[0] << " " << src_bf[1] << endl;
 	}
 	delete[] mag00;
 	delete[] mag11;
@@ -3093,76 +3141,26 @@ double Lens::chisq_pos_source_plane()
 	return chisq;
 }
 
-void Lens::output_analytic_srcpos(lensvector *beta_i)
-{
-	// Note: beta_i needs to have the same size as the number of image sets being fit, or else a seg fault will occur
-	int i,j;
-	lensvector beta_ji;
-	lensmatrix mag, magsqr;
-	lensmatrix amatrix, ainv;
-	lensvector bvec;
-	lensmatrix jac;
-
-	double siginv, src_norm;
-	for (i=0; i < n_sourcepts_fit; i++) {
-		amatrix[0][0] = amatrix[0][1] = amatrix[1][0] = amatrix[1][1] = 0;
-		bvec[0] = bvec[1] = 0;
-		beta_i[i][0] = beta_i[i][1] = 0;
-		src_norm=0;
-		for (j=0; j < image_data[i].n_images; j++) {
-			find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
-			if (use_magnification_in_chisq) {
-				hessian(image_data[i].pos[j],jac,zfactors[i]);
-				jac[0][0] = 1 - jac[0][0];
-				jac[1][1] = 1 - jac[1][1];
-				jac[0][1] = -jac[0][1];
-				jac[1][0] = -jac[1][0];
-				mag = jac.inverse();
-				lensmatsqr(mag,magsqr);
-				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-				amatrix[0][0] += magsqr[0][0]*siginv;
-				amatrix[1][0] += magsqr[1][0]*siginv;
-				amatrix[0][1] += magsqr[0][1]*siginv;
-				amatrix[1][1] += magsqr[1][1]*siginv;
-				bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
-				bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
-			} else {
-				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-				beta_i[i][0] += beta_ji[0]*siginv;
-				beta_i[i][1] += beta_ji[1]*siginv;
-				src_norm += siginv;
-			}
-		}
-		if (use_magnification_in_chisq) {
-			if (amatrix.invert(ainv)==false) return;
-			beta_i[i] = ainv*bvec;
-		} else {
-			beta_i[i][0] /= src_norm;
-			beta_i[i][1] /= src_norm;
-		}
-	}
-	return;
-}
-
 double Lens::chisq_pos_image_plane()
 {
-	int mpi_chunk, mpi_start, mpi_end;
+	int mpi_chunk=n_sourcepts_fit, mpi_start=0;
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
 	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
 #endif
 
-	mpi_chunk = n_sourcepts_fit / group_np;
-	mpi_start = group_id*mpi_chunk;
-	if (group_id == group_np-1) mpi_chunk += (n_sourcepts_fit % group_np); // assign the remainder elements to the last mpi process
-	mpi_end = mpi_start + mpi_chunk;
+	if (group_np > 1) {
+		mpi_chunk = n_sourcepts_fit / group_np;
+		mpi_start = group_id*mpi_chunk;
+		if (group_id == group_np-1) mpi_chunk += (n_sourcepts_fit % group_np); // assign the remainder elements to the last mpi process
+	}
 
 	double chisq=0, chisq_part=0;
 
 	int n_images, n_tot_images=0, n_tot_images_part;
 	double chisq_each_srcpt, dist;
 	int i,j,k,n;
-	for (i=mpi_start; i < mpi_end; i++) {
+	for (i=mpi_start; i < mpi_start + mpi_chunk; i++) {
 		create_grid(false,zfactors[i]);
 		chisq_each_srcpt = 0;
 		image *img = get_images(sourcepts_fit[i], n_images, false);
@@ -3258,38 +3256,6 @@ double Lens::chisq_pos_image_plane()
 	n_tot_images = n_tot_images_part;
 #endif
 
-	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
-	if (n_sourcepts_fit > 1) n_visible_images = n_tot_images; // save the total number of visible images produced
-	return chisq;
-}
-
-double Lens::chisq_pos_image_plane2()
-{
-	double chisq=0;
-
-	int n_images, n_visible_images, n_tot_images=0;
-	double chisq_each_srcpt;
-	int i,j,k;
-	for (i=0; i < n_sourcepts_fit; i++) {
-		create_grid(false,zfactors[i]);
-		chisq_each_srcpt = 0;
-		image *img = get_images(sourcepts_fit[i], n_images, false);
-		n_visible_images = n_images;
-		if (!include_central_image) { for (j=0; j < n_images; j++) if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) n_visible_images--; }
-		if ((n_images_penalty==true) and (n_visible_images != image_data[i].n_images)) return 1e30;
-		n_tot_images += n_visible_images;
-		double distsqr, distsqr_min, sig_min;
-		for (k=0; k < image_data[i].n_images; k++) {
-			distsqr_min=1e30;
-			for (j=0; j < n_images; j++) {
-				if ((!include_central_image) and (img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) continue;
-				distsqr = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
-				if (distsqr < distsqr_min) { distsqr_min = distsqr; sig_min = image_data[i].sigma_pos[k]; }
-			}
-			chisq_each_srcpt += distsqr_min/SQR(sig_min);
-		}
-		chisq += chisq_each_srcpt;
-	}
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	if (n_sourcepts_fit > 1) n_visible_images = n_tot_images; // save the total number of visible images produced
 	return chisq;
@@ -3444,7 +3410,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
 	if (source_fit_mode==Point_Source) {
 		if (source_plane_rscale==0.0) autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
 				if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
@@ -3470,7 +3436,7 @@ void Lens::set_default_plimits()
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	if (source_fit_mode==Point_Source) {
 		if (source_plane_rscale==0.0) autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) index++;
 				if (vary_sourcepts_y[i]) index++;
@@ -3494,7 +3460,7 @@ void Lens::get_n_fit_parameters(int &nparams)
 		lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
 	if (source_fit_mode==Point_Source) {
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) nparams++;
 				if (vary_sourcepts_y[i]) nparams++;
@@ -3523,7 +3489,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
 	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters");
 	if (source_fit_mode==Point_Source) {
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) fitparams[index++] = sourcepts_fit[i][0];
 				if (vary_sourcepts_y[i]) fitparams[index++] = sourcepts_fit[i][1];
@@ -3543,11 +3509,6 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	transformed_latex_parameter_names.resize(n_fit_parameters);
 	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
-	//if (mpi_id==0) {
-		//cout << "Initial parameters: ";
-		//for (int i=0; i < n_fit_parameters; i++) cout << fitparams[i] << " ";
-		//cout << endl;
-	//}
 	if (include_limits) {
 		upper_limits.input(n_fit_parameters);
 		lower_limits.input(n_fit_parameters);
@@ -3559,7 +3520,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 		}
 		if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
 		if (source_fit_mode==Point_Source) {
-			if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+			if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 				for (int i=0; i < n_sourcepts_fit; i++) {
 					if (vary_sourcepts_x[i]) {
 						lower_limits[index] = sourcepts_lower_limit[i][0];
@@ -3666,7 +3627,7 @@ void Lens::get_parameter_names()
 	}
 	delete[] new_parameter_names;
 	if (source_fit_mode==Point_Source) {
-		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			if (n_sourcepts_fit==1) {
 				if (vary_sourcepts_x[0]) {
 					fit_parameter_names.push_back("xsrc");
@@ -3721,7 +3682,6 @@ void Lens::get_parameter_names()
 	if (fit_parameter_names.size() != n_fit_parameters) die("get_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
 	for (i=0; i < n_fit_parameters; i++) {
 		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
-		//cout << latex_parameter_names[i] << endl;
 	}
 }
 
@@ -3951,7 +3911,7 @@ double Lens::chi_square_fit_simplex()
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
-		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq)) {
 			turned_on_chisqmag = true;
 			use_magnification_in_chisq = true;
 			fitmodel->use_magnification_in_chisq = true;
@@ -4020,7 +3980,7 @@ double Lens::chi_square_fit_simplex()
 			};
 			if (!found_bestfit_flux) warn("Not all best-fit source fluxes could be calculated. If there are no measured fluxes in your\ndata, turn 'chisqflux' off.");
 
-			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 				fitmodel->output_analytic_srcpos(bestfit_src);
 			} else {
 				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
@@ -4110,7 +4070,7 @@ double Lens::chi_square_fit_powell()
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
-		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq)) {
 			turned_on_chisqmag = true;
 			use_magnification_in_chisq = true;
 			fitmodel->use_magnification_in_chisq = true;
@@ -4166,7 +4126,7 @@ double Lens::chi_square_fit_powell()
 				bestfit_flux = new double[n_sourcepts_fit];
 				fitmodel->output_model_source_flux(bestfit_flux);
 			};
-			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 				fitmodel->output_analytic_srcpos(bestfit_src);
 			} else {
 				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
@@ -4260,7 +4220,6 @@ void Lens::chi_square_nested_sampling()
 	}
 #endif
 	string filename = fit_output_dir + "/" + fit_output_filename;
-	//if (use_image_plane_chisq2) display_chisq_status = true;
 
 	MonoSample(filename.c_str(),n_mcpoints,fitparams.array(),param_errors,mcmc_logfile);
 	bestfitparams.input(fitparams);
@@ -4287,7 +4246,7 @@ void Lens::chi_square_nested_sampling()
 				bestfit_flux = new double[n_sourcepts_fit];
 				fitmodel->output_model_source_flux(bestfit_flux);
 			};
-			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+			if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 				fitmodel->output_analytic_srcpos(bestfit_src);
 			} else {
 				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
@@ -4375,7 +4334,6 @@ void Lens::chi_square_twalk()
 	}
 #endif
 	string filename = fit_output_dir + "/" + fit_output_filename;
-	//if (use_image_plane_chisq2) display_chisq_status = true;
 
 	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
 	bestfitparams.input(fitparams);
@@ -4416,7 +4374,7 @@ void Lens::use_bestfit_model()
 	update_anchored_parameters();
 	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (source_fit_mode == Point_Source) {
-		if ((use_analytic_bestfit_src) and (!use_image_plane_chisq) and (!use_image_plane_chisq2)) {
+		if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
 			output_analytic_srcpos(sourcepts_fit);
 		} else {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -4458,7 +4416,7 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 	// this function calculates the marginalized error using the Gaussian approximation
 	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
 	static const double increment2 = 1e-4;
-	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!use_image_plane_chisq2) and (!use_image_plane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
+	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!use_image_plane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
 
 	dmatrix fisher(n_fit_parameters,n_fit_parameters);
 	fisher_inverse.erase();
@@ -4625,13 +4583,6 @@ double Lens::fitmodel_loglike_point_source(double* params)
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
-	else if (use_image_plane_chisq2) {
-		chisq = fitmodel->chisq_pos_image_plane2();
-		if ((display_chisq_status) and (mpi_id==0)) {
-			cout << "# images: " << fitmodel->n_visible_images << " vs. " << image_data[0].n_images << " data, ";
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
-		}
-	}
 	else {
 		chisq = fitmodel->chisq_pos_source_plane();
 		if ((display_chisq_status) and (mpi_id==0)) {
@@ -4692,13 +4643,6 @@ double Lens::loglike_point_source(double* params)
 			int tot_data_images = 0;
 			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
 			cout << "# images: " << n_visible_images << " vs. " << tot_data_images << " data, ";
-			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
-		}
-	}
-	else if (use_image_plane_chisq2) {
-		chisq = chisq_pos_image_plane2();
-		if ((display_chisq_status) and (mpi_id==0)) {
-			cout << "# images: " << n_visible_images << " vs. " << image_data[0].n_images << " data, ";
 			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
@@ -4842,7 +4786,7 @@ void Lens::print_fit_model()
 	print_lens_list(true);
 	if (source_fit_mode == Point_Source) {
 		if (sourcepts_fit != NULL) {
-			if ((!use_analytic_bestfit_src) or (use_image_plane_chisq) or (use_image_plane_chisq2)) {
+			if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 					cout << "Initial fit coordinates for source points:\n";
 					for (int i=0; i < n_sourcepts_fit; i++) cout << "Source point " << i << ": (" << sourcepts_fit[i][0] << "," << sourcepts_fit[i][1] << ")\n";

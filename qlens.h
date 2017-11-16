@@ -315,7 +315,6 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	bool use_magnification_in_chisq_during_repeats;
 	bool include_parity_in_chisq;
 	bool use_image_plane_chisq;
-	bool use_image_plane_chisq2;
 	bool calculate_parameter_errors;
 	bool adaptive_grid;
 	bool use_average_magnification_for_subgridding;
@@ -739,7 +738,6 @@ public:
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
-	double chisq_pos_image_plane2();
 	double chisq_flux();
 	double chisq_time_delays();
 	void output_model_source_flux(double *bestfit_flux);
