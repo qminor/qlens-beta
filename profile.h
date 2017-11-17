@@ -147,6 +147,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_anchored_parameters();
+	virtual void update_meta_parameters() {}
 	void update_anchor_center();
 	virtual void update_special_anchored_params() {}
 	virtual void assign_special_anchored_parameters(LensProfile*) {}
@@ -255,6 +256,7 @@ class Alpha : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_meta_parameters() { qsq = q*q; ssq = s*s; }
 
 	void print_parameters();
 
@@ -297,6 +299,7 @@ class PseudoJaffe : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_meta_parameters() { qsq = q*q; ssq = s*s; asq = a*a; }
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
@@ -587,6 +590,10 @@ class SersicLens : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_meta_parameters() {
+		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+		k = b*pow(sqrt(q)/re,1.0/n);
+	}
 
 	public:
 

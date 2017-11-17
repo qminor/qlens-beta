@@ -229,6 +229,7 @@ void LensProfile::update_anchored_parameters()
 	for (int i=0; i < n_params; i++) {
 		if (anchor_parameter[i]) (*param[i]) = parameter_anchor_ratio[i]*(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]));
 	}
+	update_meta_parameters();
 }
 
 void LensProfile::update_anchor_center()

@@ -137,6 +137,7 @@ Lens::Lens() : UCMC()
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
+	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = true; // this automatically sets the reference source redshift (for kappa scaling) equal to the source redshift being used
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
 	reference_zfactor = 1.0; // this is the scaling for lensing quantities if the source redshift is different from the reference value
@@ -323,9 +324,9 @@ Lens::Lens() : UCMC()
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
 	subgrid_around_satellites = true;
-	galsubgrid_radius_fraction = 1.3;
-	galsubgrid_min_cellsize_fraction = 0.1;
-	galsubgrid_cc_splittings = 1;
+	galsubgrid_radius_fraction = 1.1;
+	galsubgrid_min_cellsize_fraction = 0.3;
+	galsubgrid_cc_splittings = 0;
 	sorted_critical_curves = false;
 	n_singular_points = 0;
 	auto_store_cc_points = true;
@@ -376,6 +377,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
+	user_changed_zsource = lens_in->user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = lens_in->auto_zsource_scaling;
 	reference_source_redshift = lens_in->reference_source_redshift; // this is the source redshift with respect to which the lens models are defined
 	reference_zfactor = lens_in->reference_zfactor; // this is the scaling for lensing quantities if the source redshift is different from the reference value
@@ -2421,6 +2423,7 @@ bool Lens::load_image_data(string filename)
 	if (image_data != NULL) delete[] image_data;
 	image_data = new ImageData[n_sourcepts_fit];
 	int i, j, nn;
+	bool zsrc_given_in_datafile = false;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		if (read_data_line(data_infile,datawords,n_datawords)==false) { 
 			warn("data file could not be read; unexpected end of file"); 
@@ -2443,6 +2446,7 @@ bool Lens::load_image_data(string filename)
 				clear_image_data();
 				return false;
 			}
+			zsrc_given_in_datafile = true;
 		}
 		image_data[i].input(nn);
 		for (j=0; j < nn; j++) {
@@ -2499,8 +2503,13 @@ bool Lens::load_image_data(string filename)
 			}
 		}
 	}
-	if (auto_zsource_scaling) {
-		source_redshift = reference_source_redshift = source_redshifts[0];
+	if (zsrc_given_in_datafile) {
+		if (!user_changed_zsource) {
+			source_redshift = source_redshifts[0];
+			if (auto_zsource_scaling) reference_source_redshift = source_redshifts[0];
+		}
+		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)
+		auto_zsource_scaling = false;
 	}
 	for (i=0; i < n_sourcepts_fit; i++) {
 		zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);

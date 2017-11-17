@@ -6,7 +6,7 @@ Required packages for basic, out-of-the-box configuration:
 * gnuplot &mdash; for generating and viewing plots from within QLens
 
 Optional packages:
-* OpenMP &mdash; used for multithreading likelihood evaluations, useful esp. for lens models that require numerical integration for lensing calculations or if source pixel reconstruction is being used.
+* OpenMP &mdash; used for multithreading likelihood evaluations, useful especially for lens models that require numerical integration for lensing calculations, or if source pixel reconstruction is being used.
 * MPI &mdash; for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling; a subset of MPI processes can also be used to parallelize the likelihood if source pixel reconstruction is used, or if multiple source points are being fit to
 * CFITSIO library &mdash; for reading and writing FITS files
 * MUMPS package &mdash; for sparse matrix inversion in pixel image modeling (often painful to install however)

@@ -4762,6 +4762,7 @@ void Lens::process_commands(bool read_file)
 				} else {
 					reference_zfactor = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
 				}
+				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
 				reset();
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "source redshift = " << source_redshift << endl;

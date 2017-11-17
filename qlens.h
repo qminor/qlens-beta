@@ -263,6 +263,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 
 	double lens_redshift;
 	double source_redshift, reference_source_redshift, reference_zfactor; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
+	bool user_changed_zsource;
 	bool auto_zsource_scaling;
 	double *source_redshifts; // used for modeling source points
 	double *zfactors;
