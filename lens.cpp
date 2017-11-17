@@ -3735,7 +3735,7 @@ void Lens::chisq_single_evaluation()
 	}
 
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
-	if ((chisq_initial > 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
+	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	fitmodel->chisq_it = 0;
 #ifdef USE_OPENMP
@@ -3902,7 +3902,7 @@ double Lens::chi_square_fit_simplex()
 	int n_iterations;
 
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
-	if (chisq_initial==1e30) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
+	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	else display_chisq_status = false;
@@ -4063,7 +4063,7 @@ double Lens::chi_square_fit_powell()
 	}
 
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
-	if (chisq_initial==1e30) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
+	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	else display_chisq_status = false;
