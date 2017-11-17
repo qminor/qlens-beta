@@ -3201,11 +3201,11 @@ double Lens::chisq_pos_image_plane()
 			}
 		}
 
-		if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
-			delete[] ignore;
-			return 1e30;
-		}
 		n_tot_images_part += n_visible_images;
+		if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+			chisq_part += 1e30;
+			continue;
+		}
 
 		int n_dists = n_visible_images*image_data[i].n_images;
 		double *distsqrs = new double[n_dists];
@@ -3735,7 +3735,7 @@ void Lens::chisq_single_evaluation()
 	}
 
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
-	if (chisq_initial==1e30) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
+	if ((chisq_initial > 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	fitmodel->chisq_it = 0;
 #ifdef USE_OPENMP
@@ -4448,7 +4448,7 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 			fisher[i][j] = (derivhi - derivlo) / step;
 			if (fisher[i][j]*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
 			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher[i][j])) << endl;
-			if ((i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
+			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
 			signal(SIGABRT, &fisher_sighandler);
 			signal(SIGTERM, &fisher_sighandler);
 			signal(SIGINT, &fisher_sighandler);
@@ -4475,7 +4475,7 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 	bool nonsingular;
 	fisher.inverse(fisher_inverse,nonsingular);
 	if (!nonsingular) {
-		warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
+		if (mpi_id==0) warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
 		fisher_inverse.erase();
 		return false;
 	}
