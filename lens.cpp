@@ -3166,7 +3166,7 @@ double Lens::chisq_pos_image_plane()
 
 	double chisq=0, chisq_part=0;
 
-	int n_images, n_tot_images=0, n_tot_images_part;
+	int n_images, n_tot_images=0, n_tot_images_part=0;
 	double chisq_each_srcpt, dist;
 	int i,j,k,n;
 	for (i=mpi_start; i < mpi_start + mpi_chunk; i++) {
