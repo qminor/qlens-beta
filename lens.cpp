@@ -3965,7 +3965,7 @@ double Lens::chi_square_fit_simplex()
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
 		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
 		else bestfit_fisher_inverse.erase(); // just in case it was defined before
-		cout << "done\n\n";
+		if (mpi_id==0) cout << "done\n\n";
 	}
 	if (mpi_id==0) {
 		if (use_scientific_notation) cout << setiosflags(ios::scientific);
