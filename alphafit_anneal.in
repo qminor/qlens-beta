@@ -65,7 +65,7 @@ simplex_minchisq = 20      # optional, if specified the simplex will skip to zer
 #fit use_bestfit          # adopt the best fit parameters so they can be used as initial parameters for the next run
 
 imgplane_chisq on  # now we will do the fit using the image plane chi-square for a more accurate fit
-nimgs_penalty off  # If on, penalizes chi-square if the number of images produced is larger than the number of data images (off by default)
+nimg_penalty off  # If on, penalizes chi-square if the number of images produced is larger than the number of data images (off by default)
 cc_splitlevels 2   # Number of times the cells split around critical curves (default = 2)
 nrepeat 2          # this tells it to minimize the chi-square again twice (at T=0) after converging to a best-fit point, just to ensure
                    # we are really at a minimum (default = 1)

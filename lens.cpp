@@ -3260,6 +3260,7 @@ double Lens::chisq_pos_image_plane()
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
+	MPI_Comm_free(&sub_comm);
 #else
 	chisq = chisq_part;
 	n_tot_images = n_tot_images_part;
@@ -4404,8 +4405,7 @@ void Lens::use_bestfit_model()
 		set_cosmology(omega_matter,0.04,hubble,2.215);
 	}
 
-	//if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
-	if (index != n_fit_parameters) warn("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
+	if ((index != n_fit_parameters) and (mpi_id==0)) warn("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
 }
 
 int FISHER_KEEP_RUNNING = 1;
@@ -4467,7 +4467,6 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 	for (i=1; i < n_fit_parameters; i++) {
 		for (j=0; j < i; j++) {
 			offdiag_avg = 0.5*(fisher[i][j]+ fisher[j][i]);
-			//cout << i << " " << j << " " << fisher[i][j] << " " << fisher[j][i] << " " << abs((fisher[i][j]-fisher[j][i])/offdiag_avg) << endl;
 			//if (abs((fisher[i][j]-fisher[j][i])/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
 			fisher[i][j] = fisher[j][i] = offdiag_avg;
 		}
