@@ -3267,7 +3267,7 @@ double Lens::chisq_pos_image_plane()
 #endif
 
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
-	if (n_sourcepts_fit > 1) n_visible_images = n_tot_images; // save the total number of visible images produced
+	n_visible_images = n_tot_images; // save the total number of visible images produced
 	return chisq;
 }
 
@@ -3419,8 +3419,8 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
 	if (source_fit_mode==Point_Source) {
-		if (source_plane_rscale==0.0) autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
 		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
+			autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
 				if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
@@ -3445,7 +3445,6 @@ void Lens::set_default_plimits()
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	if (source_fit_mode==Point_Source) {
-		if (source_plane_rscale==0.0) autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
 		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) index++;
@@ -4368,11 +4367,17 @@ void Lens::chi_square_twalk()
 	fitmodel = NULL;
 }
 
-void Lens::use_bestfit_model()
+bool Lens::use_bestfit_model()
 {
-	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
-	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
-	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
+	if (nlens == 0) { if (mpi_id==0) warn(warnings,"No fit model has been specified"); return false; }
+	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
+	if (bestfitparams.size() != n_fit_parameters) {
+		if (mpi_id==0) warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+		return false;
+	}
+	//int np;
+	//get_n_fit_parameters(np);
+	//if (np != n_fit_parameters) die("WTF!");
 	int i, index=0;
 	double transformed_params[n_fit_parameters];
 	param_settings->inverse_transform_parameters(bestfitparams.array(),transformed_params);
@@ -4405,7 +4410,8 @@ void Lens::use_bestfit_model()
 		set_cosmology(omega_matter,0.04,hubble,2.215);
 	}
 
-	if ((index != n_fit_parameters) and (mpi_id==0)) warn("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
+	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
+	return true;
 }
 
 int FISHER_KEEP_RUNNING = 1;

@@ -706,7 +706,7 @@ public:
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
-	void use_bestfit_model();
+	bool use_bestfit_model();
 
 	bool include_central_image;
 	bool include_flux_chisq, include_time_delay_chisq;

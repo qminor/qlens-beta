@@ -14,7 +14,7 @@
 #include <readline/history.h>
 using namespace std;
 
-#define Complain(errmsg) do { cerr << "Error: " << errmsg << endl; if ((read_from_file) and (quit_after_error)) die(); goto next_line; } while (false) // the while(false) is a trick to make the macro syntax behave like a function
+#define Complain(errmsg) do { if (mpi_id==0) cerr << "Error: " << errmsg << endl; if ((read_from_file) and (quit_after_error)) die(); goto next_line; } while (false) // the while(false) is a trick to make the macro syntax behave like a function
 #define display_switch(setting) ((setting) ? "on" : "off")
 #define set_switch(setting,setword) do { if ((setword)=="on") setting = true; else if ((setword)=="off") setting = false; else Complain("invalid argument; must specify 'on' or 'off'"); } while (false)
 #define LENS_AXIS_DIR ((LensProfile::orient_major_axis_north==true) ? "y-axis" : "x-axis")
@@ -3425,7 +3425,7 @@ void Lens::process_commands(bool read_file)
 					}
 				} else if (words[1]=="use_bestfit") {
 					if (nwords > 2) Complain("no arguments allowed for 'use_bestfit' command");
-					use_bestfit_model();
+					if (use_bestfit_model()==false) Complain("could not adopt best-fit model");
 				} else if (words[1]=="save_bestfit") {
 					if (nwords > 2) Complain("no arguments allowed for 'save_bestfit' command");
 					if (mpi_id==0) output_bestfit_model();
@@ -4595,6 +4595,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'imgplane_chisq' command; must specify 'on' or 'off'");
 				set_switch(use_image_plane_chisq,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			if (nlens > 0) get_n_fit_parameters(n_fit_parameters); // update number of fit parameters, since source parameters might not have been included for source plane chi-square
 		}
 		else if (words[0]=="analytic_bestfit_src")
 		{
