@@ -2988,6 +2988,7 @@ void Lens::process_commands(bool read_file)
 					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
 					if (nwords==4)
 					{
+						if (n_sourcepts_fit > 1) Complain("with more than one source point, coordinates must be entered on separate lines after 'fit sourcept'");
 						double xs, ys;
 						if (!(ws[2] >> xs)) Complain("Invalid x-coordinate for initial source point");
 						if (!(ws[3] >> ys)) Complain("Invalid y-coordinate for initial source point");

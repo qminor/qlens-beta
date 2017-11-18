@@ -3420,7 +3420,8 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
 	if (source_fit_mode==Point_Source) {
 		if ((!use_analytic_bestfit_src) or (use_image_plane_chisq)) {
-			autogrid(); // autogrid sets source_plane_rscale, which is the scale for the source plane caustics
+			// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map data points to source plane and use their average separations to set the scale--implement this later
+			autogrid();
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
 				if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
