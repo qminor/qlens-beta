@@ -226,10 +226,17 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 
 void LensProfile::update_anchored_parameters()
 {
+	bool at_least_one_param_anchored = false;
 	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter[i]) (*param[i]) = parameter_anchor_ratio[i]*(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]));
+		if (anchor_parameter[i]) {
+			(*param[i]) = parameter_anchor_ratio[i]*(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]));
+			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+		}
 	}
-	update_meta_parameters();
+	if (at_least_one_param_anchored) {
+		update_meta_parameters();
+		update_angle_meta_params();
+	}
 }
 
 void LensProfile::update_anchor_center()
@@ -553,7 +560,20 @@ void LensProfile::set_angle_radians(const double &theta_in)
 	}
 }
 
-inline void LensProfile::rotate(double &x, double &y)
+void LensProfile::update_angle_meta_params()
+{
+	// trig functions are stored to save computation time later
+	costheta = cos(theta);
+	sintheta = sin(theta);
+	if (orient_major_axis_north==true) {
+		// this effectively alters theta by 90 degrees, so that the major axis will point along "north" (i.e. the y-axis)
+		double tmp = sintheta;
+		sintheta = costheta;
+		costheta = -tmp;
+	}
+}
+
+void LensProfile::rotate(double &x, double &y)
 {
 	// perform a counter-clockwise rotation of the coordinate system to match the coordinate system of the rotated galaxy
 	double xp = x*costheta + y*sintheta;

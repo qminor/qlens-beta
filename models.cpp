@@ -29,12 +29,12 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	if (q > 1) q = 1.0; // don't allow q>1
-	b = bb_prime/sqrt(q);
-	s = ss_prime/sqrt(q);
+	bprime = bb_prime;
+	sprime = ss_prime;
 	alpha = aa;
-	if (s < 0) s = -s; // don't allow negative core radii
-	qsq=q*q; ssq=s*s;
+	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
 
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -56,16 +56,16 @@ Alpha::Alpha(const Alpha* lens_in)
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
 
-	b = lens_in->b;
+	bprime = lens_in->bprime;
 	alpha = lens_in->alpha;
-	s = lens_in->s;
-	if (s < 0) s = -s; // don't allow negative core radii
+	sprime = lens_in->sprime;
+	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
 	q = lens_in->q;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	if (q > 1) q = 1.0; // don't allow q>1
-	qsq=q*q; ssq=s*s;
+	update_meta_parameters();
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
 	set_integration_pointers();
@@ -81,8 +81,8 @@ void Alpha::assign_paramnames()
 	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
 	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
-		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "\\epsilon"; latex_param_subscripts[4] = "2";
 	} else {
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
@@ -95,9 +95,9 @@ void Alpha::assign_paramnames()
 
 void Alpha::assign_param_pointers()
 {
-	param[0] = &b;
+	param[0] = &bprime;
 	param[1] = &alpha;
-	param[2] = &s;
+	param[2] = &sprime;
 	param[3] = &q;
 	param[4] = &theta;
 	if (!center_anchored) {
@@ -108,9 +108,9 @@ void Alpha::assign_param_pointers()
 
 void Alpha::get_parameters(double* params)
 {
-	params[0] = b*sqrt(q);
+	params[0] = bprime;
 	params[1] = alpha;
-	params[2] = s*sqrt(q);
+	params[2] = sprime;
 	if (use_ellipticity_components) {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 		params[3] = (1-q)*cos(2*theta_eff);
@@ -133,14 +133,14 @@ void Alpha::update_parameters(const double* params)
 		q=params[3];
 		set_angle(params[4]);
 	}
-	b = params[0]/sqrt(q);
-	s = params[2]/sqrt(q);
+	bprime = params[0];
+	sprime = params[2];
 	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
-	qsq=q*q; ssq=s*s;
 
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -148,21 +148,16 @@ void Alpha::update_parameters(const double* params)
 void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &status)
 {
 	if (n_vary_params > 0) {
-		// note, the actual mass and core parameters are b_prime, s_prime, even though their spherical counterparts b, s are used in the calculations
-		// (b_prime = b*sqrt(q) is favored because it is much less degenerate with q; same for s_prime).
-		double b_prime, s_prime;
+		// note, the actual mass and core parameters are bprime, sprime, even though their spherical counterparts b, s are used in the calculations
+		// (bprime = b*sqrt(q) is favored because it is much less degenerate with q; same for sprime).
 		double old_q = q;
-		if (vary_params[0]) b_prime = fitparams[index++];
-		else b_prime = b*sqrt(q);
+		if (vary_params[0]) bprime = fitparams[index++];
 
 		if (vary_params[1]) {
 			if (fitparams[index] <= 0) status = false; // alpha <= 0 is not a physically acceptable value, so report that we're out of bounds
 			alpha = fitparams[index++];
 		}
-		if (vary_params[2]) s_prime = fitparams[index++];
-		else {
-			s_prime = s*sqrt(q);
-		}
+		if (vary_params[2]) sprime = fitparams[index++];
 
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
@@ -178,7 +173,6 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 				if (q < 0) q = -q; // don't allow negative axis ratios
 				if (q > 1) q = 1.0; // don't allow q>1
 				if (q==0) q = 0.01;
-				qsq=q*q;
 			}
 		} else {
 			if (vary_params[3]) {
@@ -187,7 +181,6 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 				if (q < 0) q = -q; // don't allow negative axis ratios
 				if (q > 1) q = 1.0; // don't allow q>1
 				if (q==0) q = 0.01;
-				qsq=q*q;
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -196,13 +189,7 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
 
-		if ((vary_params[0]) or (vary_params[3]) or ((use_ellipticity_components) and (vary_params[4]))) b = b_prime/sqrt(q);
-		if ((vary_params[2]) or (vary_params[3]) or ((use_ellipticity_components) and (vary_params[4]))) {
-			s = s_prime/sqrt(q);
-			if (s < 0) s = -s; // don't allow negative core radii
-			ssq=s*s;
-		}
-
+		update_meta_parameters();
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
 	}
@@ -229,9 +216,9 @@ void Alpha::set_model_specific_integration_pointers()
 
 void Alpha::get_fit_parameters(dvector& fitparams, int &index)
 {
-	if (vary_params[0]) fitparams[index++] = b*sqrt(q);
+	if (vary_params[0]) fitparams[index++] = bprime;
 	if (vary_params[1]) fitparams[index++] = alpha;
-	if (vary_params[2]) fitparams[index++] = s*sqrt(q);
+	if (vary_params[2]) fitparams[index++] = sprime;
 	if (use_ellipticity_components) {
 		if (vary_params[3]) {
 			theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
@@ -253,9 +240,9 @@ void Alpha::get_fit_parameters(dvector& fitparams, int &index)
 
 void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
-	if (vary_params[0]) stepsizes[index++] = 0.1*b*sqrt(q);
+	if (vary_params[0]) stepsizes[index++] = 0.1*bprime;
 	if (vary_params[1]) stepsizes[index++] = 0.1;
-	if (vary_params[2]) stepsizes[index++] = 0.02*b*sqrt(q); // this one is a bit arbitrary, but hopefully reasonable enough
+	if (vary_params[2]) stepsizes[index++] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
 	if (use_ellipticity_components) {
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 0.1;
@@ -264,8 +251,8 @@ void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.1*b*sqrt(q);
-		if (vary_params[6]) stepsizes[index++] = 0.1*b*sqrt(q);
+		if (vary_params[5]) stepsizes[index++] = 0.1*bprime;
+		if (vary_params[6]) stepsizes[index++] = 0.1*bprime;
 	}
 }
 
@@ -397,7 +384,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 {
 	double xi, phi, kap;
 	xi = sqrt(q*x*x+y*y/q);
-	kap = 0.5 * (2-alpha) * pow(b*sqrt(q)/xi, alpha);
+	kap = 0.5 * (2-alpha) * pow(bprime/xi, alpha);
 	phi = atan(abs(y/(q*x)));
 	if (x < 0) {
 		if (y < 0)
@@ -410,7 +397,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 
 	complex<double> hess_complex, zstar(x,-y);
 	// The following is the *deflection*, not the shear, but it will be transformed to shear in the following line
-	hess_complex = 2*b*q/(1+q)*pow(b*sqrt(q)/xi,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	hess_complex = 2*b*q/(1+q)*pow(bprime/xi,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
 	hess_complex = -kap*conj(zstar)/zstar + (1-alpha)*hess_complex/zstar; // this is the complex shear
 
 	hess_complex = kap + hess_complex; // this is now (kappa+shear)
@@ -460,17 +447,14 @@ void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const
 
 void Alpha::print_parameters()
 {
-	double b_prime, s_prime;
-	b_prime = b*sqrt(q);
-	s_prime = s*sqrt(q);
 	if (use_ellipticity_components) {
 		double e_1, e_2;
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 		e_1 = (1-q)*cos(2*theta_eff);
 		e_2 = (1-q)*sin(2*theta_eff);
-		cout << "alpha: b=" << b_prime << ", alpha=" << alpha << ", s=" << s_prime << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
+		cout << "alpha: b=" << bprime << ", alpha=" << alpha << ", s=" << sprime << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
 	} else {
-		cout << "alpha: b=" << b_prime << ", alpha=" << alpha << ", s=" << s_prime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
+		cout << "alpha: b=" << bprime << ", alpha=" << alpha << ", s=" << sprime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
@@ -478,8 +462,7 @@ void Alpha::print_parameters()
 
 /********************************** PseudoJaffe **********************************/
 
-PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const double &ss_prime, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const double &ss_prime, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = PJAFFE;
 	center_anchored = false;
@@ -492,12 +475,12 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_paramnames();
 	if (q > 1) q = 1.0; // don't allow q>1
-	b = bb_prime/sqrt(q);
-	s = ss_prime/sqrt(q);
-	a = aa_prime/sqrt(q);
-	if (s < 0) s = -s;
-	qsq=q*q; ssq=s*s; asq=a*a;
+	bprime = bb_prime;
+	sprime = ss_prime;
+	aprime = aa_prime;
+	if (sprime < 0) sprime = -sprime;
 
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -520,16 +503,17 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 	vary_params.input(lens_in->vary_params);
 	param_number_to_vary.input(n_vary_params);
 
-	b = lens_in->b;
-	s = lens_in->s;
-	a = lens_in->a;
-	if (s < 0) s = -s; // don't allow negative core radii
+	bprime = lens_in->bprime;
+	sprime = lens_in->sprime;
+	aprime = lens_in->aprime;
+	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
 	q = lens_in->q;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	if (q > 1) q = 1.0; // don't allow q>1
-	qsq=q*q; ssq=s*s; asq=a*a;
+
+	update_meta_parameters();
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
@@ -545,8 +529,8 @@ void PseudoJaffe::assign_paramnames()
 	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
 
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
-		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "\\epsilon"; latex_param_subscripts[4] = "2";
 	} else {
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
@@ -559,9 +543,9 @@ void PseudoJaffe::assign_paramnames()
 
 void PseudoJaffe::assign_param_pointers()
 {
-	param[0] = &b;
-	param[1] = &a;
-	param[2] = &s;
+	param[0] = &bprime;
+	param[1] = &aprime;
+	param[2] = &sprime;
 	param[3] = &q;
 	param[4] = &theta;
 	if (!center_anchored) {
@@ -576,7 +560,8 @@ void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 	tidal_host = host_in;
 	double rm, ravg;
 	tidal_host->get_einstein_radius(rm,ravg,1.0);
-	a = sqrt(ravg*b/sqrt(q)); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+	aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+	a = aprime/sqrt(q);
 	asq = a*a;
 }
 
@@ -585,16 +570,17 @@ void PseudoJaffe::update_special_anchored_params()
 	if (anchor_special_parameter) {
 		double rm, ravg;
 		tidal_host->get_einstein_radius(rm,ravg,1.0);
-		a = sqrt(ravg*b/sqrt(q)); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+		aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+		a = aprime/sqrt(q);
 		asq = a*a;
 	}
 }
 
 void PseudoJaffe::get_parameters(double* params)
 {
-	params[0] = b*sqrt(q);
-	params[1] = a*sqrt(q);
-	params[2] = s*sqrt(q);
+	params[0] = bprime;
+	params[1] = aprime;
+	params[2] = sprime;
 	if (use_ellipticity_components) {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 		params[3] = (1-q)*cos(2*theta_eff);
@@ -616,15 +602,14 @@ void PseudoJaffe::update_parameters(const double* params)
 		q=params[3];
 		set_angle(params[4]);
 	}
-	b = params[0]/sqrt(q);
-	if (!anchor_special_parameter) a = params[1]/sqrt(q);
-	else a = a/sqrt(q); // the average tidal radius (a') may not have changed, but q has changed, so update a
-	s = params[2]/sqrt(q);
+	bprime = params[0];
+	if (!anchor_special_parameter) aprime = params[1];
+	sprime = params[2];
 	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
 	}
-	qsq=q*q; ssq=s*s; asq=a*a;
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -632,13 +617,9 @@ void PseudoJaffe::update_parameters(const double* params)
 void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
-		double b_prime, a_prime, s_prime;
-		if (vary_params[0]) b_prime = fitparams[index++];
-		else b_prime = b*sqrt(q);
-		if (vary_params[1]) a_prime = fitparams[index++];
-		else a_prime = a*sqrt(q);
-		if (vary_params[2]) s_prime = fitparams[index++];
-		else s_prime = s*sqrt(q);
+		if (vary_params[0]) bprime = fitparams[index++];
+		if (vary_params[1]) aprime = fitparams[index++];
+		if (vary_params[2]) sprime = fitparams[index++];
 
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
@@ -650,7 +631,6 @@ void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, boo
 				else e_2 = (1-q)*sin(2*theta_eff);
 				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				qsq=q*q;
 				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
 				if (q < 0) q = -q; // don't allow negative axis ratios
 				if (q > 1) q = 1.0; // don't allow q>1
@@ -661,7 +641,6 @@ void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, boo
 				q = fitparams[index++];
 				if (q < 0) q = -q; // don't allow negative axis ratios
 				if (q > 1) q = 1.0; // don't allow q>1
-				qsq=q*q;
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -670,18 +649,7 @@ void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, boo
 			if (vary_params[6]) y_center = fitparams[index++];
 		}
 
-		if ((vary_params[0]) or (vary_params[3]) or ((use_ellipticity_components) and (vary_params[4]))) b = b_prime/sqrt(q);
-		if ((vary_params[1]) or (vary_params[3]) or ((use_ellipticity_components) and (vary_params[4]))) {
-			a = a_prime/sqrt(q);
-			if (a < 0) a = -a; // don't allow negative tidal radii
-			asq=a*a;
-		}
-		if ((vary_params[2]) or (vary_params[3]) or ((use_ellipticity_components) and (vary_params[4]))) {
-			s = s_prime/sqrt(q);
-			if (s < 0) s = -s; // don't allow negative core radii
-			ssq=s*s;
-		}
-
+		update_meta_parameters();
 		set_integration_pointers(); // we do this because the potential is still calculated using integration, although analytic formulas can be used--add this in later
 		set_model_specific_integration_pointers();
 	}
@@ -701,9 +669,9 @@ void PseudoJaffe::set_model_specific_integration_pointers()
 
 void PseudoJaffe::get_fit_parameters(dvector& fitparams, int &index)
 {
-	if (vary_params[0]) fitparams[index++] = b*sqrt(q);
-	if (vary_params[1]) fitparams[index++] = a*sqrt(q);
-	if (vary_params[2]) fitparams[index++] = s*sqrt(q);
+	if (vary_params[0]) fitparams[index++] = bprime;
+	if (vary_params[1]) fitparams[index++] = aprime;
+	if (vary_params[2]) fitparams[index++] = sprime;
 	if (use_ellipticity_components) {
 		if (vary_params[3]) {
 			theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
@@ -725,9 +693,9 @@ void PseudoJaffe::get_fit_parameters(dvector& fitparams, int &index)
 
 void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
-	if (vary_params[0]) stepsizes[index++] = 0.5*b*sqrt(q);
-	if (vary_params[1]) stepsizes[index++] = 0.2*b*sqrt(q);
-	if (vary_params[2]) stepsizes[index++] = 0.02*b*sqrt(q); // this one is a bit arbitrary, but hopefully reasonable enough
+	if (vary_params[0]) stepsizes[index++] = 0.5*bprime;
+	if (vary_params[1]) stepsizes[index++] = 0.2*bprime;
+	if (vary_params[2]) stepsizes[index++] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
 	if (use_ellipticity_components) {
 		if (vary_params[3]) stepsizes[index++] = 0.1;
 		if (vary_params[4]) stepsizes[index++] = 0.1;
@@ -736,8 +704,8 @@ void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
 		if (vary_params[4]) stepsizes[index++] = 20;
 	}
 	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.5*b*sqrt(q);
-		if (vary_params[6]) stepsizes[index++] = 0.5*b*sqrt(q);
+		if (vary_params[5]) stepsizes[index++] = 0.5*bprime;
+		if (vary_params[6]) stepsizes[index++] = 0.5*bprime;
 	}
 }
 
@@ -841,18 +809,14 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 
 void PseudoJaffe::print_parameters()
 {
-	double b_prime, s_prime, a_prime;
-	b_prime = b*sqrt(q);
-	s_prime = s*sqrt(q);
-	a_prime = a*sqrt(q);
 	if (use_ellipticity_components) {
 		double e_1, e_2;
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 		e_1 = (1-q)*cos(2*theta_eff);
 		e_2 = (1-q)*sin(2*theta_eff);
-		cout << "pjaffe: b=" << b_prime << ", a=" << a_prime << ", s=" << s_prime << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
+		cout << "pjaffe: b=" << bprime << ", a=" << aprime << ", s=" << sprime << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
 	} else {
-		cout << "pjaffe: b=" << b_prime << ", a=" << a_prime << ", s=" << s_prime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
+		cout << "pjaffe: b=" << bprime << ", a=" << aprime << ", s=" << sprime << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
 	if (anchor_special_parameter) cout << " (tidal radius a set by lens " << tidal_host->lens_number << ")";
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
@@ -898,7 +862,7 @@ NFW::NFW(const NFW* lens_in)
 
 	ks = lens_in->ks;
 	rs = lens_in->rs;
-	if (rs < 0) rs = -rs; // don't allow negative core radii
+	if (rs < 0) rs = -rs; // don't allow negative scale radii
 	q = lens_in->q;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
@@ -918,8 +882,8 @@ void NFW::assign_paramnames()
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
-		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "\\epsilon"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "2";
 	} else {
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
@@ -991,7 +955,7 @@ void NFW::update_fit_parameters(const double* fitparams, int &index, bool& statu
 			rs = fitparams[index++];
 			if (rs < 0) {
 				status = false;
-				rs = -rs; // don't allow negative core radii
+				rs = -rs; // don't allow negative scale radii
 			}
 		}
 		if (use_ellipticity_components) {
@@ -1120,9 +1084,9 @@ inline double NFW::lens_function_xsq(const double &xsq)
 
 double NFW::deflection_spherical_r(const double r)
 {
-	double tmp = SQR(r/rs);
-	// warning: below tmp ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for tmp smaller than this (do later)
-	return 2*ks*r*(2*lens_function_xsq(tmp) + log(tmp/4))/tmp;
+	double xsq = SQR(r/rs);
+	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
+	return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 }
 
 void NFW::print_parameters()
@@ -1135,6 +1099,382 @@ void NFW::print_parameters()
 		cout << "nfw: ks=" << ks << ", rs=" << rs << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
 	} else {
 		cout << "nfw: ks=" << ks << ", rs=" << rs << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
+	}
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
+	cout << endl;
+}
+
+/********************************** NFW with elliptic potential *************************************/
+
+NFW_Elliptic_Potential::NFW_Elliptic_Potential(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+{
+	lenstype = nfwpot;
+	center_anchored = false;
+	anchor_special_parameter = false;
+	set_n_params(6);
+	assign_param_pointers();
+	ks = ks_in; rs = rs_in;
+	set_default_base_values(nn,acc);
+	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	epsilon = e_in;
+	set_angle(theta_degrees);
+	assign_paramnames();
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+}
+
+NFW_Elliptic_Potential::NFW_Elliptic_Potential(const NFW_Elliptic_Potential* lens_in)
+{
+	lenstype = lens_in->lenstype;
+	lens_number = lens_in->lens_number;
+	center_anchored = lens_in->center_anchored;
+	center_anchor_lens = lens_in->center_anchor_lens;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
+	n_params = lens_in->n_params;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
+	n_vary_params = lens_in->n_vary_params;
+	vary_params.input(lens_in->vary_params);
+	param_number_to_vary.input(n_vary_params);
+
+	ks = lens_in->ks;
+	rs = lens_in->rs;
+	if (rs < 0) rs = -rs; // don't allow negative scale radii
+	epsilon = lens_in->epsilon;
+	set_angle_radians(lens_in->theta);
+	x_center = lens_in->x_center;
+	y_center = lens_in->y_center;
+	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+}
+
+void NFW_Elliptic_Potential::assign_paramnames()
+{
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	if (use_ellipticity_components) {
+		paramnames[2] = "e1"; latex_paramnames[2] = "\\epsilon"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "2";
+	} else {
+		paramnames[2] = "epsilon"; latex_paramnames[2] = "\\epsilon"; latex_param_subscripts[2] = "";
+		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
+	}
+	if (!center_anchored) {
+		paramnames[4] = "xc"; latex_paramnames[4] = "x"; latex_param_subscripts[4] = "c";
+		paramnames[5] = "yc"; latex_paramnames[5] = "y"; latex_param_subscripts[5] = "c";
+	}
+}
+
+void NFW_Elliptic_Potential::assign_param_pointers()
+{
+	param[0] = &ks;
+	param[1] = &rs;
+	param[2] = &epsilon;
+	param[3] = &theta;
+	if (!center_anchored) {
+		param[4] = &x_center;
+		param[5] = &y_center;
+	}
+}
+
+void NFW_Elliptic_Potential::get_parameters(double* params)
+{
+	params[0] = ks;
+	params[1] = rs;
+	if (use_ellipticity_components) {
+		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+		params[2] = epsilon*cos(2*theta_eff);
+		params[3] = epsilon*sin(2*theta_eff);
+	} else {
+		params[2] = epsilon;
+		params[3] = radians_to_degrees(theta);
+	}
+	params[4] = x_center;
+	params[5] = y_center;
+}
+
+void NFW_Elliptic_Potential::update_parameters(const double* params)
+{
+	ks=params[0];
+	rs=params[1];
+	if (use_ellipticity_components) {
+		epsilon = sqrt(SQR(params[2]) + SQR(params[3]));
+		set_angle_from_components(params[2],params[3]);
+	} else {
+		epsilon=params[2];
+		set_angle(params[3]);
+	}
+	if (!center_anchored) {
+		x_center = params[4];
+		y_center = params[5];
+	}
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+}
+
+void NFW_Elliptic_Potential::update_fit_parameters(const double* fitparams, int &index, bool& status)
+{
+	if (n_vary_params > 0) {
+		if (vary_params[0]) {
+			ks = fitparams[index++];
+			if (ks < 0) {
+				status = false;
+				ks = -ks; // don't allow negative kappa
+			}
+		}
+		if (vary_params[1]) {
+			rs = fitparams[index++];
+			if (rs < 0) {
+				status = false;
+				rs = -rs; // don't allow negative scale radii
+			}
+		}
+		if (use_ellipticity_components) {
+			if ((vary_params[2]) or (vary_params[3])) {
+				double e_1, e_2;
+				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+				if (vary_params[2]) e_1 = fitparams[index++];
+				else e_1 = epsilon*cos(2*theta_eff);
+				if (vary_params[3]) e_2 = fitparams[index++];
+				else e_2 = epsilon*sin(2*theta_eff);
+				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				set_angle_from_components(e_1,e_2);
+				if ((epsilon <= 0) or (epsilon > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
+				if (epsilon > 1) epsilon = 1.0; // don't allow epsilon>1
+			}
+		} else {
+			if (vary_params[2]) {
+				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				epsilon = fitparams[index++];
+				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
+				if (epsilon > 1) epsilon = 1.0; // don't allow epsilon>1
+			}
+			if (vary_params[3]) set_angle(fitparams[index++]);
+		}
+		if (!center_anchored) {
+			if (vary_params[4]) x_center = fitparams[index++];
+			if (vary_params[5]) y_center = fitparams[index++];
+		}
+
+		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+	}
+}
+
+void NFW_Elliptic_Potential::get_fit_parameters(dvector& fitparams, int &index)
+{
+	if (vary_params[0]) fitparams[index++] = ks;
+	if (vary_params[1]) fitparams[index++] = rs;
+	if (use_ellipticity_components) {
+		if (vary_params[2]) {
+			theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+			fitparams[index++] = epsilon*cos(2*theta_eff);
+		}
+		if (vary_params[3]) {
+			theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+			fitparams[index++] = epsilon*sin(2*theta_eff);
+		}
+	} else {
+		if (vary_params[2]) fitparams[index++] = epsilon;
+		if (vary_params[3]) fitparams[index++] = radians_to_degrees(theta);
+	}
+	if (!center_anchored) {
+		if (vary_params[4]) fitparams[index++] = x_center;
+		if (vary_params[5]) fitparams[index++] = y_center;
+	}
+}
+
+void NFW_Elliptic_Potential::get_auto_stepsizes(dvector& stepsizes, int &index)
+{
+	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
+	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
+	if (use_ellipticity_components) {
+		if (vary_params[2]) stepsizes[index++] = 0.1;
+		if (vary_params[3]) stepsizes[index++] = 0.1;
+	} else {
+		if (vary_params[2]) stepsizes[index++] = 0.2;
+		if (vary_params[3]) stepsizes[index++] = 20;
+	}
+	if (!center_anchored) {
+		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+		if (vary_params[5]) stepsizes[index++] = 1.0;
+	}
+}
+
+void NFW_Elliptic_Potential::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+{
+	if (vary_params[0]) {
+		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
+		index++;
+	}
+	if (vary_params[1]) {
+		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
+		index++;
+	}
+	if (use_ellipticity_components) {
+		if (vary_params[2]) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
+			index++;
+		}
+		if (vary_params[3]) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
+			index++;
+		}
+	} else {
+		if (vary_params[2]) {
+			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
+			index++;
+		}
+		if (vary_params[3]) index++;
+	}
+	if (!center_anchored) {
+		if (vary_params[4]) index++;
+		if (vary_params[5]) index++;
+	}
+}
+
+double NFW_Elliptic_Potential::kappa_rsq(const double rsq)
+{
+	double xsq = rsq/(rs*rs);
+	if (xsq==1) return (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
+	else return (2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1));
+}
+
+double NFW_Elliptic_Potential::kappa_rsq_deriv(const double rsq)
+{
+	double xsq = rsq/(rs*rs);
+	if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // derivative function on next line becomes unstable for x very close to 1, this fixes the instability
+	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
+}
+
+inline double NFW_Elliptic_Potential::lens_function_xsq(const double &xsq)
+{
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
+}
+
+double NFW_Elliptic_Potential::deflection_spherical_r(const double r)
+{
+	double xsq = SQR(r/rs);
+	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
+	return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+}
+
+double NFW_Elliptic_Potential::shear_magnitude(const double rsq)
+{
+	double xsq, kapavg, kappa;
+	xsq = rsq/(rs*rs);
+	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
+	kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	if (xsq==1) kappa = (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
+	else kappa = 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
+	return (kapavg - kappa);
+}
+
+double NFW_Elliptic_Potential::kappa(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double phi = atan(abs(y/x));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	double rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
+	return (kappa_rsq(rsq) + epsilon*shear_magnitude(rsq)*cos(2*phi));
+}
+
+double NFW_Elliptic_Potential::potential(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double phi = atan(abs(y/x));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	// Put this in!
+	return 0;
+}
+
+void NFW_Elliptic_Potential::deflection(double x, double y, lensvector& def)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double phi = atan(abs(y/x));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	double defmag = deflection_spherical_r(sqrt((1-epsilon)*x*x + (1+epsilon)*y*y));
+	def[0] = defmag*sqrt(1-epsilon)*cos(phi);
+	def[1] = defmag*sqrt(1+epsilon)*sin(phi);
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+}
+
+void NFW_Elliptic_Potential::hessian(double x, double y, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double phi = atan(abs(y/x));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	double rsq, gamma1, gamma2, kap, shearmag;
+	rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
+	kap = kappa_rsq(rsq);
+	shearmag = shear_magnitude(rsq);
+	//cout << "x=" << x << ", y=" << y << endl;
+	//cout << "SHEARMAG: " << shearmag << endl;
+	//cout << "phi: " << radians_to_degrees(phi) << endl;
+	//cout << "sintheta=" << sintheta << ", costheta=" << costheta << endl;
+	gamma1 = -epsilon*kap - shearmag*cos(2*phi);
+	gamma2 = -sqrt(1+epsilon*epsilon)*shearmag*sin(2*phi);
+	//cout << "gamma1=" << gamma1 << ", gamma2=" << gamma2 << endl;
+	hess[0][0] = kap + gamma1;
+	hess[1][1] = kap - gamma1;
+	hess[0][1] = gamma2;
+	hess[1][0] = gamma2;
+	//cout << "HESS0: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << " " << hess[1][0] << endl;
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+	//cout << "HESS: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << " " << hess[1][0] << endl;
+}
+
+void NFW_Elliptic_Potential::print_parameters()
+{
+	if (use_ellipticity_components) {
+		double e_1, e_2;
+		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+		e_1 = epsilon*cos(2*theta_eff);
+		e_2 = epsilon*sin(2*theta_eff);
+		cout << "nfw: ks=" << ks << ", rs=" << rs << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
+	} else {
+		cout << "nfw: ks=" << ks << ", rs=" << rs << ", epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
@@ -1181,7 +1521,7 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rt = lens_in->rt;
-	if (rs < 0) rs = -rs; // don't allow negative core radii
+	if (rs < 0) rs = -rs; // don't allow negative scale radii
 	q = lens_in->q;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
@@ -1202,8 +1542,8 @@ void Truncated_NFW::assign_paramnames()
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
-		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "\\epsilon"; latex_param_subscripts[4] = "2";
 	} else {
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";
@@ -1527,8 +1867,8 @@ void Hernquist::assign_paramnames()
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
-		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "\\epsilon"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "2";
 	} else {
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
@@ -1785,8 +2125,8 @@ void ExpDisk::assign_paramnames()
 	paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	paramnames[1] = "R_d"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "d";
 	if (use_ellipticity_components) {
-		paramnames[2] = "e1"; latex_paramnames[2] = "e"; latex_param_subscripts[2] = "1";
-		paramnames[3] = "e2"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "2";
+		paramnames[2] = "e1"; latex_paramnames[2] = "\\epsilon"; latex_param_subscripts[2] = "1";
+		paramnames[3] = "e2"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "2";
 	} else {
 		paramnames[2] = "q"; latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
 		paramnames[3] = "theta"; latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
@@ -2852,15 +3192,15 @@ void CoreCusp::assign_paramnames()
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
-	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "e"; }
+	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "\\epsilon"; }
 	else { paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0"; }
 	paramnames[1] = "gamma"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	paramnames[3] = "a"; latex_paramnames[3] = "a"; latex_param_subscripts[3] = "";
 	paramnames[4] = "s"; latex_paramnames[4] = "s"; latex_param_subscripts[4] = "";
 	if (use_ellipticity_components) {
-		paramnames[5] = "e1"; latex_paramnames[5] = "e"; latex_param_subscripts[5] = "1";
-		paramnames[6] = "e2"; latex_paramnames[6] = "e"; latex_param_subscripts[6] = "2";
+		paramnames[5] = "e1"; latex_paramnames[5] = "\\epsilon"; latex_param_subscripts[5] = "1";
+		paramnames[6] = "e2"; latex_paramnames[6] = "\\epsilon"; latex_param_subscripts[6] = "2";
 	} else {
 		paramnames[5] = "q"; latex_paramnames[5] = "q"; latex_param_subscripts[5] = "";
 		paramnames[6] = "theta"; latex_paramnames[6] = "\\theta"; latex_param_subscripts[6] = "";
@@ -3332,8 +3672,8 @@ void SersicLens::assign_paramnames()
 	paramnames[1] = "R_eff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	if (use_ellipticity_components) {
-		paramnames[3] = "e1"; latex_paramnames[3] = "e"; latex_param_subscripts[3] = "1";
-		paramnames[4] = "e2"; latex_paramnames[4] = "e"; latex_param_subscripts[4] = "2";
+		paramnames[3] = "e1"; latex_paramnames[3] = "\\epsilon"; latex_param_subscripts[3] = "1";
+		paramnames[4] = "e2"; latex_paramnames[4] = "\\epsilon"; latex_param_subscripts[4] = "2";
 	} else {
 		paramnames[3] = "q"; latex_paramnames[3] = "q"; latex_param_subscripts[3] = "";
 		paramnames[4] = "theta"; latex_paramnames[4] = "\\theta"; latex_param_subscripts[4] = "";

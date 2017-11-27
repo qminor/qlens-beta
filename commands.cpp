@@ -1568,6 +1568,7 @@ void Lens::process_commands(bool read_file)
 									(profile_name==MULTIPOLE) ? "mpole" :
 									(profile_name==nfw) ? "nfw" :
 									(profile_name==TRUNCATED_nfw) ? "tnfw" :
+									(profile_name==nfwpot) ? "nfwpot" :
 									(profile_name==HERNQUIST) ? "hern" :
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
@@ -2051,6 +2052,78 @@ void Lens::process_commands(bool read_file)
 					}
 				}
 				else Complain("nfw requires at least 3 parameters (ks, rs, q)");
+			}
+			else if (words[1]=="nfwpot")
+			{
+				if (nwords > 8) Complain("more than 6 parameters not allowed for model nfwpot");
+				if (nwords >= 5) {
+					double ks, rs;
+					double epsilon, theta = 0, xc = 0, yc = 0;
+					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model nfwpot");
+					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model nfwpot");
+					if (!(ws[4] >> epsilon)) Complain("invalid epsilon parameter for model nfwpot");
+					if (nwords >= 6) {
+						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfwpot");
+						if (nwords == 7) {
+							if (words[6].find("anchor_center=")==0) {
+								string anchorstr = words[6].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_lens_center = true;
+							} else Complain("x-coordinate specified for center, but not y-coordinate");
+						}
+						else if (nwords == 8) {
+							if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
+							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model nfwpot");
+							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfwpot");
+						}
+					}
+					param_vals.input(6);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=epsilon; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+					if (vary_parameters) {
+						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
+						if (read_command(false)==false) return;
+						if (nwords != tot_nparams_to_vary) {
+							string complain_str = "";
+							if (anchor_lens_center) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model nfwpot";
+							}
+							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model nfwpot";
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
+								complain_str += ",\n     plus two shear parameters ";
+								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+							}
+							if (complain_str != "") Complain(complain_str);
+						}
+						vary_flags.input(nparams_to_vary);
+						if (add_shear) shear_vary_flags.input(2);
+						bool invalid_params = false;
+						int i,j;
+						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+					}
+					if (update_parameters) {
+						lens_list[lens_number]->update_parameters(param_vals.array());
+						update_anchored_parameters();
+						reset();
+						if (auto_ccspline) automatically_determine_ccspline_mode();
+					} else {
+						add_lens(nfwpot, ks, rs, 0.0, epsilon, theta, xc, yc);
+						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
+					}
+				}
+				else Complain("nfwpot requires at least 3 parameters (ks, rs, q)");
 			}
 			else if (words[1]=="tnfw")
 			{

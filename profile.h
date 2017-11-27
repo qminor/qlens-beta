@@ -20,6 +20,7 @@ enum LensProfileName
 	PJAFFE,
 	nfw,
 	TRUNCATED_nfw,
+	nfwpot,
 	HERNQUIST,
 	EXPDISK,
 	SHEAR,
@@ -147,6 +148,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_anchored_parameters();
+	void update_angle_meta_params();
 	virtual void update_meta_parameters() {}
 	void update_anchor_center();
 	virtual void update_special_anchored_params() {}
@@ -225,6 +227,7 @@ class Alpha : public LensProfile
 	private:
 	double alpha, b, s;
 	// Note that the actual fit parameters are b' = b*sqrt(q) and s' = s*sqrt(q), not b and s. (See the constructor function for more on how this is implemented.)
+	double bprime, sprime;
 	double qsq, ssq; // used in lensing calculations
 
 	double kappa_rsq(const double);
@@ -256,7 +259,11 @@ class Alpha : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
-	void update_meta_parameters() { qsq = q*q; ssq = s*s; }
+	void update_meta_parameters() {
+		b = bprime/sqrt(q);
+		s = sprime/sqrt(q);
+		qsq = q*q; ssq = s*s;
+	}
 
 	void print_parameters();
 
@@ -269,6 +276,7 @@ class PseudoJaffe : public LensProfile
 {
 	private:
 	double b, s, a; // a is truncation radius
+	double bprime, sprime, aprime;
 	double qsq, ssq, asq; // used in lensing calculations
 
 	double kappa_rsq(const double);
@@ -299,7 +307,12 @@ class PseudoJaffe : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
-	void update_meta_parameters() { qsq = q*q; ssq = s*s; asq = a*a; }
+	void update_meta_parameters() {
+		b = bprime/sqrt(q);
+		s = sprime/sqrt(q);
+		a = aprime/sqrt(q);
+		qsq = q*q; ssq = s*s; asq = a*a;
+	}
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
@@ -363,6 +376,41 @@ class Truncated_NFW : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+
+	void print_parameters();
+};
+
+class NFW_Elliptic_Potential : public LensProfile
+{
+	private:
+	double ks, rs, epsilon; // epsilon is the ellipticity parameter
+
+	double kappa_rsq(const double);
+	double kappa_rsq_deriv(const double);
+	double lens_function_xsq(const double&);
+
+	double deflection_spherical_r(const double r);
+
+	public:
+	NFW_Elliptic_Potential() : LensProfile() {}
+	NFW_Elliptic_Potential(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	NFW_Elliptic_Potential(const NFW_Elliptic_Potential* lens_in);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void get_fit_parameters(dvector& fitparams, int &index);
+	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void get_parameters(double* params);
+	void update_parameters(const double* params);
+	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+
+	// here the base class deflection/hessian functions are overloaded because we are parametrizing the ellipticity differently from the base class
+	double kappa(double, double);
+	double potential(double, double);
+	void deflection(double, double, lensvector&);
+	void hessian(double, double, lensmatrix&);
+	double shear_magnitude(const double r);
 
 	void print_parameters();
 };

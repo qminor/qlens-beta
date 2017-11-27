@@ -599,6 +599,9 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 			newlist[nlens] = new NFW(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TRUNCATED_nfw:
 			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+		case nfwpot:
+			// in the case of nfwpot, q here is not the axis ratio, but rather an ellipticity parameter e such that R^2 = (1-e)*x*x + (1+e)*y*y
+			newlist[nlens] = new NFW_Elliptic_Potential(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case PJAFFE:
 			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case EXPDISK:
@@ -2915,6 +2918,8 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
 				fitmodel->lens_list[i] = new Truncated_NFW((Truncated_NFW*) lens_list[i]); break;
+			case nfwpot:
+				fitmodel->lens_list[i] = new NFW_Elliptic_Potential((NFW_Elliptic_Potential*) lens_list[i]); break;
 			case HERNQUIST:
 				fitmodel->lens_list[i] = new Hernquist((Hernquist*) lens_list[i]); break;
 			case EXPDISK:
