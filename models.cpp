@@ -1125,6 +1125,8 @@ Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const double &ks_in, const double &
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
 	epsilon = e_in;
 	set_angle(theta_degrees);
+	x_center = xc_in;
+	y_center = yc_in;
 	assign_paramnames();
 	update_meta_parameters();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);

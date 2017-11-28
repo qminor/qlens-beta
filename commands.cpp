@@ -454,7 +454,8 @@ void Lens::process_commands(bool read_file)
 					else if (words[2]=="sourcept")
 						cout << "fit sourcept\n"
 							"fit sourcept <sourcept_num>\n"
-							"fit sourcept <x0> <y0>                               (for a single source point)\n\n"
+							"fit sourcept <x0> <y0>                      (for a single source point)\n"
+							"fit sourcept auto                           (adopts best fit from source plane chi-sq)\n\n"
 							"Specify the initial fit coordinates for the source points, one for each set of images loaded as\n"
 							"data (via the 'imgdata' command). If only one source point is being used, these can be given as\n"
 							"arguments on the same line (e.g. 'fit sourcept 1 2.5'); for more than one source point, the\n"
@@ -3067,7 +3068,16 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="sourcept")
 				{
 					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
-					if (nwords==4)
+					if ((nwords==3) and (words[2]=="auto")) {
+						lensvector *srcpts = new lensvector[n_sourcepts_fit];
+						output_analytic_srcpos(srcpts);
+						for (int i=0; i < n_sourcepts_fit; i++) {
+							sourcepts_fit[i][0] = srcpts[i][0];
+							sourcepts_fit[i][1] = srcpts[i][1];
+						}
+						delete[] srcpts;
+					}
+					else if (nwords==4)
 					{
 						if (n_sourcepts_fit > 1) Complain("with more than one source point, coordinates must be entered on separate lines after 'fit sourcept'");
 						double xs, ys;
