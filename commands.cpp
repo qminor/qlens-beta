@@ -226,6 +226,7 @@ void Lens::process_commands(bool read_file)
 							"kmpole -- multipole term in kappa\n"
 							"pjaffe -- Pseudo-Jaffe profile (truncated isothermal ellipsoid)\n"
 							"nfw -- NFW model\n"
+							"pnfw -- Pseudo-elliptical NFW model\n"
 							"tnfw -- Truncated NFW model\n"
 							"hern -- Hernquist model\n"
 							"expdisk -- exponential disk\n"
@@ -327,6 +328,13 @@ void Lens::process_commands(bool read_file)
 							"where <ks> is the mass parameter, <rs> is the scale radius, <q> is the axis ratio,\n"
 							"and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
+							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+					else if (words[2]=="pnfw")
+						cout << "lens pnfw <ks> <rs> <epsilon> [theta] [x-center] [y-center]\n\n"
+							"Pseudo-elliptical NFW profile from Golse & Kneib (2002), where <ks> is the mass parameter, <rs> is the\n"
+							"scale radius, <epsilon> is the ellipticity parameter, and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
 							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
@@ -1568,7 +1576,7 @@ void Lens::process_commands(bool read_file)
 									(profile_name==MULTIPOLE) ? "mpole" :
 									(profile_name==nfw) ? "nfw" :
 									(profile_name==TRUNCATED_nfw) ? "tnfw" :
-									(profile_name==nfwpot) ? "nfwpot" :
+									(profile_name==pnfw) ? "pnfw" :
 									(profile_name==HERNQUIST) ? "hern" :
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
@@ -2053,17 +2061,17 @@ void Lens::process_commands(bool read_file)
 				}
 				else Complain("nfw requires at least 3 parameters (ks, rs, q)");
 			}
-			else if (words[1]=="nfwpot")
+			else if (words[1]=="pnfw")
 			{
-				if (nwords > 8) Complain("more than 6 parameters not allowed for model nfwpot");
+				if (nwords > 8) Complain("more than 6 parameters not allowed for model pnfw");
 				if (nwords >= 5) {
 					double ks, rs;
 					double epsilon, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model nfwpot");
-					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model nfwpot");
-					if (!(ws[4] >> epsilon)) Complain("invalid epsilon parameter for model nfwpot");
+					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model pnfw");
+					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model pnfw");
+					if (!(ws[4] >> epsilon)) Complain("invalid epsilon parameter for model pnfw");
 					if (nwords >= 6) {
-						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfwpot");
+						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model pnfw");
 						if (nwords == 7) {
 							if (words[6].find("anchor_center=")==0) {
 								string anchorstr = words[6].substr(14);
@@ -2076,8 +2084,8 @@ void Lens::process_commands(bool read_file)
 						}
 						else if (nwords == 8) {
 							if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
-							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model nfwpot");
-							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfwpot");
+							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model pnfw");
+							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model pnfw");
 						}
 					}
 					param_vals.input(6);
@@ -2093,9 +2101,9 @@ void Lens::process_commands(bool read_file)
 								if (nwords==tot_nparams_to_vary+2) {
 									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model nfwpot";
+								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model pnfw";
 							}
-							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model nfwpot";
+							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model pnfw";
 							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -2117,13 +2125,13 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(nfwpot, ks, rs, 0.0, epsilon, theta, xc, yc);
+						add_lens(pnfw, ks, rs, 0.0, epsilon, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
 					}
 				}
-				else Complain("nfwpot requires at least 3 parameters (ks, rs, q)");
+				else Complain("pnfw requires at least 3 parameters (ks, rs, epsilon)");
 			}
 			else if (words[1]=="tnfw")
 			{
@@ -4402,6 +4410,7 @@ void Lens::process_commands(bool read_file)
 				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
 				cout << "magnification = " << magnification(point,0,reference_zfactor) << endl;
 				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
+				cout << "shear1=" << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2=" << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
 				cout << "potential = " << potential(point,reference_zfactor) << endl;
 				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n\n";
 				cout << "shear/kappa = " << sheartot/kappa(point,reference_zfactor) << endl;

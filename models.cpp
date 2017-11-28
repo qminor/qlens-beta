@@ -125,7 +125,9 @@ void Alpha::get_parameters(double* params)
 
 void Alpha::update_parameters(const double* params)
 {
+	bprime = params[0];
 	alpha=params[1];
+	sprime = params[2];
 	if (use_ellipticity_components) {
 		q = 1 - sqrt(SQR(params[3]) + SQR(params[4]));
 		set_angle_from_components(params[3],params[4]);
@@ -133,8 +135,6 @@ void Alpha::update_parameters(const double* params)
 		q=params[3];
 		set_angle(params[4]);
 	}
-	bprime = params[0];
-	sprime = params[2];
 	if (!center_anchored) {
 		x_center = params[5];
 		y_center = params[6];
@@ -172,7 +172,7 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
 				if (q < 0) q = -q; // don't allow negative axis ratios
 				if (q > 1) q = 1.0; // don't allow q>1
-				if (q==0) q = 0.01;
+				if (q==0) q = 0.01; // just to avoid catastrophe
 			}
 		} else {
 			if (vary_params[3]) {
@@ -1067,13 +1067,16 @@ double NFW::kappa_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
 	if (xsq==1) return (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-	else return (2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1));
+	else if (xsq < 1e-6) return -ks*(2+log(xsq/4));
+	else return 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
 }
 
 double NFW::kappa_rsq_deriv(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
 	if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // derivative function on next line becomes unstable for x very close to 1, this fixes the instability
+	else if (xsq < 1e-6) return -ks/rsq;
 	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
 }
 
@@ -1085,8 +1088,11 @@ inline double NFW::lens_function_xsq(const double &xsq)
 double NFW::deflection_spherical_r(const double r)
 {
 	double xsq = SQR(r/rs);
-	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
-	return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
+	if (xsq > 1e-6)
+		return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	else
+		return -ks*r*(1+log(xsq/4));
 }
 
 void NFW::print_parameters()
@@ -1106,10 +1112,10 @@ void NFW::print_parameters()
 
 /********************************** NFW with elliptic potential *************************************/
 
-NFW_Elliptic_Potential::NFW_Elliptic_Potential(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees,
+Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
-	lenstype = nfwpot;
+	lenstype = pnfw;
 	center_anchored = false;
 	anchor_special_parameter = false;
 	set_n_params(6);
@@ -1120,10 +1126,11 @@ NFW_Elliptic_Potential::NFW_Elliptic_Potential(const double &ks_in, const double
 	epsilon = e_in;
 	set_angle(theta_degrees);
 	assign_paramnames();
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+	update_meta_parameters();
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);
 }
 
-NFW_Elliptic_Potential::NFW_Elliptic_Potential(const NFW_Elliptic_Potential* lens_in)
+Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_in)
 {
 	lenstype = lens_in->lenstype;
 	lens_number = lens_in->lens_number;
@@ -1148,10 +1155,11 @@ NFW_Elliptic_Potential::NFW_Elliptic_Potential(const NFW_Elliptic_Potential* len
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+	update_meta_parameters();
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);
 }
 
-void NFW_Elliptic_Potential::assign_paramnames()
+void Pseudo_Elliptical_NFW::assign_paramnames()
 {
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
@@ -1171,7 +1179,7 @@ void NFW_Elliptic_Potential::assign_paramnames()
 	}
 }
 
-void NFW_Elliptic_Potential::assign_param_pointers()
+void Pseudo_Elliptical_NFW::assign_param_pointers()
 {
 	param[0] = &ks;
 	param[1] = &rs;
@@ -1183,7 +1191,7 @@ void NFW_Elliptic_Potential::assign_param_pointers()
 	}
 }
 
-void NFW_Elliptic_Potential::get_parameters(double* params)
+void Pseudo_Elliptical_NFW::get_parameters(double* params)
 {
 	params[0] = ks;
 	params[1] = rs;
@@ -1199,7 +1207,7 @@ void NFW_Elliptic_Potential::get_parameters(double* params)
 	params[5] = y_center;
 }
 
-void NFW_Elliptic_Potential::update_parameters(const double* params)
+void Pseudo_Elliptical_NFW::update_parameters(const double* params)
 {
 	ks=params[0];
 	rs=params[1];
@@ -1214,10 +1222,11 @@ void NFW_Elliptic_Potential::update_parameters(const double* params)
 		x_center = params[4];
 		y_center = params[5];
 	}
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+	update_meta_parameters();
+	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);
 }
 
-void NFW_Elliptic_Potential::update_fit_parameters(const double* fitparams, int &index, bool& status)
+void Pseudo_Elliptical_NFW::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
 		if (vary_params[0]) {
@@ -1242,7 +1251,7 @@ void NFW_Elliptic_Potential::update_fit_parameters(const double* fitparams, int 
 				else e_1 = epsilon*cos(2*theta_eff);
 				if (vary_params[3]) e_2 = fitparams[index++];
 				else e_2 = epsilon*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				epsilon = sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
 				if ((epsilon <= 0) or (epsilon > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
 				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
@@ -1250,7 +1259,7 @@ void NFW_Elliptic_Potential::update_fit_parameters(const double* fitparams, int 
 			}
 		} else {
 			if (vary_params[2]) {
-				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // e <= 0 or e > 1 is not a physically acceptable value, so report that we're out of bounds
 				epsilon = fitparams[index++];
 				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
 				if (epsilon > 1) epsilon = 1.0; // don't allow epsilon>1
@@ -1262,11 +1271,12 @@ void NFW_Elliptic_Potential::update_fit_parameters(const double* fitparams, int 
 			if (vary_params[5]) y_center = fitparams[index++];
 		}
 
-		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW_Elliptic_Potential::deflection_spherical_r);
+		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);
+		update_meta_parameters();
 	}
 }
 
-void NFW_Elliptic_Potential::get_fit_parameters(dvector& fitparams, int &index)
+void Pseudo_Elliptical_NFW::get_fit_parameters(dvector& fitparams, int &index)
 {
 	if (vary_params[0]) fitparams[index++] = ks;
 	if (vary_params[1]) fitparams[index++] = rs;
@@ -1289,7 +1299,7 @@ void NFW_Elliptic_Potential::get_fit_parameters(dvector& fitparams, int &index)
 	}
 }
 
-void NFW_Elliptic_Potential::get_auto_stepsizes(dvector& stepsizes, int &index)
+void Pseudo_Elliptical_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
 	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
 	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
@@ -1306,7 +1316,7 @@ void NFW_Elliptic_Potential::get_auto_stepsizes(dvector& stepsizes, int &index)
 	}
 }
 
-void NFW_Elliptic_Potential::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void Pseudo_Elliptical_NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
 	if (vary_params[0]) {
 		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
@@ -1338,49 +1348,69 @@ void NFW_Elliptic_Potential::get_auto_ranges(boolvector& use_penalty_limits, dve
 	}
 }
 
-double NFW_Elliptic_Potential::kappa_rsq(const double rsq)
+double Pseudo_Elliptical_NFW::kappa_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
 	if (xsq==1) return (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-	else return (2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1));
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
+	else if (xsq < 1e-6)
+		return -ks*(2+log(xsq/4));
+	else
+		return (2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1));
 }
 
-double NFW_Elliptic_Potential::kappa_rsq_deriv(const double rsq)
+double Pseudo_Elliptical_NFW::kappa_rsq_deriv(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
 	if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // derivative function on next line becomes unstable for x very close to 1, this fixes the instability
+	else if (xsq < 1e-6) return -ks/rsq;
 	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
 }
 
-inline double NFW_Elliptic_Potential::lens_function_xsq(const double &xsq)
+inline double Pseudo_Elliptical_NFW::lens_function_xsq(const double &xsq)
 {
 	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
-double NFW_Elliptic_Potential::deflection_spherical_r(const double r)
+double Pseudo_Elliptical_NFW::deflection_spherical_r(const double r)
 {
 	double xsq = SQR(r/rs);
-	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
-	return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
+	if (xsq > 1e-6)
+		return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	else
+		return -ks*r*(1+log(xsq/4));
+
 }
 
-double NFW_Elliptic_Potential::shear_magnitude(const double rsq)
+double Pseudo_Elliptical_NFW::shear_magnitude(const double rsq)
 {
+	// This is the shear of the *spherical* model
 	double xsq, kapavg, kappa;
 	xsq = rsq/(rs*rs);
 	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
-	kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
-	if (xsq==1) kappa = (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-	else kappa = 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
+
+	if (xsq==1) {
+		kappa = (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
+		kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+	}
+	else if (xsq > 1e-6) {
+		kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+		kappa = 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
+	} else {
+		kapavg = -ks*(1+log(xsq/4));
+		kappa = -ks*(2+log(xsq/4));
+	}
 	return (kapavg - kappa);
 }
 
-double NFW_Elliptic_Potential::kappa(double x, double y)
+double Pseudo_Elliptical_NFW::kappa(double x, double y)
 {
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	double phi = atan(abs(y/x));
+	double phi = atan(abs(y/(q*x)));
 	if (x < 0) {
 		if (y < 0)
 			phi = phi - M_PI;
@@ -1393,88 +1423,75 @@ double NFW_Elliptic_Potential::kappa(double x, double y)
 	return (kappa_rsq(rsq) + epsilon*shear_magnitude(rsq)*cos(2*phi));
 }
 
-double NFW_Elliptic_Potential::potential(double x, double y)
+double Pseudo_Elliptical_NFW::potential(double x, double y)
 {
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	double phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
-	// Put this in!
-	return 0;
+	double xsq = ((1-epsilon)*x*x + (1+epsilon)*y*y)/(rs*rs); // just r_ell for the moment
+	if (xsq < 1)
+		return 2*ks*rs*rs*(-SQR(atanh(sqrt(1-xsq))) + SQR(log(xsq/4)/2));
+	else 
+		return 2*ks*rs*rs*(-SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2));
 }
 
-void NFW_Elliptic_Potential::deflection(double x, double y, lensvector& def)
+void Pseudo_Elliptical_NFW::deflection(double x, double y, lensvector& def)
 {
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	double phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
-	double defmag = deflection_spherical_r(sqrt((1-epsilon)*x*x + (1+epsilon)*y*y));
-	def[0] = defmag*sqrt(1-epsilon)*cos(phi);
-	def[1] = defmag*sqrt(1+epsilon)*sin(phi);
+	double defmag_over_r_ell = sqrt((1-epsilon)*x*x + (1+epsilon)*y*y); // just r_ell for the moment
+	defmag_over_r_ell = deflection_spherical_r(defmag_over_r_ell)/defmag_over_r_ell;
+	def[0] = defmag_over_r_ell*(1-epsilon)*x;
+	def[1] = defmag_over_r_ell*(1+epsilon)*y;
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
 }
 
-void NFW_Elliptic_Potential::hessian(double x, double y, lensmatrix& hess)
+void Pseudo_Elliptical_NFW::hessian(double x, double y, lensmatrix& hess)
 {
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	double phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
+	double temp, gamma1, gamma2, kap_r, shearmag, kap, phi;
+	if (x==0) {
+		if (y > 0) phi = M_PI/2;
+		else phi = -M_PI/2;
+	} else {
+		phi = atan(abs(y/(q*x)));
+		if (x < 0) {
+			if (y < 0)
+				phi = phi - M_PI;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = -phi;
+		}
 	}
-	double rsq, gamma1, gamma2, kap, shearmag;
-	rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
-	kap = kappa_rsq(rsq);
-	shearmag = shear_magnitude(rsq);
-	//cout << "x=" << x << ", y=" << y << endl;
-	//cout << "SHEARMAG: " << shearmag << endl;
-	//cout << "phi: " << radians_to_degrees(phi) << endl;
-	//cout << "sintheta=" << sintheta << ", costheta=" << costheta << endl;
-	gamma1 = -epsilon*kap - shearmag*cos(2*phi);
-	gamma2 = -sqrt(1+epsilon*epsilon)*shearmag*sin(2*phi);
-	//cout << "gamma1=" << gamma1 << ", gamma2=" << gamma2 << endl;
+	temp = (1-epsilon)*x*x + (1+epsilon)*y*y; // elliptical r^2
+	kap_r = kappa_rsq(temp);
+	shearmag = shear_magnitude(temp);
+	temp = cos(2*phi);
+	kap = kap_r + epsilon*shearmag*temp;
+	gamma1 = -epsilon*kap_r - shearmag*temp;
+	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin(2*phi);
 	hess[0][0] = kap + gamma1;
 	hess[1][1] = kap - gamma1;
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
-	//cout << "HESS0: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << " " << hess[1][0] << endl;
+
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
-	//cout << "HESS: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << " " << hess[1][0] << endl;
 }
 
-void NFW_Elliptic_Potential::print_parameters()
+void Pseudo_Elliptical_NFW::print_parameters()
 {
 	if (use_ellipticity_components) {
 		double e_1, e_2;
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 		e_1 = epsilon*cos(2*theta_eff);
 		e_2 = epsilon*sin(2*theta_eff);
-		cout << "nfw: ks=" << ks << ", rs=" << rs << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
+		cout << "pnfw: ks=" << ks << ", rs=" << rs << ", e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
 	} else {
-		cout << "nfw: ks=" << ks << ", rs=" << rs << ", epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
+		cout << "pnfw: ks=" << ks << ", rs=" << rs << ", epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
 	}
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;

@@ -20,7 +20,7 @@ enum LensProfileName
 	PJAFFE,
 	nfw,
 	TRUNCATED_nfw,
-	nfwpot,
+	pnfw,
 	HERNQUIST,
 	EXPDISK,
 	SHEAR,
@@ -380,7 +380,7 @@ class Truncated_NFW : public LensProfile
 	void print_parameters();
 };
 
-class NFW_Elliptic_Potential : public LensProfile
+class Pseudo_Elliptical_NFW : public LensProfile
 {
 	private:
 	double ks, rs, epsilon; // epsilon is the ellipticity parameter
@@ -392,9 +392,9 @@ class NFW_Elliptic_Potential : public LensProfile
 	double deflection_spherical_r(const double r);
 
 	public:
-	NFW_Elliptic_Potential() : LensProfile() {}
-	NFW_Elliptic_Potential(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
-	NFW_Elliptic_Potential(const NFW_Elliptic_Potential* lens_in);
+	Pseudo_Elliptical_NFW() : LensProfile() {}
+	Pseudo_Elliptical_NFW(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_in);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -404,6 +404,9 @@ class NFW_Elliptic_Potential : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_meta_parameters() {
+		q = sqrt((1-epsilon)/(1+epsilon));
+	}
 
 	// here the base class deflection/hessian functions are overloaded because we are parametrizing the ellipticity differently from the base class
 	double kappa(double, double);

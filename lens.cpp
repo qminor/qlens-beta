@@ -228,9 +228,9 @@ Lens::Lens() : UCMC()
 	fix_source_flux = false;
 	source_flux = 1.0;
 	param_settings = new ParamSettings;
-	sim_err_pos = 0.1;
-	sim_err_flux = 0.1;
-	sim_err_td = 0.1;
+	sim_err_pos = 0.005;
+	sim_err_flux = 0.01;
+	sim_err_td = 1;
 
 	image_pixel_data = NULL;
 	image_pixel_grid = NULL;
@@ -599,9 +599,9 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 			newlist[nlens] = new NFW(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TRUNCATED_nfw:
 			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
-		case nfwpot:
-			// in the case of nfwpot, q here is not the axis ratio, but rather an ellipticity parameter e such that R^2 = (1-e)*x*x + (1+e)*y*y
-			newlist[nlens] = new NFW_Elliptic_Potential(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+		case pnfw:
+			// in the case of pnfw, q here is not the axis ratio, but rather an ellipticity parameter e such that R^2 = (1-e)*x*x + (1+e)*y*y
+			newlist[nlens] = new Pseudo_Elliptical_NFW(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case PJAFFE:
 			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case EXPDISK:
@@ -2417,9 +2417,9 @@ bool Lens::load_image_data(string filename)
 	}
 	if ((fitmethod != POWELL) and (fitmethod != SIMPLEX)) {
 		// You should replace the pointers here with a container class like Vector. This is too bug-prone!
-		if (sourcepts_lower_limit!=NULL) delete[] sourcepts_lower_limit;
+		if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
 		sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
-		if (sourcepts_upper_limit!=NULL) delete[] sourcepts_upper_limit;
+		if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
 		sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 	}
 
@@ -2678,6 +2678,15 @@ void Lens::clear_image_data()
 		delete[] sourcepts_upper_limit;
 		sourcepts_upper_limit = NULL;
 	}
+	if (zfactors != NULL) {
+		delete[] zfactors;
+		zfactors = NULL;
+	}
+	if (source_redshifts != NULL) {
+		delete[] source_redshifts;
+		source_redshifts = NULL;
+	}
+
 	n_sourcepts_fit = 0;
 }
 
@@ -2858,12 +2867,14 @@ void ImageData::write_to_file(ofstream &outfile)
 
 ImageData::~ImageData()
 {
-	delete[] pos;
-	delete[] flux;
-	delete[] time_delays;
-	delete[] sigma_pos;
-	delete[] sigma_f;
-	delete[] sigma_t;
+	if (n_images != 0) {
+		delete[] pos;
+		delete[] flux;
+		delete[] time_delays;
+		delete[] sigma_pos;
+		delete[] sigma_f;
+		delete[] sigma_t;
+	}
 }
 
 
@@ -2918,8 +2929,8 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
 				fitmodel->lens_list[i] = new Truncated_NFW((Truncated_NFW*) lens_list[i]); break;
-			case nfwpot:
-				fitmodel->lens_list[i] = new NFW_Elliptic_Potential((NFW_Elliptic_Potential*) lens_list[i]); break;
+			case pnfw:
+				fitmodel->lens_list[i] = new Pseudo_Elliptical_NFW((Pseudo_Elliptical_NFW*) lens_list[i]); break;
 			case HERNQUIST:
 				fitmodel->lens_list[i] = new Hernquist((Hernquist*) lens_list[i]); break;
 			case EXPDISK:
