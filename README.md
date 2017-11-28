@@ -12,7 +12,13 @@ Optional packages:
 * MUMPS package &mdash; for sparse matrix inversion in pixel image modeling (often painful to install however)
 * UMFPACK &mdash; alternative to MUMPS; much easier to install but not quite as fast or parallelized
 
-# change log (Nov. 15, 2017)
+# change log (Nov. 28, 2017)
+
+Upgrades since Nov. 15:
+
+1. I have added a new lens model, the pseudo-elliptical NFW model (called "pnfw" in QLens). This is the model of Golse & Kneib (2002) that introduces ellipticity into the potential, rather than the projected density. It has the advantage of having analytic solutions for all the lensing quantities, which makes it roughly 10 times faster than the elliptical NFW model, but the density contours become unphysical for ellipticity e > 0.4 or so. Note that when using the pnfw model, the ellipticity parameter is used rather than the axis ratio q. So e=0 means no ellipticity.
+
+2. Fixed a bug related to the parameter anchoring (using "/anchor=") for Alpha & PJaffe models. The ratios listed when you type "fit lens" should now be accurate for these models.
 
 Upgrades since Nov. 12:
 
