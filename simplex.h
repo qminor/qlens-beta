@@ -34,7 +34,7 @@ class Simplex : public Random
 	double tt;
 	double *disps;
 	int max_iterations, max_iterations_anneal;
-	double fmin;
+	double fmin, fmin_anneal;
 
 	bool simplex_exit_status;
 
@@ -76,6 +76,7 @@ class Simplex : public Random
 	void initialize_simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in, const int seed_in = 100000);
 	void simplex_set_function(double (Simplex::*func_in)(double*)) { func = func_in; }
 	void simplex_set_fmin(double fmin_in) { fmin = fmin_in; }
+	void simplex_set_fmin_anneal(double fmin_in) { fmin_anneal = fmin_in; }
 	void set_annealing_schedule_parameters(double t0_in, double tfinal_in, double tinc_in, double nmax_anneal_in, double nmax_in) {
 		t0 = t0_in;
 		tfinal = tfinal_in;

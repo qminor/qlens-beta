@@ -166,6 +166,7 @@ Lens::Lens() : UCMC()
 	simplex_temp_final = 1;
 	simplex_cooling_factor = 0.9; // temperature decrement (multiplicative) for annealing schedule
 	simplex_minchisq = -1e30;
+	simplex_minchisq_anneal = -1e30;
 	n_mcpoints = 1000; // for nested sampling
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
@@ -324,9 +325,9 @@ Lens::Lens() : UCMC()
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
 	subgrid_around_satellites = true;
-	galsubgrid_radius_fraction = 1.1;
+	galsubgrid_radius_fraction = 1.4;
 	galsubgrid_min_cellsize_fraction = 0.3;
-	galsubgrid_cc_splittings = 0;
+	galsubgrid_cc_splittings = 1;
 	sorted_critical_curves = false;
 	n_singular_points = 0;
 	auto_store_cc_points = true;
@@ -400,6 +401,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	simplex_temp_final = lens_in->simplex_temp_final;
 	simplex_cooling_factor = lens_in->simplex_cooling_factor; // temperature decrement (multiplicative) for annealing schedule
 	simplex_minchisq = lens_in->simplex_minchisq;
+	simplex_minchisq_anneal = lens_in->simplex_minchisq_anneal;
 	n_mcpoints = lens_in->n_mcpoints; // for nested sampling
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
@@ -3912,7 +3914,8 @@ double Lens::chi_square_fit_simplex()
 
 	initialize_simplex(fitparams.array(),n_fit_parameters,stepsizes.array(),chisq_tolerance,-10);
 	simplex_set_function(loglikeptr);
-	simplex_set_fmin(simplex_minchisq);
+	simplex_set_fmin(simplex_minchisq/2);
+	simplex_set_fmin_anneal(simplex_minchisq_anneal/2);
 	//int iterations = 0;
 	//downhill_simplex(iterations,max_iterations,0); // last argument is temperature for simulated annealing, but there is no cooling schedule with this function
 	set_annealing_schedule_parameters(simplex_temp_initial,simplex_temp_final,simplex_cooling_factor,simplex_nmax_anneal,simplex_nmax);

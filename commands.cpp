@@ -5211,11 +5211,21 @@ void Lens::process_commands(bool read_file)
 		{
 			int minchisq;
 			if (nwords == 2) {
-				if (!(ws[1] >> minchisq)) Complain("invalid maximum number of iterations per temperature for downhill simplex");
+				if (!(ws[1] >> minchisq)) Complain("invalid minimum chi-square threshold for downhill simplex");
 				simplex_minchisq = minchisq;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Maximum number of iterations per temperature for downhill simplex = " << simplex_minchisq << endl;
-			} else Complain("must specify either zero or one argument (maximum number of iterations for downhill simplex)");
+				if (mpi_id==0) cout << "Minimum chi-square threshold for downhill simplex = " << simplex_minchisq << endl;
+			} else Complain("must specify either zero or one argument (minimum chi-square threshold for downhill simplex)");
+		}
+		else if (words[0]=="simplex_minchisq_anneal")
+		{
+			int minchisq_anneal;
+			if (nwords == 2) {
+				if (!(ws[1] >> minchisq_anneal)) Complain("invalid minimum chi-square threshold for simulated annealing");
+				simplex_minchisq_anneal = minchisq_anneal;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Minimum chi-square threshold for simulated annealing = " << simplex_minchisq_anneal << endl;
+			} else Complain("must specify either zero or one argument (minimum chi-square threshold for simulated_annealing)");
 		}
 		else if (words[0]=="simplex_temp0")
 		{

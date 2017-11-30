@@ -1675,7 +1675,7 @@ void Grid::grid_search(const int& searchlevel, const int& thread)
 void Grid::subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings)
 {
 	for (int i=0; i < n_cc_splittings; i++)
-		subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,i,true);
+		subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,i,false);
 	subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,false);
 }
 

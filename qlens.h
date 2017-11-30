@@ -233,7 +233,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	static int nthreads;
 	int inversion_nthreads;
 	int simplex_nmax, simplex_nmax_anneal;
-	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq;
+	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq, simplex_minchisq_anneal;
 	int n_mcpoints; // for nested sampling
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings

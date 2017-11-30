@@ -190,8 +190,12 @@ double Simplex::amotry(double* psum, const int &ihi, double& yhi, const double& 
 	}
 	ytry=(this->*func)(ptry);
 	if (ytry <= yb) {
-		for (j=0;j<ndim;j++) pb[j]=ptry[j];
-		yb=ytry;
+		if (ytry > fmin) {
+			for (j=0;j<ndim;j++) pb[j]=ptry[j];
+			yb=ytry;
+		} else {
+			SIMPLEX_KEEP_RUNNING = 0;
+		}
 	}
 	yflu=ytry;
 	if (tt != 0.0) yflu -= tt*log(RandomNumber2());
@@ -243,10 +247,13 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 				//cout << ")      " << endl;
 				//cout << endl;
 			}
-			if (yb < fmin) break;
-			t *= tinc;
+			if (yb < fmin_anneal) t = 0;
+			else t *= tinc;
 		}
 		if (simplex_exit_status==false) return iterations;
+		if (verbal) {
+			cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
+		}
 	}
 	downhill_simplex(iterations,max_iterations,0); // do final run with zero temperature
 	return iterations;

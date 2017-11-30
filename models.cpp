@@ -1484,6 +1484,23 @@ void Pseudo_Elliptical_NFW::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
+void Pseudo_Elliptical_NFW::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
+{
+	zfac = zfactor;
+	if ((einstein_radius_root(rmin_einstein_radius)*einstein_radius_root(rmax_einstein_radius)) > 0) {
+		// multiple imaging does not occur with this lens
+		re_major_axis = 0;
+		re_average = 0;
+		return;
+	}
+	double (Brent::*bptr)(const double);
+	bptr = static_cast<double (Brent::*)(const double)> (&Pseudo_Elliptical_NFW::einstein_radius_root);
+	// for this lens, the elliptical radius is such that the scale rs gives the average, rather than major axis value (thus, same true for Einstein radius)
+	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
+	re_major_axis = re_average / sqrt(1-epsilon);
+	zfac = 1.0;
+}
+
 void Pseudo_Elliptical_NFW::print_parameters()
 {
 	if (use_ellipticity_components) {

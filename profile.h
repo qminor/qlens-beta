@@ -416,6 +416,7 @@ class Pseudo_Elliptical_NFW : public LensProfile
 	double shear_magnitude(const double r);
 
 	void print_parameters();
+	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 };
 
 class Hernquist : public LensProfile
