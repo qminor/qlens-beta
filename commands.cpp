@@ -3069,6 +3069,7 @@ void Lens::process_commands(bool read_file)
 				{
 					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
 					if ((nwords==3) and (words[2]=="auto")) {
+						if (nlens==0) Complain("No lens model has been defined; cannot determine optimal source point");
 						lensvector *srcpts = new lensvector[n_sourcepts_fit];
 						output_analytic_srcpos(srcpts);
 						for (int i=0; i < n_sourcepts_fit; i++) {

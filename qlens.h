@@ -266,6 +266,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	bool user_changed_zsource;
 	bool auto_zsource_scaling;
 	double *source_redshifts; // used for modeling source points
+	vector<int> source_redshift_groups;
 	double *zfactors;
 	bool vary_hubble_parameter;
 	double hubble, omega_matter;

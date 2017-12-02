@@ -73,7 +73,7 @@ DMUMPS_STRUC_C *Lens::mumps_solver;
 void Lens::setup_mumps()
 {
 	mumps_solver = new DMUMPS_STRUC_C;
-	mumps_solver->par = 1; //host machine participates in calculation
+	mumps_solver->par = 1; // this tells MUMPS that the host machine participates in calculation
 }
 #endif
 
@@ -218,7 +218,7 @@ Lens::Lens() : UCMC()
 	n_repeats = 1;
 	calculate_parameter_errors = true;
 	use_image_plane_chisq = false;
-	use_magnification_in_chisq = false;
+	use_magnification_in_chisq = true;
 	use_magnification_in_chisq_during_repeats = true;
 	include_central_image = true;
 	include_flux_chisq = false;
@@ -2349,6 +2349,56 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 	sourcepts_fit = new_sourcepts_fit;
 	vary_sourcepts_x = new_vary_sourcepts_x;
 	vary_sourcepts_y = new_vary_sourcepts_y;
+
+	// Reorganize, if necessary, so that image sets with the same source redshift are listed together. This makes it easy to assign image sets with
+	// different source planes to different MPI processes in the image plane chi-square.
+	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
+	double *sorted_redshifts = new double[n_sourcepts_fit];
+	double *sorted_zfactors = new double[n_sourcepts_fit];
+	bool *sorted_vary_sourcepts_x = new bool[n_sourcepts_fit];
+	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
+	source_redshift_groups.clear();
+	source_redshift_groups.push_back(0);
+	int i,k,j=0;
+	bool *assigned = new bool[n_sourcepts_fit];
+	for (i=0; i < n_sourcepts_fit; i++) assigned[i] = false;
+	for (i=0; i < n_sourcepts_fit; i++) {
+		if (!assigned[i]) {
+			sorted_image_data[j].input(image_data[i]);
+			sorted_redshifts[j] = source_redshifts[i];
+			sorted_zfactors[j] = zfactors[i];
+			sorted_vary_sourcepts_x[j] = vary_sourcepts_x[i];
+			sorted_vary_sourcepts_y[j] = vary_sourcepts_y[i];
+			assigned[i] = true;
+			j++;
+			for (k=i+1; k < n_sourcepts_fit; k++) {
+				if (!assigned[k]) {
+					if (source_redshifts[k]==source_redshifts[i]) {
+						sorted_image_data[j].input(image_data[k]);
+						sorted_redshifts[j] = source_redshifts[k];
+						sorted_zfactors[j] = zfactors[k];
+						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
+						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
+						assigned[k] = true;
+						j++;
+					}
+				}
+			}
+			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
+		}
+	}
+	if (j != n_sourcepts_fit) die("something got fucked up");
+	delete[] source_redshifts;
+	delete[] image_data;
+	delete[] zfactors;
+	delete[] vary_sourcepts_x;
+	delete[] vary_sourcepts_y;
+	source_redshifts = sorted_redshifts;
+	image_data = sorted_image_data;
+	zfactors = sorted_zfactors;
+	vary_sourcepts_x = sorted_vary_sourcepts_x;
+	vary_sourcepts_y = sorted_vary_sourcepts_y;
+
 	if (sourcepts_upper_limit != NULL) {
 		delete[] sourcepts_upper_limit;
 		delete[] sourcepts_lower_limit;
@@ -2516,12 +2566,46 @@ bool Lens::load_image_data(string filename)
 		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)
 		auto_zsource_scaling = false;
 	}
+
+	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
+	double *sorted_redshifts = new double[n_sourcepts_fit];
+	source_redshift_groups.clear();
+	source_redshift_groups.push_back(0);
+	int k;
+	j=0;
+	bool *assigned = new bool[n_sourcepts_fit];
+	for (i=0; i < n_sourcepts_fit; i++) assigned[i] = false;
+	for (i=0; i < n_sourcepts_fit; i++) {
+		if (!assigned[i]) {
+			sorted_image_data[j].input(image_data[i]);
+			sorted_redshifts[j] = source_redshifts[i];
+			assigned[i] = true;
+			j++;
+			for (k=i+1; k < n_sourcepts_fit; k++) {
+				if (!assigned[k]) {
+					if (source_redshifts[k]==source_redshifts[i]) {
+						sorted_image_data[j].input(image_data[k]);
+						sorted_redshifts[j] = source_redshifts[k];
+						assigned[k] = true;
+						j++;
+					}
+				}
+			}
+			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
+		}
+	}
+	if (j != n_sourcepts_fit) die("something got fucked up");
+	delete[] source_redshifts;
+	delete[] image_data;
+	source_redshifts = sorted_redshifts;
+	image_data = sorted_image_data;
+
 	for (i=0; i < n_sourcepts_fit; i++) {
 		zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
 	}
 
 	int ncombs, max_combinations = -1;
-	int k,n;
+	int n;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		ncombs = image_data[i].n_images * (image_data[i].n_images-1) / 2;
 		if (ncombs > max_combinations) max_combinations = ncombs;
@@ -2539,6 +2623,11 @@ bool Lens::load_image_data(string filename)
 		image_data[i].max_distsqr = distsqrs[n-1]; // this saves the maximum distance between any pair of images (useful for image chi-square for missing image penalty values)
 	}
 	delete[] distsqrs;
+
+	//cout << "n_redshift_groups=" << source_redshift_groups.size()-1 << endl;
+	//for (i=0; i < source_redshift_groups.size(); i++) {
+		//cout << source_redshift_groups[i] << endl;
+	//}
 
 	return true;
 }
@@ -2740,7 +2829,7 @@ void ImageData::input(const ImageData& imgs_in)
 		sigma_f[i] = imgs_in.sigma_f[i];
 		sigma_t[i] = imgs_in.sigma_t[i];
 	}
-	max_distsqr = 1e30;
+	max_distsqr = imgs_in.max_distsqr;
 }
 
 void ImageData::input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays)
@@ -2910,6 +2999,9 @@ void Lens::initialize_fitmodel()
 			fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			fitmodel->zfactors[i] = zfactors[i];
+		}
+		for (int i=0; i < source_redshift_groups.size(); i++) {
+			fitmodel->source_redshift_groups.push_back(source_redshift_groups[i]);
 		}
 	} else if (source_fit_mode == Pixellated_Source) {
 		fitmodel->image_pixel_data = image_pixel_data;
@@ -3170,110 +3262,114 @@ double Lens::chisq_pos_source_plane()
 
 double Lens::chisq_pos_image_plane()
 {
-	int mpi_chunk=n_sourcepts_fit, mpi_start=0;
+	int n_redshift_groups = source_redshift_groups.size()-1;
+	int mpi_chunk=n_redshift_groups, mpi_start=0;
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
 	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
 #endif
 
 	if (group_np > 1) {
-		mpi_chunk = n_sourcepts_fit / group_np;
+		if (group_np > n_redshift_groups) die("Number of MPI processes per group cannot be greater than number of source planes in data being fit");
+		mpi_chunk = n_redshift_groups / group_np;
 		mpi_start = group_id*mpi_chunk;
-		if (group_id == group_np-1) mpi_chunk += (n_sourcepts_fit % group_np); // assign the remainder elements to the last mpi process
+		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
 	}
 
 	double chisq=0, chisq_part=0;
 
 	int n_images, n_tot_images=0, n_tot_images_part=0;
 	double chisq_each_srcpt, dist;
-	int i,j,k,n;
-	for (i=mpi_start; i < mpi_start + mpi_chunk; i++) {
-		create_grid(false,zfactors[i]);
-		chisq_each_srcpt = 0;
-		image *img = get_images(sourcepts_fit[i], n_images, false);
-		n_visible_images = n_images;
-		bool *ignore = new bool[n_images];
-		for (j=0; j < n_images; j++) ignore[j] = false;
+	int i,j,k,m,n;
+	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
+		create_grid(false,zfactors[source_redshift_groups[m]]);
+		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
+			chisq_each_srcpt = 0;
+			image *img = get_images(sourcepts_fit[i], n_images, false);
+			n_visible_images = n_images;
+			bool *ignore = new bool[n_images];
+			for (j=0; j < n_images; j++) ignore[j] = false;
 
-		for (j=0; j < n_images; j++) {
-			if (!include_central_image) {
-				if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
+			for (j=0; j < n_images; j++) {
+				if (!include_central_image) {
+					if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
+						ignore[j] = true;
+						n_visible_images--;
+					}
+				}
+				if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
 					ignore[j] = true;
 					n_visible_images--;
 				}
-			}
-			if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
-				ignore[j] = true;
-				n_visible_images--;
-			}
-			if ((chisq_imgsep_threshold > 0) and (!ignore[j])) {
-				for (k=j+1; k < n_images; k++) {
-					if (!ignore[k]) {
-						dist = sqrt(SQR(img[k].pos[0] - img[j].pos[0]) + SQR(img[k].pos[1] - img[j].pos[1]));
-						if (dist < chisq_imgsep_threshold) {
-							ignore[k] = true;
-							n_visible_images--;
+				if ((chisq_imgsep_threshold > 0) and (!ignore[j])) {
+					for (k=j+1; k < n_images; k++) {
+						if (!ignore[k]) {
+							dist = sqrt(SQR(img[k].pos[0] - img[j].pos[0]) + SQR(img[k].pos[1] - img[j].pos[1]));
+							if (dist < chisq_imgsep_threshold) {
+								ignore[k] = true;
+								n_visible_images--;
+							}
 						}
 					}
 				}
 			}
-		}
 
-		n_tot_images_part += n_visible_images;
-		if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
-			chisq_part += 1e30;
-			continue;
-		}
+			n_tot_images_part += n_visible_images;
+			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+				chisq_part += 1e30;
+				continue;
+			}
 
-		int n_dists = n_visible_images*image_data[i].n_images;
-		double *distsqrs = new double[n_dists];
-		int *data_k = new int[n_dists];
-		int *model_j = new int[n_dists];
-		n=0;
-		for (k=0; k < image_data[i].n_images; k++) {
-			for (j=0; j < n_images; j++) {
-				if (ignore[j]) continue;
-				distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
-				data_k[n] = k;
-				model_j[n] = j;
-				n++;
+			int n_dists = n_visible_images*image_data[i].n_images;
+			double *distsqrs = new double[n_dists];
+			int *data_k = new int[n_dists];
+			int *model_j = new int[n_dists];
+			n=0;
+			for (k=0; k < image_data[i].n_images; k++) {
+				for (j=0; j < n_images; j++) {
+					if (ignore[j]) continue;
+					distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
+					data_k[n] = k;
+					model_j[n] = j;
+					n++;
+				}
 			}
-		}
-		if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
-		sort(n_dists,distsqrs,data_k,model_j);
-		int *closest_image_j = new int[image_data[i].n_images];
-		int *closest_image_k = new int[n_images];
-		double *closest_distsqrs = new double[image_data[i].n_images];
-		for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
-		for (j=0; j < n_images; j++) closest_image_k[j] = -1;
-		int m=0;
-		int mmax = dmin(n_visible_images,image_data[i].n_images);
-		for (n=0; n < n_dists; n++) {
-			if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
-				closest_image_j[data_k[n]] = model_j[n];
-				closest_image_k[model_j[n]] = data_k[n];
-				closest_distsqrs[data_k[n]] = distsqrs[n];
-				m++;
-				if (m==mmax) n = n_dists; // force loop to exit
+			if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
+			sort(n_dists,distsqrs,data_k,model_j);
+			int *closest_image_j = new int[image_data[i].n_images];
+			int *closest_image_k = new int[n_images];
+			double *closest_distsqrs = new double[image_data[i].n_images];
+			for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
+			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
+			int m=0;
+			int mmax = dmin(n_visible_images,image_data[i].n_images);
+			for (n=0; n < n_dists; n++) {
+				if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
+					closest_image_j[data_k[n]] = model_j[n];
+					closest_image_k[model_j[n]] = data_k[n];
+					closest_distsqrs[data_k[n]] = distsqrs[n];
+					m++;
+					if (m==mmax) n = n_dists; // force loop to exit
+				}
 			}
-		}
 
-		for (k=0; k < image_data[i].n_images; k++) {
-			if (closest_image_j[k] != -1) {
-				chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
-			} else {
-				// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-				chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+			for (k=0; k < image_data[i].n_images; k++) {
+				if (closest_image_j[k] != -1) {
+					chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+				} else {
+					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
+					chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+				}
 			}
+			chisq_part += chisq_each_srcpt;
+			delete[] ignore;
+			delete[] distsqrs;
+			delete[] data_k;
+			delete[] model_j;
+			delete[] closest_image_j;
+			delete[] closest_image_k;
+			delete[] closest_distsqrs;
 		}
-		chisq_part += chisq_each_srcpt;
-		delete[] ignore;
-		delete[] distsqrs;
-		delete[] data_k;
-		delete[] model_j;
-		delete[] closest_image_j;
-		delete[] closest_image_k;
-		delete[] closest_distsqrs;
 	}
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);

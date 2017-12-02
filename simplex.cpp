@@ -223,7 +223,8 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 	int iterations;
 	if (t > 0) {
 		if ((verbal) and (t >= tfinal)) {
-			cout << "Beginning simulated annealing...." << endl;
+			//cout << "Beginning simulated annealing...." << endl;
+			cout << "temperature=" << t << endl;
 			//cout << "initial point: (";
 			//for (int i=0; i < ndim; i++) {
 				//cout << p[0][i];
@@ -237,6 +238,8 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 			downhill_simplex(iterations,max_iterations,t);
 			if (simplex_exit_status==false) break;
 
+			if (yb < fmin_anneal) t = 0;
+			else t *= tinc;
 			if (verbal) {
 				cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
 				//cout << "best-fit point: (";
@@ -247,13 +250,8 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 				//cout << ")      " << endl;
 				//cout << endl;
 			}
-			if (yb < fmin_anneal) t = 0;
-			else t *= tinc;
 		}
 		if (simplex_exit_status==false) return iterations;
-		if (verbal) {
-			cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
-		}
 	}
 	downhill_simplex(iterations,max_iterations,0); // do final run with zero temperature
 	return iterations;

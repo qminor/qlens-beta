@@ -12,7 +12,13 @@ Optional packages:
 * MUMPS package &mdash; for sparse matrix inversion in pixel image modeling (often painful to install however)
 * UMFPACK &mdash; alternative to MUMPS; much easier to install but not quite as fast or parallelized
 
-# change log (Nov. 28, 2017)
+# change log (Dec. 2, 2017)
+
+Upgrades since Nov. 28:
+
+1. QLens now organizes image data sets by their redshifts. If two image sets have the same source redshift, QLens will not recompute the lensing quantities over the grid when calculating the chi-square for the second image set (since they're the same for a given redshift). This means you can have many images sets at the same redshift (for example, different "knots" along an arc) with very little extra overhead when calculating he chi-square. If you MPI'ing the chi-square function, you should set the number of processes per group equal to the number of source planes (so, if there are three different source redshifts, there should be 3 MPI processes per group; see below readme "upgrades since Nov. 12", item 2, for instructions on how to do this).
+
+2. By default, "chisqmag" is now turned on (this option tells qlens to include magnification information from the model in the source plane chi-square for image positions). Generally, if one is using MCMC or simulated annealing, it is better to use magnification in the source plane chi-square since the resulting parameter uncertainties are much more accurate. The only reason to *not* have it on is if you are simply trying to minimize the source plane chi-square (without annealing), since it can become unstable if you're not close to a good fit. Since your odds of success are much greater if you use annealing or MCMC, I realized it's safer to have "chisqmag" on by default.
 
 Upgrades since Nov. 15:
 
