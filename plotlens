@@ -106,8 +106,10 @@ then
 elif [[ $COMMAND == "imgdat" ]]
 then
 	PTSIZE=1
-	PLOTCOMMAND="plot $RANGE 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
-	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
+	grep -v \" imgdat.dat >imgdat_notitles.dat
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1)"
+	#PLOTCOMMAND="plot $RANGE 'imgdat.dat' i 0 u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1), 'imgdat.dat' i 1 u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
 	else
@@ -500,6 +502,7 @@ fi
 
 echo "$PLOTLINE" >tempplot.in
 
-gnuplot -persist tempplot.in
+gnuplot -persist tempplot.in >/dev/null 2>&1
 rm tempplot.in
+if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 

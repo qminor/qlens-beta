@@ -482,6 +482,8 @@ void usage_error()
 			"  -s       do not include shading in 2D histograms\n"
 			"  -b       output minimum chi-square point\n"
 			"  -e       output mean parameters with standard errors in each parameter\n"
+			"  -c       number of initial points to cut from each MCMC chain (if no cut is specified,\n"
+			"                the first 10% of points are cut by default)\n"
 			"  -p#      specify number of MPI processes involved in making the chains\n"
 			"  -t#      read in # chains per process (if more than one chain involved)\n"
 			"  -B#      input minimum probability threshold used for defining parameter ranges\n"

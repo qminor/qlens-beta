@@ -123,7 +123,7 @@ void Lens::process_commands(bool read_file)
 						"omega_m -- Matter density today divided by critical density of Universe (default = 0.3)\n"
 						"central_image -- include central images when fitting to data (if on)\n"
 						"nrepeat -- number of repeat chi-square optimizations after original run\n"
-						"chisqmag -- use magnification in chi-square function for image positions\n"
+						"chisqmag -- use magnification in source plane chi-square function for image positions\n"
 						"chisqflux -- include flux information in chi-square fit (if on)\n"
 						"chisq_time_delays -- include time delay information in chi-square fit (if on)\n"
 						"chisq_parity -- include parity information in flux chi-square fit (if on)\n"
@@ -1300,7 +1300,7 @@ void Lens::process_commands(bool read_file)
 				cout << "Use image plane chi-square function (imgplane_chisq): " << display_switch(use_image_plane_chisq) << endl;
 				cout << "Find analytic best-fit source position for source plane chi-square (analytic_bestfit_src): " << display_switch(use_analytic_bestfit_src) << endl;
 				cout << "Number of repeat chi-square optimizations (nrepeat): " << n_repeats << endl;
-				cout << "Use magnification in chi-square (chisqmag): " << display_switch(use_magnification_in_chisq) << endl;
+				cout << "Use magnification in source plane chi-square (chisqmag): " << display_switch(use_magnification_in_chisq) << endl;
 				cout << "Include image flux in chi-square (chisqflux): " << display_switch(include_flux_chisq) << endl;
 				cout << "Include parity information in flux chi-square (chisq_parity): " << display_switch(include_parity_in_chisq) << endl;
 				cout << "Include time delays in chi-square (chisq_time_delays): " << display_switch(include_time_delay_chisq) << endl;
@@ -3555,6 +3555,7 @@ void Lens::process_commands(bool read_file)
 					} else Complain("'lens clear' command requires either one or zero arguments");
 				} else if (words[1]=="plot") {
 					bool show_sbmap = false;
+					bool show_all = false;
 					int dataset;
 					if (words[nwords-1]=="sbmap") {
 						show_sbmap = true;
@@ -3567,13 +3568,23 @@ void Lens::process_commands(bool read_file)
 						ws = new_ws;
 						nwords--;
 					}
-					if (nwords==2) dataset = 0;
+					if (nwords==2) show_all = true;
 					else if (nwords==3) {
 						if (!(ws[2] >> dataset)) Complain("invalid image dataset");
 						if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
 					} else Complain("invalid number of arguments to 'imgdata plot'");
 					ofstream imgout("imgdat.dat");
-					image_data[dataset].write_to_file(imgout);
+					if (show_all) {
+						for (int i=0; i < n_sourcepts_fit; i++) {
+							imgout << "\"Dataset " << i << " (zsrc=" << source_redshifts[i] << ")\"" << endl;
+							image_data[i].write_to_file(imgout);
+							imgout << endl << endl;
+						}
+					} else {
+						imgout << "\"Dataset " << dataset << " (zsrc=" << source_redshifts[dataset] << ")\"" << endl;
+						image_data[dataset].write_to_file(imgout);
+						imgout << endl << endl;
+					}
 					if (!show_sbmap)
 						run_plotter("imgdat");
 					else {
@@ -4703,7 +4714,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="chisqmag")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Include magnification in chi-square: " << display_switch(use_magnification_in_chisq) << endl;
+				if (mpi_id==0) cout << "Include magnification in source plane chi-square: " << display_switch(use_magnification_in_chisq) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'chisqmag' command; must specify 'on' or 'off'");
 				set_switch(use_magnification_in_chisq,setword);
