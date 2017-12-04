@@ -317,7 +317,7 @@ Lens::Lens() : UCMC()
 	effectively_spherical = false;
 
 	// parameters for the recursive grid
-	enforce_min_cell_area = true;
+	enforce_min_cell_area = true; // this is option is obsolete, and should be removed (we should always enforce a min cell area!!!!)
 	min_cell_area = 1e-6;
 	rsplit_initial = 16; // initial number of cell divisions in the r-direction
 	thetasplit_initial = 24; // initial number of cell divisions in the theta-direction
@@ -3813,14 +3813,12 @@ void Lens::fit_set_optimizations()
 {
 	temp_auto_ccspline = auto_ccspline;
 	temp_auto_store_cc_points = auto_store_cc_points;
-	temp_enforce_min_cell_area = enforce_min_cell_area;
 	temp_include_time_delays = include_time_delays;
 
 	// turn the following features off because they add pointless overhead (they will be restored to their
 	// former settings after the search is done)
 	auto_ccspline = false;
 	auto_store_cc_points = false;
-	enforce_min_cell_area = false;
 	include_time_delays = false; // calculating time delays from images found not necessary during fit, since the chisq_time_delays finds time delays separately
 
 	fisher_inverse.erase(); // reset parameter covariance matrix in case it was used in a previous fit
@@ -3830,7 +3828,6 @@ void Lens::fit_restore_defaults()
 {
 	auto_ccspline = temp_auto_ccspline;
 	auto_store_cc_points = temp_auto_store_cc_points;
-	enforce_min_cell_area = temp_enforce_min_cell_area;
 	include_time_delays = temp_include_time_delays;
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
@@ -3849,8 +3846,6 @@ void Lens::chisq_single_evaluation()
 		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
 	}
 
-	double chisq_initial = (this->*loglikeptr)(fitparams.array());
-	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 	if (source_fit_mode==Point_Source) display_chisq_status = true;
 	fitmodel->chisq_it = 0;
 #ifdef USE_OPENMP
@@ -3863,6 +3858,7 @@ void Lens::chisq_single_evaluation()
 		if (display_chisq_status) cout << endl;
 		cout << "loglike: " << chisqval/2 << endl;
 	}
+	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;

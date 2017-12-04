@@ -677,7 +677,7 @@ public:
 	void create_output_directory();
 
 	private:
-	bool temp_auto_ccspline, temp_auto_store_cc_points, temp_enforce_min_cell_area, temp_include_time_delays;
+	bool temp_auto_ccspline, temp_auto_store_cc_points, temp_include_time_delays;
 	void fit_set_optimizations();
 	void fit_restore_defaults();
 	double zfac_re; // used by einstein_radius_root(...)
