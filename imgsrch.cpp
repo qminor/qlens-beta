@@ -1865,7 +1865,7 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 }
 
 
-bool Lens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, string imgfilename, string srcfilename, const double flux, const bool show_labels)
+bool Lens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
@@ -1889,9 +1889,7 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 	}
 
 	if (mpi_id==0) {
-		ofstream srcfile(srcfilename.c_str());
 		srcfile << x_source << " " << y_source << endl;
-		srcfile.close();
 		//cout << "# " << Grid::nfound << " images" << endl;
 		if (show_labels) {
 			cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
@@ -1899,7 +1897,6 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 			if (include_time_delays) cout << "\ttime_delay (days)";
 			cout << endl;
 		}
-		ofstream imgfile(imgfilename.c_str());
 		if (include_time_delays) {
 			for (int i = 0; i < Grid::nfound; i++) {
 				if (flux == -1.0) cout << images_found[i].pos[0] << "\t" << images_found[i].pos[1] << "\t" << images_found[i].mag << "\t" << images_found[i].td << endl;

@@ -7,6 +7,7 @@ PTTYPE=7 # default point type
 LINEWIDTH=2 # default line width
 FONTSIZE=14 # default font size for postscript plots
 COLORBOX=1 # show color bar for pixel map plots
+KEY=0 # plot key within figure (1 = outside)
 TITLE=""
 SETTERM=""
 FILENAME=""
@@ -40,6 +41,9 @@ for VAR in "$@"; do
 		PTSIZE=${VAR#ps=}
 	fi
 
+	if [[ $VAR == *'key='* ]]; then
+		KEY=${VAR#key=}
+	fi
 	if [[ $VAR == *'pt='* ]]; then
 		PTTYPE=${VAR#pt=}
 	fi
@@ -138,8 +142,22 @@ then
 elif [[ $COMMAND == "imgfit" ]]
 then
 	PTSIZE=1
-	PLOTCOMMAND="plot $RANGE  'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt 6 ps $PTSIZE lc 2 t 'data'"
-	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
+
+	grep -v \" imgdat.dat >imgdat_notitles.dat
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "imgfits" ]]
+then
+	PTSIZE=0.7
+
+	grep -v \" imgdat.dat >imgdat_notitles.dat
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
 	else
@@ -150,6 +168,30 @@ then
 	PTSIZE=1
 	PLOTCOMMAND="plot $RANGE 'imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "srcfit" ]]
+then
+	PTSIZE=1
+
+	grep -v \" srcs.dat >imgdat_notitles.dat
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $TERM != "" ]]; then
+		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "srcfits" ]]
+then
+	PTSIZE=1
+
+	grep -v \" srcs.dat >imgdat_notitles.dat
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
 	else
@@ -500,6 +542,7 @@ fi
 
 #PLOTLINE="$PLOTLINE, sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0, -sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0"
 
+if [[ $KEY == 1 ]]; then PLOTLINE="set key outside; $PLOTLINE"; fi
 echo "$PLOTLINE" >tempplot.in
 
 gnuplot -persist tempplot.in >/dev/null 2>&1

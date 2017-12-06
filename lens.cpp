@@ -1923,6 +1923,7 @@ bool Lens::plot_sorted_critical_curves(const char *critfile)
 	ofstream crit(critfile);
 	if (use_scientific_notation) crit << setiosflags(ios::scientific);
 	int n_cc = sorted_critical_curve.size();
+	if (n_cc==0) return false;
 	for (int j=0; j < n_cc; j++) {
 		for (int k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
 			crit << sorted_critical_curve[j].cc_pts[k][0] << " " << sorted_critical_curve[j].cc_pts[k][1] << " " << sorted_critical_curve[j].caustic_pts[k][0] << " " << sorted_critical_curve[j].caustic_pts[k][1] << " " << sorted_critical_curve[j].length_of_cell[k] << endl;

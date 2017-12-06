@@ -349,6 +349,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
 	string plot_title;
+	bool plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar;
 	int plot_pttype;
@@ -640,10 +641,14 @@ public:
 	public:
 	bool plot_recursive_grid(const char filename[]);
 	void output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false);
-	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false) {
-		return plot_images_single_source(x_source,y_source,verbal,"imgs.dat","src.dat",flux,show_labels);
+	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false, string imgheader = "", string srcheader = "") {
+		ofstream imgfile("imgs.dat");
+		ofstream srcfile("srcs.dat");
+		if (!imgheader.empty()) imgfile << "\"" << imgheader << "\"" << endl;
+		if (!srcheader.empty()) srcfile << "\"" << srcheader << "\"" << endl;
+		return plot_images_single_source(x_source,y_source,verbal,imgfile,srcfile,flux,show_labels);
 	}
-	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, string imgfilename, string srcfilename, const double flux = -1.0, const bool show_labels = false);
+	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
