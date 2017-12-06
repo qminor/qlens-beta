@@ -3299,24 +3299,35 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
 					}
 					if (mpi_id==0) cout << endl;
+					string imgname="imgs.dat", srcname="srcs.dat";
+					bool output_to_text_files = false;
+					if ((terminal==TEXT) and (nwords==4)) {
+						output_to_text_files = true;
+						srcname = words[2];
+						imgname = words[3];
+					}
 					if (!show_all) {
-						stringstream imgstr;
-						string imgstring;
-						imgstr << dataset;
-						imgstr >> imgstring;
-						if (plot_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, srcflux[dataset], true, "image set " + imgstring, "source " + imgstring)==true) {
-							ofstream imgout("imgdat.dat");
+						ofstream imgout("imgdat.dat");
+						ofstream imgfile(imgname.c_str());
+						ofstream srcfile(srcname.c_str());
+						if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
+						imgfile << "\"image set " << dataset << "\"" << endl;
+						srcfile << "\"source " << dataset << "\"" << endl;
+						if (plot_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, imgfile, srcfile, srcflux[dataset], true)==true) {
 							imgout << "\"dataset " << dataset << " (z_{s}=" << source_redshifts[dataset] << ")\"" << endl;
 							image_data[dataset].write_to_file(imgout);
 							imgout << endl << endl;
+							imgfile << endl << endl;
+							srcfile << endl << endl;
 						}
 					} else {
 						reset();
 						ofstream imgout("imgdat.dat");
-						ofstream imgfile("imgs.dat");
-						ofstream srcfile("srcs.dat");
+						ofstream imgfile(imgname.c_str());
+						ofstream srcfile(srcname.c_str());
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							create_grid(false,zfactors[i]);
+						if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 							imgfile << "\"image set " << i << "\"" << endl;
 							srcfile << "\"source " << i << "\"" << endl;
 							if (plot_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, imgfile, srcfile, srcflux[i], true)==true) {
@@ -3329,14 +3340,16 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					if (nwords==4) {
-						if (show_cc) {
-							if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],"");
-							else run_plotter("imgfit",words[3],"");
-						}
-						else run_plotter("imgfit_nocc",words[3],"");
-						if (plot_srcplane) {
-							if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],"");
-							else run_plotter("srcfit",words[2],"");
+						if (terminal != TEXT) {
+							if (show_cc) {
+								if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],"");
+								else run_plotter("imgfit",words[3],"");
+							}
+							else run_plotter("imgfit_nocc",words[3],"");
+							if (plot_srcplane) {
+								if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],"");
+								else run_plotter("srcfit",words[2],"");
+							}
 						}
 					} else {
 						if (show_cc) {
@@ -3611,12 +3624,12 @@ void Lens::process_commands(bool read_file)
 					ofstream imgout("imgdat.dat");
 					if (show_all) {
 						for (int i=0; i < n_sourcepts_fit; i++) {
-							imgout << "\"Dataset " << i << " (zsrc=" << source_redshifts[i] << ")\"" << endl;
+							imgout << "\"Dataset " << i << " (z_{s}=" << source_redshifts[i] << ")\"" << endl;
 							image_data[i].write_to_file(imgout);
 							imgout << endl << endl;
 						}
 					} else {
-						imgout << "\"Dataset " << dataset << " (zsrc=" << source_redshifts[dataset] << ")\"" << endl;
+						imgout << "\"Dataset " << dataset << " (z_{s}=" << source_redshifts[dataset] << ")\"" << endl;
 						image_data[dataset].write_to_file(imgout);
 						imgout << endl << endl;
 					}
