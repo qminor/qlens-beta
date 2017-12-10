@@ -24,6 +24,7 @@ void Lens::process_commands(bool read_file)
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
 	plot_key_outside = false;
+	show_plot_key = true;
 	show_colorbar = true;
 	plot_title = "";
 	fontsize = 14;
@@ -3253,15 +3254,31 @@ void Lens::process_commands(bool read_file)
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
 					int dataset;
-					bool show_all = false;
-					if (nwords==2) show_all = true;
+					bool show_multiple = false;
+					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
+					if (nwords==2) show_multiple = true;
 					else {
-						if (words[2].find("src=")==0) {
-							string dstr = words[2].substr(4);
-							stringstream dstream;
-							dstream << dstr;
-							if (!(dstream >> dataset)) Complain("invalid dataset");
-							if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+						int pos0, pos;
+						if ((pos0 = words[2].find("src="))==0) {
+							string srcstring = words[2].substr(pos0+4);
+							if ((pos = srcstring.find("-")) != string::npos) {
+								string dminstring, dmaxstring;
+								dminstring = srcstring.substr(0,pos);
+								dmaxstring = srcstring.substr(pos+1);
+								stringstream dmaxstream, dminstream;
+								dminstream << dminstring;
+								dmaxstream << dmaxstring;
+								if (!(dminstream >> min_dataset)) Complain("invalid dataset");
+								if (!(dmaxstream >> max_dataset)) Complain("invalid dataset");
+								if (max_dataset >= n_sourcepts_fit) Complain("specified max image dataset exceeds number of image sets in data");
+								show_multiple = true;
+							} else {
+								string dstr = words[2].substr(4);
+								stringstream dstream;
+								dstream << dstr;
+								if (!(dstream >> dataset)) Complain("invalid dataset");
+								if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+							}
 							stringstream* new_ws = new stringstream[nwords-1];
 							new_ws[0] << words[0];
 							new_ws[1] << words[1];
@@ -3273,9 +3290,9 @@ void Lens::process_commands(bool read_file)
 							ws = new_ws;
 							nwords--;
 						}
-						else show_all = true;
+						else show_multiple = true;
 					}
-					if (show_all) {
+					if (show_multiple) {
 						reset();
 						create_grid(false,reference_zfactor);
 					} else {
@@ -3306,7 +3323,7 @@ void Lens::process_commands(bool read_file)
 						srcname = words[2];
 						imgname = words[3];
 					}
-					if (!show_all) {
+					if (!show_multiple) {
 						ofstream imgout("imgdat.dat");
 						ofstream imgfile(imgname.c_str());
 						ofstream srcfile(srcname.c_str());
@@ -3325,9 +3342,9 @@ void Lens::process_commands(bool read_file)
 						ofstream imgout("imgdat.dat");
 						ofstream imgfile(imgname.c_str());
 						ofstream srcfile(srcname.c_str());
-						for (int i=0; i < n_sourcepts_fit; i++) {
+						for (int i=min_dataset; i <= max_dataset; i++) {
 							create_grid(false,zfactors[i]);
-						if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
+							if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 							imgfile << "\"image set " << i << "\"" << endl;
 							srcfile << "\"source " << i << "\"" << endl;
 							if (plot_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, imgfile, srcfile, srcflux[i], true)==true) {
@@ -3342,23 +3359,23 @@ void Lens::process_commands(bool read_file)
 					if (nwords==4) {
 						if (terminal != TEXT) {
 							if (show_cc) {
-								if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],"");
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],"");
 								else run_plotter("imgfit",words[3],"");
 							}
 							else run_plotter("imgfit_nocc",words[3],"");
 							if (plot_srcplane) {
-								if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],"");
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],"");
 								else run_plotter("srcfit",words[2],"");
 							}
 						}
 					} else {
 						if (show_cc) {
-							if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("imgfits");
+							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits");
 							else run_plotter("imgfit");
 						}
 						else run_plotter("imgfit_nocc");
 						if (plot_srcplane) {
-							if ((show_all) and (n_sourcepts_fit > 1)) run_plotter("srcfits");
+							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits");
 							else run_plotter("srcfit");
 						}
 					}
@@ -4631,6 +4648,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(plot_key_outside,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="plot_key")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Show plot key: " << display_switch(show_plot_key) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'plot_key' command; must specify 'on' or 'off'");
+				set_switch(show_plot_key,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="plot_title")
 		{
 			if (nwords==1) {
@@ -5870,7 +5896,8 @@ void Lens::run_plotter(string plotcommand)
 		lwstr << linewidth;
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
-		if (plot_key_outside) command += " key=1";
+		if (!show_plot_key) command += " key=-1";
+		else if (plot_key_outside) command += " key=1";
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (show_colorbar==false) command += " nocb";
 		system(command.c_str());
@@ -5894,7 +5921,8 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (terminal==POSTSCRIPT) command += " term=postscript fs=" + fsstring;
 		else if (terminal==PDF) command += " term=pdf";
-		if (plot_key_outside) command += " key=1";
+		if (!show_plot_key) command += " key=-1";
+		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
 		system(command.c_str());
 	}
@@ -5913,7 +5941,8 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " " + range + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
-		if (plot_key_outside) command += " key=1";
+		if (!show_plot_key) command += " key=-1";
+		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
 		system(command.c_str());
 	}
@@ -5934,7 +5963,8 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " file=" + filename + " " + extra_command + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
-		if (plot_key_outside) command += " key=1";
+		if (!show_plot_key) command += " key=-1";
+		else if (plot_key_outside) command += " key=1";
 		if (terminal==POSTSCRIPT) command += " term=postscript fs=" + fsstring;
 		else if (terminal==PDF) command += " term=pdf";
 		if (show_colorbar==false) command += " nocb";

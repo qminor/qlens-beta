@@ -349,7 +349,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
 	string plot_title;
-	bool plot_key_outside;
+	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar;
 	int plot_pttype;

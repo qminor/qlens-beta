@@ -7,7 +7,7 @@ PTTYPE=7 # default point type
 LINEWIDTH=2 # default line width
 FONTSIZE=14 # default font size for postscript plots
 COLORBOX=1 # show color bar for pixel map plots
-KEY=0 # plot key within figure (1 = outside)
+KEY=0 # plot key within figure (1 = outside, -1 = no key)
 TITLE=""
 SETTERM=""
 FILENAME=""
@@ -542,7 +542,8 @@ fi
 
 #PLOTLINE="$PLOTLINE, sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0, -sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0"
 
-if [[ $KEY == 1 ]]; then PLOTLINE="set key outside; $PLOTLINE"; fi
+if [[ $KEY == 1 ]]; then PLOTLINE="set key outside; $PLOTLINE"
+elif [[ $KEY == -1 ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
 echo "$PLOTLINE" >tempplot.in
 
 gnuplot -persist tempplot.in >/dev/null 2>&1
