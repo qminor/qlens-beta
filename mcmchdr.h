@@ -11,7 +11,7 @@ using namespace std;
 
 const char TRANSFORM = 0x01;
 const char NOTRANSFORM = 0x00;
-const char MULT = 0x01;
+const char MULTS = 0x01;
 
 inline bool notUnit(const vector<double> &in)
 {
@@ -119,6 +119,7 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		bool checkLimitsUni(double *);
 		void Convert(double *, double *);
 		void Convert_initial(double *, double *);
+		void Convert_reverse_initial(double *ptrout, double *ptrin);
 		bool checkReplaceLimits(double *, RandomBasis &);
 		void replaceUpperLimits(double *, RandomBasis &);
 		void replaceLowerLimits(double *, RandomBasis &);
@@ -129,11 +130,11 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		void MetHas(const char *, int, const char flag = 0x00);
 		void Barker(const char *, int, const char flag = 0x00);
 		void MetHasAdapt(const char *name, const double tol, const int Threads, const int cut, double *best_fit_params, const char flag = 0x00);
-		void TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile);
+		void TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile, double** initial_points = NULL);
 		void McmcAd(const char *, int);
 		void Slicing(const char *, int, const char flag = NOTRANSFORM);
 		void SlicingFull(const char *, int);
-		void MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile);
+		void MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points = NULL);
 		void HMC(const char *name, double tol, const char flag);
 		void ApproxCovMatrix();
 		void FindCovMatrix();

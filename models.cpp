@@ -807,6 +807,28 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	return (b*q/u)*(x*(atan(u*x/(psi+s)) - atan(u*x/(psi2+a)))+ y*(atanh(u*y/(psi+qsq*s)) - atanh(u*y/(psi2+qsq*a)))) + b*q*(s*(-log(SQR(psi+s) + SQR(u*x))/2 + log((1.0+q)*s)) - a*(-log(SQR(psi2+a) + SQR(u*x))/2 + log((1.0+q)*a)));
 }
 
+bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double kpc_to_km = 3.086e16;
+	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
+	double c = 2.998e5;
+	double b_kpc, sigma, r_tidal, r_core;
+	b_kpc = bprime/kpc_to_arcsec;
+	sigma = c * sqrt(b_kpc*(1-sprime/aprime)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
+	cout << "sigma = " << sigma << " km/s  (velocity dispersion)\n";
+	r_tidal = aprime/kpc_to_arcsec;
+	r_core = sprime/kpc_to_arcsec;
+	cout << "r_tidal = " << r_tidal << " kpc" << endl;
+	cout << "r_core = " << r_core << " kpc" << endl;
+	cout << endl;
+	//double tsig = 297.2, tb;
+	//tb = kpc_to_arcsec*2*SQR(tsig/c)/((Rs_sun_km/kpc_to_km)*sigma_cr*(1-sprime/aprime));
+	//cout << "Test b = " << tb << endl;
+}
+
 void PseudoJaffe::print_parameters()
 {
 	if (use_ellipticity_components) {
@@ -1093,6 +1115,25 @@ double NFW::deflection_spherical_r(const double r)
 		return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 	else
 		return -ks*r*(1+log(xsq/4));
+}
+
+bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double rs_kpc, ds, c, m200, r200;
+	rs_kpc = rs / kpc_to_arcsec;
+	ds = ks * sigma_cr / rs_kpc;
+	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+	c = r200/rs_kpc;
+	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "c = " << c << endl;
+	cout << "M_200 = " << m200 << " M_sol\n";
+	cout << "r_200 = " << r200 << " kpc\n";
+	cout << endl;
+	return true;
 }
 
 void NFW::print_parameters()
@@ -1499,6 +1540,25 @@ void Pseudo_Elliptical_NFW::get_einstein_radius(double& re_major_axis, double& r
 	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
 	re_major_axis = re_average / sqrt(1-epsilon);
 	zfac = 1.0;
+}
+
+bool Pseudo_Elliptical_NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double rs_kpc, ds, c, m200, r200;
+	rs_kpc = rs / kpc_to_arcsec;
+	ds = ks * sigma_cr / rs_kpc;
+	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+	c = r200/rs_kpc;
+	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "c = " << c << endl;
+	cout << "M_200 = " << m200 << " M_sol\n";
+	cout << "r_200 = " << r200 << " kpc\n";
+	cout << endl;
+	return true;
 }
 
 void Pseudo_Elliptical_NFW::print_parameters()

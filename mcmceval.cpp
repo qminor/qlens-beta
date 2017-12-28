@@ -8,6 +8,7 @@
 #include "mcmceval.h"
 #include "random.h"
 #include "errors.h"
+#include "mathexpr.h"
 
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
 
@@ -131,7 +132,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	}
 	numOfParam = a;
 	cout << "Number of parameters: " << a << endl;
-	param_transforms = new ParamTransform[a];
+	param_transforms = new EvalParamTransform[a];
 	if (transform_params) input_parameter_transforms(transform_filename);
 	if (a <= 0) die("no parameters found in input file");
 	minvals = new double[a];
@@ -411,10 +412,10 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 	if (ws != NULL) delete[] ws;
 	//for (int i=0; i < numOfParam; i++) {
 		//cout << "Parameter " << i << ": ";
-		//if (param_transforms[i].transform==NONE) cout << "none";
-		//else if (param_transforms[i].transform==LOG_TRANSFORM) cout << "log";
-		//else if (param_transforms[i].transform==EXP_TRANSFORM) cout << "exp";
-		//else if (param_transforms[i].transform==GAUSS_TRANSFORM) cout << "gaussian (mean=" << param_transforms[i].gaussian_pos << ",sig=" << param_transforms[i].gaussian_sig << ")";
+		//if (param_transforms[i].transform==EVAL_NONE) cout << "none";
+		//else if (param_transforms[i].transform==EVAL_LOG_TRANSFORM) cout << "log";
+		//else if (param_transforms[i].transform==EVAL_EXP_TRANSFORM) cout << "exp";
+		//else if (param_transforms[i].transform==EVAL_GAUSS_TRANSFORM) cout << "gaussian (mean=" << param_transforms[i].gaussian_pos << ",sig=" << param_transforms[i].gaussian_sig << ")";
 		//cout << endl;
 	//}
 }
@@ -505,16 +506,23 @@ void McmcEval::FindCoVar(const char *name, double *avg, double *sigs, double *mi
 	{
 		avg[k] /= totNum;
 	}
-	ofstream out(name);
+	ofstream out;
+	if (name != NULL) {
+		out.open(name);
+	}
 	for (k = 0; k < numOfParam; k++)
 	{
 		if (sigs != NULL) sigs[k] = sqrt(coVar[k][k]/totNum - avg[k]*avg[k]);
 		for (l = 0; l < numOfParam; l++)
 		{
 			coVar[k][l] = coVar[k][l]/totNum - avg[k]*avg[l];
-			out << coVar[k][l] << "   ";
+			if (name != NULL) {
+				out << coVar[k][l] << "   ";
+			}
 		}
-		out << endl;
+		if (name != NULL) {
+			out << endl;
+		}
 	}
 	del <double> (coVar, numOfParam);
 	if (allocated_avgs) del <double> (avg);
@@ -713,6 +721,20 @@ void McmcEval::FindMinChisq()
 	min_chisq_pt_jj = jjmin;
 }
 
+void McmcEval::get_final_points(const int nlist, double **params, double *chisq)
+{
+	// This is for nested sampling only (hence j=0). We assume here that memory has already been allocated for the arrays being passed in
+	int i,k,jj;
+	//int block = numOfPoints[0] / nlist;
+	//for (jj=0, i=0; jj < nlist; jj++, i += block) {
+	for (jj=0, i=numOfPoints[0]-nlist; i < numOfPoints[0]; i++, jj++) {
+		for (k=0; k < numOfParam; k++) params[jj][k] = points[0][i][k];
+		chisq[jj] = chi2[0][i];
+		//cout << jj << " " << i << " " << numOfPoints[0] << endl;
+	}
+	if (jj != nlist) die("WTF!!!!!!");
+}
+
 void McmcEval::MkHist(double al, double ah, const int N, const char *name, const int iin, const char flag, double *crap)
 {
 	int i, j, f;
@@ -754,7 +776,7 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 		fx = log10;
 		gx = (flag&LOGAXIS) ? dummy : pow10;
 		facx = (flag&NOADJ) ? unit : pow10;
-		FindHiLow(xhi, xlow, iin, NONEG);
+		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
 	{
@@ -1268,7 +1290,7 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 		fx = log10;
 		gx = (flag&LOGAXIS) ? dummy : pow10;
 		facx = (flag&NOADJ) ? unit : pow10;
-		FindHiLowDerived(xhi, xlow, derived_param, totPts, NONEG);
+		FindHiLowDerived(xhi, xlow, derived_param, totPts, EVAL_NONEG);
 	}
 	else
 	{
@@ -1792,7 +1814,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 		fx = log10;
 		gx = pow10;
 		facx = (flag&NOADJ) ? unit : pow10;
-		FindHiLow(xhi, xlow, iin, NONEG);
+		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
 	{
@@ -2223,7 +2245,7 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		fx = log10;
 		gx = pow10;
 		facx = (flag&NOADJX) ? unit : pow10;
-		FindHiLow(xhi, xlow, iin, NONEG);
+		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
 	{
@@ -2238,7 +2260,7 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		fy = log10;
 		gy = pow10;
 		facy = (flag&NOADJY) ? unit : pow10;
-		FindHiLow(yhi, ylow, jin, NONEG);
+		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
 	{
@@ -2774,7 +2796,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 		fx = log10;
 		gx = pow10;
 		facx = (flag&NOADJX) ? unit : pow10;
-		FindHiLow(xhi, xlow, iin, NONEG);
+		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
 	{
@@ -2789,7 +2811,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 		fy = log10;
 		gy = pow10;
 		facy = (flag&NOADJY) ? unit : pow10;
-		FindHiLow(yhi, ylow, jin, NONEG);
+		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
 	{

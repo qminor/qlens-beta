@@ -7,6 +7,7 @@
 #include "brent.h"
 #include "lensvec.h"
 #include "romberg.h"
+#include "cosmo.h"
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -168,6 +169,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual double kappa_r(const double r);
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
+	virtual bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 
 	double kappa_avg_r(const double r);
 	double dkappa_rsq(double rsq) { return kappa_rsq_deriv(rsq); }
@@ -316,6 +318,7 @@ class PseudoJaffe : public LensProfile
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
+	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 	void print_parameters();
 	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
 	double get_tidal_radius() { return a; }
@@ -346,6 +349,8 @@ class NFW : public LensProfile
 	void get_parameters(double* params);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+
+	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 
 	void print_parameters();
 };
@@ -417,6 +422,7 @@ class Pseudo_Elliptical_NFW : public LensProfile
 
 	void print_parameters();
 	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
+	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 };
 
 class Hernquist : public LensProfile

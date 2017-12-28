@@ -13,6 +13,7 @@
 #include <string>
 #include "spline.h"
 #include "romberg.h"
+#include "brent.h"
 #include "mathexpr.h"
 using namespace std;
 
@@ -43,10 +44,10 @@ struct CosmologyParams
 	void remove_comments(string& instring);
 };
 
-class Cosmology : public Spline, public Romberg
+class Cosmology : public Spline, public Romberg, public Brent
 {
 	private:
-	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor;
+	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor, dcrit0;
 	double power_k_normalization, variance_normalization;
 	double A_s; // dimensionless curvature power spectrum at the pivot scale
 	double ns, running;
@@ -57,6 +58,7 @@ class Cosmology : public Spline, public Romberg
 	static const double default_running;
 	static const double default_n_massive_neutrinos; // effective neutrino number; following Planck convention
 	static const double default_neutrino_mass; // in eV; this is the minimal mass required to explain neutrino oscillation experiments
+	double croot_const; // used for solving for the concentration of NFW halo using root finder
 
 	private:
 	double tophat_window_R;
@@ -129,6 +131,10 @@ class Cosmology : public Spline, public Romberg
 	double comoving_distance(const double z) { return (comoving_distance_spline.splint(z)); }
 	double angular_diameter_distance(const double z) { return (angular_radius(comoving_distance_spline.splint(z)) / (1+z)); }
 	double luminosity_distance(const double z) { return (angular_radius(comoving_distance_spline.splint(z)) * (1+z)); }
+	double critical_density(const double z);
+	double matter_density(const double z) { return omega_m*dcrit0*CUBE(1+z); }
+	void get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir);
+	double concentration_root_equation(const double c);
 	double sigma_crit_kpc(double zl, double zs); // for lensing
 	double sigma_crit_arcsec(double zl, double zs); // for lensing
 	double time_delay_factor_arcsec(double zl, double zs); // for lensing

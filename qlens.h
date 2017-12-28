@@ -168,7 +168,8 @@ class Grid : public Brent
 
 	static const int max_iterations, max_step_length;
 	static bool *newton_check;
-	// make these multithread-safe when you are ready to multithread the image searching
+
+	// make these multithread-safe if you decide to multithread the image searching
 	static bool finished_search;
 	static int nfound_max, nfound_pos, nfound_neg;
 	static image images[];
@@ -210,7 +211,7 @@ public:
 	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
 };
 
-class Lens : public Cosmology, public Brent, public Sort, public Powell, public Simplex, public UCMC
+class Lens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -312,7 +313,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	bool display_chisq_status;
 	int n_visible_images;
 	int chisq_display_frequency;
-	double chisq_magnification_threshold, chisq_imgsep_threshold;
+	double chisq_magnification_threshold, chisq_imgsep_threshold, chisq_srcplane_substitute_threshold;
 	bool use_magnification_in_chisq;
 	bool use_magnification_in_chisq_during_repeats;
 	bool include_parity_in_chisq;
@@ -331,6 +332,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	void add_simulated_image_data(const lensvector &sourcept);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
+	bool plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	void remove_image_data(int image_set);
 
 	bool read_data_line(ifstream& infile, vector<string>& datawords, int &n_datawords);
@@ -351,7 +353,7 @@ class Lens : public Cosmology, public Brent, public Sort, public Powell, public 
 	string plot_title;
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
-	bool show_colorbar;
+	bool show_colorbar, plot_square_axes;
 	int plot_pttype;
 	string fit_output_dir;
 	bool auto_fit_output_dir;
@@ -665,6 +667,7 @@ public:
 	void update_anchored_parameters();
 	void print_lens_list(bool show_vary_params);
 	void print_fit_model();
+	void print_lens_cosmology_info();
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
@@ -690,7 +693,8 @@ public:
 	public:
 	double chi_square_fit_simplex();
 	double chi_square_fit_powell();
-	void chi_square_nested_sampling();
+	void nested_sampling();
+	void nested_sampling_source_and_image_plane();
 	//void chi_square_metropolis_hastings();
 	void chi_square_twalk();
 	void test_fitmodel_invert();

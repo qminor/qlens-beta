@@ -8,6 +8,7 @@ LINEWIDTH=2 # default line width
 FONTSIZE=14 # default font size for postscript plots
 COLORBOX=1 # show color bar for pixel map plots
 KEY=0 # plot key within figure (1 = outside, -1 = no key)
+SQUARE_AXES=0
 TITLE=""
 SETTERM=""
 FILENAME=""
@@ -18,6 +19,10 @@ COMMAND=$1
 shift
 
 for VAR in "$@"; do
+	if [[ $VAR == "square" ]]; then
+		SQUARE_AXES=1
+	fi
+
 	if [[ $VAR == "nocb" ]]; then
 		COLORBOX=0
 	fi
@@ -71,7 +76,9 @@ if [[ $TERM != "" ]]; then
 	fi
 fi
 
-#SETTERM="$SETTERM; set size ratio -1"  # perhaps make an option to do this (equal size axis scales)
+if [[ $SQUARE_AXES == "1" ]]; then
+	SETTERM="$SETTERM; set size ratio -1"  # perhaps make an option to do this (equal size axis scales)
+fi
 
 if [[ $COLORBOX == "0" ]]; then
 	SETTERM="$SETTERM; unset colorbox";
@@ -93,7 +100,11 @@ then
 	if [[ $TERM != "" ]]; then
 		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
 		PLOTLINE="$SETTERM; set multiplot; unset key"
-		PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 		PLOTLINE="$PLOTLINE; $KEYPLOT"
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
@@ -103,7 +114,11 @@ then
 	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
 	if [[ $TERM != "" ]]; then
 		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -115,7 +130,11 @@ then
 	#PLOTCOMMAND="plot $RANGE 'imgdat.dat' i 0 u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1), 'imgdat.dat' i 1 u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE t columnheader(1)"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -125,7 +144,11 @@ then
 	PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE lc 1 ps $PTSIZE t 'images'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -135,7 +158,11 @@ then
 	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -147,7 +174,11 @@ then
 	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -159,7 +190,11 @@ then
 	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'imgs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -169,7 +204,11 @@ then
 	PLOTCOMMAND="plot $RANGE 'imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', 'imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -181,7 +220,11 @@ then
 	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -193,7 +236,43 @@ then
 	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "srcptfit" ]]
+then
+	PTSIZE=1
+
+	grep -v \" srcs.dat >srcs_notitles.dat
+	PLOTCOMMAND="stats 'srcs_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'srcfit.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] 'srcfit.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "srcptfits" ]]
+then
+	PTSIZE=0.7
+
+	grep -v \" srcs.dat >srcs_notitles.dat
+	PLOTCOMMAND="stats 'srcs_notitles.dat'; plot $RANGE 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'srcfit.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] 'srcs.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] 'srcfit.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -203,7 +282,11 @@ then
 	PLOTCOMMAND="plot $RANGE 'imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -213,17 +296,25 @@ then
 	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
 elif [[ $COMMAND == "source" ]]
 then
 	PTSIZE=1
-	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'src.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
-	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'src.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
+	PLOTCOMMAND="plot $RANGE 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'srcs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', 'srcs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'sources'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -243,7 +334,11 @@ then
 	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
 		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -276,7 +371,11 @@ then
 		KEYPLOT="set title ' '; $KEYPLOT 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"
 		JUSTPLOTTED=1; fi
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -296,7 +395,11 @@ then
 	if [[ `head -1 sources.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'sources.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
 		KEYPLOT="set title ' '; $KEYPLOT, 'sources.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -308,7 +411,11 @@ then
 	#PLOTCOMMAND="plot $RANGE 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
 	if [[ $TERM != "" ]]; then
 		#KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
@@ -318,7 +425,11 @@ then
 	if [[ $TERM != "" ]]; then
 		KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'lx.dat' w lines lc 1 t 'x-roots', 'ly.dat' w lines lc 3 t 'y-roots'"
 		PLOTLINE="$SETTERM; set multiplot; unset key"
-		PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$PLOTLINE; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 		PLOTLINE="$PLOTLINE; $KEYPLOT"
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
@@ -390,7 +501,11 @@ then
 
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	fi
@@ -408,7 +523,11 @@ then
 
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	fi
@@ -435,13 +554,21 @@ then
 	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
 		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
 
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	fi
@@ -467,13 +594,21 @@ then
 	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, 'images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
 		KEYPLOT="set title ' '; $KEYPLOT, 'images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
 
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	fi
@@ -490,7 +625,11 @@ then
 
 	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 	if [[ $TERM != "" ]]; then
-		PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
 	else
 		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	fi
@@ -542,8 +681,8 @@ fi
 
 #PLOTLINE="$PLOTLINE, sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0, -sqrt(0.27302**2-(x+1.5)**2)-0.37 w lines lt 2 lw 8 lc 0"
 
-if [[ $KEY == 1 ]]; then PLOTLINE="set key outside; $PLOTLINE"
-elif [[ $KEY == -1 ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
+if [[ $KEY == 1 ]]; then PLOTCOMMAND="set key outside; $PLOTCOMMAND"
+elif [[ $KEY == -1 ]]; then PLOTCOMMAND="set key off; $PLOTCOMMAND"; fi
 echo "$PLOTLINE" >tempplot.in
 
 gnuplot -persist tempplot.in >/dev/null 2>&1

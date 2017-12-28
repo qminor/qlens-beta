@@ -3,6 +3,7 @@
 #include "mathexpr.h"
 #include "romberg.h"
 #include "errors.h"
+#include "cosmo.h"
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -832,6 +833,11 @@ void LensProfile::print_vary_parameters()
 		}
 		cout << endl;
 	}
+}
+
+bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+{
+	return false;
 }
 
 bool LensProfile::core_present() { return false; }

@@ -3,10 +3,10 @@
 #include "GregsMathHdr.h"
 #include "random.h"
 
-inline double SQR(const double s) { return s*s; }
+//inline double SQR(const double s) { return s*s; }
 
 const char LINEAR = 0x00;
-const char NONEG = 0x01;
+const char EVAL_NONEG = 0x01;
 const char LOG = 0x01;
 const char XLOG = 0x01;
 const char YLOG = 0x02;
@@ -28,30 +28,30 @@ const char LOGAXIS = 0x10;
 const char ZLOG = 0x04;
 const char LIKE = 0x02;
 
-enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, INVERSE_GAUSS_TRANSFORM, EXP_TRANSFORM };
+enum EvalTransform { EVAL_NONE, EVAL_LOG_TRANSFORM, EVAL_GAUSS_TRANSFORM, INVERSE_EVAL_GAUSS_TRANSFORM, EVAL_EXP_TRANSFORM };
 
-struct ParamTransform
+struct EvalParamTransform
 {
 	double gaussian_pos, gaussian_sig;
 	bool transform_name;
 	string transformed_param_name;
-	Transform transform;
-	ParamTransform() { transform = NONE; transform_name = false; }
-	void set_none() { transform = NONE; }
-	void set_log() { transform = LOG_TRANSFORM; }
-	void set_exp() { transform = EXP_TRANSFORM; }
-	void set_gaussian(double &pos_in, double &sig_in) { transform = GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void set_inverse_gaussian(double &pos_in, double &sig_in) { transform = INVERSE_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	EvalTransform transform;
+	EvalParamTransform() { transform = EVAL_NONE; transform_name = false; }
+	void set_none() { transform = EVAL_NONE; }
+	void set_log() { transform = EVAL_LOG_TRANSFORM; }
+	void set_exp() { transform = EVAL_EXP_TRANSFORM; }
+	void set_gaussian(double &pos_in, double &sig_in) { transform = EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	void set_inverse_gaussian(double &pos_in, double &sig_in) { transform = INVERSE_EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void transform_param_name(string &name_in) { transform_name = true; transformed_param_name = name_in; }
 	void transform_parameter(double& param)
 	{
 		double p = param;
-		if (transform==NONE) return;
-		else if (transform==LOG_TRANSFORM) param = log(p)/M_LN10;
-		else if (transform==EXP_TRANSFORM) param = pow(10.0,p);
-		else if (transform==GAUSS_TRANSFORM)
+		if (transform==EVAL_NONE) return;
+		else if (transform==EVAL_LOG_TRANSFORM) param = log(p)/M_LN10;
+		else if (transform==EVAL_EXP_TRANSFORM) param = pow(10.0,p);
+		else if (transform==EVAL_GAUSS_TRANSFORM)
 			param = erff((p - gaussian_pos)/(M_SQRT2*gaussian_sig));
-		else if (transform==INVERSE_GAUSS_TRANSFORM)
+		else if (transform==INVERSE_EVAL_GAUSS_TRANSFORM)
 			param = (gaussian_pos + M_SQRT2*gaussian_sig*erfinv(p));
 	}
 };
@@ -66,7 +66,7 @@ class McmcEval
 		double *maxvals;
 		double *derived_param;
 		double *derived_mults;
-		ParamTransform *param_transforms;
+		EvalParamTransform *param_transforms;
 		int *cut;
 		int *numOfPoints;
 		int totPts;
@@ -85,6 +85,7 @@ class McmcEval
 		void transform_parameter_names(string *paramnames);
 		void calculate_derived_param();
 		void output_min_chisq_pt(void);
+		void get_final_points(const int nlist, double **params, double *chisq);
 		void FindCoVar(const char *, double *avgs = NULL, double *sigs = NULL, double *minvals = NULL, double *maxvals = NULL);
 		void FindCoVar(const char *, int *, const int);
 		void FindDerivedSigs(double &center, double &sig);

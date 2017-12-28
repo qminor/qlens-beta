@@ -437,7 +437,7 @@ void UCMC::MetHas(const char *name, int N, const char flag)
 
 		if (((ans = chisqnext - chisq) <= 0.0)||(gDev.ExpDev() >= ans))
 		{
-			if (flag&MULT)
+			if (flag&MULTS)
 			{
 				out << mult << "   ";
 				for (int k = 0; k < ma; k++)
@@ -501,7 +501,7 @@ void UCMC::Barker(const char *name, int N, const char flag)
 
 		if (gDev.Doub() <= 1.0/(1.0+exp(chisqnext-chisq)))
 		{
-			if (flag&MULT)
+			if (flag&MULTS)
 			{
 				out << mult << "   ";
 				for (int k = 0; k < ma; k++)
@@ -706,7 +706,7 @@ void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, co
 		if ((ans <= 0.0)||(gDev[t]->ExpDev() >= ans))
 		{
 			if (0.0*ans) cout << "Warning: absurd log-likelihood value obtained (dchisq=" << ans << ")" << endl;
-			if (flag&MULT)
+			if (flag&MULTS)
 			{
 				out[t] << mult << "   ";
 				for (k = 0; k < ma; k++)
@@ -807,7 +807,7 @@ void quitproc(int sig)
 	exit(0);
 }
 
-void UCMC::TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile)
+void UCMC::TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile, double** initial_points)
 {
 	int NThreads = (Threads > ma+1) ? Threads : ma + 2;
 	if (NThreads < 5+mpi_ngroups) NThreads = 5 + mpi_ngroups;
@@ -895,8 +895,15 @@ void UCMC::TWalk(const char *name, const double div, const int proj, const doubl
 		if (mpi_group_num == 0)
 		{
 #endif
-			for (j=0; j < ma; j++) {
-				a0[t][j] = gDev.Doub();
+			if (initial_points==NULL) {
+				for (j=0; j < ma; j++) {
+					a0[t][j] = gDev.Doub();
+				}
+			} else {
+				for (j=0; j < ma; j++) {
+					//if (mpi_id==0) cout << t << " " << j << a0[t][j] << endl;
+					a0[t][j] = (initial_points[t][j] - lowerLimits_initial[j]) / (upperLimits_initial[j] - lowerLimits_initial[j]);
+				}
 			}
 #ifdef USE_MPI
 		}
@@ -2824,6 +2831,14 @@ void UCMC::Convert_initial(double *ptrout, double *ptrin)
 		*ptrout = *lptr + (*ptrin)*(*uptr - *lptr);
 }
 
+void UCMC::Convert_reverse_initial(double *ptrout, double *ptrin)
+{
+	double *lptr = lowerLimits_initial;
+	double *uptr = upperLimits_initial;
+	for (int i = 0; i < ma; i++, ptrout++, ptrin++, lptr++, uptr++)
+		*ptrout = ((*ptrin) - (*lptr)) / ((*uptr) - (*lptr));
+}
+
 class Counter
 {
 	private:
@@ -2864,7 +2879,7 @@ class Counter
 		}
 };
 
-void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile)
+void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points)
 {
 	int i, j, k;
 	double **points = matrix <double> (N, ma);
@@ -2926,13 +2941,29 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 	for (i = mpi_group_num; i < N; i += mpi_ngroups)
 	{	
 		ptr1 = points[i];
-		for (j = 0; j < ma; j++)
-		{
-			ptr1[j] = random.Doub();
+		if (initial_points==NULL) {
+			for (j = 0; j < ma; j++)
+			{
+				ptr1[j] = random.Doub();
+			}
+			Convert_initial(cpt, ptr1);
+		} else {
+			for (j = 0; j < ma; j++)
+			{
+				cpt[j] = initial_points[i][j];
+			}
+			Convert_reverse_initial(ptr1, cpt);
 		}
-		Convert_initial(cpt, ptr1);
 		logPriors[i] = LogPrior(cpt);
 		logLikes[i] = LOGLIKE(cpt) + logPriors[i];
+		//cout << i << " ";
+		//for (j = 0; j < ma; j++)
+		//{
+			//cout << cpt[j] << " ";
+			////cout << ptr1[j] << " ";
+		//}
+		//cout << logLikes[i] << endl;
+
 		if ((logLikes[i]*0.0) or (isinf(logLikes[i])))
 		{
 			i -= mpi_ngroups;
@@ -3039,6 +3070,8 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			} while ((!accepted) and (++i < mpi_ngroups));
 #else
 			if (temp < likeMin) accepted = true;
+			//if (accepted) cout << "ACCEPTED\n";
+			//else cout << "NOT_ACCEPTED loglike=" << temp << " vs. " << likeMin << "\n";
 			trystot++;
 #endif
 		}
@@ -3079,7 +3112,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		slope = w0*exp(1.0/N) + exp(1.0/N-likeLast+likeOld)*slope;
 		likeLast = likeOld;
 
-	count++;
+		count++;
 		cRec.Hit();
 #ifdef USE_OPENMP
 		total_time = omp_get_wtime() - total_time0;

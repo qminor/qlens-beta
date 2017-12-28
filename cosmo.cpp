@@ -7,6 +7,7 @@
 #include "romberg.h"
 #include "mathexpr.h"
 #include "errors.h"
+#include "brent.h"
 #include "cosmo.h"
 using namespace std;
 
@@ -108,6 +109,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	omega_lambda = omega_lamb;
 	hubble = hub;
 	hubble_length = 2.998e3/hubble; // in Mpc
+	dcrit0 = 2.775e11*hubble*hubble;  // units are solar masses per Mpc^3
 	A_s = A_s_in;
 	k_pivot = default_k_pivot;
 
@@ -385,6 +387,27 @@ double Cosmology::comoving_distance_derivative(const double z)
 	return (hubble_length*pow(omega_m*CUBE(1+z)+(1-omega_m-omega_lambda)*SQR(1+z) + omega_lambda, -0.5));
 }
 
+double Cosmology::critical_density(const double z)
+{
+	return dcrit0*(omega_m*CUBE(1+z)+1-omega_m);
+}
+
+void Cosmology::get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir)
+{
+	static const double virial_ratio = 200.0;
+	double (Brent::*croot)(const double);
+	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::concentration_root_equation);
+	croot_const = virial_ratio*critical_density(z)/(3*ds*1e9);
+	double c;
+	c = BrentsMethod(croot, 0.01, 1000, 1e-4);
+	rvir = c * rs;
+	mvir = 4.0*M_PI/3.0*CUBE(rvir)*1e-9*virial_ratio*critical_density(z);
+}
+
+double Cosmology::concentration_root_equation(const double c)
+{
+	return croot_const*c*c*c - log(1+c) + c/(1+c);
+}
 
 double Cosmology::time_delay_factor_arcsec(double zl, double zs) // for lensing
 {
@@ -404,7 +427,7 @@ double Cosmology::time_delay_factor_arcsec(double zl, double zs) // for lensing
 
 double Cosmology::time_delay_factor_kpc(double zl, double zs) // for lensing
 {
-	double kpc_to_arcsec = 206.2648/angular_diameter_distance(zl);
+	double kpc_to_arcsec = 206.264806/angular_diameter_distance(zl);
 	return (time_delay_factor_arcsec(zl,zs) * SQR(kpc_to_arcsec));
 }
 

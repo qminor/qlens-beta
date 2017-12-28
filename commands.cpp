@@ -26,6 +26,7 @@ void Lens::process_commands(bool read_file)
 	plot_key_outside = false;
 	show_plot_key = true;
 	show_colorbar = true;
+	plot_square_axes = false;
 	plot_title = "";
 	fontsize = 14;
 	linewidth = 1;
@@ -73,6 +74,7 @@ void Lens::process_commands(bool read_file)
 						"imgdata -- commands for loading point image data ('help imgdata' for list of subcommands)\n"
 						"sbmap -- commands for surface brightness maps ('help sbmap' for list of subcommands)\n"
 						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
+						"cosmology -- display cosmological information, including physical properties of lenses\n"
 						"lensinfo -- display kappa, deflection, magnification, shear, and potential at a specific point\n"
 						"plotlensinfo -- plot pixel maps of kappa, deflection, magnification, shear, and potential\n"
 						"grid -- specify coordinates of Cartesian grid on image plane\n"
@@ -399,7 +401,9 @@ void Lens::process_commands(bool read_file)
 							"fit run\n"
 							"fit chisq\n"
 							"fit findimg [sourcept_num]\n"
-							"fit plotimg [sourcept_num]\n"
+							"fit plotimg [src=#]\n"
+							"fit plotsrc [src=#]\n"
+							"fit data_imginfo\n"
 							"fit method <method>\n"
 							"fit label <label>\n"
 							"fit use_bestfit\n"
@@ -1517,6 +1521,9 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords == 1) {
 				autogrid();
 			} else Complain("must specify two parameters, rmin and rmax, to determine gridsize automatically");
+		}
+		else if (words[0]=="cosmology") {
+			if (mpi_id==0) print_lens_cosmology_info();
 		}
 		else if ((words[0]=="lens") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="lens")))
 		{
@@ -3108,8 +3115,8 @@ void Lens::process_commands(bool read_file)
 							sourcepts_lower_limit[0][1] = ymin;
 							sourcepts_upper_limit[0][1] = ymax;
 						}
-						if ((!use_image_plane_chisq) and (use_analytic_bestfit_src)) {
-							if (mpi_id==0) warn(warnings,"for source plane chi-square, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
+						if (use_analytic_bestfit_src) {
+							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
 						}
 					} else if ((nwords==2) or (nwords==3)) {
 						int imin = 0, imax = n_sourcepts_fit;
@@ -3148,8 +3155,8 @@ void Lens::process_commands(bool read_file)
 							sourcepts_fit[i][0] = xs;
 							sourcepts_fit[i][1] = ys;
 						}
-						if ((!use_image_plane_chisq) and (use_analytic_bestfit_src)) {
-							if (mpi_id==0) warn(warnings,"for source plane chi-square, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
+						if (use_analytic_bestfit_src) {
+							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
 						}
 					} else Complain("Must specify either zero or two arguments (sourcept_x, sourcept_y)");
 				}
@@ -3212,7 +3219,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
-					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
+					if (use_analytic_bestfit_src) {
 						output_analytic_srcpos(srcpts);
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
@@ -3248,6 +3255,157 @@ void Lens::process_commands(bool read_file)
 					delete[] srcflux;
 					delete[] srcpts;
 				}
+				else if (words[1]=="data_imginfo")
+				{
+					if (nlens==0) Complain("No lens model has been specified");
+					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
+					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
+					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
+					double* srcflux = new double[n_sourcepts_fit];
+					lensvector *srcpts = new lensvector[n_sourcepts_fit];
+					if (include_flux_chisq) {
+						output_model_source_flux(srcflux);
+					} else {
+						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
+					}
+
+					if (fix_source_flux) srcflux[0] = source_flux;
+					if (use_analytic_bestfit_src) {
+						output_analytic_srcpos(srcpts);
+					} else {
+						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
+					}
+					if (mpi_id==0) cout << endl;
+					for (int i=0; i < n_sourcepts_fit; i++) {
+						plot_srcpts_from_image_data(i,NULL,srcpts[i][0],srcpts[i][1],srcflux[i]);
+					}
+					delete[] srcflux;
+					delete[] srcpts;
+				}
+				else if (words[1]=="plotsrc")
+				{
+					if (nlens==0) Complain("No lens model has been specified");
+					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
+					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					int dataset;
+					bool show_multiple = false;
+					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
+					if (nwords==2) show_multiple = true;
+					else {
+						int pos0, pos;
+						if ((pos0 = words[2].find("src="))==0) {
+							string srcstring = words[2].substr(pos0+4);
+							if ((pos = srcstring.find("-")) != string::npos) {
+								string dminstring, dmaxstring;
+								dminstring = srcstring.substr(0,pos);
+								dmaxstring = srcstring.substr(pos+1);
+								stringstream dmaxstream, dminstream;
+								dminstream << dminstring;
+								dmaxstream << dmaxstring;
+								if (!(dminstream >> min_dataset)) Complain("invalid dataset");
+								if (!(dmaxstream >> max_dataset)) Complain("invalid dataset");
+								if (max_dataset >= n_sourcepts_fit) Complain("specified max image dataset exceeds number of image sets in data");
+								show_multiple = true;
+							} else {
+								string dstr = words[2].substr(4);
+								stringstream dstream;
+								dstream << dstr;
+								if (!(dstream >> dataset)) Complain("invalid dataset");
+								if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+							}
+							stringstream* new_ws = new stringstream[nwords-1];
+							new_ws[0] << words[0];
+							new_ws[1] << words[1];
+							for (int i=2; i < nwords-1; i++) {
+								new_ws[i] << words[i+1];
+							}
+							words.erase(words.begin()+2);
+							delete[] ws;
+							ws = new_ws;
+							nwords--;
+						}
+						else show_multiple = true;
+					}
+					if (show_multiple) {
+						reset();
+						create_grid(false,reference_zfactor); // even though we're not finding images, still need to plot caustics
+					} else {
+						reset();
+						create_grid(false,zfactors[dataset]); // even though we're not finding images, still need to plot caustics
+					}
+					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves and caustics");
+					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
+					double* srcflux = new double[n_sourcepts_fit];
+					lensvector *srcpts = new lensvector[n_sourcepts_fit];
+					if (include_flux_chisq) {
+						output_model_source_flux(srcflux);
+					} else {
+						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
+					}
+
+					if (fix_source_flux) srcflux[0] = source_flux;
+					if (use_analytic_bestfit_src) {
+						output_analytic_srcpos(srcpts);
+					} else {
+						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
+					}
+					if (mpi_id==0) cout << endl;
+					string srcname="srcs.dat";
+					bool output_to_text_files = false;
+					if ((terminal==TEXT) and (nwords==3)) {
+						output_to_text_files = true;
+						srcname = words[2];
+					}
+					ofstream srcfit;
+					ofstream srcfile;
+					if (mpi_id==0) {
+						srcfit.open("srcfit.dat");
+						srcfile.open(srcname.c_str());
+					}
+					if (!show_multiple) {
+						if (mpi_id==0) {
+							if (output_to_text_files) { srcfile << "# "; }
+							srcfile << "\"dataset " << dataset << "\"" << endl;
+						}
+						if (plot_srcpts_from_image_data(dataset,&srcfile,srcpts[dataset][0],srcpts[dataset][1],srcflux[dataset])==true) {
+							if (mpi_id==0) {
+								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << source_redshifts[dataset] << ")\"" << endl;
+								srcfit << srcpts[dataset][0] << "\t" << srcpts[dataset][1] << endl << endl << endl;
+								srcfile << endl << endl;
+							}
+						}
+					} else {
+						for (int i=min_dataset; i <= max_dataset; i++) {
+							if (mpi_id==0) {
+								if (output_to_text_files) { srcfile << "# "; }
+								srcfile << "\"dataset " << i << "\"" << endl;
+								srcfile << srcpts[i][0] << "\t" << srcpts[i][1] << " # from fit" << endl;
+							}
+							if (plot_srcpts_from_image_data(i,&srcfile,srcpts[i][0],srcpts[i][1],srcflux[i])==true) {
+								if (mpi_id==0) {
+									srcfit << "\"fit srcpt " << i << " (z_{s}=" << source_redshifts[i] << ")\"" << endl;
+									srcfit << srcpts[i][0] << "\t" << srcpts[i][1] << endl << endl << endl;
+									srcfile << endl << endl;
+								}
+							}
+						}
+					}
+					if (nwords==3) {
+						if (terminal != TEXT) {
+							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcptfits",words[2],"");
+							else run_plotter("srcptfit",words[2],"");
+						}
+					} else {
+						if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcptfits");
+						else run_plotter("srcptfit");
+					}
+					reset();
+					create_grid(false,reference_zfactor);
+					delete[] srcflux;
+					delete[] srcpts;
+				}
+
 				else if (words[1]=="plotimg")
 				{
 					if (nlens==0) Complain("No lens model has been specified");
@@ -3310,7 +3468,7 @@ void Lens::process_commands(bool read_file)
 					}
 
 					if (fix_source_flux) srcflux[0] = source_flux;
-					if ((use_analytic_bestfit_src) and (!use_image_plane_chisq)) {
+					if (use_analytic_bestfit_src) {
 						output_analytic_srcpos(srcpts);
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
@@ -3323,36 +3481,46 @@ void Lens::process_commands(bool read_file)
 						srcname = words[2];
 						imgname = words[3];
 					}
+					ofstream imgout;
+					ofstream imgfile;
+					ofstream srcfile;
+					if (mpi_id==0) {
+						imgout.open("imgdat.dat");
+						imgfile.open(imgname.c_str());
+						srcfile.open(srcname.c_str());
+					}
 					if (!show_multiple) {
-						ofstream imgout("imgdat.dat");
-						ofstream imgfile(imgname.c_str());
-						ofstream srcfile(srcname.c_str());
-						if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
-						imgfile << "\"image set " << dataset << "\"" << endl;
-						srcfile << "\"source " << dataset << "\"" << endl;
-						if (plot_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, imgfile, srcfile, srcflux[dataset], true)==true) {
-							imgout << "\"dataset " << dataset << " (z_{s}=" << source_redshifts[dataset] << ")\"" << endl;
-							image_data[dataset].write_to_file(imgout);
-							imgout << endl << endl;
-							imgfile << endl << endl;
-							srcfile << endl << endl;
-						}
-					} else {
-						reset();
-						ofstream imgout("imgdat.dat");
-						ofstream imgfile(imgname.c_str());
-						ofstream srcfile(srcname.c_str());
-						for (int i=min_dataset; i <= max_dataset; i++) {
-							create_grid(false,zfactors[i]);
+						if (mpi_id==0) {
 							if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
-							imgfile << "\"image set " << i << "\"" << endl;
-							srcfile << "\"source " << i << "\"" << endl;
-							if (plot_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, imgfile, srcfile, srcflux[i], true)==true) {
-								imgout << "\"dataset " << i << " (z_{s}=" << source_redshifts[i] << ")\"" << endl;
-								image_data[i].write_to_file(imgout);
+							imgfile << "\"image set " << dataset << "\"" << endl;
+							srcfile << "\"source " << dataset << "\"" << endl;
+						}
+						if (plot_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, imgfile, srcfile, srcflux[dataset], true)==true) {
+							if (mpi_id==0) {
+								imgout << "\"dataset " << dataset << " (z_{s}=" << source_redshifts[dataset] << ")\"" << endl;
+								image_data[dataset].write_to_file(imgout);
 								imgout << endl << endl;
 								imgfile << endl << endl;
 								srcfile << endl << endl;
+							}
+						}
+					} else {
+						reset();
+						for (int i=min_dataset; i <= max_dataset; i++) {
+							create_grid(false,zfactors[i]);
+							if (mpi_id==0) {
+								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
+								imgfile << "\"image set " << i << "\"" << endl;
+								srcfile << "\"source " << i << "\"" << endl;
+							}
+							if (plot_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, imgfile, srcfile, srcflux[i], true)==true) {
+								if (mpi_id==0) {
+									imgout << "\"dataset " << i << " (z_{s}=" << source_redshifts[i] << ")\"" << endl;
+									image_data[i].write_to_file(imgout);
+									imgout << endl << endl;
+									imgfile << endl << endl;
+									srcfile << endl << endl;
+								}
 							}
 						}
 					}
@@ -3403,7 +3571,8 @@ void Lens::process_commands(bool read_file)
 				{
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
-					else if (fitmethod==NESTED_SAMPLING) chi_square_nested_sampling();
+					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
+					//else if (fitmethod==NESTED_SAMPLING) nested_sampling_source_and_image_plane();
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 				}
@@ -4681,6 +4850,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(show_colorbar,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="plot_square_axes")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Plot square axes: " << display_switch(plot_square_axes) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'plot_square_axes' command; must specify 'on' or 'off'");
+				set_switch(plot_square_axes,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="fontsize")
 		{
 			if (nwords==1) {
@@ -4832,6 +5010,16 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "image separation threshold for including image in chi-square function = " << chisq_imgsep_threshold << endl;
 			} else Complain("must specify either zero or one argument (chi-square image separation threshold)");
+		}
+		else if (words[0]=="chisq_srcplane_threshold")
+		{
+			double srcplanethresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> srcplanethresh)) Complain("invalid threshold for substituting source plane chi-square for image plane chi-square");
+				chisq_srcplane_substitute_threshold = srcplanethresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "threshold for substituting source plane chi-square for image plane chi-square function = " << chisq_srcplane_substitute_threshold << endl;
+			} else Complain("must specify either zero or one argument (chi-square source plane substitution threshold)");
 		}
 		else if (words[0]=="chisqflux")
 		{
@@ -5900,6 +6088,7 @@ void Lens::run_plotter(string plotcommand)
 		else if (plot_key_outside) command += " key=1";
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (show_colorbar==false) command += " nocb";
+		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
 }
@@ -5924,6 +6113,7 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
+		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
 }
@@ -5944,6 +6134,7 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
+		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
 }
@@ -5968,6 +6159,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		if (terminal==POSTSCRIPT) command += " term=postscript fs=" + fsstring;
 		else if (terminal==PDF) command += " term=pdf";
 		if (show_colorbar==false) command += " nocb";
+		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
 }

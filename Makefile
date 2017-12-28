@@ -46,7 +46,7 @@ objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 mkdist_objects = mkdist.o mcmceval.o
 mkdist_shared_objects = GregsMathHdr.o errors.o hyp_2F1.o
 cosmocalc_objects = cosmocalc.o
-cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o
+cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
