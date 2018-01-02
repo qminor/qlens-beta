@@ -3572,7 +3572,7 @@ void Lens::process_commands(bool read_file)
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
-					//else if (fitmethod==NESTED_SAMPLING) nested_sampling_source_and_image_plane();
+					//else if (fitmethod==NESTED_SAMPLING) nested_sampling_source_and_image_plane(); // experimental
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 				}

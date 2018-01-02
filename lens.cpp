@@ -4481,7 +4481,7 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
-void Lens::nested_sampling_source_and_image_plane()
+void Lens::nested_sampling_source_and_image_plane() // this may be an ill-conceived idea...probably better to just use chisq_srcplane_threshold
 {
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();

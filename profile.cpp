@@ -50,7 +50,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	param_number_to_vary.input(n_vary_params);
 
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
@@ -166,10 +166,10 @@ void LensProfile::get_parameters(double* params)
 void LensProfile::update_parameters(const double* params)
 {
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[0]) + SQR(params[1]));
+		set_q(1 - sqrt(SQR(params[0]) + SQR(params[1])));
 		set_angle_from_components(params[0],params[1]);
 	} else {
-		q=params[0];
+		set_q(params[0]);
 		set_angle(params[1]);
 	}
 	qx_parameter=params[2];
@@ -178,6 +178,7 @@ void LensProfile::update_parameters(const double* params)
 		x_center = params[4];
 		y_center = params[5];
 	}
+	update_meta_parameters();
 }
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
@@ -208,13 +209,13 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[1]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				set_q(1 - sqrt(SQR(e_1) + SQR(e_2)));
 				set_angle_from_components(e_1,e_2);
 			}
 		} else {
 			if (vary_params[0]==true) {
 				if (fitparams[index] > 1) status = false; // q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[1]==true) set_angle(fitparams[index++]);
 		}
@@ -223,6 +224,7 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 			if (vary_params[3]==true) y_center = fitparams[index++];
 		}
 	}
+	update_meta_parameters();
 }
 
 void LensProfile::update_anchored_parameters()
@@ -430,7 +432,7 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 	qx_parameter = 1.0;
 	if (use_ellipticity_components) {
 		double angle;
-		q = 1 - sqrt(SQR(q1_in) + SQR(q2_in));
+		set_q(1 - sqrt(SQR(q1_in) + SQR(q2_in)));
 		if (q1_in==0) {
 			if (q2_in > 0) angle = M_HALFPI;
 			else angle = -M_HALFPI;
@@ -451,12 +453,24 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 		while (angle <= -M_HALFPI) angle += M_PI;
 		set_angle_radians(angle);
 	} else {
-		q=q1_in;
+		set_q(q1_in);
 		set_angle(q2_in);
 	}
-	if (q < 0) q = -q; // don't allow negative axis ratios
 	x_center = xc_in;
 	y_center = yc_in;
+}
+
+void LensProfile::set_q(const double &q_in)
+{
+	q = q_in; // axis ratio q = b/a
+	if (q < 0) q = -q; // don't allow negative axis ratios
+	if (q > 1) q = 1.0; // don't allow q>1
+	if (q==0) q = 0.001; // just to avoid catastrophe
+
+	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
+	//f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
+	f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+	//f_major_axis = sqrt((1+q*q)/2)/q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
 }
 
 void LensProfile::set_angle_from_components(const double &comp1, const double &comp2)
@@ -588,7 +602,7 @@ double LensProfile::kappa(double x, double y)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	return kappa_rsq(x*x + y*y/(q*q));
+	return kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
 }
 
 double LensProfile::potential(double x, double y)
@@ -651,8 +665,8 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	}
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
-	re_major_axis = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
-	re_average = re_major_axis * sqrt(q);
+	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
+	re_major_axis = re_average * f_major_axis;
 	zfac = 1.0;
 }
 
@@ -905,20 +919,20 @@ double LensIntegral::k_integral()
 double LensIntegral::i_integrand_prime(const double w)
 {
 	u = w*w;
-	xi = sqrt(u*(xsqval + ysqval/(1-(1-qsq)*u)));
-	return (2*w*(xi/u)*(profile->deflection_spherical_r_generic)(xi) / sqrt(1-(1-qsq)*u));
+	xi = sqrt(u*(xsqval + ysqval/(1-(1-qsq)*u))*fsqinv);
+	return (2*w*(xi/u)*(profile->deflection_spherical_r_generic)(xi) / sqrt(1-(1-qsq)*u))/fsqinv;
 }
 
 double LensIntegral::j_integrand_prime(const double w)
 {
-	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w));
+	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w))*fsqinv;
 	return (2*w*profile->kappa_rsq(xisq) / pow(1-(1-qsq)*w*w, nval+0.5));
 }
 
 double LensIntegral::k_integrand_prime(const double w)
 {
-	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w));
-	return (2*w*w*w*profile->kappa_rsq_deriv(xisq) / pow(1-(1-qsq)*w*w, nval+0.5));
+	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w))*fsqinv;
+	return fsqinv*(2*w*w*w*profile->kappa_rsq_deriv(xisq) / pow(1-(1-qsq)*w*w, nval+0.5));
 }
 
 

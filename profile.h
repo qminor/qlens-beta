@@ -47,6 +47,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	protected:
 	LensProfileName lenstype;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
+	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double costheta, sintheta;
 	double romberg_accuracy;
 	double theta_eff; // used for intermediate calculations if ellipticity components are being used
@@ -67,6 +68,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void assign_param_pointers();
 	void set_angle(const double &theta_degrees);
 	void set_angle_radians(const double &theta_in);
+	void set_q(const double &q_in);
 	void rotate(double&, double&);
 
 	double potential_numerical(const double, const double);
@@ -200,20 +202,24 @@ struct LensIntegral : public Romberg, public GaussLegendre
 	LensProfile *profile;
 	double xsqval, ysqval, xisq, qsq;
 	double xi, u;
+	double fsqinv;
 	int nval;
 
 	LensIntegral(LensProfile *profile_in) : profile(profile_in)
 	{
 		qsq = SQR(profile->q);
+		fsqinv = 1.0/SQR(profile->f_major_axis);
 		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
 	}
 	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in) {
 		qsq = SQR(profile->q);
+		fsqinv = 1.0/SQR(profile->f_major_axis);
 		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
 	}
 	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, int nval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in), nval(nval_in)
 	{
 		qsq=SQR(profile->q);
+		fsqinv = 1.0/SQR(profile->f_major_axis);
 		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
 	}
 	double i_integrand_prime(const double w);
@@ -262,8 +268,8 @@ class Alpha : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_meta_parameters() {
-		b = bprime/sqrt(q);
-		s = sprime/sqrt(q);
+		b = bprime*f_major_axis;
+		s = sprime*f_major_axis;
 		qsq = q*q; ssq = s*s;
 	}
 
@@ -310,9 +316,9 @@ class PseudoJaffe : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_meta_parameters() {
-		b = bprime/sqrt(q);
-		s = sprime/sqrt(q);
-		a = aprime/sqrt(q);
+		b = bprime*f_major_axis;
+		s = sprime*f_major_axis;
+		a = aprime*f_major_axis;
 		qsq = q*q; ssq = s*s; asq = a*a;
 	}
 	void assign_special_anchored_parameters(LensProfile*);
@@ -410,7 +416,7 @@ class Pseudo_Elliptical_NFW : public LensProfile
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_meta_parameters() {
-		q = sqrt((1-epsilon)/(1+epsilon));
+		set_q(sqrt((1-epsilon)/(1+epsilon)));
 	}
 
 	// here the base class deflection/hessian functions are overloaded because we are parametrizing the ellipticity differently from the base class
@@ -650,7 +656,7 @@ class SersicLens : public LensProfile
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_meta_parameters() {
 		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-		k = b*pow(sqrt(q)/re,1.0/n);
+		k = b*pow(1.0/re,1.0/n);
 	}
 
 	public:

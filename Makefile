@@ -41,10 +41,10 @@ GCC   := g++ -Wno-write-strings -O3
 objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				profile.o models.o sbprofile.o errors.o brent.o sort.o rand.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
-				simplex.o powell.o
+				simplex.o powell.o mcmceval.o
 
-mkdist_objects = mkdist.o mcmceval.o
-mkdist_shared_objects = GregsMathHdr.o errors.o hyp_2F1.o
+mkdist_objects = mkdist.o
+mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
 cosmocalc_objects = cosmocalc.o
 cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 

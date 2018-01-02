@@ -28,7 +28,6 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
-	if (q > 1) q = 1.0; // don't allow q>1
 	bprime = bb_prime;
 	sprime = ss_prime;
 	alpha = aa;
@@ -60,11 +59,10 @@ Alpha::Alpha(const Alpha* lens_in)
 	alpha = lens_in->alpha;
 	sprime = lens_in->sprime;
 	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	update_meta_parameters();
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
@@ -129,10 +127,10 @@ void Alpha::update_parameters(const double* params)
 	alpha=params[1];
 	sprime = params[2];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[3]) + SQR(params[4]));
+		set_q(1 - sqrt(SQR(params[3]) + SQR(params[4])));
 		set_angle_from_components(params[3],params[4]);
 	} else {
-		q=params[3];
+		set_q(params[3]);
 		set_angle(params[4]);
 	}
 	if (!center_anchored) {
@@ -161,26 +159,21 @@ void Alpha::update_fit_parameters(const double* fitparams, int &index, bool &sta
 
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[3]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[4]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
-				if (q==0) q = 0.01; // just to avoid catastrophe
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
 			}
 		} else {
 			if (vary_params[3]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
-				if (q==0) q = 0.01;
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -294,22 +287,22 @@ void Alpha::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvec
 
 double Alpha::kappa_rsq(const double rsq)
 {
-	return (0.5 * (2-alpha) * pow(b*b/(ssq+rsq), alpha/2));
+	return (0.5 * (2-alpha) * pow(bprime*bprime/(sprime*sprime+rsq), alpha/2));
 }
 
 double Alpha::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * alpha * (2-alpha) * pow(b*b/(ssq+rsq), alpha/2 + 1)) / (b*b);
+	return (-0.25 * alpha * (2-alpha) * pow(bprime*bprime/(sprime*sprime+rsq), alpha/2 + 1)) / (bprime*bprime);
 }
 
 double Alpha::deflection_spherical_r(const double r)
 {
-	return (pow(b,alpha)*(pow(r*r+ssq,1-alpha/2) - pow(s,2-alpha)))/r;
+	return (pow(bprime,alpha)*(pow(r*r+sprime*sprime,1-alpha/2) - pow(sprime,2-alpha)))/r;
 }
 
 double Alpha::deflection_spherical_r_iso(const double r) // only for alpha=1
 {
-	return b*(sqrt(ssq+r*r)-s)/r; // now, tmp = kappa_average
+	return bprime*(sqrt(sprime*sprime+r*r)-sprime)/r; // now, tmp = kappa_average
 }
 
 void Alpha::deflection_elliptical_iso(const double x, const double y, lensvector& def) // only for alpha=1
@@ -429,11 +422,11 @@ void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const
 {
 	if (s==0.0) {
 		re_major_axis = b*pow(zfactor,1.0/alpha);
-		re_average = re_major_axis*sqrt(q);
+		re_average = re_major_axis/f_major_axis;
 	} else if (alpha==1.0) {
 		if (s < b/2.0) {
 			re_major_axis = b*sqrt(1-2*s/b/zfactor)*zfactor;
-			re_average = re_major_axis*sqrt(q);
+			re_average = re_major_axis/f_major_axis;
 		} else {
 			re_major_axis = 0;
 			re_average = 0;
@@ -474,7 +467,6 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_paramnames();
-	if (q > 1) q = 1.0; // don't allow q>1
 	bprime = bb_prime;
 	sprime = ss_prime;
 	aprime = aa_prime;
@@ -507,11 +499,10 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 	sprime = lens_in->sprime;
 	aprime = lens_in->aprime;
 	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 
 	update_meta_parameters();
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
@@ -561,7 +552,7 @@ void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 	double rm, ravg;
 	tidal_host->get_einstein_radius(rm,ravg,1.0);
 	aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-	a = aprime/sqrt(q);
+	a = aprime/f_major_axis;
 	asq = a*a;
 }
 
@@ -571,7 +562,7 @@ void PseudoJaffe::update_special_anchored_params()
 		double rm, ravg;
 		tidal_host->get_einstein_radius(rm,ravg,1.0);
 		aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-		a = aprime/sqrt(q);
+		a = aprime/f_major_axis;
 		asq = a*a;
 	}
 }
@@ -596,10 +587,10 @@ void PseudoJaffe::get_parameters(double* params)
 void PseudoJaffe::update_parameters(const double* params)
 {
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[3]) + SQR(params[4]));
+		set_q(1 - sqrt(SQR(params[3]) + SQR(params[4])));
 		set_angle_from_components(params[3],params[4]);
 	} else {
-		q=params[3];
+		set_q(params[3]);
 		set_angle(params[4]);
 	}
 	bprime = params[0];
@@ -623,24 +614,22 @@ void PseudoJaffe::update_fit_parameters(const double* fitparams, int &index, boo
 
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[3]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[4]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[3]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -747,18 +736,18 @@ void PseudoJaffe::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 
 double PseudoJaffe::kappa_rsq(const double rsq)
 {
-	return (0.5 * b * (pow(ssq+rsq, -0.5) - pow(asq+rsq,-0.5)));
+	return (0.5 * bprime * (pow(sprime*sprime+rsq, -0.5) - pow(aprime*aprime+rsq,-0.5)));
 }
 
 double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * b * (pow(ssq+rsq, -1.5) - pow(asq+rsq,-1.5)));
+	return (-0.25 * bprime * (pow(sprime*sprime+rsq, -1.5) - pow(asq+rsq,-1.5)));
 }
 
 double PseudoJaffe::deflection_spherical_r(const double r)
 {
 	double rsq = r*r;
-	return b*((sqrt(ssq+rsq)-s) - (sqrt(asq+rsq)-a))/r;
+	return bprime*((sqrt(sprime*sprime+rsq)-sprime) - (sqrt(aprime*aprime+rsq)-aprime))/r;
 }
 
 void PseudoJaffe::deflection_elliptical(const double x, const double y, lensvector& def)
@@ -860,7 +849,6 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_paramnames();
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_integration_pointers();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::deflection_spherical_r);
 }
@@ -885,11 +873,10 @@ NFW::NFW(const NFW* lens_in)
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	if (rs < 0) rs = -rs; // don't allow negative scale radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
 	set_integration_pointers();
@@ -949,10 +936,10 @@ void NFW::update_parameters(const double* params)
 	ks=params[0];
 	rs=params[1];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[2]) + SQR(params[3]));
+		set_q(1 - sqrt(SQR(params[2]) + SQR(params[3])));
 		set_angle_from_components(params[2],params[3]);
 	} else {
-		q=params[2];
+		set_q(params[2]);
 		set_angle(params[3]);
 	}
 	if (!center_anchored) {
@@ -960,6 +947,7 @@ void NFW::update_parameters(const double* params)
 		y_center = params[5];
 	}
 	set_integration_pointers();
+	update_meta_parameters();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::deflection_spherical_r);
 }
 
@@ -982,24 +970,22 @@ void NFW::update_fit_parameters(const double* fitparams, int &index, bool& statu
 		}
 		if (use_ellipticity_components) {
 			if ((vary_params[2]) or (vary_params[3])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[2]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[3]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[2]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
@@ -1009,6 +995,7 @@ void NFW::update_fit_parameters(const double* fitparams, int &index, bool& statu
 		}
 
 		set_integration_pointers();
+		update_meta_parameters();
 		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::deflection_spherical_r);
 	}
 }
@@ -1297,14 +1284,14 @@ void Pseudo_Elliptical_NFW::update_fit_parameters(const double* fitparams, int &
 				epsilon = sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
 				if ((epsilon <= 0) or (epsilon > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
+				if (epsilon < 0) epsilon = -epsilon; // don't allow negative epsilon
 				if (epsilon > 1) epsilon = 1.0; // don't allow epsilon>1
 			}
 		} else {
 			if (vary_params[2]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // e <= 0 or e > 1 is not a physically acceptable value, so report that we're out of bounds
 				epsilon = fitparams[index++];
-				if (epsilon < 0) epsilon = -epsilon; // don't allow negative axis ratios
+				if (epsilon < 0) epsilon = -epsilon; // don't allow negative epsilon
 				if (epsilon > 1) epsilon = 1.0; // don't allow epsilon>1
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
@@ -1591,7 +1578,6 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 	assign_paramnames();
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_integration_pointers();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::deflection_spherical_r);
 }
@@ -1618,11 +1604,10 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	rs = lens_in->rs;
 	rt = lens_in->rt;
 	if (rs < 0) rs = -rs; // don't allow negative scale radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under NFW deflection_spherical(...) function)
 	set_integration_pointers();
@@ -1687,10 +1672,10 @@ void Truncated_NFW::update_parameters(const double* params)
 	rs=params[1];
 	rt=params[2];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[3]) + SQR(params[4]));
+		set_q(1 - sqrt(SQR(params[3]) + SQR(params[4])));
 		set_angle_from_components(params[3],params[4]);
 	} else {
-		q=params[3];
+		set_q(params[3]);
 		set_angle(params[4]);
 	}
 	if (!center_anchored) {
@@ -1698,6 +1683,7 @@ void Truncated_NFW::update_parameters(const double* params)
 		y_center = params[6];
 	}
 	set_integration_pointers();
+	update_meta_parameters();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::deflection_spherical_r);
 }
 
@@ -1718,24 +1704,22 @@ void Truncated_NFW::update_fit_parameters(const double* fitparams, int &index, b
 		}
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[3]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[4]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[3]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -1745,6 +1729,7 @@ void Truncated_NFW::update_fit_parameters(const double* fitparams, int &index, b
 		}
 
 		set_integration_pointers();
+		update_meta_parameters();
 		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::deflection_spherical_r);
 	}
 }
@@ -1921,7 +1906,6 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_paramnames();
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_integration_pointers();
 	// NOTE: for q=1, the deflection has an analytic formula. Implement this later!
 }
@@ -1946,11 +1930,10 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	if (rs < 0) rs = -rs; // don't allow negative core radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	set_integration_pointers();
 }
@@ -2008,16 +1991,17 @@ void Hernquist::update_parameters(const double* params)
 	ks=params[0];
 	rs=params[1];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[2]) + SQR(params[3]));
+		set_q(1 - sqrt(SQR(params[2]) + SQR(params[3])));
 		set_angle_from_components(params[2],params[3]);
 	} else {
-		q=params[2];
+		set_q(params[2]);
 		set_angle(params[3]);
 	}
 	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
+	update_meta_parameters();
 	set_integration_pointers();
 }
 
@@ -2031,24 +2015,22 @@ void Hernquist::update_fit_parameters(const double* fitparams, int &index, bool&
 		}
 		if (use_ellipticity_components) {
 			if ((vary_params[2]) or (vary_params[3])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[2]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[3]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[2]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
@@ -2057,6 +2039,7 @@ void Hernquist::update_fit_parameters(const double* fitparams, int &index, bool&
 			if (vary_params[5]) y_center = fitparams[index++];
 		}
 
+	update_meta_parameters();
 		set_integration_pointers();
 	}
 }
@@ -2180,7 +2163,6 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 	set_default_base_values(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_paramnames();
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_integration_pointers();
 }
 
@@ -2204,11 +2186,10 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 	k0 = lens_in->k0;
 	R_d = lens_in->R_d;
 	if (R_d < 0) R_d = -R_d; // don't allow negative core radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	set_integration_pointers();
 }
@@ -2267,16 +2248,17 @@ void ExpDisk::update_parameters(const double* params)
 	k0=params[0];
 	R_d=params[1];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[2]) + SQR(params[3]));
+		set_q(1 - sqrt(SQR(params[2]) + SQR(params[3])));
 		set_angle_from_components(params[2],params[3]);
 	} else {
-		q=params[2];
+		set_q(params[2]);
 		set_angle(params[3]);
 	}
 	if (!center_anchored) {
 		x_center = params[4];
 		y_center = params[5];
 	}
+	update_meta_parameters();
 	set_integration_pointers();
 }
 
@@ -2293,24 +2275,22 @@ void ExpDisk::update_fit_parameters(const double* fitparams, int &index, bool& s
 		}
 		if (use_ellipticity_components) {
 			if ((vary_params[2]) or (vary_params[3])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[2]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[3]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[2]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[3]) set_angle(fitparams[index++]);
 		}
@@ -2320,6 +2300,7 @@ void ExpDisk::update_fit_parameters(const double* fitparams, int &index, bool& s
 		}
 
 		set_integration_pointers();
+	update_meta_parameters();
 	}
 }
 
@@ -3268,11 +3249,10 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 	a = lens_in->a;
 	s = lens_in->s;
 	if (s < 0) s = -s; // don't allow negative core radii
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
@@ -3389,10 +3369,10 @@ void CoreCusp::update_parameters(const double* params)
 	s = params[4];
 
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[5]) + SQR(params[6]));
+		set_q(1 - sqrt(SQR(params[5]) + SQR(params[6])));
 		set_angle_from_components(params[5],params[6]);
 	} else {
-		q = params[5];
+		set_q(params[5]);
 		set_angle(params[6]);
 	}
 	if (!center_anchored) {
@@ -3412,6 +3392,7 @@ void CoreCusp::update_parameters(const double* params)
 	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 
 	set_integration_pointers();
+	update_meta_parameters();
 	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::deflection_spherical_r);
 }
 
@@ -3430,24 +3411,22 @@ void CoreCusp::update_fit_parameters(const double* fitparams, int &index, bool& 
 
 		if (use_ellipticity_components) {
 			if ((vary_params[5]) or (vary_params[6])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[5]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[6]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[5]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
 				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
 			}
 			if (vary_params[6]) set_angle(fitparams[index++]);
 		}
@@ -3468,6 +3447,7 @@ void CoreCusp::update_fit_parameters(const double* fitparams, int &index, bool& 
 
 		set_integration_pointers();
 		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::deflection_spherical_r);
+	update_meta_parameters();
 	}
 }
 
@@ -3723,7 +3703,7 @@ SersicLens::SersicLens(const double &kappa0_in, const double &Re_in, const doubl
 	n = n_in;
 	re = Re_in;
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	k = b*pow(sqrt(q)/re,1.0/n);
+	k = b*pow(1.0/re,1.0/n);
 	kappa0 = kappa0_in;
 	set_default_base_values(nn,acc);
 	set_integration_pointers();
@@ -3750,11 +3730,10 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	n = lens_in->n;
 	re = lens_in->re;
 	k = lens_in->k;
-	q = lens_in->q;
+	set_q(lens_in->q);
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (q > 1) q = 1.0; // don't allow q>1
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	set_integration_pointers();
 }
@@ -3816,10 +3795,10 @@ void SersicLens::update_parameters(const double* params)
 	re=params[1];
 	n=params[2];
 	if (use_ellipticity_components) {
-		q = 1 - sqrt(SQR(params[3]) + SQR(params[4]));
+		set_q(1 - sqrt(SQR(params[3]) + SQR(params[4])));
 		set_angle_from_components(params[3],params[4]);
 	} else {
-		q=params[3];
+		set_q(params[3]);
 		set_angle(params[4]);
 	}
 	if (!center_anchored) {
@@ -3827,7 +3806,8 @@ void SersicLens::update_parameters(const double* params)
 		y_center = params[6];
 	}
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	k = b*pow(sqrt(q)/re,1.0/n);
+	k = b*pow(1.0/re,1.0/n);
+	update_meta_parameters();
 	set_integration_pointers();
 	//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
 }
@@ -3852,24 +3832,22 @@ void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool
 		if (vary_params[2]) n = fitparams[index++];
 		if (use_ellipticity_components) {
 			if ((vary_params[3]) or (vary_params[4])) {
-				double e_1, e_2;
+				double e_1, e_2, qq;
 				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 				if (vary_params[3]) e_1 = fitparams[index++];
 				else e_1 = (1-q)*cos(2*theta_eff);
 				if (vary_params[4]) e_2 = fitparams[index++];
 				else e_2 = (1-q)*sin(2*theta_eff);
-				q = 1 - sqrt(SQR(e_1) + SQR(e_2));
+				qq = 1 - sqrt(SQR(e_1) + SQR(e_2));
 				set_angle_from_components(e_1,e_2);
-				if ((q <= 0) or (q > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				if ((qq <= 0) or (qq > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
+				set_q(qq);
+
 			}
 		} else {
 			if (vary_params[3]) {
 				if ((fitparams[index] <= 0) or (fitparams[index] > 1)) status = false; // q <= 0 or q > 1 is not a physically acceptable value, so report that we're out of bounds
-				q = fitparams[index++];
-				if (q < 0) q = -q; // don't allow negative axis ratios
-				if (q > 1) q = 1.0; // don't allow q>1
+				set_q(fitparams[index++]);
 			}
 			if (vary_params[4]) set_angle(fitparams[index++]);
 		}
@@ -3879,7 +3857,8 @@ void SersicLens::update_fit_parameters(const double* fitparams, int &index, bool
 		}
 
 		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-		k = b*pow(sqrt(q)/re,1.0/n);
+		k = b*pow(1.0/re,1.0/n);
+		update_meta_parameters();
 		set_integration_pointers();
 		// Note, there *is* an analytic deflection formula for spherical Sersic profile...could be useful for time delays where we need potential. Implement this!!!
 		//defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
