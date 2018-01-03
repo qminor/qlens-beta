@@ -11,7 +11,7 @@
 #include "mcmchdr.h"
 #include "hyp_2F1.h"
 #include "cosmo.h"
-#include "mcmceval.h"
+//#include "mcmceval.h"
 #include <cmath>
 #include <complex>
 #include <iostream>
@@ -4481,6 +4481,7 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
+/*
 void Lens::nested_sampling_source_and_image_plane() // this may be an ill-conceived idea...probably better to just use chisq_srcplane_threshold
 {
 	if (setup_fit_parameters(true)==false) return;
@@ -4694,6 +4695,7 @@ void Lens::nested_sampling_source_and_image_plane() // this may be an ill-concei
 	delete fitmodel;
 	fitmodel = NULL;
 }
+*/
 
 void Lens::test_fitmodel_invert()
 {
