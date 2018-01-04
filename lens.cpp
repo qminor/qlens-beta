@@ -329,7 +329,7 @@ Lens::Lens() : UCMC()
 	subgrid_around_satellites = true;
 	subgrid_only_near_data_images = true; // if on, only subgrids around satellite galaxies (during fit) if a data image is within the determined subgridding radius
 	galsubgrid_radius_fraction = 1;
-	galsubgrid_min_cellsize_fraction = 0.3;
+	galsubgrid_min_cellsize_fraction = 0.2;
 	galsubgrid_cc_splittings = 1;
 	sorted_critical_curves = false;
 	n_singular_points = 0;
