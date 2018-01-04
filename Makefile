@@ -24,8 +24,8 @@ LINKLIBS = $(OTHERLIBS)
 # Version with MUMPS
 #default: qlens mkdist cosmocalc
 #CCOMP = mpicxx -DUSE_MPI
-##OPTS = -w -O3 -fopenmp
-#OPTS = -w -O3 -fopenmp
+#OPTS = -Wno-write-strings -O3 -fopenmp
+#OPTS_NO_OPT = -Wno-write-strings -fopenmp
 #FLAGS = -DUSE_OPENMP -DUSE_MUMPS -DUSE_FITS -DUSE_UMFPACK
 #CMUMPS = $(INCS) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src
 #MUMPSLIBS = $(LIBDMUMPS) $(LORDERINGS) $(LIBS) $(LIBBLAS) $(LIBOTHERS) -lgfortran

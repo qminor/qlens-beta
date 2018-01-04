@@ -741,7 +741,7 @@ double PseudoJaffe::kappa_rsq(const double rsq)
 
 double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * bprime * (pow(sprime*sprime+rsq, -1.5) - pow(asq+rsq,-1.5)));
+	return (-0.25 * bprime * (pow(sprime*sprime+rsq, -1.5) - pow(aprime*aprime+rsq,-1.5)));
 }
 
 double PseudoJaffe::deflection_spherical_r(const double r)
@@ -766,10 +766,10 @@ void PseudoJaffe::hessian_elliptical(const double x, const double y, lensmatrix&
 	double xsq, ysq, psi, tmp1, psi2, tmp2;
 	xsq=x*x; ysq=y*y;
 	psi = sqrt(qsq*(ssq+xsq)+ysq);
-	tmp1 = ((b*q)/psi)/(xsq+ysq+2*psi*s+ssq*(1+qsq));
+	tmp1 = (b*q/psi)/(xsq+ysq+2*psi*s+ssq*(1+qsq));
 
 	psi2 = sqrt(qsq*(asq+xsq)+ysq);
-	tmp2 = ((b*q)/psi2)/(xsq+ysq+2*psi2*a+asq*(1+qsq));
+	tmp2 = (b*q/psi2)/(xsq+ysq+2*psi2*a+asq*(1+qsq));
 
 	hess[0][0] = tmp1*(ysq+s*psi+ssq*qsq) - tmp2*(ysq+a*psi2+asq*qsq);
 	hess[1][1] = tmp1*(xsq+s*psi+ssq) - tmp2*(xsq+a*psi2+asq);

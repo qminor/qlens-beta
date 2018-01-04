@@ -6009,22 +6009,6 @@ void Lens::remove_equal_sign(void)
 	}
 }
 
-/*
-void Lens::remove_equal_sign(void)
-{
-	// if there's an equal sign, remove it
-	string word1,word2;
-	word1=words[0]; word2=words[2];
-	words.clear();
-	words.push_back(word1);
-	words.push_back(word2);
-	nwords = 2;
-	delete[] ws;
-	ws = new stringstream[nwords];
-	ws[0] << words[0]; ws[1] << words[1];
-}
-*/
-
 void Lens::remove_word(int n_remove)
 {
 	if (n_remove >= nwords) die("word number to remove is greater than number of words in command");
@@ -6081,9 +6065,11 @@ void Lens::run_plotter(string plotcommand)
 		psstr >> psstring;
 		ptstr << plot_pttype;
 		ptstr >> ptstring;
+		fsstr << fontsize;
+		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
-		string command = "plotlens " + plotcommand + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
+		string command = "plotlens " + plotcommand + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (plot_title != "") command += " title='" + plot_title + "'";
@@ -6106,9 +6092,9 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
-		string command = "plotlens " + plotcommand + " file=" + filename + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
+		string command = "plotlens " + plotcommand + " file=" + filename + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
-		if (terminal==POSTSCRIPT) command += " term=postscript fs=" + fsstring;
+		if (terminal==POSTSCRIPT) command += " term=postscript";
 		else if (terminal==PDF) command += " term=pdf";
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
@@ -6127,9 +6113,11 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		psstr >> psstring;
 		ptstr << plot_pttype;
 		ptstr >> ptstring;
+		fsstr << fontsize;
+		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
-		string command = "plotlens " + plotcommand + " " + range + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
+		string command = "plotlens " + plotcommand + " " + range + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
@@ -6152,11 +6140,11 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
-		string command = "plotlens " + plotcommand + " file=" + filename + " " + extra_command + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring;
+		string command = "plotlens " + plotcommand + " file=" + filename + " " + extra_command + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
-		if (terminal==POSTSCRIPT) command += " term=postscript fs=" + fsstring;
+		if (terminal==POSTSCRIPT) command += " term=postscript";
 		else if (terminal==PDF) command += " term=pdf";
 		if (show_colorbar==false) command += " nocb";
 		if (plot_square_axes==true) command += " square";
