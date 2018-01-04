@@ -5796,6 +5796,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(subgrid_around_satellites,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="galsubgrid_near_imgs")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Subgrid around satellite galaxies only near data images: " << display_switch(subgrid_only_near_data_images) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'galsubgrid_near_imgs' command; must specify 'on' or 'off'");
+				set_switch(subgrid_only_near_data_images,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="inversion_nthreads")
 		{
 			int nt;

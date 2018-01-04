@@ -327,7 +327,8 @@ Lens::Lens() : UCMC()
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
 	subgrid_around_satellites = true;
-	galsubgrid_radius_fraction = 1.4;
+	subgrid_only_near_data_images = true; // if on, only subgrids around satellite galaxies (during fit) if a data image is within the determined subgridding radius
+	galsubgrid_radius_fraction = 1;
 	galsubgrid_min_cellsize_fraction = 0.3;
 	galsubgrid_cc_splittings = 1;
 	sorted_critical_curves = false;
@@ -560,6 +561,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	cc_splitlevels = lens_in->cc_splitlevels; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = lens_in->cc_neighbor_splittings;
 	subgrid_around_satellites = lens_in->subgrid_around_satellites;
+	subgrid_only_near_data_images = lens_in->subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius
 	galsubgrid_radius_fraction = lens_in->galsubgrid_radius_fraction;
 	galsubgrid_min_cellsize_fraction = lens_in->galsubgrid_min_cellsize_fraction;
 	galsubgrid_cc_splittings = lens_in->galsubgrid_cc_splittings;
@@ -953,7 +955,7 @@ void Lens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool Lens::create_grid(bool verbal, const double zfac)
+bool Lens::create_grid(bool verbal, const double zfac, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }
 	double mytime0, mytime;
@@ -1014,7 +1016,7 @@ bool Lens::create_grid(bool verbal, const double zfac)
 		else
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfac);
 	}
-	if (subgrid_around_satellites) subgrid_around_satellite_galaxies(zfac);
+	if (subgrid_around_satellites) subgrid_around_satellite_galaxies(zfac,redshift_index);
 	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
@@ -1029,16 +1031,17 @@ bool Lens::create_grid(bool verbal, const double zfac)
 	return true;
 }
 
-void Lens::subgrid_around_satellite_galaxies(const double zfac)
+void Lens::subgrid_around_satellite_galaxies(const double zfac, const int redshift_index)
 {
 	if (grid==NULL) {
 		if (create_grid(false,zfac)==false) die("Could not create recursive grid");
 	}
+	int i;
 	if (nlens==0) { warn(warnings,"No galaxies in lens lens_list"); return; }
 	double largest_einstein_radius = 0, xch, ych;
 	dvector einstein_radii(nlens);
 	double re_avg; // won't use this
-	for (int i=0; i < nlens; i++) {
+	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,reference_zfactor);
 		if (einstein_radii[i] > largest_einstein_radius) {
 			largest_einstein_radius = einstein_radii[i];
@@ -1052,7 +1055,7 @@ void Lens::subgrid_around_satellite_galaxies(const double zfac)
 	int parity, n_satellites=0;
 	double *kappas = new double[nlens];
 	double *parities = new double[nlens];
-	for (int i=0; i < nlens; i++) {
+	for (i=0; i < nlens; i++) {
 		if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
 			lens_list[i]->get_center_coords(xc,yc);
 			// lenses co-centered with the primary lens, no matter how small, are not considered satellites
@@ -1068,6 +1071,7 @@ void Lens::subgrid_around_satellite_galaxies(const double zfac)
 		}
 	}
 	lensvector *galcenter = new lensvector[n_satellites];
+	bool *subgrid = new bool[n_satellites];
 	double *einstein_radius = new double[n_satellites];
 	double *subgrid_radius = new double[n_satellites];
 	double *min_galsubgrid_cellsize = new double[n_satellites];
@@ -1080,7 +1084,7 @@ void Lens::subgrid_around_satellite_galaxies(const double zfac)
 	double shear_at_center, kappa_at_center, cc_major_axis_factor;
 	lensvector displaced_center;
 	dr = 1e-5;
-	for (int i=0; i < nlens; i++) {
+	for (i=0; i < nlens; i++) {
 		if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
 			lens_list[i]->get_center_coords(xc,yc);
 			// lenses co-centered with the primary lens, no matter how small, are not considered satellites
@@ -1133,12 +1137,28 @@ void Lens::subgrid_around_satellite_galaxies(const double zfac)
 				subgrid_radius[j] = galsubgrid_radius_fraction*rmax;
 				min_galsubgrid_cellsize[j] = SQR(galsubgrid_min_cellsize_fraction*rmax);
 				//cout << "Galaxy " << i << ": kappa: " << kappa_at_center << ", shear: " << shear_at_center << ", axis ratio: " << ratio << ", axis1=" << axis1 << ", axis2=" << axis2 << ", major axis factor: " << cc_major_axis_factor << ", subgrid_radius=" << subgrid_radius[j] << endl;
+				subgrid[j] = true;
 				j++;
 			}
 		}
 	}
+	if ((subgrid_only_near_data_images) and (redshift_index != -1)) {
+		int k;
+		double distsqr, min_distsqr;
+		for (j=0; j < n_satellites; j++) {
+			min_distsqr = 1e30;
+			for (i=source_redshift_groups[redshift_index]; i < source_redshift_groups[redshift_index+1]; i++) {
+				for (k=0; k < image_data[i].n_images; k++) {
+					distsqr = SQR(image_data[i].pos[k][0] - galcenter[j][0]) + SQR(image_data[i].pos[k][1] - galcenter[j][1]);
+					if (distsqr < min_distsqr) min_distsqr = distsqr;
+				}
+			}
+			if (min_distsqr > SQR(subgrid_radius[j])) subgrid[j] = false;
+		}
+	}
 
-	grid->subgrid_around_galaxies(galcenter,n_satellites,subgrid_radius,min_galsubgrid_cellsize,galsubgrid_cc_splittings);
+	grid->subgrid_around_galaxies(galcenter,n_satellites,subgrid_radius,min_galsubgrid_cellsize,galsubgrid_cc_splittings,subgrid);
+	delete[] subgrid;
 	delete[] kappas;
 	delete[] parities;
 	delete[] galcenter;
@@ -3367,7 +3387,7 @@ double Lens::chisq_pos_image_plane()
 	double chisq_each_srcpt, dist;
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
-		create_grid(false,zfactors[source_redshift_groups[m]]);
+		create_grid(false,zfactors[source_redshift_groups[m]],m);
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			image *img = get_images(sourcepts_fit[i], n_images, false);

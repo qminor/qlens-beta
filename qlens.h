@@ -193,8 +193,8 @@ public:
 	static double warning_magnification_threshold;
 	image* tree_search();
 	static void set_lens(Lens* lensptr) { lens = lensptr; }
-	void subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings);
-	void subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting);
+	void subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
+	void subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting, bool *subgrid);
 
 	void galsubgrid();
 	void store_critical_curve_pts();
@@ -391,9 +391,10 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	// private functions are all contained in the file lens.cpp
 	bool subgrid_around_satellites; // if on, will always subgrid around satellites (with pjaffe profile) when new grid is created
+	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_satellite_galaxies(const double zfac);
+	void subgrid_around_satellite_galaxies(const double zfac, const int redshift_index);
 	void calculate_critical_curve_deformation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	void calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
 
@@ -675,7 +676,7 @@ public:
 	void print_source_list();
 	void clear_source_objects();
 
-	bool create_grid(bool verbal, const double zfac);
+	bool create_grid(bool verbal, const double zfac, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 	void clear_lenses();
 	void clear();
 	void reset();

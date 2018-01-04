@@ -1672,14 +1672,14 @@ void Grid::grid_search(const int& searchlevel, const int& thread)
 	}
 }
 
-void Grid::subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings)
+void Grid::subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid)
 {
 	for (int i=0; i < n_cc_splittings; i++)
-		subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,i,false);
-	subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,false);
+		subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,i,false,subgrid);
+	subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,false,subgrid);
 }
 
-void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool cc_neighbor_splitting)
+void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool cc_neighbor_splitting, bool *subgrid)
 {
 	bool galaxy_nearby;
 	if (level < splitlevels+1)
@@ -1687,7 +1687,7 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 		int i,j;
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
-				cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers, ngal, subgrid_radius, min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting);
+				cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers, ngal, subgrid_radius, min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting,subgrid);
 			}
 		}
 	}
@@ -1697,7 +1697,7 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 		int i,j,k;
 		for (k=0; k < ngal; k++) {
 			galaxy_nearby = false;
-			if ((cell_area > min_galsubgrid_cellsize[k]) or ((n_cc_splittings > 0) and (cc_inside))) {
+			if ((subgrid[k]) and (cell_area > min_galsubgrid_cellsize[k]) or ((n_cc_splittings > 0) and (cc_inside))) {
 				if (test_if_inside_cell(galaxy_centers[k],0)==true) galaxy_nearby = true;
 				else galaxy_nearby = test_if_galaxy_nearby(galaxy_centers[k],SQR(subgrid_radius[k]));
 				if (galaxy_nearby==true) {
@@ -1707,13 +1707,13 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 							if (cell[0][0]->cell_area > min_galsubgrid_cellsize[k]) {
 								for (i=0; i < u_N; i++)
 									for (j=0; j < w_N; j++)
-										cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting);
+										cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting,subgrid);
 							} else if (n_cc_splittings > 0) {
 								bool recurse;
 								for (i=0; i < u_N; i++) {
 									for (j=0; j < w_N; j++) {
 										if (cell[i][j]->cell != NULL) {
-											cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting);
+											cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers,ngal,subgrid_radius,min_galsubgrid_cellsize,n_cc_splittings,cc_neighbor_splitting,subgrid);
 										} else {
 											if (recurse==true) recurse = false;
 											if (cell[i][j]->galsubgrid_cc_splitlevels < n_cc_splittings) {
@@ -1737,7 +1737,7 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 						if (cell[0][0]->cell_area > dmax(min_cell_area,min_galsubgrid_cellsize[k])) {
 							for (i=0; i < u_N; i++) {
 								for (j=0; j < w_N; j++) {
-									cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers, ngal, subgrid_radius, min_galsubgrid_cellsize, n_cc_splittings, cc_neighbor_splitting);
+									cell[i][j]->subgrid_around_galaxies_iteration(galaxy_centers, ngal, subgrid_radius, min_galsubgrid_cellsize, n_cc_splittings, cc_neighbor_splitting,subgrid);
 								}
 							}
 						}
