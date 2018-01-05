@@ -670,6 +670,6 @@ elif [[ $KEY == "-1" ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
 echo "$PLOTLINE" >tempplot.in
 
 gnuplot -persist tempplot.in >/dev/null 2>&1
-#rm tempplot.in
-#if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
+rm tempplot.in
+if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 
