@@ -1502,6 +1502,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="autogrid")
 		{
+			if (nlens == 0) Complain("cannot autogrid; no lens model has been specified");
 			if (nwords >= 3) {
 				double ccrmin, ccrmax, gridfrac;
 				if (!(ws[1] >> ccrmin)) Complain("invalid grid x-coordinate");
