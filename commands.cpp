@@ -1668,11 +1668,8 @@ void Lens::process_commands(bool read_file)
 						parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 						parameter_anchor_i++;
 						words[i] = pvalstring;
-						stringstream* new_ws = new stringstream[nwords];
-						for (int j=0; j < nwords; j++)
-							new_ws[j] << words[j];
-						delete[] ws;
-						ws = new_ws;
+						ws[i].str(""); ws[i].clear();
+						ws[i] << words[i];
 					} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
 				}
 			}	
@@ -1698,11 +1695,8 @@ void Lens::process_commands(bool read_file)
 						parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 						parameter_anchor_i++;
 						words[i] = "0";
-						stringstream* new_ws = new stringstream[nwords];
-						for (int j=0; j < nwords; j++)
-							new_ws[j] << words[j];
-						delete[] ws;
-						ws = new_ws;
+						ws[i].str(""); ws[i].clear();
+						ws[i] << words[i];
 					} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
 				}
 			}	
@@ -3207,6 +3201,12 @@ void Lens::process_commands(bool read_file)
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
 					if (nwords==3) {
+						// if using the "src=#" notation (as in 'fit plotimg'), remove the "src=" part
+						if (words[2].find("src=") == 0) {
+							words[2] = words[2].substr(4);
+							ws[2].str(""); ws[2].clear();
+							ws[2] << words[2];
+						}
 						if (!(ws[2] >> dataset)) Complain("invalid image dataset");
 						if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
 						show_all = false;

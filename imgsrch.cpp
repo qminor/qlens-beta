@@ -638,7 +638,7 @@ inline void Grid::check_if_cc_inside()
 inline void Grid::check_if_central_image_region()
 {
 	// establish whether this cell only contains central images. If it does, then we can exclude them
-	// from searches if no central image is observed
+	// from searches if no central image is observed in the data
 	cell_in_central_image_region = true;
 	for (int k=0; k < 4; k++)
 		if ((*corner_parity[k] == false) or (*corner_kappa[k] < 1)) { cell_in_central_image_region = false; break; }

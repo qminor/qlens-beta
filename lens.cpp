@@ -327,7 +327,7 @@ Lens::Lens() : UCMC()
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
 	subgrid_around_satellites = true;
-	subgrid_only_near_data_images = true; // if on, only subgrids around satellite galaxies (during fit) if a data image is within the determined subgridding radius
+	subgrid_only_near_data_images = false; // if on, only subgrids around satellite galaxies (during fit) if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	galsubgrid_radius_fraction = 1;
 	galsubgrid_min_cellsize_fraction = 0.2;
 	galsubgrid_cc_splittings = 1;
@@ -3396,12 +3396,13 @@ double Lens::chisq_pos_image_plane()
 			for (j=0; j < n_images; j++) ignore[j] = false;
 
 			for (j=0; j < n_images; j++) {
-				if (!include_central_image) {
-					if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
-						ignore[j] = true;
-						n_visible_images--;
-					}
-				}
+				// central images are already tested for during the image searching, so the following lines should be redundant
+				//if (!include_central_image) {
+					//if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
+						//ignore[j] = true;
+						//n_visible_images--;
+					//}
+				//}
 				if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
 					ignore[j] = true;
 					n_visible_images--;

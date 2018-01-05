@@ -391,7 +391,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	// private functions are all contained in the file lens.cpp
 	bool subgrid_around_satellites; // if on, will always subgrid around satellites (with pjaffe profile) when new grid is created
-	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius
+	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_satellite_galaxies(const double zfac, const int redshift_index);
