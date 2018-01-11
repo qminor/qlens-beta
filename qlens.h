@@ -332,6 +332,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void add_simulated_image_data(const lensvector &sourcept);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
+	void sort_image_data_into_redshift_groups();
 	bool plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	void remove_image_data(int image_set);
 
@@ -666,6 +667,7 @@ public:
 	void add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
 	void add_lens(const char *splinefile, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void update_anchored_parameters();
+	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	void print_fit_model();
 	void print_lens_cosmology_info();

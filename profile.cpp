@@ -13,14 +13,17 @@ using namespace std;
 IntegrationMethod LensProfile::integral_method;
 bool LensProfile::orient_major_axis_north;
 bool LensProfile::use_ellipticity_components;
+int LensProfile::default_ellipticity_mode;
 
 LensProfile::LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in)
 {
 	lenstype = KSPLINE;
+	model_name = "kspline";
 	defined_spherical_kappa_profile = true;
 	center_anchored = false;
 	anchor_special_parameter = false;
-	set_n_params(4);
+	ellipticity_mode = default_ellipticity_mode;
+	set_n_params(6);
 	assign_paramnames();
 	assign_param_pointers();
 	set_default_base_values(nn,acc);
@@ -35,7 +38,9 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 LensProfile::LensProfile(const LensProfile* lens_in)
 {
 	lenstype = lens_in->lenstype;
+	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
+	ellipticity_mode = lens_in->ellipticity_mode;
 	center_anchored = lens_in->center_anchored;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
@@ -47,10 +52,10 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
-	param_number_to_vary.input(n_vary_params);
 
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	set_q(lens_in->q);
+	q = lens_in->q;
+	f_major_axis = lens_in->f_major_axis;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
@@ -63,18 +68,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
 {
-	if (!center_anchored) {
-		center_anchored = true;
-		n_params -= 2;
-		boolvector temp_vary_params;
-		temp_vary_params.input(vary_params);
-		vary_params.input(n_params);
-		n_vary_params=0;
-		for (int i=0; i < n_params; i++) {
-			vary_params[i] = temp_vary_params[i];
-			if (vary_params[i]==true) n_vary_params++;
-		}
-	}
+	if (!center_anchored) center_anchored = true;
 	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
 	x_center = center_anchor_lens->x_center;
 	y_center = center_anchor_lens->y_center;
@@ -85,13 +79,6 @@ void LensProfile::delete_center_anchor()
 	if (center_anchored) {
 		center_anchored = false;
 		center_anchor_lens = NULL;
-		n_params += 2;
-		boolvector temp_vary_params;
-		temp_vary_params.input(vary_params);
-		vary_params.input(n_params);
-		for (int i=0; i < n_params-2; i++) vary_params[i] = temp_vary_params[i];
-		temp_vary_params[n_params-2] = false;
-		temp_vary_params[n_params-1] = false;
 	}
 }
 
@@ -103,26 +90,20 @@ void LensProfile::delete_special_parameter_anchor()
 void LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
 	if (vary_params_in.size() != n_params) {
-		// if the lens is center_anchored to another lens, it's ok to have vary params of zero entered for these parameters (they'll just be ignored)
-		if ((center_anchored) and (vary_params_in.size() == n_params + 2) and (vary_params_in[n_params]==0) and (vary_params_in[n_params+1]==0)) ;
+		if ((vary_params_in.size() == n_params-2) and (center_anchored)) {
+			vary_params[n_params-2] = false;
+			vary_params[n_params-1] = false;
+		}
 		else die("number of parameters to vary does not match total number of parameters");
 	}
 	n_vary_params=0;
 	int i;
-	for (i=0; i < n_params; i++) {
+	for (i=0; i < vary_params_in.size(); i++) {
 		vary_params[i] = vary_params_in[i];
 		if (vary_params_in[i]) {
 			n_vary_params++;
 		}
 	}
-	param_number_to_vary.input(n_vary_params);
-	n_vary_params=0;
-	for (i=0; i < n_params; i++) {
-		if (vary_params_in[i]) {
-			param_number_to_vary[n_vary_params++] = i;
-		}
-	}
-
 }
 
 void LensProfile::set_limits(const dvector& lower, const dvector& upper)
@@ -149,36 +130,21 @@ void LensProfile::set_limits(const dvector& lower, const dvector& upper, const d
 
 void LensProfile::get_parameters(double* params)
 {
-	if (use_ellipticity_components) {
-		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		params[0] = (1-q)*cos(2*theta_eff);
-		params[1] = (1-q)*sin(2*theta_eff);
-	} else {
-		params[0] = q;
-		params[1] = radians_to_degrees(theta);
+	for (int i=0; i < n_params; i++) {
+		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		else params[i] = *(param[i]);
 	}
-	params[2] = qx_parameter;
-	params[3] = f_parameter;
-	params[4] = x_center;
-	params[5] = y_center;
 }
 
 void LensProfile::update_parameters(const double* params)
 {
-	if (use_ellipticity_components) {
-		set_q(1 - sqrt(SQR(params[0]) + SQR(params[1])));
-		set_angle_from_components(params[0],params[1]);
-	} else {
-		set_q(params[0]);
-		set_angle(params[1]);
-	}
-	qx_parameter=params[2];
-	f_parameter=params[3];
-	if (!center_anchored) {
-		x_center = params[4];
-		y_center = params[5];
+	for (int i=0; i < n_params; i++) {
+		if (i==angle_paramnum) *(param[i]) = degrees_to_radians(params[i]);
+		else *(param[i]) = params[i];
 	}
 	update_meta_parameters();
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
 }
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
@@ -201,30 +167,20 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
-		if (use_ellipticity_components) {
-			if ((vary_params[0]) or (vary_params[1])) {
-				double e_1, e_2;
-				theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-				if (vary_params[0]) e_1 = fitparams[index++];
-				else e_1 = (1-q)*cos(2*theta_eff);
-				if (vary_params[1]) e_2 = fitparams[index++];
-				else e_2 = (1-q)*sin(2*theta_eff);
-				set_q(1 - sqrt(SQR(e_1) + SQR(e_2)));
-				set_angle_from_components(e_1,e_2);
+		for (int i=0; i < n_params; i++) {
+			if (vary_params[i]==true) {
+				if (i==angle_paramnum) {
+					// the costheta, sintheta meta-parameters will be set in update_ellipticity_meta_parameters, which is called from update_meta_parameters for elliptical models
+					*(param[i]) = degrees_to_radians(fitparams[index++]);
+					update_angle_meta_params();
+				}
+				else *(param[i]) = fitparams[index++];
 			}
-		} else {
-			if (vary_params[0]==true) {
-				if (fitparams[index] > 1) status = false; // q > 1 is not a physically acceptable value, so report that we're out of bounds
-				set_q(fitparams[index++]);
-			}
-			if (vary_params[1]==true) set_angle(fitparams[index++]);
 		}
-		if (!center_anchored) {
-			if (vary_params[2]==true) x_center = fitparams[index++];
-			if (vary_params[3]==true) y_center = fitparams[index++];
-		}
+		update_meta_parameters();
+		set_integration_pointers();
+		set_model_specific_integration_pointers();
 	}
-	update_meta_parameters();
 }
 
 void LensProfile::update_anchored_parameters()
@@ -238,7 +194,6 @@ void LensProfile::update_anchored_parameters()
 	}
 	if (at_least_one_param_anchored) {
 		update_meta_parameters();
-		update_angle_meta_params();
 	}
 }
 
@@ -252,62 +207,54 @@ void LensProfile::update_anchor_center()
 
 void LensProfile::get_fit_parameters(dvector& fitparams, int &index)
 {
-	if (use_ellipticity_components) {
-		if (vary_params[0]) {
-			theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-			double e_1 = (1-q)*cos(2*theta_eff);
-			fitparams[index++] = e_1;
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]==true) {
+			if (i==angle_paramnum) fitparams[index++] = radians_to_degrees(*(param[i]));
+			else fitparams[index++] = *(param[i]);
 		}
-		if (vary_params[1]) {
-			double e_2 = (1-q)*sin(2*theta_eff);
-			fitparams[index++] = e_2;
-		}
-	} else {
-		if (vary_params[0]==true) fitparams[index++] = q;
-		if (vary_params[1]==true) fitparams[index++] = radians_to_degrees(theta);
-	}
-	if (!center_anchored) {
-		if (vary_params[2]==true) fitparams[index++] = x_center;
-		if (vary_params[3]==true) fitparams[index++] = y_center;
 	}
 }
 
 void LensProfile::get_auto_stepsizes(dvector& stepsizes, int &index)
 {
+	if (vary_params[0]==true) stepsizes[index++] = 0.1;
+	if (vary_params[1]==true) stepsizes[index++] = 0.1;
 	if (use_ellipticity_components) {
-		if (vary_params[0]==true) stepsizes[index++] = 0.1;
-		if (vary_params[1]==true) stepsizes[index++] = 0.1;
+		if (vary_params[2]==true) stepsizes[index++] = 0.1;
+		if (vary_params[3]==true) stepsizes[index++] = 0.1;
 	} else {
-		if (vary_params[0]==true) stepsizes[index++] = 0.2;
-		if (vary_params[1]==true) stepsizes[index++] = 10;
+		if (vary_params[2]==true) stepsizes[index++] = 0.2;
+		if (vary_params[3]==true) stepsizes[index++] = 10;
 	}
 	if (!center_anchored) {
-		if (vary_params[2]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
-		if (vary_params[3]==true) stepsizes[index++] = 1.0;
+		if (vary_params[4]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
+		if (vary_params[5]==true) stepsizes[index++] = 1.0;
 	}
 }
 
 void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
+	if (vary_params[0]==true) index++;
+	if (vary_params[1]==true) index++;
 	if (use_ellipticity_components) {
-		if (vary_params[0]==true) {
+		if (vary_params[2]==true) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[1]==true) {
+		if (vary_params[3]==true) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
 			index++;
 		}
 	} else {
-		if (vary_params[0]==true) {
+		if (vary_params[2]==true) {
 			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
 			index++;
 		}
-		if (vary_params[1]==true) index++;
+		if (vary_params[3]==true) index++;
 	}
 	if (!center_anchored) {
-		if (vary_params[2]==true) index++;
-		if (vary_params[3]==true) index++;
+		if (vary_params[4]==true) index++;
+		if (vary_params[5]==true) index++;
 	}
 }
 
@@ -404,73 +351,87 @@ void LensProfile::assign_paramnames()
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
+	paramnames[0] = "qx"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "x";
+	paramnames[1] = "f"; latex_paramnames[1] = "f"; latex_param_subscripts[1] = "";
+	set_geometric_paramnames(2);
+}
+
+void LensProfile::set_geometric_paramnames(int qi)
+{
 	if (use_ellipticity_components) {
-		paramnames[0] = "e1"; latex_paramnames[0] = "e"; latex_param_subscripts[0] = "1";
-		paramnames[1] = "e2"; latex_paramnames[1] = "e"; latex_param_subscripts[1] = "2";
+		paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1"; qi++;
+		paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2"; qi++;
 	} else {
-		paramnames[0] = "q"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "";
-		paramnames[1] = "theta"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "";
+		if (ellipticity_mode==2) {
+			paramnames[qi] = "epsilon";  latex_paramnames[qi] = "\\epsilon"; latex_param_subscripts[qi] = ""; qi++;
+		} else {
+			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = ""; qi++;
+		}
+		paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = ""; qi++;
 	}
 	if (!center_anchored) {
-		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
-		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c"; qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c"; qi++;
 	}
 }
 
 void LensProfile::assign_param_pointers()
 {
-	param[0] = &q;
-	param[1] = &theta;
+	param[0] = &qx_parameter;
+	param[1] = &f_parameter;
+	set_geometric_param_pointers(2);
+}
+
+void LensProfile::set_geometric_param_pointers(int qi)
+{
+	// Sets parameter pointers for ellipticity (or axis ratio) and angle
+	if (use_ellipticity_components) {
+		param[qi++] = &epsilon;
+		param[qi++] = &epsilon2;
+		angle_paramnum = -1; // there is no angle parameter if ellipticity components are being used
+	} else {
+		if (ellipticity_mode==2)
+			param[qi++] = &epsilon;
+		else
+			param[qi++] = &q;
+		param[qi] = &theta;
+		angle_paramnum = qi++;
+	}
 	if (!center_anchored) {
-		param[2] = &x_center;
-		param[3] = &y_center;
+		param[qi++] = &x_center;
+		param[qi++] = &y_center;
 	}
 }
 
 void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2_in, const double &xc_in, const double &yc_in)
 {
-	qx_parameter = 1.0;
 	if (use_ellipticity_components) {
-		double angle;
-		set_q(1 - sqrt(SQR(q1_in) + SQR(q2_in)));
-		if (q1_in==0) {
-			if (q2_in > 0) angle = M_HALFPI;
-			else angle = -M_HALFPI;
-		} else {
-			angle = atan(abs(q2_in/q1_in));
-			if (q1_in < 0) {
-				if (q2_in < 0)
-					angle = angle - M_PI;
-				else
-					angle = M_PI - angle;
-			} else if (q2_in < 0) {
-				angle = -angle;
-			}
-		}
-		angle = 0.5*angle;
-		if (orient_major_axis_north) angle -= M_HALFPI;
-		while (angle > M_HALFPI) angle -= M_PI;
-		while (angle <= -M_HALFPI) angle += M_PI;
-		set_angle_radians(angle);
+		epsilon = q1_in;
+		epsilon2 = q2_in;
 	} else {
-		set_q(q1_in);
-		set_angle(q2_in);
+		set_ellipticity_parameter(q1_in);
+		theta = degrees_to_radians(q2_in);
 	}
 	x_center = xc_in;
 	y_center = yc_in;
+	update_ellipticity_meta_parameters();
 }
 
-void LensProfile::set_q(const double &q_in)
+void LensProfile::set_ellipticity_parameter(const double &q_in)
 {
-	q = q_in; // axis ratio q = b/a
+	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
+	if (ellipticity_mode==0) {
+		q = q_in; // axis ratio q = b/a
+	} else if (ellipticity_mode==1) {
+		q = q_in; // axis ratio q = b/a
+	} else if (use_ellipticity_components) {
+		q = q_in; // axis ratio q = b/a
+	} else if (ellipticity_mode==2) {
+		epsilon = q_in; // axis ratio q = b/a
+	}
 	if (q < 0) q = -q; // don't allow negative axis ratios
 	if (q > 1) q = 1.0; // don't allow q>1
 	if (q==0) q = 0.001; // just to avoid catastrophe
-
-	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
-	//f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
-	f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
-	//f_major_axis = sqrt((1+q*q)/2)/q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
 }
 
 void LensProfile::set_angle_from_components(const double &comp1, const double &comp2)
@@ -504,6 +465,10 @@ void LensProfile::set_default_base_values(const int &nn, const double &acc)
 	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
 	SetGaussLegendre(nn);
 	romberg_accuracy = acc;
+}
+
+void LensProfile::set_model_specific_integration_pointers() // gets overloaded by some models
+{
 }
 
 void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q has been defined before calling this
@@ -573,6 +538,28 @@ void LensProfile::set_angle_radians(const double &theta_in)
 		sintheta = costheta;
 		costheta = -tmp;
 	}
+}
+
+void LensProfile::update_ellipticity_meta_parameters()
+{
+	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
+	if (use_ellipticity_components) {
+		set_ellipticity_parameter(1 - sqrt(SQR(epsilon) + SQR(epsilon2)));
+		// if ellipticity components are being used, we are automatically using the following major axis scaling
+		set_angle_from_components(epsilon,epsilon2);
+		f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+	} else if (ellipticity_mode==0) {
+		epsilon = 1 - q;
+		f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
+	} else if (ellipticity_mode==1) {
+		epsilon = 1 - q;
+		// if ellipticity components are being used, we are automatically using the following major axis scaling
+		f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+	} else if (ellipticity_mode==2) {
+		q = sqrt((1-epsilon)/(1+epsilon));
+		f_major_axis = sqrt((1+q*q)/2)/q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
+	}
+	if (!use_ellipticity_components) update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
 }
 
 void LensProfile::update_angle_meta_params()
@@ -791,16 +778,16 @@ inline double LensProfile::k_integral(const double x, const double y, const int 
 
 void LensProfile::print_parameters()
 {
-	if (use_ellipticity_components) {
-		double e_1, e_2;
-		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		e_1 = (1-q)*cos(2*theta_eff);
-		e_2 = (1-q)*sin(2*theta_eff);
-		cout << "kspline: e1=" << e_1 << ", e2=" << e_2 << ", center=(" << x_center << "," << y_center << ")";
-	} else {
-		cout << "kspline: q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")";
+	cout << model_name << ": ";
+	for (int i=0; i < n_params-2; i++) {
+		cout << paramnames[i] << "=";
+		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
+		else cout << *(param[i]);
+		cout << ", ";
 	}
+	cout << "center=(" << x_center << "," << y_center << ")";
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
+	//if (ellipticity_mode != default_ellipticity_mode) cout << " (ellipticity mode = " << ellipticity_mode << ")";
 	cout << endl;
 }
 
@@ -851,7 +838,7 @@ void LensProfile::print_vary_parameters()
 
 bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
 {
-	return false;
+	return false; // no cosmology-dependent physical parameters to calculate for this model
 }
 
 bool LensProfile::core_present() { return false; }

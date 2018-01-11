@@ -351,6 +351,8 @@ Lens::Lens() : UCMC()
 	romberg_accuracy = 1e-6;
 	LensProfile::integral_method = Gaussian_Quadrature;
 	LensProfile::orient_major_axis_north = true;
+	LensProfile::use_ellipticity_components = false;
+	LensProfile::default_ellipticity_mode = 1;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = false;
 }
@@ -732,12 +734,10 @@ void Lens::toggle_major_axis_along_y(bool major_axis_along_y)
 {
 	if (LensProfile::orient_major_axis_north != major_axis_along_y) {
 		LensProfile::orient_major_axis_north = major_axis_along_y;
-		if (major_axis_along_y) {
-			if (nlens > 0) {
+		if (nlens > 0) {
+			if (major_axis_along_y) {
 				for (int i=0; i < nlens; i++) lens_list[i]->shift_angle_minus_90();
-			}
-		} else {
-			if (nlens > 0) {
+			} else {
 				for (int i=0; i < nlens; i++) lens_list[i]->shift_angle_90();
 			}
 		}
@@ -2378,55 +2378,6 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 	vary_sourcepts_x = new_vary_sourcepts_x;
 	vary_sourcepts_y = new_vary_sourcepts_y;
 
-	// Reorganize, if necessary, so that image sets with the same source redshift are listed together. This makes it easy to assign image sets with
-	// different source planes to different MPI processes in the image plane chi-square.
-	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
-	double *sorted_redshifts = new double[n_sourcepts_fit];
-	double *sorted_zfactors = new double[n_sourcepts_fit];
-	bool *sorted_vary_sourcepts_x = new bool[n_sourcepts_fit];
-	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
-	source_redshift_groups.clear();
-	source_redshift_groups.push_back(0);
-	int i,k,j=0;
-	bool *assigned = new bool[n_sourcepts_fit];
-	for (i=0; i < n_sourcepts_fit; i++) assigned[i] = false;
-	for (i=0; i < n_sourcepts_fit; i++) {
-		if (!assigned[i]) {
-			sorted_image_data[j].input(image_data[i]);
-			sorted_redshifts[j] = source_redshifts[i];
-			sorted_zfactors[j] = zfactors[i];
-			sorted_vary_sourcepts_x[j] = vary_sourcepts_x[i];
-			sorted_vary_sourcepts_y[j] = vary_sourcepts_y[i];
-			assigned[i] = true;
-			j++;
-			for (k=i+1; k < n_sourcepts_fit; k++) {
-				if (!assigned[k]) {
-					if (source_redshifts[k]==source_redshifts[i]) {
-						sorted_image_data[j].input(image_data[k]);
-						sorted_redshifts[j] = source_redshifts[k];
-						sorted_zfactors[j] = zfactors[k];
-						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
-						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
-						assigned[k] = true;
-						j++;
-					}
-				}
-			}
-			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
-		}
-	}
-	if (j != n_sourcepts_fit) die("something got fucked up");
-	delete[] source_redshifts;
-	delete[] image_data;
-	delete[] zfactors;
-	delete[] vary_sourcepts_x;
-	delete[] vary_sourcepts_y;
-	source_redshifts = sorted_redshifts;
-	image_data = sorted_image_data;
-	zfactors = sorted_zfactors;
-	vary_sourcepts_x = sorted_vary_sourcepts_x;
-	vary_sourcepts_y = sorted_vary_sourcepts_y;
-
 	if (sourcepts_upper_limit != NULL) {
 		delete[] sourcepts_upper_limit;
 		delete[] sourcepts_lower_limit;
@@ -2437,6 +2388,7 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		sourcepts_upper_limit = new_sourcepts_upper_limit;
 		sourcepts_lower_limit = new_sourcepts_lower_limit;
 	}
+	sort_image_data_into_redshift_groups();
 }
 
 void Lens::write_image_data(string filename)
@@ -2595,42 +2547,11 @@ bool Lens::load_image_data(string filename)
 		auto_zsource_scaling = false;
 	}
 
-	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
-	double *sorted_redshifts = new double[n_sourcepts_fit];
-	source_redshift_groups.clear();
-	source_redshift_groups.push_back(0);
-	int k;
-	j=0;
-	bool *assigned = new bool[n_sourcepts_fit];
-	for (i=0; i < n_sourcepts_fit; i++) assigned[i] = false;
-	for (i=0; i < n_sourcepts_fit; i++) {
-		if (!assigned[i]) {
-			sorted_image_data[j].input(image_data[i]);
-			sorted_redshifts[j] = source_redshifts[i];
-			assigned[i] = true;
-			j++;
-			for (k=i+1; k < n_sourcepts_fit; k++) {
-				if (!assigned[k]) {
-					if (source_redshifts[k]==source_redshifts[i]) {
-						sorted_image_data[j].input(image_data[k]);
-						sorted_redshifts[j] = source_redshifts[k];
-						assigned[k] = true;
-						j++;
-					}
-				}
-			}
-			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
-		}
-	}
-	if (j != n_sourcepts_fit) die("something got fucked up");
-	delete[] source_redshifts;
-	delete[] image_data;
-	source_redshifts = sorted_redshifts;
-	image_data = sorted_image_data;
-
 	for (i=0; i < n_sourcepts_fit; i++) {
 		zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
 	}
+
+	sort_image_data_into_redshift_groups();
 
 	int ncombs, max_combinations = -1;
 	int n;
@@ -2638,6 +2559,7 @@ bool Lens::load_image_data(string filename)
 		ncombs = image_data[i].n_images * (image_data[i].n_images-1) / 2;
 		if (ncombs > max_combinations) max_combinations = ncombs;
 	}
+	int k;
 	double *distsqrs = new double[max_combinations];
 	for (i=0; i < n_sourcepts_fit; i++) {
 		n=0;
@@ -2660,40 +2582,110 @@ bool Lens::load_image_data(string filename)
 	return true;
 }
 
+void Lens::sort_image_data_into_redshift_groups()
+{
+	// Reorganize, if necessary, so that image sets with the same source redshift are listed together. This makes it easy to assign image sets with
+	// different source planes to different MPI processes in the image plane chi-square.
+	//
+	//
+
+	bool sort_sourcept_limits = false;
+
+	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
+	double *sorted_redshifts = new double[n_sourcepts_fit];
+	double *sorted_zfactors = new double[n_sourcepts_fit];
+	bool *sorted_vary_sourcepts_x = new bool[n_sourcepts_fit];
+	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
+	lensvector *sorted_sourcepts_upper_limit;
+	lensvector *sorted_sourcepts_lower_limit;
+	if (sourcepts_upper_limit != NULL) {
+		sort_sourcept_limits = true;
+		sorted_sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+		sorted_sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
+	}
+	source_redshift_groups.clear();
+	source_redshift_groups.push_back(0);
+	int i,k,j=0;
+	bool *assigned = new bool[n_sourcepts_fit];
+	for (i=0; i < n_sourcepts_fit; i++) assigned[i] = false;
+	for (i=0; i < n_sourcepts_fit; i++) {
+		if (!assigned[i]) {
+			sorted_image_data[j].input(image_data[i]);
+			sorted_redshifts[j] = source_redshifts[i];
+			sorted_zfactors[j] = zfactors[i];
+			sorted_vary_sourcepts_x[j] = vary_sourcepts_x[i];
+			sorted_vary_sourcepts_y[j] = vary_sourcepts_y[i];
+			if (sort_sourcept_limits) {
+				sorted_sourcepts_upper_limit[j] = sourcepts_upper_limit[i];
+				sorted_sourcepts_lower_limit[j] = sourcepts_lower_limit[i];
+			}
+			assigned[i] = true;
+			j++;
+			for (k=i+1; k < n_sourcepts_fit; k++) {
+				if (!assigned[k]) {
+					if (source_redshifts[k]==source_redshifts[i]) {
+						sorted_image_data[j].input(image_data[k]);
+						sorted_redshifts[j] = source_redshifts[k];
+						sorted_zfactors[j] = zfactors[k];
+						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
+						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
+						if (sort_sourcept_limits) {
+							sorted_sourcepts_upper_limit[j] = sourcepts_upper_limit[k];
+							sorted_sourcepts_lower_limit[j] = sourcepts_lower_limit[k];
+						}
+						assigned[k] = true;
+						j++;
+					}
+				}
+			}
+			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
+		}
+	}
+	if (j != n_sourcepts_fit) die("something got fucked up");
+	delete[] image_data;
+	delete[] source_redshifts;
+	delete[] zfactors;
+	delete[] vary_sourcepts_x;
+	delete[] vary_sourcepts_y;
+	delete[] assigned;
+	image_data = sorted_image_data;
+	source_redshifts = sorted_redshifts;
+	zfactors = sorted_zfactors;
+	vary_sourcepts_x = sorted_vary_sourcepts_x;
+	vary_sourcepts_y = sorted_vary_sourcepts_y;
+	if (sort_sourcept_limits) {
+		delete[] sourcepts_upper_limit;
+		delete[] sourcepts_lower_limit;
+		sourcepts_upper_limit = sorted_sourcepts_upper_limit;
+		sourcepts_lower_limit = sorted_sourcepts_lower_limit;
+	}
+}
+
 void Lens::remove_image_data(int image_set)
 {
 	if (image_set >= n_sourcepts_fit) { warn(warnings,"Specified image dataset has not been loaded"); return; }
+	if (n_sourcepts_fit==1) { clear_image_data(); return; }
 	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit-1];
 	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit-1];
 	lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit-1];
 	ImageData *new_image_data = new ImageData[n_sourcepts_fit-1];
 	int i,j;
+	double *new_redshifts, *new_zfactors;
+	new_redshifts = new double[n_sourcepts_fit-1];
+	new_zfactors = new double[n_sourcepts_fit-1];
 	for (i=0,j=0; i < n_sourcepts_fit; i++) {
 		if (i != image_set) {
+			new_image_data[j].input(image_data[i]);
 			new_sourcepts_fit[j] = sourcepts_fit[i];
+			new_redshifts[j] = source_redshifts[i];
+			new_zfactors[j] = zfactors[i];
 			new_vary_sourcepts_x[j] = vary_sourcepts_x[i];
 			new_vary_sourcepts_y[j] = vary_sourcepts_y[i];
-			new_image_data[j].input(image_data[i]);
 			j++;
 		}
 	}
-	if (n_sourcepts_fit > 1) {
-		// always leave one redshift recorded, which is the generic redshift used when playing around (not necessarily for model fitting)
-		double *new_redshifts, *new_zfactors;
-		new_redshifts = new double[n_sourcepts_fit-1];
-		new_zfactors = new double[n_sourcepts_fit-1];
-		for (i=0,j=0; i < n_sourcepts_fit; i++) {
-			if (i != image_set) {
-				new_redshifts[j] = source_redshifts[i];
-				new_zfactors[j] = zfactors[i];
-			}
-			j++;
-		}
-		delete[] source_redshifts;
-		delete[] zfactors;
-		source_redshifts = new_redshifts;
-		zfactors = new_zfactors;
-	}
+	delete[] source_redshifts;
+	delete[] zfactors;
 	delete[] image_data;
 	delete[] sourcepts_fit;
 	delete[] vary_sourcepts_x;
@@ -2702,8 +2694,12 @@ void Lens::remove_image_data(int image_set)
 	n_sourcepts_fit--;
 	image_data = new_image_data;
 	sourcepts_fit = new_sourcepts_fit;
+	source_redshifts = new_redshifts;
+	zfactors = new_zfactors;
 	vary_sourcepts_x = new_vary_sourcepts_x;
 	vary_sourcepts_y = new_vary_sourcepts_y;
+
+	sort_image_data_into_redshift_groups(); // this updates redshift_groups, in case there are no other image sets that shared the redshift of the one being deleted
 }
 
 bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux)
@@ -3679,7 +3675,7 @@ void Lens::set_default_plimits()
 	if (vary_pixel_fraction) index++;
 	if (vary_magnification_threshold) index++;
 	if (vary_hubble_parameter) index++;
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges");
+	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
 
@@ -3717,7 +3713,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	fitparams.input(n_fit_parameters);
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
-	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters");
+	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
@@ -5219,6 +5215,31 @@ void Lens::set_romberg_accuracy(const double& acc)
 	}
 }
 
+void Lens::reassign_lensparam_pointers_and_names()
+{
+	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
+	if (nlens > 0) {
+		for (int i=0; i < nlens; i++) {
+			lens_list[i]->assign_param_pointers();
+			lens_list[i]->assign_paramnames();
+		}
+	}
+}
+
+void Lens::print_lens_cosmology_info()
+{
+	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
+	double dlens = angular_diameter_distance(lens_redshift);
+	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
+	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl << endl;
+	if (nlens > 0) {
+		for (int i=0; i < nlens; i++) {
+			lens_list[i]->output_cosmology_info(lens_redshift,reference_source_redshift,this,i);
+		}
+	}
+	else cout << "No lens models have been specified" << endl << endl;
+}
+
 void Lens::print_lens_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
@@ -5234,20 +5255,6 @@ void Lens::print_lens_list(bool show_vary_params)
 	else cout << "No lens models have been specified" << endl;
 	cout << endl;
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
-}
-
-void Lens::print_lens_cosmology_info()
-{
-	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
-	double dlens = angular_diameter_distance(lens_redshift);
-	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
-	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl << endl;
-	if (nlens > 0) {
-		for (int i=0; i < nlens; i++) {
-			lens_list[i]->output_cosmology_info(lens_redshift,reference_source_redshift,this,i);
-		}
-	}
-	else cout << "No lens models have been specified" << endl << endl;
 }
 
 void Lens::print_fit_model()

@@ -58,6 +58,7 @@ mcmctol 1.02    # Convergence criterion for T-Walk; the closer it is to 1, the l
 # to finish in this example, although if you use the source plane chi-square (by doing imgplane_chisq off) it will run MUCH faster but
 # will not be as accurate. To make T-Walk run faster, compile QLens with MPI and run it with multiple processes
 
+pause
 fit run  # FYI: you can interrupt T-Walk at any time by pressing CTRL-C, e.g. if the chains are clearly not converging well
 
 # Once the T-Walk algorithm finishes, you can plot the resulting posterior probability distributions using the 'mkdist' tool,

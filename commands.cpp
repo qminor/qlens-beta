@@ -223,12 +223,12 @@ void Lens::process_commands(bool read_file)
 							"varying parameters), use 'lens anchor' ('help lens anchor' for usage information).\n\n"
 							"Available lens models:   (type 'help lens <lensmodel>' for usage information)\n\n"
 							"ptmass -- point mass\n"
-							"alpha -- softened power-law ellipsoid\n"
+							"alpha -- power-law ellipsoid with core\n"
 							"shear -- external shear\n"
 							"sheet -- mass sheet\n"
 							"mpole -- multipole term in lensing potential\n"
 							"kmpole -- multipole term in kappa\n"
-							"pjaffe -- Pseudo-Jaffe profile (truncated isothermal ellipsoid)\n"
+							"pjaffe -- Pseudo-Jaffe profile (truncated isothermal ellipsoid with core)\n"
 							"nfw -- NFW model\n"
 							"pnfw -- Pseudo-elliptical NFW model\n"
 							"tnfw -- Truncated NFW model\n"
@@ -383,11 +383,11 @@ void Lens::process_commands(bool read_file)
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kspline")
-						cout << "lens kspline <filename> <q> [theta] [qx] [f] [x-center] [y-center]\n\n"
+						cout << "lens kspline <filename> [qx] [f] [q] [theta] [x-center] [y-center]\n\n"
 							"where <filename> gives the input file containing the tabulated radial profile,\n"
 							"<q> is the axis ratio, and [theta] is the angle of rotation (counterclockwise, in degrees)\n"
 							"about the center. [qx] scales the x-axis, [f] scales kappa for all r.\n"
-							"(default: qx=f=1, theta=xc=yc=0)\n"
+							"(defaults: qx=f=q=1, theta=xc=yc=0)\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
 							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else Complain("lens model not recognized");
@@ -2287,37 +2287,41 @@ void Lens::process_commands(bool read_file)
 			{
 				if (nwords > 9) Complain("more than 7 parameters not allowed for model kspline");
 				string filename;
-				if (nwords >= 4) {
-					double q, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
-					filename = words[2];
-					if (!(ws[3] >> q)) Complain("invalid q parameter");
-					if (nwords >= 5) {
-						if (!(ws[4] >> theta)) Complain("invalid theta parameter");
-						if (nwords >= 7) {
-							if (!(ws[5] >> qx)) Complain("invalid qx parameter for model kspline");
-							if (!(ws[6] >> f)) Complain("invalid f parameter for model kspline");
-							if (nwords == 8) {
-								if (words[7].find("anchor_center=")==0) {
-									string anchorstr = words[7].substr(14);
-									stringstream anchorstream;
-									anchorstream << anchorstr;
-									if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
-									if (anchornum >= nlens) Complain("lens anchor number does not exist");
-									anchor_lens_center = true;
-								} else Complain("x-coordinate specified for center, but not y-coordinate");
-							}
-							else if (nwords == 9) {
-							if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
-								if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model kspline");
-								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model kspline");
-							}
-						} else if (nwords == 6) Complain("must specify qx and f parameters together");
+				if (nwords >= 3) {
+					double q = 1, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
+					int index=2;
+					if (!update_parameters)
+						filename = words[index++];
+					if ((nwords >= index+1) and (!(ws[index] >> qx))) Complain("invalid qx parameter for model kspline");
+					else index++;
+					if ((nwords >= index+1) and (!(ws[index] >> f))) Complain("invalid f parameter for model kspline");
+					else index++;
+					if (nwords >= index+1) {
+						if (!(ws[index] >> q)) Complain("invalid q parameter");
+						else index++;
+						if (!(ws[index] >> theta)) Complain("invalid theta parameter");
+						else index++;
+						if (nwords == index+1) {
+							if (words[index].find("anchor_center=")==0) {
+								string anchorstr = words[index].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_lens_center = true;
+							} else Complain("x-coordinate specified for center, but not y-coordinate");
+						}
+						else if (nwords == index+2) {
+						if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
+							if (!(ws[index++] >> xc)) Complain("invalid x-center parameter for model kspline");
+							if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
+						}
 					}
-					param_vals.input(5);
+					param_vals.input(6);
 					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-					param_vals[0]=q; param_vals[1]=theta; param_vals[2]=qx; param_vals[3]=f; param_vals[4]=xc; param_vals[5]=yc;
+					param_vals[0]=qx; param_vals[1]=f; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
-						nparams_to_vary = (anchor_lens_center) ? 2 : 4;
+						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 						if (read_command(false)==false) return;
 						if (nwords != tot_nparams_to_vary) {
@@ -2326,9 +2330,9 @@ void Lens::process_commands(bool read_file)
 								if (nwords==tot_nparams_to_vary+2) {
 									if ((words[2] != "0") or (words[3] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for two parameters (q,theta) in model kspline";
+								} else complain_str = "Must specify vary flags for four parameters (qx,f,q,theta) in model kspline";
 							}
-							else complain_str = "Must specify vary flags for four parameters (q,theta,xc,yc) in model kspline";
+							else complain_str = "Must specify vary flags for six parameters (qx,f,q,theta,xc,yc) in model kspline";
 							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -2356,7 +2360,7 @@ void Lens::process_commands(bool read_file)
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
 					}
 				}
-				else Complain("kspline requires at least 2 parameters (filename, q)");
+				else Complain("kspline requires at least 1 argument (filename)");
 			}
 			else if (words[1]=="hern")
 			{
@@ -4778,6 +4782,7 @@ void Lens::process_commands(bool read_file)
 				bool use_comps;
 				set_switch(use_comps,setword);
 				Shear::use_shear_component_params = use_comps;
+				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="ellipticity_components")
@@ -4789,7 +4794,18 @@ void Lens::process_commands(bool read_file)
 				bool use_comps;
 				set_switch(use_comps,setword);
 				LensProfile::use_ellipticity_components = use_comps;
+				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="ellipticity_mode")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile::default_ellipticity_mode << endl;
+			} else if (nwords==2) {
+				int elmode;
+				if (!(ws[1] >> elmode)) Complain("invalid argument to 'ellipticity_mode' command; must specify 0, 1, or 2");
+				LensProfile::default_ellipticity_mode = elmode;
+			} else Complain("invalid number of arguments; must specify 0, 1, or 2");
 		}
 		else if (words[0]=="show_cc")
 		{
