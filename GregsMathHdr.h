@@ -288,6 +288,8 @@ class GammaFunction
 double Beta(const double, const double);
 double BetaInc(const double, const double, const double);
 double Gamma(const double);
+double DiGamma(const double);
+double G_Function(const double x, const double b, const double c);  // This is the limit (2F1(a,b,c;x) - 1)/a as a --> 0
 double Beta(const double x, const double y);
 double IncGamma(const double, const double);
 double IncGammaUp(const double, const double);

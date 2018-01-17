@@ -5149,13 +5149,13 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 		}
 	}
 	double loglike, chisq=0;
-	for (int i=0; i < nlens; i++) {
-		if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
-			double subparams[10];
-			lens_list[i]->get_parameters(subparams);
-			if (subparams[2] > subparams[1]) chisq=2e30; // don't allow s to be larger than a
-		}
-	}
+	//for (int i=0; i < nlens; i++) {
+		//if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
+			//double subparams[10];
+			//lens_list[i]->get_parameters(subparams);
+			//if (subparams[2] > subparams[1]) chisq=2e30; // don't allow s to be larger than a
+		//}
+	//}
 	if (chisq != 2e30) {
 		if (fitmodel->regularization_parameter < 0) chisq = 2e30;
 		else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;

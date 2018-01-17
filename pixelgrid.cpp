@@ -3161,7 +3161,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
 	center_sourcepts = new lensvector*[x_N];
-	center_magnifications = new double*[x_N];
 	maps_to_source_pixel = new bool*[x_N];
 	pixel_index = new int*[x_N];
 	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
@@ -3176,7 +3175,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 	for (i=0; i < x_N; i++) {
 		center_pts[i] = new lensvector[y_N];
 		center_sourcepts[i] = new lensvector[y_N];
-		center_magnifications[i] = new double[y_N];
 		maps_to_source_pixel[i] = new bool[y_N];
 		pixel_index[i] = new int[y_N];
 		surface_brightness[i] = new double[y_N];
@@ -3216,7 +3214,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 					center_pts[i][j][0] = x + 0.5*pixel_xlength;
 					center_pts[i][j][1] = y + 0.5*pixel_ylength;
 					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,zfactor);
-					center_magnifications[i][j] = abs(lens->magnification(center_pts[i][j],thread,zfactor));
 				}
 				corner_pts[i][j][0] = x;
 				corner_pts[i][j][1] = y;
@@ -3264,7 +3261,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
 	center_sourcepts = new lensvector*[x_N];
-	center_magnifications = new double*[x_N];
 	maps_to_source_pixel = new bool*[x_N];
 	pixel_index = new int*[x_N];
 	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
@@ -3279,7 +3275,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 	for (i=0; i < x_N; i++) {
 		center_pts[i] = new lensvector[y_N];
 		center_sourcepts[i] = new lensvector[y_N];
-		center_magnifications[i] = new double[y_N];
 		maps_to_source_pixel[i] = new bool[y_N];
 		pixel_index[i] = new int[y_N];
 		surface_brightness[i] = new double[y_N];
@@ -3300,7 +3295,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 				center_pts[i][j][0] = input_pixel_grid->center_pts[i][j][0];
 				center_pts[i][j][1] = input_pixel_grid->center_pts[i][j][1];
 				center_sourcepts[i][j] = input_pixel_grid->center_sourcepts[i][j];
-				center_magnifications[i][j] = input_pixel_grid->center_magnifications[i][j];
 				surface_brightness[i][j] = input_pixel_grid->surface_brightness[i][j];
 				max_sb=input_pixel_grid->max_sb;
 			}
@@ -3336,7 +3330,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
 	center_sourcepts = new lensvector*[x_N];
-	center_magnifications = new double*[x_N];
 	maps_to_source_pixel = new bool*[x_N];
 	fit_to_data = new bool*[x_N];
 	pixel_index = new int*[x_N];
@@ -3352,7 +3345,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 	for (i=0; i < x_N; i++) {
 		center_pts[i] = new lensvector[y_N];
 		center_sourcepts[i] = new lensvector[y_N];
-		center_magnifications[i] = new double[y_N];
 		maps_to_source_pixel[i] = new bool[y_N];
 		fit_to_data[i] = new bool[y_N];
 		pixel_index[i] = new int[y_N];
@@ -3394,7 +3386,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 					center_pts[i][j][0] = x + 0.5*pixel_xlength;
 					center_pts[i][j][1] = y + 0.5*pixel_ylength;
 					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,zfactor);
-					center_magnifications[i][j] = abs(lens->magnification(center_pts[i][j],thread,zfactor));
 					surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
 					fit_to_data[i][j] = pixel_data.require_fit[i][j];
 					if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
@@ -3438,7 +3429,6 @@ ImagePixelGrid::ImagePixelGrid(double zfactor_in, RayTracingMethod method, Image
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
 	center_sourcepts = new lensvector*[x_N];
-	center_magnifications = new double*[x_N];
 	fit_to_data = new bool*[x_N];
 	maps_to_source_pixel = new bool*[x_N];
 	pixel_index = new int*[x_N];
@@ -3454,7 +3444,6 @@ ImagePixelGrid::ImagePixelGrid(double zfactor_in, RayTracingMethod method, Image
 	for (i=0; i < x_N; i++) {
 		center_pts[i] = new lensvector[y_N];
 		center_sourcepts[i] = new lensvector[y_N];
-		center_magnifications[i] = new double[y_N];
 		maps_to_source_pixel[i] = new bool[y_N];
 		fit_to_data[i] = new bool[y_N];
 		pixel_index[i] = new int[y_N];
@@ -3595,7 +3584,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 			j = n_cell / x_N;
 			i = n_cell % x_N;
 			lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,zfactor);
-			center_magnifications[i][j] = abs(lens->magnification(center_pts[i][j],thread,zfactor));
 
 			n = j*(x_N+1)+i;
 			n_yp = (j+1)*(x_N+1)+i;
@@ -4165,7 +4153,6 @@ ImagePixelGrid::~ImagePixelGrid()
 	for (int i=0; i < x_N; i++) {
 		delete[] center_pts[i];
 		delete[] center_sourcepts[i];
-		delete[] center_magnifications[i];
 		delete[] maps_to_source_pixel[i];
 		delete[] pixel_index[i];
 		delete[] mapped_source_pixels[i];
@@ -4175,7 +4162,6 @@ ImagePixelGrid::~ImagePixelGrid()
 	}
 	delete[] center_pts;
 	delete[] center_sourcepts;
-	delete[] center_magnifications;
 	delete[] maps_to_source_pixel;
 	delete[] pixel_index;
 	delete[] mapped_source_pixels;

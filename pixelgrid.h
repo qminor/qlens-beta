@@ -173,7 +173,6 @@ class ImagePixelGrid : public Sort
 	lensvector **corner_sourcepts;
 	lensvector **center_pts;
 	lensvector **center_sourcepts;
-	double **center_magnifications;
 	double **surface_brightness;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane

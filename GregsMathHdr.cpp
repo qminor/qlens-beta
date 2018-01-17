@@ -173,6 +173,52 @@ double Beta(const double x, const double y)
 	return Gamma(x)*Gamma(y)/Gamma(x+y);
 }
 
+double DiGamma(const double x)
+{
+	static double c = 8.5;
+	static double euler_mascheroni = 0.57721566490153286060;
+	double r;
+	double value;
+	double x2;
+	if ( x <= 0.0 ) return 0.0;
+	if ( x <= 0.000001 ) {
+		return (-euler_mascheroni - 1.0/x + 1.6449340668482264365 * x); //  Use approximation for small argument.
+	}
+	//  Reduce to DIGAMMA(X + N).
+	value = 0.0;
+	x2 = x;
+	while (x2 < c) {
+		value = value - 1.0/x2;
+		x2 = x2 + 1.0;
+	}
+	//  Use Stirling's (actually de Moivre's) expansion.
+	r = 1.0 / x2;
+	value = value + log(x2) - 0.5 * r;
+	r = r * r;
+
+	value = value 
+		- r * ( 1.0 / 12.0 
+		- r * ( 1.0 / 120.0 
+		- r * ( 1.0 / 252.0 
+		- r * ( 1.0 / 240.0
+		- r * ( 1.0 / 132.0 ) ) ) ) );
+
+	return value;
+}
+
+double G_Function(const double b, const double c, const double x)  // This is the limit (2F1(a,b,c;x) - 1)/a as a --> 0
+{
+	int j=1;
+	double ans=0, fac=1;
+	static double tol = 1e-12;
+	do {
+		fac *= ((b+j-1)/(c+j-1)) * x;
+		ans += fac/j;
+	} while (fac > tol*ans*j++);
+	//cout << "Number of iterations: " << j << endl;
+	return ans;
+}
+
 /*
 // The following functions appear to be normalized differently by a factor of sqrt(M_PI)...check this later!
 double IncGamma(const double a, const double x)

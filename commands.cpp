@@ -1533,6 +1533,8 @@ void Lens::process_commands(bool read_file)
 			bool vary_parameters = false;
 			bool anchor_lens_center = false;
 			bool add_shear = false;
+			int emode = -1; // if set, then specifies the ellipticity mode for the lens being created
+			int old_emode = LensProfile::default_ellipticity_mode;
 			boolvector vary_flags, shear_vary_flags;
 			vector<string> specfic_update_params;
 			vector<double> specfic_update_param_vals;
@@ -1644,6 +1646,19 @@ void Lens::process_commands(bool read_file)
 			}
 
 			for (int i=2; i < nwords; i++) {
+				int pos;
+				if ((pos = words[i].find("emode=")) != string::npos) {
+					string enumstring = words[i].substr(pos+6);
+					stringstream enumstr;
+					enumstr << enumstring;
+					if (!(enumstr >> emode)) Complain("incorrect format for ellipticity mode; must specify 0, 1, 2, or 3");
+					if ((emode < 0) or (emode > 3)) Complain("ellipticity mode must be either 0, 1, 2, or 3");
+					remove_word(i);
+					i = nwords; // breaks out of this loop, without breaking from outer loop
+				}
+			}	
+
+			for (int i=2; i < nwords; i++) {
 				int pos0;
 				if ((pos0 = words[i].find("/anchor=")) != string::npos) {
 					string pvalstring, astr;
@@ -1700,6 +1715,8 @@ void Lens::process_commands(bool read_file)
 					} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
 				}
 			}	
+
+			if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
 			if (nwords==1) {
 				if (mpi_id==0) print_lens_list(vary_parameters);
@@ -2924,6 +2941,7 @@ void Lens::process_commands(bool read_file)
 					lens_list[nlens-1]->set_limits(lower,upper,lower_initial,upper_initial);
 				}
 			}
+			if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 		}
 		else if (words[0]=="source")
 		{
@@ -4803,9 +4821,10 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile::default_ellipticity_mode << endl;
 			} else if (nwords==2) {
 				int elmode;
-				if (!(ws[1] >> elmode)) Complain("invalid argument to 'ellipticity_mode' command; must specify 0, 1, or 2");
+				if (!(ws[1] >> elmode)) Complain("invalid argument to 'ellipticity_mode' command; must specify 0, 1, 2, or 3");
+				if (elmode > 3) Complain("ellipticity mode cannot be greater than 3");
 				LensProfile::default_ellipticity_mode = elmode;
-			} else Complain("invalid number of arguments; must specify 0, 1, or 2");
+			} else Complain("invalid number of arguments; must specify 0, 1, 2, or 3");
 		}
 		else if (words[0]=="show_cc")
 		{
