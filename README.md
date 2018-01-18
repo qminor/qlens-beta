@@ -24,15 +24,15 @@ Here is a brief description of each ellipticity mode. In each example, we use co
 
 1. Mode 0: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.
 
-	Ellipticity parameter: q (axis ratio).  This happens to be the mode that gravlens (lensmodel) uses for its lens models (albeit with e=1-q as the parameter), with a few exceptions. In this parameterization, the major axis of the tangential critical curve is equal to the Einstein radius of the corresponding spherical (q=1) model. It's not ideal for model fitting if the Einstein radius is used as a parameter, because typically the *average* radius of the critical curve is better constrained, not its major axis.
+	Ellipticity parameter: q (axis ratio).  This happens to be the mode that gravlens (lensmodel) uses for its lens models (albeit with e=1-q as the parameter), with a few exceptions. In this parameterization, the major/minor axes of the density contours are at (R,Rq) respectively. Typically the major axis of the tangential critical curve is roughly equal to the Einstein radius of the corresponding spherical (q=1) model. It's not ideal for model fitting if the Einstein radius is used as a parameter, because typically the *average* radius of the critical curve is better constrained, not its major axis.
 
 2. Mode 1: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
 
-	Ellipticity parameter: q (axis ratio).  This is the default ellipticity mode in qlens. In this parameterization, the average radius of the tangential critical curve is equal to the Einstein radius of the corresponding spherical model (by average, we mean the geometric mean of the major and minor axes of the critical curve).
+	Ellipticity parameter: q (axis ratio).  This is the default ellipticity mode in qlens. In this parameterization, the major/minor axes of the density contours are at (R/sqrt(q),R*sqrt(q)) respectively. The average radius of the critical curve is roughly comparable to the Einstein radius of the corresponding spherical model; the major axis will be larger than the Einstein radius, while the minor axis is smaller. 
 
 3. Mode 2: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; (1-&epsilon;)x<sup>2</sup> + (1+&epsilon;)y<sup>2</sup>.
 
-	Ellipticity parameter: &epsilon;. This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here too, the average radius of the critical curve is roughly equal to the Einstein radius (if &epsilon; is not too large). The axis ratio is given by the formula q = sqrt((1-&epsilon;)/(1+&epsilon;)).
+	Ellipticity parameter: &epsilon;. This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here again, for power law models the average radius of the critical curve is roughly equal to the Einstein radius. The axis ratio is given by the formula q = sqrt((1-&epsilon;)/(1+&epsilon;)).
 
 4. Mode 3: in the lensing potential &phi;(R), we let R<sup>2</sup> &rarr; (1-&epsilon;)x<sup>2</sup> + (1+&epsilon;)y<sup>2</sup>.
 
