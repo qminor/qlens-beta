@@ -622,6 +622,9 @@ public:
 	stringstream* ws;
 	stringstream datastream;
 	bool read_from_file;
+	bool open_script;
+	bool reading_default_script;
+	bool original_verbal_mode; // if default script is read, verbal mode goes to silent, then reverts to specified mode
 	bool quit_after_reading_file;
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
@@ -659,13 +662,13 @@ public:
 	void lens_equation(const lensvector&, lensvector&, const int& thread, const double zfactor); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
-	void add_lens(LensProfileName, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const bool optional_setting = false);
+	void add_lens(LensProfileName, const int emode, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const bool optional_setting = false);
 	void add_shear_lens(const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
 	void add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 
 	void add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
-	void add_lens(const char *splinefile, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void update_anchored_parameters();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);

@@ -116,6 +116,16 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 			inlen.open((string(name) + suffix).c_str());
 		else
 			inlen.open(name);
+		if (!inlen.is_open()) {
+			numOfParam = 0;
+			cerr << "Error: could not open data file '";
+			if (filesin > 1)
+				cout << string(name) + suffix;
+			else
+				cout << string(name);
+			cout << "'" << endl;
+			return;
+		}
 		string str;
 		getline(inlen, str);
 		istringstream iss(str);
@@ -123,7 +133,12 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		while(iss >> str) a++;
 		if (a==0) {
 			numOfParam = 0;
-			cerr << "Error: cannot read data file '" << string(name) + suffix << "'" << endl;
+			cerr << "Error: data file '";
+			if (filesin > 1)
+				cout << string(name) + suffix;
+			else
+				cout << string(name);
+			cout << "' does not contain readable data" << endl;
 			return;
 		}
 		if(flag&MULT) a--;

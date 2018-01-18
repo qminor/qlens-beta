@@ -180,7 +180,8 @@ double DiGamma(const double x)
 	double r;
 	double value;
 	double x2;
-	if ( x <= 0.0 ) return 0.0;
+	if ( x == 0.0 ) die("DiGamma function is singular at x=0");
+	if (x < 0) return (DiGamma(1+x) - 1/x); // recursive identity to handle negative arguments
 	if ( x <= 0.000001 ) {
 		return (-euler_mascheroni - 1.0/x + 1.6449340668482264365 * x); //  Use approximation for small argument.
 	}
@@ -367,6 +368,21 @@ double IncGamma(const double a, const double x)
 		gcf(gammcf,a,x,gln);
 		return 1.0-gammcf;
 	}
+}
+
+double IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam)
+{
+	double gamser,gammcf,gln;
+
+	if (x < 0.0 || a <= 0.0) die("Invalid arguments in routine gammp");
+	if (x < (a+1.0)) {
+		gser(gamser,a,x,gln);
+		GammaP = gamser;
+	} else {
+		gcf(gammcf,a,x,gln);
+		GammaP = 1.0-gammcf;
+	}
+	gam = exp(gln);
 }
 
 double IncGammaUp(const double a, const double x)

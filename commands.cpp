@@ -23,6 +23,8 @@ void Lens::process_commands(bool read_file)
 {
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
+	reading_default_script = false;
+	original_verbal_mode = verbal_mode; // if default script is read, verbal mode goes to silent, then reverts to specified mode
 	plot_key_outside = false;
 	show_plot_key = true;
 	show_colorbar = true;
@@ -35,6 +37,18 @@ void Lens::process_commands(bool read_file)
 	read_from_file = read_file;
 	ws = NULL;
 	buffer = NULL;
+
+	/*
+	// The following allows for a default initial script to be read, but it conflicts with how qlens opens
+	// scripts using a command-line argument ('qlens script.in'). You need to fix this before implementing
+	// the default script option
+	infile.open("qlens_default.in");
+	if (infile.is_open()) {
+		read_from_file = true;
+		reading_default_script = true;
+		set_verbal_mode(false);
+	}
+	*/
 
 	for (;;)
    {
@@ -116,6 +130,7 @@ void Lens::process_commands(bool read_file)
 						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (if on)\n"
 						"major_axis_along_y -- orient major axis of lenses along y-direction (on/off)\n"
 						"ellipticity_components -- if on, use components of ellipticity e=1-q instead of (q,theta)\n"
+						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
 						"shear_components -- if on, use components of external shear instead of (shear,theta)\n"
 						"autogrid_from_Re -- automatically set grid size from Einstein radius of primary lens (on/off)\n"
 						"autocenter -- automatically center grid on given lens number (or 'off')\n"
@@ -210,33 +225,35 @@ void Lens::process_commands(bool read_file)
 					if (nwords==2)
 						cout << "lens <lensmodel> <lens_parameter##> ...\n"
 							"lens update <lens_number> ...\n"
-							"lens clear [lens_number]\n"
-							"lens anchor <lens1> <lens2>\n\n"
-							"Creates (or updates) a lens from given model and parameters. If other lenses are\n"
-							"present, the new lens will be superimposed with the others. If no arguments are\n"
-							"given, a numbered list of the current lens models being used is printed along with\n"
-							"their parameter values. To remove a lens or delete the entire configuration, use\n"
-							"'lens clear'. To update the parameters of a lens in the current list of models,\n"
-							"type 'lens update #' where # corresponds to the number of the lens you wish to\n"
-							"change, followed by the parameters required for the given lens model.\n"
-							"To fix a lens model so that its center coincides with another lens (useful when\n"
-							"varying parameters), use 'lens anchor' ('help lens anchor' for usage information).\n\n"
+							"lens clear [lens_number]\n\n"
+							"Creates (or updates) a lens from given model and parameters. If other lenses are present, the\n"
+							"new lens will be superimposed with the others. If no arguments are given, a numbered list of\n"
+							"the current lens models being used is printed along with their parameter values. Note that any\n"
+							"elliptical mass model can be converted into a pseudo-elliptical model with the argument\n"
+							"'emode=3' at the end of the line, or by changing the default ellipticity mode (type 'help emode'\n"
+							"for more info on the different ellipticity modes). To remove a lens or delete the entire config-\n"
+							"uration, use 'lens clear'. To update the parameters of a lens in the current list of models,\n"
+							"type 'lens update #' where # corresponds to the number of the lens you wish to change, followed\n"
+							"by the parameters required for the given lens model. Finally, it is possible to anchor the\n"
+							"parameters of one lens to another lens; type 'help lens anchoring' for info on how to do this.\n\n"
 							"Available lens models:   (type 'help lens <lensmodel>' for usage information)\n\n"
-							"ptmass -- point mass\n"
-							"alpha -- power-law ellipsoid with core\n"
-							"shear -- external shear\n"
-							"sheet -- mass sheet\n"
-							"mpole -- multipole term in lensing potential\n"
-							"kmpole -- multipole term in kappa\n"
-							"pjaffe -- Pseudo-Jaffe profile (truncated isothermal ellipsoid with core)\n"
+							"\033[4mElliptical mass models:\033[0m\n"  // ASCII codes are for underlining
+							"alpha -- softened power-law profile\n"
+							"pjaffe -- Pseudo-Jaffe profile (smoothly truncated isothermal profile with core)\n"
 							"nfw -- NFW model\n"
-							"pnfw -- Pseudo-elliptical NFW model\n"
 							"tnfw -- Truncated NFW model\n"
 							"hern -- Hernquist model\n"
 							"expdisk -- exponential disk\n"
 							"sersic -- Sersic profile\n"
 							"corecusp -- generalized profile with core, scale radius, inner & outer log-slope\n"
-							"kspline -- splined kappa profile (generated from an input file)\n\n";
+							"kspline -- splined kappa profile (generated from an input file)\n"
+							"\n"
+							"\033[4mNon-elliptical mass models:\033[0m\n"
+							"ptmass -- point mass\n"
+							"shear -- external shear\n"
+							"sheet -- mass sheet\n"
+							"mpole -- multipole term in lensing potential\n"
+							"kmpole -- multipole term in kappa\n\n";
 					else if (words[2]=="clear")
 						cout << "lens clear\n\n"
 							"lens clear [lens_number]\n"
@@ -244,6 +261,36 @@ void Lens::process_commands(bool read_file)
 							"is given, all lenses are removed; otherwise, removes only the lens given by argument\n"
 							"<lens_number> corresponding to its assigned number in the list of lenses generated\n"
 							"by the 'lens' command.\n";
+					else if (words[2]=="anchoring")
+						cout << "There are a few different ways that you can anchor a lens parameter to another lens parameter.\n"
+							"To demonstrate this, suppose our first lens is entered as follows:\n\n"
+							"fit lens alpha 5 1 0 0.8 30 0 0\n"
+							"1 1 0 1 1 1 1\n\n"
+							"so that this now becomes listed as lens '0'. There are two ways to anchor parameters to this lens:\n\n"
+							"a) Anchor type 1: Now suppose you add another model, e.g. a kappa multipole, where I want\n"
+							"the angle to always be equal to that of lens 0. Then I enter this as\n\n"
+							"fit lens kmpole 0.1 2 anchor=0,4 0 0\n"
+							"1 0 0 1 1\n\n"
+							"The 'anchor=0,4' means we are anchoring this parameter (the angle) to lens 0, parameter 4\n"
+							"which is the angle of the first lens (remember the first parameter is indexed as zero!). The vary\n"
+							"flag must be turned off for the parameter being anchored, or else qlens will complain.\n\n"
+							"NOTE: Keep in mind that as long as you use the correct format, qlens will not complain no matter\n"
+							"how absurd the choice of anchoring is; so make sure you have indexed it correctly. To test it out,\n"
+							"you can use 'lens update ...' to update the lens you are anchoring to, and make sure that the\n"
+							"anchored parameter changes accordingly.\n\n"
+							"b) Anchor type 2: Suppose I want to add a model where I want a parameter to keep the same *ratio*\n"
+							"with a parameter in another lens that I started with. You can do this using the following format:\n\n"
+							"fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 0 0\n"
+							"1 0 0 1 1 1 1\n\n"
+							"The '2.5/anchor=0,0' enters the initial value in as 2.5, and since this is half of the parameter we\n"
+							"are anchoring to (b=5 for lens 0), they will always keep this ratio. It is even possible to anchor a\n"
+							"parameter to another parameter in the *same* lens, if you use the lens number that will be assigned\n"
+							"to the lens you are creating. Again, the vary flag *must* be off for the parameter being anchored.\n\n"
+							"To anchor the center of a lens to another lens, you can use 'anchor_center=...' as a shortcut. So\n"
+							"in the previous example, if we wanted to also anchor the center of the lens to lens 0, we do\n\n"
+							"fit lens alpha 2.5/anchor=0,0 1 0 0.8 30 anchor_center=0\n"
+							"1 0 0 1 1 0 0\n\n"
+							"The vary flags for center coordinates must be entered as zeroes, or they can be omitted altogether.\n";
 					else if (words[2]=="anchor")
 						cout << "lens anchor <lens1> <lens2>\n\n"
 							"Fix the center of <lens1> to that of <lens2> for fitting purposes, where <lens1>\n"
@@ -256,12 +303,13 @@ void Lens::process_commands(bool read_file)
 							"should be the same arguments as when you add a new lens model (type 'help lens <model>\n"
 							"for a refresher on the arguments for a specific lens model).\n";
 					else if (words[2]=="alpha")
-						cout << "lens alpha <b> <alpha> <s> <q> [theta] [x-center] [y-center]\n\n"
-							"where <b> is the mass parameter, <alpha> is the exponent of the radial power law\n"
-							"(alpha=1 for isothermal), <s> is the core radius, <q> is the axis ratio, and [theta]\n"
-							"is the angle of rotation (counterclockwise, in degrees) about the center (defaults=0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens alpha <b> <alpha> <s> <q/e> [theta] [x-center] [y-center]\n\n"
+							"where <b> is the mass parameter, <alpha> is the exponent of the radial power law (alpha=1 for\n"
+							"isothermal), <s> is the core radius, <q/e> is the axis ratio or ellipticity (depending on the\n"
+							"ellipticity mode) , and [theta] is the angle of rotation (counterclockwise, in degrees) about the\n"
+							"center (defaults=0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="ptmass")
 						cout << "lens ptmass <b> [x-center] [y-center]\n\n"
 							"where <b> is the Einstein radius of the point mass. If center coordinates are not\n"
@@ -321,75 +369,75 @@ void Lens::process_commands(bool read_file)
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="pjaffe")
-						cout << "lens pjaffe <b> <a> <s> <q> [theta] [x-center] [y-center]\n\n"
-							"where <b> is the mass parameter, a is the tidal break radius,\n"
-							"<s> is the core radius, <q> is the axis ratio, and [theta] is the angle\n"
-							"of rotation (counterclockwise, in degrees) about the center (defaults=0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens pjaffe <b> <a> <s> <q/e> [theta] [x-center] [y-center]\n\n"
+							"where <b> is the mass parameter, a is the tidal break radius, <s> is the core radius, <q/e> is the\n"
+							"axis ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center (defaults=0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="nfw")
-						cout << "lens nfw <ks> <rs> <q> [theta] [x-center] [y-center]\n\n"
-							"where <ks> is the mass parameter, <rs> is the scale radius, <q> is the axis ratio,\n"
-							"and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
-							"(all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
-					else if (words[2]=="pnfw")
+						cout << "lens nfw <ks> <rs> <q/e> [theta] [x-center] [y-center]\n\n"
+							"where <ks> is the mass parameter, <rs> is the scale radius, <q/e> is the axis ratio or ellipticity\n"
+							"(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in\n"
+							"degrees) about the center (all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+					else if (words[2]=="pnfw")  // obsolete--remove soon!
 						cout << "lens pnfw <ks> <rs> <epsilon> [theta] [x-center] [y-center]\n\n"
 							"Pseudo-elliptical NFW profile from Golse & Kneib (2002), where <ks> is the mass parameter, <rs> is the\n"
 							"scale radius, <epsilon> is the ellipticity parameter, and [theta] is the angle of rotation\n"
 							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
-						cout << "lens tnfw <ks> <rs> <rt> <q> [theta] [x-center] [y-center]\n\n"
-							"Truncated NFW profile from Baltz et al. (2008), which is produced by multiplying the NFW\n"
-							"density profile by a factor (1+(r/rt)^2)^-2, where rt acts as the truncation/tidal radius.\n\n"
-							"Here, <ks> is the mass parameter, <rs> is the scale radius, <rt> is the tidal radius,\n"
-							"<q> is the axis ratio, and [theta] is the angle of rotation (counterclockwise, in degrees)\n"
-							"about the center (all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens tnfw <ks> <rs> <rt> <q/e> [theta] [x-center] [y-center]\n\n"
+							"Truncated NFW profile from Baltz et al. (2008), which is produced by multiplying the NFW density\n"
+							"profile by a factor (1+(r/rt)^2)^-2, where rt acts as the truncation/tidal radius.\n\n"
+							"Here, <ks> is the mass parameter, <rs> is the scale radius, <rt> is the tidal radius, <q/e> is the axis\n"
+							"ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="expdisk")
-						cout << "lens expdisk <k0> <rs> <q> [theta] [x-center] [y-center]\n\n"
-							"where <k0> is the mass parameter, <R_d> is the scale radius, <q> is the axis ratio,\n"
-							"and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
-							"(all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens expdisk <k0> <rs> <q/e> [theta] [x-center] [y-center]\n\n"
+							"where <k0> is the mass parameter, <R_d> is the scale radius, <q/e> is the axis ratio or ellipticity\n"
+							"n(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees)\n"
+							"about the center (all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="hern")
-						cout << "lens hern <ks> <rs> <q> [theta] [x-center] [y-center]\n\n"
-							"where <ks> is the mass parameter, <rs> is the scale radius, <q> is the axis ratio,\n"
-							"and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
-							"(all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens hern <ks> <rs> <q/e> [theta] [x-center] [y-center]\n\n"
+							"where <ks> is the mass parameter, <rs> is the scale radius, <q/e> is the axis ratio or ellipticity\n"
+							"(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees)\n"
+							"about the center (all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="corecusp")
-						cout << "lens corecusp [re_param] <k0/R_e> <gamma> <n> <a> <s> <q> [theta] [x-center] [y-center]\n\n"
+						cout << "lens corecusp [re_param] <k0/R_e> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]\n\n"
 							"This is a cored version of the halo model of Munoz et al. (2001), where <a> is the scale/tidal\n"
 							"radius, <k0> = 2*pi*rho_0*a/sigma_crit, <s> is the core radius, and <gamma>/<n> are the inner/outer\n"
 							"(3D) log-slopes respectively. To use the Einstein radius as a parameter instead of k0, include the\n"
 							"argument 're_param'. (The pseudo-Jaffe profile corresponds to gamma=2, n=4 and b=k0*a/(1-(s/a)^2).)\n"
-							"As with the other models, <q> is the axis ratio, and [theta] is the angle of rotation (counter-\n"
-							"clockwise, in degrees) about the center (all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+							"As with the other models, <q/e> is the axis ratio or ellipticity (depending on the ellipticity mode),\n"
+							"and [theta] is the angle of rotation (counter-clockwise, in degrees) about the center (all defaults = 0).\n"
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="sersic")
-						cout << "lens sersic <kappa0> <R_eff> <n> <q> [theta] [x-center] [y-center]\n\n"
-							"The sersic profile is defined by kappa = kappa0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
-							"determined from the value for n (enforces the half-mass radius Re). For an elliptical model, we make\n"
-							"the replacement R --> sqrt(q*x^2 + (y^2/q), analogous to the elliptical radius defined in the lens\n"
-							"models. Here, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
-							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
-							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+						cout << "lens sersic <kappa_e> <R_eff> <n> <q/e> [theta] [x-center] [y-center]\n\n"
+							"The sersic profile is defined by kappa = kappa_e * exp(-b*((R/R_eff)^(1/n-1))), where kappa_e is the\n"
+							"kappa value at the effective (half-mass) radius R_eff, and b is a factor automatically determined from\n"
+							"the value for n to ensure that R_eff contains half the total mass. Here, [theta] is the angle of\n"
+							"rotation (counterclockwise, in degrees) about the center (defaults=0). Note that for theta=0, the major\n"
+							"axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for\n"
+							"theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kspline")
-						cout << "lens kspline <filename> [qx] [f] [q] [theta] [x-center] [y-center]\n\n"
-							"where <filename> gives the input file containing the tabulated radial profile,\n"
-							"<q> is the axis ratio, and [theta] is the angle of rotation (counterclockwise, in degrees)\n"
-							"about the center. [qx] scales the x-axis, [f] scales kappa for all r.\n"
+						cout << "lens kspline <filename> [qx] [f] [q/e] [theta] [x-center] [y-center]\n\n"
+							"where <filename> gives the input file containing the tabulated radial profile, <q/e> is the axis ratio\n"
+							"or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center. [qx] scales the x-axis, [f] scales kappa for all r.\n"
 							"(defaults: qx=f=q=1, theta=xc=yc=0)\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction\n"
-							"of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
+							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else Complain("lens model not recognized");
 				}
 				else if (words[1]=="fit") {
@@ -420,7 +468,7 @@ void Lens::process_commands(bool read_file)
 							"routine, use the 'fit run' command.\n";
 					else if (words[2]=="lens") 
 						cout << "fit lens ...\n"
-							"fit lens ... anchor=<lens_number>\n" <<
+							"fit lens ... anchor_center=<lens_number>\n" <<
 							((Shear::use_shear_component_params) ?
 							"fit lens ... shear=<shear_1> <shear_1>\n\n" :
 							"fit lens ... shear=<shear> <theta>\n\n") <<
@@ -428,23 +476,22 @@ void Lens::process_commands(bool read_file)
 							"must be entered for each parameter (either 0 or 1) to specify whether it will be\n"
 							"varied or not. For example, consider the following command:\n\n"
 							"fit lens alpha 10 1 0.5 0.9 0 0 0\n"
-							"1 0 0 1 1 1 1\n\n"
-							"This specifies that parameters b, q, theta, xc and yc will be varied; the arguments\n"
-							"specified on the first line give their initial values. The total number of flags\n"
+							"1 0 0 1 0 0 0\n"
+							"0.1 20                             #limits for b  (only needed for MCMC/nested sampling)\n"
+							"0.1 1                              #limits for q  (only needed for MCMC/nested sampling)\n\n"
+							"This specifies that parameters b, and q will be varied, while the others are fixed; the\n"
+							"arguments specified on the first line give their initial values. The total number of flags\n"
 							"entered must match the total number of parameters for the given lens model.\n"
-							"Depending on the fit method, you may also need to enter upper/lower bounds for each\n"
-							"parameter to be varied. e.g., for nested sampling the following format is required:\n\n"
-							"fit lens alpha 4.5 1 0.2 0.65 1 0.8 0.2\n"
-							"1 0 0 1 0 0 0                             #vary flags\n"
-							"0.1 20                                   #limits for b\n"
-							"0.1 1                                    #limits for q\n\n"
+							"If you are using T-Walk or nested sampling, you may also need to enter upper/lower bounds\n"
+							"for each parameter to be varied, as shown above; otherwise, if you are doing a chi-square\n"
+							"optimization (the default qlens mode), those lines are omitted.\n\n"
 							"If you would like the center of the lens model to be fixed to that of another lens\n"
-							"model that has already been specified, you can type 'anchor=<##>' at the end of the\n"
-							"fit command in place of the x/y center coordinates, where <##> is the number of the\n"
-							"lens model given in the current lens list (to see the list simply type 'lens'). If\n"
+							"model that has already been specified, you can type 'anchor_center=<##>' at the end\n"
+							"of the fit command in place of the x/y center coordinates, where <##> is the number of\n"
+							"the lens model given in the current lens list (to see the list simply type 'lens'). If\n"
 							"you anchor to another lens, you must omit the vary flags for the lens center x/y\n"
 							"coordinates (always the last two parameters). For example:\n\n"
-							"fit lens alpha 10 1 0.5 0.9 0 anchor=0\n"
+							"fit lens alpha 10 1 0.5 0.9 0 anchor_center=0\n"
 							"1 0 0 1 1\n\n"
 							"This is similar to the above example, except that this lens is anchored to lens 0\n"
 							"so that their centers will always coincide when the parameters are varied.\n\n"
@@ -456,7 +503,10 @@ void Lens::process_commands(bool read_file)
 								"one line by adding 'shear=<shear> <theta>' to the end of the line. For example,\n"
 								"to add external shear with shear=0.1 and theta=30 degrees, one can enter:\n\n"
 								"fit lens alpha 10 1 0 0.9 0 0.3 0.5 shear=0.1 30\n") <<
-							"1 0 0 1 1 1 1 1 1     # vary flags for the alpha model + external shear parameters\n";
+							"1 0 0 1 1 1 1 1 1     # vary flags for the alpha model + external shear parameters\n\n"
+							"Finally, it is possible to anchor a specific parameter to another parameter in another\n"
+							"lens model (or even the same lens model). For more information on how to do this, type\n"
+							"'help lens anchoring'.\n";
 					else if (words[2]=="sourcept")
 						cout << "fit sourcept\n"
 							"fit sourcept <sourcept_num>\n"
@@ -1056,6 +1106,27 @@ void Lens::process_commands(bool read_file)
 						"Set the grid for image searches to radial or Cartesian (default=radial). If the gridtype is\n"
 						"Cartesian, the the number of initial splittings is set by the xsplit and ysplit commands,\n"
 						"rather than rsplit and thetasplit.\n";
+				else if (words[1]=="emode")
+					cout << "emode [#]\n\n"
+						"The ellipticity mode (which can be either 0,1,2, or 3) controls how ellipticity is introduced\n"
+						"into the lens models. In modes 0-2, ellipticity is introduced into the projected density (kappa),\n"
+						"whereas in mode 3, ellipticity is introduced into the potential (called a pseudo-elliptic\n"
+						"model). The ellipticity is parameterized by the axis ratio q in modes 0,1, and by the\n"
+						"ellipticity parameter in modes 2,3. The 'emode' command changes the default ellipticity mode for\n"
+						"lens models that get created, but you can also specify the ellipticity mode of a specific lens\n"
+						"you create by adding the argument 'emode=#' to the line (e.g., 'lens nfw emode=3 0.8 20 0.3').\n"
+						"Below we describe each mode in detail.\n\n"
+						"Mode 0: in kappa(R), we let R^2 --> x^2 + (y/q)^2. Ellipticity parameter: q\n"
+						"Mode 1: in kappa(R), we let R^2 --> qx^2 + y^2/q. Ellipticity parameter: q  (qlens default mode)\n"
+						"Mode 2: in kappa(R), we let R^2 --> (1-e)*x^2 + (1+e)*y^2. Ellipticity parameter: e (epsilon)\n"
+						"Mode 3: in potential(R), we let R^2 --> (1-e)*x^2 + (1+e)*y^2. Ellipticity parameter: e (epsilon)\n\n"
+						"If a lens is created using mode 3, the prefix 'pseudo-' is added to the lens model name. The\n"
+						"pseudo-elliptical model can do lens calculations significantly faster in most of the elliptical\n"
+						"mass models, since analytic formulas are used for the deflection. Exceptions are the pjaffe\n"
+						"model and the alpha model in the case where s=0 or alpha=1, since in these cases the formulas\n"
+						"are analytic regardless. Keep in mind however that the pseudo-elliptical models can lead to\n"
+						"unphysical density contours when the ellipticity is high enough (you can check this using the\n"
+						"command 'plotlogkappa').\n";
 				else if (words[1]=="ccspline")
 					cout << "ccspline <on/off>\n\n"
 						"Set critical curve spline mode on/off (if no arguments given, prints current setting.\n"
@@ -1364,7 +1435,11 @@ void Lens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (infile.is_open()) {
 					infile.close();
-					if (mpi_id==0) cout << "Closing current script file...\n";
+					if ((mpi_id==0) and (verbal_mode)) cout << "Closing current script file...\n";
+					if (reading_default_script) {
+						set_verbal_mode(original_verbal_mode);
+						reading_default_script = false;
+					}
 				}
 				infile.open(words[1].c_str());
 				if (infile.is_open()) read_from_file = true;
@@ -1534,7 +1609,6 @@ void Lens::process_commands(bool read_file)
 			bool anchor_lens_center = false;
 			bool add_shear = false;
 			int emode = -1; // if set, then specifies the ellipticity mode for the lens being created
-			int old_emode = LensProfile::default_ellipticity_mode;
 			boolvector vary_flags, shear_vary_flags;
 			vector<string> specfic_update_params;
 			vector<double> specfic_update_param_vals;
@@ -1589,7 +1663,7 @@ void Lens::process_commands(bool read_file)
 									(profile_name==MULTIPOLE) ? "mpole" :
 									(profile_name==nfw) ? "nfw" :
 									(profile_name==TRUNCATED_nfw) ? "tnfw" :
-									(profile_name==pnfw) ? "pnfw" :
+									(profile_name==pnfw) ? "pnfw" :   // obsolete--remove soon!
 									(profile_name==HERNQUIST) ? "hern" :
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
@@ -1605,118 +1679,119 @@ void Lens::process_commands(bool read_file)
 					delete[] ws;
 					ws = new_ws;
 				} else Complain("must specify a lens number to update, followed by parameters");
-			} else if ((nwords > 1) and (words[nwords-1].find("shear=")==0)) {
-				add_shear = true;
-				string shearstr = words[nwords-1].substr(6);
-				stringstream shearstream;
-				shearstream << shearstr;
-				if (!(shearstream >> shear_param_vals[0])) {
-					if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
-					Complain("invalid shear value");
+			} else {
+				// check for words that specify ellipticity mode, shear anchoring, or parameter anchoring
+				for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("emode=")) != string::npos) {
+						string enumstring = words[i].substr(pos+6);
+						stringstream enumstr;
+						enumstr << enumstring;
+						if (!(enumstr >> emode)) Complain("incorrect format for ellipticity mode; must specify 0, 1, 2, or 3");
+						if ((emode < 0) or (emode > 3)) Complain("ellipticity mode must be either 0, 1, 2, or 3");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}	
+
+				if ((nwords > 1) and (words[nwords-1].find("shear=")==0)) {
+					add_shear = true;
+					string shearstr = words[nwords-1].substr(6);
+					stringstream shearstream;
+					shearstream << shearstr;
+					if (!(shearstream >> shear_param_vals[0])) {
+						if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
+						Complain("invalid shear value");
+					}
+					shear_param_vals[1] = 0;
+					stringstream* new_ws = new stringstream[nwords-1];
+					for (int i=0; i < nwords-1; i++)
+						new_ws[i] << words[i];
+					delete[] ws;
+					ws = new_ws;
+					words.pop_back();
+					nwords--;
+				} else if ((nwords > 2) and (words[nwords-2].find("shear=")==0)) {
+					add_shear = true;
+					string shearstr = words[nwords-2].substr(6);
+					stringstream shearstream;
+					shearstream << shearstr;
+					if (!(shearstream >> shear_param_vals[0])) {
+						if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
+						Complain("invalid shear value");
+					}
+					if (!(ws[nwords-1] >> shear_param_vals[1])) {
+						if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
+						Complain("invalid shear angle");
+					}
+					stringstream* new_ws = new stringstream[nwords-1];
+					for (int i=0; i < nwords-2; i++)
+						new_ws[i] << words[i];
+					delete[] ws;
+					ws = new_ws;
+					words.pop_back();
+					words.pop_back();
+					nwords -= 2;
 				}
-				shear_param_vals[1] = 0;
-				stringstream* new_ws = new stringstream[nwords-1];
-				for (int i=0; i < nwords-1; i++)
-					new_ws[i] << words[i];
-				delete[] ws;
-				ws = new_ws;
-				words.pop_back();
-				nwords--;
-			} else if ((nwords > 2) and (words[nwords-2].find("shear=")==0)) {
-				add_shear = true;
-				string shearstr = words[nwords-2].substr(6);
-				stringstream shearstream;
-				shearstream << shearstr;
-				if (!(shearstream >> shear_param_vals[0])) {
-					if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
-					Complain("invalid shear value");
-				}
-				if (!(ws[nwords-1] >> shear_param_vals[1])) {
-					if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
-					Complain("invalid shear angle");
-				}
-				stringstream* new_ws = new stringstream[nwords-1];
-				for (int i=0; i < nwords-2; i++)
-					new_ws[i] << words[i];
-				delete[] ws;
-				ws = new_ws;
-				words.pop_back();
-				words.pop_back();
-				nwords -= 2;
+
+				for (int i=2; i < nwords; i++) {
+					int pos0;
+					if ((pos0 = words[i].find("/anchor=")) != string::npos) {
+						string pvalstring, astr;
+						pvalstring = words[i].substr(0,pos0);
+						astr = words[i].substr(pos0+8);
+						int pos, lnum, pnum;
+						if ((pos = astr.find(",")) != string::npos) {
+							string lnumstring, pnumstring;
+							lnumstring = astr.substr(0,pos);
+							pnumstring = astr.substr(pos+1);
+							stringstream lnumstr, pnumstr;
+							lnumstr << lnumstring;
+							if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+							pnumstr << pnumstring;
+							if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+							if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+							if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
+							parameter_anchors[parameter_anchor_i].anchor_param = true;
+							parameter_anchors[parameter_anchor_i].use_anchor_ratio = true;
+							parameter_anchors[parameter_anchor_i].paramnum = i-2;
+							parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+							parameter_anchor_i++;
+							words[i] = pvalstring;
+							ws[i].str(""); ws[i].clear();
+							ws[i] << words[i];
+						} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+					}
+				}	
+
+				for (int i=2; i < nwords; i++) {
+					if (words[i].find("anchor=")==0) {
+						string astr = words[i].substr(7);
+						int pos, lnum, pnum;
+						if ((pos = astr.find(",")) != string::npos) {
+							string lnumstring, pnumstring;
+							lnumstring = astr.substr(0,pos);
+							pnumstring = astr.substr(pos+1);
+							stringstream lnumstr, pnumstr;
+							lnumstr << lnumstring;
+							if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+							pnumstr << pnumstring;
+							if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+							if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+							if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
+							parameter_anchors[parameter_anchor_i].anchor_param = true;
+							parameter_anchors[parameter_anchor_i].paramnum = i-2;
+							parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+							parameter_anchor_i++;
+							words[i] = "0";
+							ws[i].str(""); ws[i].clear();
+							ws[i] << words[i];
+						} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+					}
+				}	
 			}
-
-			for (int i=2; i < nwords; i++) {
-				int pos;
-				if ((pos = words[i].find("emode=")) != string::npos) {
-					string enumstring = words[i].substr(pos+6);
-					stringstream enumstr;
-					enumstr << enumstring;
-					if (!(enumstr >> emode)) Complain("incorrect format for ellipticity mode; must specify 0, 1, 2, or 3");
-					if ((emode < 0) or (emode > 3)) Complain("ellipticity mode must be either 0, 1, 2, or 3");
-					remove_word(i);
-					i = nwords; // breaks out of this loop, without breaking from outer loop
-				}
-			}	
-
-			for (int i=2; i < nwords; i++) {
-				int pos0;
-				if ((pos0 = words[i].find("/anchor=")) != string::npos) {
-					string pvalstring, astr;
-					pvalstring = words[i].substr(0,pos0);
-					astr = words[i].substr(pos0+8);
-					int pos, lnum, pnum;
-					if ((pos = astr.find(",")) != string::npos) {
-						string lnumstring, pnumstring;
-						lnumstring = astr.substr(0,pos);
-						pnumstring = astr.substr(pos+1);
-						stringstream lnumstr, pnumstr;
-						lnumstr << lnumstring;
-						if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						pnumstr << pnumstring;
-						if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
-						if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
-						parameter_anchors[parameter_anchor_i].anchor_param = true;
-						parameter_anchors[parameter_anchor_i].use_anchor_ratio = true;
-						parameter_anchors[parameter_anchor_i].paramnum = i-2;
-						parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
-						parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
-						parameter_anchor_i++;
-						words[i] = pvalstring;
-						ws[i].str(""); ws[i].clear();
-						ws[i] << words[i];
-					} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-				}
-			}	
-
-			for (int i=2; i < nwords; i++) {
-				if (words[i].find("anchor=")==0) {
-					string astr = words[i].substr(7);
-					int pos, lnum, pnum;
-					if ((pos = astr.find(",")) != string::npos) {
-						string lnumstring, pnumstring;
-						lnumstring = astr.substr(0,pos);
-						pnumstring = astr.substr(pos+1);
-						stringstream lnumstr, pnumstr;
-						lnumstr << lnumstring;
-						if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						pnumstr << pnumstring;
-						if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-						if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
-						if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
-						parameter_anchors[parameter_anchor_i].anchor_param = true;
-						parameter_anchors[parameter_anchor_i].paramnum = i-2;
-						parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
-						parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
-						parameter_anchor_i++;
-						words[i] = "0";
-						ws[i].str(""); ws[i].clear();
-						ws[i] << words[i];
-					} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-				}
-			}	
-
-			if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
 			if (nwords==1) {
 				if (mpi_id==0) print_lens_list(vary_parameters);
@@ -1808,7 +1883,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(ALPHA, b, alpha, s, q, theta, xc, yc);
+						add_lens(ALPHA, emode, b, alpha, s, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -1893,7 +1968,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(PJAFFE, b, a, s, q, theta, xc, yc);
+						add_lens(PJAFFE, emode, b, a, s, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
@@ -2075,7 +2150,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(nfw, ks, rs, 0.0, q, theta, xc, yc);
+						add_lens(nfw, emode, ks, rs, 0.0, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2083,7 +2158,7 @@ void Lens::process_commands(bool read_file)
 				}
 				else Complain("nfw requires at least 3 parameters (ks, rs, q)");
 			}
-			else if (words[1]=="pnfw")
+			else if (words[1]=="pnfw") // obsolete--remove soon!
 			{
 				if (nwords > 8) Complain("more than 6 parameters not allowed for model pnfw");
 				if (nwords >= 5) {
@@ -2147,7 +2222,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(pnfw, ks, rs, 0.0, epsilon, theta, xc, yc);
+						add_lens(pnfw, emode, ks, rs, 0.0, epsilon, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2220,7 +2295,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(TRUNCATED_nfw, ks, rs, rt, q, theta, xc, yc);
+						add_lens(TRUNCATED_nfw, emode, ks, rs, rt, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2292,7 +2367,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(EXPDISK, k0, R_d, 0.0, q, theta, xc, yc);
+						add_lens(EXPDISK, emode, k0, R_d, 0.0, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2371,7 +2446,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(filename.c_str(), q, theta, qx, f, xc, yc);
+						add_lens(filename.c_str(), emode, q, theta, qx, f, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2443,7 +2518,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(HERNQUIST, ks, rs, 0.0, q, theta, xc, yc);
+						add_lens(HERNQUIST, emode, ks, rs, 0.0, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2544,7 +2619,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(CORECUSP, k0, a, s, q, theta, xc, yc, gamma, n, parametrize_einstein_radius);
+						add_lens(CORECUSP, emode, k0, a, s, q, theta, xc, yc, gamma, n, parametrize_einstein_radius);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (set_tidal_host) {
@@ -2691,7 +2766,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(SERSIC_LENS, kappa0, re, n, q, theta, xc, yc);
+						add_lens(SERSIC_LENS, emode, kappa0, re, n, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
@@ -2851,7 +2926,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[5] >> yc)) Complain("invalid y-center parameter for model testmodel");
 						}
 					}
-					add_lens(TESTMODEL, 0, 0, 0, q, theta, xc, yc);
+					add_lens(TESTMODEL, emode, 0, 0, 0, q, theta, xc, yc);
 					if (vary_parameters) Complain("vary parameters not supported for testmodel");
 				}
 				else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
@@ -2941,7 +3016,6 @@ void Lens::process_commands(bool read_file)
 					lens_list[nlens-1]->set_limits(lower,upper,lower_initial,upper_initial);
 				}
 			}
-			if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 		}
 		else if (words[0]=="source")
 		{
@@ -4688,12 +4762,12 @@ void Lens::process_commands(bool read_file)
 				beta[1] = point[1] - alpha[1];
 				cout << "kappa = " << kappa(point,reference_zfactor) << endl;
 				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
+				cout << "potential = " << potential(point,reference_zfactor) << endl;
 				cout << "magnification = " << magnification(point,0,reference_zfactor) << endl;
 				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
-				cout << "shear1=" << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2=" << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
-				cout << "potential = " << potential(point,reference_zfactor) << endl;
+				//cout << "shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
 				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n\n";
-				cout << "shear/kappa = " << sheartot/kappa(point,reference_zfactor) << endl;
+				//cout << "shear/kappa = " << sheartot/kappa(point,reference_zfactor) << endl;
 			}
 		}
 		else if (words[0]=="plotlensinfo")
@@ -4815,13 +4889,13 @@ void Lens::process_commands(bool read_file)
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="ellipticity_mode")
+		else if (words[0]=="emode")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile::default_ellipticity_mode << endl;
 			} else if (nwords==2) {
 				int elmode;
-				if (!(ws[1] >> elmode)) Complain("invalid argument to 'ellipticity_mode' command; must specify 0, 1, 2, or 3");
+				if (!(ws[1] >> elmode)) Complain("invalid argument to 'emode' command; must specify 0, 1, 2, or 3");
 				if (elmode > 3) Complain("ellipticity mode cannot be greater than 3");
 				LensProfile::default_ellipticity_mode = elmode;
 			} else Complain("invalid number of arguments; must specify 0, 1, 2, or 3");
@@ -5970,7 +6044,11 @@ bool Lens::read_command(bool show_prompt)
 		if (infile.eof()) {
 			read_from_file = false;
 			infile.close();
-			if (quit_after_reading_file) return false;
+			if (reading_default_script) {
+				set_verbal_mode(original_verbal_mode);
+				reading_default_script = false;
+			} else
+				if (quit_after_reading_file) return false;
 		} else {
 			getline(infile,line);
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;

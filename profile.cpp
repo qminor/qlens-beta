@@ -19,7 +19,6 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
-	defined_spherical_kappa_profile = true;
 	center_anchored = false;
 	anchor_special_parameter = false;
 	ellipticity_mode = default_ellipticity_mode;
@@ -545,6 +544,7 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 	defptr_r_spherical = &LensProfile::deflection_spherical_integral;
 	potptr_rsq_spherical = &LensProfile::potential_spherical_integral;
 	if (q==1.0) {
+		potptr = &LensProfile::potential_spherical_default;
 		defptr = &LensProfile::deflection_spherical_default;
 		hessptr = &LensProfile::hessian_spherical_default;
 	} else {
@@ -619,11 +619,6 @@ double LensProfile::kappa_from_elliptical_potential(const double x, const double
 	double rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
 	return (kappa_rsq(rsq) + epsilon*shear_magnitude_spherical(rsq)*cos(2*phi));
 }
-
-//double Pseudo_Elliptical_NFW::potential_elliptical(const double x, const double y)
-//{
-	//double rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
-//}
 
 void LensProfile::shift_angle_90()
 {
@@ -851,6 +846,11 @@ void LensProfile::deflection_spherical_default(double x, double y, lensvector& d
 
 	def[0] = def_r*x/r;
 	def[1] = def_r*y/r;
+}
+
+double LensProfile::potential_spherical_default(const double x, const double y)
+{
+	return (this->*potptr_rsq_spherical)(x*x+y*y); // ellipticity is put into the potential in this mode
 }
 
 double LensProfile::deflection_spherical_r_generic(const double r)

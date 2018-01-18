@@ -293,6 +293,7 @@ double G_Function(const double x, const double b, const double c);  // This is t
 double Beta(const double x, const double y);
 double IncGamma(const double, const double);
 double IncGammaUp(const double, const double);
+double IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam);
 double gammln(const double xx);
 void gser(double &gamser, const double a, const double x, double &gln);
 void gcf(double &gammcf, const double a, const double x, double &gln);

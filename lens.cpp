@@ -585,7 +585,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
-void Lens::add_lens(LensProfileName name, const double mass_parameter, const double scale1, const double scale2, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
+void Lens::add_lens(LensProfileName name, const int emode, const double mass_parameter, const double scale1, const double scale2, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
@@ -593,6 +593,8 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
+	int old_emode = LensProfile::default_ellipticity_mode;
+	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
 	switch (name) {
 		case PTMASS:
@@ -627,6 +629,7 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 		default:
 			die("Lens type not recognized");
 	}
+	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 	nlens++;
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -634,7 +637,7 @@ void Lens::add_lens(LensProfileName name, const double mass_parameter, const dou
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_lens(const char *splinefile, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
+void Lens::add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
@@ -642,7 +645,10 @@ void Lens::add_lens(const char *splinefile, const double q, const double theta, 
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
+	int old_emode = LensProfile::default_ellipticity_mode;
+	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 	newlist[nlens++] = new LensProfile(splinefile, q, theta, xc, yc, Gauss_NN, romberg_accuracy, qx, f);
+	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -652,17 +658,17 @@ void Lens::add_lens(const char *splinefile, const double q, const double theta, 
 
 void Lens::add_shear_lens(const double shear_p1, const double shear_p2, const double xc, const double yc)
 {
-	add_lens(SHEAR,0,0,0,shear_p1,shear_p2,xc,yc);
+	add_lens(SHEAR,-1,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
 void Lens::add_ptmass_lens(const double mass_parameter, const double xc, const double yc)
 {
-	add_lens(PTMASS,mass_parameter,0,0,0,0,xc,yc);
+	add_lens(PTMASS,-1,mass_parameter,0,0,0,0,xc,yc);
 }
 
 void Lens::add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc)
 {
-	add_lens(SHEET,mass_parameter,0,0,0,0,xc,yc);
+	add_lens(SHEET,-1,mass_parameter,0,0,0,0,xc,yc);
 }
 
 void Lens::add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
@@ -5380,15 +5386,21 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N)
 	double kap, mag, invmag, shearval, pot;
 	lensvector alpha;
 	lensvector pos;
+	bool negkap = false; // Pseudo-elliptical models can produce negative kappa, so produce a warning if so
 	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
 			kap = kappa(pos,reference_zfactor);
+			if (kap < 0) {
+				negkap = true;
+				kap = abs(kap);
+			}
 			logkapout << log(kap)/log(10) << " ";
 		}
 		logkapout << endl;
 	}
+	if (negkap==true) warn("kappa has negative values in some locations; plotting abs(kappa)");
 }
 
 void Lens::plot_logmag_map(const int x_N, const int y_N)

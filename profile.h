@@ -25,11 +25,11 @@ enum LensProfileName
 	pnfw,
 	HERNQUIST,
 	EXPDISK,
-	SHEAR,
-	PTMASS,
-	MULTIPOLE,
 	CORECUSP,
 	SERSIC_LENS,
+	MULTIPOLE,
+	PTMASS,
+	SHEAR,
 	SHEET,
 	TESTMODEL
 };
@@ -62,7 +62,6 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	vector<string> paramnames;
 	vector<string> latex_paramnames, latex_param_subscripts;
 	bool include_limits;
-	bool defined_spherical_kappa_profile; // indicates whether there is a function for a spherical (q=1) kappa profile (which is not true for e.g. external shear)
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
 
@@ -75,6 +74,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void rotate(double&, double&);
 
 	double potential_numerical(const double, const double);
+	double potential_spherical_default(const double x, const double y);
 	void deflection_numerical(const double, const double, lensvector&);
 	void deflection_spherical_default(const double, const double, lensvector&);
 	void hessian_numerical(const double, const double, lensmatrix&);
@@ -113,7 +113,6 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	LensProfile() : defptr(0), defptr_r_spherical(0), hessptr(0), potptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
 	{
 		set_default_base_values(20,1e-6);
-		defined_spherical_kappa_profile = true;
 		zfac = 1.0;
 	}
 	LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in);
@@ -257,15 +256,16 @@ class Alpha : public LensProfile
 	// Note that the actual fit parameters are b' = b*sqrt(q) and s' = s*sqrt(q), not b and s. (See the constructor function for more on how this is implemented.)
 	double bprime, sprime;
 	double qsq, ssq; // used in lensing calculations
+	static const double euler_mascheroni;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
 
 	double deflection_spherical_r(const double r);
+	double potential_spherical_rsq(const double rsq);
 	double deflection_spherical_r_iso(const double r);
 	void deflection_elliptical_iso(const double, const double, lensvector&);
 	void hessian_elliptical_iso(const double, const double, lensmatrix&);
-	double potential_spherical_iso(const double x, const double y);
 	double potential_spherical_rsq_iso(const double rsq);
 	double potential_elliptical_iso(const double x, const double y);
 	void deflection_elliptical_nocore(const double x, const double y, lensvector&);
@@ -310,7 +310,6 @@ class PseudoJaffe : public LensProfile
 	double deflection_spherical_r(const double r);
 	void deflection_elliptical(const double, const double, lensvector&);
 	void hessian_elliptical(const double, const double, lensmatrix&);
-	double potential_spherical(const double x, const double y);
 	double potential_elliptical(const double x, const double y);
 	double potential_spherical_rsq(const double rsq);
 
@@ -357,6 +356,8 @@ class NFW : public LensProfile
 	double deflection_spherical_r(const double r);
 	double potential_spherical_rsq(const double rsq);
 
+	void set_model_specific_integration_pointers();
+
 	public:
 	NFW() : LensProfile() {}
 	NFW(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
@@ -366,7 +367,6 @@ class NFW : public LensProfile
 	void assign_param_pointers();
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-	void set_model_specific_integration_pointers();
 
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 };
@@ -379,10 +379,9 @@ class Truncated_NFW : public LensProfile
 
 	double kappa_rsq(const double);
 	double lens_function_xsq(const double&);
-
 	double deflection_spherical_r(const double r);
-	//void deflection_spherical(double, double, lensvector&);
-	void hessian_spherical(const double, const double, lensmatrix&);
+
+	void set_model_specific_integration_pointers();
 
 	public:
 	Truncated_NFW() : LensProfile() {}
@@ -393,7 +392,6 @@ class Truncated_NFW : public LensProfile
 	void assign_param_pointers();
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-	void set_model_specific_integration_pointers();
 };
 
 class Pseudo_Elliptical_NFW : public LensProfile
@@ -410,6 +408,8 @@ class Pseudo_Elliptical_NFW : public LensProfile
 	void hessian_elliptical(const double, const double, lensmatrix&);
 	double potential_elliptical(const double x, const double y);
 
+	void set_model_specific_integration_pointers();
+
 	public:
 	Pseudo_Elliptical_NFW() : LensProfile() {}
 	Pseudo_Elliptical_NFW(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
@@ -419,7 +419,6 @@ class Pseudo_Elliptical_NFW : public LensProfile
 	void assign_param_pointers();
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-	void set_model_specific_integration_pointers();
 	void update_meta_parameters() {
 		update_ellipticity_meta_parameters();
 		q = sqrt((1-epsilon)/(1+epsilon));
@@ -441,6 +440,10 @@ class Hernquist : public LensProfile
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
 	double lens_function_xsq(const double);
+	double deflection_spherical_r(const double r);
+	double potential_spherical_rsq(const double rsq);
+
+	void set_model_specific_integration_pointers();
 
 	public:
 	Hernquist() : LensProfile() {}
@@ -461,6 +464,8 @@ class ExpDisk : public LensProfile
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
+	double deflection_spherical_r(const double r);
+	void set_model_specific_integration_pointers();
 
 	public:
 	ExpDisk() : LensProfile() {}
@@ -484,7 +489,7 @@ class Shear : public LensProfile
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
 
 	public:
-	Shear() : LensProfile() { defined_spherical_kappa_profile = false; }
+	Shear() : LensProfile() {}
 	Shear(const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Shear(const Shear* lens_in);
 	static bool use_shear_component_params; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
@@ -528,7 +533,7 @@ class Multipole : public LensProfile
 
 	public:
 
-	Multipole() : LensProfile() { defined_spherical_kappa_profile = false; }
+	Multipole() : LensProfile() {}
 	Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine=false);
 	Multipole(const Multipole* lens_in);
 
@@ -635,12 +640,21 @@ class CoreCusp : public LensProfile
 class SersicLens : public LensProfile
 {
 	private:
-	double kappa0, k, n; // sig_x is the dispersion along the major axis
+	double kappa_e, b, n;
 	double re; // effective radius
-	double kappa0_frac; // used if we are center_anchoring to another Sersic profile, so that a shared mass-to-light ratio can be constrained
+	double def_factor; // used to calculate the spherical deflection
 
 	double kappa_rsq(const double rsq);
 	double kappa_rsq_deriv(const double rsq);
+	double deflection_spherical_r(const double r);
+
+	void set_model_specific_integration_pointers();
+
+	public:
+
+	SersicLens() : LensProfile() {}
+	SersicLens(const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	SersicLens(const SersicLens* lens_in);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -648,15 +662,9 @@ class SersicLens : public LensProfile
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 	void update_meta_parameters() {
 		update_ellipticity_meta_parameters();
-		double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-		k = b*pow(1.0/re,1.0/n);
+		b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+		def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
 	}
-
-	public:
-
-	SersicLens() : LensProfile() {}
-	SersicLens(const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
-	SersicLens(const SersicLens* lens_in);
 };
 
 class MassSheet : public LensProfile

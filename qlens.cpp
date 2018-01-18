@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-		cout << "QLens by Quinn Minor (2017)\n";
+		cout << "QLens by Quinn Minor (2018)\n";
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
