@@ -20,27 +20,26 @@ One major upgrade: I have implemented the 'emode' command, which controls how el
 
 The ellipticity mode (which can be either 0,1,2, or 3) controls how ellipticity is introduced into the lens models. In modes 0-2, ellipticity is introduced into the projected density (kappa), whereas in mode 3, ellipticity is introduced into the potential (called a pseudo-elliptic model). The ellipticity is parameterized by the axis ratio q in modes 0,1, and by the ellipticity parameter in modes 2,3. The 'emode' command changes the default ellipticity mode for lens models that get created, but you can also specify the ellipticity mode of a specific lens you create by adding the argument 'emode=#' to the line (e.g., 'lens nfw emode=3 0.8 20 0.3'). It doesn't matter where you put the 'emode=#' argument when creating a lens, as long as it's after the name of the lens model&mdash;it could be at the end of the line, for example. Also note that different lenses don't have to have the same ellipticity mode.
 
-Here is a brief description of each ellipticity mode:
+Here is a brief description of each ellipticity mode. In each example, we use coordinates in the "lens frame" where the major axis lies along x, minor axis along y.
 
 1. Mode 0: in kappa(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.
 
-	Ellipticity parameter: q
+	Ellipticity parameter: q.  This happens to be the default mode that gravlens (lensmodel) uses (albeit with e=1-q as the parameter), with a few exceptions. In this parameterization, the major axis of the tangential critical curve is equal to the Einstein radius of the corresponding spherical (q=1) model. It's not ideal for model fitting if the Einstein radius is used as a parameter, because typically the *average* radius of the critical curve is better constrained, not its major axis.
 
 2. Mode 1: in kappa(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
 
-	Ellipticity parameter: q  (this is the qlens default mode)
+	Ellipticity parameter: q.  This is the default ellipticity mode in qlens. In this parameterization, the average radius of the tangential critical curve is equal to the Einstein radius of the corresponding spherical model (by average, we mean the geometric mean of the major and minor axes of the critical curve).
 
 3. Mode 2: in kappa(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
 
-	Ellipticity parameter: e (epsilon)
+	Ellipticity parameter: e (epsilon). This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here too, the average radius of the critical curve is roughly equal to the Einstein radius. The axis ratio is given by the formula sqrt((1-e)/(1+e)).
 
 4. Mode 3: in the lensing potential phi(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
 
-	Ellipticity parameter: e (epsilon)
+	Ellipticity parameter: e (epsilon). This is the "pseudo-elliptical" version, where ellipticity is put into the potential, not the projected density. It's important to note that while emodes 0-2 are essentially just reparametrizations of the same ellipsoidal lens model, emode 3 is fundamentally different. The pseudo-elliptical model can do lens calculations significantly faster in most of the elliptical mass models, since analytic formulas are used for the deflection and magnifications (it simply modifies the spherical deflection formula, which has an analytic solution for all mass models in qlens). It will *not* improve the speed of calculations for the pjaffe model or the alpha model in the special case where alpha=1 or s=0, since in these cases the formulas are analytic regardless. Also keep in mind that the pseudo-elliptical models can lead to unphysical density contours when the ellipticity is high enough--they might begin to look peanut-shaped and can even become negative in certain places (you can check this using the command 'plotlogkappa').
+
 
 If a lens is created using mode 3, the prefix 'pseudo-' is added to the lens model name. The pseudo-NFW model "pnfw" is still allowed in qlens, but I will remove it soon since it's redundant; it's just the NFW model with emode=3.
-
-The pseudo-elliptical model can do lens calculations significantly faster in most of the elliptical mass models, since analytic formulas are used for the deflection and magnifications (it simply modifies the spherical deflection formula, which has an analytic solution for all mass models in qlens). It will *not* improve the speed of calculations for the pjaffe model or the alpha model in the special case where alpha=1 or s=0, since in these cases the formulas are analytic regardless. Also keep in mind that the pseudo-elliptical models can lead to unphysical density contours when the ellipticity is high enough--they might begin to look peanut-shaped and can even become negative in certain places (you can check this using the command 'plotlogkappa').
 
 Upgrades since Dec. 4:
 
