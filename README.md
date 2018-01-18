@@ -22,15 +22,15 @@ There are four different ellipticity modes (0-4). In modes 0-2, ellipticity is i
 
 Here is a brief description of each ellipticity mode. In each example, we use coordinates in the "lens frame" where the major axis lies along x, minor axis along y.
 
-1. Mode 0: in &kappa;(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.
+1. Mode 0: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.
 
 	Ellipticity parameter: q (axis ratio).  This happens to be the mode that gravlens (lensmodel) uses for its lens models (albeit with e=1-q as the parameter), with a few exceptions. In this parameterization, the major axis of the tangential critical curve is equal to the Einstein radius of the corresponding spherical (q=1) model. It's not ideal for model fitting if the Einstein radius is used as a parameter, because typically the *average* radius of the critical curve is better constrained, not its major axis.
 
-2. Mode 1: in &kappa;(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
+2. Mode 1: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
 
 	Ellipticity parameter: q (axis ratio).  This is the default ellipticity mode in qlens. In this parameterization, the average radius of the tangential critical curve is equal to the Einstein radius of the corresponding spherical model (by average, we mean the geometric mean of the major and minor axes of the critical curve).
 
-3. Mode 2: in &kappa;(R), we let R<sup>2</sup> &rarr; (1-&epsilon;)x<sup>2</sup> + (1+&epsilon;)y<sup>2</sup>.
+3. Mode 2: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; (1-&epsilon;)x<sup>2</sup> + (1+&epsilon;)y<sup>2</sup>.
 
 	Ellipticity parameter: &epsilon;. This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here too, the average radius of the critical curve is roughly equal to the Einstein radius (if &epsilon; is not too large). The axis ratio is given by the formula q = sqrt((1-&epsilon;)/(1+&epsilon;)).
 
