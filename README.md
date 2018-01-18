@@ -28,7 +28,7 @@ Here is a brief description of each ellipticity mode. In each example, we use co
 
 2. Mode 1: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
 
-	Ellipticity parameter: q (axis ratio).  This is the default ellipticity mode in qlens. In this parameterization, the major/minor axes of the density contours are at (R/&\sqrt{q};,R*sqrt(q)) respectively. The average radius of the critical curve is roughly comparable to the Einstein radius of the corresponding spherical model; the major axis will be larger than the Einstein radius, while the minor axis is smaller. 
+	Ellipticity parameter: q (axis ratio).  This is the default ellipticity mode in qlens. In this parameterization, the major/minor axes of the density contours are at (R/sqrt(q),R*sqrt(q)) respectively. The average radius of the critical curve is roughly comparable to the Einstein radius of the corresponding spherical model; the major axis will be larger than the Einstein radius, while the minor axis is smaller. 
 
 3. Mode 2: in the projected density &Sigma;(R), we let R<sup>2</sup> &rarr; (1-&epsilon;)x<sup>2</sup> + (1+&epsilon;)y<sup>2</sup>.
 
