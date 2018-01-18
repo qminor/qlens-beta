@@ -32,7 +32,7 @@ Here is a brief description of each ellipticity mode. In each example, we use co
 
 3. Mode 2: in kappa(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
 
-	Ellipticity parameter: e (epsilon). This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here too, the average radius of the critical curve is roughly equal to the Einstein radius. The axis ratio is given by the formula q = sqrt((1-e)/(1+e)).
+	Ellipticity parameter: e (\epsilon). This is the parameterization that lenstool uses for all its (non-pseudo) lens models; here too, the average radius of the critical curve is roughly equal to the Einstein radius (if e is not too large). The axis ratio is given by the formula q = sqrt((1-e)/(1+e)).
 
 4. Mode 3: in the lensing potential phi(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
 
