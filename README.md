@@ -22,10 +22,14 @@ The ellipticity mode (which can be either 0,1,2, or 3) controls how ellipticity 
 
 Here is a brief description of each ellipticity mode:
 
-1. Mode 0: in kappa(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.      Ellipticity parameter: q
-2. Mode 1: in kappa(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.     Ellipticity parameter: q  (this is the qlens default mode)
-3. Mode 2: in kappa(R), we let R<sup>2</sup> &rarr; (1-e)*x<sup>2</sup> + (1+e)*y<sup>2</sup>.     Ellipticity parameter: e (epsilon)
-4. Mode 3: in the lensing potential phi(R), we let R<sup>2</sup> &rarr; (1-e)*x<sup>2</sup> + (1+e)*y<sup>2</sup>.     Ellipticity parameter: e (epsilon)
+1. Mode 0: in kappa(R), we let R<sup>2</sup> &rarr; x<sup>2</sup> + (y/q)<sup>2</sup>.
+	Ellipticity parameter: q
+2. Mode 1: in kappa(R), we let R<sup>2</sup> &rarr; qx<sup>2</sup> + y<sup>2</sup>/q.
+	Ellipticity parameter: q  (this is the qlens default mode)
+3. Mode 2: in kappa(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
+	Ellipticity parameter: e (epsilon)
+4. Mode 3: in the lensing potential phi(R), we let R<sup>2</sup> &rarr; (1-e)x<sup>2</sup> + (1+e)y<sup>2</sup>.
+	Ellipticity parameter: e (epsilon)
 
 If a lens is created using mode 3, the prefix 'pseudo-' is added to the lens model name. The pseudo-NFW model "pnfw" is still allowed in qlens, but I will remove it soon since it's redundant; it's just the NFW model with emode=3.
 
