@@ -561,14 +561,9 @@ double LensProfile::kappa_rsq(const double rsq) // this function should be redef
 	return (f_parameter*kspline.splint(r/qx_parameter));
 }
 
-double LensProfile::shear_magnitude_spherical(const double rsq)
-{
-	double r = sqrt(rsq);
-	return ((this->*defptr_r_spherical)(r) / r) - kappa_rsq(rsq);
-}
-
 void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector& def)
 {
+	// Formulas derived in Dumet-Montoya et al. (2012)
 	double defmag_over_r_ell = sqrt((1-epsilon)*x*x + (1+epsilon)*y*y); // just r_ell for the moment
 	defmag_over_r_ell = (this->*defptr_r_spherical)(defmag_over_r_ell)/defmag_over_r_ell;
 	def[0] = defmag_over_r_ell*(1-epsilon)*x;
@@ -577,28 +572,19 @@ void LensProfile::deflection_from_elliptical_potential(const double x, const dou
 
 void LensProfile::hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess)
 {
-	double temp, gamma1, gamma2, kap_r, shearmag, kap, phi;
-	if (x==0) {
-		if (y > 0) phi = M_PI/2;
-		else phi = -M_PI/2;
-	} else {
-		phi = atan(abs(y/(q*x)));
-		if (x < 0) {
-			if (y < 0)
-				phi = phi - M_PI;
-			else
-				phi = M_PI - phi;
-		} else if (y < 0) {
-			phi = -phi;
-		}
-	}
-	temp = (1-epsilon)*x*x + (1+epsilon)*y*y; // elliptical r^2
-	kap_r = kappa_rsq(temp);
-	shearmag = shear_magnitude_spherical(temp);
-	temp = cos(2*phi);
-	kap = kap_r + epsilon*shearmag*temp;
-	gamma1 = -epsilon*kap_r - shearmag*temp;
-	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin(2*phi);
+	// Formulas derived in Dumet-Montoya et al. (2012)
+	double cos2phi, sin2phi, exsq, eysq, rr, gamma1, gamma2, kap_r, shearmag, kap;
+	exsq = (1-epsilon)*x*x; // elliptical x^2
+	eysq = (1+epsilon)*y*y; // elliptical y^2
+	rr = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rr;
+	sin2phi = 2*q*(1+epsilon)*x*y/rr;
+	kap_r = kappa_rsq(rr);
+	rr = sqrt(rr); // Now rr is just r
+	shearmag = ((this->*defptr_r_spherical)(rr) / rr) - kap_r; // shear from the spherical model
+	kap = kap_r + epsilon*shearmag*cos2phi;
+	gamma1 = -epsilon*kap_r - shearmag*cos2phi;
+	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin2phi;
 	hess[0][0] = kap + gamma1;
 	hess[1][1] = kap - gamma1;
 	hess[0][1] = gamma2;
@@ -607,17 +593,18 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 
 double LensProfile::kappa_from_elliptical_potential(const double x, const double y)
 {
-	double phi = atan(abs(y/(q*x)));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
-	double rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
-	return (kappa_rsq(rsq) + epsilon*shear_magnitude_spherical(rsq)*cos(2*phi));
+	// Formulas derived in Dumet-Montoya et al. (2012)
+	double cos2phi, exsq, eysq, rr, kap_r, shearmag;
+	exsq = (1-epsilon)*x*x; // elliptical x^2
+	eysq = (1+epsilon)*y*y; // elliptical y^2
+	rr = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rr;
+
+	kap_r = kappa_rsq(rr);
+	rr = sqrt(rr);
+	shearmag = ((this->*defptr_r_spherical)(rr) / rr) - kap_r;
+
+	return (kap_r + epsilon*shearmag*cos2phi);
 }
 
 void LensProfile::shift_angle_90()
@@ -717,7 +704,7 @@ double LensProfile::kappa(double x, double y)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	if (ellipticity_mode==3) {
+	if ((ellipticity_mode==3) and (q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
 	} else {
 		return kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
@@ -743,7 +730,7 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	if (ellipticity_mode==3) {
+	if ((ellipticity_mode==3) and (q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
 	} else {
 		(this->*defptr)(x,y,def);
@@ -757,7 +744,7 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	if (ellipticity_mode==3) {
+	if ((ellipticity_mode==3) and (q != 1)) {
 		hessian_from_elliptical_potential(x,y,hess);
 	} else {
 		(this->*hessptr)(x,y,hess);

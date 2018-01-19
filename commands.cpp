@@ -23,8 +23,6 @@ void Lens::process_commands(bool read_file)
 {
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
-	reading_default_script = false;
-	original_verbal_mode = verbal_mode; // if default script is read, verbal mode goes to silent, then reverts to specified mode
 	plot_key_outside = false;
 	show_plot_key = true;
 	show_colorbar = true;
@@ -37,18 +35,6 @@ void Lens::process_commands(bool read_file)
 	read_from_file = read_file;
 	ws = NULL;
 	buffer = NULL;
-
-	/*
-	// The following allows for a default initial script to be read, but it conflicts with how qlens opens
-	// scripts using a command-line argument ('qlens script.in'). You need to fix this before implementing
-	// the default script option
-	infile.open("qlens_default.in");
-	if (infile.is_open()) {
-		read_from_file = true;
-		reading_default_script = true;
-		set_verbal_mode(false);
-	}
-	*/
 
 	for (;;)
    {
@@ -1436,10 +1422,6 @@ void Lens::process_commands(bool read_file)
 				if (infile.is_open()) {
 					infile.close();
 					if ((mpi_id==0) and (verbal_mode)) cout << "Closing current script file...\n";
-					if (reading_default_script) {
-						set_verbal_mode(original_verbal_mode);
-						reading_default_script = false;
-					}
 				}
 				infile.open(words[1].c_str());
 				if (infile.is_open()) read_from_file = true;
@@ -3328,15 +3310,15 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) if (source_redshifts[i] != source_redshift) different_zsrc = true;
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							if (different_zsrc) {
-								reset();
-								create_grid(false,zfactors[i]);
+								if ((i != 0) and (zfactors[i] != zfactors[i-1]))
+									create_grid(false,zfactors[i]);
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
 							output_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, srcflux[i], true);
 						}
 						if (different_zsrc) {
 							reset();
-							create_grid(false,reference_zfactor);
+							//create_grid(false,reference_zfactor);
 						}
 					} else {
 						if (source_redshifts[dataset] != source_redshift) {
@@ -3346,7 +3328,7 @@ void Lens::process_commands(bool read_file)
 						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, srcflux[dataset], true);
 						if (source_redshifts[dataset] != source_redshift) {
 							reset();
-							create_grid(false,reference_zfactor);
+							//create_grid(false,reference_zfactor);
 						}
 					}
 					delete[] srcflux;
@@ -3505,6 +3487,9 @@ void Lens::process_commands(bool read_file)
 
 				else if (words[1]=="plotimg")
 				{
+					// this needs to be redone a bit, along with "fit findimg"--it should just call get_images(...) directly, so that it can
+					// add up the total number of images, specify how many images are above the stated magnification threshold, etc.
+					// also, you should put this entire thing in a function -- also true for many commands in this file! Critical before public release.
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
@@ -3604,7 +3589,8 @@ void Lens::process_commands(bool read_file)
 					} else {
 						reset();
 						for (int i=min_dataset; i <= max_dataset; i++) {
-							create_grid(false,zfactors[i]);
+							if ((i != min_dataset) and (zfactors[i] != zfactors[i-1]))
+								create_grid(false,zfactors[i]);
 							if (mpi_id==0) {
 								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 								imgfile << "\"image set " << i << "\"" << endl;
@@ -5121,15 +5107,15 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "image separation threshold for including image in chi-square function = " << chisq_imgsep_threshold << endl;
 			} else Complain("must specify either zero or one argument (chi-square image separation threshold)");
 		}
-		else if (words[0]=="chisq_srcplane_threshold")
+		else if (words[0]=="chisq_imgplane_threshold")
 		{
 			double srcplanethresh;
 			if (nwords == 2) {
-				if (!(ws[1] >> srcplanethresh)) Complain("invalid threshold for substituting source plane chi-square for image plane chi-square");
-				chisq_srcplane_substitute_threshold = srcplanethresh;
+				if (!(ws[1] >> srcplanethresh)) Complain("invalid threshold for substituting image plane chi-square for source plane chi-square");
+				chisq_imgplane_substitute_threshold = srcplanethresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "threshold for substituting source plane chi-square for image plane chi-square function = " << chisq_srcplane_substitute_threshold << endl;
-			} else Complain("must specify either zero or one argument (chi-square source plane substitution threshold)");
+				if (mpi_id==0) cout << "threshold for substituting image plane chi-square for source plane chi-square function = " << chisq_imgplane_substitute_threshold << endl;
+			} else Complain("must specify either zero or one argument (chi-square image plane substitution threshold)");
 		}
 		else if (words[0]=="chisqflux")
 		{
@@ -6044,11 +6030,7 @@ bool Lens::read_command(bool show_prompt)
 		if (infile.eof()) {
 			read_from_file = false;
 			infile.close();
-			if (reading_default_script) {
-				set_verbal_mode(original_verbal_mode);
-				reading_default_script = false;
-			} else
-				if (quit_after_reading_file) return false;
+			if (quit_after_reading_file) return false;
 		} else {
 			getline(infile,line);
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;

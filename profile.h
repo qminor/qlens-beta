@@ -185,7 +185,6 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
-	virtual double shear_magnitude_spherical(const double rsq);
 	virtual void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
 	virtual void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
 	virtual double kappa_from_elliptical_potential(const double x, const double y);

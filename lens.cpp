@@ -216,7 +216,7 @@ Lens::Lens() : UCMC()
 	chisq_tolerance = 1e-3;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
-	chisq_srcplane_substitute_threshold = -1; // if > 0, will evaluate the source plane chi-square and if above the threshold, use instead of image plane chi-square (if imgplane_chisq is on)
+	chisq_imgplane_substitute_threshold = -1; // if > 0, will evaluate the source plane chi-square and if above the threshold, use instead of image plane chi-square (if imgplane_chisq is on)
 	n_repeats = 1;
 	calculate_parameter_errors = true;
 	use_image_plane_chisq = false;
@@ -436,7 +436,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	chisq_tolerance = lens_in->chisq_tolerance;
 	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
-	chisq_srcplane_substitute_threshold = lens_in->chisq_srcplane_substitute_threshold;
+	chisq_imgplane_substitute_threshold = lens_in->chisq_imgplane_substitute_threshold;
 	n_repeats = lens_in->n_repeats;
 	calculate_parameter_errors = lens_in->calculate_parameter_errors;
 	use_image_plane_chisq = lens_in->use_image_plane_chisq;
@@ -5025,24 +5025,29 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	}
 
 	double loglike, chisq_total=0, chisq;
+	bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
 	if (use_image_plane_chisq) {
-		if (chisq_srcplane_substitute_threshold > 0) {
-			chisq = fitmodel->chisq_pos_source_plane();
-			if (chisq < chisq_srcplane_substitute_threshold)
-				chisq = fitmodel->chisq_pos_image_plane();
-		} else {
-			chisq = fitmodel->chisq_pos_image_plane();
-		}
-		if ((display_chisq_status) and (mpi_id==0)) {
-			int tot_data_images = 0;
-			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-			cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data, ";
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
-		}
+		used_imgplane_chisq = true;
+		chisq = fitmodel->chisq_pos_image_plane();
 	}
 	else {
+		used_imgplane_chisq = false;
 		chisq = fitmodel->chisq_pos_source_plane();
-		if ((display_chisq_status) and (mpi_id==0)) {
+		if (chisq < chisq_imgplane_substitute_threshold) {
+			chisq = fitmodel->chisq_pos_image_plane();
+			used_imgplane_chisq = true;
+		}
+	}
+	if ((display_chisq_status) and (mpi_id==0)) {
+		if (used_imgplane_chisq) {
+			if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
+			int tot_data_images = 0;
+			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
+			cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+				cout << ", chisq_pos=" << chisq;
+			}
+		} else {
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
@@ -5062,7 +5067,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		}
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
-		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "               ";
+		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "                ";
 		cout << endl;
 		cout << "\033[1A";
 	}

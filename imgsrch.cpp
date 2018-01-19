@@ -1864,7 +1864,6 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 	if (mpi_id==0) cout << endl;
 }
 
-
 bool Lens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed

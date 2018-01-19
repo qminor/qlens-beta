@@ -313,7 +313,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool display_chisq_status;
 	int n_visible_images;
 	int chisq_display_frequency;
-	double chisq_magnification_threshold, chisq_imgsep_threshold, chisq_srcplane_substitute_threshold;
+	double chisq_magnification_threshold, chisq_imgsep_threshold, chisq_imgplane_substitute_threshold;
 	bool use_magnification_in_chisq;
 	bool use_magnification_in_chisq_during_repeats;
 	bool include_parity_in_chisq;
@@ -622,9 +622,6 @@ public:
 	stringstream* ws;
 	stringstream datastream;
 	bool read_from_file;
-	bool open_script;
-	bool reading_default_script;
-	bool original_verbal_mode; // if default script is read, verbal mode goes to silent, then reverts to specified mode
 	bool quit_after_reading_file;
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
