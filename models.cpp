@@ -94,12 +94,20 @@ void Alpha::assign_param_pointers()
 	set_geometric_param_pointers(3);
 }
 
+void Alpha::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	b = bprime*f_major_axis;
+	s = sprime*f_major_axis;
+	qsq = q*q; ssq = s*s;
+}
+
 void Alpha::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq);
 	if (alpha==1.0) {
-		defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::deflection_spherical_r_iso);
+		kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq_iso);
 		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_iso);
 		if (q != 1.0) {
 			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_iso);
@@ -163,14 +171,14 @@ double Alpha::kappa_rsq_deriv(const double rsq)
 	return (-0.25 * alpha * (2-alpha) * pow(bprime*bprime/(sprime*sprime+rsq), alpha/2 + 1)) / (bprime*bprime);
 }
 
-double Alpha::deflection_spherical_r(const double r)
+double Alpha::kapavg_spherical_rsq(const double rsq)
 {
-	return (pow(bprime,alpha)*(pow(r*r+sprime*sprime,1-alpha/2) - pow(sprime,2-alpha)))/r;
+	return (pow(bprime,alpha)*(pow(rsq+sprime*sprime,1-alpha/2) - pow(sprime,2-alpha)))/rsq;
 }
 
-double Alpha::deflection_spherical_r_iso(const double r) // only for alpha=1
+double Alpha::kapavg_spherical_rsq_iso(const double rsq) // only for alpha=1
 {
-	return bprime*(sqrt(sprime*sprime+r*r)-sprime)/r; // now, tmp = kappa_average
+	return bprime*(sqrt(sprime*sprime+rsq)-sprime)/rsq; // now, tmp = kappa_average
 }
 
 double Alpha::potential_spherical_rsq(const double rsq)
@@ -401,6 +409,15 @@ void PseudoJaffe::assign_param_pointers()
 	set_geometric_param_pointers(3);
 }
 
+void PseudoJaffe::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	b = bprime*f_major_axis;
+	s = sprime*f_major_axis;
+	a = aprime*f_major_axis;
+	qsq = q*q; ssq = s*s; asq = a*a;
+}
+
 void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
@@ -425,7 +442,7 @@ void PseudoJaffe::update_special_anchored_params()
 
 void PseudoJaffe::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::potential_spherical_rsq);
 	if (q != 1.0) {
 		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
@@ -481,10 +498,9 @@ double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 	return (-0.25 * bprime * (pow(sprime*sprime+rsq, -1.5) - pow(aprime*aprime+rsq,-1.5)));
 }
 
-double PseudoJaffe::deflection_spherical_r(const double r)
+double PseudoJaffe::kapavg_spherical_rsq(const double rsq)
 {
-	double rsq = r*r;
-	return bprime*((sqrt(sprime*sprime+rsq)-sprime) - (sqrt(aprime*aprime+rsq)-aprime))/r;
+	return bprime*((sqrt(sprime*sprime+rsq)-sprime) - (sqrt(aprime*aprime+rsq)-aprime))/rsq;
 }
 
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
@@ -570,7 +586,7 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 	ellipticity_mode = default_ellipticity_mode;
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	assign_param_pointers();
 	assign_paramnames();
@@ -605,7 +621,7 @@ NFW::NFW(const NFW* lens_in)
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -629,7 +645,7 @@ void NFW::assign_param_pointers()
 
 void NFW::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
 }
 
@@ -689,14 +705,14 @@ inline double NFW::lens_function_xsq(const double &xsq)
 	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
-double NFW::deflection_spherical_r(const double r)
+double NFW::kapavg_spherical_rsq(const double rsq)
 {
-	double xsq = SQR(r/rs);
+	double xsq = rsq/(rs*rs);
 	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
 	if (xsq > 1e-6)
-		return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+		return 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 	else
-		return -ks*r*(1+log(xsq/4));
+		return -ks*(1+log(xsq/4));
 }
 
 double NFW::potential_spherical_rsq(const double rsq)
@@ -740,7 +756,7 @@ Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const double &ks_in, const double &
 	ellipticity_mode = 2;
 	ks = ks_in; rs = rs_in;
 	set_default_base_values(nn,acc);
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	epsilon = e_in;
 	set_angle(theta_degrees);
 	x_center = xc_in;
@@ -777,7 +793,7 @@ Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_i
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
@@ -805,9 +821,15 @@ void Pseudo_Elliptical_NFW::assign_param_pointers()
 	}
 }
 
+void Pseudo_Elliptical_NFW::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	q = sqrt((1-epsilon)/(1+epsilon));
+}
+
 void Pseudo_Elliptical_NFW::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::kapavg_spherical_rsq);
 	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Pseudo_Elliptical_NFW::deflection_elliptical);
 	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Pseudo_Elliptical_NFW::hessian_elliptical);
 	potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Pseudo_Elliptical_NFW::potential_elliptical);
@@ -873,14 +895,14 @@ inline double Pseudo_Elliptical_NFW::lens_function_xsq(const double &xsq)
 	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
-double Pseudo_Elliptical_NFW::deflection_spherical_r(const double r)
+double Pseudo_Elliptical_NFW::kapavg_spherical_rsq(const double rsq)
 {
-	double xsq = SQR(r/rs);
+	double xsq = rsq/(rs*rs);
 	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
 	if (xsq > 1e-6)
-		return 2*ks*r*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
+		return 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 	else
-		return -ks*r*(1+log(xsq/4));
+		return -ks*(1+log(xsq/4));
 }
 
 double Pseudo_Elliptical_NFW::shear_magnitude_spherical(const double rsq)
@@ -933,10 +955,10 @@ double Pseudo_Elliptical_NFW::potential_elliptical(const double x, const double 
 
 void Pseudo_Elliptical_NFW::deflection_elliptical(const double x, const double y, lensvector& def)
 {
-	double defmag_over_r_ell = sqrt((1-epsilon)*x*x + (1+epsilon)*y*y); // just r_ell for the moment
-	defmag_over_r_ell = deflection_spherical_r(defmag_over_r_ell)/defmag_over_r_ell;
-	def[0] = defmag_over_r_ell*(1-epsilon)*x;
-	def[1] = defmag_over_r_ell*(1+epsilon)*y;
+	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
+	kapavg = kapavg_spherical_rsq(kapavg);
+	def[0] = kapavg*(1-epsilon)*x;
+	def[1] = kapavg*(1+epsilon)*y;
 }
 
 void Pseudo_Elliptical_NFW::hessian_elliptical(const double x, const double y, lensmatrix& hess)
@@ -1020,7 +1042,7 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 	set_default_base_values(nn,acc);
 	assign_param_pointers();
 	assign_paramnames();
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
@@ -1055,7 +1077,7 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	rmin_einstein_radius = 1e-3*rs; // at the moment, kappa_average is not reliable below this value (see note under NFW deflection_spherical(...) function)
+	rmin_einstein_radius = 1e-6*rs;
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -1081,7 +1103,7 @@ void Truncated_NFW::assign_param_pointers()
 
 void Truncated_NFW::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq);
 }
 
 void Truncated_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
@@ -1137,16 +1159,16 @@ inline double Truncated_NFW::lens_function_xsq(const double &xsq)
 	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
-double Truncated_NFW::deflection_spherical_r(const double r)
+double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 {
 	double xsq, tau, tsq, sqrttx, lx, tmp;
-	xsq = SQR(r/rs);
+	xsq = rsq/(rs*rs);
 	tau = rt/rs;
 	tsq = tau*tau;
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
 	tmp = 2*(tsq+1+4*(xsq-1))*lens_function_xsq(xsq) + (M_PI*(3*tsq-1) + 2*tau*(tsq-3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq+xsq)-tsq-1) + (-tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx)/CUBE(tau)/sqrttx;
-	return 2*r*ks*tsq*tsq/CUBE(tsq+1)/xsq*tmp; // now, tmp = kappa_average
+	return 2*ks*tsq*tsq/CUBE(tsq+1)/xsq*tmp; // now, tmp = kappa_average
 }
 
 /********************************** Hernquist **********************************/
@@ -1219,7 +1241,7 @@ void Hernquist::assign_param_pointers()
 
 void Hernquist::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::potential_spherical_rsq);
 }
 
@@ -1276,11 +1298,11 @@ inline double Hernquist::lens_function_xsq(const double xsq)
 	return ((sqrt(xsq) > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (sqrt(xsq) < 1.0) ? (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
-double Hernquist::deflection_spherical_r(const double r)
+double Hernquist::kapavg_spherical_rsq(const double rsq)
 {
-	double xsq = SQR(r/rs);
-	if (xsq==1) return (2*ks*r/3.0);
-	else return 2*ks*r*(1 - lens_function_xsq(xsq))/(xsq - 1);
+	double xsq = rsq/(rs*rs);
+	if (xsq==1) return (2*ks/3.0);
+	else return 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
 }
 
 double Hernquist::potential_spherical_rsq(const double rsq)
@@ -1359,7 +1381,7 @@ void ExpDisk::assign_param_pointers()
 
 void ExpDisk::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&ExpDisk::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&ExpDisk::kapavg_spherical_rsq);
 }
 
 void ExpDisk::get_auto_stepsizes(dvector& stepsizes, int &index)
@@ -1407,10 +1429,10 @@ double ExpDisk::kappa_rsq_deriv(const double rsq)
 	return (-k0*exp(-r/R_d)/(q*R_d*2*r));
 }
 
-double ExpDisk::deflection_spherical_r(const double r)
+double ExpDisk::kapavg_spherical_rsq(const double rsq)
 {
-	double x = r/R_d;
-	return 2*k0*R_d*(1 - (1+x)*exp(-x))/x;
+	double x = sqrt(rsq)/R_d;
+	return 2*k0*(1 - (1+x)*exp(-x))/(x*x);
 }
 
 /***************************** External shear *****************************/
@@ -1497,6 +1519,18 @@ void Shear::assign_param_pointers()
 	if (!center_anchored) {
 		param[2] = &x_center;
 		param[3] = &y_center;
+	}
+}
+
+void Shear::update_meta_parameters()
+{
+	if (use_shear_component_params) {
+		q = sqrt(SQR(shear1) + SQR(shear2));
+		set_angle_from_components(shear1,shear2);
+	} else {
+		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+		shear1 = -q*cos(2*theta_eff);
+		shear2 = -q*sin(2*theta_eff);
 	}
 }
 
@@ -1634,8 +1668,8 @@ void Multipole::set_model_specific_integration_pointers()
 {
 	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Multipole::deflection);
 	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Multipole::hessian);
-	defptr_r_spherical = NULL;
-	if (m==0) defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&Multipole::deflection_m0_spherical_r);
+	kapavgptr_rsq_spherical = NULL;
+	if (m==0) kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Multipole::deflection_m0_spherical_r);
 }
 
 void Multipole::assign_paramnames()
@@ -2020,7 +2054,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
 		k0 = 1.0; // needed since kappa_avg_spherical includes k0
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-		if (a != 0) k0 = 1.0 / kappa_avg_spherical_rsq(einstein_radius*einstein_radius);
+		if (a != 0) k0 = 1.0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
 	}
 	else k0 = mass_param_in;
 
@@ -2076,7 +2110,7 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 
 void CoreCusp::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::kapavg_spherical_rsq);
 }
 
 void CoreCusp::assign_paramnames()
@@ -2104,6 +2138,18 @@ void CoreCusp::assign_param_pointers()
 	set_geometric_param_pointers(5);
 }
 
+void CoreCusp::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	if (set_k0_by_einstein_radius) {
+		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
+		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
+	}
+	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
+	digamma_term = DiGamma(1.5-gamma/2);
+}
+
+
 void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
@@ -2113,7 +2159,7 @@ void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
 	if (set_k0_by_einstein_radius) {
 		a = sqrt(ravg*einstein_radius); // Not good! Only true for Pseudo-Jaffe subhalo. Fix this later (if it can be fixed)
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-		k0 = k0 / kappa_avg_spherical_rsq(einstein_radius*einstein_radius);
+		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 	} else {
 		if (gamma >= 3) a=1e30; // effectively infinite in this case (not physical however, because the mass diverges at the center of the subhalo)
@@ -2130,7 +2176,7 @@ void CoreCusp::update_special_anchored_params()
 		if (set_k0_by_einstein_radius) {
 			a = sqrt(ravg*einstein_radius);
 			if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-			k0 = k0 / kappa_avg_spherical_rsq(einstein_radius*einstein_radius);
+			k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
 			if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		}
 		else {
@@ -2224,31 +2270,25 @@ void CoreCusp::set_core_enclosed_mass()
 	else core_enclosed_mass = enclosed_mass_spherical_nocore(s*s,sqrt(a*a-s*s));
 }
 
-double CoreCusp::kappa_avg_spherical_rsq(const double rsq)
+double CoreCusp::kapavg_spherical_rsq(const double rsq)
 {
-	double r = sqrt(rsq);
-	return deflection_spherical_r(r)/r;
-}
-
-double CoreCusp::deflection_spherical_r(const double r)
-{
-	double aprime, def_r, rsq = r*r;
+	double aprime, kapavg;
 	if (s != 0) {
 		aprime = sqrt(a*a-s*s);
 		if (n==3) {
-			def_r = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore_n3(rsq+s*s,aprime,nstep) - core_enclosed_mass) / r;
+			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore_n3(rsq+s*s,aprime,nstep) - core_enclosed_mass) / rsq;
 		} else {
-			def_r = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore(rsq+s*s,aprime) - core_enclosed_mass) / r;
+			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore(rsq+s*s,aprime) - core_enclosed_mass) / rsq;
 		}
 	} else {
 		if (n==3) {
-			def_r = enclosed_mass_spherical_nocore_n3(rsq,a,nstep) / r;
+			kapavg = enclosed_mass_spherical_nocore_n3(rsq,a,nstep) / rsq;
 		}
 		else {
-			def_r = enclosed_mass_spherical_nocore(rsq,a) / r;
+			kapavg = enclosed_mass_spherical_nocore(rsq,a) / rsq;
 		}
 	}
-	return def_r;
+	return kapavg;
 }
 
 double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const double aprime, const double nprime) // actually mass_enclosed/(pi*sigma_crit)
@@ -2396,9 +2436,16 @@ void SersicLens::assign_param_pointers()
 	set_geometric_param_pointers(3);
 }
 
+void SersicLens::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+}
+
 void SersicLens::set_model_specific_integration_pointers()
 {
-	defptr_r_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::deflection_spherical_r);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::kapavg_spherical_rsq);
 }
 
 void SersicLens::get_auto_stepsizes(dvector& stepsizes, int &index)
@@ -2447,13 +2494,13 @@ double SersicLens::kappa_rsq_deriv(const double rsq)
 	return -kappa_e*exp(-b*(pow(rsq/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow(rsq,0.5/n-1)/(2*n);
 }
 
-double SersicLens::deflection_spherical_r(const double r)
+double SersicLens::kapavg_spherical_rsq(const double rsq)
 {
 	// Formula from Cardone et al. 2003
 	double x, alpha_e_times_2re, gamm2n, incgam2n;
-	x = pow(r/re,1.0/n);
+	x = pow(rsq/(re*re),1.0/(2*n));
 	IncGammaP_and_Gamma(2*n,b*x,incgam2n,gamm2n);
-	return def_factor*gamm2n*incgam2n/r;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
+	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
 
 

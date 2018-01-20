@@ -65,7 +65,8 @@ void Lens::process_commands(bool read_file)
 		{
 			if (mpi_id==0) {
 				if (nwords==1) {
-					cout << endl << "Available commands:   (type 'help <command>' for usage information)\n\n"
+					// You'll need to organize settings by category, because there are simply too many of them now.
+					cout << "Available commands:   (type 'help <command>' for usage information)\n\n"
 						"read -- execute commands from input file\n"
 						"write -- save command history to text file\n"
 						"settings -- display all settings (type 'help settings' for list of settings)\n"
@@ -89,17 +90,19 @@ void Lens::process_commands(bool read_file)
 						"replotimgs -- replot image positions previously found by 'plotimgs' command\n"
 						"plotcrit -- plot critical curves and caustics to data files (or to an image)\n"
 						"plotgrid -- plot recursive grid, if exists; plots corners of all grid cells\n"
-						"plotlenseq -- plot the x/y components of the lens equation with a given source position\n"
+						"plotlogkappa -- plot log(kappa) as a colormap along with isokappa contours\n"
+						"plotlogmag -- plot log(magnification) as a colormap along with magnification contours\n"
+						//"plotlenseq -- plot the x/y components of the lens equation with a given source position\n"   // You should probably get rid of this function (uninteresting)
 						"plotkappa -- plot radial kappa profile for each lens model and the total kappa profile\n"
 						"plotmass -- plot radial mass profile\n"
 						"defspline -- create a bicubic spline of the deflection field over the range of the grid\n"
 						"einstein -- find Einstein radius of a given lens model\n"
-						"\n"
-						"FEATURES THAT REQUIRE CCSPLINE MODE:\n"
-						"cc_reset -- delete the current critical curve spline and create a new one\n"
-						"auto_defspline -- spline deflection over an optimized grid determined by critical curves\n"
-						"mkrandsrc -- create file containing randomly plotted sources to be read with 'findimgs'\n"
-						"printcs -- print total (unbiased) cross section\n\n";
+						"\n";
+						//"FEATURES THAT REQUIRE CCSPLINE MODE:\n"
+						//"cc_reset -- delete the current critical curve spline and create a new one\n"              // These are obsolete features, probably should remove
+						//"auto_defspline -- spline deflection over an optimized grid determined by critical curves\n" // Although the 'mkrandsrc' and 'printcs' should be generalized
+						//"mkrandsrc -- create file containing randomly plotted sources to be read with 'findimgs'\n" // so they don't require ccspline mode (then get rid of ccspline)
+						//"printcs -- print total (unbiased) cross section\n\n";
 				} else if (words[1]=="settings") {
 					cout << "Type 'help <setting>' to display information about each setting and how to change\n"
 					"them; type 'settings' to display all current settings, or type each keyword alone\n"
@@ -109,9 +112,16 @@ void Lens::process_commands(bool read_file)
 						"warnings -- set warning flags on/off\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
 						"fits_format -- load surface brightness maps from FITS files (if on) or text files (if off)\n"
-						"data_pixel_size -- specify the pixel size to assume for pixel data files\n"
 						"gridtype -- set grid to radial or Cartesian\n"
-						"show_cc -- display critical curves along with images (on/off)\n"
+						"show_cc -- display critical curves when plotting images (on/off)\n"
+						"show_srcplane -- show source plane plots when plotting images (on/off)\n"
+						"plot_title -- set title to display on plots\n"
+						"plot_square_axes -- enforce x, y axes to follow the same length scale in plots\n"
+						"fontsize -- set font size for title and key in plots\n"
+						"linewidth -- set line width in plots\n"
+						"plot_key -- specify whether to display key in plots (on/off)\n"
+						"plot_key_outside -- specify whether to display key inside plots or next to plots (on/off)\n"
+						"colorbar -- specify whether to show color bar scale in pixel map plots (on/off)\n"
 						"ccspline -- set critical curve spline mode on/off\n"
 						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (if on)\n"
 						"major_axis_along_y -- orient major axis of lenses along y-direction (on/off)\n"
@@ -125,14 +135,22 @@ void Lens::process_commands(bool read_file)
 						"zsrc_ref -- source redshift used to define lensing quantities (kappa, etc.)\n"
 						"auto_zsrc_scaling -- if on, automatically keep zsrc_ref equal to zsrc (on/off)\n"
 						"h0 -- Hubble parameter given by h, where H_0 = 100*h km/s/Mpc (default = 0.7)\n"
+						"vary_h0 -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
 						"omega_m -- Matter density today divided by critical density of Universe (default = 0.3)\n"
 						"central_image -- include central images when fitting to data (if on)\n"
 						"nrepeat -- number of repeat chi-square optimizations after original run\n"
+						"imgplane_chisq -- use chi-square defined in image plane (if on) or source plane (if off)\n"
+						"analytic_bestfit_src\n"
 						"chisqmag -- use magnification in source plane chi-square function for image positions\n"
 						"chisqflux -- include flux information in chi-square fit (if on)\n"
 						"chisq_time_delays -- include time delay information in chi-square fit (if on)\n"
+						"chiq_mag_threshold -- exclude images from chi-square whose magnification is below threshold\n"
+						"chiq_imgsep_threshold -- exclude images whose separation from other images is below threshold\n"
+						"chiq_imgplane_threshold -- switch to imgplane_chisq if below threshold (if imgplane_chisq off)\n"
+						"nimg_penalty -- penalize chi-square if too many images are produced (if imgplane_chisq on)\n"
 						"chisq_parity -- include parity information in flux chi-square fit (if on)\n"
 						"chisqtol -- chi-square required accuracy during fit\n"
+						"find_errors -- calculate and show marginalized error in each parameter after chi-square fit\n"
 						"srcflux -- flux of point source (for producing or fitting image flux data)\n"
 						"fix_srcflux -- fix source flux to specified value during fit (if on)\n"
 						"time_delays -- calculate time delays for all images (if on)\n"
@@ -143,6 +161,7 @@ void Lens::process_commands(bool read_file)
 						: "xsplit -- set initial number of grid rows in the x-direction\n"
 						"ysplit -- set initial number of grid columns in the y-direction\n")
 						<< "cc_splitlevels -- set # of times grid squares are split when containing critical curve\n"
+						"cc_split_neighbors -- when splitting cells that contain critical curves, also split neighbors\n"
 						"imagepos_accuracy -- required accuracy in the calculated image positions\n"
 						"min_cellsize -- smallest allowed grid cell area for subgridding\n"
 						"rmin_frac -- set minimum radius of innermost cells in grid (fraction of max radius)\n"
@@ -150,21 +169,57 @@ void Lens::process_commands(bool read_file)
 						"galsub_min_cellsize -- minimum satellite subgrid cell length (units of Einstein radius)\n"
 						"galsub_cc_splitlevels -- number of critical curve splittings around satellite galaxies\n"
 						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
+						"inversion_method -- set method for image matrix inversion (mumps, umfpack, or cg)\n"
 						"img_npixels -- set number of pixels for images produced by 'sbmap plotimg'\n"
 						"src_npixels -- set # of source grid pixels for inverting or plotting lensed pixel images\n"
 						"auto_src_npixels -- automatically determine # of source pixels from lens model/data (on/off)\n"
 						"srgrid -- set source grid size and location for inverting or plotting lensed pixel images\n"
 						"auto_srcgrid -- automatically choose source grid size/location from lens model/data (on/off)\n"
+						"data_pixel_size -- specify the pixel size to assume for pixel data files\n"
 						"data_pixel_noise -- pixel noise in data pixel images (loaded using 'sbmap loadimg')\n"
 						"sim_pixel_noise -- simulated pixel noise added to images produced by 'sbmap plotimg'\n"
-						"psf_width -- width of point spread function (PSF) along x- and y-axes\n"
+						"random_seed -- seed for random number generator\n"
+						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
+						"psf_threshold -- when assuming Gaussian PSF, approximate PSF as zero if below threshold\n"
+						"sb_threshold --\n"
+						"noise_threshold --\n"
+						"psf_mpi --\n"
+						"inversion_nthreads --\n"
+						"pixel_fraction --\n"
+						"vary_pixel_fraction --\n"
 						"regparam -- value of regularization parameter for inverting lensed pixel images\n"
 						"vary_regparam -- vary the regularization parameter during a fit (on/off)\n"
 						"adaptive_grid -- use adaptive source grid that splits source pixels recursively (on/off)\n"
-						"vary_h0 -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
+						"auto_srcgrid_set_pixelsize --\n"
+						"nimg_prior --\n"
+						"outside_sb_prior --\n"
+						"subhalo_prior --\n"
+						"activate_unmapped_srcpixels --\n"
+						"exlcude_srcpixels_outside_mask --\n"
+						"remove_unmapped_srcpixels --\n"
 						"sb_threshold -- minimum surface brightness to include when determining image centroids\n"
-						"ptsize/ps -- set point size for plots\n"
-						"pttype/pt -- set point marker type for plots\n"
+						"ptsize/ps -- set point size for plots --\n"
+						"pttype/pt -- set point marker type for plots --\n"
+						"min_cellsize --\n"
+						"sim_err_pos --\n"
+						"sim_err_flux --\n"
+						"sim_err_td --\n"
+						"n_mcpoints --\n"
+						"simplex_nmax --\n"
+						"simplex_nmax_anneal --\n"
+						"simplex_minchisq --\n"
+						"simplex_minchisq_anneal --\n"
+						"simplex_temp0 --\n"
+						"simplex_temp0 --\n"
+						"simplex_tfac --\n"
+						"mcmc_chains --\n"
+						"mcmctol --\n"
+						"mcmclog --\n"
+						"chisqlog --\n"
+						"parallel_mumps --\n"
+						"show_mumps_info --\n"
+						"srcpixel_mag_threshold --\n"
+						"vary_srcpixel_mag_threshold --\n"
 						"\n";
 				} else if (words[1]=="read")
 					cout << "read <filename>\n\n"
@@ -925,13 +980,14 @@ void Lens::process_commands(bool read_file)
 						"(-xmax,xmax) x (-ymax,ymax). If [xmax] and [ymax] are not specified, defaults to\n"
 						"current gridsize. If no argument is given, outputs the size and number of steps of\n"
 						"current spline. If 'off' is specified, deletes current deflection spline.\n";
-				else if (words[1]=="auto_defspline")
-					cout << "auto_defspline <N>\n\n"
-						"Creates a bicubic spline of the deflection field with NxN steps over an optimized\n"
-						"grid determined by the points where the outer critical curve crosses x/y axes.\n";
+				else if (words[1]=="auto_defspline")  // obsolete--should probably remove
+					cout << "auto_defspline <N>\n\n"  // obsolete--should probably remove
+						"Creates a bicubic spline of the deflection field with NxN steps over an optimized\n"  // obsolete--should probably remove
+						"grid determined by the points where the outer critical curve crosses x/y axes.\n";  // obsolete--should probably remove
 				else if (words[1]=="lensinfo")
 					cout << "lensinfo <x> <y>\n\n"
-						"Displays kappa, magnification, shear, and potential at the point (x,y).\n";
+						"Displays the total kappa, deflection, potential, magnification, shear magnitude/direction, and\n"
+						"corresponding source position for the point (x,y).\n";
 				else if (words[1]=="plotlensinfo")
 					cout << "plotlensinfo [file_root]\n\n"
 						"Plot a pixel map of the kappa, magnification, shear, and potential at each pixel, which are output to\n"
@@ -949,9 +1005,21 @@ void Lens::process_commands(bool read_file)
 						"<critical_curve_x> <critical_curve_y> <caustic_x> <caustic_y>\n";
 				else if (words[1]=="plotgrid")
 					cout << "plotgrid [file]\n\n"
-						"Plots recursive grid (if one has been created) to <file>. The (x,y) coordinates of\n"
-						"the corners of grid cells are plotted. If no filename is specified, plots to default\n"
-						"file 'xgrid.dat' and plots graphically with gnuplot.\n";
+						"Plots recursive grid (if one has been created) to <file>, or to the screen using gnuplot if no filename\n"
+						"is specified. The (x,y) coordinates of the corners of grid cells are plotted, along with the critical\n"
+						"curves.\n";
+				else if (words[1]=="plotlogkappa")
+					cout << "plotlogkappa [file]\n\n"
+						"Plots a colormap of the total log(kappa), along with log(kappa) contours, either to the screen (if no\n"
+						"filename is specified) or to a file. If terminal is set to 'text' and a filename is given, outputs\n"
+						"log(kappa) map to file. The number of pixels is set by 'img_npixels'. (Note: in pseudo-elliptical\n"
+						"models, it is possible for kappa to have negative values in some places. In this case, a warning is\n"
+						"produced, and then the log of the absolute value of kappa is plotted.\n";
+				else if (words[1]=="plotlogmag")
+					cout << "plotlogmag [file]\n\n"
+						"Plots a colormap of log(magnification), along with contours, either to the screen (if no filename is\n"
+						"specified) or to a file. If terminal is set to 'text' and a filename is given, outputs log(mag) map\n"
+						"to file. The number of pixels is set by 'img_npixels'.\n";
 				else if (words[1]=="findimg")
 					cout << "findimg <source_x> <source_y>\n\n"
 						"Finds the set of images corresponding to given source position. The image data is\n"
@@ -1016,8 +1084,8 @@ void Lens::process_commands(bool read_file)
 					cout << "show_cc <on/off>\n\n"
 					"If on, plots critical curves along with image positions; otherwise, omits critical curves.\n"
 					"(default=on)\n";
-				else if (words[1]=="plot_srcplane")
-					cout << "plot_srcplane <on/off>\n\n"
+				else if (words[1]=="show_srcplane")
+					cout << "show_srcplane <on/off>\n\n"
 					"If on, plots the source along with the lensed images when the 'plotimg' or 'plotimgs' commands\n"
 					"are used. (default=on)\n";
 				else if (words[1]=="plot_title")
@@ -1034,14 +1102,14 @@ void Lens::process_commands(bool read_file)
 					cout << "mkrandsrc <N> [source_outfile]   (supported only in ccspline mode)\n\n"
 						"Plots N sources randomly within the curve circumscribing the outermost caustic(s).\n"
 						"Sources are plotted to [source_outfile] (default='sourcexy.in')\n";
-				else if (words[1]=="plotlenseq")
-					cout << "plotlenseq <source_x> <source_y> [x-file] [y-file] (text terminal mode)\n"
-						"plotlenseq <source_x> <source_y> [picture_file]    (postscript/PDF terminal mode)\n"
-						"plotlenseq <source_x> <source_y> grid\n\n"
-						"Plots the x/y components of the lens equation with specified source. If no filenames\n"
-						"are given, the components are plotted graphically through Gnuplot. If 'grid' is\n"
-						"specified as the third argument, the current grid is superimposed. Otherwise the\n"
-						"curves are plotted to the specified output files.\n";
+				//else if (words[1]=="plotlenseq")                                                                // Probably should get rid of this function (uninteresting)
+					//cout << "plotlenseq <source_x> <source_y> [x-file] [y-file] (text terminal mode)\n"
+						//"plotlenseq <source_x> <source_y> [picture_file]    (postscript/PDF terminal mode)\n"
+						//"plotlenseq <source_x> <source_y> grid\n\n"
+						//"Plots the x/y components of the lens equation with specified source. If no filenames\n"
+						//"are given, the components are plotted graphically through Gnuplot. If 'grid' is\n"
+						//"specified as the third argument, the current grid is superimposed. Otherwise the\n"
+						//"curves are plotted to the specified output files.\n";
 				else if (words[1]=="plotkappa")
 					cout << "plotkappa <rmin> <rmax> <steps> <kappa_file> [dkappa_file] [lens=#]\n\n"
 						"Plots the radial kappa profile and its (optional) derivative to <kappa_file> and [dkappa_file]\n"
@@ -1064,8 +1132,8 @@ void Lens::process_commands(bool read_file)
 					cout << "clear <#>\n\n"
 					"Remove lens galaxy # from the list (the list of galaxies can be printed using the\n"
 					"'lens' command). If no arguments given, delete entire lens configuration and start over.\n";
-				else if (words[1]=="cc_reset")
-					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n";
+				else if (words[1]=="cc_reset")  // obsolete--should probably remove
+					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n"; // obsolete--should probably remove
 				else if (words[1]=="integral_method")
 					cout << "integral_method gauss [npoints]\n"
 						"integral_method romberg [accuracy]\n\n"
@@ -1314,6 +1382,9 @@ void Lens::process_commands(bool read_file)
 				bool setting;
 				int intval;
 				double doubleval;
+
+				// There are far more settings than are shown here, so you need to complete this list. You should also
+				// organize them by category (also with "help settings") so they can be looked up more easily
 
 				// first display the mode settings
 				if (terminal==TEXT) cout << "Terminal: text" << endl;
@@ -3980,7 +4051,7 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Created " << splinesteps << "x" << splinesteps << " bicubic spline" << endl;
 			} else Complain("must specify number of steps N and (xmax,ymax) (defaults to current gridsize)");
 		}
-		else if (words[0]=="auto_defspline")
+		else if (words[0]=="auto_defspline")  // obsolete--should probably remove
 		{
 			if (!use_cc_spline) Complain("auto_defspline is only supported in ccspline mode");
 			if (nwords >= 2) {
@@ -4014,7 +4085,6 @@ void Lens::process_commands(bool read_file)
 				else Complain("two filenames must be specified for plotting of critical curves in postscript/PDF mode");
 			} else if (nwords == 1) {
 				if (plotcrit("crit.dat")==true) {
-					// Plot critical curves and caustics graphically using Gnuplot
 					run_plotter("crit");
 					if (plot_srcplane) run_plotter("caust");
 				} else warn(warnings,"No critical curves found");
@@ -4229,24 +4299,44 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="plotlogkappa")
 		{
 			if (!islens()) Complain("must specify lens model first");
-			if (nwords == 1) {
-				plot_logkappa_map(n_image_pixels_x,n_image_pixels_y);
-				run_plotter("lensmap_kappalog");
-			} else Complain("invalid number of arguments to 'plotlogkappa'");
+			if (nwords < 3) {
+				if ((nwords==2) and (terminal==TEXT)) {
+					plot_logkappa_map(n_image_pixels_x,n_image_pixels_y,words[1]);
+				} else {
+					plot_logkappa_map(n_image_pixels_x,n_image_pixels_y,"lensmap");
+					if (nwords==2) {
+						run_plotter("lensmap_kappalog",words[1],"");
+					} else {
+						run_plotter("lensmap_kappalog");
+					}
+				}
+			} else Complain("only up to one argument is allowed for 'plotlogkappa' (filename)");
 		}
 		else if (words[0]=="plotlogmag")
 		{
-			if (nwords == 1) {
+			if (nwords < 3) {
 				if (!islens()) Complain("must specify lens model first");
 				if ((!show_cc) or (plotcrit("crit.dat")==true)) {
-					plot_logmag_map(n_image_pixels_x,n_image_pixels_y);
-					if (show_cc) {
-						run_plotter("lensmap_maglog");
+					if ((nwords==2) and (terminal==TEXT)) {
+						plot_logmag_map(n_image_pixels_x,n_image_pixels_y,words[1]);
 					} else {
-						run_plotter("lensmap_maglog_nocc");
+						plot_logmag_map(n_image_pixels_x,n_image_pixels_y,"lensmap");
+						if (nwords==2) {
+							if (show_cc) {
+								run_plotter("lensmap_maglog",words[1],"");
+							} else {
+								run_plotter("lensmap_maglog_nocc",words[1],"");
+							}
+						} else {
+							if (show_cc) {
+								run_plotter("lensmap_maglog");
+							} else {
+								run_plotter("lensmap_maglog_nocc");
+							}
+						}
 					}
 				} else Complain("could not find critical curves");
-			} else Complain("invalid number of arguments to 'plotlogmag'");
+			} else Complain("only up to one argument is allowed for 'plotlogmag' (filename)");
 		}
 		else if (words[0]=="einstein")
 		{
@@ -4895,12 +4985,12 @@ void Lens::process_commands(bool read_file)
 				set_switch(show_cc,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="plot_srcplane")
+		else if (words[0]=="show_srcplane")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Plot source plane: " << display_switch(plot_srcplane) << endl;
+				if (mpi_id==0) cout << "Show source plane when plotting: " << display_switch(plot_srcplane) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'plot_srcplane' command; must specify 'on' or 'off'");
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'show_srcplane' command; must specify 'on' or 'off'");
 				set_switch(plot_srcplane,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -6002,12 +6092,8 @@ void Lens::process_commands(bool read_file)
 			wtime = omp_get_wtime() - wtime0;
 			cout << "Wall time = " << wtime << endl;
 #endif
-			//double rein;
-			//rein = einstein_radius_of_primary_lens();
-			//cout << "EIN: " << rein << endl;
+			// These are experimental functions that I either need to make official, or else remove
 			//plot_chisq_1d(0,30,50,450);
-			//plot_chisq_2d(0,1,20,20,140,20,0,8);
-			//plot_chisq_2d(0,1,10,10,300,10,1.8,4.0);
 			//plot_chisq_2d(3,4,20,-0.1,0.1,20,-0.1,0.1); // implement this as a command later; probably should make a 1d version as well
 			//make_satellite_population(0.04444,2500,0.1,0.6);
 			//plot_satellite_deflection_vs_area();

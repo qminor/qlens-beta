@@ -541,7 +541,7 @@ void LensProfile::set_model_specific_integration_pointers() // gets overloaded b
 void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q has been defined before calling this
 {
 	potptr = &LensProfile::potential_numerical;
-	defptr_r_spherical = &LensProfile::deflection_spherical_integral;
+	kapavgptr_rsq_spherical = &LensProfile::kappa_avg_spherical_integral;
 	potptr_rsq_spherical = &LensProfile::potential_spherical_integral;
 	if (q==1.0) {
 		potptr = &LensProfile::potential_spherical_default;
@@ -564,24 +564,23 @@ double LensProfile::kappa_rsq(const double rsq) // this function should be redef
 void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector& def)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double defmag_over_r_ell = sqrt((1-epsilon)*x*x + (1+epsilon)*y*y); // just r_ell for the moment
-	defmag_over_r_ell = (this->*defptr_r_spherical)(defmag_over_r_ell)/defmag_over_r_ell;
-	def[0] = defmag_over_r_ell*(1-epsilon)*x;
-	def[1] = defmag_over_r_ell*(1+epsilon)*y;
+	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
+	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+	def[0] = kapavg*(1-epsilon)*x;
+	def[1] = kapavg*(1+epsilon)*y;
 }
 
 void LensProfile::hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, sin2phi, exsq, eysq, rr, gamma1, gamma2, kap_r, shearmag, kap;
+	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
 	exsq = (1-epsilon)*x*x; // elliptical x^2
 	eysq = (1+epsilon)*y*y; // elliptical y^2
-	rr = exsq+eysq; // elliptical r^2
-	cos2phi = (exsq - eysq) / rr;
-	sin2phi = 2*q*(1+epsilon)*x*y/rr;
-	kap_r = kappa_rsq(rr);
-	rr = sqrt(rr); // Now rr is just r
-	shearmag = ((this->*defptr_r_spherical)(rr) / rr) - kap_r; // shear from the spherical model
+	rsq = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rsq;
+	sin2phi = 2*q*(1+epsilon)*x*y/rsq;
+	kap_r = kappa_rsq(rsq);
+	shearmag = ((this->*kapavgptr_rsq_spherical)(rsq)) - kap_r; // shear from the spherical model
 	kap = kap_r + epsilon*shearmag*cos2phi;
 	gamma1 = -epsilon*kap_r - shearmag*cos2phi;
 	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin2phi;
@@ -594,15 +593,14 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 double LensProfile::kappa_from_elliptical_potential(const double x, const double y)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, exsq, eysq, rr, kap_r, shearmag;
+	double cos2phi, exsq, eysq, rsq, kap_r, shearmag;
 	exsq = (1-epsilon)*x*x; // elliptical x^2
 	eysq = (1+epsilon)*y*y; // elliptical y^2
-	rr = exsq+eysq; // elliptical r^2
-	cos2phi = (exsq - eysq) / rr;
+	rsq = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rsq;
 
-	kap_r = kappa_rsq(rr);
-	rr = sqrt(rr);
-	shearmag = ((this->*defptr_r_spherical)(rr) / rr) - kap_r;
+	kap_r = kappa_rsq(rsq);
+	shearmag = (this->*kapavgptr_rsq_spherical)(rsq) - kap_r;
 
 	return (kap_r + epsilon*shearmag*cos2phi);
 }
@@ -752,24 +750,19 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-double LensProfile::kappa_r(const double r)
-{
-	return kappa_rsq(r*r);
-}
-
 double LensProfile::kappa_avg_r(const double r)
 {
-	return (this->*defptr_r_spherical)(r)/r;
+	return (this->*kapavgptr_rsq_spherical)(r*r);
 }
 
 double LensProfile::einstein_radius_root(const double r)
 {
-	return (zfac*kappa_avg_r(r)-1);
+	return (zfac*(this->*kapavgptr_rsq_spherical)(r*r)-1);
 }
 
 void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
 {
-	if (defptr_r_spherical==NULL) {
+	if (kapavgptr_rsq_spherical==NULL) {
 		re_major_axis=0;
 		re_average=0;
 		return;
@@ -783,7 +776,7 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	}
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
-	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
+	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
 	re_major_axis = re_average * f_major_axis;
 	zfac = 1.0;
 }
@@ -803,7 +796,7 @@ double LensProfile::get_inner_logslope()
 	static const double h = 1e-6;
 	double dlogh;
 	dlogh = log(h);
-	return ((log(kappa_r(exp(2*dlogh))) - log(kappa_r(h))) / dlogh);
+	return ((log(kappa_rsq(SQR(exp(2*dlogh)))) - log(kappa_rsq(h*h))) / dlogh);
 }
 
 void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname)
@@ -816,23 +809,23 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 	if (kdname != NULL) kdout.open(kdname);
 	kout << setiosflags(ios::scientific);
 	if (kdname != NULL) kdout << setiosflags(ios::scientific);
-	double kavg;
+	double kavg, rsq;
 	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
-		if (defptr_r_spherical==NULL) kavg=0; // just in case there is no radial deflection function defined
-		else kavg = kappa_avg_r(r);
-		kout << r << " " << kappa_r(r) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*r*r << endl;
-		if (kdname != NULL) kdout << r << " " << fabs(kappa_rsq_deriv(r*r)) << endl;
+		rsq = r*r;
+		if (kapavgptr_rsq_spherical==NULL) kavg=0; // just in case there is no radial deflection function defined
+		else kavg = (this->*kapavgptr_rsq_spherical)(rsq);
+		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq << endl;
+		if (kdname != NULL) kdout << r << " " << fabs(kappa_rsq_deriv(rsq)) << endl;
 	}
 }
 
 void LensProfile::deflection_spherical_default(double x, double y, lensvector& def)
 {
-	double def_r, r;
-	r = sqrt(x*x+y*y);
-	def_r = (this->*defptr_r_spherical)(r);
+	double kapavg = x*x+y*y; // r^2 right now
+	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
 
-	def[0] = def_r*x/r;
-	def[1] = def_r*y/r;
+	def[0] = kapavg*x;
+	def[1] = kapavg*y;
 }
 
 double LensProfile::potential_spherical_default(const double x, const double y)
@@ -840,38 +833,37 @@ double LensProfile::potential_spherical_default(const double x, const double y)
 	return (this->*potptr_rsq_spherical)(x*x+y*y); // ellipticity is put into the potential in this mode
 }
 
-double LensProfile::deflection_spherical_r_generic(const double r)
+double LensProfile::kapavg_spherical_generic(const double rsq)
 {
-	return (this->*defptr_r_spherical)(r);
+	return (this->*kapavgptr_rsq_spherical)(rsq);
 }
 
-double LensProfile::deflection_spherical_integral(const double r)
+double LensProfile::kappa_avg_spherical_integral(const double rsq)
 {
 	double ans;
 	if (integral_method == Romberg_Integration)
 	{
 		double (Romberg::*sptr)(const double);
-		sptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::deflection_spherical_integrand);
-		ans = (2.0/r)*romberg_open(sptr, 0, r, romberg_accuracy, 5);
+		sptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		ans = (2.0/rsq)*romberg_open(sptr, 0, sqrt(rsq), romberg_accuracy, 5);
 	}
 	else if (integral_method == Gaussian_Quadrature)
 	{
 		double (GaussianIntegral::*sptr)(double);
-		sptr = static_cast<double (GaussianIntegral::*)(double)> (&LensProfile::deflection_spherical_integrand);
-		ans = (2.0/r)*NIntegrate(sptr,0,r);
+		sptr = static_cast<double (GaussianIntegral::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		ans = (2.0/rsq)*NIntegrate(sptr,0,sqrt(rsq));
 	}
 	else die("unknown integral method");
 	return ans;
 }
 
-double LensProfile::deflection_spherical_integrand(const double u) { return u*kappa_r(u); }
+double LensProfile::mass_enclosed_spherical_integrand(const double u) { return u*kappa_rsq(u*u); } // actually mass enclosed / (2*pi*sigma_cr)
 
 void LensProfile::hessian_spherical_default(const double x, const double y, lensmatrix& hess)
 {
-	double r, rsq, kappa_avg, r_dfdr;
+	double rsq, kappa_avg, r_dfdr;
 	rsq = x*x+y*y;
-	r = sqrt(rsq);
-	kappa_avg = (this->*defptr_r_spherical)(r)/r;
+	kappa_avg = (this->*kapavgptr_rsq_spherical)(rsq);
 	r_dfdr = 2*(kappa_rsq(rsq) - kappa_avg)/rsq; // Here, r_dfdr = (1/r)*d/dr(kappa_avg)
 
 	hess[0][0] = kappa_avg + x*x*r_dfdr;
@@ -977,26 +969,32 @@ double LensIntegral::k_integral()
 	return ans;
 }
 
-// i,j,k integrals are just like from Gravlens manual, but with subsitution
+// i,j,k integrals are in form similar to Keeton (2001), but generalized to allow for different
+// definitions of the elliptical radius. I have also made the subsitution
 // u=w*w (easier for Gaussian quadrature; makes kappa singularity more manageable)
 
 double LensIntegral::i_integrand_prime(const double w)
 {
 	u = w*w;
-	xi = sqrt(u*(xsqval + ysqval/(1-(1-qsq)*u))*fsqinv);
-	return (2*w*(xi/u)*(profile->deflection_spherical_r_generic)(xi) / sqrt(1-(1-qsq)*u))/fsqinv;
+	qfac = 1 - (1-qsq)*u;
+	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
+	return (2*w*(xisq/u)*(profile->kapavg_spherical_generic)(xisq) / sqrt(qfac))/fsqinv;
 }
 
 double LensIntegral::j_integrand_prime(const double w)
 {
-	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w))*fsqinv;
-	return (2*w*profile->kappa_rsq(xisq) / pow(1-(1-qsq)*w*w, nval+0.5));
+	u = w*w;
+	qfac = 1 - (1-qsq)*u;
+	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
+	return (2*w*profile->kappa_rsq(xisq) / pow(qfac, nval+0.5));
 }
 
 double LensIntegral::k_integrand_prime(const double w)
 {
-	xisq = w*w*(xsqval + ysqval/(1-(1-qsq)*w*w))*fsqinv;
-	return fsqinv*(2*w*w*w*profile->kappa_rsq_deriv(xisq) / pow(1-(1-qsq)*w*w, nval+0.5));
+	u = w*w;
+	qfac = 1 - (1-qsq)*u;
+	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
+	return fsqinv*(2*w*u*profile->kappa_rsq_deriv(xisq) / pow(qfac, nval+0.5));
 }
 
 

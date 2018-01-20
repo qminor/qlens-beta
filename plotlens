@@ -636,7 +636,7 @@ then
 	PLOTCOMMAND="set contour; unset surface; set cntrparam levels incr $C0,$STEP,$Cf; set view map; set dgrid3d 100,100,4; set table 'contour.txt'; splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
 	PLOTCOMMAND="$PLOTCOMMAND; unset contour; set surface; set table 'dgrid.txt';splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
 	PLOTCOMMAND="$PLOTCOMMAND; reset; set pm3d map; unset key; set palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e'); set autoscale fix; set grid"
-	PLOTCOMMAND="$PLOTCOMMAND; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf]; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
+	PLOTCOMMAND="$PLOTCOMMAND; set title '$TITLE'; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf]; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
 	PLOTLINE="set key; $SETTERM; $PLOTCOMMAND"
 elif [[ $COMMAND == "lensmap_maglog" ]]
 then
@@ -670,6 +670,6 @@ elif [[ $KEY == "-1" ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
 echo "$PLOTLINE" >tempplot.in
 
 gnuplot -persist tempplot.in >/dev/null 2>&1
-rm tempplot.in
+#rm tempplot.in
 if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 

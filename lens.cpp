@@ -585,8 +585,9 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
-void Lens::add_lens(LensProfileName name, const int emode, const double mass_parameter, const double scale1, const double scale2, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
+void Lens::add_lens(LensProfileName name, const int emode, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
 {
+	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++)
@@ -602,30 +603,29 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 		case SHEET:
 			newlist[nlens] = new MassSheet(mass_parameter, xc, yc); break;
 		case ALPHA:
-			newlist[nlens] = new Alpha(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case SHEAR:
-			newlist[nlens] = new Shear(q, theta, xc, yc); break;
+			newlist[nlens] = new Shear(eparam, theta, xc, yc); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(...) because one of the input parameters is an int
 		case nfw:
-			newlist[nlens] = new NFW(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TRUNCATED_nfw:
-			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case pnfw:
-			// in the case of pnfw, q here is not the axis ratio, but rather an ellipticity parameter e such that R^2 = (1-e)*x*x + (1+e)*y*y
-			newlist[nlens] = new Pseudo_Elliptical_NFW(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Pseudo_Elliptical_NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case PJAFFE:
-			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case EXPDISK:
-			newlist[nlens] = new ExpDisk(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new ExpDisk(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case HERNQUIST:
-			newlist[nlens] = new Hernquist(mass_parameter, scale1, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Hernquist(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case CORECUSP:
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
-			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy, optional_setting); break;
+			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy, optional_setting); break;
 		case SERSIC_LENS:
-			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TESTMODEL: // Model for testing purposes
-			newlist[nlens] = new TestModel(q, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new TestModel(eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		default:
 			die("Lens type not recognized");
 	}
@@ -1980,7 +1980,7 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 		lens_list[j]->get_center_coords(xc,yc);
 		if ((xc==xc0) and (yc==yc0)) {
 			centered[j]=true;
-			if ((multiple_lenses==false) and (lens_list[j]->defptr_r_spherical != NULL)) multiple_lenses = true;
+			if ((multiple_lenses==false) and (lens_list[j]->kapavgptr_rsq_spherical != NULL)) multiple_lenses = true;
 		}
 		else centered[j]=false;
 	}
@@ -2008,7 +2008,7 @@ double Lens::einstein_radius_root(const double r)
 {
 	double kapavg=0;
 	for (int j=0; j < nlens; j++) {
-		if ((centered[j]) and (lens_list[j]->defptr_r_spherical != NULL)) kapavg += zfac_re*lens_list[j]->kappa_avg_r(r);
+		if ((centered[j]) and (lens_list[j]->kapavgptr_rsq_spherical != NULL)) kapavg += zfac_re*lens_list[j]->kappa_avg_r(r);
 	}
 	return (kapavg-1);
 }
@@ -2033,7 +2033,9 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		if ((xc==xc0) and (yc==yc0)) centered[j]=true;
 		else centered[j]=false;
 	}
+	double rsq;
 	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
+		rsq = r*r;
 		kout << r << " ";
 		if (kdname != NULL) kdout << r << " ";
 		total_kappa = 0;
@@ -2041,8 +2043,8 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		for (int j=0; j < nlens; j++) {
 			if (centered[j]) {
 				// this ignores off-center lenses (satellites) since we are plotting the radial profile; ellipticity is also ignored
-				kap = lens_list[j]->kappa_r(r);
-				if (kdname != NULL) dkap = lens_list[j]->dkappa_rsq(r*r);
+				kap = lens_list[j]->kappa_rsq(rsq);
+				if (kdname != NULL) dkap = lens_list[j]->kappa_rsq_deriv(rsq);
 				total_kappa += kap;
 				if (kdname != NULL) total_dkappa += dkap;
 			}
@@ -5364,15 +5366,15 @@ void Lens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double y
 	delete[] corner_sourcepts;
 }
 
-void Lens::plot_logkappa_map(const int x_N, const int y_N)
+void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 	xstep = (xmax-xmin)/x_N;
 	ystep = (ymax-ymin)/y_N;
-	string x_filename = "lensmap.x";
-	string y_filename = "lensmap.y";
+	string x_filename = filename + ".x";
+	string y_filename = filename + ".y";
 	ofstream pixel_xvals(x_filename.c_str());
 	ofstream pixel_yvals(y_filename.c_str());
 	int i,j;
@@ -5385,7 +5387,7 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N)
 	pixel_xvals.close();
 	pixel_yvals.close();
 
-	string logkapname = "lensmap.kappalog";
+	string logkapname = filename + ".kappalog";
 	ofstream logkapout(logkapname.c_str());
 
 	double kap, mag, invmag, shearval, pot;
@@ -5408,15 +5410,15 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N)
 	if (negkap==true) warn("kappa has negative values in some locations; plotting abs(kappa)");
 }
 
-void Lens::plot_logmag_map(const int x_N, const int y_N)
+void Lens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 	xstep = (xmax-xmin)/x_N;
 	ystep = (ymax-ymin)/y_N;
-	string x_filename = "lensmap.x";
-	string y_filename = "lensmap.y";
+	string x_filename = filename + ".x";
+	string y_filename = filename + ".y";
 	ofstream pixel_xvals(x_filename.c_str());
 	ofstream pixel_yvals(y_filename.c_str());
 	int i,j;
@@ -5429,7 +5431,7 @@ void Lens::plot_logmag_map(const int x_N, const int y_N)
 	pixel_xvals.close();
 	pixel_yvals.close();
 
-	string logmagname = "lensmap.maglog";
+	string logmagname = filename + ".maglog";
 	ofstream logmagout(logmagname.c_str());
 
 	double mag, invmag, shearval, pot;

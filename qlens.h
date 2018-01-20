@@ -408,8 +408,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static const double satellite_einstein_radius_fraction;
 	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny);
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
-	void plot_logkappa_map(const int x_N, const int y_N);
-	void plot_logmag_map(const int x_N, const int y_N);
+	void plot_logkappa_map(const int x_N, const int y_N, const string filename);
+	void plot_logmag_map(const int x_N, const int y_N, const string filename);
 
 	struct critical_curve {
 		vector<lensvector> cc_pts;

@@ -1143,7 +1143,7 @@ ofstream Grid::xgrid;
 bool Lens::plot_recursive_grid(const char filename[])
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
-	if ((this->*plot_critical_curves)("crit.dat")==false) return false;
+	(this->*plot_critical_curves)("crit.dat");
 	if ((grid==NULL) and (create_grid(true,reference_zfactor)==false)) return false;
 
 	if (mpi_id==0) {
