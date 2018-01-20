@@ -15,7 +15,6 @@ sci_notation off        # This is just up to your personal preference
 central_image off       # The image data does not include a central image, so this tells QLens not to search for one.
 imgdata read alphafit.dat    # Loads in the image data
 imgdata                      # Shows the image data so you can see what it looks like
-find_errors off
 
 # Here are some tips for deciding your initial guess for the lens parameters:
 # Use the scale of the images to guess the Einstein radius.
@@ -42,29 +41,33 @@ fit lens alpha 4.5 1 0 0.7 90 0.9 0.3 shear=0.0 0.1  # For the parameters we wil
 -0.2 0.2
 -0.2 0.2
 
-fit sourcept 0.6 0.5 # Again, the initial guess for the source point is not actually used by T-Walk; only limits (next two lines) are used
-0 1
-0.2 1.2
+analytic_bestfit_src on   # This tells qlens to solve for the best-fit source coordinates analytically during the fit, so they will not
+                          # be varied as free parameters (makes it converge faster, however you won't be able to infer the uncertainties
+								  # in the source position if you do this).
+
+# The following is only necessary if analytic_bestfit_src is off, since then the source coordinates are free parameters
+#fit sourcept 0.6 0.5    # The initial guess for the source point is not actually used by T-Walk; only limits (next two lines) are used
+#0 1
+#0.2 1.2
+
+# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+# This often works well enough for a first-run fit, and should be used especially if the image-plane chi-square has trouble converging.
+# If your best-fit point returns the wrong number of images, however, try switching to the image plane chi-square instead
+imgplane_chisq off    # using source plane chi-square (this is the default)
 
 chisqflux on            # This means we use the image fluxes in the fit (very useful if you can use them, but often cannot)
 chisq_time_delays off   # Don't use time delays (this is the default; time delays are only available for certain quasar lenses)
 n_mcpoints = 1000       # This determines how well the nested sampler explores the parameter space;
                         #    bigger value --> better sampling, but takes longer to converge
 
-# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
-# This often works well enough for a first-run fit, and should be used especially if the image-plane chi-square has trouble converging.
-# Here we simply use the image-plane chi-square to define our likelihood, which is more accurate
-imgplane_chisq on
-warnings off
-
-# The nested sampling finishes when the value of 'test' reaches 2; it may take awhile (up to a couple hours) to finish in this example,
-# although if you use the source plane chi-square (by doing imgplane_chisq off) it will run MUCH faster but will not be as accurate.
-# To make the nested sampling run faster, compile QLens with MPI and run it with multiple processes
+# The nested sampling finishes when the value of 'test' reaches 2; it may take awhile (up to ~30 mins depending on your machine)
+# to finish in this example. To make the nested sampling run faster, compile QLens with MPI and run it with multiple processes
 
 fit run  # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
 
 # Once the nested sampling finishes, you can plot the resulting posterior probability distributions using the 'mkdist' tool,
-# included with qlens, from the UNIX command line.
+# included with qlens, from the UNIX command line. For a quick start, you can go to the directory 'chains_alpha_nest' and type
+# 'mkdist -n40 -N40 -SP', then view the resulting PDF files that get created.
 
 fit use_bestfit
 fit chisq
