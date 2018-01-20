@@ -11,6 +11,7 @@ const double Simplex::tfinal_default = 1e-10;
 const double Simplex::tinc_default = 0.9;
 const int Simplex::max_iterations_default = 1000;
 const int Simplex::max_iterations_anneal_default = 1000;
+bool Simplex::simplex_display_bestfit_point;
 
 int SIMPLEX_KEEP_RUNNING = 1;
 
@@ -223,14 +224,7 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 	int iterations;
 	if (t > 0) {
 		if ((verbal) and (t >= tfinal)) {
-			//cout << "Beginning simulated annealing...." << endl;
 			cout << "temperature=" << t << endl;
-			//cout << "initial point: (";
-			//for (int i=0; i < ndim; i++) {
-				//cout << p[0][i];
-				//if (i < ndim-1) cout << ",";
-			//}
-			//cout << ")             " << endl;
 		}
 		while (t >= tfinal) {
 			if (simplex_exit_status==false) break;
@@ -241,14 +235,17 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 			if (yb < fmin_anneal) t = 0;
 			else t *= tinc;
 			if (verbal) {
-				cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
-				//cout << "best-fit point: (";
-				//for (int i=0; i < ndim; i++) {
-					//cout << pb[i];
-					//if (i < ndim-1) cout << ",";
-				//}
-				//cout << ")      " << endl;
-				//cout << endl;
+				if (simplex_display_bestfit_point) {
+					cout << "\033[2A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
+					cout << "best-fit point: (";
+					for (int i=0; i < ndim; i++) {
+						cout << pb[i];
+						if (i < ndim-1) cout << ",";
+					}
+					cout << ")      " << endl;
+				} else {
+					cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
+				}
 			}
 		}
 		if (simplex_exit_status==false) return iterations;

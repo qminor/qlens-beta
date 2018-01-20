@@ -168,6 +168,7 @@ Lens::Lens() : UCMC()
 	simplex_cooling_factor = 0.9; // temperature decrement (multiplicative) for annealing schedule
 	simplex_minchisq = -1e30;
 	simplex_minchisq_anneal = -1e30;
+	simplex_show_bestfit = false;
 	n_mcpoints = 1000; // for nested sampling
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
@@ -407,6 +408,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	simplex_cooling_factor = lens_in->simplex_cooling_factor; // temperature decrement (multiplicative) for annealing schedule
 	simplex_minchisq = lens_in->simplex_minchisq;
 	simplex_minchisq_anneal = lens_in->simplex_minchisq_anneal;
+	simplex_show_bestfit = lens_in->simplex_show_bestfit;
 	n_mcpoints = lens_in->n_mcpoints; // for nested sampling
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
@@ -3356,6 +3358,7 @@ double Lens::chisq_pos_source_plane()
 	delete[] mag01;
 	delete[] beta_ji;
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
+	if (chisq*0.0 != 0.0) die("WTF!");
 	return chisq;
 }
 
@@ -4115,6 +4118,7 @@ double Lens::chi_square_fit_simplex()
 	}
 
 	initialize_simplex(fitparams.array(),n_fit_parameters,stepsizes.array(),chisq_tolerance,-10);
+	simplex_set_display_bfpont(simplex_show_bestfit);
 	simplex_set_function(loglikeptr);
 	simplex_set_fmin(simplex_minchisq/2);
 	simplex_set_fmin_anneal(simplex_minchisq_anneal/2);
@@ -4131,6 +4135,7 @@ double Lens::chi_square_fit_simplex()
 
 	fitmodel->chisq_it = 0;
 	bool verbal = (mpi_id==0) ? true : false;
+	if (simplex_show_bestfit) cout << endl; // since we'll need an extra line to display best-fit parameters during annealing
 	n_iterations = downhill_simplex_anneal(verbal);
 	simplex_minval(fitparams.array(),chisq_bestfit);
 	chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq

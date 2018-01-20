@@ -37,12 +37,14 @@ class Simplex : public Random
 	double fmin, fmin_anneal;
 
 	bool simplex_exit_status;
+	static bool simplex_display_bestfit_point;
 
 	Simplex() : Random(-10) {
 		initialized = false;
 		t0 = t0_default;
 		tfinal = tfinal_default;
 		tinc = tinc_default;
+		simplex_display_bestfit_point = false;
 	}
 	Simplex(double* point, const int& ndim_in, const double& vertex_displacement, const double& ftol_in, const int seed_in)
 	{
@@ -54,6 +56,7 @@ class Simplex : public Random
 		for (int i=0; i < ndim_in; i++) disps_in[i] = vertex_displacement;
 		initialize_simplex(point,ndim_in,disps_in,ftol_in,seed_in);
 		func = NULL;
+		simplex_display_bestfit_point = false;
 	}
 	Simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in, const int seed_in)
 	{
@@ -63,6 +66,7 @@ class Simplex : public Random
 		initialized = false;
 		initialize_simplex(point,ndim_in,vertex_displacements,ftol_in,seed_in);
 		func = NULL;
+		simplex_display_bestfit_point = false;
 	}
 	~Simplex();
 
@@ -77,6 +81,7 @@ class Simplex : public Random
 	void simplex_set_function(double (Simplex::*func_in)(double*)) { func = func_in; }
 	void simplex_set_fmin(double fmin_in) { fmin = fmin_in; }
 	void simplex_set_fmin_anneal(double fmin_in) { fmin_anneal = fmin_in; }
+	void simplex_set_display_bfpont(bool dispbf) { simplex_display_bestfit_point = dispbf; }
 	void set_annealing_schedule_parameters(double t0_in, double tfinal_in, double tinc_in, double nmax_anneal_in, double nmax_in) {
 		t0 = t0_in;
 		tfinal = tfinal_in;

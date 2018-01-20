@@ -212,6 +212,7 @@ void Lens::process_commands(bool read_file)
 						"simplex_temp0 --\n"
 						"simplex_temp0 --\n"
 						"simplex_tfac --\n"
+						"simplex_show_bestfit --\n"
 						"mcmc_chains --\n"
 						"mcmctol --\n"
 						"mcmclog --\n"
@@ -5764,6 +5765,15 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'chisqlog' command; must specify 'on' or 'off'");
 				set_switch(open_chisq_logfile,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="simplex_show_bestfit")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Show current best-fit point while doing simulated annealing: " << display_switch(simplex_show_bestfit) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'anneal_show_bestfit' command; must specify 'on' or 'off'");
+				set_switch(simplex_show_bestfit,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="psf_mpi")

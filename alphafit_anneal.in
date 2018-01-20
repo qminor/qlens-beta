@@ -35,7 +35,7 @@ imgdata                      # Shows the image data so you can see what it looks
 fit lens alpha 4.5 1 0 0.5 120 0.7 0.2 shear=0.05 20 # Now we put our initial guess for the lens parameters
 1 0 0 1 1 1 1 1 1                                    #vary flags; here we vary everything except for alpha and s (core size)
 
-fit sourcept 0.6 0.5   # Here, we put our initial guess for where the source point is located.
+fit sourcept auto   # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).
 						 # You can use 'fit plotimg' to see if the resulting images are roughly in the correct regions.
                    # If the fit doesn't converge even after simulated annealing, play around with qlens further and find a
 						 # lens model and source point that fits the images more closely before trying again
@@ -53,28 +53,27 @@ simplex_temp0 = 1000000    # initial temperature should be chosen based on how m
 simplex_tempf = 10         # final temperature; after this is reached, a final minimization with zero temperature will be performed
 simplex_nmax_anneal = 1000 # this is the number of iterations at each temperature setting (not including the final temp=0 run)
 simplex_nmax = 10000       # this is the number of iterations for the final run, where the temperature will be set to zero
-simplex_tfac = 0.9         # the temperature is multiplied by this factor after each run, continuing until final temperature is reached;
+simplex_tfac = 0.95         # the temperature is multiplied by this factor after each run, continuing until final temperature is reached;
                            #    when in doubt, set closer to 1 for slower cooling
-simplex_minchisq = 20      # optional, if specified the simplex will skip to zero temperature if the chi-square falls below this specified value
+simplex_minchisq_anneal = 20      # optional, if specified the simplex will skip to zero temperature if the chi-square falls below this specified value
 
 # For this example, I recommend that you play with simplex_temp0 to get a feel for how high a starting temperature is needed for success
 
-# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
-#fit run                  # for the first run, you might want to use the source plane chi-square to find the right region of
-                          #   parameter space (which is faster and sometimes less prone to getting stuck in a rut, but not always accurate)
-#fit use_bestfit          # adopt the best fit parameters so they can be used as initial parameters for the next run
-
-imgplane_chisq on  # now we will do the fit using the image plane chi-square for a more accurate fit
-nimg_penalty off  # If on, penalizes chi-square if the number of images produced is larger than the number of data images (off by default)
-cc_splitlevels 2   # Number of times the cells split around critical curves (default = 2)
 nrepeat 2          # this tells it to minimize the chi-square again twice (at T=0) after converging to a best-fit point, just to ensure
                    # we are really at a minimum (default = 1)
+						 #
+# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+fit run                  # for the first run, you might want to use the source plane chi-square to find the right region of
+                          #   parameter space (which is faster and sometimes less prone to getting stuck in a rut, but not always accurate)
+fit use_bestfit          # adopt the best fit parameters so they can be used as initial parameters for the next run
+             # FYI: you can interrupt downhill simplex at any time by pressing CTRL-C, in which case it will skip to the final
+             # zero-temperature run. This can be useful, e.g. if the chi-square is not converging well (or is converging very well!)
 
-pause
-         # FYI: you can interrupt downhill simplex at any time by pressing CTRL-C, in which case it will skip to the final
-fit run  # zero-temperature run. This can be useful, e.g. if the chi-square is not converging well (or is converging very well!)
+#imgplane_chisq on  # if necessary we can instead do the fit using the image plane chi-square for a more accurate fit
+#nimg_penalty off  # If on, penalizes chi-square if the number of images produced is larger than the number of data images (off by default)
+#cc_splitlevels 2   # Number of times the cells split around critical curves (default = 2)
+#fit use_bestfit
 
-fit use_bestfit
 fit findimg # you can also do 'fit plotimg' to see the best-fit model image positions compared to the data
 
 pause
