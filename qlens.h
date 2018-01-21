@@ -802,7 +802,6 @@ public:
 	void set_rminfrac(double setting) { rmin_frac = setting; }
 	void get_rminfrac(double &setting) { setting = rmin_frac; }
 	void set_imagepos_accuracy(double setting) { Grid::set_imagepos_accuracy(setting); }
-	void get_imagepos_accuracy(double &setting) { setting = Grid::image_pos_accuracy; }
 	void set_galsubgrid_radius_fraction(double setting) { galsubgrid_radius_fraction = setting; }
 	void get_galsubgrid_radius_fraction(double &setting) { setting = galsubgrid_radius_fraction; }
 	void set_galsubgrid_min_cellsize_fraction(double setting) { galsubgrid_min_cellsize_fraction = setting; }

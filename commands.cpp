@@ -65,7 +65,6 @@ void Lens::process_commands(bool read_file)
 		{
 			if (mpi_id==0) {
 				if (nwords==1) {
-					// You'll need to organize settings by category, because there are simply too many of them now.
 					cout << "Available commands:   (type 'help <command>' for usage information)\n\n"
 						"read -- execute commands from input file\n"
 						"write -- save command history to text file\n"
@@ -104,17 +103,52 @@ void Lens::process_commands(bool read_file)
 						//"mkrandsrc -- create file containing randomly plotted sources to be read with 'findimgs'\n" // so they don't require ccspline mode (then get rid of ccspline)
 						//"printcs -- print total (unbiased) cross section\n\n";
 				} else if (words[1]=="settings") {
-					cout << "Type 'help <setting>' to display information about each setting and how to change\n"
-					"them; type 'settings' to display all current settings, or type each keyword alone\n"
-						"to display its current setting individually.\n\n"
-						"SETTINGS:\n"
-						"terminal -- set file output mode (text, postscript, or PDF)\n"
+					cout << "Type 'help <category_name>' to display a list of settings in each category, and 'help <setting>'\n"
+						"for a detailed description of each individual setting. Type 'settings' to display all current\n"
+						"settings, '<category_name>' to display settings in a specific category, or enter a specific\n"
+						"setting name to display its current value.\n"
+						"\n"
+						"SETTING CATEGORIES:    (type 'help <category_name>' for list of settings in each category)\n"
+						"\n"
+						"plot_settings -- preferences for graphical plotting\n"
+						"imgsrch_settings -- settings for image searching and grid configuration\n"
+						"fit_settings -- settings for model fitting, esp. chi-square options and parameter exploration\n"
+						"sbmap_settings -- surface brightness maps and source pixel inversion\n"
+						"\n"
+						"OTHER SETTINGS:\n"
+						"\n"
+						"\033[4mCosmology settings\033[0m\n"
+						"hubble -- Hubble parameter given by h, where H_0 = 100*h km/s/Mpc (default = 0.7)\n"
+						"omega_m -- Matter density today divided by critical density of Universe (default = 0.3)\n"
+						"zlens -- redshift of lens plane\n"
+						"zsrc -- redshift of source plane used for 'findimg', 'plotimg' and 'plotcrit'\n"
+						"zsrc_ref -- source redshift used to define lensing quantities (kappa, etc.) (default=zsrc)\n"
+						"auto_zsrc_scaling -- if on, automatically keep zsrc_ref equal to zsrc (default=on)\n"
+						"vary_hubble -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
+						"\n"
+						"\033[4mLens model settings\033[0m\n"
+						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
+						"integral_method -- set integration method (romberg/gauss) and number of points (if gauss)\n"
+						"major_axis_along_y -- orient major axis of lenses along y-direction when theta = 0 (on/off)\n"
+						"ellipticity_components -- if on, use components of ellipticity e=1-q instead of (q,theta)\n"
+						"shear_components -- if on, use components of external shear instead of (shear,theta)\n"
+						//"auto_srcgrid_set_pixelsize -- determine size of source pixels based on magnifications\n"  // This is not working well yet
+						//"nimg_prior -- impose penalty if # of images produced from pixel inversion doesn't match this\n"   // This is not ready yet--needs to be generalized so user can specify number of expected images
+						"\n"
+						"\033[4mMiscellaneous settings\033[0m\n"
 						"warnings -- set warning flags on/off\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
-						"fits_format -- load surface brightness maps from FITS files (if on) or text files (if off)\n"
-						"gridtype -- set grid to radial or Cartesian\n"
+						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
+						"sim_err_flux -- random error in image fluxes, added when producing simulated image data\n"
+						"sim_err_td -- random error in time delays, added when producing simulated image data\n"
+						"\n";
+				} else if (words[1]=="plot_settings") {
+					cout <<
+						"terminal -- set file output mode when plotting to files (text, postscript, or PDF)\n"
 						"show_cc -- display critical curves when plotting images (on/off)\n"
 						"show_srcplane -- show source plane plots when plotting images (on/off)\n"
+						"ptsize/ps -- set point size for plotting image positions with 'plotimg'\n"
+						"pttype/pt -- set point marker type for plotting image positions with 'plotimg'\n"
 						"plot_title -- set title to display on plots\n"
 						"plot_square_axes -- enforce x, y axes to follow the same length scale in plots\n"
 						"fontsize -- set font size for title and key in plots\n"
@@ -122,105 +156,101 @@ void Lens::process_commands(bool read_file)
 						"plot_key -- specify whether to display key in plots (on/off)\n"
 						"plot_key_outside -- specify whether to display key inside plots or next to plots (on/off)\n"
 						"colorbar -- specify whether to show color bar scale in pixel map plots (on/off)\n"
-						"ccspline -- set critical curve spline mode on/off\n"
-						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (if on)\n"
-						"major_axis_along_y -- orient major axis of lenses along y-direction (on/off)\n"
-						"ellipticity_components -- if on, use components of ellipticity e=1-q instead of (q,theta)\n"
-						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
-						"shear_components -- if on, use components of external shear instead of (shear,theta)\n"
+						"\n";
+				} else if (words[1]=="imgsrch_settings") {
+					cout << 
+						"gridtype -- set grid to radial or Cartesian\n"
 						"autogrid_from_Re -- automatically set grid size from Einstein radius of primary lens (on/off)\n"
-						"autocenter -- automatically center grid on given lens number (or 'off')\n"
-						"zlens -- redshift of lens plane\n"
-						"zsrc -- redshift of source object being lensed\n"
-						"zsrc_ref -- source redshift used to define lensing quantities (kappa, etc.)\n"
-						"auto_zsrc_scaling -- if on, automatically keep zsrc_ref equal to zsrc (on/off)\n"
-						"h0 -- Hubble parameter given by h, where H_0 = 100*h km/s/Mpc (default = 0.7)\n"
-						"vary_h0 -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
-						"omega_m -- Matter density today divided by critical density of Universe (default = 0.3)\n"
-						"central_image -- include central images when fitting to data (if on)\n"
-						"nrepeat -- number of repeat chi-square optimizations after original run\n"
-						"imgplane_chisq -- use chi-square defined in image plane (if on) or source plane (if off)\n"
-						"analytic_bestfit_src\n"
-						"chisqmag -- use magnification in source plane chi-square function for image positions\n"
-						"chisqflux -- include flux information in chi-square fit (if on)\n"
-						"chisq_time_delays -- include time delay information in chi-square fit (if on)\n"
-						"chiq_mag_threshold -- exclude images from chi-square whose magnification is below threshold\n"
-						"chiq_imgsep_threshold -- exclude images whose separation from other images is below threshold\n"
-						"chiq_imgplane_threshold -- switch to imgplane_chisq if below threshold (if imgplane_chisq off)\n"
-						"nimg_penalty -- penalize chi-square if too many images are produced (if imgplane_chisq on)\n"
-						"chisq_parity -- include parity information in flux chi-square fit (if on)\n"
-						"chisqtol -- chi-square required accuracy during fit\n"
-						"find_errors -- calculate and show marginalized error in each parameter after chi-square fit\n"
-						"srcflux -- flux of point source (for producing or fitting image flux data)\n"
-						"fix_srcflux -- fix source flux to specified value during fit (if on)\n"
-						"time_delays -- calculate time delays for all images (if on)\n"
-						"galsubgrid -- subgrid around satellite galaxies not centered at the origin (if on)\n"
-						"integral_method -- set integration method (romberg/gauss) and number of points (if gauss)\n"
+						"autogrid_before_mkgrid -- automatically set grid size from critical curves using 'autogrid'\n"
+						"autocenter -- automatically center grid on the specified lens number (or else 'off')\n"
+						"central_image -- include central images when fitting to data (on/off)\n"
+						"time_delays -- calculate time delays for all images (on/off)\n"
+						"min_cellsize -- minimum allowed (average) length of subgrid cells used for image searching\n"
 						<< ((radial_grid) ? "rsplit -- set initial number of grid rows in the radial direction\n"
 						"thetasplit -- set initial number of grid columns in the angular direction\n"
 						: "xsplit -- set initial number of grid rows in the x-direction\n"
-						"ysplit -- set initial number of grid columns in the y-direction\n")
-						<< "cc_splitlevels -- set # of times grid squares are split when containing critical curve\n"
+						"ysplit -- set initial number of grid columns in the y-direction\n") <<
+						"cc_splitlevels -- set # of times grid squares are split when containing critical curve\n"
 						"cc_split_neighbors -- when splitting cells that contain critical curves, also split neighbors\n"
 						"imagepos_accuracy -- required accuracy in the calculated image positions\n"
-						"min_cellsize -- smallest allowed grid cell area for subgridding\n"
-						"rmin_frac -- set minimum radius of innermost cells in grid (fraction of max radius)\n"
-						"galsub_radius -- scale the radius of satellite subgridding\n"
+						"rmin_frac -- set minimum radius of innermost cells in radial grid (fraction of max radius)\n"
+						"galsubgrid -- subgrid around satellite galaxies not co-centered with primary lens (on/off)\n"
+						"galsub_radius -- scale factor for the optimal radius of satellite subgridding\n"
 						"galsub_min_cellsize -- minimum satellite subgrid cell length (units of Einstein radius)\n"
 						"galsub_cc_splitlevels -- number of critical curve splittings around satellite galaxies\n"
-						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
-						"inversion_method -- set method for image matrix inversion (mumps, umfpack, or cg)\n"
+						"ccspline -- set critical curve spline mode on/off\n"
+						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (on/off)\n"
+						"\n";
+				} else if (words[1]=="sbmap_settings") {
+					cout <<
+						"\033[4mSurface brightness pixel map settings\033[0m\n"
+						"fits_format -- load surface brightness maps from FITS files (if on) or text files (if off)\n"
 						"img_npixels -- set number of pixels for images produced by 'sbmap plotimg'\n"
-						"src_npixels -- set # of source grid pixels for inverting or plotting lensed pixel images\n"
-						"auto_src_npixels -- automatically determine # of source pixels from lens model/data (on/off)\n"
-						"srgrid -- set source grid size and location for inverting or plotting lensed pixel images\n"
-						"auto_srcgrid -- automatically choose source grid size/location from lens model/data (on/off)\n"
-						"data_pixel_size -- specify the pixel size to assume for pixel data files\n"
-						"data_pixel_noise -- pixel noise in data pixel images (loaded using 'sbmap loadimg')\n"
+						"src_npixels -- set # of source grid pixels for plotting or inverting lensed pixel images\n"
+						"srcgrid -- set source grid size and location for inverting or plotting lensed pixel images\n"
+						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
 						"sim_pixel_noise -- simulated pixel noise added to images produced by 'sbmap plotimg'\n"
-						"random_seed -- seed for random number generator\n"
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
 						"psf_threshold -- when assuming Gaussian PSF, approximate PSF as zero if below threshold\n"
-						"sb_threshold --\n"
-						"noise_threshold --\n"
-						"psf_mpi --\n"
-						"inversion_nthreads --\n"
-						"pixel_fraction --\n"
-						"vary_pixel_fraction --\n"
-						"regparam -- value of regularization parameter for inverting lensed pixel images\n"
-						"vary_regparam -- vary the regularization parameter during a fit (on/off)\n"
+						"psf_mpi -- parallelize PSF convolution using MPI (on/off)\n"
+						"\n"
+						"\033[4mSource pixel reconstruction settings\033[0m\n"
+						"inversion_method -- set method for image matrix inversion (mumps, umfpack, or cg)\n"
 						"adaptive_grid -- use adaptive source grid that splits source pixels recursively (on/off)\n"
-						"auto_srcgrid_set_pixelsize --\n"
-						"nimg_prior --\n"
-						"outside_sb_prior --\n"
-						"subhalo_prior --\n"
-						"activate_unmapped_srcpixels --\n"
-						"exlcude_srcpixels_outside_mask --\n"
-						"remove_unmapped_srcpixels --\n"
+						"auto_src_npixels -- automatically determine # of source pixels from lens model/data (on/off)\n"
+						"auto_srcgrid -- automatically choose source grid size/location from lens model/data (on/off)\n"
+						"noise_threshold -- threshold (multiple of pixel noise) for automatic source pixel grid sizing\n"
+						"data_pixel_size -- specify the pixel size to assume for pixel data files\n"
+						"data_pixel_noise -- pixel noise in data pixel images (loaded using 'sbmap loadimg')\n"
+						"inversion_nthreads -- number of OpenMP threads to use specifically for matrix inversion\n"
+						"pixel_fraction -- fraction of srcpixels/imgpixels used to determine number of source pixels\n"
+						"vary_pixel_fraction -- allow pixel fraction to vary as a free parameter during a fit (on/off)\n"
+						"regparam -- value of regularization parameter used for inverting lensed pixel images\n"
+						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
+						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
+						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
+						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
+						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
+						"remove_unmapped_subpixels -- when inverting, exclude *sub*pixels that don't map to any imgpixels\n"
 						"sb_threshold -- minimum surface brightness to include when determining image centroids\n"
-						"ptsize/ps -- set point size for plots --\n"
-						"pttype/pt -- set point marker type for plots --\n"
-						"min_cellsize --\n"
-						"sim_err_pos --\n"
-						"sim_err_flux --\n"
-						"sim_err_td --\n"
-						"n_mcpoints --\n"
-						"simplex_nmax --\n"
-						"simplex_nmax_anneal --\n"
-						"simplex_minchisq --\n"
-						"simplex_minchisq_anneal --\n"
-						"simplex_temp0 --\n"
-						"simplex_temp0 --\n"
-						"simplex_tfac --\n"
-						"simplex_show_bestfit --\n"
-						"mcmc_chains --\n"
-						"mcmctol --\n"
-						"mcmclog --\n"
-						"chisqlog --\n"
-						"parallel_mumps --\n"
-						"show_mumps_info --\n"
-						"srcpixel_mag_threshold --\n"
-						"vary_srcpixel_mag_threshold --\n"
+						"parallel_mumps -- run MUMPS matrix inversion using parallel analysis mode (if on)\n"
+						"show_mumps_info -- show MUMPS information output after a lensing matrix inversion\n"
+						"srcpixel_mag_threshold -- split srcpixels if magnification > threshold (if adaptive_grid=on)\n"
+						"vary_srcpixel_mag_threshold -- vary srcpixel_mag_threshold as a free parameter (if on)\n"
+						"\n";
+				} else if (words[1]=="fit_settings") {
+					cout <<
+						"\033[4mChi-square function settings\033[0m\n"
+						"imgplane_chisq -- use chi-square defined in image plane (if on) or source plane (if off)\n"
+						"chisqmag -- use magnification in source plane chi-square function for image positions\n"
+						"chisqflux -- include flux information in chi-square fit (on/off)\n"
+						"chisq_time_delays -- include time delay information in chi-square fit (on/off)\n"
+						"chisq_parity -- include parity information in flux chi-square fit (on/off)\n"
+						"analytic_bestfit_src -- find (approx) best-fit source coordinates automatically during fit\n"
+						"chisq_mag_threshold -- exclude images from chi-square whose magnification is below threshold\n"
+						"chisq_imgsep_threshold -- exclude images whose separation from other images is below threshold\n"
+						"chisq_imgplane_threshold -- switch to imgplane_chisq if below threshold (if imgplane_chisq off)\n"
+						"nimg_penalty -- penalize chi-square if too many images are produced (if imgplane_chisq on)\n"
+						"chisqtol -- chi-square required accuracy during fit\n"
+						"srcflux -- flux of point source (for producing or fitting image flux data)\n"
+						"fix_srcflux -- fix source flux to specified value during fit rather than find analytically\n"
+						"\n"
+						"\033[4mOptimization and Monte Carlo sampler settings\033[0m\n"
+						"nrepeat -- number of repeat chi-square optimizations after original run\n"
+						"find_errors -- calculate and show marginalized error in each parameter after chi-square fit\n"
+						"simplex_nmax -- max number of iterations allowed when using downhill simplex (at temp=0)\n"
+						"simplex_nmax_anneal -- number of iterations at given temperature during simulated annealing\n"
+						"simplex_minchisq -- downhill simplex finishes immediately if chisq falls below this value\n"
+						"simplex_minchisq_anneal -- when annealing, skip to temp=0 if chisq falls below this value\n"
+						"simplex_temp0 -- initial annealing temperature for downhill simplex (zero --> no annealing)\n"
+						"simplex_tfac -- \"cooling factor\" controls how quickly temp is reduced during annealing\n"
+						"simplex_show_bestfit -- show the current best-fit parameters during annealing (if on)\n"
+						"n_mcpoints -- number of live points used in nested sampling runs\n"
+						"mcmc_chains -- number of chains used in MCMC routines (e.g. T-Walk)\n"
+						"mcmctol -- during MCMC, stop chains if Gelman-Rubin R-statistic falls below this threshold\n"
+						"mcmclog -- output MCMC convergence, accept ratio etc. to log file while running (if on)\n"
+						"random_seed -- random number generator seed for Monte Carlo samplers and simulated annealing\n"
+						"chisqlog -- output chi-square, parameter information to log file for each chisq evaluation\n"
 						"\n";
 				} else if (words[1]=="read")
 					cout << "read <filename>\n\n"
@@ -672,7 +702,7 @@ void Lens::process_commands(bool read_file)
 							"where <label> is set by the 'fit label' command, and the output directory is set by 'fit output_dir'.\n"
 							"In addition, the parameter covariance matrix is output to the file '<label>.pcov'.\n"
 							"Note that if 'auto_save_bestfit' is set to 'on', the best-fit model is saved automatically after a\n"
-							"fit is performed. If one uses T-Walk or Nested Sampling, data from the chains is saved automatically\n"
+							"fit is performed. If one uses T-Walk or nested Sampling, data from the chains is saved automatically\n"
 							"regardless of whether 'save_bestfit' is invoked.\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
@@ -1210,6 +1240,13 @@ void Lens::process_commands(bool read_file)
 						"therefore recommended during model fitting ('autogrid' is slower because it searches for\n"
 						"the critical curves of the entire lens configuration), but may not work well if the lens\n"
 						"has a very low axis ratio or is very strongly perturbed by external shear.\n\n";
+				else if (words[1]=="autogrid_before_mkgrid")
+					cout << "autogrid_before_mkgrid <on/off>\n\n"
+						"Automatically set the grid size from critical curves using the 'autogrid' function before\n"
+						"grid is created (if on). This is quite robust, but is much slower compared to the\n"
+						"alternative 'autogrid_from_Re' function. Therefore, during model fitting it is recommended\n"
+						"to use 'autogrid_from_Re' (if the lens is not too asymmetric) or else fix the grid size based\n"
+						"on the observed image configuration.\n\n";
 				else if (words[1]=="chisqmag")
 					cout << "chisqmag <on/off>\n\n"
 						"Use magnification in chi-square function for image positions (if on). Note that this is\n"
@@ -1280,11 +1317,11 @@ void Lens::process_commands(bool read_file)
 						"comparable to or smaller than the resolution (in terms of area) of the image in question.\n";
 				else if (words[1]=="galsub_radius")
 					cout << "galsub_radius <#>\n\n"
-						"When subgridding around satellite galaxies, galsub_radius scales the maximum\n"
-						"radius away from the center of each satellite within which cells are split.\n"
-						"For each satellite, its Einstein radius plus shear, kappa, and parity\n"
-						"information are used to determine the optimal subgridding radius for each\n"
-						"satellite; galsub_radius can be used to scale the subgridding radii.\n";
+						"When subgridding around satellite galaxies, galsub_radius scales the maximum radius away from\n"
+						"the center of each satellite within which cells are split. For each satellite, its Einstein\n"
+						"radius along with shear, kappa, and parity information are used to determine the optimal\n"
+						"subgridding radius for each satellite; galsub_radius can be used to scale these subgridding\n"
+						"radii by the specified factor.\n";
 				else if (words[1]=="galsub_min_cellsize")
 					cout << "galsub_min_cellsize <#>\n\n"
 						"When subgridding around satellite galaxies, galsub_min_cellsize specifies the\n"
@@ -1371,121 +1408,198 @@ void Lens::process_commands(bool read_file)
 						"add_from_centroid' command for information on how to do this). (default=0)\n";
 				else if ((words[1]=="terminal") or (words[1]=="term"))
 					cout << "terminal <text/ps/pdf>\n\n"
-						"Set plot output mode (text, postscript or PDF). You can use 'term' as shorthand.\n";
+						"Set plot output mode when plotting to files (text, postscript or PDF). (Shorthand: 'term').\n";
 				else if ((words[1]=="quit") or (words[1]=="exit") or (words[1]=="q"))
 					cout << words[1] << " -- (no arguments) exit qlens.\n";
 				else Complain("command not recognized");
 			}
 		}
-		else if (words[0]=="settings")
+		else if ((words[0]=="settings") or (words[0]=="plot_settings") or (words[0]=="imgsrch_settings") or (words[0]=="sbmap_settings") or (words[0]=="fit_settings"))
 		{
 			if (mpi_id==0) {
+				bool show_all_settings = false;
+				bool show_plot_settings = false;
+				bool show_imgsrch_settings = false;
+				bool show_sbmap_settings = false;
+				bool show_fit_settings = false;
+				if (words[0]=="plot_settings") show_plot_settings = true;
+				else if (words[0]=="imgsrch_settings") show_imgsrch_settings = true;
+				else if (words[0]=="sbmap_settings") show_sbmap_settings = true;
+				else if (words[0]=="fit_settings") show_fit_settings = true;
+				else if (words[0]=="settings") {
+					show_all_settings = true;
+					show_plot_settings = true;
+					show_imgsrch_settings = true;
+					show_sbmap_settings = true;
+					show_fit_settings = true;
+				}
 				bool setting;
 				int intval;
 				double doubleval;
 
-				// There are far more settings than are shown here, so you need to complete this list. You should also
-				// organize them by category (also with "help settings") so they can be looked up more easily
-
-				// first display the mode settings
-				if (terminal==TEXT) cout << "Terminal: text" << endl;
-				else if (terminal==POSTSCRIPT) cout << "Terminal: postscript" << endl;
-				else if (terminal==PDF) cout << "Terminal: PDF" << endl;
-				else cout << "Unknown terminal" << endl;
-				cout << "Use FITS format for input surface brightness pixel files: " << display_switch(fits_format) << endl;
-				if (fitmethod==POWELL) cout << "Fit method: powell" << endl;
-				else if (fitmethod==SIMPLEX) cout << "Fit method: simplex" << endl;
-				else if (fitmethod==NESTED_SAMPLING) cout << "Fit method: nest" << endl;
-				else if (fitmethod==TWALK) cout << "Fit method: twalk" << endl;
-				else cout << "Unknown fit method" << endl;
-				cout << "Warnings: " << display_switch(warnings) << endl;
-				cout << "Warnings for Newton's method: " << display_switch(newton_warnings) << endl;
-				cout << "Scientific notation (sci_notation): " << display_switch(use_scientific_notation) << endl;
-
-				if (radial_grid) cout << "Grid type (gridtype): radial" << endl;
-				else cout << "Grid type (gridtype): Cartesian" << endl;
-
-				cout << "Show critical curves (show_cc): " << display_switch(show_cc) << endl;
-				cout << "Critical curve spline (ccspline): " << display_switch(use_cc_spline) << endl;
-				cout << "Automatic critical curve spline (auto_ccspline): " << display_switch(auto_ccspline) << endl;
-				cout << "Automatically determine source grid dimensions (auto_srcgrid): " << display_switch(auto_sourcegrid) << endl;
-				cout << "Automatic grid center (autocenter): ";
-				if (autocenter==false) cout << "off\n";
-				else cout << "centers on lens " << autocenter_lens_number << endl;
-				cout << "Automatically set grid size from Einstein radius before grid creation (autogrid_from_Re): " << display_switch(auto_gridsize_from_einstein_radius) << endl;
-				cout << "Subgrid around satellite galaxies (galsubgrid): " << display_switch(subgrid_around_satellites) << endl;
-				cout << "Include time delays (time_delays): " << display_switch(include_time_delays) << endl;
-
-				double imagepos_accuracy;
-				get_imagepos_accuracy(imagepos_accuracy);
-				cout << "Required image position accuracy (imagepos_accuracy): " << imagepos_accuracy << endl;
-
-				if (source_fit_mode==Point_Source) cout << "Source mode for fitting (fit source_mode): ptsource" << endl;
-				else if (source_fit_mode==Pixellated_Source) cout << "Source mode for fitting (fit source_mode): pixel" << endl;
-				else if (source_fit_mode==Parameterized_Source) cout << "Source mode for fitting (fit source_mode): sbprofile" << endl;
-
-				cout << "Lens redshift (zlens): " << lens_redshift << endl;
-				cout << "Source redshift (zsrc): " << source_redshift << endl;
-				cout << "Reference source redshift (zsrc_ref): " << reference_source_redshift << endl;
-				cout << "Automatically set zsrc_ref = zsrc (auto_zsrc_scaling): " << auto_zsource_scaling << endl;
-				cout << "Hubble constant (h0): " << hubble << endl;
-				cout << "Matter density (omega_m): " << omega_matter << endl;
-
-				cout << endl << "Chi-square required accuracy (chisqtol): " << chisq_tolerance << endl;
-				cout << "Use image plane chi-square function (imgplane_chisq): " << display_switch(use_image_plane_chisq) << endl;
-				cout << "Find analytic best-fit source position for source plane chi-square (analytic_bestfit_src): " << display_switch(use_analytic_bestfit_src) << endl;
-				cout << "Number of repeat chi-square optimizations (nrepeat): " << n_repeats << endl;
-				cout << "Use magnification in source plane chi-square (chisqmag): " << display_switch(use_magnification_in_chisq) << endl;
-				cout << "Include image flux in chi-square (chisqflux): " << display_switch(include_flux_chisq) << endl;
-				cout << "Include parity information in flux chi-square (chisq_parity): " << display_switch(include_parity_in_chisq) << endl;
-				cout << "Include time delays in chi-square (chisq_time_delays): " << display_switch(include_time_delay_chisq) << endl;
-				cout << "Include central images in fit (central_image): " << display_switch(include_central_image) << endl;
-				cout << "Fix source point flux: " << display_switch(fix_source_flux) << endl;
-				cout << "Source point flux: " << source_flux << endl;
-
-				if (LensProfile::integral_method==Romberg_Integration) cout << "Integration method: Romberg integration with accuracy " << romberg_accuracy << endl << endl;
-				else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl << endl;
-
-				if (ray_tracing_method==Area_Overlap) cout << "Ray tracing method (raytrace_method): area overlap" << endl;
-				else if (ray_tracing_method==Interpolate) cout << "Ray tracing method (raytrace_method): linear 3-point interpolation" << endl;
-				else if (ray_tracing_method==Area_Interpolation) cout << "Ray tracing method (raytrace_method): area overlap + interpolation" << endl;
-				if (inversion_method==MUMPS) cout << "Lensing inversion method (inversion_method): LDL factorization (MUMPS)" << endl;
-				else if (inversion_method==UMFPACK) cout << "Lensing inversion method (inversion_method): LU factorization (UMFPACK)" << endl;
-				else if (inversion_method==CG_Method) cout << "Lensing inversion method (inversion_method): conjugate gradient method" << endl;
-
-				cout << "Number of image pixels (img_npixels): (" << n_image_pixels_x << "," << n_image_pixels_y << ")\n";
-				cout << "Number of source pixels (src_npixels): (" << srcgrid_npixels_x << "," << srcgrid_npixels_y << ")\n";
-				if (auto_srcgrid_npixels) cout << " (auto_src_npixels on)";
 				cout << endl;
-				cout << "Source grid (srcgrid): (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
-				if (auto_sourcegrid) cout << " (auto_srcgrid on)";
-				cout << endl;
-				cout << "Point spread function (PSF) width (psf_width): (" << psf_width_x << "," << psf_width_y << ")\n";
-				cout << "Adaptive source pixel grid (adaptive_grid): " << display_switch(adaptive_grid) << endl;
-				cout << "Data pixel surface brightness dispersion (data_pixel_noise): " << data_pixel_noise << endl;
-				cout << "Simulated pixel surface brightness dispersion for plotting (sim_pixel_noise): " << sim_pixel_noise << endl;
-				cout << "surface brightness threshold = " << sb_threshold << endl;
-				if (data_pixel_size < 0) cout << "Pixel size for loaded FITS images (data_pixel_size): not specified\n";
-				else cout << "Pixel size for loaded FITS images (data_pixel_size): " << data_pixel_size << endl;
-				cout << resetiosflags(ios::scientific);
-				if (radial_grid) {
-					cout << "radial splittings: rsplit = " << rsplit_initial << endl;
-					cout << "angular splittings: thetasplit = " << thetasplit_initial << endl;
-				} else {
-					cout << "x-splittings: xsplit = " << rsplit_initial << endl;
-					cout << "y-splittings: ysplit = " << thetasplit_initial << endl;
+				if (show_plot_settings) {
+					cout << "\033[4mGraphical plot settings\033[0m\n";
+					cout << "Terminal (term): " << ((terminal==TEXT) ? "text\n" : (terminal==POSTSCRIPT) ? "postscript\n" : (terminal==PDF) ? "PDF\n" : "Unknown terminal\n");
+					cout << "Show critical curves (show_cc): " << display_switch(show_cc) << endl;
+					cout << "Show source plane when plotting (show_srcplane): " << display_switch(plot_srcplane) << endl;
+					cout << resetiosflags(ios::scientific);
+					cout << "Point size for images: ptsize = " << plot_ptsize << endl;
+					cout << "Point marker type for images: pttype = " << plot_pttype << endl;
+					if (use_scientific_notation) cout << setiosflags(ios::scientific);
+					if (plot_title.empty()) cout << "Title of plots (plot_title): none\n";
+					else cout << "Title of plots (plot_title): '" << plot_title << "'\n";
+					cout << "Enforce equal scale x/y axes (plot_square_axes): " << display_switch(plot_square_axes) << endl;
+					if (mpi_id==0) {
+						cout << resetiosflags(ios::scientific);
+						cout << "Font size for title/key in plots: fontsize = " << fontsize << endl;
+						if (use_scientific_notation) cout << setiosflags(ios::scientific);
+					}
+					cout << resetiosflags(ios::scientific);
+					cout << "Line width in plots: linewidth = " << linewidth << endl;
+					if (use_scientific_notation) cout << setiosflags(ios::scientific);
+					cout << "Show plot key (plot_key): " << display_switch(show_plot_key) << endl;
+					cout << "Plot key outside figure (plot_key_outside): " << display_switch(plot_key_outside) << endl;
+					cout << "Show color bar in pixel map plots (colorbar): " << display_switch(show_colorbar) << endl;
+					cout << endl;
 				}
-				cout << "Critical curve split levels: cc_splitlevels = " << cc_splitlevels << endl;
-				cout << "Minimum subgrid cell size: min_cellsize = " << sqrt(min_cell_area) << endl;
-				cout << "Minimum radius of grid: rmin_frac = " << rmin_frac << endl;
-				cout << "Satellite galaxy subgrid radius scaling: galsub_radius = " << galsubgrid_radius_fraction << " (units of Einstein radius)" << endl;
-				cout << "Satellite galaxy minimum cell length: galsub_min_cellsize = " << galsubgrid_min_cellsize_fraction << " (units of Einstein radius)" << endl;
-				cout << "Critical curve split levels around satellites: galsub_cc_splitlevels = " << galsubgrid_cc_splittings << endl;
-				cout << resetiosflags(ios::scientific);
-				cout << "Point size: ptsize = " << plot_ptsize << endl;
-				cout << "Point type: pttype = " << plot_pttype << endl;
-				cout << endl;
-				if (use_scientific_notation) cout << setiosflags(ios::scientific);
+				if (show_imgsrch_settings) {
+					cout << "\033[4mImage search grid settings\033[0m\n";
+					if (radial_grid) cout << "Grid type (gridtype): radial" << endl;
+					else cout << "Grid type (gridtype): Cartesian" << endl;
+					cout << "Automatically set grid size from Einstein radius before grid creation (autogrid_from_Re): " << display_switch(auto_gridsize_from_einstein_radius) << endl;
+					cout << "Automatically optimize grid parameters before grid creation (autogrid_before_mkgrid): " << display_switch(autogrid_before_grid_creation) << endl;
+					cout << "Automatic grid center (autocenter): ";
+					if (autocenter==false) cout << "off\n";
+					else cout << "centers on lens " << autocenter_lens_number << endl;
+					cout << "Include central images in grid search (central_image): " << display_switch(include_central_image) << endl;
+					cout << "Include time delays (time_delays): " << display_switch(include_time_delays) << endl;
+					cout << "Minimum subgrid cell size: min_cellsize = " << sqrt(min_cell_area) << endl;
+					cout << resetiosflags(ios::scientific);
+					if (radial_grid) {
+						cout << "radial splittings: rsplit = " << rsplit_initial << endl;
+						cout << "angular splittings: thetasplit = " << thetasplit_initial << endl;
+					} else {
+						cout << "x-splittings: xsplit = " << rsplit_initial << endl;
+						cout << "y-splittings: ysplit = " << thetasplit_initial << endl;
+					}
+					cout << "Critical curve split levels: cc_splitlevels = " << cc_splitlevels << endl;
+					cout << "Split cells adjacent to cells containing critical curves (cc_split_neighbors): " << display_switch(cc_neighbor_splittings) << endl;
+					cout << "Required image position accuracy: imagepos_accuracy = " << Grid::image_pos_accuracy << endl;
+					cout << "Minimum radius of grid: rmin_frac = " << rmin_frac << endl;
+					cout << "Subgrid around satellite galaxies (galsubgrid): " << display_switch(subgrid_around_satellites) << endl;
+					cout << "Satellite galaxy subgrid radius scaling: galsub_radius = " << galsubgrid_radius_fraction << " (units of Einstein radius)" << endl;
+					cout << "Satellite galaxy minimum cell length: galsub_min_cellsize = " << galsubgrid_min_cellsize_fraction << " (units of Einstein radius)" << endl;
+					cout << "Critical curve split levels around satellites: galsub_cc_splitlevels = " << galsubgrid_cc_splittings << endl;
+					cout << "Critical curve spline (ccspline): " << display_switch(use_cc_spline) << endl;
+					cout << "Automatic critical curve spline (auto_ccspline): " << display_switch(auto_ccspline) << endl;
+					cout << endl;
+				}
+				if (show_sbmap_settings) {
+					cout << "\033[4mSurface brightness pixel map settings\033[0m\n";
+					cout << "Use FITS format for input surface brightness pixel files (fits_format): " << display_switch(fits_format) << endl;
+					cout << "Number of image pixels (img_npixels): (" << n_image_pixels_x << "," << n_image_pixels_y << ")\n";
+					cout << "Number of source pixels (src_npixels): (" << srcgrid_npixels_x << "," << srcgrid_npixels_y << ")";
+					if (auto_srcgrid_npixels) cout << " (auto_src_npixels on)";
+					cout << endl;
+					cout << "Source grid (srcgrid): (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
+					if (auto_sourcegrid) cout << " (auto_srcgrid on)";
+					cout << endl;
+					cout << "Ray tracing method (raytrace_method): " << ((ray_tracing_method==Area_Overlap) ? "area overlap\n" : (ray_tracing_method==Interpolate) ? "linear 3-point interpolation\n" : (ray_tracing_method==Area_Interpolation) ? "area overlap + interpolation\n" : "unknown\n");
+					cout << "Simulated pixel surface brightness dispersion for plotting: sim_pixel_noise = " << sim_pixel_noise << endl;
+					cout << "Point spread function width (psf_width): (" << psf_width_x << "," << psf_width_y << ")\n";
+					cout << "Point spread function input threshold: psf_threshold = " << psf_threshold << endl;
+					cout << "Use parallel PSF convolution with MPI (psf_mpi): " << display_switch(psf_convolution_mpi) << endl;
+					cout << endl;
+					cout << "\033[4mSource pixel reconstruction settings\033[0m\n";
+					cout << "Lensing inversion method (inversion_method): " << ((inversion_method==MUMPS) ? "LDL factorization (MUMPS)\n" : (inversion_method==UMFPACK) ? "LU factorization (UMFPACK)\n" : (inversion_method==CG_Method) ? "conjugate gradient method\n" : "unknown\n");
+					cout << "Adaptive source pixel grid (adaptive_grid): " << display_switch(adaptive_grid) << endl;
+					cout << "Automatically determine number of source grid pixels (auto_src_npixels): " << display_switch(auto_srcgrid_npixels) << endl;
+					cout << "Automatically determine source grid dimensions (auto_srcgrid): " << display_switch(auto_sourcegrid) << endl;
+					cout << "Noise threshold for automatic source pixel grid sizing: noise_threshold = " << noise_threshold << endl;
+					if (data_pixel_size < 0) cout << "Pixel size for loaded FITS images (data_pixel_size): not specified\n";
+					else cout << "Pixel size for loaded FITS images (data_pixel_size): " << data_pixel_size << endl;
+					cout << "Data pixel surface brightness dispersion: data_pixel_noise = " << data_pixel_noise << endl;
+					cout << "Number of OpenMP threads for lensing matrix inversion: inversion_nthreads = " << inversion_nthreads << endl;
+					cout << "Source pixel ratio of srcpixels/imgpixels: pixel_fraction = " << pixel_fraction << endl;
+					cout << "Vary firstlevel source pixel fraction: " << display_switch(vary_pixel_fraction) << endl;
+					cout << "Regularization parameter: regparam = " << regularization_parameter << endl;
+					cout << "Vary regularization parameter (vary_regparam): " << display_switch(vary_regularization_parameter) << endl;
+					cout << "Set prior on max surface brightness allowed beyond pixel mask (outside_sb_prior): " << display_switch(max_sb_prior_unselected_pixels) << endl;
+					cout << "Constrain subhalos (w/ pjaffe/corecusp profile) to lie within pixel mask (subhalo_prior): " << display_switch(subhalo_prior) << endl;
+					cout << "Activate source pixels that do not map to any image pixels (activate_unmapped_srcpixels): " << display_switch(activate_unmapped_source_pixels) << endl;
+					cout << "Exclude source pixels that map beyond pixel mask (exclude_srcpixels_outside_mask): " << display_switch(exclude_source_pixels_beyond_fit_window) << endl;
+					cout << "Remove source subpixels (by un-splitting) that do not map to any image pixels (remove_unmapped_subpixels): " << display_switch(regrid_if_unmapped_source_subpixels) << endl;
+					cout << "Surface brightness threshold for determining image centroids: sb_threshold = " << sb_threshold << endl;
+					cout << "Use parallel analysis phase in MUMPS solver (parallel_mumps): " << display_switch(parallel_mumps) << endl;
+					cout << "Display MUMPS inversion information: " << display_switch(show_mumps_info) << endl;
+					cout << "Source pixel magnification threshold: srcpixel_mag_threshold = " << pixel_magnification_threshold << endl;
+					cout << "Vary source pixel magnification threshold (vary_srcpixel_mag_threshold): " << display_switch(vary_magnification_threshold) << endl;
+					cout << endl;
+				}
+				if (show_fit_settings) {
+					cout << "\033[4mChi-square function settings\033[0m\n";
+					cout << "Fit method: " << ((fitmethod==POWELL) ? "text\n" : (fitmethod==SIMPLEX) ? "postscript\n" : (fitmethod==NESTED_SAMPLING) ? "PDF\n" : (fitmethod==TWALK) ? "twalk" : "Unknown fitmethod\n");
+					cout << "Source mode for fitting (fit source_mode): " << ((source_fit_mode==Point_Source) ? "ptsource\n" : (source_fit_mode==Pixellated_Source) ? "pixel\n" : (source_fit_mode==Parameterized_Source) ? "sbprofile\n" : "unknown\n");
+					cout << "Use image plane chi-square function (imgplane_chisq): " << display_switch(use_image_plane_chisq) << endl;
+					cout << "Use magnification in source plane chi-square (chisqmag): " << display_switch(use_magnification_in_chisq) << endl;
+					cout << "Include image flux in chi-square (chisqflux): " << display_switch(include_flux_chisq) << endl;
+					cout << "Include time delays in chi-square (chisq_time_delays): " << display_switch(include_time_delay_chisq) << endl;
+					cout << "Include parity information in flux chi-square (chisq_parity): " << display_switch(include_parity_in_chisq) << endl;
+					cout << "Find analytic best-fit source positions using source plane chi-square (analytic_bestfit_src): " << display_switch(use_analytic_bestfit_src) << endl;
+					cout << "magnification threshold for including image in chi-square: chisq_mag_threshold = " << chisq_magnification_threshold << endl;
+					cout << "image separation threshold for including image in chi-square: chisq_imgsep_threshold = " << chisq_imgsep_threshold << endl;
+					cout << "threshold for substituting imgplane chi-square for srcplane chi-square: chisq_imgplane_threshold = " << chisq_imgplane_substitute_threshold << endl;
+					cout << "Include penalty in chi-square for producing too many images (nimg_penalty): " << display_switch(n_images_penalty) << endl;
+					cout << "Chi-square required accuracy: chisqtol = " << chisq_tolerance << endl;
+					cout << "Source point flux: srcflux = " << source_flux << endl;
+					cout << "Fix source point flux (fix_srcflux): " << display_switch(fix_source_flux) << endl;
+					cout << endl;
+					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
+					cout << "Number of repeat chi-square optimizations: nrepeat = " << n_repeats << endl;
+					cout << "Calculate marginalized errors from Fisher matrix (find_errors): " << display_switch(calculate_parameter_errors) << endl;
+					cout << "Maximum number of iterations for downhill simplex: simplex_nmax = " << simplex_nmax << endl;
+					cout << "Maximum number of iterations per temperature for downhill simplex: simplex_nmax_anneal = " << simplex_nmax_anneal << endl;
+					cout << "Chi-square threshold for ending downhill simplex fit: simplex_minchisq = " << simplex_minchisq << endl;
+					cout << "Chi-square threshold for ending simulated annealing: simplex_minchisq_anneal = " << simplex_minchisq_anneal << endl;
+					cout << "Initial temperature for downhill simplex: simplex_temp0 = " << simplex_temp_initial << endl;
+					cout << "Final temperature for downhill simplex: simplex_tempf = " << simplex_temp_final << endl;
+					cout << "Cooling factor for downhill simplex: simplex_cooling_factor = " << simplex_cooling_factor << endl;
+					cout << "Show current best-fit point while doing simulated annealing: " << display_switch(simplex_show_bestfit) << endl;
+					cout << "Number of live points for nested sampling: n_mcpoints = " << n_mcpoints << endl;
+					cout << "Number of chains for MCMC: mcmc_chains = " << mcmc_threads << endl;
+					cout << "MCMC convergence tolerance: mcmctol = " << mcmc_tolerance << endl;
+					cout << "Output MCMC progress to logfile (mcmc_logfile): " << display_switch(mcmc_logfile) << endl;
+					cout << "Random number generator seed for MCMC and simulated anneadling: random_seed = " << get_random_seed() << endl;
+					cout << "Output chi-square evaluations to logfile (chisqlog): " << display_switch(open_chisq_logfile) << endl;
+					cout << endl;
+				}
+				if (show_all_settings) {
+					cout << "\033[4mCosmology settings\033[0m\n";
+					cout << "Hubble parameter: hubble = " << hubble << endl;
+					cout << "Matter density: omega_m = " << omega_matter << endl;
+					cout << "Lens redshift: zlens = " << lens_redshift << endl;
+					cout << "Source redshift: zsrc = " << source_redshift << endl;
+					cout << "Reference source redshift: zsrc_ref = " << reference_source_redshift << endl;
+					cout << "Automatically set zsrc_ref=zsrc: auto_zsrc_scaling = " << auto_zsource_scaling << endl;
+					cout << "Vary Hubble parameter (vary_hubble): " << display_switch(vary_hubble_parameter) << endl;
+					cout << endl;
+					cout << "\033[4mLens model settings\033[0m\n";
+					cout << "Ellipticity mode: emode = " << LensProfile::default_ellipticity_mode << endl;
+					if (LensProfile::integral_method==Romberg_Integration) cout << "Integration method: Romberg integration with accuracy " << romberg_accuracy << endl;
+					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					cout << "Orient major axis along y-direction: " << display_switch(LensProfile::orient_major_axis_north) << endl;
+					cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile::use_ellipticity_components) << endl;
+					cout << "Use shear components as parameters: " << display_switch(Shear::use_shear_component_params) << endl;
+					cout << endl;
+					cout << "\033[4mMiscellaneous settings\033[0m\n";
+					cout << "Warnings: " << display_switch(warnings) << endl;
+					cout << "Scientific notation (sci_notation): " << display_switch(use_scientific_notation) << endl;
+					cout << "Simulated (isotropic) error in image positions: sim_err_pos = " << sim_err_pos << endl;
+					cout << "Simulated error in image fluxes: sim_err_flux = " << sim_err_flux << endl;
+					cout << "Simulated error in image time delays: sim_err_td = " << sim_err_td << endl;
+					cout << endl;
+				}
 			}
 		}
 		else if (words[0]=="read")
@@ -5154,7 +5268,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="analytic_bestfit_src")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Find analytic best-fit source position (only for source plane chi-square): " << display_switch(use_analytic_bestfit_src) << endl;
+				if (mpi_id==0) cout << "Solve for approximate best-fit source coordinates analytically during fit: " << display_switch(use_analytic_bestfit_src) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_bestfit_src' command; must specify 'on' or 'off'");
 				set_switch(use_analytic_bestfit_src,setword);
@@ -5351,12 +5465,12 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "reference source redshift = " << reference_source_redshift << endl;
 			} else Complain("must specify either zero or one argument (reference source redshift)");
 		}
-		else if (words[0]=="h0")
+		else if (words[0]=="hubble")
 		{
-			double h0;
+			double h0param;
 			if (nwords == 2) {
-				if (!(ws[1] >> h0)) Complain("invalid h0 setting");
-				hubble = h0;
+				if (!(ws[1] >> h0param)) Complain("invalid hubble setting");
+				hubble = h0param;
 				set_cosmology(omega_matter,0.04,hubble,2.215);
 				if ((vary_hubble_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					if (mpi_id==0) cout << "Limits for Hubble parameter:\n";
@@ -5370,15 +5484,15 @@ void Lens::process_commands(bool read_file)
 					hubble_upper_limit = hmax;
 				}
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Hubble constant = " << hubble << endl;
-			} else Complain("must specify either zero or one argument (Hubble constant)");
+				if (mpi_id==0) cout << "Hubble parameter = " << hubble << endl;
+			} else Complain("must specify either zero or one argument (Hubble parameter)");
 		}
-		else if (words[0]=="vary_h0")
+		else if (words[0]=="vary_hubble")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Vary Hubble parameter: " << display_switch(vary_hubble_parameter) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_h0' command; must specify 'on' or 'off'");
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_hubble' command; must specify 'on' or 'off'");
 				set_switch(vary_hubble_parameter,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -5434,7 +5548,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="cc_split_neighbors")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Include penalty function in chi-square for wrong number of images: " << display_switch(cc_neighbor_splittings) << endl;
+				if (mpi_id==0) cout << "Split cells adjacent to cells containing critical curves: " << display_switch(cc_neighbor_splittings) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'cc_split_neighbors' command; must specify 'on' or 'off'");
 				set_switch(cc_neighbor_splittings,setword);
@@ -5458,7 +5572,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> imagepos_accuracy)) Complain("invalid imagepos_accuracy setting");
 				set_imagepos_accuracy(imagepos_accuracy);
 			} else if (nwords==1) {
-				get_imagepos_accuracy(imagepos_accuracy);
+				imagepos_accuracy = Grid::image_pos_accuracy;
 				if (mpi_id==0) cout << "image position imagepos_accuracy = " << imagepos_accuracy << endl;
 			} else Complain("must specify either zero or one argument (image position accuracy)");
 		}
@@ -5614,7 +5728,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> frac)) Complain("invalid firstlevel source pixel fraction");
 				pixel_fraction = frac;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "firstlevel source pixel fraction = " << pixel_fraction << endl;
+				if (mpi_id==0) cout << "Source pixel fraction of srcpixels/imgpixels = " << pixel_fraction << endl;
 			} else Complain("must specify one argument (firstlevel source pixel fraction)");
 		}
 		else if (words[0]=="fits_format")
@@ -5655,7 +5769,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> n_lp)) Complain("invalid number of live points for nested sampling");
 				n_mcpoints = n_lp;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Number of points for Monte Carlo fit routines = " << n_mcpoints << endl;
+				if (mpi_id==0) cout << "Number of live points for nested sampling = " << n_mcpoints << endl;
 			} else Complain("must specify either zero or one argument (number of Monte Carlo points)");
 		}
 		else if (words[0]=="simplex_nmax")
@@ -5685,7 +5799,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> minchisq)) Complain("invalid minimum chi-square threshold for downhill simplex");
 				simplex_minchisq = minchisq;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Minimum chi-square threshold for downhill simplex = " << simplex_minchisq << endl;
+				if (mpi_id==0) cout << "Minimum chi-square threshold for ending downhill simplex = " << simplex_minchisq << endl;
 			} else Complain("must specify either zero or one argument (minimum chi-square threshold for downhill simplex)");
 		}
 		else if (words[0]=="simplex_minchisq_anneal")
@@ -5695,7 +5809,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> minchisq_anneal)) Complain("invalid minimum chi-square threshold for simulated annealing");
 				simplex_minchisq_anneal = minchisq_anneal;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Minimum chi-square threshold for simulated annealing = " << simplex_minchisq_anneal << endl;
+				if (mpi_id==0) cout << "Minimum chi-square threshold for ending simulated annealing = " << simplex_minchisq_anneal << endl;
 			} else Complain("must specify either zero or one argument (minimum chi-square threshold for simulated_annealing)");
 		}
 		else if (words[0]=="simplex_temp0")
@@ -5725,7 +5839,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> tfac)) Complain("invalid cooling factor for downhill simplex");
 				simplex_cooling_factor = tfac;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "cooling factor for downhill simplex = " << simplex_cooling_factor << endl;
+				if (mpi_id==0) cout << "Cooling factor for downhill simplex = " << simplex_cooling_factor << endl;
 			} else Complain("must specify either zero or one argument (cooling factor for downhill simplex)");
 		}
 		else if (words[0]=="mcmc_chains")
@@ -5907,7 +6021,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> noise_thresh)) Complain("invalid noise threshold for automatic source grid sizing");
 				noise_threshold = noise_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "noise threshold = " << noise_threshold << endl;
+				if (mpi_id==0) cout << "Noise threshold for automatic srcpixel grid sizing = " << noise_threshold << endl;
 			} else Complain("must specify either zero or one argument (noise threshold for automatic source grid sizing)");
 		}
 		else if (words[0]=="adaptive_grid")
@@ -5928,7 +6042,7 @@ void Lens::process_commands(bool read_file)
 				set_switch(auto_srcgrid_set_pixel_size,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="nimg_prior")
+		else if (words[0]=="nimg_prior")    // This needs to be generalized so the user can specify the number of expected images
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Set prior on number of images: " << display_switch(n_image_prior) << endl;
@@ -5940,7 +6054,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="outside_sb_prior")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Set prior on maximum surface brightness allowed beyond selected fit region: " << display_switch(max_sb_prior_unselected_pixels) << endl;
+				if (mpi_id==0) cout << "Set prior on maximum surface brightness allowed beyond pixel mask: " << display_switch(max_sb_prior_unselected_pixels) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'outside_sb_prior' command; must specify 'on' or 'off'");
 				set_switch(max_sb_prior_unselected_pixels,setword);
@@ -5949,7 +6063,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="subhalo_prior")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Constrain subhalos (with pjaffe profile) to lie within selected fit region: " << display_switch(subhalo_prior) << endl;
+				if (mpi_id==0) cout << "Constrain subhalos (with pjaffe/corecusp profile) to lie within pixel mask: " << display_switch(subhalo_prior) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'subhalo_prior' command; must specify 'on' or 'off'");
 				set_switch(subhalo_prior,setword);
@@ -6003,13 +6117,12 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="inversion_nthreads")
 		{
-			int nt;
 			if (nwords == 2) {
+				int nt;
 				if (!(ws[1] >> nt)) Complain("invalid number of threads");
 				inversion_nthreads = nt;
 			} else if (nwords==1) {
-				nt = inversion_nthreads;
-				if (mpi_id==0) cout << "inversion # of threads = " << nt << endl;
+				if (mpi_id==0) cout << "inversion # of threads = " << inversion_nthreads << endl;
 			} else Complain("must specify either zero or one argument (number of threads for inversion)");
 		}
 		else if (words[0]=="raytrace_method") {

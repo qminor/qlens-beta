@@ -57,7 +57,7 @@ analytic_bestfit_src on   # This tells qlens to solve for the best-fit source co
 #0 1
 #0.2 1.2
 
-mcmctol 1.005    # Convergence criterion for T-Walk; the closer it is to 1, the longer the chains will run and the better it
+mcmctol 1.02    # Convergence criterion for T-Walk; the closer it is to 1, the longer the chains will run and the better it
                 #   samples the distribution (default = 1.01)
 
 # T-Walk finishes when the value of the R-criterion reaches the tolerance level set by mcmctol; it may take awhile (up to an hour,
