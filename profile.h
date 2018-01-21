@@ -62,6 +62,8 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	bool include_limits;
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
+	void copy_base_lensdata(const LensProfile* lens_in);
+
 
 	void set_n_params(const int &n_params_in);
 	void set_geometric_param_pointers(int qi);

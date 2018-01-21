@@ -44,33 +44,12 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 
 Alpha::Alpha(const Alpha* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	bprime = lens_in->bprime;
 	alpha = lens_in->alpha;
 	sprime = lens_in->sprime;
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	update_meta_parameters();
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
+	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -357,35 +336,13 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	bprime = lens_in->bprime;
 	sprime = lens_in->sprime;
 	aprime = lens_in->aprime;
-	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
+	copy_base_lensdata(lens_in);
 
 	update_meta_parameters();
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -596,34 +553,15 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 
 NFW::NFW(const NFW* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	ks = lens_in->ks;
 	rs = lens_in->rs;
-	if (rs < 0) rs = -rs; // don't allow negative scale radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	rmin_einstein_radius = 1e-6*rs;
+
+	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+
+	rmin_einstein_radius = 1e-6*rs;
 }
 
 void NFW::assign_paramnames()
@@ -770,33 +708,15 @@ Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const double &ks_in, const double &
 
 Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	ks = lens_in->ks;
 	rs = lens_in->rs;
-	if (rs < 0) rs = -rs; // don't allow negative scale radii
-	epsilon = lens_in->epsilon;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	rmin_einstein_radius = 1e-6*rs;
+
+	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+
+	rmin_einstein_radius = 1e-6*rs;
 }
 
 void Pseudo_Elliptical_NFW::assign_paramnames()
@@ -1050,36 +970,16 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 
 Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rt = lens_in->rt;
-	if (rs < 0) rs = -rs; // don't allow negative scale radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	rmin_einstein_radius = 1e-6*rs;
+
+	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+
+	rmin_einstein_radius = 1e-6*rs;
 }
 
 void Truncated_NFW::assign_paramnames()
@@ -1193,33 +1093,14 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 
 Hernquist::Hernquist(const Hernquist* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	ks = lens_in->ks;
 	rs = lens_in->rs;
-	if (rs < 0) rs = -rs; // don't allow negative core radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+
+	copy_base_lensdata(lens_in);
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+
+	rmin_einstein_radius = 1e-6*rs;
 }
 
 void Hernquist::assign_paramnames()
@@ -1333,31 +1214,11 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	k0 = lens_in->k0;
 	R_d = lens_in->R_d;
-	if (R_d < 0) R_d = -R_d; // don't allow negative core radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+
+	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
@@ -1465,27 +1326,9 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 
 Shear::Shear(const Shear* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
-	q = lens_in->q;
-	set_angle_radians(lens_in->theta);
 	shear1 = lens_in->shear1;
 	shear2 = lens_in->shear2;
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
+	copy_base_lensdata(lens_in);
 }
 
 void Shear::assign_paramnames()
@@ -1638,29 +1481,13 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 
 Multipole::Multipole(const Multipole* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	n = lens_in->n;
 	m = lens_in->m;
-	q=lens_in->q;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
 	kappa_multipole = lens_in->kappa_multipole;
 	sine_term = lens_in->sine_term;
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
+
+	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 	set_model_specific_integration_pointers();
 }
 
@@ -1935,24 +1762,9 @@ PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 
 PointMass::PointMass(const PointMass* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	b = lens_in->b;
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
+	// the base class copies q and theta, which are useless here, but it's simpler to just call it
+	copy_base_lensdata(lens_in);
 }
 
 void PointMass::assign_paramnames()
@@ -2068,43 +1880,19 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 
 CoreCusp::CoreCusp(const CoreCusp* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
 	tidal_host = lens_in->tidal_host;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
-	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	k0 = lens_in->k0;
 	gamma = lens_in->gamma;
 	digamma_term = lens_in->digamma_term;
 	n = lens_in->n;
 	a = lens_in->a;
 	s = lens_in->s;
-	if (s < 0) s = -s; // don't allow negative core radii
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
+	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
+	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
 	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
+	copy_base_lensdata(lens_in);
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
 	set_model_specific_integration_pointers();
 }
 
@@ -2118,7 +1906,7 @@ void CoreCusp::assign_paramnames()
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
-	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "\\e"; }
+	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "e"; }
 	else { paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0"; }
 	paramnames[1] = "gamma"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
@@ -2386,32 +2174,12 @@ SersicLens::SersicLens(const double &kappa_e_in, const double &Re_in, const doub
 
 SersicLens::SersicLens(const SersicLens* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	n_params = lens_in->n_params;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	kappa_e = lens_in->kappa_e;
 	n = lens_in->n;
 	re = lens_in->re;
 	b = lens_in->b;
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+
+	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
@@ -2521,24 +2289,8 @@ MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &y
 
 MassSheet::MassSheet(const MassSheet* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	anchor_special_parameter = lens_in->anchor_special_parameter;
-	n_params = lens_in->n_params;
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
 	kext = lens_in->kext;
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
+	copy_base_lensdata(lens_in);
 }
 
 void MassSheet::assign_paramnames()

@@ -65,6 +65,34 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	zfac = lens_in->zfac;
 }
 
+void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
+{
+	lenstype = lens_in->lenstype;
+	model_name = lens_in->model_name;
+	lens_number = lens_in->lens_number;
+	center_anchored = lens_in->center_anchored;
+	anchor_special_parameter = lens_in->anchor_special_parameter;
+	center_anchor_lens = lens_in->center_anchor_lens;
+	n_params = lens_in->n_params;
+	ellipticity_mode = lens_in->ellipticity_mode;
+	paramnames = lens_in->paramnames;
+	latex_paramnames = lens_in->latex_paramnames;
+	latex_param_subscripts = lens_in->latex_param_subscripts;
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
+	n_vary_params = lens_in->n_vary_params;
+	vary_params.input(lens_in->vary_params);
+	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+
+	q = lens_in->q;
+	epsilon = lens_in->epsilon;
+	epsilon2 = lens_in->epsilon2;
+	f_major_axis = lens_in->f_major_axis;
+	set_angle_radians(lens_in->theta);
+	x_center = lens_in->x_center;
+	y_center = lens_in->y_center;
+}
+
 void LensProfile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
 {
 	if (!center_anchored) center_anchored = true;
