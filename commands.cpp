@@ -455,13 +455,6 @@ void Lens::process_commands(bool read_file)
 							"degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
-					else if (words[2]=="pnfw")  // obsolete--remove soon!
-						cout << "lens pnfw <ks> <rs> <epsilon> [theta] [x-center] [y-center]\n\n"
-							"Pseudo-elliptical NFW profile from Golse & Kneib (2002), where <ks> is the mass parameter, <rs> is the\n"
-							"scale radius, <epsilon> is the ellipticity parameter, and [theta] is the angle of rotation\n"
-							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
-							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
-							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
 						cout << "lens tnfw <ks> <rs> <rt> <q/e> [theta] [x-center] [y-center]\n\n"
 							"Truncated NFW profile from Baltz et al. (2008), which is produced by multiplying the NFW density\n"
@@ -638,7 +631,7 @@ void Lens::process_commands(bool read_file)
 					else if (words[2]=="method") {
 						if (nwords==3)
 							cout << "fit method <fit_method>\n\n"
-								"Specify the fitting method, which can be either a minimization or Monte Carlo\n"
+								"Specify the fitting method, which can be either a chi-square optimization or Monte Carlo\n"
 								"sampling routine. Available fit methods are:\n\n"
 								"simplex -- minimize chi-square using downhill simplex method (+ optional simulated annealing)\n"
 								"powell -- minimize chi-square using Powell's method\n"
@@ -1561,8 +1554,8 @@ void Lens::process_commands(bool read_file)
 					cout << "Calculate marginalized errors from Fisher matrix (find_errors): " << display_switch(calculate_parameter_errors) << endl;
 					cout << "Max no. of iterations for downhill simplex: simplex_nmax = " << simplex_nmax << endl;
 					cout << "Max no. of iterations per temperature for downhill simplex: simplex_nmax_anneal = " << simplex_nmax_anneal << endl;
-					cout << "Chi-square threshold for ending downhill simplex: simplex_minchisq = " << simplex_minchisq << endl;
-					cout << "Chi-square threshold for ending simulated annealing: simplex_minchisq_anneal = " << simplex_minchisq_anneal << endl;
+					cout << "Chi-square threshold to end downhill simplex: simplex_minchisq = " << simplex_minchisq << endl;
+					cout << "Chi-square threshold to end simulated annealing: simplex_minchisq_anneal = " << simplex_minchisq_anneal << endl;
 					cout << "Initial temperature for downhill simplex: simplex_temp0 = " << simplex_temp_initial << endl;
 					cout << "Final temperature for downhill simplex: simplex_tempf = " << simplex_temp_final << endl;
 					cout << "Cooling factor for downhill simplex: simplex_cooling_factor = " << simplex_cooling_factor << endl;
@@ -1587,11 +1580,11 @@ void Lens::process_commands(bool read_file)
 					cout << endl;
 					cout << "\033[4mLens model settings\033[0m\n";
 					cout << "Ellipticity mode: emode = " << LensProfile::default_ellipticity_mode << endl;
-					if (LensProfile::integral_method==Romberg_Integration) cout << "Integration method: Romberg integration with accuracy " << romberg_accuracy << endl;
-					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
-					cout << "Orient major axis along y-direction: " << display_switch(LensProfile::orient_major_axis_north) << endl;
-					cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile::use_ellipticity_components) << endl;
-					cout << "Use shear components as parameters: " << display_switch(Shear::use_shear_component_params) << endl;
+					if (LensProfile::integral_method==Romberg_Integration) cout << "Integration method (integral_method): Romberg integration with accuracy " << romberg_accuracy << endl;
+					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "Integration method (integral_method): Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					cout << "Orient major axis along y-direction (major_axis_along_y): " << display_switch(LensProfile::orient_major_axis_north) << endl;
+					cout << "Use ellipticity components (ellipticity_components): " << display_switch(LensProfile::use_ellipticity_components) << endl;
+					cout << "Use shear components as parameters (shear_components): " << display_switch(Shear::use_shear_component_params) << endl;
 					cout << endl;
 					cout << "\033[4mMiscellaneous settings\033[0m\n";
 					cout << "Warnings: " << display_switch(warnings) << endl;
@@ -1832,7 +1825,6 @@ void Lens::process_commands(bool read_file)
 									(profile_name==MULTIPOLE) ? "mpole" :
 									(profile_name==nfw) ? "nfw" :
 									(profile_name==TRUNCATED_nfw) ? "tnfw" :
-									(profile_name==pnfw) ? "pnfw" :   // obsolete--remove soon!
 									(profile_name==HERNQUIST) ? "hern" :
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
@@ -2326,78 +2318,6 @@ void Lens::process_commands(bool read_file)
 					}
 				}
 				else Complain("nfw requires at least 3 parameters (ks, rs, q)");
-			}
-			else if (words[1]=="pnfw") // obsolete--remove soon!
-			{
-				if (nwords > 8) Complain("more than 6 parameters not allowed for model pnfw");
-				if (nwords >= 5) {
-					double ks, rs;
-					double epsilon, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model pnfw");
-					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model pnfw");
-					if (!(ws[4] >> epsilon)) Complain("invalid epsilon parameter for model pnfw");
-					if (nwords >= 6) {
-						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model pnfw");
-						if (nwords == 7) {
-							if (words[6].find("anchor_center=")==0) {
-								string anchorstr = words[6].substr(14);
-								stringstream anchorstream;
-								anchorstream << anchorstr;
-								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
-								if (anchornum >= nlens) Complain("lens anchor number does not exist");
-								anchor_lens_center = true;
-							} else Complain("x-coordinate specified for center, but not y-coordinate");
-						}
-						else if (nwords == 8) {
-							if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
-							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model pnfw");
-							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model pnfw");
-						}
-					}
-					param_vals.input(6);
-					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=epsilon; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
-					if (vary_parameters) {
-						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
-						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
-						if (read_command(false)==false) return;
-						if (nwords != tot_nparams_to_vary) {
-							string complain_str = "";
-							if (anchor_lens_center) {
-								if (nwords==tot_nparams_to_vary+2) {
-									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
-									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model pnfw";
-							}
-							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model pnfw";
-							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
-								complain_str += ",\n     plus two shear parameters ";
-								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
-							}
-							if (complain_str != "") Complain(complain_str);
-						}
-						vary_flags.input(nparams_to_vary);
-						if (add_shear) shear_vary_flags.input(2);
-						bool invalid_params = false;
-						int i,j;
-						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
-						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
-						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
-					}
-					if (update_parameters) {
-						lens_list[lens_number]->update_parameters(param_vals.array());
-						update_anchored_parameters();
-						reset();
-						if (auto_ccspline) automatically_determine_ccspline_mode();
-					} else {
-						add_lens(pnfw, emode, ks, rs, 0.0, epsilon, theta, xc, yc);
-						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-					}
-				}
-				else Complain("pnfw requires at least 3 parameters (ks, rs, epsilon)");
 			}
 			else if (words[1]=="tnfw")
 			{

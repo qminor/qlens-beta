@@ -19,50 +19,39 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	ellipticity_mode = default_ellipticity_mode;
-	set_n_params(6);
-	assign_paramnames();
-	assign_param_pointers();
-	set_default_base_values(nn,acc);
+	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	set_integration_pointers();
+
 	qx_parameter = qx_in;
 	f_parameter = f_in;
 	kspline.input(splinefile);
 	zfac = 1.0;
+
+	set_integration_pointers();
+}
+
+void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens)
+{
+	set_nparams_and_anchordata(np);
+	center_anchored = false;
+	anchor_special_parameter = false;
+	if (is_elliptical_lens) ellipticity_mode = default_ellipticity_mode;
+
+	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	assign_param_pointers();
+	assign_paramnames();
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)
 {
-	lenstype = lens_in->lenstype;
-	model_name = lens_in->model_name;
-	lens_number = lens_in->lens_number;
-	ellipticity_mode = lens_in->ellipticity_mode;
-	center_anchored = lens_in->center_anchored;
-	center_anchor_lens = lens_in->center_anchor_lens;
-	n_params = lens_in->n_params;
-	paramnames = lens_in->paramnames;
-	latex_paramnames = lens_in->latex_paramnames;
-	latex_param_subscripts = lens_in->latex_param_subscripts;
-
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
-	n_vary_params = lens_in->n_vary_params;
-	vary_params.input(lens_in->vary_params);
-
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
-	q = lens_in->q;
-	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
-	x_center = lens_in->x_center;
-	y_center = lens_in->y_center;
-	set_integration_pointers();
 	qx_parameter = lens_in->qx_parameter;
 	f_parameter = lens_in->f_parameter;
 	kspline.input(lens_in->kspline);
 	zfac = lens_in->zfac;
+
+	copy_base_lensdata(lens_in);
+	set_integration_pointers();
 }
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
@@ -82,7 +71,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
-	set_default_base_values(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+	set_default_base_settings(lens_in->numberOfPoints,lens_in->romberg_accuracy);
 
 	q = lens_in->q;
 	epsilon = lens_in->epsilon;
@@ -91,6 +80,33 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
+}
+
+void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
+{
+	n_params = n_params_in;
+	n_vary_params = 0;
+	vary_params.input(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.input(n_params);
+	set_auto_penalty_limits.input(n_params);
+	penalty_lower_limits.input(n_params);
+	penalty_upper_limits.input(n_params);
+
+	anchor_parameter = new bool[n_params];
+	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	param = new double*[n_params];
+	for (int i=0; i < n_params; i++) {
+		vary_params[i] = false;
+		anchor_parameter[i] = false;
+		parameter_anchor_lens[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+	}
 }
 
 void LensProfile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
@@ -242,46 +258,66 @@ void LensProfile::get_fit_parameters(dvector& fitparams, int &index)
 	}
 }
 
-void LensProfile::get_auto_stepsizes(dvector& stepsizes, int &index)
+void LensProfile::set_auto_stepsizes()
 {
-	if (vary_params[0]==true) stepsizes[index++] = 0.1;
-	if (vary_params[1]==true) stepsizes[index++] = 0.1;
+	stepsizes[0] = 0.1;
+	stepsizes[1] = 0.1;
+	set_auto_eparam_stepsizes(2,3);
+	stepsizes[4] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
+	stepsizes[5] = 1.0;
+}
+
+void LensProfile::set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i)
+{
 	if (use_ellipticity_components) {
-		if (vary_params[2]==true) stepsizes[index++] = 0.1;
-		if (vary_params[3]==true) stepsizes[index++] = 0.1;
+		stepsizes[eparam1_i] = 0.1; // e1
+		stepsizes[eparam2_i] = 0.1; // e2
 	} else {
-		if (vary_params[2]==true) stepsizes[index++] = 0.2;
-		if (vary_params[3]==true) stepsizes[index++] = 10;
+		stepsizes[eparam1_i] = 0.1; // q or e
+		stepsizes[eparam2_i] = 20;  // angle stepsize
 	}
-	if (!center_anchored) {
-		if (vary_params[4]==true) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
-		if (vary_params[5]==true) stepsizes[index++] = 1.0;
+}
+
+void LensProfile::get_auto_stepsizes(dvector& stepsizes_in, int &index)
+{
+	set_auto_stepsizes();
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) stepsizes_in[index++] = stepsizes[i];
 	}
+}
+
+void LensProfile::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_geometric_param_auto_ranges(2);
+}
+
+void LensProfile::set_geometric_param_auto_ranges(int param_i)
+{
+	if (use_ellipticity_components) {
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
+	} else {
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0; penalty_upper_limits[param_i] = 1; param_i++;
+		set_auto_penalty_limits[param_i++] = false;
+	}
+	set_auto_penalty_limits[param_i++] = false;
+	set_auto_penalty_limits[param_i++] = false;
 }
 
 void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
-	if (vary_params[0]==true) index++;
-	if (vary_params[1]==true) index++;
-	if (use_ellipticity_components) {
-		if (vary_params[2]==true) {
-			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
+	set_auto_ranges();
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) {
+			if (set_auto_penalty_limits[i]) {
+				use_penalty_limits[index] = true;
+				lower[index] = penalty_lower_limits[i];
+				upper[index] = penalty_upper_limits[i];
+			}
 			index++;
 		}
-		if (vary_params[3]==true) {
-			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; }
-			index++;
-		}
-	} else {
-		if (vary_params[2]==true) {
-			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; }
-			index++;
-		}
-		if (vary_params[3]==true) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]==true) index++;
-		if (vary_params[5]==true) index++;
 	}
 }
 
@@ -289,7 +325,7 @@ void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 {
 	int i;
 	for (i=0; i < n_params; i++) {
-		if (vary_params[i]==true) {
+		if (vary_params[i]) {
 			paramnames_vary.push_back(paramnames[i]);
 			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
 			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
@@ -310,25 +346,6 @@ bool LensProfile::get_limits(dvector& lower, dvector& upper, dvector& lower0, dv
 	return true;
 }
 
-void LensProfile::set_n_params(const int &n_params_in)
-{
-	n_params = n_params_in;
-	n_vary_params = 0;
-	vary_params.input(n_params);
-	anchor_parameter = new bool[n_params];
-	parameter_anchor_lens = new LensProfile*[n_params];
-	parameter_anchor_paramnum = new int[n_params];
-	parameter_anchor_ratio = new double[n_params];
-	param = new double*[n_params];
-	for (int i=0; i < n_params; i++) {
-		vary_params[i] = false;
-		anchor_parameter[i] = false;
-		parameter_anchor_lens[i] = NULL;
-		parameter_anchor_paramnum[i] = -1;
-		parameter_anchor_ratio[i] = 1.0;
-	}
-}
-
 void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 {
 	// n_params *must* already be set before running this
@@ -343,7 +360,14 @@ void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 		parameter_anchor_paramnum[i] = lens_in->parameter_anchor_paramnum[i];
 		parameter_anchor_ratio[i] = lens_in->parameter_anchor_ratio[i];
 	}
+	if (anchor_special_parameter) copy_special_parameter_anchor(lens_in);
 }
+
+void LensProfile::copy_special_parameter_anchor(const LensProfile *lens_in)
+{
+	special_anchor_lens = lens_in->special_anchor_lens;
+}
+
 
 void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens)
 {
@@ -553,18 +577,22 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	set_angle_radians(angle);
 }
 
-void LensProfile::set_default_base_values(const int &nn, const double &acc)
+void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 {
 	include_limits = false;
-	qx_parameter = 1.0;
 	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
 	SetGaussLegendre(nn);
 	romberg_accuracy = acc;
 }
 
-void LensProfile::set_model_specific_integration_pointers() // gets overloaded by some models
+void LensProfile::update_meta_parameters_and_pointers()
 {
+	update_meta_parameters();
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
 }
+
+void LensProfile::set_model_specific_integration_pointers() {} // gets overloaded by some models
 
 void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q has been defined before calling this
 {

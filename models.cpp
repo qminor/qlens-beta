@@ -21,15 +21,10 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 {
 	lenstype = ALPHA;
 	model_name = "alpha";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(7);
-	ellipticity_mode = default_ellipticity_mode;
-	assign_param_pointers();
-	assign_paramnames();
-	set_default_base_values(nn,acc);
+	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	bprime = bb_prime;
@@ -37,9 +32,7 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 	alpha = aa;
 	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
 
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	update_meta_parameters_and_pointers();
 }
 
 Alpha::Alpha(const Alpha* lens_in)
@@ -49,19 +42,14 @@ Alpha::Alpha(const Alpha* lens_in)
 	sprime = lens_in->sprime;
 
 	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	update_meta_parameters_and_pointers();
 }
 
 void Alpha::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	paramnames[0] = "b";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "";
 	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
-	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
+	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
 	set_geometric_paramnames(3);
 }
 
@@ -79,6 +67,24 @@ void Alpha::update_meta_parameters()
 	b = bprime*f_major_axis;
 	s = sprime*f_major_axis;
 	qsq = q*q; ssq = s*s;
+}
+
+void Alpha::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.1*bprime;
+	stepsizes[1] = 0.1;
+	stepsizes[2] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_auto_eparam_stepsizes(3,4);
+	stepsizes[5] = 0.1*bprime;
+	stepsizes[6] = 0.1*bprime;
+}
+
+void Alpha::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(3);
 }
 
 void Alpha::set_model_specific_integration_pointers()
@@ -100,43 +106,6 @@ void Alpha::set_model_specific_integration_pointers()
 			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
 			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
 		}
-	}
-}
-
-void Alpha::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.1*bprime;
-	if (vary_params[1]) stepsizes[index++] = 0.1;
-	if (vary_params[2]) stepsizes[index++] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
-	if (use_ellipticity_components) {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.1*bprime;
-		if (vary_params[6]) stepsizes[index++] = 0.1*bprime;
-	}
-}
-
-void Alpha::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 2;    } index++; }
-	if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-		
-	if (use_ellipticity_components) {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[4]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[4]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) index++;
-		if (vary_params[6]) index++;
 	}
 }
 
@@ -162,7 +131,7 @@ double Alpha::kapavg_spherical_rsq_iso(const double rsq) // only for alpha=1
 
 double Alpha::potential_spherical_rsq(const double rsq)
 {
-	// Formula from Keeton (2002), with typo corrected (plus sign in front of the DiGamma() term)
+	// Formula from Keeton (2002), w/ typo corrected (sign in front of the DiGamma() term)
 	double bpow, bs, p, tmp;
 	bpow = pow(bprime,alpha);
 	bs = bpow*pow(sprime,2-alpha);
@@ -186,7 +155,7 @@ double Alpha::potential_spherical_rsq_nocore(const double rsq) // only for s=0
 }
 
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
-//  transformed from the prime versions (bprime, etc.) for the correct emode
+//  transformed from the prime versions (bprime, etc.) defined for the correct emode (0, 1, or 2)
 
 void Alpha::deflection_elliptical_iso(const double x, const double y, lensvector& def) // only for alpha=1
 {
@@ -314,44 +283,31 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 {
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(7);
-	ellipticity_mode = default_ellipticity_mode;
-	set_default_base_values(nn,acc);
+	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	assign_param_pointers();
-	assign_paramnames();
 	bprime = bb_prime;
 	sprime = ss_prime;
 	aprime = aa_prime;
 	if (sprime < 0) sprime = -sprime;
 
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	update_meta_parameters_and_pointers();
 }
 
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
-	tidal_host = lens_in->tidal_host;
 	bprime = lens_in->bprime;
 	sprime = lens_in->sprime;
 	aprime = lens_in->aprime;
-	copy_base_lensdata(lens_in);
 
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	copy_base_lensdata(lens_in);
+	update_meta_parameters_and_pointers();
 }
 
 void PseudoJaffe::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
 	paramnames[1] = "a"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "";
 	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
@@ -378,23 +334,40 @@ void PseudoJaffe::update_meta_parameters()
 void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
-	tidal_host = host_in;
+	special_anchor_lens = host_in;
 	double rm, ravg;
-	tidal_host->get_einstein_radius(rm,ravg,1.0);
+	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 	aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-	a = aprime/f_major_axis;
-	asq = a*a;
+	update_meta_parameters();
 }
 
 void PseudoJaffe::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
 		double rm, ravg;
-		tidal_host->get_einstein_radius(rm,ravg,1.0);
+		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 		aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
 		a = aprime/f_major_axis;
 		asq = a*a;
 	}
+}
+
+void PseudoJaffe::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*bprime;
+	stepsizes[1] = 0.2*bprime;
+	stepsizes[2] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_auto_eparam_stepsizes(3,4);
+	stepsizes[5] = 0.2*bprime;
+	stepsizes[6] = 0.2*bprime;
+}
+
+void PseudoJaffe::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(3);
 }
 
 void PseudoJaffe::set_model_specific_integration_pointers()
@@ -405,43 +378,6 @@ void PseudoJaffe::set_model_specific_integration_pointers()
 		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
 		hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&PseudoJaffe::hessian_elliptical);
 		potptr = static_cast<double (LensProfile::*)(const double,const double)> (&PseudoJaffe::potential_elliptical);
-	}
-}
-
-void PseudoJaffe::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.5*bprime;
-	if (vary_params[1]) stepsizes[index++] = 0.2*bprime;
-	if (vary_params[2]) stepsizes[index++] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
-	if (use_ellipticity_components) {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[3]) stepsizes[index++] = 0.2;
-		if (vary_params[4]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.5*bprime;
-		if (vary_params[6]) stepsizes[index++] = 0.5*bprime;
-	}
-}
-
-void PseudoJaffe::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-
-	if (use_ellipticity_components) {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[4]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[4]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) index++;
-		if (vary_params[6]) index++;
 	}
 }
 
@@ -537,18 +473,14 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 {
 	lenstype = nfw;
 	model_name = "nfw";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(6);
-	ellipticity_mode = default_ellipticity_mode;
-	ks = ks_in; rs = rs_in;
-	set_default_base_values(nn,acc);
-	rmin_einstein_radius = 1e-6*rs;
+	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	assign_param_pointers();
-	assign_paramnames();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+
+	ks = ks_in;
+	rs = rs_in;
+
+	update_meta_parameters_and_pointers();
 }
 
 NFW::NFW(const NFW* lens_in)
@@ -557,18 +489,11 @@ NFW::NFW(const NFW* lens_in)
 	rs = lens_in->rs;
 
 	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-
-	rmin_einstein_radius = 1e-6*rs;
+	update_meta_parameters_and_pointers();
 }
 
 void NFW::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	set_geometric_paramnames(2);
@@ -581,44 +506,31 @@ void NFW::assign_param_pointers()
 	set_geometric_param_pointers(2);
 }
 
+void NFW::update_meta_parameters()
+{
+	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
+}
+
+void NFW::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*ks;
+	stepsizes[1] = 0.2*rs;
+	set_auto_eparam_stepsizes(2,3);
+	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[5] = 0.5;
+}
+
+void NFW::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_geometric_param_auto_ranges(2);
+}
+
 void NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
-}
-
-void NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
-	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
-	if (use_ellipticity_components) {
-		if (vary_params[2]) stepsizes[index++] = 0.1;
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[2]) stepsizes[index++] = 0.2;
-		if (vary_params[3]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) stepsizes[index++] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[5]) stepsizes[index++] = 0.5;
-	}
-}
-
-void NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[3]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) index++;
-		if (vary_params[5]) index++;
-	}
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -632,9 +544,10 @@ double NFW::kappa_rsq(const double rsq)
 double NFW::kappa_rsq_deriv(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	// below xsq ~ 1e-6 or so, kappa formula becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
+	// below xsq ~ 1e-6 or so, kappa formula becomes inaccurate due to fine cancellations; a series expansion
+	// is done for xsq smaller than this
 	if (xsq < 1e-6) return -ks/rsq;
-	else if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // kappa formula on next line becomes unstable for x very close to 1, this fixes the instability
+	else if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // formula on next line becomes unstable for x close to 1, this fixes it
 	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
 }
 
@@ -646,7 +559,8 @@ inline double NFW::lens_function_xsq(const double &xsq)
 double NFW::kapavg_spherical_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
+	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion
+	// is done for xsq smaller than this
 	if (xsq > 1e-6)
 		return 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 	else
@@ -681,272 +595,6 @@ bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology
 	return true;
 }
 
-/********************************** NFW with elliptic potential *************************************/
-
-Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
-{
-	lenstype = pnfw;
-	model_name = "pnfw";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(6);
-	ellipticity_mode = 2;
-	ks = ks_in; rs = rs_in;
-	set_default_base_values(nn,acc);
-	rmin_einstein_radius = 1e-6*rs;
-	epsilon = e_in;
-	set_angle(theta_degrees);
-	x_center = xc_in;
-	y_center = yc_in;
-	assign_param_pointers();
-	assign_paramnames();
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-}
-
-Pseudo_Elliptical_NFW::Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_in)
-{
-	ks = lens_in->ks;
-	rs = lens_in->rs;
-
-	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-
-	rmin_einstein_radius = 1e-6*rs;
-}
-
-void Pseudo_Elliptical_NFW::assign_paramnames()
-{
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
-	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
-	set_geometric_paramnames(2);
-}
-
-void Pseudo_Elliptical_NFW::assign_param_pointers()
-{
-	param[0] = &ks;
-	param[1] = &rs;
-	param[2] = &epsilon;
-	param[3] = &theta; angle_paramnum = 3;
-	if (!center_anchored) {
-		param[4] = &x_center;
-		param[5] = &y_center;
-	}
-}
-
-void Pseudo_Elliptical_NFW::update_meta_parameters()
-{
-	update_ellipticity_meta_parameters();
-	q = sqrt((1-epsilon)/(1+epsilon));
-}
-
-void Pseudo_Elliptical_NFW::set_model_specific_integration_pointers()
-{
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Pseudo_Elliptical_NFW::kapavg_spherical_rsq);
-	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Pseudo_Elliptical_NFW::deflection_elliptical);
-	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Pseudo_Elliptical_NFW::hessian_elliptical);
-	potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Pseudo_Elliptical_NFW::potential_elliptical);
-}
-
-
-void Pseudo_Elliptical_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
-	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
-	if (use_ellipticity_components) {
-		if (vary_params[2]) stepsizes[index++] = 0.1;
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[2]) stepsizes[index++] = 0.2;
-		if (vary_params[3]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) stepsizes[index++] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[5]) stepsizes[index++] = 0.5;
-	}
-}
-
-void Pseudo_Elliptical_NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[3]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) index++;
-		if (vary_params[5]) index++;
-	}
-}
-
-double Pseudo_Elliptical_NFW::kappa_rsq(const double rsq)
-{
-	double xsq = rsq/(rs*rs);
-	if (xsq==1) return (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
-	else if (xsq < 1e-6)
-		return -ks*(2+log(xsq/4));
-	else
-		return (2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1));
-}
-
-double Pseudo_Elliptical_NFW::kappa_rsq_deriv(const double rsq)
-{
-	double xsq = rsq/(rs*rs);
-	// below xsq ~ 1e-6 or so, kappa formula becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
-	if (xsq < 1e-6) return -ks/rsq;
-	else if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // kappa formula on next line becomes unstable for x very close to 1, this fixes the instability
-	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
-}
-
-inline double Pseudo_Elliptical_NFW::lens_function_xsq(const double &xsq)
-{
-	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
-}
-
-double Pseudo_Elliptical_NFW::kapavg_spherical_rsq(const double rsq)
-{
-	double xsq = rsq/(rs*rs);
-	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion is done for xsq smaller than this
-	if (xsq > 1e-6)
-		return 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
-	else
-		return -ks*(1+log(xsq/4));
-}
-
-double Pseudo_Elliptical_NFW::shear_magnitude_spherical(const double rsq)
-{
-	// This is the shear of the *spherical* model
-	double xsq, kapavg, kappa;
-	xsq = rsq/(rs*rs);
-	// warning: below xsq ~ 10^-6 or so, this becomes inaccurate due to fine cancellations; a series expansion should be done for xsq smaller than this (do later)
-
-	if (xsq==1) {
-		kappa = (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-		kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
-	}
-	else if (xsq > 1e-6) {
-		kapavg = 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
-		kappa = 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
-	} else {
-		kapavg = -ks*(1+log(xsq/4));
-		kappa = -ks*(2+log(xsq/4));
-	}
-	return (kapavg - kappa);
-}
-
-double Pseudo_Elliptical_NFW::kappa(double x, double y)
-{
-	x -= x_center;
-	y -= y_center;
-	if (sintheta != 0) rotate(x,y);
-	double phi = atan(abs(y/(q*x)));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
-	double rsq = (1-epsilon)*x*x + (1+epsilon)*y*y;
-	return (kappa_rsq(rsq) + epsilon*shear_magnitude_spherical(rsq)*cos(2*phi));
-}
-
-double Pseudo_Elliptical_NFW::potential_elliptical(const double x, const double y)
-{
-	double xsq = ((1-epsilon)*x*x + (1+epsilon)*y*y)/(rs*rs);
-	if (xsq < 1)
-		return 2*ks*rs*rs*(-SQR(atanh(sqrt(1-xsq))) + SQR(log(xsq/4)/2));
-	else 
-		return 2*ks*rs*rs*(-SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2));
-}
-
-void Pseudo_Elliptical_NFW::deflection_elliptical(const double x, const double y, lensvector& def)
-{
-	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
-	kapavg = kapavg_spherical_rsq(kapavg);
-	def[0] = kapavg*(1-epsilon)*x;
-	def[1] = kapavg*(1+epsilon)*y;
-}
-
-void Pseudo_Elliptical_NFW::hessian_elliptical(const double x, const double y, lensmatrix& hess)
-{
-	double temp, gamma1, gamma2, kap_r, shearmag, kap, phi;
-	if (x==0) {
-		if (y > 0) phi = M_PI/2;
-		else phi = -M_PI/2;
-	} else {
-		phi = atan(abs(y/(q*x)));
-		if (x < 0) {
-			if (y < 0)
-				phi = phi - M_PI;
-			else
-				phi = M_PI - phi;
-		} else if (y < 0) {
-			phi = -phi;
-		}
-	}
-	temp = (1-epsilon)*x*x + (1+epsilon)*y*y; // elliptical r^2
-	kap_r = kappa_rsq(temp);
-	shearmag = shear_magnitude_spherical(temp);
-	temp = cos(2*phi);
-	kap = kap_r + epsilon*shearmag*temp;
-	gamma1 = -epsilon*kap_r - shearmag*temp;
-	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin(2*phi);
-	hess[0][0] = kap + gamma1;
-	hess[1][1] = kap - gamma1;
-	hess[0][1] = gamma2;
-	hess[1][0] = gamma2;
-}
-
-void Pseudo_Elliptical_NFW::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
-{
-	zfac = zfactor;
-	if ((einstein_radius_root(rmin_einstein_radius)*einstein_radius_root(rmax_einstein_radius)) > 0) {
-		// multiple imaging does not occur with this lens
-		re_major_axis = 0;
-		re_average = 0;
-		return;
-	}
-	double (Brent::*bptr)(const double);
-	bptr = static_cast<double (Brent::*)(const double)> (&Pseudo_Elliptical_NFW::einstein_radius_root);
-	// for this lens, the elliptical radius is such that the scale rs gives the average, rather than major axis value (thus, same true for Einstein radius)
-	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
-	re_major_axis = re_average / sqrt(1-epsilon);
-	zfac = 1.0;
-}
-
-bool Pseudo_Elliptical_NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
-{
-	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
-	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	double rs_kpc, ds, c, m200, r200;
-	rs_kpc = rs / kpc_to_arcsec;
-	ds = ks * sigma_cr / rs_kpc;
-	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-	c = r200/rs_kpc;
-	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
-	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
-	cout << "c = " << c << endl;
-	cout << "M_200 = " << m200 << " M_sol\n";
-	cout << "r_200 = " << r200 << " kpc\n";
-	cout << endl;
-	return true;
-}
-
 /********************************** Truncated_NFW **********************************/
 
 Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
@@ -954,18 +602,15 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 {
 	lenstype = TRUNCATED_nfw;
 	model_name = "tnfw";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(7);
-	ellipticity_mode = default_ellipticity_mode;
-	ks = ks_in; rs = rs_in; rt = rt_in;
-	set_default_base_values(nn,acc);
-	assign_param_pointers();
-	assign_paramnames();
-	rmin_einstein_radius = 1e-6*rs;
+	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+
+	ks = ks_in;
+	rs = rs_in;
+	rt = rt_in;
+
+	update_meta_parameters_and_pointers();
 }
 
 Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
@@ -975,18 +620,11 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	rt = lens_in->rt;
 
 	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-
-	rmin_einstein_radius = 1e-6*rs;
+	update_meta_parameters_and_pointers();
 }
 
 void Truncated_NFW::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
@@ -1001,45 +639,32 @@ void Truncated_NFW::assign_param_pointers()
 	set_geometric_param_pointers(3);
 }
 
+void Truncated_NFW::update_meta_parameters()
+{
+	rmin_einstein_radius = 1e-6*rs;
+}
+
+void Truncated_NFW::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*ks;
+	stepsizes[1] = 0.2*rs;
+	stepsizes[2] = 0.2*rt;
+	set_auto_eparam_stepsizes(3,4);
+	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[6] = 0.5;
+}
+
+void Truncated_NFW::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(3);
+}
+
 void Truncated_NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq);
-}
-
-void Truncated_NFW::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
-	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
-	if (vary_params[2]) stepsizes[index++] = 0.2*rt;
-	if (use_ellipticity_components) {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[6]) stepsizes[index++] = 0.5;
-	}
-}
-
-void Truncated_NFW::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[4]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[4]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) index++;
-		if (vary_params[6]) index++;
-	}
 }
 
 double Truncated_NFW::kappa_rsq(const double rsq)
@@ -1078,17 +703,14 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 {
 	lenstype = HERNQUIST;
 	model_name = "hern";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(6);
-	ellipticity_mode = default_ellipticity_mode;
-	ks = ks_in; rs = rs_in;
-	set_default_base_values(nn,acc);
+	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	assign_param_pointers();
-	assign_paramnames();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+
+	ks = ks_in;
+	rs = rs_in;
+
+	update_meta_parameters_and_pointers();
 }
 
 Hernquist::Hernquist(const Hernquist* lens_in)
@@ -1097,17 +719,11 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 	rs = lens_in->rs;
 
 	copy_base_lensdata(lens_in);
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-
-	rmin_einstein_radius = 1e-6*rs;
+	update_meta_parameters_and_pointers();
 }
 
 void Hernquist::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	set_geometric_paramnames(2);
@@ -1120,57 +736,44 @@ void Hernquist::assign_param_pointers()
 	set_geometric_param_pointers(2);
 }
 
+void Hernquist::update_meta_parameters()
+{
+	rmin_einstein_radius = 1e-6*rs;
+}
+
+void Hernquist::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*ks;
+	stepsizes[1] = 0.2*rs;
+	set_auto_eparam_stepsizes(2,3);
+	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[5] = 0.5;
+}
+
+void Hernquist::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_geometric_param_auto_ranges(2);
+}
+
 void Hernquist::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::potential_spherical_rsq);
 }
 
-void Hernquist::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*ks;
-	if (vary_params[1]) stepsizes[index++] = 0.2*rs;
-	if (use_ellipticity_components) {
-		if (vary_params[2]) stepsizes[index++] = 0.1;
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[2]) stepsizes[index++] = 0.2;
-		if (vary_params[3]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[5]) stepsizes[index++] = 1.0;
-	}
-}
-
-void Hernquist::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[3]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) index++;
-		if (vary_params[5]) index++;
-	}
-}
-
 double Hernquist::kappa_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	if (abs(xsq-1.0) < 1e-4) return 0.4*ks*(0.666666666667 - 0.571428571429*(xsq-1)); // function on next line becomes unstable for x very close to 1; this fixes the instability
+	if (abs(xsq-1.0) < 1e-4) return 0.4*ks*(0.666666666667 - 0.571428571429*(xsq-1)); // function on next line becomes unstable for x close to 1, this fixes it
 	return (ks*(-3 + (2+xsq)*lens_function_xsq(xsq))/((xsq-1)*(xsq-1)));
 }
 
 double Hernquist::kappa_rsq_deriv(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	if (abs(xsq-1.0) < 1e-4) return -0.4*ks*(0.571428571429)/(rs*rs); // function on next line becomes unstable for x very close to 1; this fixes the instability
+	if (abs(xsq-1.0) < 1e-4) return -0.4*ks*(0.571428571429)/(rs*rs); // function on next line becomes unstable for x close to 1, this fixes it
 	return ((ks/((2*rsq)*CUBE(xsq-1))) * (-3*xsq*lens_function_xsq(xsq)*(xsq+4) + 13*xsq + 2));
 }
 
@@ -1199,17 +802,14 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 {
 	lenstype = EXPDISK;
 	model_name = "expdisk";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(6);
-	ellipticity_mode = default_ellipticity_mode;
-	k0 = k0_in; R_d = R_d_in;
-	set_default_base_values(nn,acc);
+	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	assign_param_pointers();
-	assign_paramnames();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+
+	k0 = k0_in;
+	R_d = R_d_in;
+
+	update_meta_parameters_and_pointers();
 }
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
@@ -1218,18 +818,13 @@ ExpDisk::ExpDisk(const ExpDisk* lens_in)
 	R_d = lens_in->R_d;
 
 	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	update_meta_parameters_and_pointers();
 }
 
 void ExpDisk::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
-	paramnames[1] = "R_d"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "d";
+	paramnames[0] = "k0";  latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "R_d"; latex_paramnames[1] = "R";       latex_param_subscripts[1] = "d";
 	set_geometric_paramnames(2);
 }
 
@@ -1240,43 +835,30 @@ void ExpDisk::assign_param_pointers()
 	set_geometric_param_pointers(2);
 }
 
+void ExpDisk::update_meta_parameters()
+{
+	rmin_einstein_radius = 1e-6*R_d;
+}
+
+void ExpDisk::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*k0;
+	stepsizes[1] = 0.2*R_d;
+	set_auto_eparam_stepsizes(2,3);
+	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[5] = 0.5;
+}
+
+void ExpDisk::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_geometric_param_auto_ranges(2);
+}
+
 void ExpDisk::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&ExpDisk::kapavg_spherical_rsq);
-}
-
-void ExpDisk::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*k0;
-	if (vary_params[1]) stepsizes[index++] = 0.2*R_d;
-	if (use_ellipticity_components) {
-		if (vary_params[2]) stepsizes[index++] = 0.1;
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[2]) stepsizes[index++] = 0.2;
-		if (vary_params[3]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) stepsizes[index++] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[5]) stepsizes[index++] = 1.0;
-	}
-}
-
-void ExpDisk::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[2]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[3]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[4]) index++;
-		if (vary_params[5]) index++;
-	}
 }
 
 double ExpDisk::kappa_rsq(const double rsq)
@@ -1302,26 +884,18 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 {
 	lenstype = SHEAR;
 	model_name = "shear";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(4);
-	assign_param_pointers();
-	assign_paramnames();
+	setup_base_lens(4,false); // number of parameters = 4, is_elliptical_lens = false
 
 	if (use_shear_component_params) {
 		shear1 = shear_p1_in;
 		shear2 = shear_p2_in;
-		q = sqrt(SQR(shear_p1_in) + SQR(shear_p2_in)); // shear magnitude
-		set_angle_from_components(shear_p1_in,shear_p2_in);
 	} else {
-		q=shear_p1_in;
+		q = shear_p1_in;
 		set_angle(shear_p2_in);
-		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		shear1 = -q*cos(2*theta_eff);
-		shear2 = -q*sin(2*theta_eff);
 	}
 	x_center = xc_in;
 	y_center = yc_in;
+	update_meta_parameters();
 }
 
 Shear::Shear(const Shear* lens_in)
@@ -1329,24 +903,20 @@ Shear::Shear(const Shear* lens_in)
 	shear1 = lens_in->shear1;
 	shear2 = lens_in->shear2;
 	copy_base_lensdata(lens_in);
+	update_meta_parameters();
 }
 
 void Shear::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	if (use_shear_component_params) {
-		paramnames[0] = "shear1"; latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "1";
-		paramnames[1] = "shear2"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "2";
+		paramnames[0] = "shear1";      latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "1";
+		paramnames[1] = "shear2";      latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "2";
 	} else {
-		paramnames[0] = "shear"; latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "";
+		paramnames[0] = "shear";       latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "";
 		paramnames[1] = "theta_shear"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "\\gamma";
 	}
-	if (!center_anchored) {
-		paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
-		paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
-	}
+	paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
+	paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
 }
 
 void Shear::assign_param_pointers()
@@ -1359,10 +929,8 @@ void Shear::assign_param_pointers()
 		param[0] = &q; // here, q is actually the shear magnitude
 		param[1] = &theta; angle_paramnum = 1;
 	}
-	if (!center_anchored) {
-		param[2] = &x_center;
-		param[3] = &y_center;
-	}
+	param[2] = &x_center;
+	param[3] = &y_center;
 }
 
 void Shear::update_meta_parameters()
@@ -1377,37 +945,30 @@ void Shear::update_meta_parameters()
 	}
 }
 
-void Shear::get_auto_stepsizes(dvector& stepsizes, int &index)
+void Shear::set_auto_stepsizes()
 {
 	if (use_shear_component_params) {
-		if (vary_params[0]) stepsizes[index++] = 0.035;
-		if (vary_params[1]) stepsizes[index++] = 0.035;
+		stepsizes[0] = 0.035;
+		stepsizes[1] = 0.035;
 	} else {
-		if (vary_params[0]) stepsizes[index++] = 0.05;
-		if (vary_params[1]) stepsizes[index++] = 20;
+		stepsizes[0] = 0.05;
+		stepsizes[1] = 20;
 	}
-	if (!center_anchored) {
-		if (vary_params[2]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
-		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
-	}
+	stepsizes[2] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
+	stepsizes[3] = 0.1;
 }
 
-void Shear::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void Shear::set_auto_ranges()
 {
 	if (use_shear_component_params) {
-		if (vary_params[0]) index++;
-		if (vary_params[1]) index++;
+		set_auto_penalty_limits[0] = false;
+		set_auto_penalty_limits[1] = false;
 	} else {
-		if (vary_params[0]) {
-			if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
-			index++;
-		}
-		if (vary_params[1]) index++;
+		set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+		set_auto_penalty_limits[1] = false;
 	}
-	if (!center_anchored) {
-		if (vary_params[2]) index++;
-		if (vary_params[3]) index++;
-	}
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = false;
 }
 
 double Shear::potential(double x, double y)
@@ -1464,19 +1025,19 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 {
 	lenstype = MULTIPOLE;
 	model_name = (kap==true) ? "kmpole" : "mpole";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(5); // Note, m cannot be varied since it must be an integer, so it is not counted as a parameter here
-	n = n_in; m = m_in;
-	q=A_m_in;
+	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
+	sine_term = sine;
+	setup_base_lens(5,false); // number of parameters = 5, is_elliptical_lens = false
+
+	n = n_in;
+	m = m_in;
+	q = A_m_in;
 	set_angle(theta_degrees);
 	x_center = xc_in;
 	y_center = yc_in;
-	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
-	sine_term = sine;
+
+	update_meta_parameters();
 	set_model_specific_integration_pointers();
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 Multipole::Multipole(const Multipole* lens_in)
@@ -1491,6 +1052,60 @@ Multipole::Multipole(const Multipole* lens_in)
 	set_model_specific_integration_pointers();
 }
 
+void Multipole::assign_paramnames()
+{
+	string mstring;
+	stringstream mstr;
+	mstr << m;
+	mstr >> mstring;
+	if (sine_term) {
+		paramnames[0] = "B_" + mstring;  latex_paramnames[0] = "B"; latex_param_subscripts[0] = mstring;
+	} else {
+		paramnames[0] =  "A_" + mstring; latex_paramnames[0] = "A"; latex_param_subscripts[0] = mstring;
+	}
+	if (kappa_multipole) {
+		paramnames[1] = "beta"; latex_paramnames[1] = "\\beta"; latex_param_subscripts[1] = "";
+	} else {
+		paramnames[1] = "n";    latex_paramnames[1] = "n"; latex_param_subscripts[1] = "";
+	}
+	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
+	paramnames[3] = "xc";    latex_paramnames[3] = "x";       latex_param_subscripts[3] = "c";
+	paramnames[4] = "yc";    latex_paramnames[4] = "y";       latex_param_subscripts[4] = "c";
+}
+
+void Multipole::assign_param_pointers()
+{
+	param[0] = &q; // here, q is actually the shear magnitude
+	param[1] = &n;
+	param[2] = &theta; angle_paramnum = 2;
+	param[3] = &x_center;
+	param[4] = &y_center;
+}
+
+void Multipole::update_meta_parameters()
+{
+	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+	if (sine_term) theta_eff += M_HALFPI/m;
+}
+
+void Multipole::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.05;
+	stepsizes[1] = 0.1;
+	stepsizes[2] = 20;
+	stepsizes[3] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
+	stepsizes[4] = 0.1;
+}
+
+void Multipole::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = false;
+	set_auto_penalty_limits[4] = false;
+}
+
 void Multipole::set_model_specific_integration_pointers()
 {
 	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Multipole::deflection);
@@ -1499,71 +1114,10 @@ void Multipole::set_model_specific_integration_pointers()
 	if (m==0) kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Multipole::deflection_m0_spherical_r);
 }
 
-void Multipole::assign_paramnames()
-{
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	string mstring;
-	stringstream mstr;
-	mstr << m;
-	mstr >> mstring;
-	if (sine_term) {
-		paramnames[0] = "B_" + mstring; latex_paramnames[0] = "B"; latex_param_subscripts[0] = mstring;
-	} else {
-		paramnames[0] =  "A_" + mstring; latex_paramnames[0] = "A"; latex_param_subscripts[0] = mstring;
-	}
-	if (kappa_multipole) {
-		paramnames[1] = "beta"; latex_paramnames[1] = "\\beta"; latex_param_subscripts[1] = "";
-	} else {
-		paramnames[1] = "n"; latex_paramnames[1] = "n"; latex_param_subscripts[1] = "";
-	}
-	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
-	if (!center_anchored) {
-		paramnames[3] = "xc"; latex_paramnames[3] = "x"; latex_param_subscripts[3] = "c";
-		paramnames[4] = "yc"; latex_paramnames[4] = "y"; latex_param_subscripts[4] = "c";
-	}
-}
-
-void Multipole::assign_param_pointers()
-{
-	param[0] = &q; // here, q is actually the shear magnitude
-	param[1] = &n;
-	param[2] = &theta; angle_paramnum = 2;
-	if (!center_anchored) {
-		param[3] = &x_center;
-		param[4] = &y_center;
-	}
-}
-
-void Multipole::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.05;
-	if (vary_params[1]) stepsizes[index++] = 0.1;
-	if (vary_params[2]) stepsizes[index++] = 20;
-	if (!center_anchored) {
-		if (vary_params[3]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
-		if (vary_params[4]) stepsizes[index++] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
-	}
-}
-
-void Multipole::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) index++;
-	if (vary_params[1]) index++;
-	if (vary_params[2]) index++;
-	if (!center_anchored) {
-		if (vary_params[3]) index++;
-		if (vary_params[4]) index++;
-	}
-}
-
 double Multipole::kappa(double x, double y)
 {
 	x -= x_center;
 	y -= y_center;
-	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-	if (sine_term) theta_eff += M_HALFPI/m;
 	double phi = atan(abs(y/x));
 	if (x < 0) {
 		if (y < 0)
@@ -1620,8 +1174,6 @@ double Multipole::potential(double x, double y)
 	if (kappa_multipole) {
 		return (2*q*pow(x*x+y*y,1-n/2)/(SQR(2-n)-m*m)) * cos(m*(phi-theta_eff));
 	} else {
-		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		if (sine_term) theta_eff += M_HALFPI/m;
 		if (m==0)
 			return -(q*pow(x*x+y*y,n/2)) * cos(m*(phi-theta_eff));
 		else
@@ -1633,8 +1185,6 @@ void Multipole::deflection(double x, double y, lensvector& def)
 {
 	x -= x_center;
 	y -= y_center;
-	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-	if (sine_term) theta_eff += M_HALFPI/m;
 	double r, phi, psi, dpsi, cs, ss;
 	r = sqrt(x*x+y*y);
 	phi = atan(abs(y/x));
@@ -1679,8 +1229,6 @@ void Multipole::hessian(double x, double y, lensmatrix& hess)
 {
 	x -= x_center;
 	y -= y_center;
-	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-	if ((sine_term) and (m != 0)) theta_eff += M_HALFPI/m;
 	int mm = m*m;
 	double r, rsq, rcube, xy, xx, yy, phi, psi, dpsi, ddpsi, cs, ss;
 	xx = x*x;
@@ -1751,11 +1299,10 @@ PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 {
 	lenstype = PTMASS;
 	model_name = "ptmass";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(3);
+	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
 	b = bb;
-	x_center = xc_in; y_center = yc_in;
+	x_center = xc_in;
+	y_center = yc_in;
 	assign_param_pointers();
 	assign_paramnames();
 }
@@ -1769,45 +1316,31 @@ PointMass::PointMass(const PointMass* lens_in)
 
 void PointMass::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
-	if (!center_anchored) {
-		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
-		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
-	}
+	paramnames[0] = "b";  latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
+	paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
 }
 
 void PointMass::assign_param_pointers()
 {
 	param[0] = &b;
-	if (!center_anchored) {
-		param[1] = &x_center;
-		param[2] = &y_center;
-	}
+	param[1] = &x_center;
+	param[2] = &y_center;
 	angle_paramnum = -1; // since there is no angle parameter
 }
 
-void PointMass::get_auto_stepsizes(dvector& stepsizes, int &index)
+void PointMass::set_auto_stepsizes()
 {
-	if (vary_params[0]) stepsizes[index++] = 0.1*b;
-	if (!center_anchored) {
-		if (vary_params[1]) stepsizes[index++] = 0.1*b;
-		if (vary_params[2]) stepsizes[index++] = 0.1*b;
-	}
+	stepsizes[0] = 0.1*b;
+	stepsizes[1] = 0.1*b;
+	stepsizes[2] = 0.1*b;
 }
 
-void PointMass::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void PointMass::set_auto_ranges()
 {
-	if (vary_params[0]) {
-		if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; }
-		index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[1]) index++;
-		if (vary_params[2]) index++;
-	}
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
 }
 
 double PointMass::potential(double x, double y)
@@ -1848,70 +1381,52 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 {
 	lenstype = CORECUSP;
 	model_name = "corecusp";
-	set_n_params(9);
-	ellipticity_mode = default_ellipticity_mode;
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_default_base_values(nn,acc);
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_k0_by_einstein_radius = parametrize_einstein_radius;
+	setup_base_lens(9,true); // number of parameters = 9, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+
 	gamma = gamma_in;
-	digamma_term = DiGamma(1.5-gamma/2);
 	n = n_in;
 	a = a_in;
 	s = s_in;
 	if (s < 0) s = -s; // don't allow negative core radii
+	if (a < 0) a = -a; // don't allow negative scale radii
 	if (set_k0_by_einstein_radius) {
 		einstein_radius = mass_param_in;
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
-		k0 = 1.0; // needed since kappa_avg_spherical includes k0
-		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-		if (a != 0) k0 = 1.0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
+		k0 = 1.0; // This will be reset when update_meta_parameters() is called
 	}
 	else k0 = mass_param_in;
 
-	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-	assign_param_pointers();
-	assign_paramnames();
+	update_meta_parameters_and_pointers();
 }
 
 CoreCusp::CoreCusp(const CoreCusp* lens_in)
 {
-	tidal_host = lens_in->tidal_host;
 	k0 = lens_in->k0;
 	gamma = lens_in->gamma;
-	digamma_term = lens_in->digamma_term;
 	n = lens_in->n;
 	a = lens_in->a;
 	s = lens_in->s;
 	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
 	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
-	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 
 	copy_base_lensdata(lens_in);
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-}
-
-void CoreCusp::set_model_specific_integration_pointers()
-{
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::kapavg_spherical_rsq);
+	update_meta_parameters_and_pointers();
 }
 
 void CoreCusp::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	if (set_k0_by_einstein_radius) { paramnames[0] = "Re"; latex_paramnames[0] = "R"; latex_param_subscripts[0] = "e"; }
-	else { paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0"; }
+	if (set_k0_by_einstein_radius) {
+		paramnames[0] = "Re"; latex_paramnames[0] = "R";       latex_param_subscripts[0] = "e";
+	} else {
+		paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	}
 	paramnames[1] = "gamma"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "";
-	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
-	paramnames[3] = "a"; latex_paramnames[3] = "a"; latex_param_subscripts[3] = "";
-	paramnames[4] = "s"; latex_paramnames[4] = "s"; latex_param_subscripts[4] = "";
+	paramnames[2] = "n";     latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
+	paramnames[3] = "a";     latex_paramnames[3] = "a";       latex_param_subscripts[3] = "";
+	paramnames[4] = "s";     latex_paramnames[4] = "s";       latex_param_subscripts[4] = "";
 	set_geometric_paramnames(5);
 }
 
@@ -1941,9 +1456,9 @@ void CoreCusp::update_meta_parameters()
 void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
 {
 	anchor_special_parameter = true;
-	tidal_host = host_in;
+	special_anchor_lens = host_in;
 	double rm, ravg;
-	tidal_host->get_einstein_radius(rm,ravg,1.0);
+	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 	if (set_k0_by_einstein_radius) {
 		a = sqrt(ravg*einstein_radius); // Not good! Only true for Pseudo-Jaffe subhalo. Fix this later (if it can be fixed)
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
@@ -1960,7 +1475,7 @@ void CoreCusp::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
 		double rm, ravg;
-		tidal_host->get_einstein_radius(rm,ravg,1.0);
+		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 		if (set_k0_by_einstein_radius) {
 			a = sqrt(ravg*einstein_radius);
 			if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
@@ -1975,47 +1490,38 @@ void CoreCusp::update_special_anchored_params()
 	}
 }
 
-void CoreCusp::get_auto_stepsizes(dvector& stepsizes, int &index)
+void CoreCusp::set_auto_stepsizes()
 {
-	if (vary_params[0]) {
-		if (set_k0_by_einstein_radius) stepsizes[index++] = 0.1*einstein_radius;
-		else stepsizes[index++] = 0.1*k0;
-	}
-	if (vary_params[1]) stepsizes[index++] = 0.1;
-	if (vary_params[2]) stepsizes[index++] = 0.1;
-	if (vary_params[3]) stepsizes[index++] = 0.1*a;
-	if (vary_params[4]) stepsizes[index++] = 0.01*a; // this one is a bit arbitrary, but hopefully reasonable enough
-	if (use_ellipticity_components) {
-		if (vary_params[5]) stepsizes[index++] = 0.1;
-		if (vary_params[6]) stepsizes[index++] = 0.1;
+	if (set_k0_by_einstein_radius) stepsizes[0] = 0.1*einstein_radius;
+	else stepsizes[0] = 0.1*k0;
+	stepsizes[1] = 0.1;
+	stepsizes[2] = 0.1;
+	stepsizes[3] = 0.1*a;
+	stepsizes[4] = 0.02*a;
+	set_auto_eparam_stepsizes(5,6);
+	if (set_k0_by_einstein_radius) {
+		// take advantage of the fact that we're keeping track of the Einstein radius
+		stepsizes[7] = 0.1*einstein_radius;
+		stepsizes[8] = 0.1*einstein_radius;
 	} else {
-		if (vary_params[5]) stepsizes[index++] = 0.1;
-		if (vary_params[6]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[7]) stepsizes[index++] = 0.1*k0;
-		if (vary_params[8]) stepsizes[index++] = 0.1*k0;
+		stepsizes[7] = 0.1; // arbitrary...maybe we should just calculate Einstein radius before determining stepsizes anyway?
+		stepsizes[8] = 0.1;
 	}
 }
 
-void CoreCusp::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void CoreCusp::set_auto_ranges()
 {
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) index++;
-	if (vary_params[2]) index++;
-	if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[4]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (use_ellipticity_components) {
-		if (vary_params[5]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[6]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[5]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[6]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[7]) index++;
-		if (vary_params[8]) index++;
-	}
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
+	set_geometric_param_auto_ranges(5);
+}
+
+void CoreCusp::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::kapavg_spherical_rsq);
 }
 
 double CoreCusp::kappa_rsq(const double rsq)
@@ -2151,25 +1657,17 @@ SersicLens::SersicLens(const double &kappa_e_in, const double &Re_in, const doub
 {
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	ellipticity_mode = default_ellipticity_mode;
-	set_n_params(7);
-	assign_param_pointers();
-	assign_paramnames();
-	set_default_base_values(nn,acc);
+	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	n = n_in;
 	re = Re_in;
-	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
 	kappa_e = kappa_e_in;
-	set_default_base_values(nn,acc);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+
+	update_meta_parameters_and_pointers();
 }
 
 SersicLens::SersicLens(const SersicLens* lens_in)
@@ -2180,19 +1678,14 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	b = lens_in->b;
 
 	copy_base_lensdata(lens_in);
-	update_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
+	update_meta_parameters_and_pointers();
 }
 
 void SersicLens::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
-	paramnames[1] = "R_eff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
-	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
+	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	set_geometric_paramnames(3);
 }
 
@@ -2211,45 +1704,27 @@ void SersicLens::update_meta_parameters()
 	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
 }
 
+void SersicLens::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*kappa_e;
+	stepsizes[1] = 0.2*re;
+	stepsizes[2] = 0.2;
+	set_auto_eparam_stepsizes(3,4);
+	stepsizes[5] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[6] = 0.3;
+}
+
+void SersicLens::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = false;
+	set_geometric_param_auto_ranges(3);
+}
+
 void SersicLens::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::kapavg_spherical_rsq);
-}
-
-void SersicLens::get_auto_stepsizes(dvector& stepsizes, int &index)
-{
-	if (vary_params[0]) stepsizes[index++] = 0.2*kappa_e;
-	if (vary_params[1]) stepsizes[index++] = 0.2*re;
-	if (vary_params[2]) stepsizes[index++] = 0.2;
-	if (use_ellipticity_components) {
-		if (vary_params[3]) stepsizes[index++] = 0.1;
-		if (vary_params[4]) stepsizes[index++] = 0.1;
-	} else {
-		if (vary_params[3]) stepsizes[index++] = 0.2;
-		if (vary_params[4]) stepsizes[index++] = 20;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) stepsizes[index++] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-		if (vary_params[6]) stepsizes[index++] = 0.3;
-	}
-}
-
-void SersicLens::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
-{
-	if (vary_params[0]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[1]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1e30; } index++; }
-	if (vary_params[2]) index++;
-	if (use_ellipticity_components) {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-		if (vary_params[4]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = -1; upper[index] = 1; } index++; }
-	} else {
-		if (vary_params[3]) { if (use_penalty_limits[index]==false) { use_penalty_limits[index] = true; lower[index] = 0; upper[index] = 1; } index++; }
-		if (vary_params[4]) index++;
-	}
-	if (!center_anchored) {
-		if (vary_params[5]) index++;
-		if (vary_params[6]) index++;
-	}
 }
 
 double SersicLens::kappa_rsq(const double rsq)
@@ -2278,13 +1753,11 @@ MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &y
 {
 	lenstype = SHEET;
 	model_name = "sheet";
-	center_anchored = false;
-	anchor_special_parameter = false;
-	set_n_params(3);
+	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
+
 	kext = kext_in;
-	x_center = xc_in; y_center = yc_in;
-	assign_param_pointers();
-	assign_paramnames();
+	x_center = xc_in;
+	y_center = yc_in;
 }
 
 MassSheet::MassSheet(const MassSheet* lens_in)
@@ -2295,42 +1768,31 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 
 void MassSheet::assign_paramnames()
 {
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "kext"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
-	if (!center_anchored) {
-		paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
-		paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
-	}
+	paramnames[1] = "xc";   latex_paramnames[1] = "x";       latex_param_subscripts[1] = "c";
+	paramnames[2] = "yc";   latex_paramnames[2] = "y";       latex_param_subscripts[2] = "c";
 }
 
 void MassSheet::assign_param_pointers()
 {
 	param[0] = &kext;
-	if (!center_anchored) {
-		param[1] = &x_center;
-		param[2] = &y_center;
-	}
+	param[1] = &x_center;
+	param[2] = &y_center;
 	angle_paramnum = -1; // since there is no angle parameter
 }
 
-void MassSheet::get_auto_stepsizes(dvector& stepsizes, int &index)
+void MassSheet::set_auto_stepsizes()
 {
-	if (vary_params[0]) stepsizes[index++] = 0.1*kext;
-	if (!center_anchored) {
-		if (vary_params[1]) stepsizes[index++] = 0.1; // arbitrary! really, the center should never be independently varied
-		if (vary_params[2]) stepsizes[index++] = 0.1;
-	}
+	stepsizes[0] = 0.3*kext;
+	stepsizes[1] = 0.1; // arbitrary! really, the center should never be independently varied
+	stepsizes[2] = 0.1;
 }
 
-void MassSheet::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void MassSheet::set_auto_ranges()
 {
-	if (vary_params[0]) index++;
-	if (!center_anchored) {
-		if (vary_params[1]) index++;
-		if (vary_params[2]) index++;
-	}
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
 }
 
 double MassSheet::potential(double x, double y)
@@ -2369,8 +1831,8 @@ TestModel::TestModel(const double &q_in, const double &theta_degrees, const doub
 {
 	lenstype = TESTMODEL;
 	model_name = "test";
-	center_anchored = false;
-	set_default_base_values(nn,acc);
+	//setup_base_lens(X,false); // number of parameters = X, is_elliptical_lens = false
+	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
 }

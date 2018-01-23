@@ -20,7 +20,6 @@ enum LensProfileName
 	PJAFFE,
 	nfw,
 	TRUNCATED_nfw,
-	pnfw,
 	HERNQUIST,
 	EXPDISK,
 	CORECUSP,
@@ -59,13 +58,16 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	string model_name;
 	vector<string> paramnames;
 	vector<string> latex_paramnames, latex_param_subscripts;
+	boolvector set_auto_penalty_limits;
+	dvector penalty_upper_limits, penalty_lower_limits;
+	dvector stepsizes;
 	bool include_limits;
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
+	void setup_base_lens(const int np, const bool is_elliptical_lens);
 	void copy_base_lensdata(const LensProfile* lens_in);
 
-
-	void set_n_params(const int &n_params_in);
+	void set_nparams_and_anchordata(const int &n_params_in);
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
 	void set_angle(const double &theta_degrees);
@@ -103,6 +105,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	double* parameter_anchor_ratio;
 
 	bool anchor_special_parameter;
+	LensProfile* special_anchor_lens;
 
 	static IntegrationMethod integral_method;
 	static bool orient_major_axis_north;
@@ -112,7 +115,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 
 	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
 	{
-		set_default_base_values(20,1e-6);
+		set_default_base_settings(20,1e-6);
 		zfac = 1.0;
 	}
 	LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in);
@@ -127,11 +130,11 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 
 	// in all derived classes, each of the following function pointers can be redirected if analytic formulas
 	// are used instead of the default numerical version
-	void (LensProfile::*defptr)(const double, const double, lensvector& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
 	double (LensProfile::*kapavgptr_rsq_spherical)(const double); // numerical: &LensProfile::kapavg_spherical_integral
+	double (LensProfile::*potptr_rsq_spherical)(const double); // numerical: &LensProfile::potential_spherical_integral
+	void (LensProfile::*defptr)(const double, const double, lensvector& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
 	void (LensProfile::*hessptr)(const double, const double, lensmatrix& hess); // numerical: &LensProfile::hessian_numerical or &LensProfile::hessian_spherical_default
 	double (LensProfile::*potptr)(const double, const double); // numerical: &LensProfile::potential_numerical
-	double (LensProfile::*potptr_rsq_spherical)(const double); // numerical: &LensProfile::potential_spherical_integral
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void delete_center_anchor();
@@ -139,8 +142,9 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void assign_paramnames();
 	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
-	void set_default_base_values(const int &nn, const double &acc);
+	void set_default_base_settings(const int &nn, const double &acc);
 	void set_integration_pointers();
+	void update_meta_parameters_and_pointers();
 	virtual void set_model_specific_integration_pointers();
 	void vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
@@ -151,8 +155,13 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void shift_angle_minus_90();
 	void reset_angle_modulo_2pi();
 
-	virtual void get_auto_stepsizes(dvector& stepsizes, int &index);
-	virtual void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	virtual void set_auto_stepsizes();  // This *must* be redefined in all derived classes
+	virtual void set_auto_ranges(); // This *must* be redefined in all derived classes
+
+	void set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i);
+	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void set_geometric_param_auto_ranges(int param_i);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
@@ -168,17 +177,18 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 		update_ellipticity_meta_parameters();
 	}
 	void update_anchor_center();
-	virtual void update_special_anchored_params() {}
 	virtual void assign_special_anchored_parameters(LensProfile*) {}
+	virtual void update_special_anchored_params() {}
+	void copy_special_parameter_anchor(const LensProfile *lens_in);
 	void delete_special_parameter_anchor();
 	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens);
 	void copy_parameter_anchors(const LensProfile* lens_in);
 	void unanchor_parameter(LensProfile* param_anchor_lens);
-
-	// the following items MUST be redefined in all derived classes
-	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
-	virtual void print_parameters();
+	void print_parameters();
 	void print_vary_parameters();
+
+	// the following function MUST be redefined in all derived classes
+	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double kappa_rsq_deriv(const double rsq);
@@ -282,8 +292,8 @@ class Alpha : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	bool core_present() { return (s==0) ? false : true; }
 	double get_inner_logslope() { return -alpha; }
@@ -310,8 +320,7 @@ class PseudoJaffe : public LensProfile
 
 	public:
 	bool calculate_tidal_radius;
-	LensProfile* tidal_host;
-	int get_special_parameter_anchor_number() { return tidal_host->lens_number; } // no special parameters can be center_anchored for the base class
+	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	PseudoJaffe() : LensProfile() {}
 	PseudoJaffe(const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
@@ -320,8 +329,8 @@ class PseudoJaffe : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
@@ -352,8 +361,9 @@ class NFW : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 };
@@ -377,43 +387,9 @@ class Truncated_NFW : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-};
-
-class Pseudo_Elliptical_NFW : public LensProfile
-{
-	private:
-	double ks, rs;
-
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
-	double lens_function_xsq(const double&);
-
-	double kapavg_spherical_rsq(const double rsq);
-	void deflection_elliptical(const double, const double, lensvector&);
-	void hessian_elliptical(const double, const double, lensmatrix&);
-	double potential_elliptical(const double x, const double y);
-
-	void set_model_specific_integration_pointers();
-
-	public:
-	Pseudo_Elliptical_NFW() : LensProfile() {}
-	Pseudo_Elliptical_NFW(const double &ks_in, const double &rs_in, const double &e_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
-	Pseudo_Elliptical_NFW(const Pseudo_Elliptical_NFW* lens_in);
-
-	void assign_paramnames();
-	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-
-	// here the base class kappa function is overloaded because we are putting ellipticity into the potential, rather than the kappa
-	double kappa(double, double);
-	double shear_magnitude_spherical(const double rsq); // the shear of the spherical model is used to calculate the lensing properties
-
-	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
-	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 };
 
 class Hernquist : public LensProfile
@@ -437,8 +413,9 @@ class Hernquist : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 };
 
 class ExpDisk : public LensProfile
@@ -458,8 +435,9 @@ class ExpDisk : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 };
 
 class Shear : public LensProfile
@@ -481,8 +459,8 @@ class Shear : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
 	double potential(double, double);
@@ -521,9 +499,9 @@ class Multipole : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void update_meta_parameters() {}
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor);
 };
@@ -544,8 +522,8 @@ class PointMass : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters() {}
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	double potential(double, double);
 	double kappa(double, double);
@@ -584,8 +562,7 @@ class CoreCusp : public LensProfile
 
 	public:
 	bool calculate_tidal_radius;
-	LensProfile* tidal_host;
-	int get_special_parameter_anchor_number() { return tidal_host->lens_number; } // no special parameters can be center_anchored for the base class
+	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	CoreCusp() : LensProfile() {}
 	CoreCusp(const double &k0_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, bool parametrize_einstein_radius = true);
@@ -594,8 +571,8 @@ class CoreCusp : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
@@ -624,8 +601,8 @@ class SersicLens : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 };
 
 class MassSheet : public LensProfile
@@ -644,8 +621,8 @@ class MassSheet : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters() {}
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void set_auto_stepsizes();
+	void set_auto_ranges();
 
 	double potential(double, double);
 	double kappa(double, double);
@@ -663,7 +640,6 @@ class TestModel : public LensProfile
 	private:
 
 	double kappa_rsq(const double);
-	//double kappa_rsq_deriv(const double rsq);
 
 	// The following functions can be overloaded, but don't necessarily have to be
 	//double kappa_rsq_deriv(const double rsq); // optional

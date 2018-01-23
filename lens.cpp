@@ -599,6 +599,8 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
+		// *NOTE*: Gauss_NN and romberg_accuracy should probably just be set as static variables in LensProfile, so they don't need to be passed in here
+
 	switch (name) {
 		case PTMASS:
 			newlist[nlens] = new PointMass(mass_parameter, xc, yc); break;
@@ -613,8 +615,6 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case TRUNCATED_nfw:
 			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
-		case pnfw:
-			newlist[nlens] = new Pseudo_Elliptical_NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case PJAFFE:
 			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
 		case EXPDISK:
@@ -3124,8 +3124,6 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
 				fitmodel->lens_list[i] = new Truncated_NFW((Truncated_NFW*) lens_list[i]); break;
-			case pnfw:
-				fitmodel->lens_list[i] = new Pseudo_Elliptical_NFW((Pseudo_Elliptical_NFW*) lens_list[i]); break;
 			case HERNQUIST:
 				fitmodel->lens_list[i] = new Hernquist((Hernquist*) lens_list[i]); break;
 			case EXPDISK:
@@ -3358,7 +3356,7 @@ double Lens::chisq_pos_source_plane()
 	delete[] mag01;
 	delete[] beta_ji;
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
-	if (chisq*0.0 != 0.0) die("WTF!");
+	//if (chisq*0.0 != 0.0) die("WTF!");
 	return chisq;
 }
 

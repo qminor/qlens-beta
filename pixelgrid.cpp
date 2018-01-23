@@ -4522,7 +4522,6 @@ void Lens::generate_Rmatrix_from_image_plane_curvature()
 
 							for (index=image_pixel_location_Lmatrix[img_index2]; index < image_pixel_location_Lmatrix[img_index2+1]; index++) {
 								src_index = Lmatrix_index[index];
-								//if (src_index==4841) cout << "Lmatrix element: " << Lmatrix[index] << endl;
 								if (curvature_submatrix[curv_l][curv_k] != 0) {
 									new_entry = true;
 									for (m=0; m < curvature_matrix_row_nn[img_index1]; m++) {
