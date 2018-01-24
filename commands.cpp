@@ -4113,17 +4113,17 @@ void Lens::process_commands(bool read_file)
 				if (plotcrit("crit.dat")==true) {
 					run_plotter("crit",words[1],range1);
 					if (plot_srcplane) run_plotter("caust",words[2],range2);
-				} else warn(warnings,"No critical curves found");
+				} else Complain("No critical curves found");
 			} else if (nwords == 2) {
 				if (terminal == TEXT) {
-					if (!plotcrit(words[1].c_str())) warn(warnings,"No critical curves found");
+					if (plotcrit(words[1].c_str())==false) Complain("No critical curves found");
 				}
 				else Complain("two filenames must be specified for plotting of critical curves in postscript/PDF mode");
 			} else if (nwords == 1) {
 				if (plotcrit("crit.dat")==true) {
 					run_plotter("crit");
 					if (plot_srcplane) run_plotter("caust");
-				} else warn(warnings,"No critical curves found");
+				} else Complain("No critical curves found");
 			} else Complain("must specify two filenames, one for each critical curve/caustic");
 		}
 		else if (words[0]=="plotgrid")
@@ -4298,7 +4298,7 @@ void Lens::process_commands(bool read_file)
 				double xsource_in, ysource_in;
 				if (!(ws[1] >> xsource_in)) Complain("invalid source x-position");
 				if (!(ws[2] >> ysource_in)) Complain("invalid source y-position");
-				if ((show_cc) and (plotcrit("crit.dat")==false)) warn(warnings,"could not plot critical curves");
+				if ((show_cc) and (plotcrit("crit.dat")==false)) warn("could not plot critical curves");
 				if (plot_images_single_source(xsource_in, ysource_in, verbal_mode)==true) {
 					if (nwords==5) {
 						if (show_cc) {
@@ -4780,7 +4780,8 @@ void Lens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
-				if ((!show_cc) or (plotcrit("crit.dat")==true)) {
+				bool foundcc = true;
+				if ((!show_cc) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
 						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual)==true)) {
@@ -4822,7 +4823,7 @@ void Lens::process_commands(bool read_file)
 							}
 						}
 					} else Complain("invalid number of arguments to 'sbmap plotimg'");
-				}
+				} else if (!foundcc) Complain("could not find critical curves");
 			}
 			else if (words[1]=="plotsrc")
 			{

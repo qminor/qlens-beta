@@ -4193,7 +4193,7 @@ bool Lens::assign_pixel_mappings(bool verbal)
 	//source_pixel_grid->missed_cells_out.open("missed_cells.dat");
 	source_pixel_grid->regrid = false;
 	source_npixels = source_pixel_grid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
-	if (source_npixels==0) { warn(warnings,"number of source pixels cannot be zero"); return false; }
+	if (source_npixels==0) { warn("number of source pixels cannot be zero"); return false; }
 	//source_pixel_grid->missed_cells_out.close();
 	while (source_pixel_grid->regrid) {
 		if ((mpi_id==0) and (verbal==true)) cout << "Redrawing the source grid after reverse-splitting unmapped source pixels...\n";

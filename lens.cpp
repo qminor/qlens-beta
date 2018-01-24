@@ -5691,7 +5691,7 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 	if ((use_input_psf_matrix) or ((psf_width_x != 0) and (psf_width_y != 0))) {
 		if (assign_pixel_mappings(verbose)==false) return false;
 		initialize_pixel_matrices(verbose);
-		//PSF_convolution_Lmatrix(verbose);
+		PSF_convolution_Lmatrix(verbose);
 		source_pixel_grid->fill_surface_brightness_vector();
 		calculate_image_pixel_surface_brightness();
 		store_image_pixel_surface_brightness();
