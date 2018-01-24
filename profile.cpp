@@ -832,8 +832,8 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	}
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
-	re_average = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
-	re_major_axis = re_average * f_major_axis;
+	re_major_axis = f_major_axis * BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
+	re_average = re_major_axis * sqrt(q);
 	zfac = 1.0;
 }
 

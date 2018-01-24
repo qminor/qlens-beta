@@ -2318,6 +2318,10 @@ void Lens::plot_satellite_deflection_vs_area()
 
 void Lens::add_simulated_image_data(const lensvector &sourcept)
 {
+	int n_images;
+	image *imgs = get_images(sourcept, n_images, false);
+	if (n_images==0) { warn("could not find any images; no data added"); return; }
+
 	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit+1];
 	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit+1];
 	lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit+1];
@@ -2356,8 +2360,6 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 	source_redshifts = new_redshifts;
 	zfactors = new_zfactors;
 
-	int n_images;
-	image *imgs = get_images(sourcept, n_images, false);
 	bool include_image[n_images];
 	double min_td=1e30;
 	for (int i=0; i < n_images; i++) {
@@ -2493,6 +2495,7 @@ bool Lens::load_image_data(string filename)
 			}
 			zsrc_given_in_datafile = true;
 		}
+		if (nn==0) warn("no images in data file for source point %i",i);
 		image_data[i].input(nn);
 		for (j=0; j < nn; j++) {
 			if (read_data_line(data_infile,datawords,n_datawords)==false) {

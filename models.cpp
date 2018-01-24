@@ -14,9 +14,9 @@ const double CoreCusp::nstep = 0.2;
 const double CoreCusp::digamma_three_halves = 0.036489973978435;
 const double Alpha::euler_mascheroni = 0.57721566490153286060;
 
-/***************************** Ellipsoidal power law model with core (alpha) *****************************/
+/*************************** Softened power law model (alpha) *****************************/
 
-Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, const double &q_in, const double &theta_degrees,
+Alpha::Alpha(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = ALPHA;
@@ -27,19 +27,19 @@ Alpha::Alpha(const double &bb_prime, const double &aa, const double &ss_prime, c
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
-	bprime = bb_prime;
-	sprime = ss_prime;
+	b = bb;
+	s = ss;
 	alpha = aa;
-	if (sprime < 0) sprime = -sprime; // don't allow negative core radii
+	if (s < 0) s = -s; // don't allow negative core radii
 
 	update_meta_parameters_and_pointers();
 }
 
 Alpha::Alpha(const Alpha* lens_in)
 {
-	bprime = lens_in->bprime;
+	b = lens_in->b;
 	alpha = lens_in->alpha;
-	sprime = lens_in->sprime;
+	s = lens_in->s;
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -55,28 +55,29 @@ void Alpha::assign_paramnames()
 
 void Alpha::assign_param_pointers()
 {
-	param[0] = &bprime;
+	param[0] = &b;
 	param[1] = &alpha;
-	param[2] = &sprime;
+	param[2] = &s;
 	set_geometric_param_pointers(3);
 }
 
 void Alpha::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
-	b = bprime*f_major_axis;
-	s = sprime*f_major_axis;
-	qsq = q*q; ssq = s*s;
+	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
+	bprime = b*f_major_axis;
+	sprime = s*f_major_axis;
+	qsq = q*q; ssq = sprime*sprime;
 }
 
 void Alpha::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1*bprime;
+	stepsizes[0] = 0.1*b;
 	stepsizes[1] = 0.1;
-	stepsizes[2] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
+	stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
 	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.1*bprime;
-	stepsizes[6] = 0.1*bprime;
+	stepsizes[5] = 0.1*b;
+	stepsizes[6] = 0.1*b;
 }
 
 void Alpha::set_auto_ranges()
@@ -89,6 +90,7 @@ void Alpha::set_auto_ranges()
 
 void Alpha::set_model_specific_integration_pointers()
 {
+	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq);
 	if (alpha==1.0) {
@@ -99,7 +101,7 @@ void Alpha::set_model_specific_integration_pointers()
 			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
 			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
 		}
-	} else if (s==0.0) {
+	} else if (sprime==0.0) {
 		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
 		if (q != 1.0) {
 			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
@@ -111,51 +113,51 @@ void Alpha::set_model_specific_integration_pointers()
 
 double Alpha::kappa_rsq(const double rsq)
 {
-	return (0.5 * (2-alpha) * pow(bprime*bprime/(sprime*sprime+rsq), alpha/2));
+	return (0.5 * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2));
 }
 
 double Alpha::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * alpha * (2-alpha) * pow(bprime*bprime/(sprime*sprime+rsq), alpha/2 + 1)) / (bprime*bprime);
+	return (-0.25 * alpha * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2 + 1)) / (b*b);
 }
 
 double Alpha::kapavg_spherical_rsq(const double rsq)
 {
-	return (pow(bprime,alpha)*(pow(rsq+sprime*sprime,1-alpha/2) - pow(sprime,2-alpha)))/rsq;
+	return (pow(b,alpha)*(pow(rsq+s*s,1-alpha/2) - pow(s,2-alpha)))/rsq;
 }
 
 double Alpha::kapavg_spherical_rsq_iso(const double rsq) // only for alpha=1
 {
-	return bprime*(sqrt(sprime*sprime+rsq)-sprime)/rsq; // now, tmp = kappa_average
+	return b*(sqrt(s*s+rsq)-s)/rsq; // now, tmp = kappa_average
 }
 
 double Alpha::potential_spherical_rsq(const double rsq)
 {
 	// Formula from Keeton (2002), w/ typo corrected (sign in front of the DiGamma() term)
 	double bpow, bs, p, tmp;
-	bpow = pow(bprime,alpha);
-	bs = bpow*pow(sprime,2-alpha);
+	bpow = pow(b,alpha);
+	bs = bpow*pow(s,2-alpha);
 	p = alpha/2-1;
-	tmp = bpow*pow(rsq,-p)*real(hyp_2F1(p,p,1+p,-sprime*sprime/rsq))/(2-alpha);
-	tmp += -bs*log(rsq/(sprime*sprime))/2 - bs*(euler_mascheroni + DiGamma(p))/2;
+	tmp = bpow*pow(rsq,-p)*real(hyp_2F1(p,p,1+p,-s*s/rsq))/(2-alpha);
+	tmp += -bs*log(rsq/(s*s))/2 - bs*(euler_mascheroni + DiGamma(p))/2;
 	return tmp;
 }
 
 double Alpha::potential_spherical_rsq_iso(const double rsq) // only for alpha=1
 {
 	double tmp;
-	tmp = bprime*(sqrt(sprime*sprime+rsq)-sprime); // now, tmp = kappa_average*rsq
-	if (sprime != 0) tmp -= bprime*sprime*log((sprime + sqrt(sprime*sprime+rsq))/(2.0*sprime));
+	tmp = b*(sqrt(s*s+rsq)-s); // now, tmp = kappa_average*rsq
+	if (s != 0) tmp -= b*s*log((s + sqrt(s*s+rsq))/(2.0*s));
 	return tmp;
 }
 
-double Alpha::potential_spherical_rsq_nocore(const double rsq) // only for s=0
+double Alpha::potential_spherical_rsq_nocore(const double rsq) // only for sprime=0
 {
-	return pow(bprime*bprime/rsq,alpha/2)*rsq/(2-alpha);
+	return pow(b*b/rsq,alpha/2)*rsq/(2-alpha);
 }
 
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
-//  transformed from the prime versions (bprime, etc.) defined for the correct emode (0, 1, or 2)
+//  (the prime versions b', a', etc.) transformed from the correct emode
 
 void Alpha::deflection_elliptical_iso(const double x, const double y, lensvector& def) // only for alpha=1
 {
@@ -163,8 +165,8 @@ void Alpha::deflection_elliptical_iso(const double x, const double y, lensvector
 	psi = sqrt(qsq*(ssq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
-	def[0] = (b*q/u)*atan(u*x/(psi+s));
-	def[1] = (b*q/u)*atanh(u*y/(psi+qsq*s));
+	def[0] = (bprime*q/u)*atan(u*x/(psi+sprime));
+	def[1] = (bprime*q/u)*atanh(u*y/(psi+qsq*sprime));
 }
 
 void Alpha::hessian_elliptical_iso(const double x, const double y, lensmatrix& hess) // only for alpha=1
@@ -173,10 +175,10 @@ void Alpha::hessian_elliptical_iso(const double x, const double y, lensmatrix& h
 	xsq=x*x; ysq=y*y;
 
 	psi = sqrt(qsq*(ssq+xsq)+ysq);
-	tmp = ((b*q)/psi)/(xsq+ysq+2*psi*s+ssq*(1+qsq));
+	tmp = ((bprime*q)/psi)/(xsq+ysq+2*psi*sprime+ssq*(1+qsq));
 
-	hess[0][0] = tmp*(ysq+s*psi+ssq*qsq);
-	hess[1][1] = tmp*(xsq+s*psi+ssq);
+	hess[0][0] = tmp*(ysq+sprime*psi+ssq*qsq);
+	hess[1][1] = tmp*(xsq+sprime*psi+ssq);
 	hess[0][1] = -tmp*x*y;
 	hess[1][0] = hess[0][1];
 }
@@ -187,8 +189,8 @@ double Alpha::potential_elliptical_iso(const double x, const double y) // only f
 	psi = sqrt(qsq*(ssq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
-	tmp = (b*q/u)*(x*atan(u*x/(psi+s)) + y*atanh(u*y/(psi+qsq*s)));
-	if (s != 0) tmp += b*q*s*(-log(SQR(psi+s) + SQR(u*x))/2 + log((1.0+q)*s));
+	tmp = (bprime*q/u)*(x*atan(u*x/(psi+sprime)) + y*atanh(u*y/(psi+qsq*sprime)));
+	if (sprime != 0) tmp += bprime*q*sprime*(-log(SQR(psi+sprime) + SQR(u*x))/2 + log((1.0+q)*sprime));
 
 	return tmp;
 }
@@ -206,7 +208,7 @@ void Alpha::deflection_elliptical_nocore(const double x, const double y, lensvec
 	} else if (y < 0) {
 		phi = -phi;
 	}
-	complex<double> def_complex = 2*b*q/(1+q)*pow(b/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
 
 	def[0] = real(def_complex);
 	def[1] = imag(def_complex);
@@ -216,7 +218,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 {
 	double xi, phi, kap;
 	xi = sqrt(x*x+y*y/qsq);
-	kap = 0.5 * (2-alpha) * pow(b/xi, alpha);
+	kap = 0.5 * (2-alpha) * pow(bprime/xi, alpha);
 	phi = atan(abs(y/(q*x)));
 	if (x < 0) {
 		if (y < 0)
@@ -229,7 +231,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 
 	complex<double> hess_complex, zstar(x,-y);
 	// The following is the *deflection*, not the shear, but it will be transformed to shear in the following line
-	hess_complex = 2*b*q/(1+q)*pow(b/xi,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	hess_complex = 2*bprime*q/(1+q)*pow(bprime/xi,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
 	hess_complex = -kap*conj(zstar)/zstar + (1-alpha)*hess_complex/zstar; // this is the complex shear
 
 	hess_complex = kap + hess_complex; // this is now (kappa+shear)
@@ -240,7 +242,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 	hess[1][1] = real(hess_complex);
 }
 
-double Alpha::potential_elliptical_nocore(const double x, const double y) // only for s=0
+double Alpha::potential_elliptical_nocore(const double x, const double y) // only for sprime=0
 {
 	double phi, R = sqrt(x*x+y*y/(q*q));
 	phi = atan(abs(y/(q*x)));
@@ -253,19 +255,19 @@ double Alpha::potential_elliptical_nocore(const double x, const double y) // onl
 	} else if (y < 0) {
 		phi = -phi;
 	}
-	complex<double> def_complex = 2*b*q/(1+q)*pow(b/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
 	return (x*real(def_complex) + y*imag(def_complex))/(2-alpha);
 }
 
 void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
 {
-	if (s==0.0) {
-		re_major_axis = b*pow(zfactor,1.0/alpha);
-		re_average = re_major_axis/f_major_axis;
+	if (sprime==0.0) {
+		re_major_axis = bprime*pow(zfactor,1.0/alpha);
+		re_average = re_major_axis * sqrt(q);
 	} else if (alpha==1.0) {
-		if (s < b/2.0) {
-			re_major_axis = b*sqrt(1-2*s/b/zfactor)*zfactor;
-			re_average = re_major_axis/f_major_axis;
+		if (sprime < bprime/2.0) {
+			re_major_axis = bprime*sqrt(1-2*sprime/bprime/zfactor)*zfactor;
+			re_average = re_major_axis * sqrt(q);
 		} else {
 			re_major_axis = 0;
 			re_average = 0;
@@ -279,7 +281,7 @@ void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const
 
 /********************************** PseudoJaffe **********************************/
 
-PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const double &ss_prime, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
@@ -288,19 +290,19 @@ PseudoJaffe::PseudoJaffe(const double &bb_prime, const double &aa_prime, const d
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	bprime = bb_prime;
-	sprime = ss_prime;
-	aprime = aa_prime;
-	if (sprime < 0) sprime = -sprime;
+	b = bb;
+	s = ss;
+	a = aa;
+	if (s < 0) s = -s;
 
 	update_meta_parameters_and_pointers();
 }
 
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
-	bprime = lens_in->bprime;
-	sprime = lens_in->sprime;
-	aprime = lens_in->aprime;
+	b = lens_in->b;
+	s = lens_in->s;
+	a = lens_in->a;
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -316,19 +318,19 @@ void PseudoJaffe::assign_paramnames()
 
 void PseudoJaffe::assign_param_pointers()
 {
-	param[0] = &bprime;
-	param[1] = &aprime;
-	param[2] = &sprime;
+	param[0] = &b;
+	param[1] = &a;
+	param[2] = &s;
 	set_geometric_param_pointers(3);
 }
 
 void PseudoJaffe::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
-	b = bprime*f_major_axis;
-	s = sprime*f_major_axis;
-	a = aprime*f_major_axis;
-	qsq = q*q; ssq = s*s; asq = a*a;
+	bprime = b*f_major_axis;
+	sprime = s*f_major_axis;
+	aprime = a*f_major_axis;
+	qsq = q*q; ssq = sprime*sprime; asq = aprime*aprime;
 }
 
 void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
@@ -337,7 +339,7 @@ void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 	special_anchor_lens = host_in;
 	double rm, ravg;
 	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-	aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+	a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
 	update_meta_parameters();
 }
 
@@ -346,20 +348,20 @@ void PseudoJaffe::update_special_anchored_params()
 	if (anchor_special_parameter) {
 		double rm, ravg;
 		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-		aprime = sqrt(ravg*bprime); // this is an approximate formula (a' = sqrt(b'*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-		a = aprime/f_major_axis;
-		asq = a*a;
+		a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+		aprime = a/f_major_axis;
+		asq = aprime*aprime;
 	}
 }
 
 void PseudoJaffe::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*bprime;
-	stepsizes[1] = 0.2*bprime;
-	stepsizes[2] = 0.02*bprime; // this one is a bit arbitrary, but hopefully reasonable enough
+	stepsizes[0] = 0.2*b;
+	stepsizes[1] = 0.2*b;
+	stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
 	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.2*bprime;
-	stepsizes[6] = 0.2*bprime;
+	stepsizes[5] = 0.2*b;
+	stepsizes[6] = 0.2*b;
 }
 
 void PseudoJaffe::set_auto_ranges()
@@ -383,21 +385,29 @@ void PseudoJaffe::set_model_specific_integration_pointers()
 
 double PseudoJaffe::kappa_rsq(const double rsq)
 {
-	return (0.5 * bprime * (pow(sprime*sprime+rsq, -0.5) - pow(aprime*aprime+rsq,-0.5)));
+	return (0.5 * b * (pow(s*s+rsq, -0.5) - pow(a*a+rsq,-0.5)));
 }
 
 double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * bprime * (pow(sprime*sprime+rsq, -1.5) - pow(aprime*aprime+rsq,-1.5)));
+	return (-0.25 * b * (pow(s*s+rsq, -1.5) - pow(a*a+rsq,-1.5)));
 }
 
 double PseudoJaffe::kapavg_spherical_rsq(const double rsq)
 {
-	return bprime*((sqrt(sprime*sprime+rsq)-sprime) - (sqrt(aprime*aprime+rsq)-aprime))/rsq;
+	return b*((sqrt(s*s+rsq)-s) - (sqrt(a*a+rsq)-a))/rsq;
+}
+
+double PseudoJaffe::potential_spherical_rsq(const double rsq)
+{
+	double tmp;
+	tmp = b*(sqrt(s*s+rsq) - s - sqrt(a*a+rsq) + a); // now, tmp = kappa_average*rsq
+	tmp += b*(a*log((a + sqrt(a*a+rsq))/(2.0*a)) - s*log((s + sqrt(s*s+rsq))/(2.0*s)));
+	return tmp;
 }
 
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
-//  transformed from the prime versions (bprime, etc.) for the correct emode
+//  (the prime versions b', a', etc.) transformed from the correct emode
 
 void PseudoJaffe::deflection_elliptical(const double x, const double y, lensvector& def)
 {
@@ -406,8 +416,8 @@ void PseudoJaffe::deflection_elliptical(const double x, const double y, lensvect
 	psi2 = sqrt(qsq*(asq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
-	def[0] = (b*q/u)*(atan(u*x/(psi+s)) - atan(u*x/(psi2+a)));
-	def[1] = (b*q/u)*(atanh(u*y/(psi+qsq*s)) - atanh(u*y/(psi2+qsq*a)));
+	def[0] = (bprime*q/u)*(atan(u*x/(psi+sprime)) - atan(u*x/(psi2+aprime)));
+	def[1] = (bprime*q/u)*(atanh(u*y/(psi+qsq*sprime)) - atanh(u*y/(psi2+qsq*aprime)));
 }
 
 void PseudoJaffe::hessian_elliptical(const double x, const double y, lensmatrix& hess)
@@ -415,23 +425,15 @@ void PseudoJaffe::hessian_elliptical(const double x, const double y, lensmatrix&
 	double xsq, ysq, psi, tmp1, psi2, tmp2;
 	xsq=x*x; ysq=y*y;
 	psi = sqrt(qsq*(ssq+xsq)+ysq);
-	tmp1 = (b*q/psi)/(xsq+ysq+2*psi*s+ssq*(1+qsq));
+	tmp1 = (bprime*q/psi)/(xsq+ysq+2*psi*sprime+ssq*(1+qsq));
 
 	psi2 = sqrt(qsq*(asq+xsq)+ysq);
-	tmp2 = (b*q/psi2)/(xsq+ysq+2*psi2*a+asq*(1+qsq));
+	tmp2 = (bprime*q/psi2)/(xsq+ysq+2*psi2*aprime+asq*(1+qsq));
 
-	hess[0][0] = tmp1*(ysq+s*psi+ssq*qsq) - tmp2*(ysq+a*psi2+asq*qsq);
-	hess[1][1] = tmp1*(xsq+s*psi+ssq) - tmp2*(xsq+a*psi2+asq);
+	hess[0][0] = tmp1*(ysq+sprime*psi+ssq*qsq) - tmp2*(ysq+aprime*psi2+asq*qsq);
+	hess[1][1] = tmp1*(xsq+sprime*psi+ssq) - tmp2*(xsq+aprime*psi2+asq);
 	hess[0][1] = (-tmp1+tmp2)*x*y;
 	hess[1][0] = hess[0][1];
-}
-
-double PseudoJaffe::potential_spherical_rsq(const double rsq)
-{
-	double tmp;
-	tmp = bprime*(sqrt(sprime*sprime+rsq) - sprime - sqrt(aprime*aprime+rsq) + aprime); // now, tmp = kappa_average*rsq
-	tmp += bprime*(aprime*log((aprime + sqrt(aprime*aprime+rsq))/(2.0*aprime)) - sprime*log((sprime + sqrt(sprime*sprime+rsq))/(2.0*sprime)));
-	return tmp;
 }
 
 double PseudoJaffe::potential_elliptical(const double x, const double y)
@@ -441,7 +443,9 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	psi2 = sqrt(qsq*(asq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
-	return (b*q/u)*(x*(atan(u*x/(psi+s)) - atan(u*x/(psi2+a)))+ y*(atanh(u*y/(psi+qsq*s)) - atanh(u*y/(psi2+qsq*a)))) + b*q*(s*(-log(SQR(psi+s) + SQR(u*x))/2 + log((1.0+q)*s)) - a*(-log(SQR(psi2+a) + SQR(u*x))/2 + log((1.0+q)*a)));
+	return (bprime*q/u)*(x*(atan(u*x/(psi+sprime)) - atan(u*x/(psi2+aprime)))+ y*(atanh(u*y/(psi+qsq*sprime))
+		- atanh(u*y/(psi2+qsq*aprime)))) + bprime*q*(sprime*(-log(SQR(psi+sprime) + SQR(u*x))/2 + log((1.0+q)*sprime))
+		- aprime*(-log(SQR(psi2+aprime) + SQR(u*x))/2 + log((1.0+q)*aprime)));
 }
 
 bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
@@ -453,20 +457,17 @@ bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, C
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
 	double b_kpc, sigma, r_tidal, r_core;
-	b_kpc = bprime/kpc_to_arcsec;
-	sigma = c * sqrt(b_kpc*(1-sprime/aprime)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
-	cout << "sigma = " << sigma << " km/s  (velocity dispersion)\n";
-	r_tidal = aprime/kpc_to_arcsec;
-	r_core = sprime/kpc_to_arcsec;
+	b_kpc = b / kpc_to_arcsec;
+	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
+	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	r_tidal = a / kpc_to_arcsec;
+	r_core = s / kpc_to_arcsec;
 	cout << "r_tidal = " << r_tidal << " kpc" << endl;
 	cout << "r_core = " << r_core << " kpc" << endl;
 	cout << endl;
-	//double tsig = 297.2, tb;
-	//tb = kpc_to_arcsec*2*SQR(tsig/c)/((Rs_sun_km/kpc_to_km)*sigma_cr*(1-sprime/aprime));
-	//cout << "Test b = " << tb << endl;
 }
 
-/********************************** NFW **********************************/
+/************************************* NFW *************************************/
 
 NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
@@ -1375,6 +1376,12 @@ void PointMass::hessian(double x, double y, lensmatrix& hess)
 	hess[0][1] = hess[1][0];
 }
 
+void PointMass::get_einstein_radius(double& r1, double& r2, const double zfactor)
+{
+	r1 = b*sqrt(zfactor);
+	r2 = r1;
+}
+
 /***************************** Core/Cusp Model *****************************/
 
 CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, bool parametrize_einstein_radius)
@@ -1526,17 +1533,17 @@ void CoreCusp::set_model_specific_integration_pointers()
 
 double CoreCusp::kappa_rsq(const double rsq)
 {
-	double aprime = sqrt(a*a-s*s);
-	return pow(a/aprime,n) * kappa_rsq_nocore(rsq+s*s,aprime);
+	double atilde = sqrt(a*a-s*s);
+	return pow(a/atilde,n) * kappa_rsq_nocore(rsq+s*s,atilde);
 }
 
-double CoreCusp::kappa_rsq_nocore(const double rsq_prime, const double aprime)
+double CoreCusp::kappa_rsq_nocore(const double rsq_prime, const double atilde)
 {
 	// Formulas for the non-cored profile are from Munoz et al. 2001
 	double ks, xisq, p, hyp, ans;
 	p = (n-1.0)/2;
-	ks = k0*aprime/(a*M_2PI);
-	xisq = rsq_prime/(aprime*aprime);
+	ks = k0*atilde/(a*M_2PI);
+	xisq = rsq_prime/(atilde*atilde);
 	hyp = real(hyp_2F1(p,gamma/2,n/2,1/(1+xisq)));
 	ans = ks*Beta(p,0.5)*pow(1+xisq,-p)*hyp;
 	return ans;
@@ -1544,17 +1551,17 @@ double CoreCusp::kappa_rsq_nocore(const double rsq_prime, const double aprime)
 
 double CoreCusp::kappa_rsq_deriv(const double rsq)
 {
-	double aprime = sqrt(a*a-s*s);
-	return pow(a/aprime,n) * kappa_rsq_deriv_nocore(rsq+s*s,aprime);
+	double atilde = sqrt(a*a-s*s);
+	return pow(a/atilde,n) * kappa_rsq_deriv_nocore(rsq+s*s,atilde);
 }
 
-double CoreCusp::kappa_rsq_deriv_nocore(const double rsq_prime, const double aprime)
+double CoreCusp::kappa_rsq_deriv_nocore(const double rsq_prime, const double atilde)
 {
 	double ks, xisq, hyp, ans;
-	ks = k0*aprime/(a*M_2PI);
-	xisq = rsq_prime/(aprime*aprime);
+	ks = k0*atilde/(a*M_2PI);
+	xisq = rsq_prime/(atilde*atilde);
 	hyp = n*(1+xisq)*real(hyp_2F1((n-1.0)/2,gamma/2,n/2,1/(1+xisq))) + gamma*real(hyp_2F1((n+1.0)/2,(gamma+2.0)/2,(n+2.0)/2,1/(1+xisq)));
-	ans = -(ks/(2*aprime*aprime))*Beta((n+1.0)/2,0.5)*pow(1+xisq,-(n+3.0)/2)*hyp;
+	ans = -(ks/(2*atilde*atilde))*Beta((n+1.0)/2,0.5)*pow(1+xisq,-(n+3.0)/2)*hyp;
 	return ans;
 }
 
@@ -1566,13 +1573,13 @@ void CoreCusp::set_core_enclosed_mass()
 
 double CoreCusp::kapavg_spherical_rsq(const double rsq)
 {
-	double aprime, kapavg;
+	double atilde, kapavg;
 	if (s != 0) {
-		aprime = sqrt(a*a-s*s);
+		atilde = sqrt(a*a-s*s);
 		if (n==3) {
-			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore_n3(rsq+s*s,aprime,nstep) - core_enclosed_mass) / rsq;
+			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore_n3(rsq+s*s,atilde,nstep) - core_enclosed_mass) / rsq;
 		} else {
-			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore(rsq+s*s,aprime) - core_enclosed_mass) / rsq;
+			kapavg = pow(1-SQR(s/a),-n/2) * (enclosed_mass_spherical_nocore(rsq+s*s,atilde) - core_enclosed_mass) / rsq;
 		}
 	} else {
 		if (n==3) {
@@ -1585,23 +1592,23 @@ double CoreCusp::kapavg_spherical_rsq(const double rsq)
 	return kapavg;
 }
 
-double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const double aprime, const double nprime) // actually mass_enclosed/(pi*sigma_crit)
+double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde, const double nprime) // actually mass_enclosed/(pi*sigma_crit)
 {
 	double xisq, p, hyp;
-	xisq = rsq_prime/(aprime*aprime);
+	xisq = rsq_prime/(atilde*atilde);
 	p = (nprime-3.0)/2;
 	hyp = pow(1+xisq,-p) * real(hyp_2F1(p,gamma/2,nprime/2,1.0/(1+xisq)));
 
-	return 2*k0*CUBE(aprime)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
+	return 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
 }
 
-double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double aprime, const double n_stepsize) // actually mass_enclosed/(pi*sigma_crit)
+double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double atilde, const double n_stepsize) // actually mass_enclosed/(pi*sigma_crit)
 {
 	// if gamma = 1, use GFunction2 (eq. 67 of Keeton 2001), but for very small r/a, use Richardson extrapolation which requires fewer iterations
 	// for other values of gamma, use Gfunction1 (eq. 66) if r < a, and GFunction2 (eq. 67) if r >= a
 
-	double xisq = rsq_prime/(aprime*aprime);
-	if ((gamma == 1.0) and (xisq < 0.01)) return enclosed_mass_spherical_nocore_limit(rsq_prime,aprime,n_stepsize); // in this regime, Richardson extrapolation is faster
+	double xisq = rsq_prime/(atilde*atilde);
+	if ((gamma == 1.0) and (xisq < 0.01)) return enclosed_mass_spherical_nocore_limit(rsq_prime,atilde,n_stepsize); // in this regime, Richardson extrapolation is faster
 	double x, p, fac;
 	p = 1.5 - gamma/2;
 	if ((xisq < 1) and (gamma != 1.0)) {
@@ -1611,10 +1618,10 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 		x=1.0/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,1.5,x) + digamma_three_halves - digamma_term; // uses Gfunction2
 	}
-	return 2*k0*CUBE(aprime)/(a*M_2PI) * fac;
+	return 2*k0*CUBE(atilde)/(a*M_2PI) * fac;
 }
 
-double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const double aprime, const double n_stepsize)
+double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const double atilde, const double n_stepsize)
 {
 	// This uses Richardson extrapolation to calculate the enclosed mass, which can be used for the n=3 case
 	const double CON=1.4, CON2=(CON*CON);
@@ -1627,11 +1634,11 @@ double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const do
 	for (i=0; i < NTAB; i++) a[i] = new double[NTAB];
 
 	hh=n_stepsize;
-	a[0][0] = 0.5*(enclosed_mass_spherical_nocore(rsq,aprime,n+hh) + enclosed_mass_spherical_nocore(rsq,aprime,n-hh));
+	a[0][0] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
 	double err=BIG;
 	for (i=1;i<NTAB;i++) {
 		hh /= CON;
-		a[0][i] = 0.5*(enclosed_mass_spherical_nocore(rsq,aprime,n+hh) + enclosed_mass_spherical_nocore(rsq,aprime,n-hh));
+		a[0][i] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
 
 		fac=CON2;
 		for (j=1;j<=i;j++) {

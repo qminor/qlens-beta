@@ -4398,8 +4398,12 @@ void Lens::process_commands(bool read_file)
 					re_major_kpc = re_major_axis*arcsec_to_kpc;
 					sigma_cr_kpc = sigma_crit_kpc(lens_redshift, source_redshift);
 					m_ein = sigma_cr_kpc*M_PI*SQR(re_kpc);
-					cout << "Einstein radius along major axis: r_E = " << re_major_axis << " arcsec, " << re_major_kpc << " kpc\n";
-					cout << "Average Einstein radius (r_E*sqrt(q)): r_avg = " << re_average << " arcsec, " << re_kpc << " kpc\n";
+					if (lens_list[lens_number]->isspherical()) {
+						cout << "Einstein radius: r_E = " << re_average << " arcsec, " << re_kpc << " kpc\n";
+					} else {
+						cout << "Average Einstein radius (r_{E,maj}*sqrt(q)): r_{E,avg} = " << re_average << " arcsec, " << re_kpc << " kpc\n";
+						cout << "Einstein radius along major axis: r_{E,maj} = " << re_major_axis << " arcsec, " << re_major_kpc << " kpc\n";
+					}
 					cout << "Mass within average Einstein radius: " << m_ein << " solar masses\n";
 
 				}

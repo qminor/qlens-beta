@@ -260,9 +260,9 @@ struct LensIntegral : public Romberg, public GaussLegendre
 class Alpha : public LensProfile
 {
 	private:
-	double alpha, b, s;
-	// Note that the actual fit parameters are b' = b*sqrt(q) and s' = s*sqrt(q), not b and s. (See the constructor function for more on how this is implemented.)
-	double bprime, sprime;
+	double alpha, bprime, sprime;
+	// Note that the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
+	double b, s;
 	double qsq, ssq; // used in lensing calculations
 	static const double euler_mascheroni;
 
@@ -295,7 +295,7 @@ class Alpha : public LensProfile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	bool core_present() { return (s==0) ? false : true; }
+	bool core_present() { return (sprime==0) ? false : true; }
 	double get_inner_logslope() { return -alpha; }
 	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 };
@@ -303,8 +303,8 @@ class Alpha : public LensProfile
 class PseudoJaffe : public LensProfile
 {
 	private:
-	double b, s, a; // a is truncation radius
-	double bprime, sprime, aprime;
+	double bprime, sprime, aprime; // aprime is truncation radius
+	double b, s, a;
 	double qsq, ssq, asq; // used in lensing calculations
 
 	double kappa_rsq(const double);
@@ -336,8 +336,8 @@ class PseudoJaffe : public LensProfile
 
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
-	double get_tidal_radius() { return a; }
-	bool core_present() { return (s==0) ? false : true; }
+	double get_tidal_radius() { return aprime; }
+	bool core_present() { return (sprime==0) ? false : true; }
 };
 
 class NFW : public LensProfile
@@ -532,7 +532,7 @@ class PointMass : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=b*sqrt(zfactor); r2=b*sqrt(zfactor); }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor);
 };
 
 class CoreCusp : public LensProfile
@@ -550,12 +550,12 @@ class CoreCusp : public LensProfile
 	double kappa_rsq_deriv(const double rsq);
 	double kapavg_spherical_rsq(const double rsq);
 
-	double kappa_rsq_nocore(const double rsq_prime, const double aprime);
-	double enclosed_mass_spherical_nocore(const double rsq_prime, const double aprime) { return enclosed_mass_spherical_nocore(rsq_prime,aprime,n); }
-	double enclosed_mass_spherical_nocore(const double rsq_prime, const double aprime, const double nprime);
-	double enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double aprime, const double nprime);
-	double enclosed_mass_spherical_nocore_limit(const double rsq, const double aprime, const double n_stepsize);
-	double kappa_rsq_deriv_nocore(const double rsq_prime, const double aprime);
+	double kappa_rsq_nocore(const double rsq_prime, const double atilde);
+	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde) { return enclosed_mass_spherical_nocore(rsq_prime,atilde,n); }
+	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde, const double nprime);
+	double enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double atilde, const double nprime);
+	double enclosed_mass_spherical_nocore_limit(const double rsq, const double atilde, const double n_stepsize);
+	double kappa_rsq_deriv_nocore(const double rsq_prime, const double atilde);
 	void set_core_enclosed_mass();
 
 	void set_model_specific_integration_pointers();
