@@ -361,6 +361,7 @@ int main(int argc, char *argv[])
 		delete[] maxvals;
 	}
 
+	int system_returnval;
 	if (make_1d_posts)
 	{
 		string pyname = file_label + ".py";
@@ -378,7 +379,7 @@ int main(int argc, char *argv[])
 			if (system(pycommand.c_str()) == 0) {
 				cout << "Plot for 1D posteriors saved to '" << file_label << ".pdf'\n";
 				string rmcommand = "rm " + pyname;
-				system(rmcommand.c_str());
+				system_returnval = system(rmcommand.c_str());
 			}
 			else cout << "Error: Could not generate PDF file for 1D posteriors\n";
 		} else {
@@ -411,7 +412,7 @@ int main(int argc, char *argv[])
 			if (system(pycommand.c_str()) == 0) {
 				cout << "Plot for 2D posteriors saved to '" << file_label << "_2D.pdf'\n";
 				string rmcommand = "rm " + pyname;
-				system(rmcommand.c_str());
+				system_returnval = system(rmcommand.c_str());
 			}
 			else cout << "Error: Could not generate PDF file for 2D posteriors\n";
 		} else {
@@ -443,7 +444,7 @@ int main(int argc, char *argv[])
 				if (system(pycommand.c_str()) == 0) {
 					cout << "Triangle plot (1D+2D posteriors) saved to '" << file_label << "_tri.pdf'\n";
 					string rmcommand = "rm " + pyname;
-					system(rmcommand.c_str());
+					system_returnval = system(rmcommand.c_str());
 				}
 				else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
 			} else {
