@@ -587,9 +587,9 @@ void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 
 void LensProfile::update_meta_parameters_and_pointers()
 {
-	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+	update_meta_parameters();
 }
 
 void LensProfile::set_model_specific_integration_pointers() {} // gets overloaded by some models

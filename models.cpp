@@ -1451,12 +1451,12 @@ void CoreCusp::assign_param_pointers()
 void CoreCusp::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
+	digamma_term = DiGamma(1.5-gamma/2);
 	if (set_k0_by_einstein_radius) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
 	}
 	if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
-	digamma_term = DiGamma(1.5-gamma/2);
 }
 
 
@@ -1618,6 +1618,7 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 		x=1.0/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,1.5,x) + digamma_three_halves - digamma_term; // uses Gfunction2
 	}
+
 	return 2*k0*CUBE(atilde)/(a*M_2PI) * fac;
 }
 
