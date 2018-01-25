@@ -20,16 +20,6 @@ GaussianIntegral::GaussianIntegral()
 	points = NULL;
 }
 
-double GaussianIntegral::output(double (GaussianIntegral::*func)(double))
-{
-	double result = 0;
-
-	for (int i = 0; i < numberOfPoints; i++)
-		result += weights[i]*(this->*func)(points[i]);
-
-	return result;
-}
-
 GaussianIntegral::~GaussianIntegral()
 {
    if (points != NULL) delete[] points;
@@ -38,34 +28,7 @@ GaussianIntegral::~GaussianIntegral()
 
 GaussLegendre::GaussLegendre(int N) : GaussianIntegral(N)
 {
-  int max = (numberOfPoints + 1)/2;
-  double z1, z, pp, p3, p2, p1;
-  
-  for (int i = 0; i < max; i++)
-  {
-		 z = cos(M_PI*(i + 0.75)/(N + 0.5));
-		 
-		 do
-		 {
-				p1 = 1.0;
-				p2 = 0.0;
-				for (int j = 0; j < numberOfPoints; j++)
-				{
-					  p3 = p2;
-					  p2 = p1;
-					  p1 = ((2.0*j + 1.0)*z*p2-j*p3)/(j + 1.0);
-				}
-				pp = N*(z*p1 - p2)/(z*z - 1.0);
-				z1 = z;
-				z = z1 - p1/pp;
-		 }
-		 while(fabs(z-z1) > EPS);
-		 
-		 points[i] = -z;
-		 points[numberOfPoints - 1 - i] = z;
-		 weights[i] = 2.0/((1.0 - z*z)*pp*pp);
-		 weights[numberOfPoints - 1 - i] = weights[i];
-  }
+	SetGaussLegendre(N);
 }
 
 void GaussLegendre::SetGaussLegendre(int N)

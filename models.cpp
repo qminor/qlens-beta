@@ -68,6 +68,7 @@ void Alpha::update_meta_parameters()
 	bprime = b*f_major_axis;
 	sprime = s*f_major_axis;
 	qsq = q*q; ssq = sprime*sprime;
+	cout << bprime << " " << sprime << " " << s << " " << b << " " << qsq << " " << ssq << endl;
 }
 
 void Alpha::set_auto_stepsizes()
@@ -101,7 +102,7 @@ void Alpha::set_model_specific_integration_pointers()
 			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
 			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
 		}
-	} else if (sprime==0.0) {
+	} else if (s==0.0) {
 		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
 		if (q != 1.0) {
 			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
@@ -1284,11 +1285,8 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 	} else {
 		if (q > 0) b = 0;
 		else {
-			if (m==0) {
-				b = pow(-q*zfactor*n,1.0/(2-n));
-			} else {
-				b = pow(-(q*zfactor*n)/m,1.0/(2-n));
-			}
+			if (m==0) b = pow(-q*zfactor*n,1.0/(2-n));
+			else b = pow(-(q*zfactor*n)/m,1.0/(2-n));
 		}
 	}
 	re_major_axis = re_average = b;

@@ -930,7 +930,7 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 
 double LensProfile::potential_spherical_integral(const double rsq)
 {
-	LensIntegral lens_integral(this,rsq,0,1.0);
+	LensIntegral lens_integral(this,rsq,0,1.0,0);
 	return (0.5*lens_integral.i_integral());
 }
 
@@ -950,7 +950,7 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& 
 
 double LensProfile::potential_numerical(const double x, const double y)
 {
-	LensIntegral lens_integral(this,x*x,y*y,q);
+	LensIntegral lens_integral(this,x*x,y*y,q,0);
 	return (0.5*q*lens_integral.i_integral());
 }
 
@@ -979,9 +979,8 @@ double LensIntegral::i_integral()
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
-		double (GaussianIntegral::*iptr)(double);
-		iptr = static_cast<double (GaussianIntegral::*)(double)> (&LensIntegral::i_integrand_prime);
-		ans = NIntegrate(iptr,0,1);
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
+		ans = GaussIntegrate(iptr,0,1);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -998,9 +997,8 @@ double LensIntegral::j_integral()
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
-		double (GaussianIntegral::*jptr)(double);
-		jptr = static_cast<double (GaussianIntegral::*)(double)> (&LensIntegral::j_integrand_prime);
-		ans = NIntegrate(jptr,0,1);
+		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
+		ans = GaussIntegrate(jptr,0,1);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1017,9 +1015,8 @@ double LensIntegral::k_integral()
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
-		double (GaussianIntegral::*kptr)(double);
-		kptr = static_cast<double (GaussianIntegral::*)(double)> (&LensIntegral::k_integrand_prime);
-		ans = NIntegrate(kptr,0,1);
+		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
+		ans = GaussIntegrate(kptr,0,1);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1032,7 +1029,7 @@ double LensIntegral::k_integral()
 double LensIntegral::i_integrand_prime(const double w)
 {
 	u = w*w;
-	qfac = 1 - (1-qsq)*u;
+	qfac = 1 - one_minus_qsq*u;
 	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
 	return (2*w*(xisq/u)*(profile->kapavg_spherical_generic)(xisq) / sqrt(qfac))/fsqinv;
 }
@@ -1040,17 +1037,25 @@ double LensIntegral::i_integrand_prime(const double w)
 double LensIntegral::j_integrand_prime(const double w)
 {
 	u = w*w;
-	qfac = 1 - (1-qsq)*u;
-	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
-	return (2*w*profile->kappa_rsq(xisq) / pow(qfac, nval+0.5));
+	qfac = 1 - one_minus_qsq*u;
+	return (2*w*profile->kappa_rsq(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
 }
 
 double LensIntegral::k_integrand_prime(const double w)
 {
 	u = w*w;
-	qfac = 1 - (1-qsq)*u;
-	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
-	return fsqinv*(2*w*u*profile->kappa_rsq_deriv(xisq) / pow(qfac, nval+0.5));
+	qfac = 1 - one_minus_qsq*u;
+	return fsqinv*(2*w*u*profile->kappa_rsq_deriv(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
+}
+
+double LensIntegral::GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b)
+{
+	double result = 0;
+
+	for (int i = 0; i < n_gausspoints; i++)
+		result += gaussweights[i]*(this->*func)(((a+b) + (b-a)*gausspoints[i])/2.0);
+
+	return (b-a)*result/2.0;
 }
 
 

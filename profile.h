@@ -222,33 +222,25 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void set_romberg_accuracy(const double acc) { romberg_accuracy = acc; }
 };
 
-struct LensIntegral : public Romberg, public GaussLegendre
+struct LensIntegral : public Romberg
 {
 	LensProfile *profile;
-	double xsqval, ysqval, xisq, qsq;
-	double xi, u, qfac;
-	double fsqinv;
-	int nval;
+	double xsqval, ysqval, fsqinv, xisq, u, one_minus_qsq, qfac, nval_plus_half;
+	double *gausspoints, *gaussweights;
+	int n_gausspoints;
 
-	LensIntegral(LensProfile *profile_in) : profile(profile_in)
+	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, double q, int nval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in)
 	{
-		qsq = SQR(profile->q);
-		fsqinv = 1.0/SQR(profile->f_major_axis);
-		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
-	}
-	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, double q) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in) {
-		qsq = q*q;
+		one_minus_qsq = 1 - q*q;
+		nval_plus_half = nval_in + 0.5;
 		if (q != 1.0) fsqinv = 1.0/SQR(profile->f_major_axis);
-		else fsqinv = 1.0; // even if the lens model is not spherical, we can still get the spherical calculations if needed by forcing q=1, f=1
-		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
+		else fsqinv = 1.0; // even if the lens model itself is not spherical, we can still get the spherical calculations if needed by setting f=1 here
+		n_gausspoints = profile->numberOfPoints;
+		gausspoints = profile->points;
+		gaussweights = profile->weights;
 	}
-	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, double q, int nval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in), nval(nval_in)
-	{
-		qsq=q*q;
-		if (q != 1.0) fsqinv = 1.0/SQR(profile->f_major_axis);
-		else fsqinv = 1.0; // even if the lens model is not spherical, we can still get the spherical calculations if needed by forcing q=1, f=1
-		SetGaussLegendre(profile->numberOfPoints,profile->points,profile->weights);
-	}
+	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
+
 	double i_integrand_prime(const double w);
 	double j_integrand_prime(const double w);
 	double k_integrand_prime(const double w);
