@@ -68,7 +68,6 @@ void Alpha::update_meta_parameters()
 	bprime = b*f_major_axis;
 	sprime = s*f_major_axis;
 	qsq = q*q; ssq = sprime*sprime;
-	cout << bprime << " " << sprime << " " << s << " " << b << " " << qsq << " " << ssq << endl;
 }
 
 void Alpha::set_auto_stepsizes()
