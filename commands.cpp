@@ -192,7 +192,7 @@ void Lens::process_commands(bool read_file)
 						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
 						"sim_pixel_noise -- simulated pixel noise added to images produced by 'sbmap plotimg'\n"
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
-						"psf_threshold -- when assuming Gaussian PSF, approximate PSF as zero if below threshold\n"
+						"psf_threshold -- when loading PSF from FITS file, approximate PSF as zero if below threshold\n"
 						"psf_mpi -- parallelize PSF convolution using MPI (on/off)\n"
 						"\n"
 						"\033[4mSource pixel reconstruction settings\033[0m\n"
@@ -209,6 +209,7 @@ void Lens::process_commands(bool read_file)
 						"regparam -- value of regularization parameter used for inverting lensed pixel images\n"
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
+						"outside_sb_threshold -- fraction of max surface brightness allowed beyond mask by outside_sb_prior\n"
 						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
@@ -4643,7 +4644,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				load_psf_fits(filename);
+				load_psf_fits(filename,verbal_mode);
 			}
 			else if (words[1]=="makesrc")
 			{
@@ -4745,7 +4746,7 @@ void Lens::process_commands(bool read_file)
 					image_pixel_data->set_required_data_pixels(xmin,xmax,ymin,ymax);
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
 			}
-			else if (words[1]=="set_data_window")
+			else if (words[1]=="unset_data_window")
 			{
 				double xmin, xmax, ymin, ymax;
 				if (nwords == 6) {
@@ -5949,6 +5950,16 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Noise threshold for automatic srcpixel grid sizing = " << noise_threshold << endl;
 			} else Complain("must specify either zero or one argument (noise threshold for automatic source grid sizing)");
+		}
+		else if (words[0]=="outside_sb_threshold")
+		{
+			double sb_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness fraction threshold for outside_sb_threshold");
+				max_sb_prior_unselected_pixels = sb_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << noise_threshold << endl;
+			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
 		else if (words[0]=="adaptive_grid")
 		{

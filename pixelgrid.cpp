@@ -2823,7 +2823,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 #endif
 }
 
-bool Lens::load_psf_fits(string fits_filename)
+bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -2925,6 +2925,7 @@ bool Lens::load_psf_fits(string fits_filename)
 	//}
 	//cout << psf_npixels_x << " " << psf_npixels_y << " " << nx_half << " " << ny_half << endl;
 
+	if ((verbal) and (mpi_id==0)) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
 	for (i=0; i < nx; i++) delete[] input_psf_matrix[i];
 	delete[] input_psf_matrix;
 

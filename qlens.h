@@ -498,7 +498,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	bool use_input_psf_matrix;
 	double **psf_matrix;
-	bool load_psf_fits(string fits_filename);
+	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
 	double psf_threshold;
 
@@ -526,7 +526,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void calculate_image_pixel_surface_brightness();
 	void store_image_pixel_surface_brightness();
 	void plot_image_pixel_surface_brightness(string outfile_root);
-	double invert_image_surface_brightness_map(bool verbal);
+	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(bool verbal);
 

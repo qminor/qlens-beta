@@ -180,7 +180,7 @@ Lens::Lens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 3.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = false;
-	max_sb_frac_unselected_pixels = 0.3; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	max_sb_frac_unselected_pixels = 0.2; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	nlens = 0;
 	n_sb = 0;
@@ -2019,13 +2019,13 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 {
 	double r, rstep, total_kappa, total_dkappa;
 	rstep = pow(rmax/rmin, 1.0/steps);
-	int i;
+	int i,j;
 	ofstream kout(kname);
 	ofstream kdout;
 	if (kdname != NULL) kdout.open(kdname);
 	if (use_scientific_notation) kout << setiosflags(ios::scientific);
 	if (use_scientific_notation) kdout << setiosflags(ios::scientific);
-	double xc, yc, kap, dkap;
+	double xc, yc, kap, kap2;
 	bool centered[nlens];
 	double xc0, yc0;
 	lens_list[0]->get_center_coords(xc0,yc0);
@@ -2035,6 +2035,37 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		if ((xc==xc0) and (yc==yc0)) centered[j]=true;
 		else centered[j]=false;
 	}
+	double theta, thetastep;
+	int thetasteps = 200;
+	thetastep = 2*M_PI/thetasteps;
+	double x, y, x2, y2, dr;
+	dr = 1e-1*rmin*(rstep-1);
+	cout << dr << endl;
+	
+	if (autocenter==true) {
+	for (int i=0; i < nlens; i++)
+		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+	}
+	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
+		total_kappa = 0;
+		total_dkappa = 0;
+		for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
+			x = grid_xcenter + r*cos(theta);
+			y = grid_ycenter + r*sin(theta);
+			x2 = (r+dr)*cos(theta);
+			y2 = (r+dr)*sin(theta);
+			kap = kappa(x,y,reference_zfactor);
+			kap2 = kappa(x2,y2,reference_zfactor);
+			total_kappa += kap;
+			total_dkappa += (kap2 - kap)/dr;
+		}
+		total_kappa /= thetasteps;
+		total_dkappa /= thetasteps;
+		kout << r << " " << total_kappa << endl;
+		if (kdname != NULL) kdout << r << " " << total_dkappa << endl;
+	}
+
+	/*
 	double rsq;
 	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
 		rsq = r*r;
@@ -2054,6 +2085,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		kout << total_kappa << endl;
 		if (kdname != NULL) kdout << fabs(total_dkappa) << endl;
 	}
+	*/
 }
 
 void Lens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
@@ -3359,7 +3391,6 @@ double Lens::chisq_pos_source_plane()
 	delete[] mag01;
 	delete[] beta_ji;
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
-	//if (chisq*0.0 != 0.0) die("WTF!");
 	return chisq;
 }
 
@@ -3960,7 +3991,7 @@ void Lens::chisq_single_evaluation()
 		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
 	}
 
-	if (source_fit_mode==Point_Source) display_chisq_status = true;
+	display_chisq_status = true;
 	fitmodel->chisq_it = 0;
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -3979,7 +4010,7 @@ void Lens::chisq_single_evaluation()
 		if (mpi_id==0) cout << "Wall time for likelihood evaluation: " << wtime << endl;
 	}
 #endif
-	if (source_fit_mode==Point_Source) display_chisq_status = false;
+	display_chisq_status = false;
 
 	fit_restore_defaults();
 }
@@ -4131,8 +4162,7 @@ double Lens::chi_square_fit_simplex()
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
-	if (source_fit_mode==Point_Source) display_chisq_status = true;
-	else display_chisq_status = false;
+	display_chisq_status = true;
 
 	fitmodel->chisq_it = 0;
 	bool verbal = (mpi_id==0) ? true : false;
@@ -4170,9 +4200,7 @@ double Lens::chi_square_fit_simplex()
 	}
 	bestfitparams.input(fitparams);
 
-	if (display_chisq_status) {
-		display_chisq_status = false;
-	}
+	display_chisq_status = false;
 	if (mpi_id==0) {
 		if (simplex_exit_status==true) {
 			if (simplex_temp_initial==0) cout << "Downhill simplex converged after " << n_iterations << " iterations\n\n";
@@ -4294,8 +4322,7 @@ double Lens::chi_square_fit_powell()
 	double chisq_initial = (this->*loglikeptr)(fitparams.array());
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
-	if (source_fit_mode==Point_Source) display_chisq_status = true;
-	else display_chisq_status = false;
+	display_chisq_status = true;
 
 	fitmodel->chisq_it = 0;
 	powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
@@ -4327,9 +4354,7 @@ double Lens::chi_square_fit_powell()
 	}
 	bestfitparams.input(fitparams);
 
-	if (display_chisq_status) {
-		display_chisq_status = false;
-	}
+	display_chisq_status = false;
 
 	if (group_id==0) fitmodel->logfile << "Optimization finished: min chisq = " << chisq_bestfit << endl;
 
@@ -4458,6 +4483,8 @@ void Lens::nested_sampling()
 	}
 #endif
 	string filename = fit_output_dir + "/" + fit_output_filename;
+
+	display_chisq_status = false; // just in case it was turned on
 
 	MonoSample(filename.c_str(),n_mcpoints,fitparams.array(),param_errors,mcmc_logfile);
 	bestfitparams.input(fitparams);
@@ -4789,6 +4816,8 @@ void Lens::chi_square_twalk()
 #endif
 	string filename = fit_output_dir + "/" + fit_output_filename;
 
+	display_chisq_status = false; // just in case it was turned on
+
 	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
 	bestfitparams.input(fitparams);
 
@@ -5081,6 +5110,15 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	}
 
 	loglike = chisq_total/2.0;
+	if (chisq*0.0 != 0.0) {
+		if (group_id==0) {
+			if (fitmodel->logfile.is_open()) {
+				for (int i=0; i < n_fit_parameters; i++) cout << params[i] << " ";
+			}
+			cout << flush << endl;
+		}
+		die("WTF!");
+	}
 
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
@@ -5167,7 +5205,7 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 			fitmodel->logfile << flush;
 		}
 	}
-	double loglike, chisq=0;
+	double loglike, chisq=0, chisq0;
 	//for (int i=0; i < nlens; i++) {
 		//if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
 			//double subparams[10];
@@ -5178,12 +5216,17 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	if (chisq != 2e30) {
 		if (fitmodel->regularization_parameter < 0) chisq = 2e30;
 		else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;
-		else chisq = fitmodel->invert_image_surface_brightness_map(false);
+		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 	}
 
 	loglike = chisq/2.0;
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	if ((display_chisq_status) and (mpi_id==0)) {
+		cout << "chisq0=" << chisq0 << ", chisq=" << loglike/2 << ", loglike=" << loglike << "              " << endl;
+		cout << "\033[1A";
+	}
+
 	return loglike;
 }
 
@@ -5204,10 +5247,10 @@ double Lens::fitmodel_loglike_pixellated_source_test(double* params)
 			dvector subhalo_params;
 		}
 	}
-	double loglike, chisq;
+	double loglike, chisq, chisq0;
 	if (fitmodel->regularization_parameter < 0) chisq = 2e30;
 	else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;
-	else chisq = fitmodel->invert_image_surface_brightness_map(true);
+	else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,true);
 	loglike = chisq/2.0;
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
@@ -5749,7 +5792,8 @@ double Lens::invert_surface_brightness_map_from_data(bool verbal)
 	image_pixel_grid = new ImagePixelGrid(reference_zfactor, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->lens = this;
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
-	double chisq = invert_image_surface_brightness_map(verbal);
+	double chisq0;
+	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if (chisq == 2e30) {
 		delete image_pixel_grid;
 		image_pixel_grid = NULL;
@@ -5757,7 +5801,7 @@ double Lens::invert_surface_brightness_map_from_data(bool verbal)
 	return chisq;
 }
 
-double Lens::invert_image_surface_brightness_map(bool verbal)
+double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
@@ -5917,6 +5961,7 @@ double Lens::invert_image_surface_brightness_map(bool verbal)
 				}
 			}
 		}
+		chisq0 = chisq;
 
 		if (group_id==0) {
 			if (logfile.is_open()) {
@@ -5965,6 +6010,7 @@ double Lens::invert_image_surface_brightness_map(bool verbal)
 		}
 		//chisq += n_data_pixels*log(2*M_PI*data_pixel_noise); // this is not very relevant because the data fit window and assumed pixel noise are not varied
 
+		bool sb_outside_window = false;
 		if (max_sb_prior_unselected_pixels) {
 			clear_lensing_matrices();
 			clear_pixel_matrices();
@@ -5988,13 +6034,17 @@ double Lens::invert_image_surface_brightness_map(bool verbal)
 				}
 			}
 			if (max_external_sb > 0) {
+				sb_outside_window = true;
 				chisq *= pow(abs(max_external_sb/(max_sb_frac_unselected_pixels*max_pixel_sb)),40);
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac_unselected_pixels*max_pixel_sb << ") has been found outside the selected fit region" << endl;
 			}
 			image_pixel_grid->set_fit_window((*image_pixel_data));
 		}
 
-		if ((group_id==0) and (logfile.is_open())) logfile << " chisq_no_priors=" << chisq << endl;
+		if ((group_id==0) and (logfile.is_open())) {
+			if (sb_outside_window) logfile << " chisq_no_priors=" << chisq << " (SB produced outside window)" << endl;
+			else logfile << " chisq_no_priors=" << chisq << endl;
+		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "chisq=" << chisq << " (without priors)" << endl;
 			if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;

@@ -207,6 +207,7 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 	return found_match;
 }
 
+// You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
 void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
@@ -871,7 +872,7 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 		if (kapavgptr_rsq_spherical==NULL) kavg=0; // just in case there is no radial deflection function defined
 		else kavg = (this->*kapavgptr_rsq_spherical)(rsq);
 		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq << endl;
-		if (kdname != NULL) kdout << r << " " << fabs(kappa_rsq_deriv(rsq)) << endl;
+		if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }
 
