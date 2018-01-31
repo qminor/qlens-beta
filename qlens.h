@@ -411,6 +411,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
 	void plot_logkappa_map(const int x_N, const int y_N, const string filename);
 	void plot_logmag_map(const int x_N, const int y_N, const string filename);
+	void plot_logpot_map(const int x_N, const int y_N, const string filename);
+
 
 	struct critical_curve {
 		vector<lensvector> cc_pts;
@@ -670,6 +672,7 @@ public:
 	void update_anchored_parameters();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
+	void output_lens_commands(string filename);
 	void print_fit_model();
 	void print_lens_cosmology_info();
 

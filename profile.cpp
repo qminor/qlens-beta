@@ -533,6 +533,43 @@ void LensProfile::print_vary_parameters()
 	}
 }
 
+void LensProfile::print_lens_command(ofstream& scriptout)
+{
+	scriptout << "fit lens " << model_name << " ";
+	if (ellipticity_mode != default_ellipticity_mode) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET))   // these models are not elliptical so emode is irrelevant
+			scriptout << "emode=" << ellipticity_mode << " ";
+	}
+
+	for (int i=0; i < n_params-2; i++) {
+		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+		else {
+			if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+			else scriptout << *(param[i]);
+			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+			scriptout << " ";
+		}
+	}
+	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
+	else scriptout << x_center << " " << y_center << endl;
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) scriptout << "1 ";
+		else scriptout << "0 ";
+	}
+	scriptout << endl;
+	if (include_limits) {
+		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
+		else {
+			for (int i=0; i < n_vary_params; i++) {
+				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
+					scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
+				else
+					scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+			}
+		}
+	}
+}
+
 bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
 {
 	return false; // no cosmology-dependent physical parameters to calculate for this model
@@ -623,8 +660,53 @@ void LensProfile::deflection_from_elliptical_potential(const double x, const dou
 	// Formulas derived in Dumet-Montoya et al. (2012)
 	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
 	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+
 	def[0] = kapavg*(1-epsilon)*x;
 	def[1] = kapavg*(1+epsilon)*y;
+}
+
+void LensProfile::deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def)
+{
+	const double eta = 0.25;
+	const double rse = 20;
+
+	double denom = 1 + 0.5*eta*SQR(y/rse); 
+	double kapavg_resq = (this->*kapavgptr_rsq_spherical)(((1-epsilon)*x*x + (1+epsilon)*y*y) / denom);
+
+	def[0] = (kapavg_resq)*(1-epsilon)*x/denom;
+	def[1] = (kapavg_resq)*((1+epsilon)*y/denom - (eta*y/(rse*rse))*((1-epsilon)*x*x+(1+epsilon)*y*y)/(2*denom*denom));
+}
+
+double LensProfile::test_resq(const double x, const double y)
+{
+	const double eta = 0.25;
+	const double rse = 20;
+	double denom;
+	//double bb=0.5*eta*(x*x)/rse;
+	//double re0 = (1-epsilon)*x*x + (1+epsilon)*y*y;
+	//double re = SQR(-bb + sqrt(bb*bb + re0));
+	//cout << bb << " " << re0 << " " << re << endl;
+	//return SQR(-bb + sqrt(bb*bb + re0));
+	//double denom = 1 + 0.5*eta*SQR(x/rse); 
+	if (eta > 0)
+		denom = 1 + 0.5*eta*SQR(y/rse); 
+	else
+		denom = 1 + 0.5*abs(eta)*SQR(x/rse); 
+	return ((1-epsilon)*x*x + (1+epsilon)*y*y) / denom;
+}
+
+double LensProfile::test_defx(const double x, const double y)
+{
+	lensvector deff;
+	deflection_from_elliptical_potential_experimental(x,y,deff);
+	return deff[0];
+}
+
+double LensProfile::test_defy(const double x, const double y)
+{
+	lensvector deff;
+	deflection_from_elliptical_potential_experimental(x,y,deff);
+	return deff[1];
 }
 
 void LensProfile::hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess)
@@ -660,6 +742,64 @@ double LensProfile::kappa_from_elliptical_potential(const double x, const double
 	shearmag = (this->*kapavgptr_rsq_spherical)(rsq) - kap_r;
 
 	return (kap_r + epsilon*shearmag*cos2phi);
+}
+
+void LensProfile::hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess)
+{
+	// Formulas derived in Dumet-Montoya et al. (2012)
+	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
+	exsq = (1-epsilon)*x*x; // elliptical x^2
+	eysq = (1+epsilon)*y*y; // elliptical y^2
+	rsq = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rsq;
+	sin2phi = 2*q*(1+epsilon)*x*y/rsq;
+	kap_r = kappa_rsq(rsq);
+	shearmag = ((this->*kapavgptr_rsq_spherical)(rsq)) - kap_r; // shear from the spherical model
+	kap = kap_r + epsilon*shearmag*cos2phi;
+	gamma1 = -epsilon*kap_r - shearmag*cos2phi;
+	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin2phi;
+	//hess[0][0] = kap + gamma1;
+	//hess[1][1] = kap - gamma1;
+	//hess[0][1] = gamma2;
+	//hess[1][0] = gamma2;
+
+	//double hess00, hess11, hess01;
+	double dx = 1e-4;
+	hess[0][0] = (test_defx(x+dx,y) - test_defx(x-dx,y))/(2*dx);
+	hess[1][1] = (test_defy(x,y+dx) - test_defy(x,y-dx))/(2*dx);
+	hess[0][1] = (test_defx(x,y+dx) - test_defx(x,y-dx))/(2*dx);
+	hess[1][0] = hess[0][1];
+	//cout << hess00 << " " << hess[0][0] << " " << hess11 << " " << hess[1][1] << " " << hess01 << " " << hess[0][1] << endl;
+
+}
+
+double LensProfile::kappa_from_elliptical_potential_experimental(const double x, const double y)
+{
+	// Formulas derived in Dumet-Montoya et al. (2012)
+	double cos2phi, exsq, eysq, rsq, kap_r, shearmag;
+	exsq = (1-epsilon)*x*x; // elliptical x^2
+	eysq = (1+epsilon)*y*y; // elliptical y^2
+	rsq = exsq+eysq; // elliptical r^2
+	cos2phi = (exsq - eysq) / rsq;
+
+	kap_r = kappa_rsq(rsq);
+	shearmag = (this->*kapavgptr_rsq_spherical)(rsq) - kap_r;
+
+	double hess00, hess11, hess01;
+	double dx = 1e-4;
+	hess00 = (test_defx(x+dx,y) - test_defx(x-dx,y))/(2*dx);
+	hess11 = (test_defy(x,y+dx) - test_defy(x,y-dx))/(2*dx);
+	hess01 = (test_defx(x,y+dx) - test_defx(x,y-dx))/(2*dx);
+	double testkap1 = (hess00+hess11)/2;
+	//cout << hess00/2 << " " << hess11/2 << " " << testkap1 << endl;
+
+	//cout << hess00 << " " << hess[0][0] << " " << hess11 << " " << hess[1][1] << " " << hess01 << " " << hess[0][1] << endl;
+
+	//double testkap0 = (kap_r + epsilon*shearmag*cos2phi);
+	//cout << testkap0 << " " << testkap1 << endl;
+
+	//return (kap_r + epsilon*shearmag*cos2phi);
+	return testkap1;
 }
 
 void LensProfile::shift_angle_90()
@@ -761,6 +901,7 @@ double LensProfile::kappa(double x, double y)
 	if (sintheta != 0) rotate(x,y);
 	if ((ellipticity_mode==3) and (q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
+		//return kappa_from_elliptical_potential_experimental(x,y);
 	} else {
 		return kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
 	}
@@ -774,6 +915,7 @@ double LensProfile::potential(double x, double y)
 	if (sintheta != 0) rotate(x,y);
 	if (ellipticity_mode==3) {
 		return (this->*potptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y); // ellipticity is put into the potential in this mode
+		//return (this->*potptr_rsq_spherical)(test_resq(x,y)); // ellipticity is put into the potential in this mode
 	} else {
 		return (this->*potptr)(x,y);
 	}
@@ -787,6 +929,7 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 	if (sintheta != 0) rotate(x,y);
 	if ((ellipticity_mode==3) and (q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
+		//deflection_from_elliptical_potential_experimental(x,y,def);
 	} else {
 		(this->*defptr)(x,y,def);
 	}
@@ -801,6 +944,7 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) rotate(x,y);
 	if ((ellipticity_mode==3) and (q != 1)) {
 		hessian_from_elliptical_potential(x,y,hess);
+		//hessian_from_elliptical_potential_experimental(x,y,hess);
 	} else {
 		(this->*hessptr)(x,y,hess);
 	}

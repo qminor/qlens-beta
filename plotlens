@@ -627,17 +627,38 @@ then
 	set -- $(tail -1 lensmap.x && tail -1 lensmap.y)
 	Xf=`bc <<< "scale=15; $1-0.5*$DX"`
 	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
-	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=0; i < NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.kappalog`
-	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=0; i < NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.kappalog`
+	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.kappalog`
+	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.kappalog`
 	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/12"`
-	C0=`bc <<< "scale=15; $MIN+$STEP"`
+	C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 	Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
 	PLOTCOMMAND="set contour; unset surface; set cntrparam levels incr $C0,$STEP,$Cf; set view map; set dgrid3d 100,100,4; set table 'contour.txt'; splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
 	PLOTCOMMAND="$PLOTCOMMAND; unset contour; set surface; set table 'dgrid.txt';splot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
 	PLOTCOMMAND="$PLOTCOMMAND; reset; set pm3d map; unset key; set palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e'); set autoscale fix; set grid"
-	PLOTCOMMAND="$PLOTCOMMAND; set title '$TITLE'; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf]; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
-	PLOTLINE="set key; $SETTERM; $PLOTCOMMAND"
+	PLOTCOMMAND="$PLOTCOMMAND; set title '$TITLE'; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf];  set size ratio -1; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
+	PLOTLINE="set key; $SETTERM;$PLOTCOMMAND"
+elif [[ $COMMAND == "lensmap_potlog" ]]
+then
+	set -- $(head -2 lensmap.x && head -2 lensmap.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+	set -- $(tail -1 lensmap.x && tail -1 lensmap.y)
+	Xf=`bc <<< "scale=15; $1-0.5*$DX"`
+	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
+	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.potlog`
+	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.potlog`
+	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/12"`
+	C0=`bc <<< "scale=15; $MIN+3*$STEP"`
+	Cf=`bc <<< "scale=15; $MAX-$STEP"`
+
+	PLOTCOMMAND="set contour; unset surface; set cntrparam levels incr $C0,$STEP,$Cf; set view map; set dgrid3d 100,100,4; set table 'contour.txt'; splot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
+	PLOTCOMMAND="$PLOTCOMMAND; unset contour; set surface; set table 'dgrid.txt';splot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix; unset table"
+	PLOTCOMMAND="$PLOTCOMMAND; reset; set pm3d map; unset key; set palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e'); set autoscale fix; set grid"
+	PLOTCOMMAND="$PLOTCOMMAND; set title '$TITLE'; set xrange [$X0:$Xf]; set yrange [$Y0:$Yf];  set size ratio -1; splot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
+	PLOTLINE="set key; $SETTERM;$PLOTCOMMAND"
 elif [[ $COMMAND == "lensmap_maglog" ]]
 then
 	set -- $(head -2 lensmap.x && head -2 lensmap.y)
@@ -669,7 +690,7 @@ elif [[ $KEY == "-1" ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
 
 echo "$PLOTLINE" >tempplot.in
 
-gnuplot -persist tempplot.in >/dev/null 2>&1
+gnuplot -persist tempplot.in
 #rm tempplot.in
 if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 

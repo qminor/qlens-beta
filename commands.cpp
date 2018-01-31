@@ -2653,6 +2653,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[5] >> a)) Complain("invalid a parameter for model corecusp");
 					}
 					if (!(ws[6] >> s)) Complain("invalid s (core) parameter for model corecusp");
+					if (a < s) Complain("scale radius a cannot be smaller than s");
 					if (!(ws[7] >> q)) Complain("invalid q parameter for model corecusp");
 					if (nwords >= 9) {
 						if (!(ws[8] >> theta)) Complain("invalid theta parameter for model corecusp");
@@ -4348,6 +4349,22 @@ void Lens::process_commands(bool read_file)
 					}
 				}
 			} else Complain("only up to one argument is allowed for 'plotlogkappa' (filename)");
+		}
+		else if (words[0]=="plotlogpot")
+		{
+			if (!islens()) Complain("must specify lens model first");
+			if (nwords < 3) {
+				if ((nwords==2) and (terminal==TEXT)) {
+					plot_logpot_map(n_image_pixels_x,n_image_pixels_y,words[1]);
+				} else {
+					plot_logpot_map(n_image_pixels_x,n_image_pixels_y,"lensmap");
+					if (nwords==2) {
+						run_plotter("lensmap_potlog",words[1],"");
+					} else {
+						run_plotter("lensmap_potlog");
+					}
+				}
+			} else Complain("only up to one argument is allowed for 'plotlogpot' (filename)");
 		}
 		else if (words[0]=="plotlogmag")
 		{

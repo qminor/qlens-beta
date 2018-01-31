@@ -5042,6 +5042,8 @@ void Lens::output_bestfit_model()
 			prangefile << "-1e30 1e30" << endl;
 	}
 	prangefile.close();
+	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
+	output_lens_commands(scriptfile_str);
 }
 
 double Lens::fitmodel_loglike_point_source(double* params)
@@ -5117,7 +5119,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 			}
 			cout << flush << endl;
 		}
-		die("WTF!");
+		warn("chi-square is returning NaN value");
 	}
 
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
@@ -5319,6 +5321,54 @@ void Lens::print_lens_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
+void Lens::output_lens_commands(string filename)
+{
+	ofstream scriptfile(filename.c_str());
+	for (int i=0; i < nlens; i++) {
+		lens_list[i]->print_lens_command(scriptfile);
+	}
+	if (source_fit_mode == Point_Source) {
+		if (sourcepts_fit != NULL) {
+			if (!use_analytic_bestfit_src) {
+				scriptfile << "fit sourcept\n";
+				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+					for (int i=0; i < n_sourcepts_fit; i++) scriptfile << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
+				} else {
+					for (int i=0; i < n_sourcepts_fit; i++) {
+						scriptfile << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
+						scriptfile << sourcepts_lower_limit[i][0] << " " << sourcepts_upper_limit[i][0] << endl;
+						scriptfile << sourcepts_lower_limit[i][1] << " " << sourcepts_upper_limit[i][1] << endl;
+					}
+				}
+			} else {
+				scriptfile << "fit sourcept auto\n";
+			}
+		} else if (n_sourcepts_fit > 0) scriptfile << "# Warning: Initial source point parameters not chosen\n";
+	}
+	else if (source_fit_mode == Pixellated_Source) {
+		if (vary_regularization_parameter) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				scriptfile << "regparam " << regularization_parameter << endl;
+			} else {
+				scriptfile << "regparam " << regularization_parameter_lower_limit << " " << regularization_parameter << " " << regularization_parameter_upper_limit << endl;
+			}
+		}
+		if (vary_magnification_threshold) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold << endl;
+			} else {
+				scriptfile << "srcpixel_mag_threshold: " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
+			}
+		}
+	}
+	if (vary_hubble_parameter) {
+		scriptfile << "hubble = " << hubble << endl;
+		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+			scriptfile << hubble_lower_limit << " " << hubble_upper_limit << endl;
+		}
+	}
+}
+
 void Lens::print_fit_model()
 {
 	print_lens_list(true);
@@ -5457,6 +5507,44 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename
 		logkapout << endl;
 	}
 	if (negkap==true) warn("kappa has negative values in some locations; plotting abs(kappa)");
+}
+
+void Lens::plot_logpot_map(const int x_N, const int y_N, const string filename)
+{
+	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
+	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+	xstep = (xmax-xmin)/x_N;
+	ystep = (ymax-ymin)/y_N;
+	string x_filename = filename + ".x";
+	string y_filename = filename + ".y";
+	ofstream pixel_xvals(x_filename.c_str());
+	ofstream pixel_yvals(y_filename.c_str());
+	int i,j;
+	for (i=0, x=xmin; i <= x_N; i++, x += xstep) {
+		pixel_xvals << x << endl;
+	}
+	for (j=0, y=ymin; j <= y_N; j++, y += ystep) {
+		pixel_yvals << y << endl;
+	}
+	pixel_xvals.close();
+	pixel_yvals.close();
+
+	string logpotname = filename + ".potlog";
+	ofstream logpotout(logpotname.c_str());
+
+	double mag, invmag, shearval, pot;
+	lensvector alpha;
+	lensvector pos;
+	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
+		pos[1] = y;
+		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
+			pos[0] = x;
+			pot = potential(pos,reference_zfactor);
+			logpotout << log(abs(pot))/log(10) << " ";
+		}
+		logpotout << endl;
+	}
 }
 
 void Lens::plot_logmag_map(const int x_N, const int y_N, const string filename)

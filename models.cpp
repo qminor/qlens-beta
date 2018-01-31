@@ -531,7 +531,7 @@ void NFW::set_auto_ranges()
 void NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
+	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq); // MUST FIX potential!
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -571,10 +571,15 @@ double NFW::kapavg_spherical_rsq(const double rsq)
 double NFW::potential_spherical_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	if (xsq < 1)
-		return 2*ks*rs*rs*(-SQR(atanh(sqrt(1-xsq))) + SQR(log(xsq/4)/2));
-	else 
-		return 2*ks*rs*rs*(-SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2));
+	if (xsq < 1) {
+		if (xsq > 1e-4)
+			return 2*ks*rs*rs*(-SQR(atanh(sqrt(1-xsq))) + SQR(log(xsq/4)/2));
+		else
+			return -ks*rsq*log(xsq/4)/2;
+	}
+	else {
+		return 2*ks*rs*rs*(-SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2)); // Something is wrong with this!!!! FIX IT!!!!!!!!!!!
+	}
 }
 
 bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)

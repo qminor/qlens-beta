@@ -186,6 +186,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void print_parameters();
 	void print_vary_parameters();
+	void print_lens_command(ofstream& scriptout);
 
 	// the following function MUST be redefined in all derived classes
 	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -198,6 +199,13 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
 	virtual void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
 	virtual double kappa_from_elliptical_potential(const double x, const double y);
+	void deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def);
+	void hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess);
+	double kappa_from_elliptical_potential_experimental(const double x, const double y);
+
+	double test_resq(const double x, const double y);
+	double test_defx(const double x, const double y);
+	double test_defy(const double x, const double y);
 
 	double kappa_avg_r(const double r);
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
