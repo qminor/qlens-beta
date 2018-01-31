@@ -897,20 +897,6 @@ void LensProfile::rotate(double &x, double &y)
 	x = xp;
 }
 
-double LensProfile::kappa(double x, double y)
-{
-	// switch to coordinate system centered on lens profile
-	x -= x_center;
-	y -= y_center;
-	if (sintheta != 0) rotate(x,y);
-	if ((ellipticity_mode==3) and (q != 1)) {
-		return kappa_from_elliptical_potential(x,y);
-		//return kappa_from_elliptical_potential_experimental(x,y);
-	} else {
-		return kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
-	}
-}
-
 double LensProfile::potential(double x, double y)
 {
 	// switch to coordinate system centered on lens profile
@@ -938,6 +924,20 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 		(this->*defptr)(x,y,def);
 	}
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+}
+
+double LensProfile::kappa(double x, double y)
+{
+	// switch to coordinate system centered on lens profile
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	if ((ellipticity_mode==3) and (q != 1)) {
+		return kappa_from_elliptical_potential(x,y);
+		//return kappa_from_elliptical_potential_experimental(x,y);
+	} else {
+		return kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
+	}
 }
 
 void LensProfile::hessian(double x, double y, lensmatrix& hess)
