@@ -1415,7 +1415,9 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	s = s_in;
 	if (s < 0) s = -s; // don't allow negative core radii
 	if (a < 0) a = -a; // don't allow negative scale radii
-	if (a < s) die("scale radius a cannot be less than core radius s");
+	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
+	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
+	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp (mass diverges at r=0)");
 	if (set_k0_by_einstein_radius) {
 		einstein_radius = mass_param_in;
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
@@ -1468,8 +1470,10 @@ void CoreCusp::assign_param_pointers()
 void CoreCusp::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
+	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
+	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
+	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp (mass diverges at r=0)");
 	digamma_term = DiGamma(1.5-gamma/2);
-	if (a < s) die("scale radius a cannot be less than core radius s");
 	if (set_k0_by_einstein_radius) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
@@ -1617,6 +1621,12 @@ double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const do
 	p = (nprime-3.0)/2;
 	hyp = pow(1+xisq,-p) * real(hyp_2F1(p,gamma/2,nprime/2,1.0/(1+xisq)));
 
+	double ans = 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
+		//if (ans*0.0 != 0.0) {
+			//cout << "deflection: a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " def=" << ans << " hyp=" << hyp << " B1=" << Beta(p,(3-gamma)/2) << " B2=" << Beta(p,1.5)*hyp << " " << endl;
+			//print_parameters();
+			//die();
+		//}
 	return 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
 }
 
@@ -1629,17 +1639,18 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 	if ((gamma == 1.0) and (xisq < 0.01)) return enclosed_mass_spherical_nocore_limit(rsq_prime,atilde,n_stepsize); // in this regime, Richardson extrapolation is faster
 	double x, p, fac;
 	p = 1.5 - gamma/2;
-	if ((xisq < 1) and (abs((gamma-1)/2) > 1e-12)) {
+	if ((xisq < 1) and ((gamma-1.0)/2 > 1e-12)) {
 		x=xisq/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,(gamma-1)/2,x) - Beta(-p,1.5)*real(hyp_2F1(1.5,p,1+p,x))*pow(x,p); // uses Gfunction1
-		//if (fac*0.0 != 0.0) {
-			//cout << "WTF! a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " dig=" << digamma_term << " gf=" << (gamma-1)/2 << " " << G_Function(gamma/2,0.001,x) << " " << Beta(-p,1.5) << " " << real(hyp_2F1(1.5,p,1+p,x)) << endl;
-			//print_parameters();
-			//die();
-		//}
 	} else {
 		x=1.0/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,1.5,x) + digamma_three_halves - digamma_term; // uses Gfunction2
+	}
+
+	if (fac*0.0 != 0.0) {
+		cout << "NaN deflection: a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " dig=" << digamma_term << " gf=" << (gamma-1)/2 << " " << G_Function(gamma/2,0.001,x) << " " << Beta(-p,1.5) << " " << real(hyp_2F1(1.5,p,1+p,x)) << endl;
+		print_parameters();
+		die();
 	}
 
 	return 2*k0*CUBE(atilde)/(a*M_2PI) * fac;

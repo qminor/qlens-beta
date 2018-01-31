@@ -486,6 +486,10 @@ void LensProfile::print_parameters()
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET))   // these models are not elliptical so emode is irrelevant
 		cout << " (ellipticity mode = " << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
 	}
+	double aux_param;
+	string aux_paramname;
+	get_auxiliary_parameter(aux_paramname,aux_param);
+	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
 	cout << endl;
 }
 

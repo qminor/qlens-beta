@@ -188,6 +188,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void print_parameters();
 	void print_vary_parameters();
 	void print_lens_command(ofstream& scriptout);
+	virtual void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
 	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -560,6 +561,7 @@ class CoreCusp : public LensProfile
 	void set_core_enclosed_mass();
 
 	void set_model_specific_integration_pointers();
+	void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
 
 	public:
 	bool calculate_tidal_radius;
