@@ -1417,7 +1417,8 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	if (a < 0) a = -a; // don't allow negative scale radii
 	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
 	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
-	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp (mass diverges at r=0)");
+	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp model (mass diverges at r=0)");
+	if (n <= 1) die("outer slope cannot be equal to or less than 1 for corecusp model");
 	if (set_k0_by_einstein_radius) {
 		einstein_radius = mass_param_in;
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
@@ -1472,7 +1473,8 @@ void CoreCusp::update_meta_parameters()
 	update_ellipticity_meta_parameters();
 	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
 	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
-	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp (mass diverges at r=0)");
+	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp model (mass diverges at r=0)");
+	if (n <= 1) die("outer slope cannot be equal to or less than 1 for corecusp model");
 	digamma_term = DiGamma(1.5-gamma/2);
 	if (set_k0_by_einstein_radius) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
