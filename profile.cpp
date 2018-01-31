@@ -19,6 +19,7 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
+	special_parameter_command = "";
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -540,6 +541,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET))   // these models are not elliptical so emode is irrelevant
 			scriptout << "emode=" << ellipticity_mode << " ";
 	}
+	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
 	for (int i=0; i < n_params-2; i++) {
 		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
@@ -667,8 +669,8 @@ void LensProfile::deflection_from_elliptical_potential(const double x, const dou
 
 void LensProfile::deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def)
 {
-	const double eta = 0.25;
-	const double rse = 20;
+	const double eta = 0.0;
+	const double rse = 15;
 
 	double denom = 1 + 0.5*eta*SQR(y/rse); 
 	double kapavg_resq = (this->*kapavgptr_rsq_spherical)(((1-epsilon)*x*x + (1+epsilon)*y*y) / denom);
@@ -677,9 +679,10 @@ void LensProfile::deflection_from_elliptical_potential_experimental(const double
 	def[1] = (kapavg_resq)*((1+epsilon)*y/denom - (eta*y/(rse*rse))*((1-epsilon)*x*x+(1+epsilon)*y*y)/(2*denom*denom));
 }
 
+/*
 double LensProfile::test_resq(const double x, const double y)
 {
-	const double eta = 0.25;
+	const double eta = 0.1;
 	const double rse = 20;
 	double denom;
 	//double bb=0.5*eta*(x*x)/rse;
@@ -694,6 +697,7 @@ double LensProfile::test_resq(const double x, const double y)
 		denom = 1 + 0.5*abs(eta)*SQR(x/rse); 
 	return ((1-epsilon)*x*x + (1+epsilon)*y*y) / denom;
 }
+*/
 
 double LensProfile::test_defx(const double x, const double y)
 {

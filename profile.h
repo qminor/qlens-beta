@@ -56,6 +56,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
 	boolvector vary_params;
 	string model_name;
+	string special_parameter_command;
 	vector<string> paramnames;
 	vector<string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;

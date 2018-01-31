@@ -5113,13 +5113,15 @@ double Lens::fitmodel_loglike_point_source(double* params)
 
 	loglike = chisq_total/2.0;
 	if (chisq*0.0 != 0.0) {
-		if (group_id==0) {
-			if (fitmodel->logfile.is_open()) {
-				for (int i=0; i < n_fit_parameters; i++) cout << params[i] << " ";
-			}
-			cout << flush << endl;
-		}
-		warn("chi-square is returning NaN value");
+		warn("chi-square is returning NaN (%g)",chisq);
+		//if (group_id==0) {
+			//if (fitmodel->logfile.is_open()) {
+				//for (int i=0; i < n_fit_parameters; i++) cerr << params[i] << " ";
+			//}
+			//cerr << "chisq=NaN" << flush << endl;
+			//fitmodel->output_lens_commands("nan_model.in");
+		//}
+		//die();
 	}
 
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);

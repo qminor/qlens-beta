@@ -21,6 +21,7 @@ Alpha::Alpha(const double &bb, const double &aa, const double &ss, const double 
 {
 	lenstype = ALPHA;
 	model_name = "alpha";
+	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -285,6 +286,7 @@ PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, c
 {
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
+	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -474,6 +476,7 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 {
 	lenstype = nfw;
 	model_name = "nfw";
+	special_parameter_command = "";
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -608,6 +611,7 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 {
 	lenstype = TRUNCATED_nfw;
 	model_name = "tnfw";
+	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -709,6 +713,7 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 {
 	lenstype = HERNQUIST;
 	model_name = "hern";
+	special_parameter_command = "";
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -808,6 +813,7 @@ ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, 
 {
 	lenstype = EXPDISK;
 	model_name = "expdisk";
+	special_parameter_command = "";
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -890,6 +896,7 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 {
 	lenstype = SHEAR;
 	model_name = "shear";
+	special_parameter_command = "";
 	setup_base_lens(4,false); // number of parameters = 4, is_elliptical_lens = false
 
 	if (use_shear_component_params) {
@@ -1031,6 +1038,11 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 {
 	lenstype = MULTIPOLE;
 	model_name = (kap==true) ? "kmpole" : "mpole";
+	stringstream mstr;
+	string mstring;
+	mstr << m_in;
+	mstr >> mstring;
+	special_parameter_command = "m=" + mstring;
 	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
 	sine_term = sine;
 	setup_base_lens(5,false); // number of parameters = 5, is_elliptical_lens = false
@@ -1302,6 +1314,7 @@ PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 {
 	lenstype = PTMASS;
 	model_name = "ptmass";
+	special_parameter_command = "";
 	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
 	b = bb;
 	x_center = xc_in;
@@ -1390,6 +1403,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 {
 	lenstype = CORECUSP;
 	model_name = "corecusp";
+	special_parameter_command = ((parametrize_einstein_radius==true) ? "re_param" : "");
 	set_k0_by_einstein_radius = parametrize_einstein_radius;
 	setup_base_lens(9,true); // number of parameters = 9, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
@@ -1401,6 +1415,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	s = s_in;
 	if (s < 0) s = -s; // don't allow negative core radii
 	if (a < 0) a = -a; // don't allow negative scale radii
+	if (a < s) die("scale radius a cannot be less than core radius s");
 	if (set_k0_by_einstein_radius) {
 		einstein_radius = mass_param_in;
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
@@ -1454,6 +1469,7 @@ void CoreCusp::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
 	digamma_term = DiGamma(1.5-gamma/2);
+	if (a < s) die("scale radius a cannot be less than core radius s");
 	if (set_k0_by_einstein_radius) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
@@ -1613,9 +1629,14 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 	if ((gamma == 1.0) and (xisq < 0.01)) return enclosed_mass_spherical_nocore_limit(rsq_prime,atilde,n_stepsize); // in this regime, Richardson extrapolation is faster
 	double x, p, fac;
 	p = 1.5 - gamma/2;
-	if ((xisq < 1) and (gamma != 1.0)) {
+	if ((xisq < 1) and (abs((gamma-1)/2) > 1e-12)) {
 		x=xisq/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,(gamma-1)/2,x) - Beta(-p,1.5)*real(hyp_2F1(1.5,p,1+p,x))*pow(x,p); // uses Gfunction1
+		//if (fac*0.0 != 0.0) {
+			//cout << "WTF! a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " dig=" << digamma_term << " gf=" << (gamma-1)/2 << " " << G_Function(gamma/2,0.001,x) << " " << Beta(-p,1.5) << " " << real(hyp_2F1(1.5,p,1+p,x)) << endl;
+			//print_parameters();
+			//die();
+		//}
 	} else {
 		x=1.0/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,1.5,x) + digamma_three_halves - digamma_term; // uses Gfunction2
@@ -1667,6 +1688,7 @@ SersicLens::SersicLens(const double &kappa_e_in, const double &Re_in, const doub
 {
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
+	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -1763,6 +1785,7 @@ MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &y
 {
 	lenstype = SHEET;
 	model_name = "sheet";
+	special_parameter_command = "";
 	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kext = kext_in;
@@ -1841,6 +1864,7 @@ TestModel::TestModel(const double &q_in, const double &theta_degrees, const doub
 {
 	lenstype = TESTMODEL;
 	model_name = "test";
+	special_parameter_command = "";
 	//setup_base_lens(X,false); // number of parameters = X, is_elliptical_lens = false
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
