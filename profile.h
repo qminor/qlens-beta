@@ -28,6 +28,7 @@ enum LensProfileName
 	PTMASS,
 	SHEAR,
 	SHEET,
+	TABULATED,
 	TESTMODEL
 };
 
@@ -82,6 +83,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void deflection_spherical_default(const double, const double, lensvector&);
 	void hessian_numerical(const double, const double, lensmatrix&);
 	void hessian_spherical_default(const double, const double, lensmatrix&);
+	void deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess);
 
 	double rmin_einstein_radius; // initial bracket used to find Einstein radius
 	double rmax_einstein_radius; // initial bracket used to find Einstein radius
@@ -114,7 +116,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	static int default_ellipticity_mode;
 	int ellipticity_mode;
 
-	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
+	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
 	{
 		set_default_base_settings(20,1e-6);
 		zfac = 1.0;
@@ -136,6 +138,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void (LensProfile::*defptr)(const double, const double, lensvector& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
 	void (LensProfile::*hessptr)(const double, const double, lensmatrix& hess); // numerical: &LensProfile::hessian_numerical or &LensProfile::hessian_spherical_default
 	double (LensProfile::*potptr)(const double, const double); // numerical: &LensProfile::potential_numerical
+	void (LensProfile::*def_and_hess_ptr)(const double, const double, lensvector& def, lensmatrix &hess); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void delete_center_anchor();
@@ -198,9 +201,11 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
-	virtual void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
-	virtual void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
-	virtual double kappa_from_elliptical_potential(const double x, const double y);
+
+	void kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess);
+	void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
+	void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
+	double kappa_from_elliptical_potential(const double x, const double y);
 	void deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def);
 	void hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess);
 	double kappa_from_elliptical_potential_experimental(const double x, const double y);
@@ -213,6 +218,8 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
 
+	virtual void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
+	virtual void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
 	virtual double potential(double, double);
 	virtual double kappa(double x, double y);
 	virtual void deflection(double, double, lensvector&);
@@ -279,6 +286,7 @@ class Alpha : public LensProfile
 	double potential_spherical_rsq_iso(const double rsq);
 	double potential_elliptical_iso(const double x, const double y);
 	void deflection_elliptical_nocore(const double x, const double y, lensvector&);
+	void deflection_and_hessian_elliptical_nocore(const double x, const double y, lensvector&, lensmatrix&);
 	void hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess);
 	double potential_elliptical_nocore(const double x, const double y);
 	double potential_spherical_rsq_nocore(const double rsq);
@@ -466,8 +474,15 @@ class Shear : public LensProfile
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
 	double potential(double, double);
+	void potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+	{
+		kap = 0;
+		potential_derivatives(x,y,def,hess);
+	}
 
 	double kappa(double, double) { return 0; }
 	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
@@ -493,6 +508,8 @@ class Multipole : public LensProfile
 	Multipole(const Multipole* lens_in);
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 	double potential(double, double);
@@ -531,6 +548,14 @@ class PointMass : public LensProfile
 	double kappa(double, double);
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+	{
+		kap = 0;
+		potential_derivatives(x,y,def,hess);
+	}
+
+
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
@@ -631,10 +656,56 @@ class MassSheet : public LensProfile
 	double kappa(double, double);
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+	{
+		kap = kext;
+		potential_derivatives(x,y,def,hess);
+	}
+
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
+};
+
+class Tabulated_Model : public LensProfile
+{
+	private:
+	double kscale;
+	int grid_x_N, grid_y_N;
+	double grid_xlength, grid_ylength;
+	double *grid_xvals, *grid_yvals;
+	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
+
+	// used for interpolation
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+
+	double kappa_rsq(const double rsq) { return 0; } // will not be used
+	double kappa_rsq_deriv(const double rsq) { return 0; } // will not be used
+
+	public:
+	Tabulated_Model() : LensProfile() {}
+	Tabulated_Model(const double &kscale_in, const double &theta_in, const double &xc_in, const double &yc_in, LensProfile* lens_in, const double xmin, const double xmax, const int x_N, const double ymin, const double ymax, const int y_N);
+
+	Tabulated_Model(const Tabulated_Model* lens_in);
+	~Tabulated_Model();
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double potential(double, double);
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
+	double kappa(double, double);
+	void deflection(double, double, lensvector&);
+	void hessian(double, double, lensmatrix&);
+
+	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; } // cannot use this
 };
 
 // Model for testing purposes; can also be used as a template for a new lens model

@@ -108,6 +108,7 @@ void Alpha::set_model_specific_integration_pointers()
 			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
 			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
 			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
+			def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&Alpha::deflection_and_hessian_elliptical_nocore);
 		}
 	}
 }
@@ -217,9 +218,9 @@ void Alpha::deflection_elliptical_nocore(const double x, const double y, lensvec
 
 void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess)
 {
-	double xi, phi, kap;
-	xi = sqrt(x*x+y*y/qsq);
-	kap = 0.5 * (2-alpha) * pow(bprime/xi, alpha);
+	double R, phi, kap;
+	R = sqrt(x*x+y*y/qsq);
+	kap = 0.5 * (2-alpha) * pow(bprime/R, alpha);
 	phi = atan(abs(y/(q*x)));
 	if (x < 0) {
 		if (y < 0)
@@ -232,9 +233,36 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 
 	complex<double> hess_complex, zstar(x,-y);
 	// The following is the *deflection*, not the shear, but it will be transformed to shear in the following line
-	hess_complex = 2*bprime*q/(1+q)*pow(bprime/xi,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	hess_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
 	hess_complex = -kap*conj(zstar)/zstar + (1-alpha)*hess_complex/zstar; // this is the complex shear
 
+	hess_complex = kap + hess_complex; // this is now (kappa+shear)
+	hess[0][0] = real(hess_complex);
+	hess[0][1] = imag(hess_complex);
+	hess[1][0] = hess[0][1];
+	hess_complex = 2*kap - hess_complex; // now we have transformed to (kappa-shear)
+	hess[1][1] = real(hess_complex);
+}
+
+void Alpha::deflection_and_hessian_elliptical_nocore(const double x, const double y, lensvector& def, lensmatrix& hess)
+{
+	double R, phi, kap;
+	R = sqrt(x*x+y*y/qsq);
+	kap = 0.5 * (2-alpha) * pow(bprime/R, alpha);
+	phi = atan(abs(y/(q*x)));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	def[0] = real(def_complex);
+	def[1] = imag(def_complex);
+	complex<double> hess_complex, zstar(x,-y);
+	hess_complex = -kap*conj(zstar)/zstar + (1-alpha)*def_complex/zstar; // this is the complex shear
 	hess_complex = kap + hess_complex; // this is now (kappa+shear)
 	hess[0][0] = real(hess_complex);
 	hess[0][1] = imag(hess_complex);
@@ -1008,6 +1036,18 @@ void Shear::hessian(double x, double y, lensmatrix& hess)
 	hess[1][0] = hess[0][1];
 }
 
+void Shear::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	def[0] = x*shear1 + y*shear2;
+	def[1] = -y*shear1 + x*shear2;
+	hess[0][0] = shear1;
+	hess[1][1] = -hess[0][0];
+	hess[0][1] = shear2;
+	hess[1][0] = hess[0][1];
+}
+
 void Shear::set_angle_from_components(const double &shear1, const double &shear2)
 {
 	double angle;
@@ -1286,6 +1326,64 @@ void Multipole::hessian(double x, double y, lensmatrix& hess)
 	hess[1][0] = hess[0][1];
 }
 
+void Multipole::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+
+	double r, rsq, rcube, xy, xx, yy, phi, ddpsi, psi, dpsi, cs, ss;
+	int mm = m*m;
+	phi = atan(abs(y/x));
+	xx = x*x;
+	yy = y*y;
+	rsq = xx+yy;
+	r = sqrt(rsq);
+	rcube = rsq*r;
+	xy = x*y;
+
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+
+	if (kappa_multipole) {
+		psi = 2*q*pow(r,2-n)/(SQR(2-n)-mm);
+		dpsi = (2-n)*psi/r;
+	} else {
+		if (m==0)
+			psi = -q*pow(r,n);
+		else
+			psi = -q*pow(r,n)/m;
+		dpsi = n*psi/r;
+	}
+
+	cs = cos(m*(phi-theta_eff));
+	ss = sin(m*(phi-theta_eff));
+	def[0] = dpsi*cs*x/r + psi*m*ss*y/r/r;
+	def[1] = dpsi*cs*y/r - psi*m*ss*x/r/r;
+
+	if (kappa_multipole) {
+		ddpsi = (1-n)*dpsi/r;
+	} else {
+		ddpsi = (n-1)*dpsi/r;
+	}
+
+	hess[0][0] = (ddpsi*xx + dpsi*yy/r - psi*mm*yy/rsq)*cs/rsq + (dpsi - psi/r)*2*m*xy*ss/rcube;
+	hess[1][1] = (ddpsi*yy + dpsi*xx/r - psi*mm*xx/rsq)*cs/rsq + (-dpsi + psi/r)*2*m*xy*ss/rcube;
+	hess[0][1] = (ddpsi - dpsi/r + psi*mm/rsq)*xy*cs/rsq + (dpsi - psi/r)*(yy-xx)*m*ss/rcube;
+	hess[1][0] = hess[0][1];
+}
+
+void Multipole::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+{
+	potential_derivatives(x,y,def,hess);
+	kap = kappa(x,y);
+}
+
 void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
 {
 	// this gives the spherically averaged Einstein radius
@@ -1375,9 +1473,9 @@ void PointMass::deflection(double x, double y, lensvector& def)
 {
 	x -= x_center;
 	y -= y_center;
-	double rsq = x*x + y*y;
-	def[0] = b*b*x/rsq;
-	def[1] = b*b*y/rsq;
+	double bsq = b*b, rsq = x*x + y*y;
+	def[0] = bsq*x/rsq;
+	def[1] = bsq*y/rsq;
 }
 
 void PointMass::hessian(double x, double y, lensmatrix& hess)
@@ -1385,6 +1483,19 @@ void PointMass::hessian(double x, double y, lensmatrix& hess)
 	x -= x_center;
 	y -= y_center;
 	double bsq = b*b, xsq = x*x, ysq = y*y, r4 = SQR(xsq + ysq);
+	hess[0][0] = bsq*(ysq-xsq)/r4;
+	hess[1][1] = -hess[0][0];
+	hess[1][0] = -2*bsq*x*y/r4;
+	hess[0][1] = hess[1][0];
+}
+
+void PointMass::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	double bsq = b*b, xsq = x*x, ysq = y*y, rsq = xsq+ysq, r4 = SQR(rsq);
+	def[0] = bsq*x/rsq;
+	def[1] = bsq*y/rsq;
 	hess[0][0] = bsq*(ysq-xsq)/r4;
 	hess[1][1] = -hess[0][0];
 	hess[1][0] = -2*bsq*x*y/r4;
@@ -1870,6 +1981,379 @@ void MassSheet::hessian(double x, double y, lensmatrix& hess)
 	hess[1][0] = 0;
 	hess[0][1] = 0;
 }
+
+void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	def[0] = kext*x;
+	def[1] = kext*y;
+	hess[0][0] = kext;
+	hess[1][1] = kext;
+	hess[1][0] = 0;
+	hess[0][1] = 0;
+}
+
+/******************************* Tabulated Model *******************************/
+
+Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &theta_in, const double &xc_in, const double &yc_in, LensProfile* lens_in, const double xmin, const double xmax, const int x_N, const double ymin, const double ymax, const int y_N)
+{
+	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
+	lenstype = TABULATED;
+	model_name = "tab";
+	special_parameter_command = "";
+	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
+
+	kscale = kscale_in;
+	theta = degrees_to_radians(theta_in);
+	x_center = xc_in;
+	y_center = yc_in;
+	update_meta_parameters();
+
+	grid_x_N = x_N;
+	grid_y_N = y_N;
+	grid_xlength = xmax-xmin;
+	grid_ylength = ymax-ymin;
+	grid_xvals = new double[x_N];
+	grid_yvals = new double[y_N];
+
+	kappa_vals = new double*[x_N];
+	pot_vals = new double*[x_N];
+	defx = new double*[x_N];
+	defy = new double*[x_N];
+	hess_xx = new double*[x_N];
+	hess_yy = new double*[x_N];
+	hess_xy = new double*[x_N];
+	int i,j;
+	for (i=0; i < x_N; i++) {
+		kappa_vals[i] = new double[y_N];
+		pot_vals[i] = new double[y_N];
+		defx[i] = new double[y_N];
+		defy[i] = new double[y_N];
+		hess_xx[i] = new double[y_N];
+		hess_yy[i] = new double[y_N];
+		hess_xy[i] = new double[y_N];
+	}
+
+	lensvector def_in;
+	lensmatrix hess_in;
+	double x,y;
+	double xstep = grid_xlength/(x_N-1);
+	double ystep = grid_ylength/(y_N-1);
+	for (i=0, x=xmin; i < x_N; i++, x += xstep) grid_xvals[i] = x;
+	for (j=0, y=ymin; j < y_N; j++, y += ystep) grid_yvals[j] = y;
+
+	for (i=0, x=xmin; i < x_N; i++, x += xstep) {
+		for (j=0, y=ymin; j < y_N; j++, y += ystep) {
+			kappa_vals[i][j] = lens_in->kappa(x,y);
+			pot_vals[i][j] = lens_in->potential(x,y);
+			lens_in->deflection(x,y,def_in);
+			defx[i][j] = def_in[0];
+			defy[i][j] = def_in[1];
+			lens_in->hessian(x,y,hess_in);
+			hess_xx[i][j] = hess_in[0][0];
+			hess_yy[i][j] = hess_in[1][1];
+			hess_xy[i][j] = hess_in[0][1];
+		}
+	}
+}
+
+Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
+{
+	kscale = lens_in->kscale;
+	copy_base_lensdata(lens_in);
+	grid_xlength = lens_in->grid_xlength;
+	grid_ylength = lens_in->grid_ylength;
+
+	grid_x_N = lens_in->grid_x_N;
+	grid_y_N = lens_in->grid_y_N;
+	grid_xvals = new double[grid_x_N];
+	grid_yvals = new double[grid_y_N];
+
+	kappa_vals = new double*[grid_x_N];
+	pot_vals = new double*[grid_x_N];
+	defx = new double*[grid_x_N];
+	defy = new double*[grid_x_N];
+	hess_xx = new double*[grid_x_N];
+	hess_yy = new double*[grid_x_N];
+	hess_xy = new double*[grid_x_N];
+	int i,j;
+	for (i=0; i < grid_x_N; i++) {
+		kappa_vals[i] = new double[grid_y_N];
+		pot_vals[i] = new double[grid_y_N];
+		defx[i] = new double[grid_y_N];
+		defy[i] = new double[grid_y_N];
+		hess_xx[i] = new double[grid_y_N];
+		hess_yy[i] = new double[grid_y_N];
+		hess_xy[i] = new double[grid_y_N];
+	}
+
+	lensvector def_in;
+	lensmatrix hess_in;
+	double x,y;
+	double xstep = grid_xlength/(grid_x_N-1);
+	double ystep = grid_ylength/(grid_y_N-1);
+	for (i=0; i < grid_x_N; i++) grid_xvals[i] = lens_in->grid_xvals[i];
+	for (j=0; j < grid_y_N; j++) grid_yvals[j] = lens_in->grid_yvals[j];
+
+	for (i=0; i < grid_x_N; i++) {
+		for (j=0; j < grid_y_N; j++) {
+			kappa_vals[i][j] = lens_in->kappa_vals[i][j];
+			pot_vals[i][j] = lens_in->pot_vals[i][j];
+			defx[i][j] = lens_in->defx[i][j];
+			defy[i][j] = lens_in->defy[i][j];
+			hess_xx[i][j] = lens_in->hess_xx[i][j];
+			hess_yy[i][j] = lens_in->hess_yy[i][j];
+			hess_xy[i][j] = lens_in->hess_xy[i][j];
+		}
+	}
+}
+
+void Tabulated_Model::assign_paramnames()
+{
+	paramnames[0] = "kscale"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
+	paramnames[1] = "theta";  latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "";
+	paramnames[2] = "xc";     latex_paramnames[2] = "x";       latex_param_subscripts[2] = "c";
+	paramnames[3] = "yc";     latex_paramnames[3] = "y";       latex_param_subscripts[3] = "c";
+}
+
+void Tabulated_Model::assign_param_pointers()
+{
+	param[0] = &kscale;
+	param[1] = &theta; angle_paramnum = 1;
+	param[2] = &x_center;
+	param[3] = &y_center;
+}
+
+void Tabulated_Model::update_meta_parameters()
+{
+	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
+	costheta = cos(theta);
+	sintheta = sin(theta);
+}
+
+void Tabulated_Model::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.3*kscale;
+	stepsizes[1] = 20;
+	stepsizes[2] = x_center; // arbitrary! really, the center should never be independently varied
+	stepsizes[3] = y_center;
+}
+
+void Tabulated_Model::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = false;
+}
+
+double Tabulated_Model::potential(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	interp = TT*UU*pot_vals[ival][jval] + tt*UU*pot_vals[ival+1][jval]
+						+ TT*uu*pot_vals[ival][jval+1] + tt*uu*pot_vals[ival+1][jval+1];
+	return kscale*interp;
+}
+
+double Tabulated_Model::kappa(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	//cout << ival << " " << jval << " " << tt << " " << uu << endl;
+	//cout << kappa_vals[ival][jval] << endl;
+	interp = TT*UU*kappa_vals[ival][jval] + tt*UU*kappa_vals[ival+1][jval]
+						+ TT*uu*kappa_vals[ival][jval+1] + tt*uu*kappa_vals[ival+1][jval+1];
+	return kscale*interp;
+}
+
+void Tabulated_Model::deflection(double x, double y, lensvector& def)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	//cout << x << " " << grid_xvals[0] << " " << grid_xlength << " " << grid_x_N << endl;
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
+	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
+	def[0] = kscale*interp;
+	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
+	def[1] = kscale*interp;
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+}
+
+void Tabulated_Model::hessian(double x, double y, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
+						+ TT*uu*hess_xx[ival][jval+1] + tt*uu*hess_xx[ival+1][jval+1];
+	hess[0][0] = kscale*interp;
+	interp = TT*UU*hess_yy[ival][jval] + tt*UU*hess_yy[ival+1][jval]
+						+ TT*uu*hess_yy[ival][jval+1] + tt*uu*hess_yy[ival+1][jval+1];
+	hess[1][1] = kscale*interp;
+	interp = TT*UU*hess_xy[ival][jval] + tt*UU*hess_xy[ival+1][jval]
+						+ TT*uu*hess_xy[ival][jval+1] + tt*uu*hess_xy[ival+1][jval+1];
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	interp = TT*UU*kappa_vals[ival][jval] + tt*UU*kappa_vals[ival+1][jval]
+						+ TT*uu*kappa_vals[ival][jval+1] + tt*uu*kappa_vals[ival+1][jval+1];
+	kap = kscale*interp;
+
+	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
+	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
+	def[0] = kscale*interp;
+	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
+	def[1] = kscale*interp;
+
+	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
+						+ TT*uu*hess_xx[ival][jval+1] + tt*uu*hess_xx[ival+1][jval+1];
+	hess[0][0] = kscale*interp;
+	interp = TT*UU*hess_yy[ival][jval] + tt*UU*hess_yy[ival+1][jval]
+						+ TT*uu*hess_yy[ival][jval+1] + tt*uu*hess_yy[ival+1][jval+1];
+	hess[1][1] = kscale*interp;
+	interp = TT*UU*hess_xy[ival][jval] + tt*UU*hess_xy[ival+1][jval]
+						+ TT*uu*hess_xy[ival][jval+1] + tt*uu*hess_xy[ival+1][jval+1];
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+
+	if (sintheta != 0) rotate(x,y);
+	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
+	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_x_N-1) ival=grid_x_N-2;
+	if (jval >= grid_y_N-1) jval=grid_y_N-2;
+	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
+	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
+	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
+	def[0] = kscale*interp;
+	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
+	def[1] = kscale*interp;
+
+	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
+						+ TT*uu*hess_xx[ival][jval+1] + tt*uu*hess_xx[ival+1][jval+1];
+	hess[0][0] = kscale*interp;
+	interp = TT*UU*hess_yy[ival][jval] + tt*UU*hess_yy[ival+1][jval]
+						+ TT*uu*hess_yy[ival][jval+1] + tt*uu*hess_yy[ival+1][jval+1];
+	hess[1][1] = kscale*interp;
+	interp = TT*UU*hess_xy[ival][jval] + tt*UU*hess_xy[ival+1][jval]
+						+ TT*uu*hess_xy[ival][jval+1] + tt*uu*hess_xy[ival+1][jval+1];
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+Tabulated_Model::~Tabulated_Model() {
+	if (grid_xvals != NULL) {
+		delete[] grid_xvals;
+		delete[] grid_yvals;
+		for (int i=0; i < grid_x_N; i++) {
+			delete[] kappa_vals[i];
+			delete[] pot_vals[i];
+			delete[] defx[i];
+			delete[] defy[i];
+			delete[] hess_xx[i];
+			delete[] hess_yy[i];
+			delete[] hess_xy[i];
+		}
+		delete[] kappa_vals;
+		delete[] pot_vals;
+		delete[] defx;
+		delete[] defy;
+		delete[] hess_xx;
+		delete[] hess_yy;
+		delete[] hess_xy;
+	}
+	if (param != NULL) delete[] param;
+	if (anchor_parameter != NULL) delete[] anchor_parameter;
+	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+}
+
+
 
 /***************************** Test Model (for testing purposes only) *****************************/
 

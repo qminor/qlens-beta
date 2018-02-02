@@ -1831,6 +1831,7 @@ void Lens::process_commands(bool read_file)
 									(profile_name==CORECUSP) ? "corecusp" :
 									(profile_name==SERSIC_LENS) ? "sersic" :
 									(profile_name==SHEAR) ? "shear" :
+									(profile_name==TABULATED) ? "tab" :
 									(profile_name==PTMASS) ? "ptmass" : "test";
 					for (int i=2; i < nwords-1; i++)
 						words[i] = words[i+1];
@@ -3001,6 +3002,78 @@ void Lens::process_commands(bool read_file)
 					if (Shear::use_shear_component_params) Complain("shear requires 4 parameters (shear_1, shear_2, xc, yc)");
 					else Complain("shear requires 4 parameters (shear, q, xc, yc)");
 				}
+			}
+			else if (words[1]=="tab")
+			{
+				if (nwords > 7) Complain("more than 5 parameters not allowed for model tab");
+				if (nwords >= 4) {
+					int lnum;
+					double scale, theta = 0, xc = 0, yc = 0;
+					if (!(ws[2] >> lnum)) Complain("invalid lens number to tabulate for model tab");
+					if (lnum >= nlens) Complain("lens number to tabulate does not exist");
+					if (!(ws[3] >> scale)) Complain("invalid scale parameter for model tab");
+					if (nwords >= 5) {
+						if (!(ws[4] >> theta)) Complain("invalid theta parameter for model tab");
+						if (nwords == 6) {
+							if (words[6].find("anchor_center=")==0) {
+								string anchorstr = words[6].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_lens_center = true;
+							} else Complain("x-coordinate specified for center, but not y-coordinate");
+						}
+						else if (nwords == 7) {
+							if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
+							if (!(ws[5] >> xc)) Complain("invalid x-center parameter for model tab");
+							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model tab");
+						}
+					}
+					param_vals.input(4);
+					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+					param_vals[0]=scale; param_vals[1]=theta; param_vals[2]=xc; param_vals[3]=yc;
+					if (vary_parameters) {
+						nparams_to_vary = (anchor_lens_center) ? 2 : 4;
+						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
+						if (read_command(false)==false) return;
+						if (nwords != tot_nparams_to_vary) {
+							string complain_str = "";
+							if (anchor_lens_center) {
+								if (nwords==tot_nparams_to_vary+2) {
+									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+								} else complain_str = "Must specify vary flags for two parameters (scale,theta) in model tab";
+							}
+							else complain_str = "Must specify vary flags for four parameters (scale,theta,xc,yc) in model tab";
+							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
+								complain_str += ",\n     plus two shear parameters ";
+								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+							}
+							if (complain_str != "") Complain(complain_str);
+						}
+						vary_flags.input(nparams_to_vary);
+						if (add_shear) shear_vary_flags.input(2);
+						bool invalid_params = false;
+						int i,j;
+						for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+						for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+					}
+					if (update_parameters) {
+						lens_list[lens_number]->update_parameters(param_vals.array());
+						update_anchored_parameters();
+						reset();
+						if (auto_ccspline) automatically_determine_ccspline_mode();
+					} else {
+						add_tabulated_lens(lnum, scale, theta, xc, yc);
+						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+						if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
+					}
+				}
+				else Complain("tab requires at least 3 parameters (ks, rs, q)");
 			}
 			else if (words[1]=="testmodel")
 			{

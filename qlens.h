@@ -573,6 +573,8 @@ public:
 	void hessian(const double&, const double&, lensmatrix&, const int &thread, const double zfactor);
 	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, const double zfactor);
 	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, const double zfactor);
+	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, const double zfactor);
+	void sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, const double zfactor);
 
 	// non-multithreaded versions
 	//void deflection(const double& x, const double& y, lensvector &def_in, const double zfactor) { deflection(x,y,def_in,0,zfactor); }
@@ -668,6 +670,8 @@ public:
 	void add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 
 	void add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
+	void add_tabulated_lens(int lnum, const double scale, const double theta, const double xc, const double yc);
+
 	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void update_anchored_parameters();
 	void reassign_lensparam_pointers_and_names();
@@ -1352,6 +1356,79 @@ inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot
 	hess_tot[1][1] *= zfactor;
 	hess_tot[0][1] *= zfactor;
 	hess_tot[1][0] *= zfactor;
+}
+
+inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, const double zfactor)
+{
+	double x = xvec[0], y = xvec[1];
+	double kap;
+	lensmatrix *jac = &jacs[thread];
+	lensvector *def_tot = &defs[thread];
+
+	if (!defspline)
+	{
+		lensvector *def_i = &defs_i[thread];
+		lensmatrix *hess_i = &hesses_i[thread];
+		lens_list[0]->kappa_and_potential_derivatives(x,y,kap_tot,(*def_tot),(*jac));
+		for (int indx=1; indx < nlens; indx++) {
+			lens_list[indx]->kappa_and_potential_derivatives(x,y,kap,(*def_i),(*hess_i));
+			kap_tot += kap;
+			(*def_tot)[0] += (*def_i)[0];
+			(*def_tot)[1] += (*def_i)[1];
+			(*jac)[0][0] += (*hess_i)[0][0];
+			(*jac)[1][1] += (*hess_i)[1][1];
+			(*jac)[0][1] += (*hess_i)[0][1];
+			(*jac)[1][0] += (*hess_i)[1][0];
+		}
+	}
+	else {
+		(*def_tot) = defspline->deflection(x,y);
+		(*jac) = defspline->hessian(x,y);
+		kap_tot = kappa(x,y,zfactor);
+	}
+	kap_tot *= zfactor;
+	srcpt[0] = x - zfactor*(*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
+	srcpt[1] = y - zfactor*(*def_tot)[1];
+
+	(*jac)[0][0] = 1 - zfactor*(*jac)[0][0];
+	(*jac)[1][1] = 1 - zfactor*(*jac)[1][1];
+	(*jac)[0][1] = -zfactor*(*jac)[0][1];
+	(*jac)[1][0] = -zfactor*(*jac)[1][0];
+	invmag = determinant((*jac));
+}
+
+inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, const double zfactor)
+{
+	double kap;
+	double x = xvec[0], y = xvec[1];
+	lensvector *def_tot = &defs[thread];
+
+	if (!defspline)
+	{
+		lensvector *def_i = &defs_i[thread];
+		lensmatrix *hess_i = &hesses_i[thread];
+		lens_list[0]->potential_derivatives(x,y,(*def_tot),jac_tot); // kap is wasted here, but that's pretty small overhead
+		for (int indx=1; indx < nlens; indx++) {
+			lens_list[indx]->potential_derivatives(x,y,(*def_i),(*hess_i));
+			(*def_tot)[0] += (*def_i)[0];
+			(*def_tot)[1] += (*def_i)[1];
+			jac_tot[0][0] += (*hess_i)[0][0];
+			jac_tot[1][1] += (*hess_i)[1][1];
+			jac_tot[0][1] += (*hess_i)[0][1];
+			jac_tot[1][0] += (*hess_i)[1][0];
+		}
+	}
+	else {
+		(*def_tot) = defspline->deflection(x,y);
+		jac_tot = defspline->hessian(x,y);
+	}
+	srcpt[0] = x - zfactor*(*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
+	srcpt[1] = y - zfactor*(*def_tot)[1];
+
+	jac_tot[0][0] = 1 - zfactor*jac_tot[0][0];
+	jac_tot[1][1] = 1 - zfactor*jac_tot[1][1];
+	jac_tot[0][1] = -zfactor*jac_tot[0][1];
+	jac_tot[1][0] = -zfactor*jac_tot[1][0];
 }
 
 inline void Lens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, const double zfactor)

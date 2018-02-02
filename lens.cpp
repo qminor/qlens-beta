@@ -689,6 +689,22 @@ void Lens::add_multipole_lens(int m, const double a_m, const double n, const dou
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
+void Lens::add_tabulated_lens(int lnum, const double scale, const double theta, const double xc, const double yc)
+{
+	LensProfile** newlist = new LensProfile*[nlens+1];
+	if (nlens > 0) {
+		for (int i=0; i < nlens; i++)
+			newlist[i] = lens_list[i];
+		delete[] lens_list;
+	}
+	newlist[nlens++] = new Tabulated_Model(scale, theta, xc, yc, newlist[lnum], grid_xcenter-0.5*grid_xlength, grid_xcenter+0.5*grid_xlength, n_image_pixels_x, grid_ycenter-0.5*grid_ylength, grid_ycenter+0.5*grid_ylength, n_image_pixels_y);
+
+	lens_list = newlist;
+	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset();
+	if (auto_ccspline) automatically_determine_ccspline_mode();
+}
+
 void Lens::remove_lens(int lensnumber)
 {
 	if ((lensnumber >= nlens) or (nlens==0)) { warn(warnings,"Specified lens does not exist"); return; }
@@ -3175,6 +3191,8 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new PointMass((PointMass*) lens_list[i]); break;
 			case SHEET:
 				fitmodel->lens_list[i] = new MassSheet((MassSheet*) lens_list[i]); break;
+			case TABULATED:
+				fitmodel->lens_list[i] = new Tabulated_Model((Tabulated_Model*) lens_list[i]); break;
 			default:
 				die("lens type not supported for fitting");
 		}
@@ -3268,13 +3286,8 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 		beta_i[i][0] = beta_i[i][1] = 0;
 		src_norm=0;
 		for (j=0; j < image_data[i].n_images; j++) {
-			find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
 			if (use_magnification_in_chisq) {
-				hessian(image_data[i].pos[j],jac,zfactors[i]);
-				jac[0][0] = 1 - jac[0][0];
-				jac[1][1] = 1 - jac[1][1];
-				jac[0][1] = -jac[0][1];
-				jac[1][0] = -jac[1][0];
+				sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i]);
 				mag = jac.inverse();
 				lensmatsqr(mag,magsqr);
 				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
@@ -3285,6 +3298,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 				bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 				bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 			} else {
+				find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
 				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
 				beta_i[i][0] += beta_ji[0]*siginv;
 				beta_i[i][1] += beta_ji[1]*siginv;
@@ -3330,13 +3344,8 @@ double Lens::chisq_pos_source_plane()
 		src_bf[0] = src_bf[1] = 0;
 		src_norm=0;
 		for (j=0; j < image_data[i].n_images; j++) {
-			find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i]);
 			if (use_magnification_in_chisq) {
-				hessian(image_data[i].pos[j],jac,zfactors[i]);
-				jac[0][0] = 1 - jac[0][0];
-				jac[1][1] = 1 - jac[1][1];
-				jac[0][1] = -jac[0][1];
-				jac[1][0] = -jac[1][0];
+				sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,zfactors[i]);
 				mag = jac.inverse();
 				mag00[j] = mag[0][0];
 				mag01[j] = mag[0][1];
@@ -3353,6 +3362,7 @@ double Lens::chisq_pos_source_plane()
 					bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 				}
 			} else {
+				find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i]);
 				if (use_analytic_bestfit_src) {
 					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
 					src_bf[0] += beta_ji[j][0]*siginv;

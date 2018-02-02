@@ -483,7 +483,7 @@ void LensProfile::print_parameters()
 	cout << "center=(" << x_center << "," << y_center << ")";
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3)) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET))   // these models are not elliptical so emode is irrelevant
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
 		cout << " (ellipticity mode = " << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
 	}
 	double aux_param;
@@ -542,7 +542,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 {
 	scriptout << "fit lens " << model_name << " ";
 	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET))   // these models are not elliptical so emode is irrelevant
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
 			scriptout << "emode=" << ellipticity_mode << " ";
 	}
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
@@ -651,6 +651,7 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 		defptr = &LensProfile::deflection_numerical;
 		hessptr = &LensProfile::hessian_numerical;
 	}
+	def_and_hess_ptr = &LensProfile::deflection_and_hessian_together;
 }
 
 double LensProfile::kappa_rsq(const double rsq) // this function should be redefined in all derived classes
@@ -810,6 +811,34 @@ double LensProfile::kappa_from_elliptical_potential_experimental(const double x,
 	return testkap1;
 }
 
+void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess)
+{
+	// Formulas derived in Dumet-Montoya et al. (2012)
+	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
+	exsq = (1-epsilon)*x*x; // elliptical x^2
+	eysq = (1+epsilon)*y*y; // elliptical y^2
+	rsq = exsq+eysq; // elliptical r^2
+
+	kapavg = (this->*kapavgptr_rsq_spherical)(rsq);
+
+	def[0] = kapavg*(1-epsilon)*x;
+	def[1] = kapavg*(1+epsilon)*y;
+
+	cos2phi = (exsq - eysq) / rsq;
+	sin2phi = 2*q*(1+epsilon)*x*y/rsq;
+	kap_r = kappa_rsq(rsq);
+	shearmag = kapavg - kap_r; // shear from the spherical model
+	kap = kap_r + epsilon*shearmag*cos2phi;
+	gamma1 = -epsilon*kap_r - shearmag*cos2phi;
+	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin2phi;
+	hess[0][0] = kap + gamma1;
+	hess[1][1] = kap - gamma1;
+	hess[0][1] = gamma2;
+	hess[1][0] = gamma2;
+
+
+}
+
 void LensProfile::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
@@ -913,6 +942,42 @@ double LensProfile::potential(double x, double y)
 	} else {
 		return (this->*potptr)(x,y);
 	}
+}
+
+void LensProfile::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double kap; // not used here, but no overhead wasted so it's ok
+	if ((ellipticity_mode==3) and (q != 1)) {
+		kappa_deflection_and_hessian_from_elliptical_potential(x,y,kap,def,hess);
+	} else {
+		(this->*def_and_hess_ptr)(x,y,def,hess);
+	}
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void LensProfile::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	if ((ellipticity_mode==3) and (q != 1)) {
+		kappa_deflection_and_hessian_from_elliptical_potential(x,y,kap,def,hess);
+	} else {
+		kap = kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
+		(this->*def_and_hess_ptr)(x,y,def,hess);
+	}
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess)
+{
+	(this->*defptr)(x,y,def);
+	(this->*hessptr)(x,y,hess);
 }
 
 void LensProfile::deflection(double x, double y, lensvector& def)

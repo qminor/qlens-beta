@@ -474,10 +474,8 @@ void Grid::assign_lensing_properties(const int& thread)
 	if (enforce_min_area) find_cell_area(thread);
 	else cell_area=0;
 
-	(*corner_invmag[0]) = lens->inverse_magnification(corner_pt[0],thread,zfactor);
+	lens->kappa_inverse_mag_sourcept(corner_pt[0],(*corner_sourcept[0]),(*corner_kappa[0]),(*corner_invmag[0]),thread,zfactor);
 	(*corner_parity[0]) = sign_bool(*corner_invmag[0]);
-	lens->find_sourcept(corner_pt[0],(*corner_sourcept[0]),thread,zfactor);
-	(*corner_kappa[0]) = lens->kappa(corner_pt[0],zfactor);
 }
 
 inline void Grid::set_grid_xvals(lensvector** xv, const int& i, const int& j)
@@ -914,10 +912,9 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_parity[1] = new bool;
 				cell[i][j]->corner_sourcept[1] = new lensvector;
 				cell[i][j]->corner_kappa[1] = new double;
-				*(cell[i][j]->corner_invmag[1]) = lens->inverse_magnification(cell[i][j]->corner_pt[1],0,zfactor);
-				*(cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
-				lens->find_sourcept(cell[i][j]->corner_pt[1],*(cell[i][j]->corner_sourcept[1]),0,zfactor);
-				*(cell[i][j]->corner_kappa[1]) = lens->kappa(cell[i][j]->corner_pt[1],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,zfactor);
+				(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
+
 				cell[i][j]->allocated_corner[1] = true;
 			}
 
@@ -936,10 +933,9 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 					cell[i][j]->corner_parity[3] = new bool;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
-					*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],0,zfactor);
-					*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-					lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),0,zfactor);
-					*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
+					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
+
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			} else {
@@ -947,20 +943,16 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_parity[2] = new bool;
 				cell[i][j]->corner_sourcept[2] = new lensvector;
 				cell[i][j]->corner_kappa[2] = new double;
-				*(cell[i][j]->corner_invmag[2]) = lens->inverse_magnification(cell[i][j]->corner_pt[2],0,zfactor);
-				*(cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
-				lens->find_sourcept(cell[i][j]->corner_pt[2],*(cell[i][j]->corner_sourcept[2]),0,zfactor);
-				*(cell[i][j]->corner_kappa[2]) = lens->kappa(cell[i][j]->corner_pt[2],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,zfactor);
+				(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
 				cell[i][j]->allocated_corner[2] = true;
 
 				cell[i][j]->corner_invmag[3] = new double;
 				cell[i][j]->corner_parity[3] = new bool;
 				cell[i][j]->corner_sourcept[3] = new lensvector;
 				cell[i][j]->corner_kappa[3] = new double;
-				*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],0,zfactor);
-				*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-				lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),0,zfactor);
-				*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
+				(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 				cell[i][j]->allocated_corner[3] = true;
 			}
 			cell[i][j]->check_if_cc_inside();
@@ -987,10 +979,9 @@ void Grid::reassign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_sourcept[1] = cell[i][j]->neighbor[2]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[1] = cell[i][j]->neighbor[2]->corner_kappa[0];
 			} else {
-				*(cell[i][j]->corner_invmag[1]) = lens->inverse_magnification(cell[i][j]->corner_pt[1],0,zfactor);
-				*(cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
-				lens->find_sourcept(cell[i][j]->corner_pt[1],*(cell[i][j]->corner_sourcept[1]),0,zfactor);
-				*(cell[i][j]->corner_kappa[1]) = lens->kappa(cell[i][j]->corner_pt[1],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,zfactor);
+				(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
+
 				cell[i][j]->allocated_corner[1] = true;
 			}
 
@@ -1005,23 +996,20 @@ void Grid::reassign_subcell_lensing_properties_firstlevel()
 					cell[i][j]->corner_sourcept[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_kappa[0];
 				} else {
-					*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],0,zfactor);
-					*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-					lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),0,zfactor);
-					*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
+					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
+
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			} else {
-				*(cell[i][j]->corner_invmag[2]) = lens->inverse_magnification(cell[i][j]->corner_pt[2],0,zfactor);
-				*(cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
-				lens->find_sourcept(cell[i][j]->corner_pt[2],*(cell[i][j]->corner_sourcept[2]),0,zfactor);
-				*(cell[i][j]->corner_kappa[2]) = lens->kappa(cell[i][j]->corner_pt[2],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,zfactor);
+				(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
+
 				cell[i][j]->allocated_corner[2] = true;
 
-				*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],0,zfactor);
-				*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-				lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),0,zfactor);
-				*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
+				(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
+
 				cell[i][j]->allocated_corner[3] = true;
 			}
 			cell[i][j]->check_if_cc_inside();
@@ -1069,10 +1057,9 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 					cell[i][j]->corner_parity[1] = new bool;
 					cell[i][j]->corner_sourcept[1] = new lensvector;
 					cell[i][j]->corner_kappa[1] = new double;
-					*(cell[i][j]->corner_invmag[1]) = lens->inverse_magnification(cell[i][j]->corner_pt[1],thread,zfactor);
-					*(cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
-					lens->find_sourcept(cell[i][j]->corner_pt[1],*(cell[i][j]->corner_sourcept[1]),thread,zfactor);
-					*(cell[i][j]->corner_kappa[1]) = lens->kappa(cell[i][j]->corner_pt[1],zfactor);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),thread,zfactor);
+					(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
+
 					cell[i][j]->allocated_corner[1] = true;
 				}
 			}
@@ -1097,10 +1084,9 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 						cell[i][j]->corner_parity[3] = new bool;
 						cell[i][j]->corner_sourcept[3] = new lensvector;
 						cell[i][j]->corner_kappa[3] = new double;
-						*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],thread,zfactor);
-						*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-						lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),thread,zfactor);
-						*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+						lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,zfactor);
+						(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
+
 						cell[i][j]->allocated_corner[3] = true;
 					}
 				}
@@ -1110,10 +1096,8 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 					cell[i][j]->corner_parity[2] = new bool;
 					cell[i][j]->corner_sourcept[2] = new lensvector;
 					cell[i][j]->corner_kappa[2] = new double;
-					*(cell[i][j]->corner_invmag[2]) = lens->inverse_magnification(cell[i][j]->corner_pt[2],thread,zfactor);
-					*(cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
-					lens->find_sourcept(cell[i][j]->corner_pt[2],*(cell[i][j]->corner_sourcept[2]),thread,zfactor);
-					*(cell[i][j]->corner_kappa[2]) = lens->kappa(cell[i][j]->corner_pt[2],zfactor);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),thread,zfactor);
+					(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
 					cell[i][j]->allocated_corner[2] = true;
 				}
 					if (cell[i][j]->corner_invmag[3]==NULL) {
@@ -1121,10 +1105,9 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 					cell[i][j]->corner_parity[3] = new bool;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
-					*(cell[i][j]->corner_invmag[3]) = lens->inverse_magnification(cell[i][j]->corner_pt[3],thread,zfactor);
-					*(cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
-					lens->find_sourcept(cell[i][j]->corner_pt[3],*(cell[i][j]->corner_sourcept[3]),thread,zfactor);
-					*(cell[i][j]->corner_kappa[3]) = lens->kappa(cell[i][j]->corner_pt[3],zfactor);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,zfactor);
+					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
+
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			}
