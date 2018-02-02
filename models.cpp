@@ -13,6 +13,7 @@ bool Shear::use_shear_component_params;
 const double CoreCusp::nstep = 0.2;
 const double CoreCusp::digamma_three_halves = 0.036489973978435;
 const double Alpha::euler_mascheroni = 0.57721566490153286060;
+const double Alpha::def_tolerance = 1e-16;
 
 /*************************** Softened power law model (alpha) *****************************/
 
@@ -199,6 +200,7 @@ double Alpha::potential_elliptical_iso(const double x, const double y) // only f
 
 void Alpha::deflection_elliptical_nocore(const double x, const double y, lensvector& def)
 {
+	// Formulas from Tessore et al. 2015
 	double phi, R = sqrt(x*x+y*y/qsq);
 	phi = atan(abs(y/(q*x)));
 
@@ -210,10 +212,27 @@ void Alpha::deflection_elliptical_nocore(const double x, const double y, lensvec
 	} else if (y < 0) {
 		phi = -phi;
 	}
-	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*deflection_angular_factor(phi);
 
 	def[0] = real(def_complex);
 	def[1] = imag(def_complex);
+}
+
+complex<double> Alpha::deflection_angular_factor(const double &phi)
+{
+	// Formulas from Tessore et al. 2015
+	double beta, ff;
+	beta = 2.0/(2-alpha);
+	ff = (1-q)/(1+q);
+	complex<double> fac = polar(1.0,phi);
+	complex<double> omega = fac;
+	int i=1;
+	do {
+		omega = polar(-ff*(beta*i - 1)/(beta*i + 1),2*phi)*omega;
+		fac += omega;
+		i++;
+	} while (norm(omega) > def_tolerance*norm(fac));
+	return fac;
 }
 
 void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess)
@@ -233,7 +252,7 @@ void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix
 
 	complex<double> hess_complex, zstar(x,-y);
 	// The following is the *deflection*, not the shear, but it will be transformed to shear in the following line
-	hess_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	hess_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*deflection_angular_factor(phi);
 	hess_complex = -kap*conj(zstar)/zstar + (1-alpha)*hess_complex/zstar; // this is the complex shear
 
 	hess_complex = kap + hess_complex; // this is now (kappa+shear)
@@ -258,7 +277,7 @@ void Alpha::deflection_and_hessian_elliptical_nocore(const double x, const doubl
 	} else if (y < 0) {
 		phi = -phi;
 	}
-	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*deflection_angular_factor(phi);
 	def[0] = real(def_complex);
 	def[1] = imag(def_complex);
 	complex<double> hess_complex, zstar(x,-y);
@@ -284,7 +303,7 @@ double Alpha::potential_elliptical_nocore(const double x, const double y) // onl
 	} else if (y < 0) {
 		phi = -phi;
 	}
-	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*polar(1.0,phi)*hyp_2F1(1.0,alpha/2.0,2.0-alpha/2.0,-(1-q)/(1+q)*polar(1.0,2*phi));
+	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*deflection_angular_factor(phi);
 	return (x*real(def_complex) + y*imag(def_complex))/(2-alpha);
 }
 

@@ -28,7 +28,7 @@ imgdata                      # Shows the image data so you can see what it looks
 #    can be used in addition to the image positions. If you do model the external shear, guess a small
 #    but nonzero value for both gamma and the angle, as we do here.
 
-fit lens alpha 4.5 1.00001 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
+fit lens alpha 4.5 1 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
 1 0 0 1 1 1 1 1 1                                   #vary flags; here we vary everything except for alpha and s (core size)
 
 fit sourcept auto  # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).
@@ -48,11 +48,10 @@ chisqtol 1e-6   # Sets the convergence criterion for finding the minimum chi-squ
 imgplane_chisq on   # now we will do the fit using the image plane chi-square for a more accurate fit
 nrepeat 2           # this tells it to minimize the chi-square again after converging to a best-fit point, just to ensure we are
                     # really at a minimum (recommended)
-#pause
+pause
 fit run                  
 
 fit use_bestfit
 fit findimg # you can also do 'fit plotimg' to see the best-fit model image positions compared to the data
-quit
 pause
 fit save_bestfit    # if you like the resulting fit, save the best-fit model (or do this automatically if 'auto_save_bestfit' is on)

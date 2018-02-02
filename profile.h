@@ -10,6 +10,7 @@
 #include "cosmo.h"
 #include <iostream>
 #include <vector>
+#include <complex>
 using namespace std;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature };
@@ -274,6 +275,7 @@ class Alpha : public LensProfile
 	double b, s;
 	double qsq, ssq; // used in lensing calculations
 	static const double euler_mascheroni;
+	static const double def_tolerance;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
@@ -290,6 +292,7 @@ class Alpha : public LensProfile
 	void hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess);
 	double potential_elliptical_nocore(const double x, const double y);
 	double potential_spherical_rsq_nocore(const double rsq);
+	complex<double> deflection_angular_factor(const double &phi);
 
 	void set_model_specific_integration_pointers();
 
