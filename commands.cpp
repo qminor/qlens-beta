@@ -1964,9 +1964,24 @@ void Lens::process_commands(bool read_file)
 				if (nwords==2) {
 				clear_lenses();
 				} else if (nwords==3) {
-					int lensnumber;
-					if (!(ws[2] >> lensnumber)) Complain("invalid lens number");
-					remove_lens(lensnumber);
+					int lensnumber, min_lensnumber, max_lensnumber, pos;
+					bool remove_subset = false;
+					if ((pos = words[2].find("-")) != string::npos) {
+						string lminstring, lmaxstring;
+						lminstring = words[2].substr(0,pos);
+						lmaxstring = words[2].substr(pos+1);
+						stringstream lmaxstream, lminstream;
+						lminstream << lminstring;
+						lmaxstream << lmaxstring;
+						if (!(lminstream >> min_lensnumber)) Complain("invalid min lens number");
+						if (!(lmaxstream >> max_lensnumber)) Complain("invalid max lens number");
+						if (max_lensnumber >= nlens) Complain("specified max lens number exceeds number of lenses in list");
+						if ((min_lensnumber > max_lensnumber) or (min_lensnumber < 0)) Complain("specified min lens number cannot exceed max lens number");
+						for (int i=max_lensnumber; i >= min_lensnumber; i--) remove_lens(i);
+					} else {
+						if (!(ws[2] >> lensnumber)) Complain("invalid lens number");
+						remove_lens(lensnumber);
+					}
 				} else Complain("'lens clear' command requires either one or zero arguments");
 			}
 			else if (words[1]=="anchor")
