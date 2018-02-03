@@ -581,7 +581,7 @@ void NFW::set_auto_ranges()
 void NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
-	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq); // MUST FIX potential!
+	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -628,7 +628,7 @@ double NFW::potential_spherical_rsq(const double rsq)
 			return -ks*rsq*log(xsq/4)/2;
 	}
 	else {
-		return 2*ks*rs*rs*(-SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2)); // Something is wrong with this!!!! FIX IT!!!!!!!!!!!
+		return 2*ks*rs*rs*(SQR(atan(sqrt(xsq-1))) + SQR(log(xsq/4)/2));
 	}
 }
 
@@ -1606,6 +1606,9 @@ void CoreCusp::update_meta_parameters()
 	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp model (mass diverges at r=0)");
 	if (n <= 1) die("outer slope cannot be equal to or less than 1 for corecusp model");
 	digamma_term = DiGamma(1.5-gamma/2);
+	double p = (n-1.0)/2;
+	beta_p1 = Beta(p,0.5);
+	beta_p2 = beta_p1/(1+1.0/(2*p)); // Beta(p,1.5)
 	if (set_k0_by_einstein_radius) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
@@ -1699,7 +1702,7 @@ double CoreCusp::kappa_rsq_nocore(const double rsq_prime, const double atilde)
 	ks = k0*atilde/(a*M_2PI);
 	xisq = rsq_prime/(atilde*atilde);
 	hyp = real(hyp_2F1(p,gamma/2,n/2,1/(1+xisq)));
-	ans = ks*Beta(p,0.5)*pow(1+xisq,-p)*hyp;
+	ans = ks*beta_p1*pow(1+xisq,-p)*hyp;
 	return ans;
 }
 
@@ -1715,8 +1718,7 @@ double CoreCusp::kappa_rsq_deriv_nocore(const double rsq_prime, const double ati
 	ks = k0*atilde/(a*M_2PI);
 	xisq = rsq_prime/(atilde*atilde);
 	hyp = n*(1+xisq)*real(hyp_2F1((n-1.0)/2,gamma/2,n/2,1/(1+xisq))) + gamma*real(hyp_2F1((n+1.0)/2,(gamma+2.0)/2,(n+2.0)/2,1/(1+xisq)));
-	ans = -(ks/(2*atilde*atilde))*Beta((n+1.0)/2,0.5)*pow(1+xisq,-(n+3.0)/2)*hyp;
-	return ans;
+	return -(ks/(2*atilde*atilde))*beta_p2*pow(1+xisq,-(n+3.0)/2)*hyp;
 }
 
 void CoreCusp::set_core_enclosed_mass()
@@ -1753,7 +1755,7 @@ double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const do
 	p = (nprime-3.0)/2;
 	hyp = pow(1+xisq,-p) * real(hyp_2F1(p,gamma/2,nprime/2,1.0/(1+xisq)));
 
-	double ans = 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
+	//double ans = 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
 		//if (ans*0.0 != 0.0) {
 			//cout << "deflection: a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " def=" << ans << " hyp=" << hyp << " B1=" << Beta(p,(3-gamma)/2) << " B2=" << Beta(p,1.5)*hyp << " " << endl;
 			//print_parameters();
@@ -1770,7 +1772,7 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 	double xisq = rsq_prime/(atilde*atilde);
 	if ((gamma == 1.0) and (xisq < 0.01)) return enclosed_mass_spherical_nocore_limit(rsq_prime,atilde,n_stepsize); // in this regime, Richardson extrapolation is faster
 	double x, p, fac;
-	p = 1.5 - gamma/2;
+	p = (3-gamma)/2;
 	if ((xisq < 1) and ((gamma-1.0)/2 > 1e-12)) {
 		x=xisq/(1+xisq);
 		fac = log(1+xisq) - G_Function(gamma/2,(gamma-1)/2,x) - Beta(-p,1.5)*real(hyp_2F1(1.5,p,1+p,x))*pow(x,p); // uses Gfunction1

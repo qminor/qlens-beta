@@ -779,7 +779,6 @@ void LensProfile::hessian_from_elliptical_potential_experimental(const double x,
 	hess[0][1] = (test_defx(x,y+dx) - test_defx(x,y-dx))/(2*dx);
 	hess[1][0] = hess[0][1];
 	//cout << hess00 << " " << hess[0][0] << " " << hess11 << " " << hess[1][1] << " " << hess01 << " " << hess[0][1] << endl;
-
 }
 
 double LensProfile::kappa_from_elliptical_potential_experimental(const double x, const double y)
@@ -835,8 +834,6 @@ void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const d
 	hess[1][1] = kap - gamma1;
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
-
-
 }
 
 void LensProfile::shift_angle_90()
@@ -946,6 +943,7 @@ double LensProfile::potential(double x, double y)
 
 void LensProfile::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
 {
+	// switch to coordinate system centered on lens profile
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
@@ -961,6 +959,7 @@ void LensProfile::potential_derivatives(double x, double y, lensvector& def, len
 
 void LensProfile::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
 {
+	// switch to coordinate system centered on lens profile
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
@@ -976,8 +975,12 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 
 void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess)
 {
-	(this->*defptr)(x,y,def);
-	(this->*hessptr)(x,y,hess);
+	if ((defptr == &LensProfile::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
+		deflection_and_hessian_numerical(x,y,def,hess);
+	} else {
+		(this->*defptr)(x,y,def);
+		(this->*hessptr)(x,y,hess);
+	}
 }
 
 void LensProfile::deflection(double x, double y, lensvector& def)
@@ -1162,6 +1165,19 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& 
 {
 	hess[0][0] = 2*q*x*x*k_integral(x,y,0) + q*j_integral(x,y,0);
 	hess[1][1] = 2*q*y*y*k_integral(x,y,2) + q*j_integral(x,y,1);
+	hess[0][1] = 2*q*x*y*k_integral(x,y,1);
+	hess[1][0] = hess[0][1];
+}
+
+void LensProfile::deflection_and_hessian_numerical(const double x, const double y, lensvector& def, lensmatrix& hess)
+{
+	double jint0, jint1;
+	jint0 = j_integral(x,y,0);
+	jint1 = j_integral(x,y,1);
+	def[0] = q*x*jint0;
+	def[1] = q*y*jint1;
+	hess[0][0] = 2*q*x*x*k_integral(x,y,0) + q*jint0;
+	hess[1][1] = 2*q*y*y*k_integral(x,y,2) + q*jint1;
 	hess[0][1] = 2*q*x*y*k_integral(x,y,1);
 	hess[1][0] = hess[0][1];
 }

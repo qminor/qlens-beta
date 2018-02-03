@@ -85,6 +85,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	void hessian_numerical(const double, const double, lensmatrix&);
 	void hessian_spherical_default(const double, const double, lensmatrix&);
 	void deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess);
+	void deflection_and_hessian_numerical(const double x, const double y, lensvector& def, lensmatrix& hess);
 
 	double rmin_einstein_radius; // initial bracket used to find Einstein radius
 	double rmax_einstein_radius; // initial bracket used to find Einstein radius
@@ -574,7 +575,7 @@ class CoreCusp : public LensProfile
 	bool set_k0_by_einstein_radius;
 	double einstein_radius;
 	double core_enclosed_mass;
-	double digamma_term;
+	double digamma_term, beta_p1, beta_p2; // used for calculations of kappa, dkappa
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double rsq);
