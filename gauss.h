@@ -37,6 +37,23 @@ class GaussHermite : public GaussianIntegral
           void SetGaussHermite(int);
 };
 
+class GaussPatterson
+{
+     protected:
+         double **pat_weights;
+         double *pat_points;
+			double *pat_funcs;
+			int *pat_orders;
+         int pat_N;
+			double pat_tolerance;
+          
+     public:
+			 GaussPatterson();
+			 void SetGaussPatterson(const double tol_in);
+          ~GaussPatterson();
+          double AdaptiveQuad(double (GaussPatterson::*)(double), double, double);
+};
+
 class GaussLaguerre : public GaussianIntegral {public: GaussLaguerre(const double, int);};
 class GaussJacobi : public GaussianIntegral {public: GaussJacobi(const double, const double, int);};
 class GaussChebyshev : public GaussianIntegral {public: GaussChebyshev(int);};

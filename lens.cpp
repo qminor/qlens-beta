@@ -349,8 +349,8 @@ Lens::Lens() : UCMC()
 	spline_frac = 1.8;
 	grid = NULL;
 	Gauss_NN = 20;
-	romberg_accuracy = 1e-6;
-	LensProfile::integral_method = Gaussian_Quadrature;
+	integral_tolerance = 5e-3;
+	LensProfile::integral_method = Gauss_Patterson_Quadrature;
 	LensProfile::orient_major_axis_north = true;
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::default_ellipticity_mode = 1;
@@ -583,7 +583,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	spline_frac = lens_in->spline_frac;
 	grid = NULL;
 	Gauss_NN = lens_in->Gauss_NN;
-	romberg_accuracy = lens_in->romberg_accuracy;
+	integral_tolerance = lens_in->integral_tolerance;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
@@ -599,7 +599,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-		// *NOTE*: Gauss_NN and romberg_accuracy should probably just be set as static variables in LensProfile, so they don't need to be passed in here
+		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
 
 	switch (name) {
 		case PTMASS:
@@ -607,27 +607,27 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 		case SHEET:
 			newlist[nlens] = new MassSheet(mass_parameter, xc, yc); break;
 		case ALPHA:
-			newlist[nlens] = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case SHEAR:
 			newlist[nlens] = new Shear(eparam, theta, xc, yc); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(...) because one of the input parameters is an int
 		case nfw:
-			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case TRUNCATED_nfw:
-			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case PJAFFE:
-			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case EXPDISK:
-			newlist[nlens] = new ExpDisk(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new ExpDisk(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case HERNQUIST:
-			newlist[nlens] = new Hernquist(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new Hernquist(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case CORECUSP:
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
-			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy, optional_setting); break;
+			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, optional_setting); break;
 		case SERSIC_LENS:
-			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case TESTMODEL: // Model for testing purposes
-			newlist[nlens] = new TestModel(eparam, theta, xc, yc, Gauss_NN, romberg_accuracy); break;
+			newlist[nlens] = new TestModel(eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		default:
 			die("Lens type not recognized");
 	}
@@ -649,7 +649,7 @@ void Lens::add_lens(const char *splinefile, const int emode, const double q, con
 	}
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
-	newlist[nlens++] = new LensProfile(splinefile, q, theta, xc, yc, Gauss_NN, romberg_accuracy, qx, f);
+	newlist[nlens++] = new LensProfile(splinefile, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	lens_list = newlist;
@@ -5281,12 +5281,12 @@ void Lens::set_Gauss_NN(const int& nn)
 	}
 }
 
-void Lens::set_romberg_accuracy(const double& acc)
+void Lens::set_integral_tolerance(const double& acc)
 {
-	romberg_accuracy = acc;
+	integral_tolerance = acc;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
-			lens_list[i]->set_romberg_accuracy(acc);
+			lens_list[i]->set_integral_tolerance(acc);
 		}
 	}
 }

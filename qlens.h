@@ -275,7 +275,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double hubble_lower_limit, hubble_upper_limit;
 
 	int Gauss_NN;	// for Gaussian quadrature
-	double romberg_accuracy; // for Romberg integration
+	double romberg_accuracy, integral_tolerance; // for Romberg integration, Gauss-Patterson quadrature
 
 	Grid *grid;
 	bool radial_grid;
@@ -782,7 +782,7 @@ public:
 	bool get_deflection_spline_info(double &xmax, double &ymax, int &nsteps);
 	void delete_ccspline();
 	void set_Gauss_NN(const int& nn);
-	void set_romberg_accuracy(const double& acc);
+	void set_integral_tolerance(const double& acc);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
 

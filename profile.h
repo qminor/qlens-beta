@@ -13,7 +13,7 @@
 #include <complex>
 using namespace std;
 
-enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature };
+enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature };
 enum LensProfileName
 {
 	KSPLINE,
@@ -35,7 +35,7 @@ enum LensProfileName
 
 struct LensIntegral;
 
-class LensProfile : public Romberg, public GaussLegendre, public Brent
+class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
 {
 	friend class LensIntegral;
 	private:
@@ -50,7 +50,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
 	double costheta, sintheta;
-	double romberg_accuracy;
+	double integral_tolerance;
 	double theta_eff; // used for intermediate calculations if ellipticity components are being used
 	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
 
@@ -120,7 +120,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 
 	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
 	{
-		set_default_base_settings(20,1e-6);
+		set_default_base_settings(20,5e-3); // is this really necessary? check...
 		zfac = 1.0;
 	}
 	LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in);
@@ -238,7 +238,7 @@ class LensProfile : public Romberg, public GaussLegendre, public Brent
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	virtual int get_special_parameter_anchor_number() { return -1; } // no special parameters can be center_anchored for the base class
 	void set_include_limits(bool inc) { include_limits = inc; }
-	void set_romberg_accuracy(const double acc) { romberg_accuracy = acc; }
+	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc); }
 };
 
 struct LensIntegral : public Romberg
@@ -246,6 +246,8 @@ struct LensIntegral : public Romberg
 	LensProfile *profile;
 	double xsqval, ysqval, fsqinv, xisq, u, one_minus_qsq, qfac, nval_plus_half;
 	double *gausspoints, *gaussweights;
+	double *pat_points, **pat_weights;
+	double pat_funcs[511];
 	int n_gausspoints;
 
 	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, double q, int nval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in)
@@ -257,8 +259,11 @@ struct LensIntegral : public Romberg
 		n_gausspoints = profile->numberOfPoints;
 		gausspoints = profile->points;
 		gaussweights = profile->weights;
+		pat_points = profile->pat_points;
+		pat_weights = profile->pat_weights;
 	}
 	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
+	double PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b);
 
 	double i_integrand_prime(const double w);
 	double j_integrand_prime(const double w);
@@ -461,6 +466,7 @@ class Shear : public LensProfile
 	double shear1, shear2; // used when shear_components is turned on
 	double kappa_rsq(const double) { return 0; }
 	double kappa_rsq_deriv(const double) { return 0; }
+	void set_model_specific_integration_pointers();
 
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
 
@@ -536,6 +542,9 @@ class PointMass : public LensProfile
 
 	double kappa_rsq(const double rsq) { return 0; }
 	double kappa_rsq_deriv(const double rsq) { return 0; }
+	double kapavg_spherical_rsq(const double rsq);
+	double potential_spherical_rsq(const double rsq);
+	void set_model_specific_integration_pointers();
 
 	public:
 	PointMass() : LensProfile() {}
@@ -644,6 +653,9 @@ class MassSheet : public LensProfile
 
 	double kappa_rsq(const double rsq) { return 0; }
 	double kappa_rsq_deriv(const double rsq) { return 0; }
+	double kapavg_spherical_rsq(const double rsq);
+	double potential_spherical_rsq(const double rsq);
+	void set_model_specific_integration_pointers();
 
 	public:
 	MassSheet() : LensProfile() {}

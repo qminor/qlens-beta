@@ -129,7 +129,7 @@ void Lens::process_commands(bool read_file)
 						"\n"
 						"\033[4mLens model settings\033[0m\n"
 						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
-						"integral_method -- set integration method (romberg/gauss) and number of points (if gauss)\n"
+						"integral_method -- set integration method (romberg/gauss), tolerance and number of points (if gauss)\n"
 						"major_axis_along_y -- orient major axis of lenses along y-direction when theta = 0 (on/off)\n"
 						"ellipticity_components -- if on, use components of ellipticity e=1-q instead of (q,theta)\n"
 						"shear_components -- if on, use components of external shear instead of (shear,theta)\n"
@@ -1165,10 +1165,11 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="cc_reset")  // obsolete--should probably remove
 					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n"; // obsolete--should probably remove
 				else if (words[1]=="integral_method")
-					cout << "integral_method gauss [npoints]\n"
+					cout << "integral_method patterson [npoints]\n"
+						"integral_method gause [npoints]\n\n"
 						"integral_method romberg [accuracy]\n\n"
-						"Set integration method (either [romberg] or [gauss]). If Gauss, can set number\n"
-						"of points = [npoints]; if Romberg, can set required accuracy of integration.\n"
+						"Set integration method (either [patterson], [romberg] or [gauss]). If Gauss, can set number\n"
+						"of points = [npoints]; if Gauss-Patterson or Romberg, can set required accuracy of integration.\n"
 						"If no arguments are given, simply prints current integration method.\n";
 				else if (words[1]=="major_axis_along_y")
 					cout << "major_axis_along_y <on/off>\n\n"
@@ -1585,7 +1586,8 @@ void Lens::process_commands(bool read_file)
 					cout << endl;
 					cout << "\033[4mLens model settings\033[0m\n";
 					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
-					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration with accuracy " << romberg_accuracy << endl;
+					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration with accuracy " << integral_tolerance << endl;
+					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature with accuracy " << integral_tolerance << endl;
 					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
 					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
 					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
@@ -1642,7 +1644,7 @@ void Lens::process_commands(bool read_file)
 					if (nwords == 3) {
 						double acc;
 						if (!(ws[2] >> acc)) Complain("invalid accuracy for Romberg integration");
-						set_romberg_accuracy(acc);
+						set_integral_tolerance(acc);
 					}
 				}
 				else if (method_name=="gauss") {
@@ -1652,14 +1654,21 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> pts)) Complain("invalid number of points");
 						set_Gauss_NN(pts);
 					}
+				} else if (method_name=="patterson") {
+					method = Gauss_Patterson_Quadrature;
+					if (nwords == 3) {
+						double acc;
+						if (!(ws[2] >> acc)) Complain("invalid accuracy for Gauss-Patterson quadrature");
+						set_integral_tolerance(acc);
+					}
 				} else Complain("unknown integration method");
 				set_integration_method(method);
 			} else {
 				if (mpi_id==0) {
 					method = LensProfile::integral_method;
-					if (method==Romberg_Integration) cout << "Integration method for lensing calculations: Romberg integration with accuracy " << romberg_accuracy << endl;
-					else if (method==Gaussian_Quadrature)
-						cout << "Integration method for lensing calculations: Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					if (method==Romberg_Integration) cout << "Integration method for lensing calculations: Romberg integration with accuracy " << integral_tolerance << endl;
+					else if (method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature with accuracy " << integral_tolerance << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method for lensing calculations: Gaussian quadrature with " << Gauss_NN << " points" << endl;
 				}
 			}
 		}

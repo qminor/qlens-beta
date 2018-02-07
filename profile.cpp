@@ -72,7 +72,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
-	set_default_base_settings(lens_in->numberOfPoints,lens_in->romberg_accuracy);
+	set_default_base_settings(lens_in->numberOfPoints,lens_in->integral_tolerance);
 
 	q = lens_in->q;
 	epsilon = lens_in->epsilon;
@@ -625,8 +625,10 @@ void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 {
 	include_limits = false;
 	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
+	//cout << "Running this...\n";
 	SetGaussLegendre(nn);
-	romberg_accuracy = acc;
+	integral_tolerance = acc;
+	SetGaussPatterson(acc);
 }
 
 void LensProfile::update_meta_parameters_and_pointers()
@@ -1122,13 +1124,19 @@ double LensProfile::kappa_avg_spherical_integral(const double rsq)
 	{
 		double (Romberg::*sptr)(const double);
 		sptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::mass_enclosed_spherical_integrand);
-		ans = (2.0/rsq)*romberg_open(sptr, 0, sqrt(rsq), romberg_accuracy, 5);
+		ans = (2.0/rsq)*romberg_open(sptr, 0, sqrt(rsq), integral_tolerance, 5);
 	}
 	else if (integral_method == Gaussian_Quadrature)
 	{
 		double (GaussianIntegral::*sptr)(double);
 		sptr = static_cast<double (GaussianIntegral::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
 		ans = (2.0/rsq)*NIntegrate(sptr,0,sqrt(rsq));
+	}
+	else if (integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (GaussPatterson::*sptr)(double);
+		sptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		ans = (2.0/rsq)*AdaptiveQuad(sptr,0,sqrt(rsq));
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1209,12 +1217,17 @@ double LensIntegral::i_integral()
 	{
 		double (Romberg::*iptr)(const double);
 		iptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::i_integrand_prime);
-		ans = romberg_open(iptr, 0, 1, profile->romberg_accuracy, 5);
+		ans = romberg_open(iptr, 0, 1, profile->integral_tolerance, 5);
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
 		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
 		ans = GaussIntegrate(iptr,0,1);
+	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
+		ans = PattersonIntegrate(iptr,0,1);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1227,12 +1240,17 @@ double LensIntegral::j_integral()
 	{
 		double (Romberg::*jptr)(const double);
 		jptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::j_integrand_prime);
-		ans = romberg_open(jptr, 0, 1, profile->romberg_accuracy, 5);
+		ans = romberg_open(jptr, 0, 1, profile->integral_tolerance, 5);
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
 		ans = GaussIntegrate(jptr,0,1);
+	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
+		ans = PattersonIntegrate(jptr,0,1);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1245,19 +1263,24 @@ double LensIntegral::k_integral()
 	{
 		double (Romberg::*kptr)(const double);
 		kptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::k_integrand_prime);
-		ans = romberg_open(kptr, 0, 1, profile->romberg_accuracy, 5);
+		ans = romberg_open(kptr, 0, 1, profile->integral_tolerance, 5);
 	}
 	else if (profile->integral_method == Gaussian_Quadrature)
 	{
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
 		ans = GaussIntegrate(kptr,0,1);
 	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
+		ans = PattersonIntegrate(kptr,0,1);
+	}
 	else die("unknown integral method");
 	return ans;
 }
 
 // i,j,k integrals are in form similar to Keeton (2001), but generalized to allow for different
-// definitions of the elliptical radius. I have also made the subsitution
+// definitions of the elliptical radius. I have also made the substitution
 // u=w*w (easier for Gaussian quadrature; makes kappa singularity more manageable)
 
 double LensIntegral::i_integrand_prime(const double w)
@@ -1292,4 +1315,42 @@ double LensIntegral::GaussIntegrate(double (LensIntegral::*func)(const double), 
 	return (b-a)*result/2.0;
 }
 
+double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b)
+{
+	double result=0, result_old;
+	int i, level=0, istep, istart;
+	double absum = (a+b)/2, abdif = (b-a)/2;
+	double *weightptr;
+
+	int order, j;
+	do {
+		weightptr = pat_weights[level];
+		result_old = result;
+		order = profile->pat_orders[level];
+		istep = (profile->pat_N+1) / (order+1);
+		istart = istep - 1;
+		istep *= 2;
+		result = 0;
+		for (j=0, i=istart; j < order; j += 2, i += istep) {
+			pat_funcs[i] = (this->*func)(absum + abdif*pat_points[i]);
+			result += weightptr[j]*pat_funcs[i];
+		}
+		for (j=1, i=istep-1; j < order; j += 2, i += istep) {
+			result += weightptr[j]*pat_funcs[i];
+		}
+		if ((level > 1) and (abs(result-result_old) < profile->pat_tolerance*abs(result))) break;
+	} while (++level < 9);
+
+	if (level==9) {
+		profile->SetGaussLegendre(1023);
+		result = 0;
+
+		for (int i = 0; i < profile->numberOfPoints; i++)
+			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
+
+		warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points; switching to Gauss-Legendre with 1023 points");
+	}
+
+	return abdif*result;
+}
 

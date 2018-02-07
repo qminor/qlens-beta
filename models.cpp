@@ -309,7 +309,7 @@ double Alpha::potential_elliptical_nocore(const double x, const double y) // onl
 
 void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
 {
-	if (sprime==0.0) {
+	if (s==0.0) {
 		re_major_axis = bprime*pow(zfactor,1.0/alpha);
 		re_average = re_major_axis * sqrt(q);
 	} else if (alpha==1.0) {
@@ -587,8 +587,8 @@ void NFW::set_model_specific_integration_pointers()
 double NFW::kappa_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
-	if (xsq==1) return (2*ks/3.0); // note, ks is defined as ks = rho_s * r_s / sigma_crit
-	else if (xsq < 1e-6) return -ks*(2+log(xsq/4));
+	if (xsq < 1e-6) return -ks*(2+log(xsq/4));
+	else if (abs(xsq-1) < 1e-5) return 2*ks*(0.3333333333333333 - (xsq-1)/5.0); // formula on next line becomes unstable for x close to 1, this fixes it
 	else return 2*ks*(1 - lens_function_xsq(xsq))/(xsq - 1);
 }
 
@@ -598,7 +598,7 @@ double NFW::kappa_rsq_deriv(const double rsq)
 	// below xsq ~ 1e-6 or so, kappa formula becomes inaccurate due to fine cancellations; a series expansion
 	// is done for xsq smaller than this
 	if (xsq < 1e-6) return -ks/rsq;
-	else if (abs(xsq-1.0) < 1e-5) return -0.4*sqrt(xsq); // formula on next line becomes unstable for x close to 1, this fixes it
+	else if (abs(xsq-1.0) < 1e-5) return 2*ks/(rs*rs)*(-0.2 + 2*(xsq-1)/7.0); // formula on next line becomes unstable for x close to 1, this fixes it
 	else return -(ks/rsq)*((xsq*(2.0-3*lens_function_xsq(xsq)) + 1)/((xsq-1)*(xsq-1)));
 }
 
@@ -1031,6 +1031,12 @@ void Shear::set_auto_ranges()
 	set_auto_penalty_limits[3] = false;
 }
 
+void Shear::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = NULL;
+	potptr_rsq_spherical = NULL;
+}
+
 double Shear::potential(double x, double y)
 {
 	x -= x_center;
@@ -1188,6 +1194,7 @@ void Multipole::set_model_specific_integration_pointers()
 	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Multipole::deflection);
 	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Multipole::hessian);
 	kapavgptr_rsq_spherical = NULL;
+	potptr_rsq_spherical = NULL;
 	if (m==0) kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Multipole::deflection_m0_spherical_r);
 }
 
@@ -1476,6 +1483,12 @@ void PointMass::set_auto_ranges()
 	set_auto_penalty_limits[2] = false;
 }
 
+void PointMass::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PointMass::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PointMass::potential_spherical_rsq);
+}
+
 double PointMass::potential(double x, double y)
 {
 	x -= x_center;
@@ -1486,6 +1499,16 @@ double PointMass::potential(double x, double y)
 double PointMass::kappa(double x, double y)
 {
 	return 0; // really it's a delta function, but effectively zero for our purposes here
+}
+
+double PointMass::kapavg_spherical_rsq(const double rsq)
+{
+	return b*b/rsq;
+}
+
+double PointMass::potential_spherical_rsq(const double rsq)
+{
+	return b*b*log(sqrt(rsq));
 }
 
 void PointMass::deflection(double x, double y, lensvector& def)
@@ -1811,7 +1834,7 @@ double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const do
 
 		fac=CON2;
 		for (j=1;j<=i;j++) {
-			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
+			a[j][i]=(a[j-1][i]*fac - a[j-1][i-1])/(fac-1.0);
 			fac=CON2*fac;
 			errt=dmax(abs(a[j][i]-a[j-1][i]),abs(a[j][i]-a[j-1][i-1]));
 			if (errt <= err) {
@@ -1973,6 +1996,12 @@ void MassSheet::set_auto_ranges()
 	set_auto_penalty_limits[2] = false;
 }
 
+void MassSheet::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&MassSheet::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&MassSheet::potential_spherical_rsq);
+}
+
 double MassSheet::potential(double x, double y)
 {
 	x -= x_center;
@@ -1983,6 +2012,16 @@ double MassSheet::potential(double x, double y)
 double MassSheet::kappa(double x, double y)
 {
 	return kext; // really it's a delta function, but effectively zero for our purposes here
+}
+
+double MassSheet::kapavg_spherical_rsq(const double rsq)
+{
+	return kext;
+}
+
+double MassSheet::potential_spherical_rsq(const double rsq)
+{
+	return kext*rsq/2.0;
 }
 
 void MassSheet::deflection(double x, double y, lensvector& def)

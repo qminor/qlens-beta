@@ -202,17 +202,16 @@ void Romberg::RombergPolyExtrapolate(double xa[], double ya[], const int n, cons
 	double *c, *d;
 	c = new double[n];
 	d = new double[n];
-	for (int i=0; i < n; i++)
-	{
-		c[i] = ya[i];
-		d[i] = ya[i];
+	for (int i=0; i < n; i++) {
+		c[i] = d[i] = ya[i];
 	}
 
+	int m,i;
 	double w;
 	y = ya[n-1];
-	for (int m=0; m < n-1; m++)
+	for (m=0; m < n-1; m++)
 	{
-		for (int i=0; i < n-m-1; i++)
+		for (i=0; i < n-m-1; i++)
 		{
 			w = (c[i+1] - d[i]) / (xa[i] - xa[i+m+1]);
 			c[i] = w * (xa[i]-x);
