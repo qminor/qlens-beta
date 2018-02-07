@@ -228,7 +228,7 @@ complex<double> Alpha::deflection_angular_factor(const double &phi)
 	complex<double> omega = fac;
 	int i=1;
 	do {
-		omega = polar(-ff*(beta*i - 1)/(beta*i + 1),2*phi)*omega;
+		omega = -polar(ff*(beta*i - 1)/(beta*i + 1),2*phi)*omega;
 		fac += omega;
 		i++;
 	} while (norm(omega) > def_tolerance*norm(fac));
