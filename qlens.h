@@ -45,6 +45,12 @@ enum RayTracingMethod {
 	Interpolate,
 	Area_Interpolation
 };
+enum DerivedParamType {
+	Total_Kappa,
+	Total_DKappa,
+	UserDefined
+};
+
 
 class Lens;			// Defined after class Grid
 class SourcePixelGrid;
@@ -53,6 +59,7 @@ class Defspline;	// ...
 struct ImageData;
 struct ImagePixelData;
 struct ParamSettings;
+struct DerivedParam;
 
 struct image {
 	lensvector pos;
@@ -258,6 +265,9 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	int n_sb;
 	SB_Profile** sb_list;
+
+	int n_derived_params;
+	DerivedParam** dparam_list;
 
 	lensvector source;
 	image *images_found;
@@ -551,6 +561,7 @@ public:
 	friend class SourcePixelGrid;
 	friend class ImagePixelGrid;
 	friend class ImagePixelData;
+	friend struct DerivedParam;
 	Lens();
 	Lens(Lens *lens_in);
 	static void allocate_multithreaded_variables(const int& threads);
@@ -686,6 +697,11 @@ public:
 	void print_source_list();
 	void clear_source_objects();
 
+	void add_derived_param(DerivedParamType type_in, double param);
+	void remove_derived_param(int dparam_number);
+	void clear_derived_params();
+	void print_derived_param_list();
+
 	bool create_grid(bool verbal, const double zfac, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 	void clear_lenses();
 	void clear();
@@ -723,6 +739,7 @@ public:
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_pixellated_source(double* params);
 	double fitmodel_loglike_pixellated_source_test(double* params);
+	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
@@ -749,6 +766,8 @@ public:
 	void make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle, const int n_subellipses, const int points_per_ellipse, string source_filename);
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
+	double total_kappa(double r);
+	double total_dkappa(double r);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac);
 	double einstein_radius_root(const double r);
@@ -828,7 +847,6 @@ public:
 			if (sourcepts_upper_limit==NULL) sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
 		}
-
 	}
 	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
 	bool open_command_file(char *filename);
@@ -1243,12 +1261,49 @@ struct ParamSettings
 	}
 };
 
+struct DerivedParam
+{
+	DerivedParamType derived_param_type;
+	double funcparam;
+	string name, latex_name;
+	DerivedParam(DerivedParamType type_in, double param) {
+		derived_param_type = type_in;
+		funcparam = param;
+		if (derived_param_type == Total_Kappa) {
+			name = "kappa"; latex_name = "\\kappa";
+		} else if (derived_param_type == Total_DKappa) {
+			name = "dkappa"; latex_name = "\\kappa'";
+		} else die("no user defined function yet");
+		stringstream paramstr;
+		string paramstring;
+		paramstr << funcparam;
+		paramstr >> paramstring;
+		name += "(" + paramstring + ")";
+		latex_name += "(" + paramstring + ")";
+	}
+	double get_derived_param(Lens* lens_in)
+	{
+		if (derived_param_type == Total_Kappa) return lens_in->total_kappa(funcparam);
+		else if (derived_param_type == Total_DKappa) return lens_in->total_dkappa(funcparam);
+		else die("no user defined function yet");
+	}
+	void print_param_description()
+	{
+		cout << name << ": ";
+		if (derived_param_type == Total_Kappa) {
+			cout << "Total kappa within r = " << funcparam << endl;
+		} else if (derived_param_type == Total_DKappa) {
+			cout << "Derivative of total kappa within r = " << funcparam << endl;
+		} else die("no user defined function yet");
+	}
+};
+
 class Defspline
 {
 	Spline2D ax, ay;
 	Spline2D axx, ayy, axy;
 
-public:
+	public:
 	friend void Lens::spline_deflection(double,double,int);
 	int nsteps() { return (ax.xlength()-1); }
 	double xmax() { return ax.xmax(); }

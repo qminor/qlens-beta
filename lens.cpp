@@ -184,6 +184,7 @@ Lens::Lens() : UCMC()
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	nlens = 0;
 	n_sb = 0;
+	n_derived_params = 0;
 	radial_grid = true;
 	grid_xlength = 20; // default gridsize
 	grid_ylength = 20;
@@ -356,6 +357,7 @@ Lens::Lens() : UCMC()
 	LensProfile::default_ellipticity_mode = 1;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = false;
+	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
 }
 
 Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
@@ -427,6 +429,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 
 	nlens = 0;
 	n_sb = 0;
+	n_derived_params = 0;
 	radial_grid = lens_in->radial_grid;
 	grid_xlength = lens_in->grid_xlength; // default gridsize
 	grid_ylength = lens_in->grid_ylength;
@@ -739,17 +742,24 @@ void Lens::clear_lenses()
 
 void Lens::clear()
 {
+	int i;
 	if (nlens > 0) {
-		for (int i=0; i < nlens; i++)
+		for (i=0; i < nlens; i++)
 			delete lens_list[i];
 		delete[] lens_list;
 		nlens = 0;
 	}
 	if (n_sb > 0) {
-		for (int i=0; i < n_sb; i++)
+		for (i=0; i < n_sb; i++)
 			delete sb_list[i];
 		delete[] sb_list;
 		n_sb = 0;
+	}
+	if (n_derived_params > 0) {
+		for (i=0; i < n_derived_params; i++)
+			delete dparam_list[i];
+		delete[] dparam_list;
+		n_derived_params = 0;
 	}
 	reset();
 }
@@ -913,6 +923,55 @@ void Lens::print_source_list()
 		}
 		else cout << "No source objects have been specified" << endl;
 		if (use_scientific_notation) cout << setiosflags(ios::scientific);
+	}
+}
+
+void Lens::add_derived_param(DerivedParamType type_in, double param)
+{
+	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
+	if (n_derived_params > 0) {
+		for (int i=0; i < n_derived_params; i++)
+			newlist[i] = dparam_list[i];
+		delete[] dparam_list;
+	}
+	newlist[n_derived_params] = new DerivedParam(type_in,param);
+	n_derived_params++;
+	dparam_list = newlist;
+}
+
+void Lens::remove_derived_param(int dparam_number)
+{
+	if ((dparam_number >= n_derived_params) or (n_derived_params == 0)) { warn(warnings,"Specified derived parameter does not exist"); return; }
+	DerivedParam** newlist = new DerivedParam*[n_derived_params-1];
+	int i,j;
+	for (i=0, j=0; i < n_derived_params; i++)
+		if (i != dparam_number) { newlist[j] = dparam_list[i]; j++; }
+	delete[] dparam_list;
+	n_derived_params--;
+
+	dparam_list = newlist;
+}
+
+void Lens::clear_derived_params()
+{
+	if (n_derived_params > 0) {
+		for (int i=0; i < n_derived_params; i++)
+			delete dparam_list[i];
+		delete[] dparam_list;
+		n_derived_params = 0;
+	}
+}
+
+void Lens::print_derived_param_list()
+{
+	if (mpi_id==0) {
+		if (n_derived_params > 0) {
+			for (int i=0; i < n_derived_params; i++) {
+				cout << i << ". ";
+				dparam_list[i]->print_param_description();
+			}
+		}
+		else cout << "No derived parameters have been created" << endl;
 	}
 }
 
@@ -2041,16 +2100,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	if (kdname != NULL) kdout.open(kdname);
 	if (use_scientific_notation) kout << setiosflags(ios::scientific);
 	if (use_scientific_notation) kdout << setiosflags(ios::scientific);
-	double xc, yc, kap, kap2;
-	bool centered[nlens];
-	double xc0, yc0;
-	lens_list[0]->get_center_coords(xc0,yc0);
-	centered[0]=true;
-	for (int j=1; j < nlens; j++) {
-		lens_list[j]->get_center_coords(xc,yc);
-		if ((xc==xc0) and (yc==yc0)) centered[j]=true;
-		else centered[j]=false;
-	}
+	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
 	thetastep = 2*M_PI/thetasteps;
@@ -2102,6 +2152,60 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		if (kdname != NULL) kdout << fabs(total_dkappa) << endl;
 	}
 	*/
+}
+
+double Lens::total_kappa(double r)
+{
+	double total_kappa;
+	int j;
+	double kap, kap2;
+	double theta, thetastep;
+	int thetasteps = 200;
+	thetastep = 2*M_PI/thetasteps;
+	double x, y;
+	
+	if (autocenter==true) {
+	for (int i=0; i < nlens; i++)
+		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+	}
+	total_kappa = 0;
+	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
+		x = grid_xcenter + r*cos(theta);
+		y = grid_ycenter + r*sin(theta);
+		kap = kappa(x,y,reference_zfactor);
+		total_kappa += kap;
+	}
+	total_kappa /= thetasteps;
+	return total_kappa;
+}
+
+double Lens::total_dkappa(double r)
+{
+	double total_dkappa;
+	int j;
+	double kap, kap2;
+	double theta, thetastep;
+	int thetasteps = 200;
+	thetastep = 2*M_PI/thetasteps;
+	double x, y, x2, y2, dr;
+	dr = 1e-5;
+	
+	if (autocenter==true) {
+	for (int i=0; i < nlens; i++)
+		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+	}
+	total_dkappa = 0;
+	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
+		x = grid_xcenter + r*cos(theta);
+		y = grid_ycenter + r*sin(theta);
+		x2 = (r+dr)*cos(theta);
+		y2 = (r+dr)*sin(theta);
+		kap = kappa(x,y,reference_zfactor);
+		kap2 = kappa(x2,y2,reference_zfactor);
+		total_dkappa += (kap2 - kap)/dr;
+	}
+	total_dkappa /= thetasteps;
+	return total_dkappa;
 }
 
 void Lens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
@@ -4460,6 +4564,7 @@ void Lens::nested_sampling()
 
 	initialize_fitmodel();
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
+	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
@@ -4468,20 +4573,24 @@ void Lens::nested_sampling()
 	}
 
 	if (mpi_id==0) {
+		int i;
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fit_parameters; i++)
 		{
 			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
 		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
 	}
 
@@ -4793,6 +4902,7 @@ void Lens::chi_square_twalk()
 	}
 	initialize_fitmodel();
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
+	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
@@ -4801,20 +4911,24 @@ void Lens::chi_square_twalk()
 	}
 
 	if (mpi_id==0) {
+		int i;
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (int i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fit_parameters; i++)
 		{
 			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
 		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
 	}
 
@@ -5269,6 +5383,14 @@ double Lens::fitmodel_loglike_pixellated_source_test(double* params)
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	return loglike;
+}
+
+void Lens::fitmodel_calculate_derived_params(double* params, double* derived_params)
+{
+	double transformed_params[n_fit_parameters];
+	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
+	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
 }
 
 void Lens::set_Gauss_NN(const int& nn)

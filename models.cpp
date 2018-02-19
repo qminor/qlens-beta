@@ -218,23 +218,6 @@ void Alpha::deflection_elliptical_nocore(const double x, const double y, lensvec
 	def[1] = imag(def_complex);
 }
 
-complex<double> Alpha::deflection_angular_factor(const double &phi)
-{
-	// Formulas from Tessore et al. 2015
-	double beta, ff;
-	beta = 2.0/(2-alpha);
-	ff = (1-q)/(1+q);
-	complex<double> fac = polar(1.0,phi);
-	complex<double> omega = fac;
-	int i=1;
-	do {
-		omega = -polar(ff*(beta*i - 1)/(beta*i + 1),2*phi)*omega;
-		fac += omega;
-		i++;
-	} while (norm(omega) > def_tolerance*norm(fac));
-	return fac;
-}
-
 void Alpha::hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess)
 {
 	double R, phi, kap;
@@ -305,6 +288,23 @@ double Alpha::potential_elliptical_nocore(const double x, const double y) // onl
 	}
 	complex<double> def_complex = 2*bprime*q/(1+q)*pow(bprime/R,alpha-1)*deflection_angular_factor(phi);
 	return (x*real(def_complex) + y*imag(def_complex))/(2-alpha);
+}
+
+complex<double> Alpha::deflection_angular_factor(const double &phi)
+{
+	// Formulas from Tessore et al. 2015
+	double beta, ff;
+	beta = 2.0/(2-alpha);
+	ff = (1-q)/(1+q);
+	complex<double> fac = polar(1.0,phi);
+	complex<double> omega = fac;
+	int i=1;
+	do {
+		omega = -polar(ff*(beta*i - 1)/(beta*i + 1),2*phi)*omega;
+		fac += omega;
+		i++;
+	} while (norm(omega) > def_tolerance*norm(fac));
+	return fac;
 }
 
 void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)

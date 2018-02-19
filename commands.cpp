@@ -722,6 +722,18 @@ void Lens::process_commands(bool read_file)
 							"for parameter 5 to 0.3. You can also scale all the stepsizes by a certain factor, e.g. 'fit\n"
 							"stepsize scale 5' multiplies all stepsizes by 5. To reset all stepsizes to their automatic values,\n"
 							"type 'fit stepsize reset'.\n";
+					else if (words[2]=="dparams")
+						cout << "fit dparams\n"
+							"fit dparams add <param_type> <param_arg>\n"
+							"fit dparams clear [param_num]\n\n"
+							"Define derived parameters whose values will be output along with the primary parameters after running\n"
+							"nested sampling or T-Walk. Type 'fit dparams' to list all the derived parameters that have been defined,\n"
+							"'fit dparams clear' to remove one or all of the derived parameters from the list, and 'fit dparams add'\n"
+							"to add a new derived parameter. All derived parameters are defined by a type and an argument.\n"
+							"The available derived parameter types are:\n\n"
+							"kappa_r -- The total kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
+							"dkappa_r -- The derivative of kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
+							"\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
 							"fit vary_sourcept <vary_srcx> <vary_srcy>\n\n"
@@ -1483,6 +1495,7 @@ void Lens::process_commands(bool read_file)
 						cout << "xsplit = " << rsplit_initial << endl;
 						cout << "ysplit = " << thetasplit_initial << endl;
 					}
+					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 					cout << "cc_splitlevels = " << cc_splitlevels << endl;
 					cout << "cc_split_neighbors: " << display_switch(cc_neighbor_splittings) << endl;
 					cout << "imagepos_accuracy = " << Grid::image_pos_accuracy << endl;
@@ -4026,6 +4039,32 @@ void Lens::process_commands(bool read_file)
 					}
 					else Complain("command 'fit plimits' requires either zero or three arguments (see 'help fit plimits')");
 				}
+				else if (words[1]=="dparams")
+				{
+					if (nwords==2) { if (mpi_id==0) print_derived_param_list(); }
+					else {
+						if (words[2]=="clear") {
+							if (nwords==3) clear_derived_params();
+							else if (nwords==4) {
+								int dparam_number;
+								if (!(ws[3] >> dparam_number)) Complain("invalid dparam number");
+								remove_derived_param(dparam_number);
+							} else Complain("only one argument allowed for 'fit dparams clear' (number of derived parameter to remove)");
+						}
+						else if (words[2]=="add") {
+							if (nwords < 5) Complain("at least two additional arguments required for 'fit dparams add' (dparam_type,input_param)");
+							double dparam_arg;
+							if (words[3]=="kappa_r") {
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								add_derived_param(Total_Kappa,dparam_arg);
+							} else if (words[3]=="dkappa_r") {
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								add_derived_param(Total_DKappa,dparam_arg);
+							} else Complain("derived parameter type not recognized");
+						}
+						else Complain("unrecognized argument to 'fit dparams'");
+					}
+				}
 				else if (words[1]=="output_dir")
 				{
 					if (nwords == 2) {
@@ -6273,16 +6312,9 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
+			add_derived_param(Total_Kappa,5.0);
+			add_derived_param(Total_DKappa,5.0);
 			//generate_solution_chain_sdp81();
-		double wtime0, wtime;
-#ifdef USE_OPENMP
-			wtime0 = omp_get_wtime();
-#endif
-			for (int i=0; i < 3000; i++) chisq_pos_image_plane();
-#ifdef USE_OPENMP
-			wtime = omp_get_wtime() - wtime0;
-			cout << "Wall time = " << wtime << endl;
-#endif
 			// These are experimental functions that I either need to make official, or else remove
 			//plot_chisq_1d(0,30,50,450);
 			//plot_chisq_2d(3,4,20,-0.1,0.1,20,-0.1,0.1); // implement this as a command later; probably should make a 1d version as well

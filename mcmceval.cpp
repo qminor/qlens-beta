@@ -4,11 +4,13 @@
 #include <cmath>
 #include <string>
 #include <sstream>
+#include <vector>
 #include "GregsMathHdr.h"
 #include "mcmceval.h"
 #include "random.h"
 #include "errors.h"
 #include "mathexpr.h"
+using namespace std;
 
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
 

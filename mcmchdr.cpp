@@ -62,12 +62,14 @@ class CovPoints
 UCMC::UCMC() : Minimize(1.0e-6, 1000), LevenMarq(0.001, 3), Derivative(1.0e-6, 10)
 {
 	rand = 100;
-	factor = 1.0;
 	cvar = NULL;
 	a = NULL;
 	upperLimits = NULL;
 	lowerLimits = NULL;
 	LogLikePtr = &UCMC::LogLike;
+	DerivedParamPtr = NULL;
+	NDerivedParams = 0;
+	dparam_list = NULL;
 	mpi_id = 0;
 	mpi_np = 1;
 	mpi_ngroups = 1;
@@ -101,6 +103,13 @@ void UCMC::Set_MCMC_MPI(const int mpi_np_in, const int mpi_id_in, const int mpi_
 	for (int i=0; i < mpi_ngroups; i++) mpi_group_leader[i] = mpi_group_leader_in[i];
 }
 #endif
+
+void UCMC::SetNDerivedParams(const int nder)
+{
+	NDerivedParams = nder;
+	if (dparam_list != NULL) delete[] dparam_list;
+	dparam_list = new double[NDerivedParams];
+}
 
 double UCMC::LogLike(double *ain) {return 0.0;}
 
@@ -1064,6 +1073,13 @@ void UCMC::TWalk(const char *name, const double div, const int proj, const doubl
 					{
 						out[t] << atrans[i] << "   ";
 					}
+					if (NDerivedParams > 0) {
+						(this->*DerivedParamPtr)(atrans,dparam_list);
+						for (i = 0; i < NDerivedParams; i++) {
+							out[t] << dparam_list[i] << "   ";
+						}
+					}
+
 					//out[t] << "   " << 2.0*loglike[t] << endl;
 					out[t] << "   " << 2.0*loglikenext << endl << flush;
 #ifdef USE_MPI
@@ -1603,6 +1619,7 @@ UCMC::~UCMC()
 		del <double> (cvar, ma);
 	}
 	if (mpi_group_leader != NULL) delete[] mpi_group_leader;
+	if (dparam_list != NULL) delete[] dparam_list;
 }
 
 class Fit : private Minimize, private LevenMarq
@@ -2881,7 +2898,7 @@ class Counter
 
 void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points)
 {
-	int i, j, k;
+	int i, j;
 	double **points = matrix <double> (N, ma);
 	double *cpt = matrix <double> (ma);
 	double *logLikes = matrix <double> (N);
@@ -3339,6 +3356,12 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			out << w0*exp(-likeOld-double(count)/N-lnZ) << "   ";
 			for (j = 0; j < ma; j++)
 				out << ptr1[j] << "   ";
+			if (NDerivedParams > 0) {
+				(this->*DerivedParamPtr)(ptr1,dparam_list);
+				for (int k = 0; k < NDerivedParams; k++) {
+					out << dparam_list[k] << "   ";
+				}
+			}
 			out << (likeOld-temp1)*2.0 << endl;
 		}
 		for (i = 0; i < N; i++)
@@ -3354,6 +3377,12 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 				avg[j] += weight*ptr1[j];
 				cov[j] += weight*ptr1[j]*ptr1[j];
 				out << ptr1[j] << "   ";
+			}
+			if (NDerivedParams > 0) {
+				(this->*DerivedParamPtr)(ptr1,dparam_list);
+				for (int k = 0; k < NDerivedParams; k++) {
+					out << dparam_list[k] << "   ";
+				}
 			}
 			out << (likeOld-temp1)*2.0 << endl;
 		}

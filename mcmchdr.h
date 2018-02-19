@@ -93,15 +93,16 @@ inline vector<vector<double> > calcIndent (const vector<vector<double> > &pts)
 
 class UCMC : public Minimize, private LevenMarq, private Derivative
 {
-	protected:
+	private:
 		double **cvar;
 		double *a;
 		double *upperLimits;
 		double *lowerLimits;
 		double *upperLimits_initial;
 		double *lowerLimits_initial;
-		double factor;
 		int ma;
+		int NDerivedParams;
+		double *dparam_list;
 		unsigned long long int rand;
 		int mpi_np, mpi_id, mpi_ngroups, mpi_group_num, mpi_group_id;
 		int *mpi_group_leader;
@@ -150,9 +151,10 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		void PrintPoint();
 		int Count(double, double, int, char*, int);
 		double OutputParam(int i){return a[i];}
-		void ChangeFactor(const double in){factor = in;}
 		void SetRan(int n){rand = n;};
 		double (UCMC::*LogLikePtr)(double *);
+		void (UCMC::*DerivedParamPtr)(double *, double *);
+		void SetNDerivedParams(const int);
 		virtual double LogLike(double *);
 		virtual double LogPrior(double *);
 		virtual double DLogLike(double *, const int);
