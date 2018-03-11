@@ -26,7 +26,7 @@ using namespace std;
 
 const double Lens::default_autogrid_initial_step = 1.0e-3;
 const double Lens::default_autogrid_rmin = 1.0e-5;
-const double Lens::default_autogrid_rmax = 1.0e6;
+const double Lens::default_autogrid_rmax = 1.0e5;
 const double Lens::default_autogrid_frac = 1.95; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
 const int Lens::max_cc_search_iterations = 8;
 double Lens::galsubgrid_radius_fraction; // radius of satellite subgridding in terms of fraction of Einstein radius
@@ -348,6 +348,11 @@ Lens::Lens() : UCMC()
 	autogrid_before_grid_creation = false; // this option (if set to true) tells qlens to optimize the grid size & position automatically (using autogrid) when grid is created
 	autocenter_lens_number = 0;
 	spline_frac = 1.8;
+	tabulate_rmin = 1e-3;
+	tabulate_qmin = 0.2;
+	tabulate_logr_N = 1000;
+	tabulate_phi_N = 200;
+	tabulate_q_N = 10;
 	grid = NULL;
 	Gauss_NN = 20;
 	integral_tolerance = 5e-3;
@@ -584,6 +589,12 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	auto_gridsize_multiple_of_Re = lens_in->auto_gridsize_multiple_of_Re;
 	autogrid_before_grid_creation = lens_in->autogrid_before_grid_creation; // this option (if set to true) tells qlens to optimize the grid size & position automatically when grid is created
 	spline_frac = lens_in->spline_frac;
+	tabulate_rmin = lens_in->tabulate_rmin;
+	tabulate_qmin = lens_in->tabulate_qmin;
+	tabulate_logr_N = lens_in->tabulate_logr_N;
+	tabulate_phi_N = lens_in->tabulate_phi_N;
+	tabulate_q_N = lens_in->tabulate_q_N;
+
 	grid = NULL;
 	Gauss_NN = lens_in->Gauss_NN;
 	integral_tolerance = lens_in->integral_tolerance;
@@ -692,20 +703,191 @@ void Lens::add_multipole_lens(int m, const double a_m, const double n, const dou
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_tabulated_lens(int lnum, const double scale, const double theta, const double xc, const double yc)
+void Lens::add_tabulated_lens(int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
 {
+	// automatically set gridsize if the appropriate settings are turned on
+	if (autogrid_before_grid_creation) autogrid();
+	else {
+		if (autocenter==true) {
+			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+		}
+		if (auto_gridsize_from_einstein_radius==true) {
+			double re_major;
+			re_major = einstein_radius_of_primary_lens(reference_zfactor);
+			if (re_major != 0.0) {
+				double rmax = auto_gridsize_multiple_of_Re*re_major;
+				grid_xlength = 2*rmax;
+				grid_ylength = 2*rmax;
+				cc_rmax = rmax;
+			}
+		}
+	}
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++)
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(scale, theta, xc, yc, newlist[lnum], grid_xcenter-0.5*grid_xlength, grid_xcenter+0.5*grid_xlength, n_image_pixels_x, grid_ycenter-0.5*grid_ylength, grid_ycenter+0.5*grid_ylength, n_image_pixels_y);
+	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+}
+
+void Lens::add_qtabulated_lens(int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
+{
+	// automatically set gridsize if the appropriate settings are turned on
+	if (autogrid_before_grid_creation) autogrid();
+	else {
+		if (autocenter==true) {
+			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+		}
+		if (auto_gridsize_from_einstein_radius==true) {
+			double re_major;
+			re_major = einstein_radius_of_primary_lens(reference_zfactor);
+			if (re_major != 0.0) {
+				double rmax = auto_gridsize_multiple_of_Re*re_major;
+				grid_xlength = 2*rmax;
+				grid_ylength = 2*rmax;
+				cc_rmax = rmax;
+			}
+		}
+	}
+	LensProfile** newlist = new LensProfile*[nlens+1];
+	if (nlens > 0) {
+		for (int i=0; i < nlens; i++)
+			newlist[i] = lens_list[i];
+		delete[] lens_list;
+	}
+	newlist[nlens++] = new QTabulated_Model(kscale, rscale, q, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N);
+
+	lens_list = newlist;
+	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset();
+	if (auto_ccspline) automatically_determine_ccspline_mode();
+}
+
+bool Lens::add_tabulated_lens_from_file(const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
+{
+	string tabfilename;
+	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
+	else tabfilename = tabfileroot;
+	ifstream tabfile(tabfilename.c_str());
+	if (!tabfile.good()) return false;
+	if (tabfile.eof()) return false;
+	int i, j, k, rN, phiN;
+	double dummy;
+	string dummyname;
+	tabfile >> dummyname;
+	tabfile >> rN >> phiN;
+	// check that the file length matches the number of fields expected from rN, phiN
+	for (i=0; i < rN; i++) {
+		if (tabfile.eof()) return false;
+		tabfile >> dummy;
+	}
+	for (i=0; i < phiN; i++) {
+		if (tabfile.eof()) return false;
+		tabfile >> dummy;
+	}
+	for (i=0; i < rN; i++) {
+		for (j=0; j < phiN; j++) {
+			for (k=0; k < 7; k++) {
+				if (tabfile.eof()) return false;
+				tabfile >> dummy;
+			}
+		}
+	}
+	tabfile.clear();
+	tabfile.seekg(0, ios::beg);
+
+	LensProfile** newlist = new LensProfile*[nlens+1];
+	if (nlens > 0) {
+		for (i=0; i < nlens; i++)
+			newlist[i] = lens_list[i];
+		delete[] lens_list;
+	}
+	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, tabfile);
+
+	lens_list = newlist;
+	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset();
+	if (auto_ccspline) automatically_determine_ccspline_mode();
+	return true;
+}
+
+bool Lens::add_qtabulated_lens_from_file(const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot)
+{
+	string tabfilename;
+	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
+	else tabfilename = tabfileroot;
+	ifstream tabfile(tabfilename.c_str());
+	if (!tabfile.good()) return false;
+	if (tabfile.eof()) return false;
+	int i, j, k, l, rN, phiN, qN;
+	double dummy;
+	string dummyname;
+	tabfile >> dummyname;
+	tabfile >> rN >> phiN >> qN;
+	// check that the file length matches the number of fields expected from rN, phiN
+	for (i=0; i < rN; i++) {
+		if (tabfile.eof()) return false;
+		tabfile >> dummy;
+	}
+	for (i=0; i < phiN; i++) {
+		if (tabfile.eof()) return false;
+		tabfile >> dummy;
+	}
+	for (i=0; i < qN; i++) {
+		if (tabfile.eof()) return false;
+		tabfile >> dummy;
+	}
+	for (i=0; i < rN; i++) {
+		for (j=0; j < phiN; j++) {
+			for (l=0; l < qN; l++) {
+				for (k=0; k < 7; k++) {
+					if (tabfile.eof()) return false;
+					tabfile >> dummy;
+				}
+			}
+		}
+	}
+	tabfile.clear();
+	tabfile.seekg(0, ios::beg);
+
+	LensProfile** newlist = new LensProfile*[nlens+1];
+	if (nlens > 0) {
+		for (i=0; i < nlens; i++)
+			newlist[i] = lens_list[i];
+		delete[] lens_list;
+	}
+	newlist[nlens++] = new QTabulated_Model(kscale, rscale, q, theta, xc, yc, tabfile);
+
+	lens_list = newlist;
+	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset();
+	if (auto_ccspline) automatically_determine_ccspline_mode();
+	return true;
+}
+
+bool Lens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
+{
+	int pos;
+	string tabfilename = tabfileroot;
+	if ((pos = tabfilename.find(".tab")) != string::npos) {
+		tabfilename = tabfilename.substr(0,pos);
+	}
+
+	if ((lens_list[lnum]->get_lenstype() != TABULATED) and (lens_list[lnum]->get_lenstype() != QTABULATED)) return false;
+	if (lens_list[lnum]->get_lenstype() == TABULATED) {
+		Tabulated_Model temp_tablens((Tabulated_Model*) lens_list[lnum]);
+		temp_tablens.output_tables(tabfilename);
+	} else {
+		QTabulated_Model temp_tablens((QTabulated_Model*) lens_list[lnum]);
+		temp_tablens.output_tables(tabfilename);
+	}
+	return true;
 }
 
 void Lens::remove_lens(int lensnumber)
@@ -3297,6 +3479,8 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new MassSheet((MassSheet*) lens_list[i]); break;
 			case TABULATED:
 				fitmodel->lens_list[i] = new Tabulated_Model((Tabulated_Model*) lens_list[i]); break;
+			case QTABULATED:
+				fitmodel->lens_list[i] = new QTabulated_Model((QTabulated_Model*) lens_list[i]); break;
 			default:
 				die("lens type not supported for fitting");
 		}

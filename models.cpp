@@ -148,9 +148,10 @@ double Alpha::potential_spherical_rsq(const double rsq)
 
 double Alpha::potential_spherical_rsq_iso(const double rsq) // only for alpha=1
 {
-	double tmp;
-	tmp = b*(sqrt(s*s+rsq)-s); // now, tmp = kappa_average*rsq
-	if (s != 0) tmp -= b*s*log((s + sqrt(s*s+rsq))/(2.0*s));
+	double tmp, sqrtterm;
+	sqrtterm = sqrt(s*s+rsq);
+	tmp = b*(sqrtterm-s); // now, tmp = kappa_average*rsq
+	if (s != 0) tmp -= b*s*log((s + sqrtterm)/(2.0*s));
 	return tmp;
 }
 
@@ -981,6 +982,7 @@ void Shear::assign_paramnames()
 
 void Shear::assign_param_pointers()
 {
+	ellipticity_paramnum = -1; // no ellipticity parameter here
 	if (use_shear_component_params) {
 		param[0] = &shear1;
 		param[1] = &shear2;
@@ -1158,6 +1160,7 @@ void Multipole::assign_paramnames()
 
 void Multipole::assign_param_pointers()
 {
+	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &q; // here, q is actually the shear magnitude
 	param[1] = &n;
 	param[2] = &theta; angle_paramnum = 2;
@@ -1466,6 +1469,7 @@ void PointMass::assign_param_pointers()
 	param[0] = &b;
 	param[1] = &x_center;
 	param[2] = &y_center;
+	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
 }
 
@@ -1979,6 +1983,7 @@ void MassSheet::assign_param_pointers()
 	param[0] = &kext;
 	param[1] = &x_center;
 	param[2] = &y_center;
+	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
 }
 
@@ -2056,64 +2061,80 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 
 /******************************* Tabulated Model *******************************/
 
-Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &theta_in, const double &xc_in, const double &yc_in, LensProfile* lens_in, const double xmin, const double xmax, const int x_N, const double ymin, const double ymax, const int y_N)
+Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N)
 {
+	// TO DO:
+	// 1) allow for radial scaling parameter
+	// 2) make a new tabulated model that allows for interpolation in q (tricubic interpolation)
+
 	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
 	lenstype = TABULATED;
-	model_name = "tab";
+	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
+	rscale = rscale0 = rscale_in;
+	x_center = xc;
+	y_center = yc;
 	theta = degrees_to_radians(theta_in);
-	x_center = xc_in;
-	y_center = yc_in;
-	update_meta_parameters();
+	update_meta_parameters_and_pointers();
+	lens_in->set_theta(0);
+	lens_in->set_center(0,0); // we're going to delete the original lens anyway, so it doesn't matter what its original angle and center position was
 
-	grid_x_N = x_N;
-	grid_y_N = y_N;
-	grid_xlength = xmax-xmin;
-	grid_ylength = ymax-ymin;
-	grid_xvals = new double[x_N];
-	grid_yvals = new double[y_N];
+	double logrmin, logrmax;
+	logrmin = log(rmin);
+	logrmax = log(rmax);
 
-	kappa_vals = new double*[x_N];
-	pot_vals = new double*[x_N];
-	defx = new double*[x_N];
-	defy = new double*[x_N];
-	hess_xx = new double*[x_N];
-	hess_yy = new double*[x_N];
-	hess_xy = new double*[x_N];
+	grid_logr_N = logr_N;
+	grid_phi_N = phi_N;
+	grid_logrlength = logrmax-logrmin;
+	grid_logrvals = new double[logr_N];
+	grid_phivals = new double[phi_N];
+
+	kappa_vals = new double*[logr_N];
+	pot_vals = new double*[logr_N];
+	defx = new double*[logr_N];
+	defy = new double*[logr_N];
+	hess_xx = new double*[logr_N];
+	hess_yy = new double*[logr_N];
+	hess_xy = new double*[logr_N];
 	int i,j;
-	for (i=0; i < x_N; i++) {
-		kappa_vals[i] = new double[y_N];
-		pot_vals[i] = new double[y_N];
-		defx[i] = new double[y_N];
-		defy[i] = new double[y_N];
-		hess_xx[i] = new double[y_N];
-		hess_yy[i] = new double[y_N];
-		hess_xy[i] = new double[y_N];
+	for (i=0; i < logr_N; i++) {
+		kappa_vals[i] = new double[phi_N];
+		pot_vals[i] = new double[phi_N];
+		defx[i] = new double[phi_N];
+		defy[i] = new double[phi_N];
+		hess_xx[i] = new double[phi_N];
+		hess_yy[i] = new double[phi_N];
+		hess_xy[i] = new double[phi_N];
 	}
 
 	lensvector def_in;
 	lensmatrix hess_in;
-	double x,y;
-	double xstep = grid_xlength/(x_N-1);
-	double ystep = grid_ylength/(y_N-1);
-	for (i=0, x=xmin; i < x_N; i++, x += xstep) grid_xvals[i] = x;
-	for (j=0, y=ymin; j < y_N; j++, y += ystep) grid_yvals[j] = y;
+	double r,x,y;
+	double logrstep = grid_logrlength/(logr_N-1);
+	double phistep = M_2PI/(phi_N-1); // the final phi value will be 2*pi, which is redundant (since it's equivalent to phi=0) but it's much simpler to do it this way
+	double logr, phi;
+	for (i=0, logr=logrmin; i < logr_N; i++, logr += logrstep) grid_logrvals[i] = logr;
+	for (j=0, phi=0; j < phi_N; j++, phi += phistep) grid_phivals[j] = phi;
 
-	for (i=0, x=xmin; i < x_N; i++, x += xstep) {
-		for (j=0, y=ymin; j < y_N; j++, y += ystep) {
-			kappa_vals[i][j] = lens_in->kappa(x,y);
-			pot_vals[i][j] = lens_in->potential(x,y);
-			lens_in->deflection(x,y,def_in);
-			defx[i][j] = def_in[0];
-			defy[i][j] = def_in[1];
-			lens_in->hessian(x,y,hess_in);
-			hess_xx[i][j] = hess_in[0][0];
-			hess_yy[i][j] = hess_in[1][1];
-			hess_xy[i][j] = hess_in[0][1];
+	rmin_einstein_radius = exp(logrmin);
+	rmax_einstein_radius = exp(logrmax);
+
+	for (i=0, logr=logrmin; i < logr_N; i++, logr += logrstep) {
+		for (j=0, phi=0; j < phi_N; j++, phi += phistep) {
+			r = exp(logr);
+			x = r*cos(phi);
+			y = r*sin(phi);
+			pot_vals[i][j] = lens_in->potential(x,y) / kscale;
+			lens_in->kappa_and_potential_derivatives(x, y, kappa_vals[i][j], def_in, hess_in);
+			kappa_vals[i][j] /= kscale;
+			defx[i][j] = def_in[0] / kscale;
+			defy[i][j] = def_in[1] / kscale;
+			hess_xx[i][j] = hess_in[0][0] / kscale;
+			hess_yy[i][j] = hess_in[1][1] / kscale;
+			hess_xy[i][j] = hess_in[0][1] / kscale;
 		}
 	}
 }
@@ -2121,43 +2142,41 @@ Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &theta_in
 Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 {
 	kscale = lens_in->kscale;
+	rscale = lens_in->rscale;
+	rscale0 = lens_in->rscale0;
 	copy_base_lensdata(lens_in);
-	grid_xlength = lens_in->grid_xlength;
-	grid_ylength = lens_in->grid_ylength;
+	grid_logrlength = lens_in->grid_logrlength;
+	grid_logr_N = lens_in->grid_logr_N;
+	grid_phi_N = lens_in->grid_phi_N;
+	grid_logrvals = new double[grid_logr_N];
+	grid_phivals = new double[grid_phi_N];
 
-	grid_x_N = lens_in->grid_x_N;
-	grid_y_N = lens_in->grid_y_N;
-	grid_xvals = new double[grid_x_N];
-	grid_yvals = new double[grid_y_N];
-
-	kappa_vals = new double*[grid_x_N];
-	pot_vals = new double*[grid_x_N];
-	defx = new double*[grid_x_N];
-	defy = new double*[grid_x_N];
-	hess_xx = new double*[grid_x_N];
-	hess_yy = new double*[grid_x_N];
-	hess_xy = new double*[grid_x_N];
+	kappa_vals = new double*[grid_logr_N];
+	pot_vals = new double*[grid_logr_N];
+	defx = new double*[grid_logr_N];
+	defy = new double*[grid_logr_N];
+	hess_xx = new double*[grid_logr_N];
+	hess_yy = new double*[grid_logr_N];
+	hess_xy = new double*[grid_logr_N];
 	int i,j;
-	for (i=0; i < grid_x_N; i++) {
-		kappa_vals[i] = new double[grid_y_N];
-		pot_vals[i] = new double[grid_y_N];
-		defx[i] = new double[grid_y_N];
-		defy[i] = new double[grid_y_N];
-		hess_xx[i] = new double[grid_y_N];
-		hess_yy[i] = new double[grid_y_N];
-		hess_xy[i] = new double[grid_y_N];
+	for (i=0; i < grid_logr_N; i++) {
+		kappa_vals[i] = new double[grid_phi_N];
+		pot_vals[i] = new double[grid_phi_N];
+		defx[i] = new double[grid_phi_N];
+		defy[i] = new double[grid_phi_N];
+		hess_xx[i] = new double[grid_phi_N];
+		hess_yy[i] = new double[grid_phi_N];
+		hess_xy[i] = new double[grid_phi_N];
 	}
 
-	lensvector def_in;
-	lensmatrix hess_in;
-	double x,y;
-	double xstep = grid_xlength/(grid_x_N-1);
-	double ystep = grid_ylength/(grid_y_N-1);
-	for (i=0; i < grid_x_N; i++) grid_xvals[i] = lens_in->grid_xvals[i];
-	for (j=0; j < grid_y_N; j++) grid_yvals[j] = lens_in->grid_yvals[j];
+	for (i=0; i < grid_logr_N; i++) grid_logrvals[i] = lens_in->grid_logrvals[i];
+	for (j=0; j < grid_phi_N; j++) grid_phivals[j] = lens_in->grid_phivals[j];
 
-	for (i=0; i < grid_x_N; i++) {
-		for (j=0; j < grid_y_N; j++) {
+	rmin_einstein_radius = lens_in->rmin_einstein_radius;
+	rmax_einstein_radius = lens_in->rmax_einstein_radius;
+
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
 			kappa_vals[i][j] = lens_in->kappa_vals[i][j];
 			pot_vals[i][j] = lens_in->pot_vals[i][j];
 			defx[i][j] = lens_in->defx[i][j];
@@ -2167,22 +2186,106 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 			hess_xy[i][j] = lens_in->hess_xy[i][j];
 		}
 	}
+	update_meta_parameters_and_pointers();
+}
+
+Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
+{
+
+	lenstype = TABULATED;
+	special_parameter_command = "";
+	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
+
+	kscale = kscale_in;
+	rscale = rscale_in;
+	theta = degrees_to_radians(theta_in);
+	x_center = xc;
+	y_center = yc;
+
+	tabfile >> model_name;
+	tabfile >> rscale0;
+	update_meta_parameters_and_pointers();
+
+	tabfile >> grid_logr_N;
+	tabfile >> grid_phi_N;
+
+	grid_logrvals = new double[grid_logr_N];
+	grid_phivals = new double[grid_phi_N];
+	kappa_vals = new double*[grid_logr_N];
+	pot_vals = new double*[grid_logr_N];
+	defx = new double*[grid_logr_N];
+	defy = new double*[grid_logr_N];
+	hess_xx = new double*[grid_logr_N];
+	hess_yy = new double*[grid_logr_N];
+	hess_xy = new double*[grid_logr_N];
+	int i,j;
+	for (i=0; i < grid_logr_N; i++) {
+		kappa_vals[i] = new double[grid_phi_N];
+		pot_vals[i] = new double[grid_phi_N];
+		defx[i] = new double[grid_phi_N];
+		defy[i] = new double[grid_phi_N];
+		hess_xx[i] = new double[grid_phi_N];
+		hess_yy[i] = new double[grid_phi_N];
+		hess_xy[i] = new double[grid_phi_N];
+	}
+
+	for (i=0; i < grid_logr_N; i++) tabfile >> grid_logrvals[i];
+	for (j=0; j < grid_phi_N; j++) tabfile >> grid_phivals[j];
+
+	rmin_einstein_radius = exp(grid_logrvals[0]);
+	rmax_einstein_radius = exp(grid_logrvals[grid_logr_N-1]);
+
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
+			tabfile >> kappa_vals[i][j] >> pot_vals[i][j] >> defx[i][j] >> defy[i][j] >> hess_xx[i][j] >> hess_yy[i][j] >> hess_xy[i][j];
+		}
+	}
+	grid_logrlength = grid_logrvals[grid_logr_N-1] - grid_logrvals[0];
+}
+
+void Tabulated_Model::output_tables(const string tabfile_root)
+{
+	string tabfilename = tabfile_root + ".tab";
+	ofstream tabfile(tabfilename.c_str());
+	tabfile << model_name << " " << rscale0 << endl;
+	tabfile << grid_logr_N << " " << grid_phi_N << endl << endl;
+	int i,j;
+	for (i=0; i < grid_logr_N; i++) tabfile << grid_logrvals[i] << " ";
+	tabfile << endl;
+	for (j=0; j < grid_phi_N; j++) tabfile << grid_phivals[j] << " ";
+	tabfile << endl << endl;
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
+			tabfile << kappa_vals[i][j] << " ";
+			tabfile << pot_vals[i][j] << " ";
+			tabfile << defx[i][j] << " ";
+			tabfile << defy[i][j] << " ";
+			tabfile << hess_xx[i][j] << " ";
+			tabfile << hess_yy[i][j] << " ";
+			tabfile << hess_xy[i][j];
+			tabfile << endl;
+		}
+	}
+	tabfile.close();
 }
 
 void Tabulated_Model::assign_paramnames()
 {
-	paramnames[0] = "kscale"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
-	paramnames[1] = "theta";  latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "";
-	paramnames[2] = "xc";     latex_paramnames[2] = "x";       latex_param_subscripts[2] = "c";
-	paramnames[3] = "yc";     latex_paramnames[3] = "y";       latex_param_subscripts[3] = "c";
+	paramnames[0] = "kscale"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rscale";  latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	paramnames[2] = "theta";  latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
+	paramnames[3] = "xc";     latex_paramnames[3] = "x";       latex_param_subscripts[3] = "c";
+	paramnames[4] = "yc";     latex_paramnames[4] = "y";       latex_param_subscripts[4] = "c";
 }
 
 void Tabulated_Model::assign_param_pointers()
 {
+	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &kscale;
-	param[1] = &theta; angle_paramnum = 1;
-	param[2] = &x_center;
-	param[3] = &y_center;
+	param[1] = &rscale;
+	param[2] = &theta; angle_paramnum = 2;
+	param[3] = &x_center;
+	param[4] = &y_center;
 }
 
 void Tabulated_Model::update_meta_parameters()
@@ -2190,22 +2293,26 @@ void Tabulated_Model::update_meta_parameters()
 	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
 	costheta = cos(theta);
 	sintheta = sin(theta);
+	rscale_factor = rscale / rscale0;
+	//cout << rscale << " " << rscale0 << " " << rscale_factor << endl;
 }
 
 void Tabulated_Model::set_auto_stepsizes()
 {
 	stepsizes[0] = 0.3*kscale;
-	stepsizes[1] = 20;
-	stepsizes[2] = x_center; // arbitrary! really, the center should never be independently varied
-	stepsizes[3] = y_center;
+	stepsizes[1] = 0.3*rscale;
+	stepsizes[2] = 20;
+	stepsizes[3] = x_center;
+	stepsizes[4] = y_center;
 }
 
 void Tabulated_Model::set_auto_ranges()
 {
-	set_auto_penalty_limits[0] = false;
-	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0.01*kscale; penalty_upper_limits[0] = 100*kscale;  // limits are somewhat arbitrary, but we shouldn't allow k --> 0 or k very large
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = exp(grid_logrvals[0]); penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = false;
+	set_auto_penalty_limits[4] = false;
 }
 
 double Tabulated_Model::potential(double x, double y)
@@ -2213,19 +2320,37 @@ double Tabulated_Model::potential(double x, double y)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor); // scaling r is easier than scaling the table itself
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
+
 	interp = TT*UU*pot_vals[ival][jval] + tt*UU*pot_vals[ival+1][jval]
 						+ TT*uu*pot_vals[ival][jval+1] + tt*uu*pot_vals[ival+1][jval+1];
-	return kscale*interp;
+	return kscale*rscale_factor*rscale_factor*interp;
 }
 
 double Tabulated_Model::kappa(double x, double y)
@@ -2233,14 +2358,31 @@ double Tabulated_Model::kappa(double x, double y)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+	//cout << "logr=" << logr << ", r=" << exp(logr) << ", phi=" << phi << endl;
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
 
@@ -2251,27 +2393,71 @@ double Tabulated_Model::kappa(double x, double y)
 	return kscale*interp;
 }
 
+double Tabulated_Model::kappa_rsq(const double rsq)
+{
+	double logr, phi;
+	logr = log(sqrt(rsq)/rscale_factor);
+	static const int phi_N = 100;
+	double phistep = M_2PI/phi_N;
+	int i, ival, jval;
+	double tt, uu, TT, UU, interp;
+	double kappa_angular_avg = 0;
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	if (ival < 0) ival=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	TT = 1-tt;
+	for (i=0, phi=0; i < phi_N; i++, phi += phistep) {
+		jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+		if (jval < 0) jval=0;
+		if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+		uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+		UU = 1-uu;
+		kappa_angular_avg += kscale*(TT*UU*kappa_vals[ival][jval] + tt*UU*kappa_vals[ival+1][jval]
+							+ TT*uu*kappa_vals[ival][jval+1] + tt*uu*kappa_vals[ival+1][jval+1]);
+	}
+	kappa_angular_avg /= phi_N;
+	return kappa_angular_avg;
+}
+
 void Tabulated_Model::deflection(double x, double y, lensvector& def)
 {
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
-	//cout << x << " " << grid_xvals[0] << " " << grid_xlength << " " << grid_x_N << endl;
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	//cout << logr << " " << grid_logrvals[0] << " " << grid_logrlength << " " << grid_logr_N << endl;
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
 	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
 	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
-	def[0] = kscale*interp;
+	def[0] = kscale*rscale_factor*interp;
 	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
-	def[1] = kscale*interp;
+	def[1] = kscale*rscale_factor*interp;
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
 }
 
@@ -2280,14 +2466,31 @@ void Tabulated_Model::hessian(double x, double y, lensmatrix& hess)
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
 	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
@@ -2308,16 +2511,31 @@ void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
 
-	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
 
@@ -2326,10 +2544,9 @@ void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double
 	kap = kscale*interp;
 
 	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
-	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
-	def[0] = kscale*interp;
+	def[0] = kscale*rscale_factor*interp;
 	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
-	def[1] = kscale*interp;
+	def[1] = kscale*rscale_factor*interp;
 
 	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
 						+ TT*uu*hess_xx[ival][jval+1] + tt*uu*hess_xx[ival+1][jval+1];
@@ -2351,24 +2568,39 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
 
-	if (sintheta != 0) rotate(x,y);
-	ival = (int) ((x - grid_xvals[0]) * grid_x_N / grid_xlength);
-	jval = (int) ((y - grid_yvals[0]) * grid_y_N / grid_ylength);
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
 	if (ival < 0) ival=0;
 	if (jval < 0) jval=0;
-	if (ival >= grid_x_N-1) ival=grid_x_N-2;
-	if (jval >= grid_y_N-1) jval=grid_y_N-2;
-	tt = (x - grid_xvals[ival]) / (grid_xvals[ival+1] - grid_xvals[ival]);
-	uu = (y - grid_yvals[jval]) / (grid_yvals[jval+1] - grid_yvals[jval]);
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
 	TT = 1-tt;
 	UU = 1-uu;
 
 	interp = TT*UU*defx[ival][jval] + tt*UU*defx[ival+1][jval] + TT*uu*defx[ival][jval+1] + tt*uu*defx[ival+1][jval+1];
 	//cout << ival << " " << jval << " " << uu << " " << tt << endl;
-	def[0] = kscale*interp;
+	def[0] = kscale*rscale_factor*interp;
 	interp = TT*UU*defy[ival][jval] + tt*UU*defy[ival+1][jval] + TT*uu*defy[ival][jval+1] + tt*uu*defy[ival+1][jval+1];
-	def[1] = kscale*interp;
+	def[1] = kscale*rscale_factor*interp;
 
 	interp = TT*UU*hess_xx[ival][jval] + tt*UU*hess_xx[ival+1][jval]
 						+ TT*uu*hess_xx[ival][jval+1] + tt*uu*hess_xx[ival+1][jval+1];
@@ -2386,10 +2618,10 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 }
 
 Tabulated_Model::~Tabulated_Model() {
-	if (grid_xvals != NULL) {
-		delete[] grid_xvals;
-		delete[] grid_yvals;
-		for (int i=0; i < grid_x_N; i++) {
+	if (grid_logrvals != NULL) {
+		delete[] grid_logrvals;
+		delete[] grid_phivals;
+		for (int i=0; i < grid_logr_N; i++) {
 			delete[] kappa_vals[i];
 			delete[] pot_vals[i];
 			delete[] defx[i];
@@ -2406,14 +2638,698 @@ Tabulated_Model::~Tabulated_Model() {
 		delete[] hess_yy;
 		delete[] hess_xy;
 	}
-	if (param != NULL) delete[] param;
-	if (anchor_parameter != NULL) delete[] anchor_parameter;
-	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
-	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
-	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 }
 
 
+/***************************** Tabulated Model that interpolates in q *****************************/
+QTabulated_Model::QTabulated_Model(const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N)
+{
+	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
+	lenstype = QTABULATED;
+	model_name = "qtab(" + lens_in->get_model_name() + ")";
+	special_parameter_command = "";
+	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
+	ellipticity_mode = -1;
+	original_emode = lens_in->ellipticity_mode;
+	// I wanted to allow q or e to be a parameter, but at present only q is allowed...fix this later
+
+	kscale = kscale_in;
+	rscale = rscale0 = rscale_in;
+	q = q_in;
+	x_center = xc;
+	y_center = yc;
+	theta = degrees_to_radians(theta_in);
+	lens_in->set_theta(0);
+	lens_in->set_center(0,0); // we're going to delete the original lens anyway, so it doesn't matter what its original angle and center position was
+
+	double logrmin, logrmax;
+	logrmin = log(rmin);
+	logrmax = log(rmax);
+	double qmin, qmax;
+	if ((original_emode==0) or (original_emode==1)) {
+		qmin = qmin_in; qmax = 1.0;
+	} else {
+		qmin = 0; qmax = 1 - qmin_in; // 'qq' here is actually epsilon = 1-qq
+	}
+
+	grid_logr_N = logr_N;
+	grid_phi_N = phi_N;
+	grid_q_N = q_N;
+	grid_logrlength = logrmax-logrmin;
+	grid_qlength = qmax-qmin;
+	grid_logrvals = new double[logr_N];
+	grid_phivals = new double[phi_N];
+	grid_qvals = new double[q_N];
+
+	kappa_vals = new double**[logr_N];
+	pot_vals = new double**[logr_N];
+	defx = new double**[logr_N];
+	defy = new double**[logr_N];
+	hess_xx = new double**[logr_N];
+	hess_yy = new double**[logr_N];
+	hess_xy = new double**[logr_N];
+	int i,j,k;
+	for (i=0; i < logr_N; i++) {
+		kappa_vals[i] = new double*[phi_N];
+		pot_vals[i] = new double*[phi_N];
+		defx[i] = new double*[phi_N];
+		defy[i] = new double*[phi_N];
+		hess_xx[i] = new double*[phi_N];
+		hess_yy[i] = new double*[phi_N];
+		hess_xy[i] = new double*[phi_N];
+		for (j=0; j < phi_N; j++) {
+			kappa_vals[i][j] = new double[q_N];
+			pot_vals[i][j] = new double[q_N];
+			defx[i][j] = new double[q_N];
+			defy[i][j] = new double[q_N];
+			hess_xx[i][j] = new double[q_N];
+			hess_yy[i][j] = new double[q_N];
+			hess_xy[i][j] = new double[q_N];
+		}
+	}
+
+	lensvector def_in;
+	lensmatrix hess_in;
+	double r,x,y;
+	double logrstep = grid_logrlength/(logr_N-1);
+	double phistep = M_2PI/(phi_N-1); // the final phi value will be 2*pi, which is redundant (since it's equivalent to phi=0) but it's much simpler to do it this way
+	double qstep = (qmax-qmin)/(q_N-1);
+	double logr, phi, qq;
+	for (i=0, logr=logrmin; i < logr_N; i++, logr += logrstep) grid_logrvals[i] = logr;
+	for (j=0, phi=0; j < phi_N; j++, phi += phistep) grid_phivals[j] = phi;
+	for (k=0, qq=qmin; k < q_N; k++, qq += qstep) grid_qvals[k] = qq;
+
+	rmin_einstein_radius = exp(logrmin);
+	rmax_einstein_radius = exp(logrmax);
+
+	for (k=0, qq=qmin; k < q_N; k++, qq += qstep) {
+		if (k==q_N-1) qq=qmax; // just to enforce q=1 at the end without any machine error
+		lens_in->update_ellipticity_parameter(qq);
+		for (i=0, logr=logrmin; i < logr_N; i++, logr += logrstep) {
+			r = exp(logr);
+			for (j=0, phi=0; j < phi_N; j++, phi += phistep) {
+				x = r*cos(phi);
+				y = r*sin(phi);
+				pot_vals[i][j][k] = lens_in->potential(x,y) / kscale;
+				lens_in->kappa_and_potential_derivatives(x, y, kappa_vals[i][j][k], def_in, hess_in);
+				kappa_vals[i][j][k] /= kscale;
+				defx[i][j][k] = def_in[0] / kscale;
+				defy[i][j][k] = def_in[1] / kscale;
+				hess_xx[i][j][k] = hess_in[0][0] / kscale;
+				hess_yy[i][j][k] = hess_in[1][1] / kscale;
+				hess_xy[i][j][k] = hess_in[0][1] / kscale;
+			}
+		}
+		cout << "Row " << k << " (q=" << qq << ") done...\n" << flush;
+	}
+	update_meta_parameters_and_pointers();
+}
+
+QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
+{
+	original_emode = lens_in->original_emode;
+	kscale = lens_in->kscale;
+	rscale = lens_in->rscale;
+	rscale0 = lens_in->rscale0;
+	copy_base_lensdata(lens_in);
+	if ((original_emode==0) or (original_emode==1))
+		q = lens_in->q;
+	else
+		q = lens_in->epsilon;
+	grid_logrlength = lens_in->grid_logrlength;
+	grid_qlength = lens_in->grid_qlength;
+	grid_logr_N = lens_in->grid_logr_N;
+	grid_phi_N = lens_in->grid_phi_N;
+	grid_q_N = lens_in->grid_q_N;
+	grid_logrvals = new double[grid_logr_N];
+	grid_phivals = new double[grid_phi_N];
+	grid_qvals = new double[grid_q_N];
+
+	kappa_vals = new double**[grid_logr_N];
+	pot_vals = new double**[grid_logr_N];
+	defx = new double**[grid_logr_N];
+	defy = new double**[grid_logr_N];
+	hess_xx = new double**[grid_logr_N];
+	hess_yy = new double**[grid_logr_N];
+	hess_xy = new double**[grid_logr_N];
+	int i,j,k;
+	for (i=0; i < grid_logr_N; i++) {
+		kappa_vals[i] = new double*[grid_phi_N];
+		pot_vals[i] = new double*[grid_phi_N];
+		defx[i] = new double*[grid_phi_N];
+		defy[i] = new double*[grid_phi_N];
+		hess_xx[i] = new double*[grid_phi_N];
+		hess_yy[i] = new double*[grid_phi_N];
+		hess_xy[i] = new double*[grid_phi_N];
+		for (j=0; j < grid_phi_N; j++) {
+			kappa_vals[i][j] = new double[grid_q_N];
+			pot_vals[i][j] = new double[grid_q_N];
+			defx[i][j] = new double[grid_q_N];
+			defy[i][j] = new double[grid_q_N];
+			hess_xx[i][j] = new double[grid_q_N];
+			hess_yy[i][j] = new double[grid_q_N];
+			hess_xy[i][j] = new double[grid_q_N];
+		}
+	}
+
+	for (i=0; i < grid_logr_N; i++) grid_logrvals[i] = lens_in->grid_logrvals[i];
+	for (j=0; j < grid_phi_N; j++) grid_phivals[j] = lens_in->grid_phivals[j];
+	for (k=0; k < grid_q_N; k++) grid_qvals[k] = lens_in->grid_qvals[k];
+
+	rmin_einstein_radius = lens_in->rmin_einstein_radius;
+	rmax_einstein_radius = lens_in->rmax_einstein_radius;
+
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
+			for (k=0; k < grid_q_N; k++) {
+				kappa_vals[i][j][k] = lens_in->kappa_vals[i][j][k];
+				pot_vals[i][j][k] = lens_in->pot_vals[i][j][k];
+				defx[i][j][k] = lens_in->defx[i][j][k];
+				defy[i][j][k] = lens_in->defy[i][j][k];
+				hess_xx[i][j][k] = lens_in->hess_xx[i][j][k];
+				hess_yy[i][j][k] = lens_in->hess_yy[i][j][k];
+				hess_xy[i][j][k] = lens_in->hess_xy[i][j][k];
+			}
+		}
+	}
+	update_meta_parameters_and_pointers();
+}
+
+QTabulated_Model::QTabulated_Model(const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
+{
+	lenstype = QTABULATED;
+	special_parameter_command = "";
+	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
+
+	kscale = kscale_in;
+	rscale = rscale_in;
+	q = q_in;
+	f_major_axis = 1.0;
+	theta = degrees_to_radians(theta_in);
+	x_center = xc;
+	y_center = yc;
+
+	tabfile >> model_name;
+	tabfile >> rscale0;
+
+	tabfile >> grid_logr_N;
+	tabfile >> grid_phi_N;
+	tabfile >> grid_q_N;
+
+	grid_logrvals = new double[grid_logr_N];
+	grid_phivals = new double[grid_phi_N];
+	grid_qvals = new double[grid_q_N];
+
+	kappa_vals = new double**[grid_logr_N];
+	pot_vals = new double**[grid_logr_N];
+	defx = new double**[grid_logr_N];
+	defy = new double**[grid_logr_N];
+	hess_xx = new double**[grid_logr_N];
+	hess_yy = new double**[grid_logr_N];
+	hess_xy = new double**[grid_logr_N];
+	int i,j,k;
+	for (i=0; i < grid_logr_N; i++) {
+		kappa_vals[i] = new double*[grid_phi_N];
+		pot_vals[i] = new double*[grid_phi_N];
+		defx[i] = new double*[grid_phi_N];
+		defy[i] = new double*[grid_phi_N];
+		hess_xx[i] = new double*[grid_phi_N];
+		hess_yy[i] = new double*[grid_phi_N];
+		hess_xy[i] = new double*[grid_phi_N];
+		for (j=0; j < grid_phi_N; j++) {
+			kappa_vals[i][j] = new double[grid_q_N];
+			pot_vals[i][j] = new double[grid_q_N];
+			defx[i][j] = new double[grid_q_N];
+			defy[i][j] = new double[grid_q_N];
+			hess_xx[i][j] = new double[grid_q_N];
+			hess_yy[i][j] = new double[grid_q_N];
+			hess_xy[i][j] = new double[grid_q_N];
+		}
+	}
+
+	for (i=0; i < grid_logr_N; i++) tabfile >> grid_logrvals[i];
+	for (j=0; j < grid_phi_N; j++) tabfile >> grid_phivals[j];
+	for (k=0; k < grid_q_N; k++) tabfile >> grid_qvals[k];
+	grid_logrlength = grid_logrvals[grid_logr_N-1] - grid_logrvals[0];
+	grid_qlength = grid_qvals[grid_q_N-1] - grid_qvals[0];
+	update_meta_parameters_and_pointers();
+
+	rmin_einstein_radius = exp(grid_logrvals[0]);
+	rmax_einstein_radius = exp(grid_logrvals[grid_logr_N-1]);
+
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
+			for (k=0; k < grid_q_N; k++) {
+				tabfile >> kappa_vals[i][j][k] >> pot_vals[i][j][k] >> defx[i][j][k] >> defy[i][j][k] >> hess_xx[i][j][k] >> hess_yy[i][j][k] >> hess_xy[i][j][k];
+			}
+		}
+		cout << "Row " << i << " done...\n" << flush;
+	}
+}
+
+void QTabulated_Model::output_tables(const string tabfile_root)
+{
+	string tabfilename = tabfile_root + ".tab";
+	ofstream tabfile(tabfilename.c_str());
+	tabfile << model_name << " " << rscale0 << endl;
+	tabfile << grid_logr_N << " " << grid_phi_N << " " << grid_q_N << endl << endl;
+	int i,j,k;
+	for (i=0; i < grid_logr_N; i++) tabfile << grid_logrvals[i] << " ";
+	tabfile << endl;
+	for (j=0; j < grid_phi_N; j++) tabfile << grid_phivals[j] << " ";
+	tabfile << endl << endl;
+	for (k=0; k < grid_q_N; k++) tabfile << grid_qvals[k] << " ";
+	tabfile << endl << endl;
+	for (i=0; i < grid_logr_N; i++) {
+		for (j=0; j < grid_phi_N; j++) {
+			for (k=0; k < grid_q_N; k++) {
+				tabfile << kappa_vals[i][j][k] << " ";
+				tabfile << pot_vals[i][j][k] << " ";
+				tabfile << defx[i][j][k] << " ";
+				tabfile << defy[i][j][k] << " ";
+				tabfile << hess_xx[i][j][k] << " ";
+				tabfile << hess_yy[i][j][k] << " ";
+				tabfile << hess_xy[i][j][k];
+				tabfile << endl;
+			}
+		}
+	}
+	tabfile.close();
+}
+
+void QTabulated_Model::assign_paramnames()
+{
+	paramnames[0] = "kscale"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rscale";  latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	paramnames[2] = "q";  latex_paramnames[2] = "q"; latex_param_subscripts[2] = "";
+	paramnames[3] = "theta";  latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
+	paramnames[4] = "xc";     latex_paramnames[4] = "x";       latex_param_subscripts[4] = "c";
+	paramnames[5] = "yc";     latex_paramnames[5] = "y";       latex_param_subscripts[5] = "c";
+}
+
+void QTabulated_Model::assign_param_pointers()
+{
+	param[0] = &kscale;
+	param[1] = &rscale;
+	param[2] = &q;
+	param[3] = &theta; angle_paramnum = 3;
+	param[4] = &x_center;
+	param[5] = &y_center;
+}
+
+void QTabulated_Model::update_meta_parameters()
+{
+	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
+	costheta = cos(theta);
+	sintheta = sin(theta);
+	rscale_factor = rscale / rscale0;
+	kval = (int) ((q - grid_qvals[0]) * grid_q_N / grid_qlength);
+	if (kval < 0) kval=0;
+	if (kval >= grid_q_N-1) kval=grid_q_N-2;
+	ww = (q - grid_qvals[kval]) / (grid_qvals[kval+1] - grid_qvals[kval]);
+	WW = 1-ww;
+}
+
+void QTabulated_Model::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.3*kscale;
+	stepsizes[1] = 0.3*rscale;
+	stepsizes[2] = 0.1;
+	stepsizes[3] = 20;
+	stepsizes[4] = x_center;
+	stepsizes[5] = y_center;
+}
+
+void QTabulated_Model::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0.01*kscale; penalty_upper_limits[0] = 100*kscale;  // limits are somewhat arbitrary, but we shouldn't allow k --> 0 or k very large
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = exp(grid_logrvals[0]); penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = grid_qvals[0]; penalty_upper_limits[2] = grid_qvals[grid_q_N-1];
+	set_auto_penalty_limits[3] = false;
+	set_auto_penalty_limits[4] = false;
+	set_auto_penalty_limits[5] = false;
+}
+
+double QTabulated_Model::potential(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor); // scaling r is easier than scaling the table itself
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	//cout << kval << " " << pot_vals[ival][jval][kval] << " " << pot_vals[ival][jval][kval+1] << endl;
+
+	interp = WW*(TT*UU*pot_vals[ival][jval][kval] + tt*UU*pot_vals[ival+1][jval][kval]
+						+ TT*uu*pot_vals[ival][jval+1][kval] + tt*uu*pot_vals[ival+1][jval+1][kval])
+				+ ww*(TT*UU*pot_vals[ival][jval][kval+1] + tt*UU*pot_vals[ival+1][jval][kval+1]
+						+ TT*uu*pot_vals[ival][jval+1][kval+1] + tt*uu*pot_vals[ival+1][jval+1][kval+1]);
+
+	return kscale*rscale_factor*rscale_factor*interp;
+}
+
+double QTabulated_Model::kappa(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+	//cout << "logr=" << logr << ", r=" << exp(logr) << ", phi=" << phi << endl;
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	//cout << ival << " " << jval << " " << tt << " " << uu << endl;
+	//cout << kappa_vals[ival][jval] << endl;
+
+	interp = WW*(TT*UU*kappa_vals[ival][jval][kval] + tt*UU*kappa_vals[ival+1][jval][kval]
+						+ TT*uu*kappa_vals[ival][jval+1][kval] + tt*uu*kappa_vals[ival+1][jval+1][kval])
+				+ ww*(TT*UU*kappa_vals[ival][jval][kval+1] + tt*UU*kappa_vals[ival+1][jval][kval+1]
+						+ TT*uu*kappa_vals[ival][jval+1][kval+1] + tt*uu*kappa_vals[ival+1][jval+1][kval+1]);
+
+	return kscale*interp;
+}
+
+double QTabulated_Model::kappa_rsq(const double rsq)
+{
+	// probably should change this so it just sets q=1 and doesn't require an angle average (perhaps?)
+	double logr, phi;
+	logr = log(sqrt(rsq)/rscale_factor);
+	static const int phi_N = 100;
+	double phistep = M_2PI/phi_N;
+	int i, ival, jval;
+	double tt, uu, TT, UU, interp;
+	double kappa_angular_avg = 0;
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	if (ival < 0) ival=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	TT = 1-tt;
+	for (i=0, phi=0; i < phi_N; i++, phi += phistep) {
+		jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+		if (jval < 0) jval=0;
+		if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+		uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+		UU = 1-uu;
+
+		kappa_angular_avg += kscale*(WW*(TT*UU*kappa_vals[ival][jval][kval] + tt*UU*kappa_vals[ival+1][jval][kval]
+						+ TT*uu*kappa_vals[ival][jval+1][kval] + tt*uu*kappa_vals[ival+1][jval+1][kval])
+				+ ww*(TT*UU*kappa_vals[ival][jval][kval+1] + tt*UU*kappa_vals[ival+1][jval][kval+1]
+						+ TT*uu*kappa_vals[ival][jval+1][kval+1] + tt*uu*kappa_vals[ival+1][jval+1][kval+1]));
+
+	}
+	kappa_angular_avg /= phi_N;
+	return kappa_angular_avg;
+}
+
+void QTabulated_Model::deflection(double x, double y, lensvector& def)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	//cout << logr << " " << grid_logrvals[0] << " " << grid_logrlength << " " << grid_logr_N << endl;
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	interp = WW*(TT*UU*defx[ival][jval][kval] + tt*UU*defx[ival+1][jval][kval] + TT*uu*defx[ival][jval+1][kval] + tt*uu*defx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defx[ival][jval][kval+1] + tt*UU*defx[ival+1][jval][kval+1] + TT*uu*defx[ival][jval+1][kval+1] + tt*uu*defx[ival+1][jval+1][kval+1]);
+	def[0] = kscale*rscale_factor*interp;
+	interp = WW*(TT*UU*defy[ival][jval][kval] + tt*UU*defy[ival+1][jval][kval] + TT*uu*defy[ival][jval+1][kval] + tt*uu*defy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defy[ival][jval][kval+1] + tt*UU*defy[ival+1][jval][kval+1] + TT*uu*defy[ival][jval+1][kval+1] + tt*uu*defy[ival+1][jval+1][kval+1]);
+	def[1] = kscale*rscale_factor*interp;
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+}
+
+void QTabulated_Model::hessian(double x, double y, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	double logr, phi;
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+	interp = WW*(TT*UU*hess_xx[ival][jval][kval] + tt*UU*hess_xx[ival+1][jval][kval] + TT*uu*hess_xx[ival][jval+1][kval] + tt*uu*hess_xx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xx[ival][jval][kval+1] + tt*UU*hess_xx[ival+1][jval][kval+1] + TT*uu*hess_xx[ival][jval+1][kval+1] + tt*uu*hess_xx[ival+1][jval+1][kval+1]);
+
+	hess[0][0] = kscale*interp;
+	interp = WW*(TT*UU*hess_yy[ival][jval][kval] + tt*UU*hess_yy[ival+1][jval][kval] + TT*uu*hess_yy[ival][jval+1][kval] + tt*uu*hess_yy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_yy[ival][jval][kval+1] + tt*UU*hess_yy[ival+1][jval][kval+1] + TT*uu*hess_yy[ival][jval+1][kval+1] + tt*uu*hess_yy[ival+1][jval+1][kval+1]);
+
+	hess[1][1] = kscale*interp;
+	interp = WW*(TT*UU*hess_xy[ival][jval][kval] + tt*UU*hess_xy[ival+1][jval][kval] + TT*uu*hess_xy[ival][jval+1][kval] + tt*uu*hess_xy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xy[ival][jval][kval+1] + tt*UU*hess_xy[ival+1][jval][kval+1] + TT*uu*hess_xy[ival][jval+1][kval+1] + tt*uu*hess_xy[ival+1][jval+1][kval+1]);
+
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void QTabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	interp = WW*(TT*UU*kappa_vals[ival][jval][kval] + tt*UU*kappa_vals[ival+1][jval][kval]
+						+ TT*uu*kappa_vals[ival][jval+1][kval] + tt*uu*kappa_vals[ival+1][jval+1][kval])
+				+ ww*(TT*UU*kappa_vals[ival][jval][kval+1] + tt*UU*kappa_vals[ival+1][jval][kval+1]
+						+ TT*uu*kappa_vals[ival][jval+1][kval+1] + tt*uu*kappa_vals[ival+1][jval+1][kval+1]);
+	kap = kscale*interp;
+
+	interp = WW*(TT*UU*defx[ival][jval][kval] + tt*UU*defx[ival+1][jval][kval] + TT*uu*defx[ival][jval+1][kval] + tt*uu*defx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defx[ival][jval][kval+1] + tt*UU*defx[ival+1][jval][kval+1] + TT*uu*defx[ival][jval+1][kval+1] + tt*uu*defx[ival+1][jval+1][kval+1]);
+	def[0] = kscale*rscale_factor*interp;
+	interp = WW*(TT*UU*defy[ival][jval][kval] + tt*UU*defy[ival+1][jval][kval] + TT*uu*defy[ival][jval+1][kval] + tt*uu*defy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defy[ival][jval][kval+1] + tt*UU*defy[ival+1][jval][kval+1] + TT*uu*defy[ival][jval+1][kval+1] + tt*uu*defy[ival+1][jval+1][kval+1]);
+	def[1] = kscale*rscale_factor*interp;
+
+	interp = WW*(TT*UU*hess_xx[ival][jval][kval] + tt*UU*hess_xx[ival+1][jval][kval] + TT*uu*hess_xx[ival][jval+1][kval] + tt*uu*hess_xx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xx[ival][jval][kval+1] + tt*UU*hess_xx[ival+1][jval][kval+1] + TT*uu*hess_xx[ival][jval+1][kval+1] + tt*uu*hess_xx[ival+1][jval+1][kval+1]);
+	hess[0][0] = kscale*interp;
+
+	interp = WW*(TT*UU*hess_yy[ival][jval][kval] + tt*UU*hess_yy[ival+1][jval][kval] + TT*uu*hess_yy[ival][jval+1][kval] + tt*uu*hess_yy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_yy[ival][jval][kval+1] + tt*UU*hess_yy[ival+1][jval][kval+1] + TT*uu*hess_yy[ival][jval+1][kval+1] + tt*uu*hess_yy[ival+1][jval+1][kval+1]);
+	hess[1][1] = kscale*interp;
+
+	interp = WW*(TT*UU*hess_xy[ival][jval][kval] + tt*UU*hess_xy[ival+1][jval][kval] + TT*uu*hess_xy[ival][jval+1][kval] + tt*uu*hess_xy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xy[ival][jval][kval+1] + tt*UU*hess_xy[ival+1][jval][kval+1] + TT*uu*hess_xy[ival][jval+1][kval+1] + tt*uu*hess_xy[ival+1][jval+1][kval+1]);
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void QTabulated_Model::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	x -= x_center;
+	y -= y_center;
+	if (sintheta != 0) rotate(x,y);
+	int ival, jval;
+	double tt, uu, TT, UU, interp;
+	double logr, phi;
+	logr = log(sqrt(x*x+y*y)/rscale_factor);
+	if (x==0.0) phi = 0;
+	else {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = M_PI + phi;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = M_2PI - phi;
+		}
+	}
+
+	ival = (int) ((logr - grid_logrvals[0]) * grid_logr_N / grid_logrlength);
+	jval = (int) ((phi - grid_phivals[0]) * grid_phi_N / M_2PI);
+	if (ival < 0) ival=0;
+	if (jval < 0) jval=0;
+	if (ival >= grid_logr_N-1) ival=grid_logr_N-2;
+	if (jval >= grid_phi_N-1) jval=grid_phi_N-2;
+	tt = (logr - grid_logrvals[ival]) / (grid_logrvals[ival+1] - grid_logrvals[ival]);
+	uu = (phi - grid_phivals[jval]) / (grid_phivals[jval+1] - grid_phivals[jval]);
+	TT = 1-tt;
+	UU = 1-uu;
+
+	interp = WW*(TT*UU*defx[ival][jval][kval] + tt*UU*defx[ival+1][jval][kval] + TT*uu*defx[ival][jval+1][kval] + tt*uu*defx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defx[ival][jval][kval+1] + tt*UU*defx[ival+1][jval][kval+1] + TT*uu*defx[ival][jval+1][kval+1] + tt*uu*defx[ival+1][jval+1][kval+1]);
+	def[0] = kscale*rscale_factor*interp;
+	interp = WW*(TT*UU*defy[ival][jval][kval] + tt*UU*defy[ival+1][jval][kval] + TT*uu*defy[ival][jval+1][kval] + tt*uu*defy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*defy[ival][jval][kval+1] + tt*UU*defy[ival+1][jval][kval+1] + TT*uu*defy[ival][jval+1][kval+1] + tt*uu*defy[ival+1][jval+1][kval+1]);
+	def[1] = kscale*rscale_factor*interp;
+
+	interp = WW*(TT*UU*hess_xx[ival][jval][kval] + tt*UU*hess_xx[ival+1][jval][kval] + TT*uu*hess_xx[ival][jval+1][kval] + tt*uu*hess_xx[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xx[ival][jval][kval+1] + tt*UU*hess_xx[ival+1][jval][kval+1] + TT*uu*hess_xx[ival][jval+1][kval+1] + tt*uu*hess_xx[ival+1][jval+1][kval+1]);
+
+	hess[0][0] = kscale*interp;
+	interp = WW*(TT*UU*hess_yy[ival][jval][kval] + tt*UU*hess_yy[ival+1][jval][kval] + TT*uu*hess_yy[ival][jval+1][kval] + tt*uu*hess_yy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_yy[ival][jval][kval+1] + tt*UU*hess_yy[ival+1][jval][kval+1] + TT*uu*hess_yy[ival][jval+1][kval+1] + tt*uu*hess_yy[ival+1][jval+1][kval+1]);
+
+	hess[1][1] = kscale*interp;
+	interp = WW*(TT*UU*hess_xy[ival][jval][kval] + tt*UU*hess_xy[ival+1][jval][kval] + TT*uu*hess_xy[ival][jval+1][kval] + tt*uu*hess_xy[ival+1][jval+1][kval])
+				+ ww*(TT*UU*hess_xy[ival][jval][kval+1] + tt*UU*hess_xy[ival+1][jval][kval+1] + TT*uu*hess_xy[ival][jval+1][kval+1] + tt*uu*hess_xy[ival+1][jval+1][kval+1]);
+	hess[0][1] = kscale*interp;
+	hess[1][0] = hess[0][1];
+
+	if (sintheta != 0) def.rotate_back(costheta,sintheta);
+	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+QTabulated_Model::~QTabulated_Model() {
+	if (grid_logrvals != NULL) {
+		delete[] grid_logrvals;
+		delete[] grid_phivals;
+		delete[] grid_qvals;
+		for (int i=0; i < grid_logr_N; i++) {
+			for (int j=0; j < grid_phi_N; j++) {
+				delete[] kappa_vals[i][j];
+				delete[] pot_vals[i][j];
+				delete[] defx[i][j];
+				delete[] defy[i][j];
+				delete[] hess_xx[i][j];
+				delete[] hess_yy[i][j];
+				delete[] hess_xy[i][j];
+			}
+			delete[] kappa_vals[i];
+			delete[] pot_vals[i];
+			delete[] defx[i];
+			delete[] defy[i];
+			delete[] hess_xx[i];
+			delete[] hess_yy[i];
+			delete[] hess_xy[i];
+		}
+		delete[] kappa_vals;
+		delete[] pot_vals;
+		delete[] defx;
+		delete[] defy;
+		delete[] hess_xx;
+		delete[] hess_yy;
+		delete[] hess_xy;
+	}
+}
 
 /***************************** Test Model (for testing purposes only) *****************************/
 

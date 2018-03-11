@@ -1199,7 +1199,9 @@ void Grid::store_critical_curve_pts()
 		double (Brent::*invmag)(const double);
 		invmag = static_cast<double (Brent::*)(const double)> (&Grid::invmag_along_diagonal);
 		if ((invmag_along_diagonal(0)*invmag_along_diagonal(1)) > 0) {
-			warn("critical curve root not bracketed within diagonal: invmag0=%g, invmag1=%g, invmag2=%g, invmag3=%g, corner03=%i",*corner_invmag[0],*corner_invmag[1],*corner_invmag[2],*corner_invmag[3],corner03);
+			double inv0=invmag_along_diagonal(0);
+			double inv1=invmag_along_diagonal(1);
+			warn("critical curve root not bracketed within diagonal: invmag0=%g, invmag1=%g, invmag2=%g, invmag3=%g, corner03=%i (cell corner=%g,%g)",*corner_invmag[0],*corner_invmag[1],*corner_invmag[2],*corner_invmag[3],corner03,corner_pt[0][0],corner_pt[0][1]);
 			return;
 		}
 		ccroot_t = BrentsMethod(invmag,0,1,1e-6);
@@ -1219,7 +1221,6 @@ void Grid::store_critical_curve_pts()
 		cclength2 = diagonal2.norm();
 		long_diagonal_length = dmax(cclength1,cclength2);
 		lens->length_of_cc_cell.push_back(long_diagonal_length);
-		//cout << "Found root: " << ccroot[0] << " " << ccroot[1] << endl;
 	}
 }
 

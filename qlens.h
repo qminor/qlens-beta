@@ -359,6 +359,9 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double auto_gridsize_multiple_of_Re;
 	bool autogrid_before_grid_creation;
 	double autogrid_frac, spline_frac;
+	double tabulate_rmin, tabulate_qmin;
+	int tabulate_logr_N, tabulate_phi_N, tabulate_q_N;
+
 	bool include_time_delays;
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
@@ -681,7 +684,12 @@ public:
 	void add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 
 	void add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
-	void add_tabulated_lens(int lnum, const double scale, const double theta, const double xc, const double yc);
+	void add_tabulated_lens(int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
+	bool add_tabulated_lens_from_file(const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
+	bool add_qtabulated_lens_from_file(const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
+	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
+	void add_qtabulated_lens(int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
+
 
 	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void update_anchored_parameters();

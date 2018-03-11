@@ -38,6 +38,10 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens)
 	center_anchored = false;
 	anchor_special_parameter = false;
 	if (is_elliptical_lens) ellipticity_mode = default_ellipticity_mode;
+	else {
+		f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
+		ellipticity_mode = -1; // indicates not an elliptical lens
+	}
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
@@ -74,9 +78,11 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	vary_params.input(lens_in->vary_params);
 	set_default_base_settings(lens_in->numberOfPoints,lens_in->integral_tolerance);
 
-	q = lens_in->q;
-	epsilon = lens_in->epsilon;
-	epsilon2 = lens_in->epsilon2;
+	if (ellipticity_mode != -1) {
+		q = lens_in->q;
+		epsilon = lens_in->epsilon;
+		epsilon2 = lens_in->epsilon2;
+	}
 	f_major_axis = lens_in->f_major_axis;
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
@@ -191,6 +197,7 @@ void LensProfile::update_parameters(const double* params)
 	set_model_specific_integration_pointers();
 }
 
+// NOT CURRENTLY USING--IMPLEMENT!
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
 {
 	double* newparams = new double[n_params];
@@ -206,6 +213,14 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 	if (found_match) update_parameters(newparams);
 	delete[] newparams;
 	return found_match;
+}
+
+void LensProfile::update_ellipticity_parameter(const double eparam)
+{
+	*(param[ellipticity_paramnum]) = eparam;
+	update_meta_parameters();
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
 }
 
 // You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
@@ -442,11 +457,13 @@ void LensProfile::set_geometric_param_pointers(int qi)
 		param[qi++] = &epsilon;
 		param[qi++] = &epsilon2;
 		angle_paramnum = -1; // there is no angle parameter if ellipticity components are being used
+		ellipticity_paramnum = -1; // no single ellipticity parameter here
 	} else {
 		if ((ellipticity_mode==2) or (ellipticity_mode==3))
-			param[qi++] = &epsilon;
+			param[qi] = &epsilon;
 		else
-			param[qi++] = &q;
+			param[qi] = &q;
+		ellipticity_paramnum = qi++;
 		param[qi] = &theta;
 		angle_paramnum = qi++;
 	}
@@ -482,7 +499,7 @@ void LensProfile::print_parameters()
 	}
 	cout << "center=(" << x_center << "," << y_center << ")";
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
-	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3)) {
+	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
 		cout << " (ellipticity mode = " << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
 	}
@@ -625,7 +642,6 @@ void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 {
 	include_limits = false;
 	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
-	//cout << "Running this...\n";
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
 	SetGaussPatterson(acc);
@@ -929,6 +945,14 @@ void LensProfile::rotate(double &x, double &y)
 	x = xp;
 }
 
+void LensProfile::rotate_back(double &x, double &y)
+{
+	// perform a clockwise rotation of the coordinate system to transform from the coordinate system of the rotated galaxy
+	double xp = x*costheta - y*sintheta;
+	y = x*sintheta + y*costheta;
+	x = xp;
+}
+
 double LensProfile::potential(double x, double y)
 {
 	// switch to coordinate system centered on lens profile
@@ -949,7 +973,7 @@ void LensProfile::potential_derivatives(double x, double y, lensvector& def, len
 	x -= x_center;
 	y -= y_center;
 	if (sintheta != 0) rotate(x,y);
-	double kap; // not used here, but no overhead wasted so it's ok
+	double kap; // not used here, but no significant overhead wasted so it's ok
 	if ((ellipticity_mode==3) and (q != 1)) {
 		kappa_deflection_and_hessian_from_elliptical_potential(x,y,kap,def,hess);
 	} else {
@@ -978,7 +1002,7 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess)
 {
 	if ((defptr == &LensProfile::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
-		deflection_and_hessian_numerical(x,y,def,hess);
+		deflection_and_hessian_numerical(x,y,def,hess); // saves time to calculate deflection & hessian together, because they have two integrals in common
 	} else {
 		(this->*defptr)(x,y,def);
 		(this->*hessptr)(x,y,hess);
@@ -1047,6 +1071,16 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 		return;
 	}
 	zfac = zfactor;
+	//cout << "RMIN " << rmin_einstein_radius << " " << einstein_radius_root(rmin_einstein_radius) << endl;
+	//cout << "RMAX " << rmax_einstein_radius << " " << einstein_radius_root(rmax_einstein_radius) << endl;
+	//int i, nn=200000;
+	//double rf, r, rstep = (rmax_einstein_radius-rmin_einstein_radius)/(nn-1);
+	//double (Brent::*bptr)(const double);
+	//bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
+	//for (i=0, r=rmin_einstein_radius; i < nn; i++, r += rstep) {
+		//rf = (this->*bptr)(r);
+	//}
+	//die();
 	if ((einstein_radius_root(rmin_einstein_radius)*einstein_radius_root(rmax_einstein_radius)) > 0) {
 		// multiple imaging does not occur with this lens
 		re_major_axis = 0;
@@ -1056,7 +1090,8 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
 	re_major_axis = f_major_axis * BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
-	re_average = re_major_axis * sqrt(q);
+	if (ellipticity_mode != -1) re_average = re_major_axis * sqrt(q);
+	else re_average = re_major_axis; // not an elliptical lens, so q has no meaning
 	zfac = 1.0;
 }
 
@@ -1159,59 +1194,89 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 
 double LensProfile::potential_spherical_integral(const double rsq)
 {
+	bool converged;
+	double ans;
 	LensIntegral lens_integral(this,rsq,0,1.0,0);
-	return (0.5*lens_integral.i_integral());
+	ans = 0.5*lens_integral.i_integral(converged);
+	return ans;
 }
 
 void LensProfile::deflection_numerical(const double x, const double y, lensvector& def)
 {
-	def[0] = q*x*j_integral(x,y,0);
-	def[1] = q*y*j_integral(x,y,1);
+	bool converged;
+	def[0] = q*x*j_integral(x,y,0,converged);
+	warn_if_not_converged(converged,x,y);
+	def[1] = q*y*j_integral(x,y,1,converged);
+	warn_if_not_converged(converged,x,y);
 }
 
 void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& hess)
 {
-	hess[0][0] = 2*q*x*x*k_integral(x,y,0) + q*j_integral(x,y,0);
-	hess[1][1] = 2*q*y*y*k_integral(x,y,2) + q*j_integral(x,y,1);
-	hess[0][1] = 2*q*x*y*k_integral(x,y,1);
+	bool converged, converged2;
+	hess[0][0] = 2*q*x*x*k_integral(x,y,0,converged) + q*j_integral(x,y,0,converged2);
+	warn_if_not_converged(converged,x,y);
+	warn_if_not_converged(converged2,x,y);
+	hess[1][1] = 2*q*y*y*k_integral(x,y,2,converged) + q*j_integral(x,y,1,converged2);
+	warn_if_not_converged(converged,x,y);
+	warn_if_not_converged(converged2,x,y);
+	hess[0][1] = 2*q*x*y*k_integral(x,y,1,converged);
+	warn_if_not_converged(converged,x,y);
 	hess[1][0] = hess[0][1];
 }
 
 void LensProfile::deflection_and_hessian_numerical(const double x, const double y, lensvector& def, lensmatrix& hess)
 {
+	bool converged;
 	double jint0, jint1;
-	jint0 = j_integral(x,y,0);
-	jint1 = j_integral(x,y,1);
+	jint0 = j_integral(x,y,0,converged);
+	warn_if_not_converged(converged,x,y);
+	jint1 = j_integral(x,y,1,converged);
+	warn_if_not_converged(converged,x,y);
 	def[0] = q*x*jint0;
 	def[1] = q*y*jint1;
-	hess[0][0] = 2*q*x*x*k_integral(x,y,0) + q*jint0;
-	hess[1][1] = 2*q*y*y*k_integral(x,y,2) + q*jint1;
-	hess[0][1] = 2*q*x*y*k_integral(x,y,1);
+	hess[0][0] = 2*q*x*x*k_integral(x,y,0,converged) + q*jint0;
+	warn_if_not_converged(converged,x,y);
+	hess[1][1] = 2*q*y*y*k_integral(x,y,2,converged) + q*jint1;
+	warn_if_not_converged(converged,x,y);
+	hess[0][1] = 2*q*x*y*k_integral(x,y,1,converged);
+	warn_if_not_converged(converged,x,y);
 	hess[1][0] = hess[0][1];
+}
+
+inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
+{
+	if (!converged) {
+		if (integral_method==Gauss_Patterson_Quadrature) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points (x=%g,y=%g); switched to Gauss-Legendre with 1023 points",x,y);
+	}
 }
 
 double LensProfile::potential_numerical(const double x, const double y)
 {
+	bool converged;
+	double ans;
 	LensIntegral lens_integral(this,x*x,y*y,q,0);
-	return (0.5*q*lens_integral.i_integral());
+	ans = 0.5*q*lens_integral.i_integral(converged);
+	warn_if_not_converged(converged,x,y);
+	return ans;
 }
 
-inline double LensProfile::j_integral(const double x, const double y, const int n)
+inline double LensProfile::j_integral(const double x, const double y, const int n, bool &converged)
 {
 	LensIntegral lens_integral(this,x*x,y*y,q,n);
-	return lens_integral.j_integral();
+	return lens_integral.j_integral(converged);
 }
 
-inline double LensProfile::k_integral(const double x, const double y, const int n)
+inline double LensProfile::k_integral(const double x, const double y, const int n, bool &converged)
 {
 	LensIntegral lens_integral(this,x*x,y*y,q,n);
-	return lens_integral.k_integral();
+	return lens_integral.k_integral(converged);
 }
 
 bool LensProfile::core_present() { return false; }
 
-double LensIntegral::i_integral()
+double LensIntegral::i_integral(bool &converged)
 {
+	converged = true; // will change if convergence not achieved
 	double ans;
 	if (profile->integral_method == Romberg_Integration)
 	{
@@ -1227,14 +1292,15 @@ double LensIntegral::i_integral()
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
 		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
-		ans = PattersonIntegrate(iptr,0,1);
+		ans = PattersonIntegrate(iptr,0,1,converged);
 	}
 	else die("unknown integral method");
 	return ans;
 }
 
-double LensIntegral::j_integral()
+double LensIntegral::j_integral(bool &converged)
 {
+	converged = true; // will change if convergence not achieved
 	double ans;
 	if (profile->integral_method == Romberg_Integration)
 	{
@@ -1250,14 +1316,15 @@ double LensIntegral::j_integral()
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
-		ans = PattersonIntegrate(jptr,0,1);
+		ans = PattersonIntegrate(jptr,0,1,converged);
 	}
 	else die("unknown integral method");
 	return ans;
 }
 
-double LensIntegral::k_integral()
+double LensIntegral::k_integral(bool &converged)
 {
+	converged = true; // will change if convergence not achieved
 	double ans;
 	if (profile->integral_method == Romberg_Integration)
 	{
@@ -1273,7 +1340,7 @@ double LensIntegral::k_integral()
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
-		ans = PattersonIntegrate(kptr,0,1);
+		ans = PattersonIntegrate(kptr,0,1,converged);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1315,12 +1382,13 @@ double LensIntegral::GaussIntegrate(double (LensIntegral::*func)(const double), 
 	return (b-a)*result/2.0;
 }
 
-double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b)
+double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b, bool& converged)
 {
 	double result=0, result_old;
 	int i, level=0, istep, istart;
 	double absum = (a+b)/2, abdif = (b-a)/2;
 	double *weightptr;
+	converged = true; // will change to false if convergence not achieved
 
 	int order, j;
 	do {
@@ -1348,7 +1416,7 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 		for (int i = 0; i < profile->numberOfPoints; i++)
 			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
 
-		warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points; switching to Gauss-Legendre with 1023 points");
+		converged = false;
 	}
 
 	return abdif*result;
