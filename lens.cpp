@@ -350,7 +350,7 @@ Lens::Lens() : UCMC()
 	spline_frac = 1.8;
 	tabulate_rmin = 1e-3;
 	tabulate_qmin = 0.2;
-	tabulate_logr_N = 1000;
+	tabulate_logr_N = 2000;
 	tabulate_phi_N = 200;
 	tabulate_q_N = 10;
 	grid = NULL;
