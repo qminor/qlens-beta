@@ -34,11 +34,11 @@ Upgrades since Jan. 18:
 		fit lens tab sersic 2 5 30 0.3 0.8
 		1 0 0 0 0
 
-	The last two lines creates a tabulated model from the values in the file 'sersic.tab' and reproduce the exact same model we had before.
+	The last two lines creates a tabulated model from the values in the file 'sersic.tab' and reproduce the exact same model we had before. It is not necessary to type the '.tab' extension in the filename when you are saving or loading the tables.
 
-	The "qtab" model extends the above model so that it interpolates in the axis ratio q as well, which allows it to capture all the essential properties of elliptical lens models that have a single scale radius and mass parameter--this includes the NFW, Hernquist, and exponential disk models. However this model is still a work in progress; because of the way linear interpolation is done, a very large number of grid points is required for good accuracy, enough to push the typical 16GB of memory on a laptop. So further work is need on my part to make the interpolation more effective without sacrificing the speed too much.
+	The "qtab" model extends the above model so that it interpolates in the axis ratio q as well, which allows it to capture all the essential properties of elliptical lens models that have a single scale radius and mass parameter--this includes the NFW, Hernquist, and exponential disk models. However this model is still a work in progress; because of the way linear interpolation is done, a very large number of grid points is required for good accuracy, enough to push the typical 16 GB of memory on a laptop. So further work is need on my part to make the interpolation more effective without sacrificing the speed too much.
 
-2. The "settings" and "help settings" commands have been redone, so that all the settings are listed and organized by category, and you can specify specific categories ("plot\_settings", "fi\_settings", etc.). This should make it much easier to look up settings in different categories.
+2. The "settings" and "help settings" commands have been redone, so that all the settings are listed and organized by category, and you can specify specific categories ("plot\_settings", "fit\_settings", etc.). This should make it much easier to look up settings in different categories.
 
 Upgrades since Dec. 28:
 
