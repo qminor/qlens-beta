@@ -506,16 +506,28 @@ bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, C
 	double kpc_to_km = 3.086e16;
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
-	double b_kpc, sigma, r_tidal, r_core;
+	double b_kpc, sigma, r_tidal, r_core, mtot;
 	b_kpc = b / kpc_to_arcsec;
 	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
 	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	calculate_total_scaled_mass(mtot);
+	mtot *= sigma_cr/(kpc_to_arcsec*kpc_to_arcsec);
+	cout << "total mass = " << mtot << " M_sol" << endl;
+
 	r_tidal = a / kpc_to_arcsec;
 	r_core = s / kpc_to_arcsec;
 	cout << "r_tidal = " << r_tidal << " kpc" << endl;
 	cout << "r_core = " << r_core << " kpc" << endl;
 	cout << endl;
+	return true;
 }
+
+bool PseudoJaffe::calculate_total_scaled_mass(double& total_mass)
+{
+	total_mass = M_PI*b*(a-s);
+	return true;
+}
+
 
 /************************************* NFW *************************************/
 
@@ -643,6 +655,7 @@ bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology
 	ds = ks * sigma_cr / rs_kpc;
 	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	c = r200/rs_kpc;
+
 	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
 	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
 	cout << "c = " << c << endl;
@@ -838,7 +851,7 @@ double Hernquist::kappa_rsq_deriv(const double rsq)
 
 inline double Hernquist::lens_function_xsq(const double xsq)
 {
-	return ((sqrt(xsq) > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (sqrt(xsq) < 1.0) ? (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ? (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
 }
 
 double Hernquist::kapavg_spherical_rsq(const double rsq)
@@ -936,6 +949,12 @@ double ExpDisk::kapavg_spherical_rsq(const double rsq)
 {
 	double x = sqrt(rsq)/R_d;
 	return 2*k0*(1 - (1+x)*exp(-x))/(x*x);
+}
+
+bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
+{
+	total_mass = 2*M_PI*k0*R_d*R_d;
+	return true;
 }
 
 /***************************** External shear *****************************/
@@ -1446,8 +1465,6 @@ PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
 	b = bb;
 	x_center = xc_in;
 	y_center = yc_in;
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 PointMass::PointMass(const PointMass* lens_in)
@@ -1552,6 +1569,12 @@ void PointMass::get_einstein_radius(double& r1, double& r2, const double zfactor
 {
 	r1 = b*sqrt(zfactor);
 	r2 = r1;
+}
+
+bool PointMass::calculate_total_scaled_mass(double& total_mass)
+{
+	total_mass = M_PI*b*b;
+	return true;
 }
 
 /***************************** Core/Cusp Model *****************************/
@@ -1950,7 +1973,6 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
 
-
 /***************************** Mass sheet *****************************/
 
 MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &yc_in)
@@ -1963,6 +1985,7 @@ MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &y
 	kext = kext_in;
 	x_center = xc_in;
 	y_center = yc_in;
+	update_meta_parameters_and_pointers();
 }
 
 MassSheet::MassSheet(const MassSheet* lens_in)

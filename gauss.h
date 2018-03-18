@@ -46,12 +46,13 @@ class GaussPatterson
 			int *pat_orders;
          int pat_N;
 			double pat_tolerance;
+			bool show_convergence_warning;
           
      public:
 			 GaussPatterson();
-			 void SetGaussPatterson(const double tol_in);
+			 void SetGaussPatterson(const double tol_in, const bool show_warnings);
           ~GaussPatterson();
-          double AdaptiveQuad(double (GaussPatterson::*)(double), double, double);
+          double AdaptiveQuad(double (GaussPatterson::*)(double), double, double, bool& converged);
 };
 
 class GaussLaguerre : public GaussianIntegral {public: GaussLaguerre(const double, int);};

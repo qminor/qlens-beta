@@ -697,7 +697,8 @@ public:
 	void print_lens_list(bool show_vary_params);
 	void output_lens_commands(string filename);
 	void print_fit_model();
-	void print_lens_cosmology_info();
+	void print_lens_cosmology_info(const int lmin, const int lmax);
+	bool output_mass_r(const double r_arcsec, const int lensnum);
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);

@@ -5608,18 +5608,42 @@ void Lens::reassign_lensparam_pointers_and_names()
 	}
 }
 
-void Lens::print_lens_cosmology_info()
+void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 {
+	if (lmax >= nlens) return;
 	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
 	double dlens = angular_diameter_distance(lens_redshift);
 	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
 	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl << endl;
 	if (nlens > 0) {
-		for (int i=0; i < nlens; i++) {
+		for (int i=lmin; i <= lmax; i++) {
 			lens_list[i]->output_cosmology_info(lens_redshift,reference_source_redshift,this,i);
 		}
 	}
 	else cout << "No lens models have been specified" << endl << endl;
+}
+
+bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
+{
+	if (lensnum >= nlens) return false;
+	double sigma_cr, kpc_to_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
+	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
+	kpc_to_arcsec = 206.264806/angular_diameter_distance(lens_redshift);
+	r_kpc = r_arcsec/kpc_to_arcsec;
+	cout << "Radius: " << r_kpc << " kpc (" << r_arcsec << " arcsec)\n";
+	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
+	cout << "Mass enclosed (2D): " << mass_r_2d << " M_sol" << endl;
+	bool converged;
+	rho_r_3d = (sigma_cr*CUBE(kpc_to_arcsec))*lens_list[lensnum]->calculate_scaled_density_3d(r_arcsec,1e-4,converged);
+	cout << "Density (3D): " << rho_r_3d << " M_sol/kpc^3" << endl;
+	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
+	//double mass_r_3d_unscaled = mass_r_3d/sigma_cr;
+	//double rho_r_3d_noscale = lens_list[lensnum]->calculate_scaled_density_3d(r_arcsec);
+	cout << "Mass enclosed (3D): " << mass_r_3d << " M_sol" << endl;
+	//cout << "Mass enclosed (3D) unscaled: " << mass_r_3d_unscaled << " M_sol" << endl;
+	//cout << "Density unscaled (3D): " << rho_r_3d_noscale << " arcsec^-1" << endl;
+	cout << endl;
+	return true;
 }
 
 void Lens::print_lens_list(bool show_vary_params)

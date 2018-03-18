@@ -595,7 +595,162 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 
 bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
 {
+	bool mass_converged, rhalf_converged;
+	double sigma_cr, mtot, rhalf;
+	mass_converged = calculate_total_scaled_mass(mtot);
+	if (mass_converged) {
+		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc);
+		mtot *= sigma_cr;
+		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+		cout << "total mass: " << mtot << " M_sol" << endl;
+		double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
+		cout << endl;
+	}
 	return false; // no cosmology-dependent physical parameters to calculate for this model
+}
+
+bool LensProfile::calculate_total_scaled_mass(double& total_mass)
+{
+	double u, mass_u, mass_u_prev;
+	double re_major_axis, re_average;
+	static const double mtol = 1e-5;
+	static const int nmax = 34;
+	get_einstein_radius(re_major_axis, re_average, 1.0);
+	if (re_major_axis==0) return false;
+	u = 1.0/(re_average*re_average);
+	mass_u = mass_inverse_rsq(u);
+	int n = 0;
+	do {
+		mass_u_prev = mass_u;
+		u /= 8.0;
+		mass_u = mass_inverse_rsq(u);
+		if (++n == nmax) break;
+	} while (abs(mass_u-mass_u_prev) > (mtol*mass_u));
+	//cout << "iterations: " << n << endl;
+	total_mass = M_PI*mass_u;
+	if (n==nmax) return false;
+	else return true;
+}
+
+double LensProfile::mass_inverse_rsq(const double u)
+{
+	return (this->*kapavgptr_rsq_spherical)(1.0/u)/u; // leaving out the M_PI here because it will be tacked on afterword
+}
+
+double LensProfile::mass_rsq(const double rsq)
+{
+	return M_PI*rsq*(this->*kapavgptr_rsq_spherical)(rsq);
+}
+
+double LensProfile::half_mass_radius_root(const double r)
+{
+	return (mass_rsq(r*r)-mass_intval);
+}
+
+bool LensProfile::calculate_half_mass_radius(double& half_mass_radius, const double mtot_in)
+{
+	if (kapavgptr_rsq_spherical==NULL) {
+		return false;
+	}
+	double mtot;
+	if (mtot_in==-10) {
+		if (calculate_total_scaled_mass(mtot)==false) return false;
+	} else mtot = mtot_in;
+	mass_intval = mtot/2;
+	if ((half_mass_radius_root(rmin_einstein_radius)*half_mass_radius_root(rmax_einstein_radius)) > 0) {
+		return false;
+	}
+	double (Brent::*bptr)(const double);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::half_mass_radius_root);
+	half_mass_radius = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
+	return true;
+}
+
+double LensProfile::calculate_scaled_mass_3d(const double r)
+{
+	static const int rho3d_nn = 1000;
+	double re_major_axis, re_average;
+	get_einstein_radius(re_major_axis, re_average, 1.0);
+	int i;
+	double R,logx,logxmin,logxmax,logxstep;
+	logxmin = -7; logxmax = log(r/re_average)/ln10;
+	logxstep = (logxmax-logxmin)/(rho3d_nn-1);
+	double *rho3dvals = new double[rho3d_nn];
+	double *logxvals = new double[rho3d_nn];
+	bool converged=true, prev_converged=true, convergence_everywhere = true;
+	bool converge_at_small_r = true;
+	double convergence_beyond_radius = 0;
+	bool first_convergence = false;
+	double tolerance = 5e-4;
+	bool trouble_at_small_and_large_r = false;
+	for (i=0, logx=logxmin; i < rho3d_nn; i++, logx += logxstep) {
+		R = re_average*pow(10,logx);
+		logxvals[i] = logx;
+		rho3dvals[i] = calculate_scaled_density_3d(R,tolerance,converged);
+		if (converged==false) {
+			convergence_everywhere = false;
+			if ((converge_at_small_r==false) and (prev_converged==true)) trouble_at_small_and_large_r = true;
+			if (i==0) converge_at_small_r = false;
+		} else {
+			if (prev_converged==false) {
+				if ((converge_at_small_r == false) and (first_convergence == false)) {
+					convergence_beyond_radius = R;
+				}
+			}
+			if (first_convergence==false) first_convergence = true;
+		}
+		//if (converged==false) cout << "trouble for r=" << R << ", rho=" << rho3dvals[i] << endl;
+		prev_converged = converged;
+	}
+	if (!convergence_everywhere) {
+		if ((converge_at_small_r==false) and (!trouble_at_small_and_large_r)) {
+			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,tolerance);
+		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",tolerance);
+	}
+
+	rho3d_logx_spline = new Spline(logxvals,rho3dvals,rho3d_nn);
+	mass_intval = re_average;
+
+	double (Romberg::*mptr)(const double);
+	mptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::mass3d_r_integrand);
+	double ans = 4*M_PI*romberg_open(mptr, 0, r, 1e-6, 5);
+
+	delete rho3d_logx_spline;
+	delete[] logxvals;
+	delete[] rho3dvals;
+
+	return ans;
+}
+
+double LensProfile::mass3d_r_integrand(const double r)
+{
+	double logx = log(r/mass_intval)/ln10;
+	if (logx < rho3d_logx_spline->xmin()) return (r*r*rho3d_logx_spline->extend_inner_logslope(logx));
+	return r*r*rho3d_logx_spline->splint(logx);
+}
+
+double LensProfile::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged)
+{
+	mass_intval = r*r;
+	//double (Romberg::*mptr)(const double);
+	//mptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::rho3d_w_integrand);
+	//double ans = -(2*r/M_PI)*romberg_open(mptr, 0, 1, 1e-8, 5);
+	double (GaussPatterson::*mptr)(double);
+	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::rho3d_w_integrand);
+	double temppat = pat_tolerance;
+	SetGaussPatterson(tolerance,false);
+	double ans = -(2*r/M_PI)*AdaptiveQuad(mptr,0,1,converged);
+	SetGaussPatterson(temppat,true);
+
+	return ans;
+}
+
+double LensProfile::rho3d_w_integrand(const double w)
+{
+	double wsq = w*w;
+	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
 }
 
 void LensProfile::set_ellipticity_parameter(const double &q_in)
@@ -644,7 +799,7 @@ void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
-	SetGaussPatterson(acc);
+	SetGaussPatterson(acc,true);
 }
 
 void LensProfile::update_meta_parameters_and_pointers()
@@ -1171,7 +1326,8 @@ double LensProfile::kappa_avg_spherical_integral(const double rsq)
 	{
 		double (GaussPatterson::*sptr)(double);
 		sptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
-		ans = (2.0/rsq)*AdaptiveQuad(sptr,0,sqrt(rsq));
+		bool converged;
+		ans = (2.0/rsq)*AdaptiveQuad(sptr,0,sqrt(rsq),converged);
 	}
 	else die("unknown integral method");
 	return ans;

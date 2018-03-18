@@ -40,6 +40,8 @@ Upgrades since Jan. 18:
 
 2. The "settings" and "help settings" commands have been redone, so that all the settings are listed and organized by category, and you can specify specific categories ("plot\_settings", "fit\_settings", etc.). This should make it much easier to look up settings in different categories.
 
+3. A new integration method has been implemented, Gauss-Patterson quadrature, which is now the default. This is an extension of Gaussian quadrature that gives "nested" rules, meaning you can add points and still use previous function evaluations. This allows for an adaptive quadrature where you can add points until converging to the desired accuracy, which can render the lensing calculations more robust compared to just using Gaussian quadrature with a fixed number of points (the previous default mode). If the profile is very steep, you may get a warning that the maximum number of allowed points (511) has been reached, which indicates that the accuracy of the lensing calculations may suffer in this case.
+
 Upgrades since Dec. 28:
 
 One major upgrade: I have implemented the "emode" command, where you can set the ellipticity mode which controls how ellipticity is put into lens models. Among other things, this allows for any ellipsoidal mass model to be converted into a "pseudo-elliptical" model (meaning ellipticity is put into the potential, not the projected density).

@@ -95,6 +95,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double rmax_einstein_radius; // initial bracket used to find Einstein radius
 	double einstein_radius_root(const double r);
 	double zfac; // for doing calculations at redshift other than the reference redshift
+	double mass_intval; // for calculating 3d enclosed mass
+	Spline *rho3d_logx_spline;
 
 	private:
 	double j_integral(const double, const double, const int, bool &converged);
@@ -208,6 +210,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	virtual bool calculate_total_scaled_mass(double& total_mass);
+	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
+	virtual double calculate_scaled_mass_3d(const double r);
 
 	void kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess);
 	void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
@@ -216,6 +221,12 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def);
 	void hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess);
 	double kappa_from_elliptical_potential_experimental(const double x, const double y);
+	bool calculate_half_mass_radius(double& half_mass_radius, const double mtot_in = -10);
+	double half_mass_radius_root(const double r);
+	double mass_inverse_rsq(const double u);
+	double mass_rsq(const double rsq);
+	double rho3d_w_integrand(const double w);
+	double mass3d_r_integrand(const double r);
 
 	double test_resq(const double x, const double y);
 	double test_defx(const double x, const double y);
@@ -246,7 +257,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_theta(double theta_in) { theta=theta_in; update_angle_meta_params(); }
 	void set_center(double xc_in, double yc_in) { x_center = xc_in; y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
-	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc); }
+	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc,true); }
 };
 
 struct LensIntegral : public Romberg
@@ -362,6 +373,7 @@ class PseudoJaffe : public LensProfile
 	void update_special_anchored_params();
 
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	bool calculate_total_scaled_mass(double& total_mass);
 	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
 	double get_tidal_radius() { return aprime; }
 	bool core_present() { return (sprime==0) ? false : true; }
@@ -465,6 +477,7 @@ class ExpDisk : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	bool calculate_total_scaled_mass(double& total_mass);
 };
 
 class Shear : public LensProfile
@@ -580,6 +593,7 @@ class PointMass : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
+	bool calculate_total_scaled_mass(double& total_mass);
 	void get_einstein_radius(double& r1, double& r2, const double zfactor);
 };
 

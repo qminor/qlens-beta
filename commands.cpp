@@ -77,6 +77,7 @@ void Lens::process_commands(bool read_file)
 						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
 						"cosmology -- display cosmological information, including physical properties of lenses\n"
 						"lensinfo -- display kappa, deflection, magnification, shear, and potential at a specific point\n"
+						"mass_r -- display both projected (2D) mass and 3D mass enclosed within a given radius\n"
 						"plotlensinfo -- plot pixel maps of kappa, deflection, magnification, shear, and potential\n"
 						"grid -- specify coordinates of Cartesian grid on image plane\n"
 						"autogrid -- determine optimal grid size from critical curves\n"
@@ -1844,7 +1845,23 @@ void Lens::process_commands(bool read_file)
 			} else Complain("must specify two parameters, rmin and rmax, to determine gridsize automatically");
 		}
 		else if (words[0]=="cosmology") {
-			if (mpi_id==0) print_lens_cosmology_info();
+			if (nwords==1) {
+				if (mpi_id==0) print_lens_cosmology_info(0,nlens-1);
+			} else if (nwords==2) {
+				int lnum;
+				if (!(ws[1] >> lnum)) Complain("invalid lens number");
+				if (lnum >= nlens) Complain("specified lens number does not exist");
+				if (mpi_id==0) print_lens_cosmology_info(lnum,lnum);
+			} else Complain("either zero or one argument required for cosmology command (lens_number)");
+		}
+		else if (words[0]=="mass_r") {
+			if (nwords != 3) Complain("exactly two arguments required for mass_r command (lens_number,radius_arcsec)");
+			int lnum;
+			double r_arcsec;
+			if (!(ws[1] >> lnum)) Complain("invalid lens number");
+			if (lnum >= nlens) Complain("specified lens number does not exist");
+			if (!(ws[2] >> r_arcsec)) Complain("invalid radius");
+			output_mass_r(r_arcsec,lnum);
 		}
 		else if ((words[0]=="lens") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="lens")))
 		{

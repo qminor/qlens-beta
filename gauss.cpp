@@ -329,12 +329,13 @@ GaussPatterson::GaussPatterson()
 	pat_weights = NULL;
 	pat_orders = NULL;
 	pat_funcs = NULL;
-	SetGaussPatterson(1e-6);
+	SetGaussPatterson(1e-6,true);
 }
 
-void GaussPatterson::SetGaussPatterson(const double tol_in)
+void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warnings)
 {
 	pat_tolerance = tol_in;
+	show_convergence_warning = show_warnings;
 	pat_N = 511;
 	if (pat_points != NULL) delete[] pat_points;
 	if (pat_funcs != NULL) delete[] pat_funcs;
@@ -1913,11 +1914,12 @@ GaussPatterson::~GaussPatterson()
 	}
 }
 
-double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), double a, double b)
+double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), double a, double b, bool &converged)
 {
 	double result = 0, result_old, dif;
 	int i, level = 0, istep, istart;
 	double absum = (a+b)/2, abdif = (b-a)/2;
+	converged = true; // until proven otherwise
 
 	int order, j;
 	do {
@@ -1938,7 +1940,10 @@ double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), doub
 		dif = result - result_old;
 		if ((level > 1) and (abs(dif) < pat_tolerance*abs(result))) break;
 	} while (++level < 9);
-	if (level==9) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points");
+	if (level==9) {
+		converged = false;
+		if (show_convergence_warning) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points");
+	}
 
 	return abdif*result;
 }
