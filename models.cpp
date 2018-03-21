@@ -506,18 +506,20 @@ bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, C
 	double kpc_to_km = 3.086e16;
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
-	double b_kpc, sigma, r_tidal, r_core, mtot;
+	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
 	b_kpc = b / kpc_to_arcsec;
 	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
 	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
 	calculate_total_scaled_mass(mtot);
+	bool rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
 	mtot *= sigma_cr/(kpc_to_arcsec*kpc_to_arcsec);
 	cout << "total mass = " << mtot << " M_sol" << endl;
+	if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 
 	r_tidal = a / kpc_to_arcsec;
 	r_core = s / kpc_to_arcsec;
 	cout << "r_tidal = " << r_tidal << " kpc" << endl;
-	cout << "r_core = " << r_core << " kpc" << endl;
+	if (r_core > 0) cout << "r_core = " << r_core << " kpc" << endl;
 	cout << endl;
 	return true;
 }

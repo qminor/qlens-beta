@@ -93,7 +93,6 @@ void Lens::process_commands(bool read_file)
 						"plotgrid -- plot recursive grid, if exists; plots corners of all grid cells\n"
 						"plotlogkappa -- plot log(kappa) as a colormap along with isokappa contours\n"
 						"plotlogmag -- plot log(magnification) as a colormap along with magnification contours\n"
-						//"plotlenseq -- plot the x/y components of the lens equation with a given source position\n"   // You should probably get rid of this function (uninteresting)
 						"plotkappa -- plot radial kappa profile for each lens model and the total kappa profile\n"
 						"plotmass -- plot radial mass profile\n"
 						"defspline -- create a bicubic spline of the deflection field over the range of the grid\n"
@@ -580,6 +579,7 @@ void Lens::process_commands(bool read_file)
 							"fit save_bestfit\n"
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
+							"fit dparams ...\n"
 							"fit priors ...\n" // WRITE HELP DOC FOR THIS COMMAND
 							"fit transform ...\n" // WRITE HELP DOC FOR THIS COMMAND
 							"fit vary_sourcept ...\n"
@@ -777,15 +777,17 @@ void Lens::process_commands(bool read_file)
 							"type 'fit stepsize reset'.\n";
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
-							"fit dparams add <param_type> <param_arg>\n"
+							"fit dparams add <param_type> <param_arg> [lens#]        (lens# is optional for some parameters)\n"
 							"fit dparams clear [param_num]\n\n"
 							"Define derived parameters whose values will be output along with the primary parameters after running\n"
 							"nested sampling or T-Walk. Type 'fit dparams' to list all the derived parameters that have been defined,\n"
 							"'fit dparams clear' to remove one or all of the derived parameters from the list, and 'fit dparams add'\n"
 							"to add a new derived parameter. All derived parameters are defined by a type and an argument.\n"
-							"The available derived parameter types are:\n\n"
-							"kappa_r -- The total kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
-							"dkappa_r -- The derivative of kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
+							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
+							"kappa_r  -- *The kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
+							"dkappa_r -- *The derivative of kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
+							"mass2d_r -- The projected mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
+							"mass3d_r -- The 3d mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
 							"\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
@@ -1197,14 +1199,6 @@ void Lens::process_commands(bool read_file)
 					cout << "mkrandsrc <N> [source_outfile]   (supported only in ccspline mode)\n\n"
 						"Plots N sources randomly within the curve circumscribing the outermost caustic(s).\n"
 						"Sources are plotted to [source_outfile] (default='sourcexy.in')\n";
-				//else if (words[1]=="plotlenseq")                                                                // Probably should get rid of this function (uninteresting)
-					//cout << "plotlenseq <source_x> <source_y> [x-file] [y-file] (text terminal mode)\n"
-						//"plotlenseq <source_x> <source_y> [picture_file]    (postscript/PDF terminal mode)\n"
-						//"plotlenseq <source_x> <source_y> grid\n\n"
-						//"Plots the x/y components of the lens equation with specified source. If no filenames\n"
-						//"are given, the components are plotted graphically through Gnuplot. If 'grid' is\n"
-						//"specified as the third argument, the current grid is superimposed. Otherwise the\n"
-						//"curves are plotted to the specified output files.\n";
 				else if (words[1]=="plotkappa")
 					cout << "plotkappa <rmin> <rmax> <steps> <kappa_file> [dkappa_file] [lens=#]\n\n"
 						"Plots the radial kappa profile and its (optional) derivative to <kappa_file> and [dkappa_file]\n"
@@ -4265,12 +4259,33 @@ void Lens::process_commands(bool read_file)
 						else if (words[2]=="add") {
 							if (nwords < 5) Complain("at least two additional arguments required for 'fit dparams add' (dparam_type,input_param)");
 							double dparam_arg;
+							int lensnum;
 							if (words[3]=="kappa_r") {
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-								add_derived_param(Total_Kappa,dparam_arg);
+								if (nwords==6) {
+									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+									if (lensnum >= nlens) Complain("specified lens number does not exist");
+								} else lensnum = -1;
+								add_derived_param(KappaR,dparam_arg,lensnum);
 							} else if (words[3]=="dkappa_r") {
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-								add_derived_param(Total_DKappa,dparam_arg);
+								if (nwords==6) {
+									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+									if (lensnum >= nlens) Complain("specified lens number does not exist");
+								} else lensnum = -1;
+								add_derived_param(DKappaR,dparam_arg,lensnum);
+							} else if (words[3]=="mass2d_r") {
+								if (nwords != 6) Complain("derived parameter mass2d_r requires two arguments (r_arcsec,lens_number)");
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(Mass2dR,dparam_arg,lensnum);
+							} else if (words[3]=="mass3d_r") {
+								if (nwords != 6) Complain("derived parameter mass3d_r requires two arguments (r_arcsec,lens_number)");
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(Mass3dR,dparam_arg,lensnum);
 							} else Complain("derived parameter type not recognized");
 						}
 						else Complain("unrecognized argument to 'fit dparams'");
@@ -4593,38 +4608,6 @@ void Lens::process_commands(bool read_file)
 				plot_mass_profile(rmin, rmax, steps, words[4].c_str());
 			} else
 			  Complain("plotmass requires 4 parameters (rmin, rmax, steps, mass_outname)");
-		}
-		else if (words[0]=="plotlenseq")
-		{
-			if (!islens()) Complain("must specify lens model first");
-			string range;
-			extract_word_starts_with('[',3,4,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((nwords==4) and (terminal==TEXT) and (words[3] != "grid")) Complain("to write to files, two file names are required in text mode (for x,y comp's)");
-			if ((nwords==3) or (nwords==4)) {
-				double xsource_in, ysource_in;
-				if (!(ws[1] >> xsource_in)) Complain("invalid source x-position");
-				if (!(ws[2] >> ysource_in)) Complain("invalid source y-position");
-				if (plot_lens_equation(xsource_in, ysource_in, "lx.dat", "ly.dat")==true) {
-					if (plotcrit("crit.dat")==true) {
-						if (nwords==4) {
-							if (words[3]=="grid") {
-								if (plot_recursive_grid("xgrid.dat")==false)
-									Complain("could not generate recursive grid");
-								run_plotter("lenseq_grid");
-							} else {
-								run_plotter("lenseq",words[3],range);
-							}
-						}
-						else run_plotter("lenseq");
-					}
-				}
-			} else if (nwords==5) {
-				if (terminal != TEXT) Complain("only one filename should be specified in postscript/PDF terminal mode");
-				double xsource_in, ysource_in;
-				if (!(ws[1] >> xsource_in)) Complain("invalid source x-position");
-				if (!(ws[2] >> ysource_in)) Complain("invalid source y-position");
-				plot_lens_equation(xsource_in, ysource_in, words[3].c_str(), words[4].c_str());
-			} else Complain("must specify source position (x,y) and filenames (optional)");
 		}
 		else if (words[0]=="findimg")
 		{
@@ -6576,8 +6559,8 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			add_derived_param(Total_Kappa,5.0);
-			add_derived_param(Total_DKappa,5.0);
+			add_derived_param(KappaR,5.0,-1);
+			add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
 			// These are experimental functions that I either need to make official, or else remove
 			//plot_chisq_1d(0,30,50,450);

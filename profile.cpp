@@ -670,58 +670,100 @@ bool LensProfile::calculate_half_mass_radius(double& half_mass_radius, const dou
 
 double LensProfile::calculate_scaled_mass_3d(const double r)
 {
-	static const int rho3d_nn = 1000;
+	static const int max_iter = 6;
+	int rho3d_nn = 40; // starting value
 	double re_major_axis, re_average;
 	get_einstein_radius(re_major_axis, re_average, 1.0);
-	int i;
-	double R,logx,logxmin,logxmax,logxstep;
+	if (re_average==0.0) {
+		warn("Einstein radius of zero; cannot calculate 3d mass");
+		return 0;
+	}
+	int i, j, iter=0;
+	double R,Rmin,logx,logxmin,logxmax,logxstep;
 	logxmin = -7; logxmax = log(r/re_average)/ln10;
-	logxstep = (logxmax-logxmin)/(rho3d_nn-1);
-	double *rho3dvals = new double[rho3d_nn];
-	double *logxvals = new double[rho3d_nn];
-	bool converged=true, prev_converged=true, convergence_everywhere = true;
-	bool converge_at_small_r = true;
-	double convergence_beyond_radius = 0;
-	bool first_convergence = false;
-	double tolerance = 5e-4;
-	bool trouble_at_small_and_large_r = false;
-	for (i=0, logx=logxmin; i < rho3d_nn; i++, logx += logxstep) {
-		R = re_average*pow(10,logx);
-		logxvals[i] = logx;
-		rho3dvals[i] = calculate_scaled_density_3d(R,tolerance,converged);
-		if (converged==false) {
-			convergence_everywhere = false;
-			if ((converge_at_small_r==false) and (prev_converged==true)) trouble_at_small_and_large_r = true;
-			if (i==0) converge_at_small_r = false;
-		} else {
-			if (prev_converged==false) {
-				if ((converge_at_small_r == false) and (first_convergence == false)) {
-					convergence_beyond_radius = R;
-				}
-			}
-			if (first_convergence==false) first_convergence = true;
+	Rmin = re_average*pow(10,logxmin);
+	bool converged, menc_converged, prev_converged, convergence_everywhere;
+	bool converge_at_small_r;
+	bool first_convergence;
+	bool trouble_at_small_and_large_r;
+	double convergence_beyond_radius;
+	double tolerance = 5e-3;
+	double quadtolerance = tolerance; // make integral tolerance a bit stricter
+
+	double *rho3dvals, *new_rho3dvals;
+	double *logxvals;
+	double temppat, mass3d, prev_mass3d;
+	double (GaussPatterson::*mptr)(double);
+	convergence_everywhere = true;
+	converge_at_small_r = true;
+	first_convergence = false;
+	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::mass3d_r_integrand);
+	do {
+		convergence_beyond_radius = 0;
+		converged=true; // this refers to the individual integrals converging
+		prev_converged=true; // this refers to previous logx value during loop over logx
+		trouble_at_small_and_large_r = false;
+		if (iter > 0) {
+			prev_mass3d = mass3d;
+			rho3d_nn = 2*(rho3d_nn-1) + 1; // double the number of steps (not points!)
 		}
-		//if (converged==false) cout << "trouble for r=" << R << ", rho=" << rho3dvals[i] << endl;
-		prev_converged = converged;
-	}
-	if (!convergence_everywhere) {
-		if ((converge_at_small_r==false) and (!trouble_at_small_and_large_r)) {
-			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,tolerance);
-		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",tolerance);
-	}
+		new_rho3dvals = new double[rho3d_nn];
+		logxvals = new double[rho3d_nn];
+		logxstep = (logxmax-logxmin)/(rho3d_nn-1);
+		for (i=0, logx=logxmin; i < rho3d_nn; i++, logx += logxstep) {
+			logxvals[i] = logx;
+			if ((iter > 0) and (i%2==0)) {
+				j = i/2;
+				new_rho3dvals[i] = rho3dvals[j];
+			} else {
+				R = re_average*pow(10,logx);
+				new_rho3dvals[i] = calculate_scaled_density_3d(R,quadtolerance,converged);
+				if (converged==false) {
+					convergence_everywhere = false;
+					if ((converge_at_small_r==false) and (prev_converged==true)) trouble_at_small_and_large_r = true;
+					if (i==0) converge_at_small_r = false;
+				} else {
+					if (prev_converged==false) {
+						if ((converge_at_small_r == false) and (first_convergence == false)) {
+							convergence_beyond_radius = R;
+						}
+					}
+					if (first_convergence==false) first_convergence = true;
+				}
+				//if (converged==false) cout << "trouble for r=" << R << ", rho=" << rho3dvals[i] << endl;
+				prev_converged = converged;
+			}
+		}
+		if (iter > 0) {
+			delete[] rho3dvals;
+		}
+		rho3dvals = new_rho3dvals;
 
-	rho3d_logx_spline = new Spline(logxvals,rho3dvals,rho3d_nn);
-	mass_intval = re_average;
+		rho3d_logx_spline = new Spline(logxvals,rho3dvals,rho3d_nn);
+		mass_intval = re_average;
 
-	double (Romberg::*mptr)(const double);
-	mptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::mass3d_r_integrand);
-	double ans = 4*M_PI*romberg_open(mptr, 0, r, 1e-6, 5);
+		temppat = pat_tolerance;
+		SetGaussPatterson(quadtolerance,false);
+		mass3d = 4*M_PI*AdaptiveQuad(mptr,Rmin,r,menc_converged);
+		SetGaussPatterson(temppat,true);
+		delete[] logxvals;
+		delete rho3d_logx_spline;
+		if (iter > 0) {
+			if (abs(mass3d-prev_mass3d) < tolerance*abs(mass3d)) break;
+		}
+	} while (++iter < max_iter);
+	if (iter==max_iter) warn("Enclosed mass did not converge after nmax=%i iterations of refining 3d density profile",max_iter);
 
-	delete rho3d_logx_spline;
-	delete[] logxvals;
 	delete[] rho3dvals;
 
-	return ans;
+	if (!convergence_everywhere) {
+		if ((converge_at_small_r==false) and (!trouble_at_small_and_large_r)) {
+			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,quadtolerance);
+		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
+	}
+	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
+
+	return mass3d;
 }
 
 double LensProfile::mass3d_r_integrand(const double r)
@@ -796,7 +838,7 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 void LensProfile::set_default_base_settings(const int &nn, const double &acc)
 {
 	include_limits = false;
-	rmin_einstein_radius = 1e-6; rmax_einstein_radius = 1e4;
+	rmin_einstein_radius = 1e-5; rmax_einstein_radius = 1e4;
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
 	SetGaussPatterson(acc,true);

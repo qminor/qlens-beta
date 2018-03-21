@@ -46,8 +46,10 @@ enum RayTracingMethod {
 	Area_Interpolation
 };
 enum DerivedParamType {
-	Total_Kappa,
-	Total_DKappa,
+	KappaR,
+	DKappaR,
+	Mass2dR,
+	Mass3dR,
 	UserDefined
 };
 
@@ -450,10 +452,6 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double inverse_magnification_r(const double);
 	double source_plane_r(const double r);
 	bool find_optimal_gridsize();
-	int find_zero_curves(Vector<lensvector>&, double, double, double, double, double, bool, double (Lens::*)(double, double));
-	double lens_equation_x(double x, double y);
-	double lens_equation_y(double x, double y);
-	static int ncfound;
 
 	bool use_cc_spline; // critical curves can be splined when (approximate) elliptical symmetry is present
 	bool auto_ccspline;
@@ -699,6 +697,8 @@ public:
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum);
+	double mass2d_r(const double r_arcsec, const int lensnum);
+	double mass3d_r(const double r_arcsec, const int lensnum);
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
@@ -706,7 +706,7 @@ public:
 	void print_source_list();
 	void clear_source_objects();
 
-	void add_derived_param(DerivedParamType type_in, double param);
+	void add_derived_param(DerivedParamType type_in, double param, int lensnum);
 	void remove_derived_param(int dparam_number);
 	void clear_derived_params();
 	void print_derived_param_list();
@@ -775,13 +775,12 @@ public:
 	void make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle, const int n_subellipses, const int points_per_ellipse, string source_filename);
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
-	double total_kappa(double r);
-	double total_dkappa(double r);
+	double total_kappa(const double r, const int lensnum);
+	double total_dkappa(const double r, const int lensnum);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac);
 	double einstein_radius_root(const double r);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
-	bool plot_lens_equation(double x_source, double y_source, const char *lxfile, const char *lyfile);
 	bool make_random_sources(int nsources, const char *outfile);
 	bool total_cross_section(double&);
 	double total_cross_section_integrand(const double);
@@ -1274,14 +1273,21 @@ struct DerivedParam
 {
 	DerivedParamType derived_param_type;
 	double funcparam;
+	int lensnum_param;
 	string name, latex_name;
-	DerivedParam(DerivedParamType type_in, double param) {
+	DerivedParam(DerivedParamType type_in, double param, int lensnum) // if lensnum == -1, then it uses *all* the lenses (if possible)
+	{
 		derived_param_type = type_in;
 		funcparam = param;
-		if (derived_param_type == Total_Kappa) {
+		lensnum_param = lensnum;
+		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa";
-		} else if (derived_param_type == Total_DKappa) {
+		} else if (derived_param_type == DKappaR) {
 			name = "dkappa"; latex_name = "\\kappa'";
+		} else if (derived_param_type == Mass2dR) {
+			name = "mass2d"; latex_name = "M_{2D}";
+		} else if (derived_param_type == Mass3dR) {
+			name = "mass3d"; latex_name = "M_{3D}";
 		} else die("no user defined function yet");
 		stringstream paramstr;
 		string paramstring;
@@ -1292,17 +1298,23 @@ struct DerivedParam
 	}
 	double get_derived_param(Lens* lens_in)
 	{
-		if (derived_param_type == Total_Kappa) return lens_in->total_kappa(funcparam);
-		else if (derived_param_type == Total_DKappa) return lens_in->total_dkappa(funcparam);
+		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param);
+		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
+		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param);
+		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param);
 		else die("no user defined function yet");
 	}
 	void print_param_description()
 	{
 		cout << name << ": ";
-		if (derived_param_type == Total_Kappa) {
-			cout << "Total kappa within r = " << funcparam << endl;
-		} else if (derived_param_type == Total_DKappa) {
-			cout << "Derivative of total kappa within r = " << funcparam << endl;
+		if (derived_param_type == KappaR) {
+			cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == DKappaR) {
+			cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Mass2dR) {
+			cout << "Projected (2D) mass enclosed within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Mass3dR) {
+			cout << "Deprojected (3D) mass enclosed within r = " << funcparam << " arcsec" << endl;
 		} else die("no user defined function yet");
 	}
 };

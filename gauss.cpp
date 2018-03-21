@@ -1938,6 +1938,7 @@ double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), doub
 			result += pat_weights[level][j]*pat_funcs[i];
 		}
 		dif = result - result_old;
+		//cout << level << " " << result << " " << abs(dif/result) << " " << converged << endl;
 		if ((level > 1) and (abs(dif) < pat_tolerance*abs(result))) break;
 	} while (++level < 9);
 	if (level==9) {

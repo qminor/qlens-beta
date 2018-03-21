@@ -3347,6 +3347,8 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		double *cov = matrix <double> (ma, 0.0);
 		int tot = count;
 		count = 0;
+		if (NDerivedParams > 0) cout << "Calculating derived parameters: [\033[21C]\033[22D" << flush;
+
 		for (i = 0; i < tot; i++, count++)
 		{
 			binin.read((char *)(ptr1), ma*sizeof(double));
@@ -3361,9 +3363,14 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 				for (int k = 0; k < NDerivedParams; k++) {
 					out << dparam_list[k] << "   ";
 				}
+				if ((i % (tot/20)) == 0)
+				{
+					if (mpi_id==0) cout << "=" << flush;
+				}
 			}
 			out << (likeOld-temp1)*2.0 << endl;
 		}
+		if (NDerivedParams > 0) cout << "]" << endl;
 		for (i = 0; i < N; i++)
 		{
 			binin.read((char *)(ptr1), ma*sizeof(double));

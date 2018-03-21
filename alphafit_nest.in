@@ -41,6 +41,11 @@ fit lens alpha 4.5 1 0 0.7 90 0.9 0.3 shear=0.0 0.1  # For the parameters we wil
 -0.2 0.2
 -0.2 0.2
 
+fit dparams add mass3d_r 2 0
+fit dparams add mass3d_r 5 0
+fit dparams add mass3d_r 8 0
+fit dparams
+
 analytic_bestfit_src on   # This tells qlens to solve for the best-fit source coordinates analytically during the fit, so they will not
                           # be varied as free parameters (makes it converge faster, however you won't be able to infer the uncertainties
 								  # in the source position if you do this).

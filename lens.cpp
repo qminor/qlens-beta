@@ -11,7 +11,6 @@
 #include "mcmchdr.h"
 #include "hyp_2F1.h"
 #include "cosmo.h"
-//#include "mcmceval.h"
 #include <cmath>
 #include <complex>
 #include <iostream>
@@ -41,7 +40,6 @@ bool Lens::use_scientific_notation;
 double Lens::rmin_frac;
 bool Lens::respline_at_end; // for creating deflection spline
 int Lens::resplinesteps; // for creating deflection spline
-int Lens::ncfound = 0; // for plotting the lens equation x/y components
 string Lens::fit_output_filename;
 
 int Lens::nthreads;
@@ -1108,7 +1106,7 @@ void Lens::print_source_list()
 	}
 }
 
-void Lens::add_derived_param(DerivedParamType type_in, double param)
+void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum)
 {
 	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
 	if (n_derived_params > 0) {
@@ -1116,7 +1114,7 @@ void Lens::add_derived_param(DerivedParamType type_in, double param)
 			newlist[i] = dparam_list[i];
 		delete[] dparam_list;
 	}
-	newlist[n_derived_params] = new DerivedParam(type_in,param);
+	newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum);
 	n_derived_params++;
 	dparam_list = newlist;
 }
@@ -2336,7 +2334,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	*/
 }
 
-double Lens::total_kappa(double r)
+double Lens::total_kappa(const double r, const int lensnum)
 {
 	double total_kappa;
 	int j;
@@ -2354,14 +2352,15 @@ double Lens::total_kappa(double r)
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r*cos(theta);
 		y = grid_ycenter + r*sin(theta);
-		kap = kappa(x,y,reference_zfactor);
+		if (lensnum==-1) kap = kappa(x,y,reference_zfactor);
+		else kap = reference_zfactor*lens_list[lensnum]->kappa(x,y);
 		total_kappa += kap;
 	}
 	total_kappa /= thetasteps;
 	return total_kappa;
 }
 
-double Lens::total_dkappa(double r)
+double Lens::total_dkappa(const double r, const int lensnum)
 {
 	double total_dkappa;
 	int j;
@@ -2382,8 +2381,13 @@ double Lens::total_dkappa(double r)
 		y = grid_ycenter + r*sin(theta);
 		x2 = (r+dr)*cos(theta);
 		y2 = (r+dr)*sin(theta);
-		kap = kappa(x,y,reference_zfactor);
-		kap2 = kappa(x2,y2,reference_zfactor);
+		if (lensnum==-1) {
+			kap = kappa(x,y,reference_zfactor);
+			kap2 = kappa(x2,y2,reference_zfactor);
+		} else {
+			kap = reference_zfactor*lens_list[lensnum]->kappa(x,y);
+			kap2 = reference_zfactor*lens_list[lensnum]->kappa(x2,y2);
+		}
 		total_dkappa += (kap2 - kap)/dr;
 	}
 	total_dkappa /= thetasteps;
@@ -2501,105 +2505,6 @@ bool Lens::total_cross_section(double &area)
 double Lens::total_cross_section_integrand(const double theta)
 {
 	return (0.5 * SQR(dmax(caust0_interpolate(theta), caust1_interpolate(theta))));
-}
-
-bool Lens::plot_lens_equation(double x_source, double y_source, const char *lxfile, const char *lyfile)
-{
-	source[0] = x_source; source[1] = y_source;
-	if (source[0]==0) source[0] = 1e-6; // the contours look weird for source[0] = 0 or source[1] = 0....
-	if (source[1]==0) source[1] = 1e-6; //  no idea why!!
-	int nxpoints, nypoints, resolution, ncells;
-	double cell_size;
-	resolution = 6000;
-	cell_size = (dmin(grid_xlength,grid_ylength))/((double) resolution);
-	ncells = 100000;
-	double max_xy = 0.5*dmax(grid_xlength,grid_ylength);
-
-	Vector<lensvector> eq0_cell(ncells);
-	Vector<lensvector> eq1_cell(ncells);
-	double (Lens::*xptr)(double,double);
-	double (Lens::*yptr)(double,double);
-	xptr = (&Lens::lens_equation_x);
-	yptr = (&Lens::lens_equation_y);
-
-	ncfound = 0;
-	nxpoints = find_zero_curves(eq0_cell, -max_xy, -max_xy, max_xy, max_xy, cell_size, true, xptr);
-	ofstream lenseqx(lxfile);
-	for (int i = 0; i < nxpoints; i++)
-		lenseqx << eq0_cell[i][0] << "\t" << eq0_cell[i][1] << endl;
-
-	ncfound = 0;
-	double x_half_length = 0.5*autogrid_frac*grid_xlength;
-	double y_half_length = 0.5*autogrid_frac*grid_ylength;
-	nypoints = find_zero_curves(eq1_cell, -x_half_length, -y_half_length, x_half_length, y_half_length, cell_size, true, yptr);
-	ofstream lenseqy(lyfile);
-	for (int i = 0; i < nypoints; i++)
-		lenseqy << eq1_cell[i][0] << "\t" << eq1_cell[i][1] << endl;
-
-	return true;
-}
-
-double Lens::lens_equation_x(double x, double y)
-{
-	lensvector def;
-	deflection(x,y,def,0,reference_zfactor);
-	return (source[0] - x + def[0]);
-}
-
-double Lens::lens_equation_y(double x, double y)
-{
-	lensvector def;
-	deflection(x,y,def,0,reference_zfactor);
-	return (source[1] - y + def[1]);
-}
-
-int Lens::find_zero_curves(Vector<lensvector>& cell, double xmin, double ymin, double xmax, double ymax, double cell_size, bool first_iteration, double (Lens::*func)(double, double))
-{
-	int steps = (first_iteration==true) ? 80 : 2;   // The gridsearch divides the grid by this number with every iteration
-	double x, y, xstep, ystep;
-	xstep = (xmax - xmin)/steps;		// The ordering of points in a box is:  3-4
-	ystep = (ymax - ymin)/steps;		//                                      | |
-	double mag1, mag2, mag3, mag4;	//                                      1-2
-	bool zero_curve_inside; // keeps track of whether a given box contains a critical curve
-	int i, j;
-	for (i = 0, x = xmin; i < steps; i++, x += xstep) {
-		for (j = 0, y = ymin; j < steps; j++, y += ystep) {
-			if (ncfound >= cell.size()) return ncfound;
-
-			// First, assign the correct (inverse) inverse-magnification values for each point in the box
-			mag1 = (this->*func)(x,y);
-			mag2 = (this->*func)(x+xstep,y);
-			mag3 = (this->*func)(x,y+ystep);
-			mag4 = (this->*func)(x+xstep,y+ystep);
-
-			// Now, test to see if there is a critical curve inside the square
-			if ((mag1*mag2*mag3*mag4) < 0) zero_curve_inside = true;
-			else if (((mag1*mag2) < 0) || (mag1*mag3) < 0) zero_curve_inside = true;
-			else zero_curve_inside = false;
-
-			// See if the square is small enough to be counted
-			if (zero_curve_inside) {
-				if ((xstep < cell_size) && (ystep < cell_size)) {	// found one!!
-					cell[ncfound][0] = x + xstep/2.0;
-					cell[ncfound][1] = y + ystep/2.0;
-					ncfound++;
-					if (ncfound >= cell.size()) {
-						warn(warnings, "maximum number of cells exceeded in grid search");
-						return ncfound;
-					}
-				} else {
-					// There's a zero curve in here, but we need to take a closer look (subgrid)
-					find_zero_curves(cell, x, y, x+xstep, y+ystep, cell_size, false, func);
-					if (ncfound >= cell.size()) {
-						warn(warnings, "maximum number of cells exceeded in grid search");
-						return ncfound;
-					}
-				}
-			}
-		}
-	}
-
-	return ncfound; // Returns number of boxes that contained a critical curve
 }
 
 /*
@@ -4842,222 +4747,6 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
-/*
-void Lens::nested_sampling_source_and_image_plane() // this may be an ill-conceived idea...probably better to just use chisq_srcplane_threshold
-{
-	if (setup_fit_parameters(true)==false) return;
-	fit_set_optimizations();
-	initialize_fitmodel();
-
-	McmcEval Eval;
-	string file_root = fit_output_dir + "/" + fit_output_filename;
-	Eval.input(file_root.c_str(),-1,1,NULL,NULL,1,0,MULT|LIKE,true,false,"");
-	double *chisqvals = new double[n_mcpoints];
-	double **paramvals = new double*[n_mcpoints];
-	double **paramvals_src = new double*[n_mcpoints];
-	int new_n_fit_parameters = n_fit_parameters + 2*n_sourcepts_fit;
-	for (int i=0; i < n_mcpoints; i++) {
-		paramvals[i] = new double[n_fit_parameters];
-		paramvals_src[i] = new double[new_n_fit_parameters];
-	}
-	Eval.get_final_points(n_mcpoints,paramvals,chisqvals);
-	lensvector *beta = new lensvector[n_sourcepts_fit];
-	double *srcx_upper_limits = new double[n_sourcepts_fit];
-	double *srcy_upper_limits = new double[n_sourcepts_fit];
-	double *srcx_lower_limits = new double[n_sourcepts_fit];
-	double *srcy_lower_limits = new double[n_sourcepts_fit];
-	int i,j,k;
-	for (j=0; j < n_sourcepts_fit; j++) {
-		srcx_upper_limits[j] = -1e30;
-		srcy_upper_limits[j] = -1e30;
-		srcx_lower_limits[j] = 1e30;
-		srcy_lower_limits[j] = 1e30;
-	}
-	for (i=0; i < n_mcpoints; i++) {
-		if (update_fitmodel(paramvals[i])==false) die("point in nested sampling output lies outside permitted range");
-		fitmodel->output_analytic_srcpos(beta);
-		for (k=0; k < n_fit_parameters; k++) paramvals_src[i][k] = paramvals[i][k];
-		for (j=0; j < n_sourcepts_fit; j++) {
-			paramvals_src[i][k++] = beta[j][0];
-			paramvals_src[i][k++] = beta[j][1];
-			if (beta[j][0] > srcx_upper_limits[j]) srcx_upper_limits[j] = beta[j][0];
-			if (beta[j][1] > srcy_upper_limits[j]) srcy_upper_limits[j] = beta[j][1];
-			if (beta[j][0] < srcx_lower_limits[j]) srcx_lower_limits[j] = beta[j][0];
-			if (beta[j][1] < srcy_lower_limits[j]) srcy_lower_limits[j] = beta[j][1];
-		}
-	}
-
-	//for (int i=0; i < n_mcpoints; i++) {
-		//cout << i << " ";
-		//for (int j=0; j < n_fit_parameters; j++) {
-			//cout << paramvals[i][j] << " ";
-		//}
-		//cout << chisqvals[i] << endl;
-	//}
-
-	int nbins = 60;
-	double threshold = 3e-3;
-	Eval.FindRanges(lower_limits.array(),upper_limits.array(),nbins,threshold);
-	for (int i=0; i < n_fit_parameters; i++) {
-		upper_limits_initial[i] = upper_limits[i];
-		lower_limits_initial[i] = lower_limits[i];
-		//cout << lower_limits[i] << " " << upper_limits[i] << endl;
-	}
-	for (j=0; j < n_sourcepts_fit; j++) {
-		sourcepts_upper_limit[j][0] = srcx_upper_limits[j];
-		sourcepts_upper_limit[j][1] = srcy_upper_limits[j];
-		sourcepts_lower_limit[j][0] = srcx_lower_limits[j];
-		sourcepts_lower_limit[j][1] = srcy_lower_limits[j];
-	}
-
-	double *centers = new double[new_n_fit_parameters];
-	double *sigs = new double[new_n_fit_parameters];
-	Eval.FindCoVar(NULL,centers,sigs,lower_limits.array(),upper_limits.array());
-	for (j=0, k=n_fit_parameters; j < n_sourcepts_fit; j++) {
-		sigs[k++] = sourcepts_upper_limit[j][0] - sourcepts_lower_limit[j][0];
-		sigs[k++] = sourcepts_upper_limit[j][1] - sourcepts_lower_limit[j][1];
-	}
-	fit_restore_defaults();
-	delete fitmodel;
-	fitmodel = NULL;
-
-	use_image_plane_chisq = true;
-	use_analytic_bestfit_src = false;
-	if (setup_fit_parameters(true)==false) return;
-	fit_set_optimizations();
-
-	Eval.FindRanges(lower_limits.array(),upper_limits.array(),nbins,threshold);
-	for (int i=0; i < n_fit_parameters; i++) {
-		upper_limits_initial[i] = upper_limits[i];
-		lower_limits_initial[i] = lower_limits[i];
-		//cout << lower_limits[i] << " " << upper_limits[i] << endl;
-	}
-	
-	double newparam;
-	for (i=0; i < n_mcpoints; i++) {
-		for (j=0; j < n_fit_parameters; j++) {
-			do {
-				newparam = paramvals_src[i][j] + 0.1*sigs[j]*(2*RandomNumber1() - 1.0);
-				//newparam = lower_limits[j] + RandomNumber1()*(upper_limits[j] - lower_limits[j]);
-			} while ((newparam > upper_limits[j]) and (newparam < lower_limits[j]));
-			paramvals_src[i][j] = newparam;
-		}
-	}
-
-	fit_output_dir += ".run2";
-	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
-		 //I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
-		 //Do this later...
-		create_output_directory();
-	}
-
-	initialize_fitmodel();
-	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
-
-	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
-	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
-	}
-
-	if (mpi_id==0) {
-		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".run2.paramnames";
-		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		pnamefile.close();
-		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".run2.latex_paramnames";
-		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		lpnamefile.close();
-		string prange_str = fit_output_dir + "/" + fit_output_filename + ".run2.ranges";
-		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
-		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
-		}
-		prangefile.close();
-	}
-
-	double *param_errors = new double[n_fit_parameters];
-#ifdef USE_OPENMP
-	double wt0, wt;
-	if (show_wtime) {
-		wt0 = omp_get_wtime();
-	}
-#endif
-	string filename = fit_output_dir + "/" + fit_output_filename + ".run2";
-
-	MonoSample(filename.c_str(),n_mcpoints,fitparams.array(),param_errors,mcmc_logfile,paramvals_src);
-
-	if (mcmc_threads < n_fit_parameters+2) mcmc_threads = n_fit_parameters + 2;
-	double **initial_points = new double*[mcmc_threads];
-	int kk = n_mcpoints - mcmc_threads - 1;
-	for (int i=0; i < mcmc_threads; i++) {
-		initial_points[i] = new double[n_fit_parameters];
-		for (j=0; j < n_fit_parameters; j++) {
-			initial_points[i][j] = paramvals_src[kk][j];
-			//cout << i << " " << j << " " << initial_points[i][j] << endl;
-		}
-		kk++;
-	}
-
-	//TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,initial_points);
-	//TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
-	bestfitparams.input(fitparams);
-
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
-
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wt = omp_get_wtime() - wt0;
-		if (mpi_id==0) cout << "Time for nested sampling: " << wt << endl;
-	}
-#endif
-
-	if (mpi_id==0) {
-		cout << endl;
-		if (source_fit_mode == Point_Source) {
-			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
-			double *bestfit_flux;
-			if (include_flux_chisq) {
-				bestfit_flux = new double[n_sourcepts_fit];
-				fitmodel->output_model_source_flux(bestfit_flux);
-			};
-			if (use_analytic_bestfit_src) {
-				fitmodel->output_analytic_srcpos(bestfit_src);
-			} else {
-				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
-			}
-			for (int i=0; i < n_sourcepts_fit; i++) {
-				cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
-				if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
-				cout << endl;
-			}
-			delete[] bestfit_src;
-			if (include_flux_chisq) delete[] bestfit_flux;
-		}
-
-		cout << "\nBest-fit parameters and errors:\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
-		}
-		cout << endl;
-		if (auto_save_bestfit) output_bestfit_model();
-	}
-	delete[] param_errors;
-
-	fit_restore_defaults();
-	delete fitmodel;
-	fitmodel = NULL;
-}
-*/
-
 void Lens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
@@ -5644,6 +5333,22 @@ bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
 	//cout << "Density unscaled (3D): " << rho_r_3d_noscale << " arcsec^-1" << endl;
 	cout << endl;
 	return true;
+}
+
+double Lens::mass2d_r(const double r_arcsec, const int lensnum)
+{
+	double sigma_cr, kpc_to_arcsec, mass_r_2d;
+	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
+	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
+	return mass_r_2d;
+}
+
+double Lens::mass3d_r(const double r_arcsec, const int lensnum)
+{
+	double sigma_cr, kpc_to_arcsec, mass_r_3d;
+	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
+	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
+	return mass_r_3d;
 }
 
 void Lens::print_lens_list(bool show_vary_params)
