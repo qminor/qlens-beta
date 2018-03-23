@@ -3402,8 +3402,7 @@ void Lens::initialize_fitmodel()
 			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
 				LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->parameter_anchor_lens[j]->lens_number];
 				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
-				double param_ratio = fitmodel->lens_list[i]->parameter_anchor_ratio[j];
-				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,param_ratio,parameter_anchor_lens);
+				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,parameter_anchor_lens);
 			}
 		}
 	}

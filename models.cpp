@@ -984,6 +984,7 @@ Shear::Shear(const Shear* lens_in)
 {
 	shear1 = lens_in->shear1;
 	shear2 = lens_in->shear2;
+	q = lens_in->q;
 	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 }
@@ -1150,6 +1151,7 @@ Multipole::Multipole(const Multipole* lens_in)
 {
 	n = lens_in->n;
 	m = lens_in->m;
+	q = lens_in->q;
 	kappa_multipole = lens_in->kappa_multipole;
 	sine_term = lens_in->sine_term;
 

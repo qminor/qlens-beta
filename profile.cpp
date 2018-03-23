@@ -397,8 +397,14 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 		parameter_anchor_ratio[paramnum] = 1.0;
 		(*param[paramnum]) = *(param_anchor_lens->param[anchor_paramnum]);
 	}
-	else parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_lens->param[anchor_paramnum]));
-
+	else {
+		if ((*(param_anchor_lens->param[anchor_paramnum]))==0) {
+			if (*param[paramnum]==0) parameter_anchor_ratio[paramnum] = 1.0;
+			else die("cannot anchor to parameter with specified ratio if parameter is equal to zero");
+		} else {
+			parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_lens->param[anchor_paramnum]));
+		}
+	}
 }
 
 void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)

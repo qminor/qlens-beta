@@ -587,7 +587,7 @@ void Lens::process_commands(bool read_file)
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
 							"current fit model (including lens and source) is listed along with the free parameters.\n"
 							"For help with the specific fit commands, type 'help fit <command>'. To run the chi-square fit,\n"
-							"routine, use the 'fit run' command.\n";
+							"routine, use the 'fit run' command.\n\n";
 					else if (words[2]=="lens") 
 						cout << "fit lens ...\n"
 							"fit lens ... anchor_center=<lens_number>\n" <<
