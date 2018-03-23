@@ -675,7 +675,7 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 	double re_major_axis, re_average;
 	get_einstein_radius(re_major_axis, re_average, 1.0);
 	if (re_average==0.0) {
-		warn("Einstein radius of zero; cannot calculate 3d mass");
+		warn("Einstein radius is returning zero; cannot calculate 3d mass");
 		return 0;
 	}
 	int i, j, iter=0;
@@ -687,8 +687,8 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 	bool first_convergence;
 	bool trouble_at_small_and_large_r;
 	double convergence_beyond_radius;
-	double tolerance = 5e-3;
-	double quadtolerance = tolerance; // make integral tolerance a bit stricter
+	double tolerance = 1e-3;
+	double quadtolerance = tolerance / 2.0; // make integral tolerance a bit stricter
 
 	double *rho3dvals, *new_rho3dvals;
 	double *logxvals;
@@ -730,7 +730,6 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 					}
 					if (first_convergence==false) first_convergence = true;
 				}
-				//if (converged==false) cout << "trouble for r=" << R << ", rho=" << rho3dvals[i] << endl;
 				prev_converged = converged;
 			}
 		}
@@ -776,16 +775,12 @@ double LensProfile::mass3d_r_integrand(const double r)
 double LensProfile::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged)
 {
 	mass_intval = r*r;
-	//double (Romberg::*mptr)(const double);
-	//mptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::rho3d_w_integrand);
-	//double ans = -(2*r/M_PI)*romberg_open(mptr, 0, 1, 1e-8, 5);
 	double (GaussPatterson::*mptr)(double);
 	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::rho3d_w_integrand);
 	double temppat = pat_tolerance;
 	SetGaussPatterson(tolerance,false);
 	double ans = -(2*r/M_PI)*AdaptiveQuad(mptr,0,1,converged);
 	SetGaussPatterson(temppat,true);
-
 	return ans;
 }
 

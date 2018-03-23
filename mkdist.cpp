@@ -43,7 +43,8 @@ int main(int argc, char *argv[])
 	int nthreads=1, n_processes=1;
 	double radius = 0.1;
 	string file_root, file_label;
-	int nparams;
+	int nparams, nparams_eff;
+	int nparams_subset = -1;
 	int nbins=60, nbins_2d=40;
 	bool silent = false;
 	bool include_shading = true;
@@ -141,14 +142,19 @@ int main(int argc, char *argv[])
 						if (sscanf(argv[i], "c%i", &cut)==0) usage_error();
 						argv[i] = advance(argv[i]);
 						break;
-					case 't':
-						if (sscanf(argv[i], "t%i", &nthreads)==0) usage_error();
-						specify_nthreads = true;
-						argv[i] = advance(argv[i]);
-						break;
+					//case 't': // this option isn't needed anymore, since it is found automatically
+						//if (sscanf(argv[i], "t%i", &nthreads)==0) usage_error();
+						//specify_nthreads = true;
+						//argv[i] = advance(argv[i]);
+						//break;
+					//case 'p': // this option isn't needed anymore, since it is found automatically
+						//if (sscanf(argv[i], "p%i", &n_processes)==0) usage_error();
+						//specify_processes = true;
+						//argv[i] = advance(argv[i]);
+						//break;
+						//
 					case 'p':
-						if (sscanf(argv[i], "p%i", &n_processes)==0) usage_error();
-						specify_processes = true;
+						if (sscanf(argv[i], "p%i", &nparams_subset)==0) usage_error();
 						argv[i] = advance(argv[i]);
 						break;
 					case 'q': silent = true; break;
@@ -228,6 +234,8 @@ int main(int argc, char *argv[])
 		Eval.get_nparams(nparams);
 	}
 	if (nparams==0) die();
+	if ((nparams_subset > 0) and (nparams_subset < nparams)) nparams_eff = nparams_subset;
+	else nparams_eff = nparams;
 
 	string *param_names = new string[nparams];
 	string paramnames_filename = file_root + ".paramnames";
@@ -241,22 +249,22 @@ int main(int argc, char *argv[])
 
 	string out_paramnames_filename = file_root + ".py_paramnames";
 	ofstream paramnames_out(out_paramnames_filename.c_str());
-	for (i=0; i < nparams; i++) {
+	for (i=0; i < nparams_eff; i++) {
 		paramnames_out << param_names[i] << endl;
 	}
 	paramnames_out.close();
 
 	if (use_fisher_matrix) {
 		if (make_1d_posts) {
-			for (i=0; i < nparams; i++) {
+			for (i=0; i < nparams_eff; i++) {
 				string dist_out;
 				dist_out = file_root + "_p_" + param_names[i] + ".dat";
 				FEval.MkDist(201, dist_out.c_str(), i);
 			}
 		}
 		if (make_2d_posts) {
-			for (i=0; i < nparams; i++) {
-				for (j=i+1; j < nparams; j++) {
+			for (i=0; i < nparams_eff; i++) {
+				for (j=i+1; j < nparams_eff; j++) {
 					string dist_out;
 					dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
 					FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
@@ -278,7 +286,7 @@ int main(int argc, char *argv[])
 		if (make_1d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
 			double rap[20];
-			for (i=0; i < nparams; i++) {
+			for (i=0; i < nparams_eff; i++) {
 				string hist_out;
 				hist_out = file_root + "_p_" + param_names[i] + ".dat";
 				if (smoothing) Eval.MkHist(minvals[i], maxvals[i], nbins, hist_out.c_str(), i, HIST|SMOOTH, rap);
@@ -332,8 +340,8 @@ int main(int argc, char *argv[])
 
 		if (make_2d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
-			for (i=0; i < nparams; i++) {
-				for (j=i+1; j < nparams; j++) {
+			for (i=0; i < nparams_eff; i++) {
+				for (j=i+1; j < nparams_eff; j++) {
 					string hist_out;
 					hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
 					Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH);
@@ -350,7 +358,7 @@ int main(int argc, char *argv[])
 			double *centers = new double[nparams];
 			double *sigs = new double[nparams];
 			Eval.FindCoVar(covar_out.c_str(),centers,sigs,minvals,maxvals);
-			for (i=0; i < nparams; i++) {
+			for (i=0; i < nparams_eff; i++) {
 				// NOTE: The following errors are from standard deviation, not from CL's 
 				cout << param_names[i] << ": " << centers[i] << " +/- " << sigs[i] << endl;
 			}
@@ -398,8 +406,8 @@ int main(int argc, char *argv[])
 		pyscript2d << "outdir=''" << endl;
 		pyscript2d << "roots=['" << file_label << "']" << endl;
 		pyscript2d << "pairs=[]" << endl;
-		for (i=0; i < nparams; i++) {
-			for (j=i+1; j < nparams; j++)
+		for (i=0; i < nparams_eff; i++) {
+			for (j=i+1; j < nparams_eff; j++)
 				pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
 		}
 		pyscript2d << "g.plots_2d(roots,param_pairs=pairs,";
@@ -430,9 +438,9 @@ int main(int argc, char *argv[])
 			pyscript << "outdir=''" << endl;
 			pyscript << "roots=['" << file_label << "']" << endl;
 			pyscript << "g.triangle_plot(roots, [";
-			for (i=0; i < nparams; i++) {
+			for (i=0; i < nparams_eff; i++) {
 				pyscript << "'" << param_names[i] << "'";
-				if (i != nparams-1) pyscript << ",";
+				if (i != nparams_eff-1) pyscript << ",";
 			}
 			pyscript << "],";
 			if (include_shading) pyscript << "shaded=True";
@@ -478,6 +486,7 @@ void usage_error()
 			"  -d:<dir> set input/output directory to <dir> (default: 'chains_<file_root>/')\n"
 			"  -n#      make 1d histograms with # bins\n"
 			"  -N#      make 2d histograms with # by # bins\n"
+			"  -p#      include only the first # parameters when plotting histograms\n"
 			"  -P       execute Python scripts generated by mkdist to output posteriors as PDF files\n"
 			"  -S       plot smoothed histograms\n"
 			"  -s       do not include shading in 2D histograms\n"
@@ -485,8 +494,8 @@ void usage_error()
 			"  -e       output mean parameters with standard errors in each parameter\n"
 			"  -c       number of initial points to cut from each MCMC chain (if no cut is specified,\n"
 			"                the first 10% of points are cut by default)\n"
-			"  -p#      specify number of MPI processes involved in making the chains\n"
-			"  -t#      read in # chains per process (if more than one chain involved)\n"
+			//"  -p#      specify number of MPI processes involved in making the chains\n"
+			//"  -t#      read in # chains per process (if more than one chain involved)\n"
 			"  -B#      input minimum probability threshold used for defining parameter ranges\n"
 			"              for plotting (default = 3e-3; higher threshold --> smaller ranges)\n"
 			"  -f       use Fisher matrix to generate 1d,2d posteriors (MCMC data not required)\n"
