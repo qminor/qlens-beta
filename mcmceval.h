@@ -80,7 +80,7 @@ class McmcEval
 		
 	public:
 		McmcEval() { numOfParam = 0; mults = chi2 = NULL; cut = numOfPoints = NULL; points = NULL; minvals = maxvals = derived_param = derived_mults = NULL; param_transforms = NULL; }
-		void input(const char *, int, int, double *, double *, const int mpi_np = 1, const int cut_val = 0, const char flag = 0x00, const bool silent = false, const bool transform_params=false, const char *transform_filename = NULL);
+		void input(const char *, int, int, double *, double *, const int mpi_np = 1, const int cut_val = 0, const char flag = 0x00, const bool silent = false, const int n_freeparams = -1, const bool transform_params=false, const char *transform_filename = NULL);
 		void input_parameter_transforms(const char *transform_filename);
 		void transform_parameter_names(string *paramnames);
 		void calculate_derived_param();

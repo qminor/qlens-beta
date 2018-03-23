@@ -107,7 +107,7 @@ class Fit : private Minimize, private LevenMarq
 		}
 };
 
-void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const bool transform_params, const char *transform_filename)
+void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename)
 {
 	if (a < 0)
 	{
@@ -145,10 +145,15 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		}
 		if(flag&MULT) a--;
 		if(flag&LIKE) a--;
-		if (!silent) cout << name << " has " << a << " parameters, " << filesin << " threads, " << mpi_np << " processes." << endl;
+		if (!silent) {
+			cout << name << " has " << a << " parameters";
+			if ((n_freeparams != -1) and (n_freeparams < a)) cout << " (" << n_freeparams << " fit, " << a-n_freeparams << " derived)";
+			if ((mpi_np > 1) or (filesin > 1))
+			cout << ", " << mpi_np << " processes, " << filesin << " threads." << endl;
+			else cout << "." << endl;
+		}
 	}
 	numOfParam = a;
-	cout << "Number of parameters: " << a << endl;
 	param_transforms = new EvalParamTransform[a];
 	if (transform_params) input_parameter_transforms(transform_filename);
 	if (a <= 0) die("no parameters found in input file");
@@ -350,8 +355,9 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	delete[] nlines_per_file;
 	if (!silent) {
 		int cuttot = 0; for (i=0; i < numOfFiles; i++) cuttot += cut[i];
-		if (cuttot==0) cout << "Total of " << totPts << " points." << endl;
-		else cout << "Total of " << totPts << " points, cutting " << cuttot << " initial points, using " << totPts - cuttot << " points." << endl;
+		if (cuttot==0) cout << "Total of " << totPts << " points included." << endl;
+		else cout << "Total of " << totPts << " points included, cutting " << cuttot << " initial points, using " << totPts - cuttot << " points." << endl;
+		cout << endl;
 	}
 
 	// this may not get used, but we allocate it regardless

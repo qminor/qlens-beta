@@ -4663,6 +4663,10 @@ void Lens::nested_sampling()
 
 	if (mpi_id==0) {
 		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
@@ -4785,6 +4789,10 @@ void Lens::chi_square_twalk()
 
 	if (mpi_id==0) {
 		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
