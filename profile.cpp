@@ -42,6 +42,7 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens)
 		f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 		ellipticity_mode = -1; // indicates not an elliptical lens
 	}
+	analytic_3d_density = false; // this will be changed to 'true' for certain models (e.g. NFW)
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
@@ -69,6 +70,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
 	ellipticity_mode = lens_in->ellipticity_mode;
+	analytic_3d_density = lens_in->analytic_3d_density;
 	paramnames = lens_in->paramnames;
 	latex_paramnames = lens_in->latex_paramnames;
 	latex_param_subscripts = lens_in->latex_param_subscripts;
@@ -625,6 +627,7 @@ bool LensProfile::calculate_total_scaled_mass(double& total_mass)
 	static const int nmax = 34;
 	get_einstein_radius(re_major_axis, re_average, 1.0);
 	if (re_major_axis==0) return false;
+	if (this->kapavgptr_rsq_spherical==NULL) return false;
 	u = 1.0/(re_average*re_average);
 	mass_u = mass_inverse_rsq(u);
 	int n = 0;
@@ -647,6 +650,7 @@ double LensProfile::mass_inverse_rsq(const double u)
 
 double LensProfile::mass_rsq(const double rsq)
 {
+	if (this->kapavgptr_rsq_spherical==NULL) return 0;
 	return M_PI*rsq*(this->*kapavgptr_rsq_spherical)(rsq);
 }
 
@@ -676,6 +680,12 @@ bool LensProfile::calculate_half_mass_radius(double& half_mass_radius, const dou
 
 double LensProfile::calculate_scaled_mass_3d(const double r)
 {
+	if (analytic_3d_density) return calculate_scaled_mass_3d_from_analytic_rho3d(r);
+	else return calculate_scaled_mass_3d_from_kappa(r);
+}
+
+double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
+{
 	static const int max_iter = 6;
 	int rho3d_nn = 40; // starting value
 	double re_major_axis, re_average;
@@ -686,7 +696,7 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 	}
 	int i, j, iter=0;
 	double R,Rmin,logx,logxmin,logxmax,logxstep;
-	logxmin = -7; logxmax = log(r/re_average)/ln10;
+	logxmin = -6; logxmax = log(r/re_average)/ln10;
 	Rmin = re_average*pow(10,logxmin);
 	bool converged, menc_converged, prev_converged, convergence_everywhere;
 	bool converge_at_small_r;
@@ -724,6 +734,7 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 			} else {
 				R = re_average*pow(10,logx);
 				new_rho3dvals[i] = calculate_scaled_density_3d(R,quadtolerance,converged);
+				if (new_rho3dvals[i]*0.0 != 0.0) cout << "r(" << i << "): R=" << R << " nan value\n";
 				if (converged==false) {
 					convergence_everywhere = false;
 					if ((converge_at_small_r==false) and (prev_converged==true)) trouble_at_small_and_large_r = true;
@@ -771,6 +782,21 @@ double LensProfile::calculate_scaled_mass_3d(const double r)
 	return mass3d;
 }
 
+double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
+{
+	bool menc_converged;
+	double mass3d, tolerance = 1e-4;
+
+	double temppat = pat_tolerance;
+	SetGaussPatterson(tolerance,false);
+	double (GaussPatterson::*mptr)(double);
+	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile::mass3d_r_integrand_analytic);
+	mass3d = 4*M_PI*AdaptiveQuad(mptr,0,r,menc_converged);
+	SetGaussPatterson(temppat,true);
+	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
+	return mass3d;
+}
+
 double LensProfile::mass3d_r_integrand(const double r)
 {
 	double logx = log(r/mass_intval)/ln10;
@@ -778,8 +804,19 @@ double LensProfile::mass3d_r_integrand(const double r)
 	return r*r*rho3d_logx_spline->splint(logx);
 }
 
+double LensProfile::mass3d_r_integrand_analytic(const double r)
+{
+	return r*r*rho3d_r_integrand_analytic(r);
+}
+
+double LensProfile::rho3d_r_integrand_analytic(const double r)
+{
+	return 0; // This function must be overloaded in lens models where analytic_3d_density==true
+}
+
 double LensProfile::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged)
 {
+	if (analytic_3d_density) return rho3d_r_integrand_analytic(r);
 	mass_intval = r*r;
 	double (GaussPatterson::*mptr)(double);
 	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::rho3d_w_integrand);
@@ -793,7 +830,10 @@ double LensProfile::calculate_scaled_density_3d(const double r, const double tol
 double LensProfile::rho3d_w_integrand(const double w)
 {
 	double wsq = w*w;
-	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
+	double ans = kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
+	if (ans*0.0 != 0.0) cout << "NAN! " << wsq << " " << mass_intval/wsq << " " << kappa_rsq_deriv(mass_intval/wsq) << endl;
+	return ans;
+	//return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
 }
 
 void LensProfile::set_ellipticity_parameter(const double &q_in)

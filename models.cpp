@@ -24,6 +24,7 @@ Alpha::Alpha(const double &bb, const double &aa, const double &ss, const double 
 	model_name = "alpha";
 	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	analytic_3d_density = true;
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -328,6 +329,27 @@ void Alpha::get_einstein_radius(double& re_major_axis, double& re_average, const
 	}
 }
 
+double Alpha::calculate_scaled_mass_3d(const double r)
+{
+	if (s==0.0) {
+		double a2, B;
+		a2 = (1+alpha)/2;
+		B = (1.5-a2)*pow(b,alpha)*Gamma(a2)/(M_SQRT_PI*Gamma(alpha/2));
+		return 4*M_PI*B*pow(r,2-alpha)/(2-alpha);
+	} else {
+		return calculate_scaled_mass_3d_from_analytic_rho3d(r);
+	}
+}
+
+double Alpha::rho3d_r_integrand_analytic(const double r)
+{
+	double rsq, a2, B;
+	rsq = r*r;
+	a2 = (1+alpha)/2;
+	B = (1.5-a2)*pow(b,alpha)*Gamma(a2)/(M_SQRT_PI*Gamma(alpha/2));
+	return B/pow(rsq+s*s,a2);
+}
+
 /********************************** PseudoJaffe **********************************/
 
 PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
@@ -336,6 +358,7 @@ PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, c
 	model_name = "pjaffe";
 	special_parameter_command = "";
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	analytic_3d_density = true;
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -530,6 +553,18 @@ bool PseudoJaffe::calculate_total_scaled_mass(double& total_mass)
 	return true;
 }
 
+double PseudoJaffe::calculate_scaled_mass_3d(const double r)
+{
+	double ans = a*atan(r/a);
+	if (s != 0.0) ans -= s*atan(r/s);
+	return 2*b*ans;
+}
+
+double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
+{
+	double rsq = r*r;
+	return (b/M_2PI)*(a*a-s*s)/(rsq+a*a)/(rsq+s*s);
+}
 
 /************************************* NFW *************************************/
 
@@ -542,6 +577,7 @@ NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const dou
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	analytic_3d_density = true;
 
 	ks = ks_in;
 	rs = rs_in;
@@ -647,6 +683,16 @@ double NFW::potential_spherical_rsq(const double rsq)
 	}
 }
 
+double NFW::rho3d_r_integrand_analytic(const double r)
+{
+	return ks/(r*SQR(1+r/rs));
+}
+
+double NFW::calculate_scaled_mass_3d(const double r)
+{
+	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
+}
+
 bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
@@ -678,6 +724,7 @@ Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const dou
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	analytic_3d_density = true;
 
 	ks = ks_in;
 	rs = rs_in;
@@ -742,13 +789,15 @@ void Truncated_NFW::set_model_specific_integration_pointers()
 
 double Truncated_NFW::kappa_rsq(const double rsq)
 {
-	double xsq, tsq, sqrttx, lx, tmp;
+	double xsq, tsq, sqrttx, lx, lf, tmp;
 	xsq = rsq/(rs*rs);
 	tsq = SQR(rt/rs);
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
+	if (xsq < 1e-6) lf = -log(xsq/4)/2;
+	else lf = lens_function_xsq(xsq);
 	if (xsq==1) tmp = 2*(tsq+1)/3.0 + 8.0 + (tsq*tsq-1)/tsq/(tsq+1) + (-M_PI*(4*(tsq+1)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+1)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
-	else tmp = 2*(tsq+1)/(xsq-1)*(1-lens_function_xsq(xsq)) + 8*lens_function_xsq(xsq) + (tsq*tsq-1)/tsq/(tsq+xsq) + (-M_PI*(4*(tsq+xsq)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
+	else tmp = 2*(tsq+1)/(xsq-1)*(1-lf) + 8*lf + (tsq*tsq-1)/tsq/(tsq+xsq) + (-M_PI*(4*(tsq+xsq)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
 	return ks*tsq*tsq/CUBE(tsq+1)*tmp;
 }
 
@@ -769,6 +818,11 @@ double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 	return 2*ks*tsq*tsq/CUBE(tsq+1)/xsq*tmp; // now, tmp = kappa_average
 }
 
+double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
+{
+	return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));
+}
+
 /********************************** Hernquist **********************************/
 
 Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
@@ -780,6 +834,7 @@ Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_i
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	analytic_3d_density = true;
 
 	ks = ks_in;
 	rs = rs_in;
@@ -867,6 +922,11 @@ double Hernquist::potential_spherical_rsq(const double rsq)
 {
 	double xsq = rsq/(rs*rs);
 	return ks*rs*rs*(log(xsq/4) + 2*lens_function_xsq(xsq));
+}
+
+double Hernquist::rho3d_r_integrand_analytic(const double r)
+{
+	return (ks/r/CUBE(1+r/rs));
 }
 
 /********************************** Exponential Disk **********************************/
@@ -1581,6 +1641,11 @@ bool PointMass::calculate_total_scaled_mass(double& total_mass)
 	return true;
 }
 
+double PointMass::calculate_scaled_mass_3d(const double r)
+{
+	return M_PI*b*b;
+}
+
 /***************************** Core/Cusp Model *****************************/
 
 CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, bool parametrize_einstein_radius)
@@ -1592,6 +1657,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	setup_base_lens(9,true); // number of parameters = 9, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	analytic_3d_density = true;
 
 	gamma = gamma_in;
 	n = n_in;
@@ -1853,31 +1919,37 @@ double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const do
 	const int NTAB=100;
 	int i,j;
 	double errt,fac,hh,ans=0.0;
-	double **a = new double*[NTAB];
-	for (i=0; i < NTAB; i++) a[i] = new double[NTAB];
+	double **amat = new double*[NTAB];
+	for (i=0; i < NTAB; i++) amat[i] = new double[NTAB];
 
 	hh=n_stepsize;
-	a[0][0] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
+	amat[0][0] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
 	double err=BIG;
 	for (i=1;i<NTAB;i++) {
 		hh /= CON;
-		a[0][i] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
+		amat[0][i] = 0.5*(enclosed_mass_spherical_nocore(rsq,atilde,n+hh) + enclosed_mass_spherical_nocore(rsq,atilde,n-hh));
 
 		fac=CON2;
 		for (j=1;j<=i;j++) {
-			a[j][i]=(a[j-1][i]*fac - a[j-1][i-1])/(fac-1.0);
+			amat[j][i]=(amat[j-1][i]*fac - amat[j-1][i-1])/(fac-1.0);
 			fac=CON2*fac;
-			errt=dmax(abs(a[j][i]-a[j-1][i]),abs(a[j][i]-a[j-1][i-1]));
+			errt=dmax(abs(amat[j][i]-amat[j-1][i]),abs(amat[j][i]-amat[j-1][i-1]));
 			if (errt <= err) {
 				err=errt;
-				ans=a[j][i];
+				ans=amat[j][i];
 			}
 		}
-		if (abs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
+		if (abs(amat[i][i]-amat[i-1][i-1]) >= SAFE*err) break;
 	}
-	for (i=0; i < NTAB; i++) delete[] a[i];
-	delete[] a;
+	for (i=0; i < NTAB; i++) delete[] amat[i];
+	delete[] amat;
 	return ans;
+}
+
+double CoreCusp::rho3d_r_integrand_analytic(const double r)
+{
+	double rsq = r*r;
+	return (k0/M_2PI)*pow(a,n-1)*pow(rsq+s*s,-gamma/2)*pow(rsq+a*a,-(n-gamma)/2);
 }
 
 /***************************** SersicLens profile *****************************/

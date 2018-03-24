@@ -39,6 +39,8 @@ struct LensIntegral;
 class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
 {
 	friend class LensIntegral;
+
+	// the following private declarations are specific to LensProfile and not derived classes
 	private:
 	Spline kspline;
 	double kappa_splint(double);
@@ -81,6 +83,19 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void rotate(double&, double&);
 	void rotate_back(double&, double&);
 
+	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	void set_default_base_settings(const int &nn, const double &acc);
+	void set_integration_pointers();
+	virtual void set_model_specific_integration_pointers();
+	void update_meta_parameters_and_pointers();
+	void update_angle_meta_params();
+	void update_ellipticity_meta_parameters();
+	virtual void update_meta_parameters()
+	{
+		update_ellipticity_meta_parameters();
+	}
+
 	double potential_numerical(const double, const double);
 	double potential_spherical_default(const double x, const double y);
 	void deflection_numerical(const double, const double, lensvector&);
@@ -98,13 +113,35 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double mass_intval; // for calculating 3d enclosed mass
 	Spline *rho3d_logx_spline;
 
-	private:
 	double j_integral(const double, const double, const int, bool &converged);
 	double k_integral(const double, const double, const int, bool &converged);
 	double kappa_avg_spherical_integral(const double);
 	double mass_enclosed_spherical_integrand(const double);
 	double kapavg_spherical_generic(const double rsq);
 	double potential_spherical_integral(const double rsq);
+
+	double calculate_scaled_mass_3d_from_kappa(const double r);
+	double calculate_scaled_mass_3d_from_analytic_rho3d(const double r);
+	double mass3d_r_integrand_analytic(const double r);
+	virtual double rho3d_r_integrand_analytic(const double r);
+
+	double rho3d_w_integrand(const double w);
+	double mass3d_r_integrand(const double r);
+	double mass_inverse_rsq(const double u);
+	double half_mass_radius_root(const double r);
+
+	void kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess);
+	void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
+	void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
+	double kappa_from_elliptical_potential(const double x, const double y);
+
+	// remove these later if it doesn't pan out
+	void deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def);
+	void hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess);
+	double kappa_from_elliptical_potential_experimental(const double x, const double y);
+	double test_resq(const double x, const double y);
+	double test_defx(const double x, const double y);
+	double test_defy(const double x, const double y);
 
 	public:
 	int lens_number;
@@ -123,6 +160,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static int default_ellipticity_mode;
 	int ellipticity_mode;
+	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
 	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
 	{
@@ -152,21 +190,13 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void delete_center_anchor();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
-	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	void set_angle_from_components(const double &comp_x, const double &comp_y);
-	void set_default_base_settings(const int &nn, const double &acc);
-	void set_integration_pointers();
-	void update_meta_parameters_and_pointers();
-	virtual void set_model_specific_integration_pointers();
 	void vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
-	void transform_center_coordinates();
 	void shift_angle_90();
 	void shift_angle_minus_90();
 	void reset_angle_modulo_2pi();
-
 	virtual void set_auto_stepsizes();  // This *must* be redefined in all derived classes
 	virtual void set_auto_ranges(); // This *must* be redefined in all derived classes
 
@@ -183,12 +213,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_ellipticity_parameter(const double param);
 	void update_anchored_parameters();
-	void update_angle_meta_params();
-	void update_ellipticity_meta_parameters();
-	virtual void update_meta_parameters()
-	{
-		update_ellipticity_meta_parameters();
-	}
 	void update_anchor_center();
 	virtual void assign_special_anchored_parameters(LensProfile*) {}
 	virtual void update_special_anchored_params() {}
@@ -214,23 +238,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
 	virtual double calculate_scaled_mass_3d(const double r);
 
-	void kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess);
-	void deflection_from_elliptical_potential(const double x, const double y, lensvector& def);
-	void hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess);
-	double kappa_from_elliptical_potential(const double x, const double y);
-	void deflection_from_elliptical_potential_experimental(const double x, const double y, lensvector& def);
-	void hessian_from_elliptical_potential_experimental(const double x, const double y, lensmatrix& hess);
-	double kappa_from_elliptical_potential_experimental(const double x, const double y);
 	bool calculate_half_mass_radius(double& half_mass_radius, const double mtot_in = -10);
-	double half_mass_radius_root(const double r);
-	double mass_inverse_rsq(const double u);
 	double mass_rsq(const double rsq);
-	double rho3d_w_integrand(const double w);
-	double mass3d_r_integrand(const double r);
-
-	double test_resq(const double x, const double y);
-	double test_defx(const double x, const double y);
-	double test_defy(const double x, const double y);
 
 	double kappa_avg_r(const double r);
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
@@ -245,7 +254,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool isspherical() { return (q==1.0); }
 	string get_model_name() { return model_name; }
-	double get_eccentricity() { return ((1-q*q)/(1+q*q)); }
 	LensProfileName get_lenstype() { return lenstype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	void get_center_coords(lensvector &center) { center[0]=x_center; center[1]=y_center; }
@@ -318,6 +326,7 @@ class Alpha : public LensProfile
 	double potential_elliptical_nocore(const double x, const double y);
 	double potential_spherical_rsq_nocore(const double rsq);
 	complex<double> deflection_angular_factor(const double &phi);
+	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
 
@@ -333,6 +342,7 @@ class Alpha : public LensProfile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
+	double calculate_scaled_mass_3d(const double r);
 	bool core_present() { return (sprime==0) ? false : true; }
 	double get_inner_logslope() { return -alpha; }
 	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
@@ -353,6 +363,7 @@ class PseudoJaffe : public LensProfile
 	void hessian_elliptical(const double, const double, lensmatrix&);
 	double potential_elliptical(const double x, const double y);
 	double potential_spherical_rsq(const double rsq);
+	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
 
@@ -373,6 +384,7 @@ class PseudoJaffe : public LensProfile
 	void update_special_anchored_params();
 
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	double calculate_scaled_mass_3d(const double r);
 	bool calculate_total_scaled_mass(double& total_mass);
 	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
 	double get_tidal_radius() { return aprime; }
@@ -390,6 +402,7 @@ class NFW : public LensProfile
 
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
+	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
 
@@ -404,6 +417,7 @@ class NFW : public LensProfile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
+	double calculate_scaled_mass_3d(const double r);
 	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
 };
 
@@ -416,6 +430,7 @@ class Truncated_NFW : public LensProfile
 	double kappa_rsq(const double);
 	double lens_function_xsq(const double&);
 	double kapavg_spherical_rsq(const double rsq);
+	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
 
@@ -441,6 +456,7 @@ class Hernquist : public LensProfile
 	double lens_function_xsq(const double);
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
+	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
 
@@ -589,11 +605,11 @@ class PointMass : public LensProfile
 		potential_derivatives(x,y,def,hess);
 	}
 
-
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
 	bool calculate_total_scaled_mass(double& total_mass);
+	double calculate_scaled_mass_3d(const double r);
 	void get_einstein_radius(double& r1, double& r2, const double zfactor);
 };
 
@@ -639,6 +655,7 @@ class CoreCusp : public LensProfile
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
+	double rho3d_r_integrand_analytic(const double r);
 	bool core_present() { return (s==0) ? false : true; }
 };
 

@@ -2739,20 +2739,20 @@ void Lens::process_commands(bool read_file)
 				bool parametrize_einstein_radius = false;
 				int hostnum;
 				if (nwords > 12) Complain("more than 10 parameters not allowed for model corecusp");
-				if (nwords >= 8) {
-					if (words[2].find("re_param")==0) {
-						if (update_parameters) Complain("Einstein radius parameterization cannot be changed when updating corecusp");
-						parametrize_einstein_radius = true;
-						stringstream* new_ws = new stringstream[nwords-1];
-						words.erase(words.begin()+2);
-						for (int i=0; i < nwords-1; i++) {
-							new_ws[i] << words[i];
-						}
-						delete[] ws;
-						ws = new_ws;
-						nwords--;
-						for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift(2);
+				if ((nwords >= 8) and (words[2].find("re_param")==0)) {
+					if (update_parameters) Complain("Einstein radius parameterization cannot be changed when updating corecusp");
+					parametrize_einstein_radius = true;
+					stringstream* new_ws = new stringstream[nwords-1];
+					words.erase(words.begin()+2);
+					for (int i=0; i < nwords-1; i++) {
+						new_ws[i] << words[i];
 					}
+					delete[] ws;
+					ws = new_ws;
+					nwords--;
+					for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift(2);
+				}
+				if (nwords >= 8) {
 					double k0, gamma, n, a, s;
 					double q, theta = 0, xc = 0, yc = 0;
 					if (!(ws[2] >> k0)) Complain("invalid k0 parameter for model corecusp");
