@@ -3037,10 +3037,94 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 	}
 }
 
+void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb)
+{
+	int i,j;
+	int imin=0, imax=npixels_x-1, jmin=0, jmax=npixels_y-1;
+	bool passed_min=false;
+	for (i=0; i < npixels_x; i++) {
+		if ((passed_min==false) and ((xvals[i+1]+xvals[i]) > 2*xmin)) {
+			imin = i;
+			passed_min = true;
+		} else if (passed_min==true) {
+			if ((xvals[i+1]+xvals[i]) > 2*xmax) {
+				imax = i-1;
+				break;
+			}
+		}
+	}
+	passed_min = false;
+	for (j=0; j < npixels_y; j++) {
+		if ((passed_min==false) and ((yvals[j+1]+yvals[j]) > 2*ymin)) {
+			jmin = j;
+			passed_min = true;
+		} else if (passed_min==true) {
+			if ((yvals[j+1]+yvals[j]) > 2*ymax) {
+				jmax = j-1;
+				break;
+			}
+		}
+	}
+	if ((imin==imax) or (jmin==jmax)) die("window for centroid calculation has zero size");
+	double sigsq_sb=0, total_flux=0;
+	int np=0;
+	double xm,ym;
+	for (j=jmin; j <= jmax; j++) {
+		for (i=imin; i <= imax; i++) {
+			if (require_fit[i][j]) {
+				total_flux += surface_brightness[i][j];
+				np++;
+			}
+		}
+	}
+
+	mean_sb = total_flux / np;
+	for (j=jmin; j <= jmax; j++) {
+		for (i=imin; i <= imax; i++) {
+			if (require_fit[i][j]) {
+				sigsq_sb += SQR(surface_brightness[i][j]-mean_sb);
+			}
+		}
+	}
+	double sqrnoise = sigsq_sb/np;
+	double sigthreshold = 3.0;
+	double sqrthreshold = SQR(sigthreshold)*sqrnoise;
+	noise = sqrt(sqrnoise);
+	cout << "noise=" << noise << endl;
+	int nclip=0, prev_nclip;
+	double difsqr;
+	do {
+		prev_nclip = nclip;
+		nclip = 0;
+		sigsq_sb = 0;
+		np = 0;
+		total_flux = 0;
+		for (j=jmin; j <= jmax; j++) {
+			for (i=imin; i <= imax; i++) {
+				if (require_fit[i][j]) {
+					difsqr = SQR(surface_brightness[i][j]-mean_sb);
+					if (difsqr > sqrthreshold) nclip++;
+					else {
+						sigsq_sb += difsqr;
+						total_flux += surface_brightness[i][j];
+						np++;
+					}
+				}
+			}
+		}
+		sqrnoise = sigsq_sb/np;
+		sqrthreshold = SQR(sigthreshold)*sqrnoise;
+		noise = sqrt(sqrnoise);
+		mean_sb = total_flux / np;
+		cout << "noise=" << noise << ", mean=" << mean_sb << ", nclip=" << nclip << endl;
+	} while (nclip > prev_nclip);
+
+}
+
 void ImagePixelData::add_point_image_from_centroid(ImageData* point_image_data, const double xmin, const double xmax, const double ymin, const double ymax, const double sb_threshold, const double pixel_error)
 {
 	int i,j;
-	int imin=0, imax=npixels_x, jmin=0, jmax=npixels_y;
+	int imin=0, imax=npixels_x-1, jmin=0, jmax=npixels_y-1;
 	bool passed_min=false;
 	for (i=0; i < npixels_x; i++) {
 		if ((passed_min==false) and ((xvals[i+1]+xvals[i]) > 2*xmin)) {

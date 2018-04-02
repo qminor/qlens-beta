@@ -1158,7 +1158,6 @@ void Grid::plot_corner_coordinates()
 
 void Grid::store_critical_curve_pts()
 {
-	lensvector new_srcpt;
 	if (lens->sorted_critical_curves==true) lens->sorted_critical_curves = false;
 	if (cell != NULL) {
 		int i,j;
@@ -1166,52 +1165,14 @@ void Grid::store_critical_curve_pts()
 			for (j=0; j < w_N; j++)
 				cell[i][j]->store_critical_curve_pts();
 	} else if (cc_inside) {
-		int i=0,j=0,k;
-		bool corner03 = true; // if true, we use the diagonal from corner 0 to corner 3; if false, we use diagonal from 1 to 2
-		if (((*corner_invmag[0]) * (*corner_invmag[1]) * (*corner_invmag[2]) * (*corner_invmag[3])) < 0) {
-			// one corner has opposite sign compared to the others; let's figure out which
-			for (k=0; k < 4; k++) {
-				if ((*corner_invmag[k]) > 0) { corner_positive_mag[i++] = k; }
-				else { corner_negative_mag[j++] = k; }
-			}
-			if ((i==1) and (j==3)) {
-				k = corner_positive_mag[0];
-				if ((k==1) or (k==2)) corner03 = false; // sets to the 1-2 diagonal
-				// otherwise, it's already set to the 0-3 diagonal
-			}
-			else if ((i==3) and (j==1)) {
-				k = corner_negative_mag[0];
-				if ((k==1) or (k==2)) corner03 = false;
-			}
-			else die("positive vs. negative magnitude corners don't match up right");
-		}
-		if (corner03) {
-			ccsearch_initial_pt[0] = corner_pt[0][0];
-			ccsearch_initial_pt[1] = corner_pt[0][1];
-			ccsearch_interval[0] = corner_pt[3][0] - corner_pt[0][0];
-			ccsearch_interval[1] = corner_pt[3][1] - corner_pt[0][1];
-		} else {
-			ccsearch_initial_pt[0] = corner_pt[1][0];
-			ccsearch_initial_pt[1] = corner_pt[1][1];
-			ccsearch_interval[0] = corner_pt[2][0] - corner_pt[1][0];
-			ccsearch_interval[1] = corner_pt[2][1] - corner_pt[1][1];
-		}
-		double (Brent::*invmag)(const double);
-		invmag = static_cast<double (Brent::*)(const double)> (&Grid::invmag_along_diagonal);
-		if ((invmag_along_diagonal(0)*invmag_along_diagonal(1)) > 0) {
-			double inv0=invmag_along_diagonal(0);
-			double inv1=invmag_along_diagonal(1);
-			warn("critical curve root not bracketed within diagonal: invmag0=%g, invmag1=%g, invmag2=%g, invmag3=%g, corner03=%i (cell corner=%g,%g)",*corner_invmag[0],*corner_invmag[1],*corner_invmag[2],*corner_invmag[3],corner03,corner_pt[0][0],corner_pt[0][1]);
-			return;
-		}
-		ccroot_t = BrentsMethod(invmag,0,1,1e-6);
-		ccroot[0] = ccsearch_initial_pt[0] + ccroot_t*ccsearch_interval[0];
-		ccroot[1] = ccsearch_initial_pt[1] + ccroot_t*ccsearch_interval[1];
-		ccroot[0] = ccsearch_initial_pt[0] + ccroot_t*ccsearch_interval[0];
-		ccroot[1] = ccsearch_initial_pt[1] + ccroot_t*ccsearch_interval[1];
-		lens->critical_curve_pts.push_back(ccroot);
-		lens->find_sourcept(ccroot,new_srcpt,0,zfactor);
-		lens->caustic_pts.push_back(new_srcpt);
+		int added_pts = 0;
+		// Try finding roots along both diagonals
+		if (((*corner_invmag[0]) * (*corner_invmag[3])) < 0) find_and_store_critical_curve_pt(0,3,added_pts);
+		if (((*corner_invmag[1]) * (*corner_invmag[2])) < 0) find_and_store_critical_curve_pt(1,2,added_pts);
+		// Now we try the edges 0-1, 0-2; no need to check the other edges, because they will be searched from neighboring cells
+		if (((*corner_invmag[0]) * (*corner_invmag[1])) < 0) find_and_store_critical_curve_pt(0,1,added_pts);
+		if (((*corner_invmag[0]) * (*corner_invmag[2])) < 0) find_and_store_critical_curve_pt(0,2,added_pts);
+		if (added_pts==0) warn("cell flagged erroneously as containing critical curve");
 		lensvector diagonal1, diagonal2;
 		diagonal1[0] = corner_pt[3][0] - corner_pt[0][0];
 		diagonal1[1] = corner_pt[3][1] - corner_pt[0][1];
@@ -1220,8 +1181,33 @@ void Grid::store_critical_curve_pts()
 		cclength1 = diagonal1.norm();
 		cclength2 = diagonal2.norm();
 		long_diagonal_length = dmax(cclength1,cclength2);
-		lens->length_of_cc_cell.push_back(long_diagonal_length);
+		while (added_pts-- > 0) lens->length_of_cc_cell.push_back(long_diagonal_length);
 	}
+}
+
+void Grid::find_and_store_critical_curve_pt(const int icorner, const int fcorner, int& added_pts)
+{
+	ccsearch_initial_pt[0] = corner_pt[icorner][0];
+	ccsearch_initial_pt[1] = corner_pt[icorner][1];
+	ccsearch_interval[0] = corner_pt[fcorner][0] - corner_pt[icorner][0];
+	ccsearch_interval[1] = corner_pt[fcorner][1] - corner_pt[icorner][1];
+
+	double (Brent::*invmag)(const double);
+	invmag = static_cast<double (Brent::*)(const double)> (&Grid::invmag_along_diagonal);
+	if ((invmag_along_diagonal(0)*invmag_along_diagonal(1)) > 0) {
+		double inv0=invmag_along_diagonal(0);
+		double inv1=invmag_along_diagonal(1);
+		warn("critical curve root not bracketed within diagonal: invmag0=%g, invmag1=%g, invmag2=%g, invmag3=%g, (cell corner=%g,%g)",*corner_invmag[0],*corner_invmag[1],*corner_invmag[2],*corner_invmag[3],corner_pt[0][0],corner_pt[0][1]);
+		return;
+	}
+	ccroot_t = BrentsMethod(invmag,0,1,1e-6);
+	ccroot[0] = ccsearch_initial_pt[0] + ccroot_t*ccsearch_interval[0];
+	ccroot[1] = ccsearch_initial_pt[1] + ccroot_t*ccsearch_interval[1];
+	lens->critical_curve_pts.push_back(ccroot);
+	lensvector new_srcpt;
+	lens->find_sourcept(ccroot,new_srcpt,0,zfactor);
+	lens->caustic_pts.push_back(new_srcpt);
+	added_pts++;
 }
 
 double Grid::invmag_along_diagonal(const double t)

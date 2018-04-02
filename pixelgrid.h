@@ -259,6 +259,7 @@ struct ImagePixelData
 	bool test_if_in_fit_region(const double& x, const double& y);
 	void set_lens(Lens* lensptr) { lens = lensptr; }
 
+	void estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb);
 	void add_point_image_from_centroid(ImageData* point_image_data, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double sb_threshold, const double pixel_error);
 	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
 	{

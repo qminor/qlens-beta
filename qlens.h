@@ -207,6 +207,7 @@ public:
 
 	void galsubgrid();
 	void store_critical_curve_pts();
+	void find_and_store_critical_curve_pt(const int icorner, const int fcorner, int &added_pts);
 	static void set_imagepos_accuracy(const double& setting) {
 		image_pos_accuracy = setting;
 		redundancy_separation_threshold = 10*setting;

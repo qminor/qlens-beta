@@ -891,6 +891,7 @@ void Lens::process_commands(bool read_file)
 							"sbmap loadsrc <source_file>\n"
 							"sbmap loadimg <image_file>\n"
 							"sbmap loadpsf <psf_file>\n"        // WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap loadmask <mask_file>\n"      // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap plotdata\n"
 							"sbmap invert\n"
@@ -899,7 +900,8 @@ void Lens::process_commands(bool read_file)
 							"sbmap set_data_annulus [...]\n"
 							"sbmap set_data_window [...]\n\n"
 							"sbmap unset_data_annulus [...]\n"
-							"sbmap unset_data_window [...]\n\n"
+							"sbmap unset_data_window [...]\n"
+							"sbmap find_noise [...]\n\n"
 							"Commands for loading, simulating, plotting and inverting surface brightness pixel maps. For\n"
 							"help on individual subcommands, type 'help sbmap <command>'. If 'sbmap' is typed with no\n"
 							"arguments, shows the dimensions of current image/source surface brightness maps, if loaded.\n";
@@ -1017,6 +1019,11 @@ void Lens::process_commands(bool read_file)
 							cout << "sbmap unset_data_window <xmin> <xmax> <ymin> <ymax>\n\n"
 								"This command is identical to 'set_data_window' except that it deactivates the pixels, rather than\n"
 								"activating them. See 'help sbmap set_data_window' for usage information.\n\n";
+						else if (words[2]=="find_noise")
+							cout << "sbmap find_noise <xmin> <xmax> <ymin> <ymax>\n\n"
+								"Calculates the mean and dispersion of the surface brightness values for pixels within the specified\n"
+								"rectangular window. When calculating the dispersion, iterative 3-sigma clipping is used to exclude\n"
+								"outlier pixels which can bias the estimated dispersion.\n\n";
 						else Complain("command not recognized");
 					}
 				}
@@ -1586,6 +1593,7 @@ void Lens::process_commands(bool read_file)
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
+					cout << "outside_sb_threshold = " << max_sb_frac_unselected_pixels << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
 					cout << "activate_unmapped_srcpixels: " << display_switch(activate_unmapped_source_pixels) << endl;
 					cout << "exclude_srcpixels_outside_mask: " << display_switch(exclude_source_pixels_beyond_fit_window) << endl;
@@ -5013,6 +5021,14 @@ void Lens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				load_psf_fits(filename,verbal_mode);
 			}
+			else if (words[1]=="unloadpsf")
+			{
+				string filename;
+				if (nwords != 2) Complain("no arguments are required for 'sbmap unloadpsf'");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				if (!use_input_psf_matrix) Complain("no psf has been loaded from FITS file");
+				use_input_psf_matrix = false;
+			}
 			else if (words[1]=="makesrc")
 			{
 				if (nwords==2) {
@@ -5124,6 +5140,21 @@ void Lens::process_commands(bool read_file)
 					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 					image_pixel_data->set_required_data_pixels(xmin,xmax,ymin,ymax,true); // the 'true' says to deactivate the pixels, instead of activating them
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
+			}
+			else if (words[1]=="find_noise")
+			{
+				double xmin, xmax, ymin, ymax, sig_sb, mean_sb;
+				if (nwords == 6) {
+					if (!(ws[2] >> xmin)) Complain("invalid rectangle xmin");
+					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
+					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
+					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
+					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+					image_pixel_data->estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb);
+					cout << "Mean surface brightness: " << mean_sb << endl;
+					cout << "Dispersion of surface brightness: " << sig_sb << endl;
+					cout << endl;
+				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap find_noise'");
 			}
 			else if (words[1]=="plotimg")
 			{
@@ -6373,9 +6404,9 @@ void Lens::process_commands(bool read_file)
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness fraction threshold for outside_sb_threshold");
-				max_sb_prior_unselected_pixels = sb_thresh;
+				max_sb_frac_unselected_pixels = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << noise_threshold << endl;
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_frac_unselected_pixels << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
 		else if (words[0]=="adaptive_grid")
@@ -6548,8 +6579,10 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="pause") {
 			if (read_from_file) {
-				if ((mpi_id==0) and (verbal_mode)) cout << "Pausing script file... (enter 'continue' or simply 'c' to continue)\n";
-				read_from_file = false;
+				if (!quit_after_reading_file) {   // if 'q' option is given, skip pauses
+					if ((mpi_id==0) and (verbal_mode)) cout << "Pausing script file... (enter 'continue' or simply 'c' to continue)\n";
+					read_from_file = false;
+				}
 			}
 			else Complain("script file is not currently being read");
 		}

@@ -126,30 +126,30 @@ double Romberg::romberg_improper(double (Romberg::*func)(const double), const do
 double Romberg::trapzd(double (Romberg::*func)(double), const double a, const double b, const int n)
 {
 	double x, tnm, sum, del;
-	static double s;
+	//double squad;
 	int it, j;
 
 	if (n == 1) {
-		return (s = 0.5 * (b-a) * (FUNC(a)+FUNC(b)));
+		return (squad = 0.5 * (b-a) * (FUNC(a)+FUNC(b)));
 	} else {
 		for (it=1, j=1; j < n-1; j++) it <<= 1;
 		tnm = it;
 		del = (b-a)/tnm;
 		x = a + 0.5*del;
 		for (sum=0.0, j=0; j < it; j++, x += del) sum += FUNC(x);
-		s = 0.5*(s + (b-a)*sum/tnm);
-		return s;
+		squad = 0.5*(squad + (b-a)*sum/tnm);
+		return squad;
 	}
 }
 
 double Romberg::midpnt(double (Romberg::*func)(double), const double a, const double b, const int n)
 {
 	double x,tnm,sum,del,ddel;
-	static double s;
+	//double squad;
 	int it,j;
 
 	if (n == 1) {
-		return (s = (b-a)*FUNC(0.5*(a+b)));
+		return (squad = (b-a)*FUNC(0.5*(a+b)));
 	} else {
 		for (it=1, j=1; j < n-1; j++) it *= 3;
 		tnm = it;
@@ -163,22 +163,22 @@ double Romberg::midpnt(double (Romberg::*func)(double), const double a, const do
 			sum += FUNC(x);
 			x += del;
 		}
-		s = (s + (b-a)*sum/tnm)/3.0;
-		return s;
+		squad = (squad + (b-a)*sum/tnm)/3.0;
+		return squad;
 	}
 }
 
 double Romberg::midinf(double (Romberg::*func)(double), const double aa, const double bb, const int n)
 {
 	double a,b,x,tnm,sum,del,ddel,mid;
-	static double s;
+	//double squad;
 	int it,j;
 
 	b=1.0/aa;
 	a=1.0/bb;
 	if (n == 1) {
 		mid = 0.5*(a+b);
-		return (s = (b-a)*(this->*func)(1.0/mid)/mid*mid);
+		return (squad = (b-a)*(this->*func)(1.0/mid)/mid*mid);
 	} else {
 		for (it=1, j=1; j < n-1; j++) it *= 3;
 		tnm = it;
@@ -192,8 +192,8 @@ double Romberg::midinf(double (Romberg::*func)(double), const double aa, const d
 			sum += (this->*func)(1.0/x)/(x*x);
 			x += del;
 		}
-		s = (s + (b-a)*sum/tnm)/3.0;
-		return s;
+		squad = (squad + (b-a)*sum/tnm)/3.0;
+		return squad;
 	}
 }
 

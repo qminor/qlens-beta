@@ -4,6 +4,7 @@
 
 class Romberg
 {
+	double squad;
 	double trapzd(double (Romberg::*func)(const double), const double a, const double b, const int n);
 	double midinf(double (Romberg::*func)(const double), const double aa, const double bb, const int n);
 	double midpnt(double (Romberg::*func)(const double), const double a, const double b, const int n);

@@ -248,7 +248,7 @@ void usage_error(const int mpi_id)
 				"  -f:<file> Read commands from input script with filename <file>\n"
 				"  -c:<file> Load cosmology parameters from input file (default: 'planck.csm')\n"
 				"  -s        Run qlens in nonverbal mode (does not echo commands read from file, etc.)\n"
-				"  -q        Quit after reading input file (rather than enter interactive mode)\n"
+				"  -q        Skip pauses and quit after reading input file (rather than enter interactive mode)\n"
 				"  -Q        Do not quit if an error is encountered while running an input script\n";
 #ifdef USE_OPENMP
 		cout << "  -t        # of OpenMP threads for matrix inversion (only inversion part)\n";

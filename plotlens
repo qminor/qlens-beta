@@ -592,22 +592,27 @@ then
 			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
 		else
 			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+
 		fi
 	else
-		PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
 elif [[ $COMMAND == "imgpixel_imgdat" ]]
 then
+	grep -v \" imgdat.dat >imgdat_notitles.dat
 	set -- $(head -2 img_pixel.x && head -2 img_pixel.y)
 	DX=`bc <<< "scale=15; $2-($1)"`
 	X0=`bc <<< "scale=15; $1+0.5*$DX"`
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'imgdat.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'data'"
+	#PLOTCOMMAND="plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'imgdat.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'data'"
 	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
+	#KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 
-	KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
+	PLOTCOMMAND="stats 'imgdat_notitles.dat'; plot $RANGE 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1)"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] 'img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, for [IDX=1:STATS_blocks] 'imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1)"
+
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
@@ -690,7 +695,8 @@ elif [[ $KEY == "-1" ]]; then PLOTLINE="set key off; $PLOTLINE"; fi
 
 echo "$PLOTLINE" >tempplot.in
 
+#gnuplot -persist tempplot.in
 gnuplot -persist tempplot.in >/dev/null 2>&1
-#rm tempplot.in
+rm tempplot.in
 if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 

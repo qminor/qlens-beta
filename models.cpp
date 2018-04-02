@@ -1032,7 +1032,7 @@ Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double 
 		shear1 = shear_p1_in;
 		shear2 = shear_p2_in;
 	} else {
-		q = shear_p1_in;
+		shear = shear_p1_in;
 		set_angle(shear_p2_in);
 	}
 	x_center = xc_in;
@@ -1044,7 +1044,7 @@ Shear::Shear(const Shear* lens_in)
 {
 	shear1 = lens_in->shear1;
 	shear2 = lens_in->shear2;
-	q = lens_in->q;
+	shear = lens_in->shear;
 	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 }
@@ -1070,7 +1070,7 @@ void Shear::assign_param_pointers()
 		param[1] = &shear2;
 		angle_paramnum = -1; // since there is no angle parameter in this mode
 	} else {
-		param[0] = &q; // here, q is actually the shear magnitude
+		param[0] = &shear; // here, shear is actually the shear magnitude
 		param[1] = &theta; angle_paramnum = 1;
 	}
 	param[2] = &x_center;
@@ -1080,12 +1080,12 @@ void Shear::assign_param_pointers()
 void Shear::update_meta_parameters()
 {
 	if (use_shear_component_params) {
-		q = sqrt(SQR(shear1) + SQR(shear2));
+		shear = sqrt(SQR(shear1) + SQR(shear2));
 		set_angle_from_components(shear1,shear2);
 	} else {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		shear1 = -q*cos(2*theta_eff);
-		shear2 = -q*sin(2*theta_eff);
+		shear1 = -shear*cos(2*theta_eff);
+		shear2 = -shear*sin(2*theta_eff);
 	}
 }
 
@@ -1198,7 +1198,7 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 
 	n = n_in;
 	m = m_in;
-	q = A_m_in;
+	A_n = A_m_in;
 	set_angle(theta_degrees);
 	x_center = xc_in;
 	y_center = yc_in;
@@ -1211,7 +1211,7 @@ Multipole::Multipole(const Multipole* lens_in)
 {
 	n = lens_in->n;
 	m = lens_in->m;
-	q = lens_in->q;
+	A_n = lens_in->A_n;
 	kappa_multipole = lens_in->kappa_multipole;
 	sine_term = lens_in->sine_term;
 
@@ -1244,7 +1244,7 @@ void Multipole::assign_paramnames()
 void Multipole::assign_param_pointers()
 {
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	param[0] = &q; // here, q is actually the shear magnitude
+	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &n;
 	param[2] = &theta; angle_paramnum = 2;
 	param[3] = &x_center;
@@ -1298,14 +1298,14 @@ double Multipole::kappa(double x, double y)
 		phi = -phi;
 	}
 	if (kappa_multipole) {
-		return q*pow(x*x+y*y,-n/2) * cos(m*(phi-theta_eff));
+		return A_n*pow(x*x+y*y,-n/2) * cos(m*(phi-theta_eff));
 	} else {
 		if (n==m) return 0;
 		else {
 			if (m==0)
-				return -q*pow(x*x+y*y,n/2-1)*(0.5*(n*n-m*m)) * cos(m*(phi-theta_eff));
+				return -A_n*pow(x*x+y*y,n/2-1)*(0.5*(n*n-m*m)) * cos(m*(phi-theta_eff));
 			else
-				return -q*pow(x*x+y*y,n/2-1)*(0.5*(n*n-m*m)/m) * cos(m*(phi-theta_eff));
+				return -A_n*pow(x*x+y*y,n/2-1)*(0.5*(n*n-m*m)/m) * cos(m*(phi-theta_eff));
 		}
 	}
 }
@@ -1313,7 +1313,7 @@ double Multipole::kappa(double x, double y)
 double Multipole::kappa_rsq(const double rsq)
 {
 	if (kappa_multipole) {
-		if (m==0) return q*pow(rsq,-n/2);
+		if (m==0) return A_n*pow(rsq,-n/2);
 		else return 0; // this model does not have a radial profile, unless n=0
 	} else
 		return 0;
@@ -1322,7 +1322,7 @@ double Multipole::kappa_rsq(const double rsq)
 double Multipole::kappa_rsq_deriv(const double rsq)
 {
 	if (kappa_multipole) {
-		if (m==0) return -(n/2)*q*pow(rsq,-n/2-1);
+		if (m==0) return -(n/2)*A_n*pow(rsq,-n/2-1);
 		else return 0; // this model does not have a radial profile, unless n=0
 	} else
 		return 0;
@@ -1342,12 +1342,12 @@ double Multipole::potential(double x, double y)
 		phi = -phi;
 	}
 	if (kappa_multipole) {
-		return (2*q*pow(x*x+y*y,1-n/2)/(SQR(2-n)-m*m)) * cos(m*(phi-theta_eff));
+		return (2*A_n*pow(x*x+y*y,1-n/2)/(SQR(2-n)-m*m)) * cos(m*(phi-theta_eff));
 	} else {
 		if (m==0)
-			return -(q*pow(x*x+y*y,n/2)) * cos(m*(phi-theta_eff));
+			return -(A_n*pow(x*x+y*y,n/2)) * cos(m*(phi-theta_eff));
 		else
-			return -(q*pow(x*x+y*y,n/2)/m) * cos(m*(phi-theta_eff));
+			return -(A_n*pow(x*x+y*y,n/2)/m) * cos(m*(phi-theta_eff));
 	}
 }
 
@@ -1368,13 +1368,13 @@ void Multipole::deflection(double x, double y, lensvector& def)
 	}
 
 	if (kappa_multipole) {
-		psi = 2*q*pow(r,2-n)/(SQR(2-n)-m*m);
+		psi = 2*A_n*pow(r,2-n)/(SQR(2-n)-m*m);
 		dpsi = (2-n)*psi/r;
 	} else {
 		if (m==0)
-			psi = -q*pow(r,n);
+			psi = -A_n*pow(r,n);
 		else
-			psi = -q*pow(r,n)/m;
+			psi = -A_n*pow(r,n)/m;
 		dpsi = n*psi/r;
 	}
 
@@ -1388,9 +1388,9 @@ double Multipole::deflection_m0_spherical_r(const double r)
 {
 	double ans;
 	if (kappa_multipole) {
-		ans = 2*q*pow(r,1-n)/(2-n);
+		ans = 2*A_n*pow(r,1-n)/(2-n);
 	} else {
-		ans = -q*pow(r,n-1);
+		ans = -A_n*pow(r,n-1);
 	}
 	return ans;
 }
@@ -1418,14 +1418,14 @@ void Multipole::hessian(double x, double y, lensmatrix& hess)
 	}
 
 	if (kappa_multipole) {
-		psi = 2*q*pow(r,2-n)/(SQR(2-n)-mm);
+		psi = 2*A_n*pow(r,2-n)/(SQR(2-n)-mm);
 		dpsi = (2-n)*psi/r;
 		ddpsi = (1-n)*dpsi/r;
 	} else {
 		if (m==0)
-			psi = -q*pow(r,n);
+			psi = -A_n*pow(r,n);
 		else
-			psi = -q*pow(r,n)/m;
+			psi = -A_n*pow(r,n)/m;
 		dpsi = n*psi/r;
 		ddpsi = (n-1)*dpsi/r;
 	}
@@ -1463,13 +1463,13 @@ void Multipole::potential_derivatives(double x, double y, lensvector& def, lensm
 	}
 
 	if (kappa_multipole) {
-		psi = 2*q*pow(r,2-n)/(SQR(2-n)-mm);
+		psi = 2*A_n*pow(r,2-n)/(SQR(2-n)-mm);
 		dpsi = (2-n)*psi/r;
 	} else {
 		if (m==0)
-			psi = -q*pow(r,n);
+			psi = -A_n*pow(r,n);
 		else
-			psi = -q*pow(r,n)/m;
+			psi = -A_n*pow(r,n)/m;
 		dpsi = n*psi/r;
 	}
 
@@ -1506,13 +1506,13 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 	}
 	double b;
 	if (kappa_multipole) {
-		if (q < 0) b = 0;
-		else b = pow(2*q*zfactor/(2-n),1.0/n);
+		if (A_n < 0) b = 0;
+		else b = pow(2*A_n*zfactor/(2-n),1.0/n);
 	} else {
-		if (q > 0) b = 0;
+		if (A_n > 0) b = 0;
 		else {
-			if (m==0) b = pow(-q*zfactor*n,1.0/(2-n));
-			else b = pow(-(q*zfactor*n)/m,1.0/(2-n));
+			if (m==0) b = pow(-A_n*zfactor*n,1.0/(2-n));
+			else b = pow(-(A_n*zfactor*n)/m,1.0/(2-n));
 		}
 	}
 	re_major_axis = re_average = b;

@@ -499,7 +499,7 @@ class ExpDisk : public LensProfile
 class Shear : public LensProfile
 {
 	private:
-	double theta_eff;
+	double shear, theta_eff;
 	double shear1, shear2; // used when shear_components is turned on
 	double kappa_rsq(const double) { return 0; }
 	double kappa_rsq_deriv(const double) { return 0; }
@@ -539,8 +539,7 @@ class Multipole : public LensProfile
 {
 	private:
 	int m;
-	double n;
-	double theta_eff;
+	double A_n, n, theta_eff;
 	bool kappa_multipole; // specifies whether it is a multipole in the potential or in kappa
 	bool sine_term; // specifies whether it is a sine or cosine multipole term
 

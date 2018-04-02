@@ -320,7 +320,7 @@ Lens::Lens() : UCMC()
 
 	// parameters for the recursive grid
 	enforce_min_cell_area = true; // this is option is obsolete, and should be removed (we should always enforce a min cell area!!!!)
-	min_cell_area = 1e-6;
+	min_cell_area = 1e-4;
 	rsplit_initial = 16; // initial number of cell divisions in the r-direction
 	thetasplit_initial = 24; // initial number of cell divisions in the theta-direction
 	splitlevels = 0; // number of times grid squares are recursively split (by default)...setting to zero is best, recursion slows down grid creation & searching
@@ -4413,8 +4413,10 @@ double Lens::chi_square_fit_simplex()
 	}
 
 	if (source_fit_mode==Pixellated_Source) {
-		fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
-		fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
+		if (fitmodel->source_pixel_grid != NULL) {
+			fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
+			fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
+		} else warn("source pixel grid was not created during fit");
 	}
 
 	bool fisher_matrix_is_nonsingular;
@@ -5009,7 +5011,7 @@ void Lens::output_bestfit_model()
 
 	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
 	ofstream outfile(outfile_str.c_str());
-	if (bestfit_fisher_inverse.is_initialized())
+	if ((calculate_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
 	{
 		if (bestfit_fisher_inverse.rows() != n_fit_parameters) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fit_parameters);
 		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
