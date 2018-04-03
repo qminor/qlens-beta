@@ -830,10 +830,10 @@ double LensProfile::calculate_scaled_density_3d(const double r, const double tol
 double LensProfile::rho3d_w_integrand(const double w)
 {
 	double wsq = w*w;
-	double ans = kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
-	if (ans*0.0 != 0.0) cout << "NAN! " << wsq << " " << mass_intval/wsq << " " << kappa_rsq_deriv(mass_intval/wsq) << endl;
-	return ans;
-	//return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
+	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
+	//double ans = kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
+	//if (ans*0.0 != 0.0) cout << "NAN! " << wsq << " " << mass_intval/wsq << " " << kappa_rsq_deriv(mass_intval/wsq) << endl;
+	//return ans;
 }
 
 void LensProfile::set_ellipticity_parameter(const double &q_in)

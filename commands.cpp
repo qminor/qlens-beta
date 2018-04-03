@@ -129,7 +129,8 @@ void Lens::process_commands(bool read_file)
 						"\n"
 						"\033[4mLens model settings\033[0m\n"
 						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
-						"integral_method -- set integration method (romberg/gauss), tolerance and number of points (if gauss)\n"
+						"integral_method -- set numerical integration method (patterson/romberg/gauss)\n"
+						"integral_tolerance -- set tolerance for numerical integration (for romberg/patterson)\n"
 						"major_axis_along_y -- orient major axis of lenses along y-direction when theta = 0 (on/off)\n"
 						"ellipticity_components -- if on, use components of ellipticity e=1-q instead of (q,theta)\n"
 						"shear_components -- if on, use components of external shear instead of (shear,theta)\n"
@@ -1231,12 +1232,35 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="cc_reset")  // obsolete--should probably remove
 					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n"; // obsolete--should probably remove
 				else if (words[1]=="integral_method")
-					cout << "integral_method patterson [npoints]\n"
-						"integral_method gause [npoints]\n\n"
-						"integral_method romberg [accuracy]\n\n"
-						"Set integration method (either [patterson], [romberg] or [gauss]). If Gauss, can set number\n"
-						"of points = [npoints]; if Gauss-Patterson or Romberg, can set required accuracy of integration.\n"
-						"If no arguments are given, simply prints current integration method.\n";
+					cout << "integral_method <method> [npoints]\n\n"
+						"Set integration method (either 'patterson', 'romberg' or 'gauss') which is used for lens models\n"
+						"where numerical quadrature is required for the lensing calculations. See below for a description of\n"
+						"of each method. If gauss is selected, can set number of points = [npoints]. For patterson or romberg,\n"
+						"which are both adaptive quadrature methods, the required error tolerance is controlled by the setting\n"
+						"'integral_tolerance'. If no arguments are given, prints current integration method.\n\n"
+						"\033[4mpatterson\033[0m: Gauss-Patterson quadrature is the fastest integration method in Qlens that is adapt-\n"
+						"   ive, meaning the integral can be refined iteratively as more points are added until the desired\n"
+						"   tolerance is achieved. It is based on the Kronrod-Patterson rules which start from Gauss-Legendre\n"
+						"   quadrature and successively add points to achieve higher order, giving nested quadrature rules.\n"
+						"   The maximum number of allowed points is 512, so Qlens will give a warning if the tolerance has\n"
+						"   not been reached after reaching 512 points (this may happen for very steep density profiles).\n\n"
+						"\033[4mromberg\033[0m: Romberg integration uses Newton-Cotes rules of successively higher orders and\n"
+						"   generates an estimated value and error using Richardson extrapolation. Generally a lot more\n"
+						"   points are required compared to 'patterson' or 'gauss' to achieve the same accuracy, but in\n"
+						"   principle there is no limit to the number of points that can be used to achieve the desired\n"
+						"   integral tolerance.\n\n"
+						"\033[4mgauss\033[0m: Gaussian quadrature is a non-adaptive method that uses a fixed number of points, and hence\n"
+						"   is not recommended in general for lens model fitting although it can be useful for diagnostic\n"
+						"   purposes, e.g. testing a new lens model.\n\n";
+				else if (words[1]=="integral_tolerance")
+					cout << "integral_tolerance <tolerance>\n\n"
+						"Set tolerance limit for numerical integration, specifically for the adaptive quadrature methods\n"
+						"'patterson' (Gauss-Patterson quadrature) and 'romberg' (Romberg integration). For patterson, the\n"
+						"integration stops when the difference between successive quadrature estimates is smaller than the\n"
+						"specified tolerance. Note that the tolerance is thus the estimated error in second-to-last iteration,\n"
+						"and hence the error in the final estimate is usually a great deal smaller than the specified tol-\n"
+						"erance. For romberg, the error returned using Richardson extrapolation is required to be less than\n"
+						"the specified tolerance.\n";
 				else if (words[1]=="major_axis_along_y")
 					cout << "major_axis_along_y <on/off>\n\n"
 						"Specify whether to orient major axis of lenses along the y-direction (if on) or x-direction\n"
@@ -1654,9 +1678,10 @@ void Lens::process_commands(bool read_file)
 					cout << endl;
 					cout << "\033[4mLens model settings\033[0m\n";
 					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
-					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration with accuracy " << integral_tolerance << endl;
-					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature with accuracy " << integral_tolerance << endl;
+					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
+					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
 					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					cout << "integral_tolerance = " << integral_tolerance << endl;
 					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
 					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
 					cout << "shear_components: " << display_switch(Shear::use_shear_component_params) << endl;
@@ -1708,16 +1733,15 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="integral_method")
 		{
 			IntegrationMethod method;
-			if (nwords >= 2) {
+			if ((nwords == 2) or (nwords == 3)) {
 				string method_name;
 				if (!(ws[1] >> method_name)) Complain("invalid integration method");
-				if (method_name=="romberg") {
+				if (method_name=="patterson") {
+					if (nwords > 2) Complain("no arguments are allowed for 'integral_method patterson'");
+					method = Gauss_Patterson_Quadrature;
+				} else if (method_name=="romberg") {
+					if (nwords > 2) Complain("no arguments are allowed for 'integral_method romberg'");
 					method = Romberg_Integration;
-					if (nwords == 3) {
-						double acc;
-						if (!(ws[2] >> acc)) Complain("invalid accuracy for Romberg integration");
-						set_integral_tolerance(acc);
-					}
 				}
 				else if (method_name=="gauss") {
 					method = Gaussian_Quadrature;
@@ -1726,23 +1750,16 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> pts)) Complain("invalid number of points");
 						set_Gauss_NN(pts);
 					}
-				} else if (method_name=="patterson") {
-					method = Gauss_Patterson_Quadrature;
-					if (nwords == 3) {
-						double acc;
-						if (!(ws[2] >> acc)) Complain("invalid accuracy for Gauss-Patterson quadrature");
-						set_integral_tolerance(acc);
-					}
 				} else Complain("unknown integration method");
 				set_integration_method(method);
-			} else {
+			} else if (nwords==1) {
 				if (mpi_id==0) {
 					method = LensProfile::integral_method;
-					if (method==Romberg_Integration) cout << "Integration method for lensing calculations: Romberg integration with accuracy " << integral_tolerance << endl;
-					else if (method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature with accuracy " << integral_tolerance << endl;
-					else if (method==Gaussian_Quadrature) cout << "Integration method for lensing calculations: Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << integral_tolerance << endl;
+					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << integral_tolerance << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
 				}
-			}
+			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
 		}
 		else if (words[0]=="gridtype")
 		{
@@ -5910,6 +5927,16 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "chi-square required accuracy = " << chisq_tolerance << endl;
 			} else Complain("must specify either zero or one argument (required chi-square accuracy)");
+		}
+		else if (words[0]=="integral_tolerance")
+		{
+			double itolerance;
+			if (nwords == 2) {
+				if (!(ws[1] >> itolerance)) Complain("invalid value for integral_tolerance");
+				set_integral_tolerance(itolerance);
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Tolerance for numerical integration = " << integral_tolerance << endl;
+			} else Complain("must specify either zero or one argument for integral_tolerance");
 		}
 		else if (words[0]=="nrepeat")
 		{

@@ -429,7 +429,6 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void plot_logmag_map(const int x_N, const int y_N, const string filename);
 	void plot_logpot_map(const int x_N, const int y_N, const string filename);
 
-
 	struct critical_curve {
 		vector<lensvector> cc_pts;
 		vector<lensvector> caustic_pts;
