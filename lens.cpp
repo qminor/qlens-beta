@@ -2286,7 +2286,6 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	thetastep = 2*M_PI/thetasteps;
 	double x, y, x2, y2, dr;
 	dr = 1e-1*rmin*(rstep-1);
-	cout << dr << endl;
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
