@@ -688,8 +688,8 @@ public:
 	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
 	void add_qtabulated_lens(int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 
-
 	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void set_new_lens_vary_parameters(boolvector &vary_flags);
 	void update_anchored_parameters();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
@@ -740,6 +740,7 @@ public:
 	bool setup_fit_parameters(bool include_limits);
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
+	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
@@ -966,7 +967,7 @@ struct ParamSettings
 			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
 		}
 	}
-	void update_params(int nparams_in, vector<string>& names, double* stepsizes_in)
+	void update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
 	{
 		int i;
 		if (nparams==nparams_in) {
@@ -1040,6 +1041,133 @@ struct ParamSettings
 		penalty_limits_hi = new_penalty_limits_hi;
 		use_penalty_limits = new_use_penalty_limits;
 		nparams = nparams_in;
+	}
+	void insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
+	{
+		int i, j, np = pf-pi;
+		int new_nparams = nparams + np;
+		ParamPrior** newpriors = new ParamPrior*[new_nparams];
+		ParamTransform** newtransforms = new ParamTransform*[new_nparams];
+		double* new_stepsizes = new double[new_nparams];
+		bool* new_auto_stepsize = new bool[new_nparams];
+		double* new_penalty_limits_lo = new double[new_nparams];
+		double* new_penalty_limits_hi = new double[new_nparams];
+		bool* new_use_penalty_limits = new bool[new_nparams];
+		string* new_param_names = new string[new_nparams];
+		for (i=0; i < pi; i++) {
+			newpriors[i] = new ParamPrior(priors[i]);
+			newtransforms[i] = new ParamTransform(transforms[i]);
+			new_stepsizes[i] = stepsizes[i];
+			new_auto_stepsize[i] = auto_stepsize[i];
+			new_penalty_limits_lo[i] = penalty_limits_lo[i];
+			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_use_penalty_limits[i] = use_penalty_limits[i];
+			new_param_names[i] = names[i];
+		}
+		for (i=pi; i < pf; i++) {
+			newpriors[i] = new ParamPrior();
+			newtransforms[i] = new ParamTransform();
+			new_stepsizes[i] = stepsizes_in[i];
+			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+			new_penalty_limits_lo[i] = -1e30;
+			new_penalty_limits_hi[i] = 1e30;
+			new_use_penalty_limits[i] = false;
+			new_param_names[i] = names[i];
+		}
+		for (j=pf,i=pi; i < nparams; i++, j++) {
+			newpriors[j] = new ParamPrior(priors[i]);
+			newtransforms[j] = new ParamTransform(transforms[i]);
+			new_stepsizes[j] = stepsizes[i];
+			new_auto_stepsize[j] = auto_stepsize[i];
+			new_penalty_limits_lo[j] = penalty_limits_lo[i];
+			new_penalty_limits_hi[j] = penalty_limits_hi[i];
+			new_use_penalty_limits[j] = use_penalty_limits[i];
+			new_param_names[j] = names[j];
+		}
+		if (j != new_nparams) die("WTF!");
+		if (nparams > 0) {
+			for (i=0; i < nparams; i++) {
+				delete priors[i];
+				delete transforms[i];
+			}
+			delete[] priors;
+			delete[] transforms;
+			delete[] stepsizes;
+			delete[] auto_stepsize;
+			delete[] penalty_limits_lo;
+			delete[] penalty_limits_hi;
+			delete[] use_penalty_limits;
+			delete[] param_names;
+		}
+		priors = newpriors;
+		transforms = newtransforms;
+		stepsizes = new_stepsizes;
+		auto_stepsize = new_auto_stepsize;
+		penalty_limits_lo = new_penalty_limits_lo;
+		penalty_limits_hi = new_penalty_limits_hi;
+		use_penalty_limits = new_use_penalty_limits;
+		param_names = new_param_names;
+		nparams = new_nparams;
+	}
+	bool remove_params(const int pi, const int pf)
+	{
+		if (pf > nparams) return false;
+		int i, j, np = pf-pi;
+		if (np==nparams) {
+			clear_params();
+			return true;
+		}
+		int new_nparams = nparams - np;
+		ParamPrior** newpriors = new ParamPrior*[new_nparams];
+		ParamTransform** newtransforms = new ParamTransform*[new_nparams];
+		double* new_stepsizes = new double[new_nparams];
+		bool* new_auto_stepsize = new bool[new_nparams];
+		double* new_penalty_limits_lo = new double[new_nparams];
+		double* new_penalty_limits_hi = new double[new_nparams];
+		bool* new_use_penalty_limits = new bool[new_nparams];
+		string* new_param_names = new string[new_nparams];
+		for (i=0; i < pi; i++) {
+			newpriors[i] = new ParamPrior(priors[i]);
+			newtransforms[i] = new ParamTransform(transforms[i]);
+			new_stepsizes[i] = stepsizes[i];
+			new_auto_stepsize[i] = auto_stepsize[i];
+			new_penalty_limits_lo[i] = penalty_limits_lo[i];
+			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_use_penalty_limits[i] = use_penalty_limits[i];
+		}
+		for (i=pf,j=pi; i < nparams; i++, j++) {
+			newpriors[j] = new ParamPrior(priors[i]);
+			newtransforms[j] = new ParamTransform(transforms[i]);
+			new_stepsizes[j] = stepsizes[i];
+			new_auto_stepsize[j] = auto_stepsize[i];
+			new_penalty_limits_lo[j] = penalty_limits_lo[i];
+			new_penalty_limits_hi[j] = penalty_limits_hi[i];
+			new_use_penalty_limits[j] = use_penalty_limits[i];
+			new_param_names[j] = param_names[i];
+		}
+		if (j != new_nparams) die("WTF!");
+		for (i=0; i < nparams; i++) {
+			delete priors[i];
+			delete transforms[i];
+		}
+		delete[] priors;
+		delete[] transforms;
+		delete[] stepsizes;
+		delete[] auto_stepsize;
+		delete[] penalty_limits_lo;
+		delete[] penalty_limits_hi;
+		delete[] use_penalty_limits;
+		delete[] param_names;
+		priors = newpriors;
+		transforms = newtransforms;
+		stepsizes = new_stepsizes;
+		auto_stepsize = new_auto_stepsize;
+		penalty_limits_lo = new_penalty_limits_lo;
+		penalty_limits_hi = new_penalty_limits_hi;
+		use_penalty_limits = new_use_penalty_limits;
+		param_names = new_param_names;
+		nparams = new_nparams;
+		return true;
 	}
 	void clear_penalty_limits()
 	{
@@ -1250,6 +1378,28 @@ struct ParamSettings
 				else if (transforms[i]->transform==GAUSS_TRANSFORM) loglike -= SQR((params[i] - transforms[i]->gaussian_pos)/transforms[i]->gaussian_sig)/2.0;
 			}
 		}
+	}
+	void clear_params()
+	{
+		if (nparams > 0) {
+			for (int i=0; i < nparams; i++) {
+				delete priors[i];
+				delete transforms[i];
+			}
+			delete[] priors;
+			delete[] transforms;
+			delete[] stepsizes;
+			delete[] auto_stepsize;
+			delete[] penalty_limits_lo;
+			delete[] penalty_limits_hi;
+			delete[] use_penalty_limits;
+		}
+		priors = NULL;
+		param_names = NULL;
+		transforms = NULL;
+		nparams = 0;
+		stepsizes = NULL;
+		auto_stepsize = NULL;
 	}
 	~ParamSettings()
 	{
@@ -1561,14 +1711,19 @@ inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, c
 	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
 	shear2 = (*hess)[0][1];
 	shear_tot = sqrt(shear1*shear1+shear2*shear2);
-	angle = atan(abs(shear2/shear1));
-	if (shear1 < 0) {
-		if (shear2 < 0)
-			angle = angle - M_PI;
-		else
-			angle = M_PI - angle;
-	} else if (shear2 < 0) {
-		angle = -angle;
+	if (shear1==0) {
+		if (shear2 > 0) angle = M_HALFPI;
+		else angle = -M_HALFPI;
+	} else {
+		angle = atan(abs(shear2/shear1));
+		if (shear1 < 0) {
+			if (shear2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (shear2 < 0) {
+			angle = -angle;
+		}
 	}
 	angle = 0.5*radians_to_degrees(angle);
 }
@@ -1637,14 +1792,19 @@ inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angl
 	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
 	shear2 = -(*jac)[0][1];
 	shear = sqrt(shear1*shear1+shear2*shear2);
-	angle = atan(abs(shear2/shear1));
-	if (shear1 < 0) {
-		if (shear2 < 0)
-			angle = angle - M_PI;
-		else
-			angle = M_PI - angle;
-	} else if (shear2 < 0) {
-		angle = -angle;
+	if (shear1==0) {
+		if (shear2 > 0) angle = M_HALFPI;
+		else angle = -M_HALFPI;
+	} else {
+		angle = atan(abs(shear2/shear1));
+		if (shear1 < 0) {
+			if (shear2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (shear2 < 0) {
+			angle = -angle;
+		}
 	}
 	angle = 0.5*radians_to_degrees(angle);
 }

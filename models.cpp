@@ -610,6 +610,7 @@ void NFW::assign_param_pointers()
 
 void NFW::update_meta_parameters()
 {
+	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
 }
 
@@ -663,7 +664,7 @@ double NFW::kapavg_spherical_rsq(const double rsq)
 	double xsq = rsq/(rs*rs);
 	// below xsq ~ 1e-6 or so, this becomes inaccurate due to fine cancellations; a series expansion
 	// is done for xsq smaller than this
-	if (xsq > 1e-6)
+	if (xsq > 1e-5)
 		return 2*ks*(2*lens_function_xsq(xsq) + log(xsq/4))/xsq;
 	else
 		return -ks*(1+log(xsq/4));
@@ -761,6 +762,7 @@ void Truncated_NFW::assign_param_pointers()
 
 void Truncated_NFW::update_meta_parameters()
 {
+	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
 }
 
@@ -823,6 +825,187 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 	return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));
 }
 
+/********************************** Cored_NFW **********************************/
+
+Cored_NFW::Cored_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+{
+	lenstype = CORED_nfw;
+	model_name = "cnfw";
+	special_parameter_command = "";
+	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	set_default_base_settings(nn,acc);
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	analytic_3d_density = true;
+
+	ks = ks_in;
+	rs = rs_in;
+	rc = rt_in;
+
+	update_meta_parameters_and_pointers();
+}
+
+Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
+{
+	ks = lens_in->ks;
+	rs = lens_in->rs;
+	rc = lens_in->rc;
+
+	copy_base_lensdata(lens_in);
+	update_meta_parameters_and_pointers();
+}
+
+void Cored_NFW::assign_paramnames()
+{
+	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	paramnames[2] = "rc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
+	set_geometric_paramnames(3);
+}
+
+void Cored_NFW::assign_param_pointers()
+{
+	param[0] = &ks;
+	param[1] = &rs;
+	param[2] = &rc;
+	set_geometric_param_pointers(3);
+}
+
+void Cored_NFW::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	rmin_einstein_radius = 1e-6*rs;
+	if (rs < rc) die("scale radius a cannot be less than core radius s for corecusp model");
+}
+
+void Cored_NFW::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.2*ks;
+	stepsizes[1] = 0.2*rs;
+	stepsizes[2] = 0.2*rc;
+	set_auto_eparam_stepsizes(3,4);
+	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[6] = 0.5;
+}
+
+void Cored_NFW::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(3);
+}
+
+void Cored_NFW::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::kapavg_spherical_rsq);
+	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::potential_spherical_rsq);
+}
+
+double Cored_NFW::kappa_rsq(const double rsq)
+{
+	double beta, xsq, rsterm, rcterm;
+	beta = rc/rs;
+	xsq = rsq/(rs*rs);
+	if (rc==0.0) {
+		if (xsq < 1e-6) return -ks*(2+log(xsq/4));
+		rcterm = 0;
+	}
+	else {
+		double xcsq = rsq/(rc*rc);
+		if (xcsq < 1e-8) {
+			if (xsq < 1e-14) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta);
+			rcterm = -log(xcsq/4)/2;
+		} else rcterm = lens_function_xsq(xcsq);
+	}
+	if (xsq < 1e-8) rsterm = -(1 - beta + log(xsq/4)/2);
+	else if (abs(xsq-1) < 1e-5) rsterm = (1-beta)*(0.3333333333333333 - (xsq-1)/5.0); // formula on next line becomes unstable for x close to 1, this fixes it
+	else rsterm = (1 - beta - (1-xsq*beta)*lens_function_xsq(xsq))/(xsq-1);
+	return 2*ks/SQR(1-beta)*(rsterm - rcterm);
+}
+
+double Cored_NFW::kappa_rsq_deriv(const double rsq)
+{
+	double beta, xsq, xcsq, rsterm, rcterm;
+	beta = rc/rs;
+	xsq = rsq/(rs*rs);
+	xcsq = rsq/(rc*rc);
+	if (rc==0.0) rcterm = 0;
+	else if ((xcsq < 1e-12) and (xsq < 1e-14)) return 0; // this could be improved on for a more seamless transition, but it's at such a small r it really doesn't matter
+	else rcterm = (lens_function_xsq(xcsq) - 1.0/xcsq) / (xsq - beta*beta);
+
+	if (xsq < 1e-10) rsterm = -1.0/xsq;
+	else if (abs(xsq-1) < 1e-5) rsterm = -(1-beta)/5.0; // formula on next line becomes unstable for x close to 1, this fixes it
+	rsterm = (-2 + 3*beta + (3-2*beta-xsq*beta)*lens_function_xsq(xsq) - 1.0/xsq)/SQR(xsq-1);
+
+	return ks/SQR(rs*(1-beta))*(rsterm + rcterm);
+}
+
+inline double Cored_NFW::lens_function_xsq(const double &xsq)
+{
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
+}
+
+/*
+inline double Cored_NFW::potential_lens_function_xsq(const double &xsq)
+{
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1))) : (xsq < 1.0) ?  (-atanh(sqrt(1-xsq))) : 0.0);
+}
+
+double Cored_NFW::potential_spherical_rsq(const double rsq)
+{
+	// Something is wrong with these formulae, but I don't have time to fix now. Figure out later
+	double beta, betasq, xsq, xcsq, rsfac, rcfac, logbterm;
+	beta = rc/rs;
+	betasq = beta*beta;
+	xsq = rsq/(rs*rs);
+	if (xsq < 1e-6) rsfac = log(xsq/4)/2;
+	else rsfac = potential_lens_function_xsq(xsq);
+	if (rc==0.0) {
+		rcfac = 0;
+		xcsq = 0;
+	} else {
+		xcsq = rsq/(rc*rc);
+		if (xcsq < 1e-6) rsfac = log(xcsq/4)/2;
+		else rcfac = potential_lens_function_xsq(xcsq);
+	}
+	if (beta==0.0) logbterm = 0;
+	else logbterm = beta*log(betasq)/2;
+	double rsfacsq = (xsq >= 1.0) ? rsfac*rsfac : -rsfac*rsfac;
+	double rcfacsq = (xcsq >= 1.0) ? rcfac*rcfac : -rcfac*rcfac;
+	double ans =  2*ks*rs*rs/SQR(1-beta)*(betasq*rcfacsq - 2*beta*sqrt(abs(xsq-betasq))*rcfac - beta*(logbterm - beta + 1)*log(xsq) + SQR((betasq-1)*log(xsq/4))/4 + 2*beta*sqrt(abs(xsq-1))*rsfac + (1-2*beta)*rsfacsq);
+	ans -= betasq*log(4*betasq) - betasq*SQR(log(betasq))/4 - beta*log(4); // this should be the limit as xsq --> 0, but something is wrong here
+	return ans;
+}
+*/
+
+double Cored_NFW::kapavg_spherical_rsq(const double rsq)
+{
+	double beta, betasq, xsq, rsterm, rcterm;
+	beta = rc/rs;
+	betasq = beta*beta;
+	xsq = rsq/(rs*rs);
+	if (rc==0.0) {
+		if (xsq < 1e-6) return -ks*(1+log(xsq/4));
+		rcterm = 0;
+	}
+	else {
+		double xcsq = rsq/(rc*rc);
+		if ((xcsq < 1e-5) and (xsq < 1e-6)) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta); // inside the core, kappa_avg = kappa (constant density)
+		rcterm = 2*(betasq - xsq)*lens_function_xsq(xcsq) - betasq*log(betasq);
+	}
+	if (xsq > 1e-5)
+		rsterm = SQR(1-beta)*log(xsq/4) + 2*(1+beta*(xsq-2))*lens_function_xsq(xsq);
+	else
+		rsterm = (beta-0.5)*xsq + (betasq-xsq/2)*log(xsq/4);
+	return 2*ks*(rsterm + rcterm)/(xsq*SQR(1-beta));
+}
+
+double Cored_NFW::rho3d_r_integrand_analytic(const double r)
+{
+	return (ks/(r+rc)/SQR(1+r/rs));
+}
+
 /********************************** Hernquist **********************************/
 
 Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
@@ -867,6 +1050,7 @@ void Hernquist::assign_param_pointers()
 
 void Hernquist::update_meta_parameters()
 {
+	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
 }
 
@@ -972,6 +1156,7 @@ void ExpDisk::assign_param_pointers()
 
 void ExpDisk::update_meta_parameters()
 {
+	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*R_d;
 }
 
@@ -1875,12 +2060,6 @@ double CoreCusp::enclosed_mass_spherical_nocore(const double rsq_prime, const do
 	p = (nprime-3.0)/2;
 	hyp = pow(1+xisq,-p) * real(hyp_2F1(p,gamma/2,nprime/2,1.0/(1+xisq)));
 
-	//double ans = 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
-		//if (ans*0.0 != 0.0) {
-			//cout << "deflection: a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " def=" << ans << " hyp=" << hyp << " B1=" << Beta(p,(3-gamma)/2) << " B2=" << Beta(p,1.5)*hyp << " " << endl;
-			//print_parameters();
-			//die();
-		//}
 	return 2*k0*CUBE(atilde)/(a*M_2PI) * (Beta(p,(3-gamma)/2) - Beta(p,1.5)*hyp);
 }
 
@@ -1902,9 +2081,9 @@ double CoreCusp::enclosed_mass_spherical_nocore_n3(const double rsq_prime, const
 	}
 
 	if (fac*0.0 != 0.0) {
-		cout << "NaN deflection: a=" << atilde << " gamma=" << gamma << " xisq=" << xisq << " dig=" << digamma_term << " gf=" << (gamma-1)/2 << " " << G_Function(gamma/2,0.001,x) << " " << Beta(-p,1.5) << " " << real(hyp_2F1(1.5,p,1+p,x)) << endl;
-		print_parameters();
-		die();
+		cout << "NaN deflection: a=" << atilde << " s=" << s << " gamma=" << gamma << " xisq=" << xisq << " rsq=" << rsq_prime << " atilde=" << atilde << " dig=" << digamma_term << " gf=" << (gamma-1)/2 << " " << G_Function(gamma/2,0.001,x) << " " << Beta(-p,1.5) << " " << real(hyp_2F1(1.5,p,1+p,x)) << endl;
+		//print_parameters();
+		//die();
 	}
 
 	return 2*k0*CUBE(atilde)/(a*M_2PI) * fac;

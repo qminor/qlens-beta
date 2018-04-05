@@ -223,6 +223,7 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+	cout << "q=" << q << " epsilon=" << epsilon << endl;
 }
 
 // You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
@@ -984,7 +985,12 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 	cos2phi = (exsq - eysq) / rsq;
 	sin2phi = 2*q*(1+epsilon)*x*y/rsq;
 	kap_r = kappa_rsq(rsq);
+	//cout << "Trying " << x << " " << y << " " << epsilon << " " << rsq << endl;
+	//double wtf = (this->*kapavgptr_rsq_spherical)(rsq); 
+	//cout << "wtf=" << wtf << ", rsq=" << rsq << endl;
+	//cout << "Trying rsq=" << rsq << endl;
 	shearmag = ((this->*kapavgptr_rsq_spherical)(rsq)) - kap_r; // shear from the spherical model
+	//cout << "shearmag=" << shearmag << ", rsq=" << rsq << endl;
 	kap = kap_r + epsilon*shearmag*cos2phi;
 	gamma1 = -epsilon*kap_r - shearmag*cos2phi;
 	gamma2 = -sqrt(1-epsilon*epsilon)*shearmag*sin2phi;
@@ -992,6 +998,7 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 	hess[1][1] = kap - gamma1;
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
+	if ((shearmag * 0.0) != 0.0) die("die2");
 }
 
 double LensProfile::kappa_from_elliptical_potential(const double x, const double y)
@@ -1090,6 +1097,7 @@ void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const d
 	hess[1][1] = kap - gamma1;
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
+	//if ((kapavg * 0.0) != 0.0) die("die1");
 }
 
 void LensProfile::shift_angle_90()
@@ -1425,6 +1433,7 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 	kappa_avg = (this->*kapavgptr_rsq_spherical)(rsq);
 	r_dfdr = 2*(kappa_rsq(rsq) - kappa_avg)/rsq; // Here, r_dfdr = (1/r)*d/dr(kappa_avg)
 
+	//cout << "PJ: " << x << " " << y << " " << kappa_avg << " " << r_dfdr << endl;
 	hess[0][0] = kappa_avg + x*x*r_dfdr;
 	hess[1][1] = kappa_avg + y*y*r_dfdr;
 	hess[0][1] = x*y*r_dfdr;

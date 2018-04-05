@@ -21,6 +21,7 @@ enum LensProfileName
 	PJAFFE,
 	nfw,
 	TRUNCATED_nfw,
+	CORED_nfw,
 	HERNQUIST,
 	EXPDISK,
 	CORECUSP,
@@ -438,6 +439,34 @@ class Truncated_NFW : public LensProfile
 	Truncated_NFW() : LensProfile() {}
 	Truncated_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
 	Truncated_NFW(const Truncated_NFW* lens_in);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+};
+
+class Cored_NFW : public LensProfile
+{
+	// This profile goes like 1/(r+rc)/(r+rs)^2
+	private:
+	double ks, rs, rc;
+
+	double kappa_rsq(const double);
+	double kappa_rsq_deriv(const double rsq);
+	double lens_function_xsq(const double&);
+	double kapavg_spherical_rsq(const double rsq);
+	//double potential_spherical_rsq(const double rsq);
+	//double potential_lens_function_xsq(const double&);
+	double rho3d_r_integrand_analytic(const double r);
+
+	void set_model_specific_integration_pointers();
+
+	public:
+	Cored_NFW() : LensProfile() {}
+	Cored_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	Cored_NFW(const Cored_NFW* lens_in);
 
 	void assign_paramnames();
 	void assign_param_pointers();

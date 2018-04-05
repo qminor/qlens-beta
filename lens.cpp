@@ -627,6 +627,8 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case TRUNCATED_nfw:
 			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+		case CORED_nfw:
+			newlist[nlens] = new Cored_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case PJAFFE:
 			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case EXPDISK:
@@ -886,6 +888,18 @@ bool Lens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 		temp_tablens.output_tables(tabfilename);
 	}
 	return true;
+}
+
+void Lens::set_new_lens_vary_parameters(boolvector &vary_flags)
+{
+	lens_list[nlens-1]->vary_parameters(vary_flags);
+	int pi, pf, nparams;
+	get_n_fit_parameters(nparams);
+	dvector stepsizes(nparams);
+	get_parameter_names();
+	get_lens_parameter_numbers(nlens-1,pi,pf);
+	get_automatic_initial_stepsizes(stepsizes);
+	param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
 }
 
 void Lens::remove_lens(int lensnumber)
@@ -1266,6 +1280,7 @@ bool Lens::create_grid(bool verbal, const double zfac, const int redshift_index)
 		}
 	}
 	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
+	//cout << "GRID: " << grid_xcenter-grid_xlength/2 << " " << grid_xcenter+grid_xlength/2 << " " << grid_ycenter-grid_ylength/2 << " " << grid_ycenter+grid_ylength/2 << endl;
 
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
@@ -1363,6 +1378,17 @@ void Lens::subgrid_around_satellite_galaxies(const double zfac, const int redshi
 				lens_list[i]->get_einstein_radius(einstein_radius[j],reavg,reference_zfactor);
 				//shear_at_center = shear_exclude(galcenter[j],i,zfac);
 				shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfac);
+				if (shear_at_center*0.0 != 0.0) {
+					warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
+					delete[] subgrid;
+					delete[] kappas;
+					delete[] parities;
+					delete[] galcenter;
+					delete[] einstein_radius;
+					delete[] subgrid_radius;
+					delete[] min_galsubgrid_cellsize;
+					return;
+				}
 				shear_angle -= 90;
 				shear_angle *= M_PI/180;
 
@@ -2586,8 +2612,8 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		}
 	}
 	new_redshifts[n_sourcepts_fit] = source_redshift;
+	new_zfactors[n_sourcepts_fit] = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
 	if (n_sourcepts_fit > 0) {
-		new_zfactors[n_sourcepts_fit] = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
 		delete[] image_data;
 		delete[] sourcepts_fit;
 		delete[] vary_sourcepts_x;
@@ -2607,7 +2633,9 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		imgs[i].pos[0] += sim_err_pos*NormalDeviate();
 		imgs[i].pos[1] += sim_err_pos*NormalDeviate();
 		imgs[i].mag *= source_flux; // now imgs[i].mag is in fact the flux, not just the magnification
+		cout << "mag0=" << imgs[i].mag;
 		imgs[i].mag += sim_err_flux*NormalDeviate();
+		cout << " mag=" << imgs[i].mag << endl;
 		if (include_time_delays) {
 			imgs[i].td += sim_err_td*NormalDeviate();
 			if (imgs[i].td < min_td) min_td = imgs[i].td;
@@ -3365,6 +3393,8 @@ void Lens::initialize_fitmodel()
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
 				fitmodel->lens_list[i] = new Truncated_NFW((Truncated_NFW*) lens_list[i]); break;
+			case CORED_nfw:
+				fitmodel->lens_list[i] = new Cored_NFW((Cored_NFW*) lens_list[i]); break;
 			case HERNQUIST:
 				fitmodel->lens_list[i] = new Hernquist((Hernquist*) lens_list[i]); break;
 			case EXPDISK:
@@ -3878,10 +3908,19 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
+	//if (use_analytic_bestfit_src==false) cout << "analytic_bestfit_src off!\n";
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
-			// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map data points to source plane and use their average separations to set the scale--implement this later
+			// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map data points to source plane and use their average separations to set the scale--implement this later. but we'll keep the grid size the same, otherwise it's confusing
+			double grid_xcenter0 = grid_xcenter;
+			double grid_ycenter0 = grid_ycenter;
+			double grid_xlength0 = grid_xlength;
+			double grid_ylength0 = grid_ylength;
 			autogrid();
+			grid_xcenter = grid_xcenter0;
+			grid_ycenter = grid_ycenter0;
+			grid_xlength = grid_xlength0;
+			grid_ylength = grid_ylength0;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
 				if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
@@ -3902,7 +3941,6 @@ void Lens::set_default_plimits()
 	boolvector use_penalty_limits;
 	dvector lower, upper;
 	param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
-	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	if (source_fit_mode==Point_Source) {
@@ -4153,6 +4191,23 @@ void Lens::get_parameter_names()
 	for (i=0; i < n_fit_parameters; i++) {
 		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
 	}
+}
+
+bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
+{
+	if (lens_i >= nlens) return false;
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	int i,j;
+	for (i=0; i < lens_i; i++) {
+		lens_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fit_parameters) return false;
+	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	pf = dummy.size();
+	if (pf==pi) return false;
+	return true;
 }
 
 void Lens::fit_set_optimizations()
@@ -5231,6 +5286,7 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	loglike = chisq/2.0;
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	//if (mpi_id==0) cout << "chisq0=" << chisq0 << ", chisq=" << loglike/2 << ", loglike=" << loglike << "              " << endl;
 	if ((display_chisq_status) and (mpi_id==0)) {
 		cout << "chisq0=" << chisq0 << ", chisq=" << loglike/2 << ", loglike=" << loglike << "              " << endl;
 		cout << "\033[1A";
