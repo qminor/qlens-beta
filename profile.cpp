@@ -1565,6 +1565,18 @@ double LensIntegral::j_integral(bool &converged)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
 		ans = PattersonIntegrate(jptr,0,1,converged);
+		/*
+		if (!converged) {
+			int i, nn=511;
+			double w, wstep = 1.0/(nn-1);
+			//for (i=0, w=0; i < nn; i++, w += wstep) {
+			for (i=0; i < nn; i++) {
+				w = 0.5 + 0.5*profile->pat_points[i];
+				cout << w << " " << j_integrand_prime(w) << endl;
+			}
+			die();
+		}
+		*/
 	}
 	else die("unknown integral method");
 	return ans;
@@ -1590,6 +1602,7 @@ double LensIntegral::k_integral(bool &converged)
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
 		ans = PattersonIntegrate(kptr,0,1,converged);
 	}
+
 	else die("unknown integral method");
 	return ans;
 }
@@ -1657,14 +1670,44 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 		if ((level > 1) and (abs(result-result_old) < profile->pat_tolerance*abs(result))) break;
 	} while (++level < 9);
 
-	if (level==9) {
+	if (level == 9) {
 		profile->SetGaussLegendre(1023);
+		gausspoints = profile->points;
+		gaussweights = profile->weights;
+
+		result = 0;
+		for (int i = 0; i < profile->numberOfPoints; i++)
+			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
+
+		converged = false;
+
+		/*
+		cerr << "level=" << level-1 << ", order=" << profile->pat_orders[level-1] << ", old_dif=" << abs((result-result_old)/result) << " (s=" << result << "), ";
+		profile->SetGaussLegendre(profile->pat_orders[level-1]);
+		gausspoints = profile->points;
+		gaussweights = profile->weights;
+
+		result_old = result;
 		result = 0;
 
 		for (int i = 0; i < profile->numberOfPoints; i++)
 			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
 
-		converged = false;
+		//if (abs(result-result_old) > profile->pat_tolerance*abs(result)) converged = false;
+		cerr << "new_dif=" << abs((result-result_old)/result) << " (s=" << result << "), ";
+		profile->SetGaussLegendre(2*profile->pat_orders[level-1]);
+		gausspoints = profile->points;
+		gaussweights = profile->weights;
+
+		result_old = result;
+		result = 0;
+
+		for (int i = 0; i < profile->numberOfPoints; i++)
+			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
+
+		//if (abs(result-result_old) > profile->pat_tolerance*abs(result)) converged = false;
+		cerr << "new_dif2=" << abs((result-result_old)/result) << " (s=" << result << ")" << endl;
+		*/
 	}
 
 	return abdif*result;

@@ -5286,9 +5286,8 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	loglike = chisq/2.0;
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
-	//if (mpi_id==0) cout << "chisq0=" << chisq0 << ", chisq=" << loglike/2 << ", loglike=" << loglike << "              " << endl;
 	if ((display_chisq_status) and (mpi_id==0)) {
-		cout << "chisq0=" << chisq0 << ", chisq=" << loglike/2 << ", loglike=" << loglike << "              " << endl;
+		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike=" << loglike << "              " << endl;
 		cout << "\033[1A";
 	}
 
@@ -6188,12 +6187,12 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 			if (regularization_parameter != 0) {
-				double t0, t1, t3, t4, tsum;
-				t0 = regularization_parameter*Es;
-				t1 = -source_npixels*log(regularization_parameter);
-				t3 = -Rmatrix_log_determinant;
-				t4 = Fmatrix_log_determinant;
-				tsum = t0 + t1 + t3 + t4;
+				//double t0, t1, t3, t4, tsum;
+				//t0 = regularization_parameter*Es;
+				//t1 = -source_npixels*log(regularization_parameter);
+				//t3 = -Rmatrix_log_determinant;
+				//t4 = Fmatrix_log_determinant;
+				//tsum = t0 + t1 + t3 + t4;
 
 				//cout << "chisq0=" << chisq << " chisq_signal=" << chisq_signal << " lambda*Es=" << t0 << " N_s*log(lambda)=" << t1 << " log_det(R)=" << t3 << " log_det(F)=" << t4 << " sum=" << tsum << endl;
 				//cout << "src_npixels=" << source_npixels << endl;

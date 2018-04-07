@@ -919,7 +919,7 @@ double Cored_NFW::kappa_rsq(const double rsq)
 		} else rcterm = lens_function_xsq(xcsq);
 	}
 	if (xsq < 1e-8) rsterm = -(1 - beta + log(xsq/4)/2);
-	else if (abs(xsq-1) < 1e-5) rsterm = (1-beta)*(0.3333333333333333 - (xsq-1)/5.0); // formula on next line becomes unstable for x close to 1, this fixes it
+	else if (abs(xsq-1) < 1e-5) rsterm = (1+2*beta)*0.3333333333333333 - (1-beta)*(0.2 + 2*beta/15.0)*(xsq-1); // formula on next line becomes unstable for x close to 1, this fixes it
 	else rsterm = (1 - beta - (1-xsq*beta)*lens_function_xsq(xsq))/(xsq-1);
 	return 2*ks/SQR(1-beta)*(rsterm - rcterm);
 }
@@ -935,8 +935,8 @@ double Cored_NFW::kappa_rsq_deriv(const double rsq)
 	else rcterm = (lens_function_xsq(xcsq) - 1.0/xcsq) / (xsq - beta*beta);
 
 	if (xsq < 1e-10) rsterm = -1.0/xsq;
-	else if (abs(xsq-1) < 1e-5) rsterm = -(1-beta)/5.0; // formula on next line becomes unstable for x close to 1, this fixes it
-	rsterm = (-2 + 3*beta + (3-2*beta-xsq*beta)*lens_function_xsq(xsq) - 1.0/xsq)/SQR(xsq-1);
+	else if (abs(xsq-1) < 1e-5) rsterm = -2*(0.2 + 2*beta/15.0); // formula on next line becomes unstable for x close to 1, this fixes it
+	else rsterm = (-2 + 3*beta + (3-2*beta-xsq*beta)*lens_function_xsq(xsq) - 1.0/xsq)/SQR(xsq-1);
 
 	return ks/SQR(rs*(1-beta))*(rsterm + rcterm);
 }
