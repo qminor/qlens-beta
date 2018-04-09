@@ -1627,7 +1627,7 @@ void Lens::process_commands(bool read_file)
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
-					cout << "outside_sb_threshold = " << max_sb_frac_unselected_pixels << endl;
+					cout << "outside_sb_threshold = " << max_sb_frac << endl;
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
@@ -6537,9 +6537,9 @@ void Lens::process_commands(bool read_file)
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness fraction threshold for outside_sb_threshold");
-				max_sb_frac_unselected_pixels = sb_thresh;
+				max_sb_frac = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_frac_unselected_pixels << endl;
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_frac << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
 		else if (words[0]=="adaptive_grid")

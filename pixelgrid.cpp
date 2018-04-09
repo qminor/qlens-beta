@@ -5175,7 +5175,18 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 				max_sb_i = i;
 			}
 		}
-		if (n_image_prior) n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+		if (n_image_prior) {
+			n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+			pixel_avg_n_image = 0;
+			double sbtot = 0;
+			for (int i=0; i < source_npixels; i++) {
+				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
+					sbtot += source_surface_brightness[i];
+				}
+			}
+			if (sbtot != 0) pixel_avg_n_image /= sbtot;
+		}
 	} else {
 		for (int i=0; i < source_npixels; i++) {
 			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
@@ -5378,7 +5389,18 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 			}
 				//cout << source_surface_brightness[i] << " ";
 		}
-		if (n_image_prior) n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+		if (n_image_prior) {
+			n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+			pixel_avg_n_image = 0;
+			double sbtot = 0;
+			for (int i=0; i < source_npixels; i++) {
+				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
+					sbtot += source_surface_brightness[i];
+				}
+			}
+			if (sbtot != 0) pixel_avg_n_image /= sbtot;
+		}
 	} else {
 		for (int i=0; i < source_npixels; i++) {
 			//if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
@@ -5666,7 +5688,18 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 				max_sb_i = i;
 			}
 		}
-		if (n_image_prior) n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+		if (n_image_prior) {
+			n_images_at_sbmax = source_pixel_n_images[max_sb_i];
+			pixel_avg_n_image = 0;
+			double sbtot = 0;
+			for (int i=0; i < source_npixels; i++) {
+				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
+					sbtot += source_surface_brightness[i];
+				}
+			}
+			if (sbtot != 0) pixel_avg_n_image /= sbtot;
+		}
 	} else {
 		for (int i=0; i < source_npixels; i++) {
 			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted

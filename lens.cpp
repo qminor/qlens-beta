@@ -178,7 +178,7 @@ Lens::Lens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 4; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = true;
-	max_sb_frac_unselected_pixels = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	max_sb_frac = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	nlens = 0;
 	n_sb = 0;
@@ -424,7 +424,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
-	max_sb_frac_unselected_pixels = lens_in->max_sb_frac_unselected_pixels;
+	max_sb_frac = lens_in->max_sb_frac;
 	subhalo_prior = lens_in->subhalo_prior;
 
 	plot_ptsize = lens_in->plot_ptsize;
@@ -6112,7 +6112,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
 	else invert_lens_mapping_CG_method(verbal);
 
-	double chisq;
+	double chisq = 0;
+	/*
 	if ((n_image_prior) and (n_images_at_sbmax < n_image_threshold) and (abs(n_images_at_sbmax-n_image_threshold) > 1e-15)) {
 		chisq = 1e30; chisq0 = 1e30;
 		if (group_id==0) {
@@ -6125,6 +6126,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 	else
 	{
+	*/
 		calculate_image_pixel_surface_brightness();
 
 #ifdef USE_OPENMP
@@ -6133,7 +6135,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
 		}
 #endif
-		chisq=0;
 		double chisq_signal=0;
 		double covariance; // right now we're using a uniform uncorrelated noise for each pixel
 		if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
@@ -6208,6 +6209,17 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		//chisq += n_data_pixels*log(2*M_PI*data_pixel_noise); // this is not very relevant because the data fit window and assumed pixel noise are not varied
 
+		if (n_image_prior) {
+			//cout << "NIMG: " << pixel_avg_n_image << " " << n_images_at_sbmax << " " << max_sb_frac << endl;
+			double chisq_penalty;
+			if (pixel_avg_n_image < n_image_threshold) {
+				chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_image,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+				//cout << "NIMG_PENALTY: " << n_image_threshold-pixel_avg_n_image << " " << chisq_penalty << endl;
+				chisq += chisq_penalty;
+				if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_image << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
+			}
+		}
+
 		bool sb_outside_window = false;
 		if (max_sb_prior_unselected_pixels) {
 			clear_lensing_matrices();
@@ -6223,7 +6235,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				for (j=0; j < image_pixel_data->npixels_y; j++) {
 					if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 						img_index = image_pixel_grid->pixel_index[i][j];
-						if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac_unselected_pixels*max_pixel_sb)) {
+						if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_pixel_sb)) {
 							if (image_surface_brightness[img_index] > max_external_sb) {
 								 max_external_sb = image_surface_brightness[img_index];
 							}
@@ -6233,8 +6245,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			if (max_external_sb > 0) {
 				sb_outside_window = true;
-				chisq *= pow(abs(max_external_sb/(max_sb_frac_unselected_pixels*max_pixel_sb)),40);
-				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac_unselected_pixels*max_pixel_sb << ") has been found outside the selected fit region" << endl;
+				chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),40) - 1.0;
+				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_pixel_sb << ") has been found outside the selected fit region" << endl;
 			}
 			image_pixel_grid->set_fit_window((*image_pixel_data));
 		}
@@ -6248,7 +6260,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;
 		}
 		if ((mpi_id==0) and (verbal)) cout << "number of pixels that map to source = " << count << endl;
-	}
+	//}
 
 	chisq_it++;
 

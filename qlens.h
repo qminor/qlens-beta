@@ -254,11 +254,11 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool psf_convolution_mpi;
 	bool use_mumps_subcomm;
 	bool n_image_prior;
-	double n_images_at_sbmax;
+	double n_images_at_sbmax, pixel_avg_n_image;
 	double n_image_threshold;
 	double max_pixel_sb;
 	bool max_sb_prior_unselected_pixels;
-	double max_sb_frac_unselected_pixels;
+	double max_sb_frac;
 	bool subhalo_prior;
 	bool lens_position_gaussian_transformation;
 	ParamSettings *param_settings;
