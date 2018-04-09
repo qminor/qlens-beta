@@ -473,6 +473,7 @@ class Cored_NFW : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	double calculate_scaled_mass_3d(const double r);
 };
 
 class Hernquist : public LensProfile

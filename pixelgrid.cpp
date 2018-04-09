@@ -2559,7 +2559,7 @@ void SourcePixelGrid::assign_active_indices(int& source_pixel_i)
 					cell[i][j]->active_index = source_pixel_i++;
 					cell[i][j]->active_pixel = true;
 				} else {
-					if (lens->mpi_id==0) warn(lens->warnings,"A source pixel does not map to any image pixel (for source pixel %i,%i), level %i, center (%g,%g)",i,j,cell[i][j]->level,cell[i][j]->center_pt[0],cell[i][j]->center_pt[1]);
+					if ((lens->mpi_id==0) and (lens->regularization_method == 0)) warn(lens->warnings,"A source pixel does not map to any image pixel (for source pixel %i,%i), level %i, center (%g,%g)",i,j,cell[i][j]->level,cell[i][j]->center_pt[0],cell[i][j]->center_pt[1]); // only show warning if no regularization being used, since matrix cannot be inverted in that case
 					if ((activate_unmapped_source_pixels) and ((!regrid_if_unmapped_source_subcells) or (level==0))) { // if we are removing unmapped subpixels, we may still want to activate first-level unmapped pixels
 						if ((exclude_source_pixels_outside_fit_window) and (cell[i][j]->maps_to_image_window==false)) ;
 						else {

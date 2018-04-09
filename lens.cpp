@@ -176,9 +176,9 @@ Lens::Lens() : UCMC()
 	use_input_psf_matrix = false;
 	psf_threshold = 1e-3;
 	n_image_prior = false;
-	n_image_threshold = 3.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	max_sb_prior_unselected_pixels = false;
-	max_sb_frac_unselected_pixels = 0.2; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	n_image_threshold = 4; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
+	max_sb_prior_unselected_pixels = true;
+	max_sb_frac_unselected_pixels = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	nlens = 0;
 	n_sb = 0;
@@ -259,7 +259,7 @@ Lens::Lens() : UCMC()
 #endif
 	parallel_mumps = false;
 	show_mumps_info = false;
-	regularization_method = None;
+	regularization_method = Curvature;
 	regularization_parameter = 0.5;
 	regularization_parameter_lower_limit = 1e30; // These must be specified by user
 	regularization_parameter_upper_limit = 1e30; // These must be specified by user
@@ -6113,8 +6113,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	else invert_lens_mapping_CG_method(verbal);
 
 	double chisq;
-	if ((n_image_prior) and (n_images_at_sbmax < n_image_threshold)) {
-		chisq = 1e30;
+	if ((n_image_prior) and (n_images_at_sbmax < n_image_threshold) and (abs(n_images_at_sbmax-n_image_threshold) > 1e-15)) {
+		chisq = 1e30; chisq0 = 1e30;
 		if (group_id==0) {
 			if (logfile.is_open()) {
 				logfile << "it=" << chisq_it << " chisq0=" << chisq << endl;

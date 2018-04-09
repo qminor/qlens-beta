@@ -319,7 +319,13 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
 	} else {
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0; penalty_upper_limits[param_i] = 1; param_i++;
+		set_auto_penalty_limits[param_i] = true;
+		if ((ellipticity_mode==2) or (ellipticity_mode==3)) {
+			penalty_lower_limits[param_i] = 0; penalty_upper_limits[param_i] = 0.995;
+		} else {
+			penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1;
+		}
+		param_i++;
 		set_auto_penalty_limits[param_i++] = false;
 	}
 	set_auto_penalty_limits[param_i++] = false;
@@ -1567,14 +1573,35 @@ double LensIntegral::j_integral(bool &converged)
 		ans = PattersonIntegrate(jptr,0,1,converged);
 		/*
 		if (!converged) {
-			int i, nn=511;
-			double w, wstep = 1.0/(nn-1);
+			//int i, nn=511;
+			//double w, wstep = 1.0/(nn-1);
+			////for (i=0, w=0; i < nn; i++, w += wstep) {
+			//for (i=0; i < nn; i++) {
+				//w = 0.5 + 0.5*profile->pat_points[i];
+				//cout << w << " " << j_integrand_prime(w) << endl;
+			//}
+			cout << endl << endl;
+			double w = 0.999999;
+			double u = w*w;
+			double qfac = 1 - one_minus_qsq*u;
+			double wtf2 = (2*w*profile->kappa_rsq(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
+
+			double wtf = 0.999999*((xsqval + ysqval/qfac)*fsqinv);
+			cout << xsqval << " " << ysqval << " " << wtf << " " << qfac << " " << one_minus_qsq << endl;
+			cout << endl;
+
+			//die();
+			int i, nn=1023;
+			double wstep = 1.0/(nn-1);
+			ofstream blargh("ctwtf.dat");
+
 			//for (i=0, w=0; i < nn; i++, w += wstep) {
 			for (i=0; i < nn; i++) {
-				w = 0.5 + 0.5*profile->pat_points[i];
-				cout << w << " " << j_integrand_prime(w) << endl;
+				w = 0.5 + 0.5*profile->points[i];
+				blargh << w << " " << j_integrand_prime(w) << endl;
 			}
-			die();
+
+			//die();
 		}
 		*/
 	}

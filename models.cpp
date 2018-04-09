@@ -468,14 +468,15 @@ double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 
 double PseudoJaffe::kapavg_spherical_rsq(const double rsq)
 {
+	double ans= b*((sqrt(s*s+rsq)-s) - (sqrt(a*a+rsq)-a))/rsq;
 	return b*((sqrt(s*s+rsq)-s) - (sqrt(a*a+rsq)-a))/rsq;
 }
 
 double PseudoJaffe::potential_spherical_rsq(const double rsq)
 {
 	double tmp;
-	tmp = b*(sqrt(s*s+rsq) - s - sqrt(a*a+rsq) + a); // now, tmp = kappa_average*rsq
-	tmp += b*(a*log((a + sqrt(a*a+rsq))/(2.0*a)) - s*log((s + sqrt(s*s+rsq))/(2.0*s)));
+	tmp = b*(sqrt(s*s+rsq) - s - sqrt(a*a+rsq) + a + a*log((a + sqrt(a*a+rsq))/(2.0*a)));
+	if (s != 0.0) tmp -= s*log((s + sqrt(s*s+rsq))/(2.0*s));
 	return tmp;
 }
 
@@ -516,9 +517,10 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	psi2 = sqrt(qsq*(asq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
-	return (bprime*q/u)*(x*(atan(u*x/(psi+sprime)) - atan(u*x/(psi2+aprime)))+ y*(atanh(u*y/(psi+qsq*sprime))
-		- atanh(u*y/(psi2+qsq*aprime)))) + bprime*q*(sprime*(-log(SQR(psi+sprime) + SQR(u*x))/2 + log((1.0+q)*sprime))
-		- aprime*(-log(SQR(psi2+aprime) + SQR(u*x))/2 + log((1.0+q)*aprime)));
+	double ans = (bprime*q/u)*(x*(atan(u*x/(psi+sprime)) - atan(u*x/(psi2+aprime)))+ y*(atanh(u*y/(psi+qsq*sprime))
+		- atanh(u*y/(psi2+qsq*aprime)))) + bprime*q*(-aprime*(-log(SQR(psi2+aprime) + SQR(u*x))/2 + log((1.0+q)*aprime)));
+	if (sprime != 0) ans += bprime*q*sprime*(-log(SQR(psi+sprime) + SQR(u*x))/2 + log((1.0+q)*sprime));
+	return ans;
 }
 
 bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
@@ -827,7 +829,7 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 
 /********************************** Cored_NFW **********************************/
 
-Cored_NFW::Cored_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
+Cored_NFW::Cored_NFW(const double &ks_in, const double &rs_in, const double &rc_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = CORED_nfw;
@@ -840,7 +842,7 @@ Cored_NFW::Cored_NFW(const double &ks_in, const double &rs_in, const double &rt_
 
 	ks = ks_in;
 	rs = rs_in;
-	rc = rt_in;
+	rc = rc_in;
 
 	update_meta_parameters_and_pointers();
 }
@@ -875,7 +877,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
-	if (rs < rc) die("scale radius a cannot be less than core radius s for corecusp model");
+	if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for corecusp model");
 }
 
 void Cored_NFW::set_auto_stepsizes()
@@ -1004,6 +1006,14 @@ double Cored_NFW::kapavg_spherical_rsq(const double rsq)
 double Cored_NFW::rho3d_r_integrand_analytic(const double r)
 {
 	return (ks/(r+rc)/SQR(1+r/rs));
+}
+
+double Cored_NFW::calculate_scaled_mass_3d(const double r)
+{
+	double beta = rc/rs, rcterm;
+	if (rc==0.0) rcterm = 0;
+	else rcterm = beta*beta*log(1+r/rc);
+	return 4*M_PI*ks*rs*rs*((1-2*beta)*log(1+r/rs) + rcterm - (1-beta)*r/(r+rs))/SQR(1-beta);
 }
 
 /********************************** Hernquist **********************************/

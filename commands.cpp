@@ -138,7 +138,6 @@ void Lens::process_commands(bool read_file)
 						"tab_r_N -- set number of points along r (spaced logarithmically) for grid in tabulated model\n"
 						"tab_phi_N -- set number of points along angular direction for grid in tabulated model\n"
 						//"auto_srcgrid_set_pixelsize -- determine size of source pixels based on magnifications\n"  // This is not working well yet
-						//"nimg_prior -- impose penalty if # of images produced from pixel inversion doesn't match this\n"   // This is not ready yet--needs to be generalized so user can specify number of expected images
 						"\n"
 						"\033[4mMiscellaneous settings\033[0m\n"
 						"warnings -- set warning flags on/off\n"
@@ -214,6 +213,8 @@ void Lens::process_commands(bool read_file)
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
 						"outside_sb_threshold -- fraction of max surface brightness allowed beyond mask by outside_sb_prior\n"
+						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
+						"nimg_threshold -- threshold on # of images at max surface brightness (used if nimg_prior is on)\n"
 						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
@@ -815,7 +816,7 @@ void Lens::process_commands(bool read_file)
 							"none -- no regularization\n"
 							"norm -- regularization matrix built from (squared) surface brightness of each pixel\n"
 							"gradient -- regularization matrix built from the derivative between neighboring pixels\n"
-							"curvature -- regularization matrix built from the curvature between neighboring pixels\n\n";
+							"curvature -- regularization matrix built from the curvature between neighboring pixels (default)\n\n";
 					else Complain("unknown fit command");
 				}
 				else if (words[1]=="imgdata") {
@@ -1627,6 +1628,8 @@ void Lens::process_commands(bool read_file)
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
 					cout << "outside_sb_threshold = " << max_sb_frac_unselected_pixels << endl;
+					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
+					cout << "nimg_threshold = " << n_image_threshold << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
 					cout << "activate_unmapped_srcpixels: " << display_switch(activate_unmapped_source_pixels) << endl;
 					cout << "exclude_srcpixels_outside_mask: " << display_switch(exclude_source_pixels_beyond_fit_window) << endl;
@@ -6557,7 +6560,7 @@ void Lens::process_commands(bool read_file)
 				set_switch(auto_srcgrid_set_pixel_size,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="nimg_prior")    // This needs to be generalized so the user can specify the number of expected images
+		else if (words[0]=="nimg_prior")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Set prior on number of images: " << display_switch(n_image_prior) << endl;
@@ -6565,6 +6568,16 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'nimg_prior' command; must specify 'on' or 'off'");
 				set_switch(n_image_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="nimg_threshold")
+		{
+			double nimg_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> nimg_thresh)) Complain("invalid number of images at max surface brightness");
+				n_image_threshold = nimg_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "threshold number of images at max surface brightness = " << n_image_threshold << endl;
+			} else Complain("must specify either zero or one argument for nimg_threshold");
 		}
 		else if (words[0]=="outside_sb_prior")
 		{
