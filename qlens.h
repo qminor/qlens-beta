@@ -1057,8 +1057,8 @@ struct ParamSettings
 		for (i=0; i < pi; i++) {
 			newpriors[i] = new ParamPrior(priors[i]);
 			newtransforms[i] = new ParamTransform(transforms[i]);
-			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
+			new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
@@ -1077,8 +1077,8 @@ struct ParamSettings
 		for (j=pf,i=pi; i < nparams; i++, j++) {
 			newpriors[j] = new ParamPrior(priors[i]);
 			newtransforms[j] = new ParamTransform(transforms[i]);
-			new_stepsizes[j] = stepsizes[i];
 			new_auto_stepsize[j] = auto_stepsize[i];
+			new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[j] = penalty_limits_lo[i];
 			new_penalty_limits_hi[j] = penalty_limits_hi[i];
 			new_use_penalty_limits[j] = use_penalty_limits[i];

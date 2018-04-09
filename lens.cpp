@@ -3905,25 +3905,32 @@ double Lens::chisq_time_delays()
 
 void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 {
-	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
-	//if (use_analytic_bestfit_src==false) cout << "analytic_bestfit_src off!\n";
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
-			// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map data points to source plane and use their average separations to set the scale--implement this later. but we'll keep the grid size the same, otherwise it's confusing
-			double grid_xcenter0 = grid_xcenter;
-			double grid_ycenter0 = grid_ycenter;
-			double grid_xlength0 = grid_xlength;
-			double grid_ylength0 = grid_ylength;
-			autogrid();
-			grid_xcenter = grid_xcenter0;
-			grid_ycenter = grid_ycenter0;
-			grid_xlength = grid_xlength0;
-			grid_ylength = grid_ylength0;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
-				if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
+			if (nlens > 0) {
+				// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map
+				// data points to source plane and use their average separations to set the scale--implement this later. but we'll
+				// keep the grid size the same, otherwise it's confusing
+				double grid_xcenter0 = grid_xcenter;
+				double grid_ycenter0 = grid_ycenter;
+				double grid_xlength0 = grid_xlength;
+				double grid_ylength0 = grid_ylength;
+				autogrid();
+				grid_xcenter = grid_xcenter0;
+				grid_ycenter = grid_ycenter0;
+				grid_xlength = grid_xlength0;
+				grid_ylength = grid_ylength0;
+				for (i=0; i < n_sourcepts_fit; i++) {
+					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
+					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
+				}
+			} else {
+				for (i=0; i < n_sourcepts_fit; i++) {
+					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.1*grid_xlength;
+					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.1*grid_ylength;
+				}
 			}
 		}
 	}
@@ -3933,7 +3940,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes");
+	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
 
 void Lens::set_default_plimits()

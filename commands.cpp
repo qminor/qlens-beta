@@ -5710,16 +5710,22 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Solve for approximate best-fit source coordinates analytically during fit: " << display_switch(use_analytic_bestfit_src) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_bestfit_src' command; must specify 'on' or 'off'");
+				int nparams;
+				//get_n_fit_parameters(nparams);
 				set_switch(use_analytic_bestfit_src,setword);
+				get_n_fit_parameters(nparams);
 				// the following could be done better. Whenever parameters are going to be added/removed by changing a setting, param_settings
 				// should be updated so just those parameters are inserted/removed and everything else left unchanged
 				// update_params(...) only properly adds or removes parameters at the end of the list, which can be dicey if there are other parameters after it
-				int nparams;
-				get_n_fit_parameters(nparams);
-				dvector stepsizes(nparams);
-				get_parameter_names();
-				get_automatic_initial_stepsizes(stepsizes);
-				param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+				if (nparams > 0) {
+					get_n_fit_parameters(nparams);
+					dvector stepsizes(nparams);
+					get_parameter_names();
+					get_automatic_initial_stepsizes(stepsizes);
+					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+				} else {
+					param_settings->clear_params();
+				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisqmag")
