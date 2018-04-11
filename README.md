@@ -11,6 +11,7 @@ Optional packages:
 * CFITSIO library &mdash; for reading and writing FITS files
 * MUMPS package &mdash; for sparse matrix inversion in pixel image modeling (often painful to install however)
 * UMFPACK &mdash; alternative to MUMPS; much easier to install but not quite as fast or parallelized
+* TCMalloc &mdash; recommended to compile with QLens if doing pixel image modeling with OpenMP; speeds up sparse matrix calculations by reducing lock contention between threads
 
 # change log (Apr. 11, 2018)
 
