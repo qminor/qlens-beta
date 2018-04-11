@@ -591,8 +591,8 @@ void Lens::process_commands(bool read_file)
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
 							"fit dparams ...\n"
-							"fit priors ...\n" // WRITE HELP DOC FOR THIS COMMAND
-							"fit transform ...\n" // WRITE HELP DOC FOR THIS COMMAND
+							"fit priors ...\n"
+							"fit transform ...\n"
 							"fit vary_sourcept ...\n"
 							"fit regularization <method>\n\n"
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
@@ -755,8 +755,7 @@ void Lens::process_commands(bool read_file)
 							"information on the output format for the chosen fit method).\n";
 					else if (words[2]=="use_bestfit")
 						cout << "fit use_bestfit\n\n"
-							"Adopt the current best-fit lens model (this can only be done after a chi-square fit\n"
-							"has been performed).\n";
+							"Adopt the current best-fit lens model (this can only be done after a chi-square fit has been performed).\n";
 					else if (words[2]=="save_bestfit")
 						cout << "fit save_bestfit\n\n"
 							"Save information on the best-fit model obtained after fitting to data to the file '<label>.bestfit',\n"
@@ -786,6 +785,43 @@ void Lens::process_commands(bool read_file)
 							"for parameter 5 to 0.3. You can also scale all the stepsizes by a certain factor, e.g. 'fit\n"
 							"stepsize scale 5' multiplies all stepsizes by 5. To reset all stepsizes to their automatic values,\n"
 							"type 'fit stepsize reset'.\n";
+					else if (words[2]=="priors")
+						cout << "fit priors\n"
+							"fit priors <param_num> <prior_type> [prior_params]\n\n"
+							"Define prior probability distributions in each fit parameter, which are used by the T-Walk and nested\n"
+							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors.\n"
+							"The list of available priors is given below. Regardless of the prior chosen, the upper and lower bounds\n"
+							"defined when you create lens models (in twalk or nest mode) still apply. Keep in mind that the initial\n"
+							"sampling of the parameter space will not follow the prior chosen, but rather will draw uniform deviates\n"
+							"within the specified limits. If you want the initial sampling to follow the prior, consider doing a\n"
+							"parameter transformation instead using 'fit transform'.\n\n"
+							"Available prior types:\n\n"
+							"uniform  -- this is the default prior for all parameters\n"
+							"log      -- prior 1/p, where p is the parameter; this is equivalent to a uniform prior in log(p)\n"
+							"gaussian -- Gaussian prior with two parameter arguments, mean value <mean> and dispersion <sig>\n"
+							"              (e.g., 'fit priors # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
+					else if (words[2]=="transform")
+						cout << "fit transform\n"
+							"fit transform <param_num> <transform_type> [transform_params] ... [include_jac]\n\n"
+							"Define coordinate transformation of one or more fit parameters. Type 'fit transform' to see current list of\n"
+							"fit parameters and corresponding transformations/priors being used. The list of available transformations is\n"
+							"given below. If upper/lower bounds were defined on the original parameter while in twalk/nest mode, these\n"
+							"bounds will also be transformed. Transforming parameters is a useful alternative to defining non-uniform\n"
+							"priors, since the transformation also changes the way the parameter space is initially sampled; for example,\n"
+							"if a Gaussian transformation is made, then the initial sampling will follow a Gaussian distribution in the\n"
+							"original parameter. If a transformation is made to better sample the prior space, then the corresponding\n"
+							"prior should not also be selected; for example, you can either define a log-prior in the parameter p, or\n"
+							"else transform to log(p) and use a uniform prior in log(p). These two approaches are equivalent, the only\n"
+							"difference is in how the parameter space is initially explored. If you want to transform the parameter but\n"
+							"still have a uniform prior in the *original* parameter, add the argument 'include_jac'.\n\n"
+							"Available transformation types:\n\n"
+							"none     -- no transformation (the default for all parameters)\n"
+							"log      -- transform to log(p) using the base 10 logarithm\n"
+							"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
+							"              linear 2 5' will transform p --> 2*p + 5.\n"
+							"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"
+							"              the original parameter. There are two arguments, mean value <mean> and dispersion <sig>\n"
+							"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
 							"fit dparams add <param_type> <param_arg> [lens#]        (lens# is optional for some parameters)\n"
@@ -868,9 +904,9 @@ void Lens::process_commands(bool read_file)
 								"imgdata plot sbmap\n\n"
 								"Plots the image positions corresponding to the specified set of images loaded as data,\n"
 								"corresponding to the number given by the 'imgdata' command (default=0 if no argument given).\n"
-								"(To plot alongside image positions from a lens model, use 'fit plotimg'.)\n";
-								//"If 'sbmap' is added as a third argument, superimposes image data points with the\n"
-								//"surface brightness pixel map (if loaded).\n";
+								"To plot alongside image positions from the current lens model being fit, use 'fit plotimg' instead.\n"
+								"If 'sbmap' is added as a third argument, superimposes image data points with the surface brightness\n"
+								"pixel data (if loaded).\n";
 						else if (words[2]=="clear")
 							cout << "imgdata clear [dataset_number]\n"
 								"imgdata clear [min_dataset]-[max_dataset]\n\n"
@@ -903,9 +939,9 @@ void Lens::process_commands(bool read_file)
 							"sbmap loadimg <image_file>\n"
 							"sbmap loadpsf <psf_file>\n"        // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
-							"sbmap loadmask <mask_file>\n"      // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap plotdata\n"
 							"sbmap invert\n"
+							"sbmap loadmask <mask_file>\n"      // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap set_all_pixels\n"
 							"sbmap unset_all_pixels\n"
 							"sbmap set_data_annulus [...]\n"
@@ -3033,10 +3069,10 @@ void Lens::process_commands(bool read_file)
 				int primary_lens_num;
 				if (nwords > 9) Complain("more than 7 parameters not allowed for model sersic");
 				if (nwords >= 6) {
-					double kappa0, re, n;
+					double kappe_e, re, n;
 					double q, theta = 0, xc = 0, yc = 0;
 					int pos;
-					if (!(ws[2] >> kappa0)) Complain("invalid kappa0 parameter for model sersic");
+					if (!(ws[2] >> kappe_e)) Complain("invalid kappe_e parameter for model sersic");
 					if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
@@ -3061,7 +3097,7 @@ void Lens::process_commands(bool read_file)
 					}
 					param_vals.input(7);
 					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-					param_vals[0]=kappa0; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+					param_vals[0]=kappe_e; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
@@ -3072,9 +3108,9 @@ void Lens::process_commands(bool read_file)
 								if (nwords==tot_nparams_to_vary+2) {
 									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for five parameters (kappa0,R_eff,n,q,theta) in model sersic";
+								} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model sersic";
 							}
-							else complain_str = "Must specify vary flags for seven parameters (kappa0,R_eff,n,q,theta,xc,yc) in model sersic";
+							else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model sersic";
 							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -3096,13 +3132,13 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(SERSIC_LENS, emode, kappa0, re, n, q, theta, xc, yc);
+						add_lens(SERSIC_LENS, emode, kappe_e, re, n, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
 					}
 				}
-				else Complain("sersic requires at least 4 parameters (kappa0, R_eff, n, q)");
+				else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
 			}
 			else if (words[1]=="sheet")
 			{
@@ -4277,7 +4313,7 @@ void Lens::process_commands(bool read_file)
 						if (words[3]=="none") param_settings->transforms[param_num]->set_none();
 						else if (words[3]=="log") param_settings->transforms[param_num]->set_log();
 						else if (words[3]=="gaussian") {
-							if (nwords != 6) Complain("'fit transform gaussian' requires two additional arguments (mean,sigma)");
+							if (nwords != 6) Complain("'fit transform gaussian' requires two parameter arguments (mean,sigma)");
 							double sig, pos;
 							if (!(ws[4] >> pos)) Complain("Invalid mean value for Gaussian transformation");
 							if (!(ws[5] >> sig)) Complain("Invalid dispersion value for Gaussian transformation");

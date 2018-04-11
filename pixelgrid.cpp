@@ -5584,6 +5584,7 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 #ifdef USE_MPI
 	MPI_Comm this_comm;
 	MPI_Comm_create(*my_comm, *my_group, &this_comm);
+	//cout << "NP: " << mpi_np << " " << mpi_ngroups << " " << group_np << " " << mpi_id << " " << group_id << " " << endl << flush;
 #endif
 
 #ifndef USE_MUMPS
@@ -5633,10 +5634,11 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		}
 	}
 
-	if (use_mumps_subcomm)
+	if (use_mumps_subcomm) {
 		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(sub_comm);
-	else
+	} else {
 		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(this_comm);
+	}
 	mumps_solver->job = JOB_INIT; // initialize
 	mumps_solver->sym = 2; // specifies that matrix is symmetric and positive-definite
 	//cout << "ICNTL = " << mumps_solver->icntl[13] << endl;

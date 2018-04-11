@@ -359,7 +359,7 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::default_ellipticity_mode = 1;
 	Shear::use_shear_component_params = false;
-	use_mumps_subcomm = false;
+	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
 }
 

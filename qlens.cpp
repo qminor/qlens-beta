@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 	int inversion_nthreads = nthreads;
 	int ngroups = mpi_np;
 	bool disptime=false;
-	bool mumps_mpi=false;
+	bool mumps_mpi=true;
 	bool quit_if_error = true;
 	CosmologyParams cosmology;
 
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 					case 'q': quit_after_reading_file = true; break;
 					case 'T': find_total_time = true; break;
 					case 'w': disptime = true; break;
-					case 'p': mumps_mpi = true; break;
+					case 'p': mumps_mpi = false; break;
 					case 'Q': quit_if_error = false; break;
 					case 't':
 						if (sscanf(argv[i], "t%i", &inversion_nthreads)==0) usage_error(mpi_id);
