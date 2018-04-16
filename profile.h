@@ -420,7 +420,7 @@ class NFW : public LensProfile
 	void set_auto_ranges();
 
 	double calculate_scaled_mass_3d(const double r);
-	bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number = -1);
+	//bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number = -1);
 };
 
 class Truncated_NFW : public LensProfile

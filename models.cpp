@@ -697,6 +697,7 @@ double NFW::calculate_scaled_mass_3d(const double r)
 	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
 }
 
+/*
 bool NFW::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
@@ -716,6 +717,7 @@ bool NFW::output_cosmology_info(const double zlens, const double zsrc, Lens* cos
 	cout << endl;
 	return true;
 }
+*/
 
 /********************************** Truncated_NFW **********************************/
 
