@@ -6,6 +6,7 @@
 #include "errors.h"
 #include "GregsMathHdr.h"
 #include "hyp_2F1.h"
+#include "cosmo.h"
 #include <complex>
 using namespace std;
 
