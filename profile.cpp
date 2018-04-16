@@ -4,6 +4,7 @@
 #include "romberg.h"
 #include "errors.h"
 #include "cosmo.h"
+#include "qlens.h"
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -608,7 +609,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 	}
 }
 
-bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
 {
 	bool mass_converged, rhalf_converged;
 	double sigma_cr, mtot, rhalf;

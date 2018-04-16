@@ -36,6 +36,7 @@ enum LensProfileName
 };
 
 struct LensIntegral;
+class Lens;
 
 class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
 {
@@ -234,7 +235,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double kappa_rsq_deriv(const double rsq);
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
-	virtual bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	virtual bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number = -1);
 	virtual bool calculate_total_scaled_mass(double& total_mass);
 	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
 	virtual double calculate_scaled_mass_3d(const double r);
@@ -384,7 +385,7 @@ class PseudoJaffe : public LensProfile
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
-	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number = -1);
 	double calculate_scaled_mass_3d(const double r);
 	bool calculate_total_scaled_mass(double& total_mass);
 	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
@@ -419,7 +420,7 @@ class NFW : public LensProfile
 	void set_auto_ranges();
 
 	double calculate_scaled_mass_3d(const double r);
-	bool output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number = -1);
+	bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number = -1);
 };
 
 class Truncated_NFW : public LensProfile

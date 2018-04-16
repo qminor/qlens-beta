@@ -6,7 +6,7 @@
 #include "errors.h"
 #include "GregsMathHdr.h"
 #include "hyp_2F1.h"
-#include "cosmo.h"
+#include "qlens.h"
 #include <complex>
 using namespace std;
 
@@ -524,7 +524,7 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	return ans;
 }
 
-bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
@@ -697,7 +697,7 @@ double NFW::calculate_scaled_mass_3d(const double r)
 	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
 }
 
-bool NFW::output_cosmology_info(const double zlens, const double zsrc, Cosmology* cosmo, const int lens_number)
+bool NFW::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
