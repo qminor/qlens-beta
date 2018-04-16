@@ -3895,8 +3895,9 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) if (source_redshifts[i] != source_redshift) different_zsrc = true;
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							if (different_zsrc) {
-								if ((i != 0) and (zfactors[i] != zfactors[i-1]))
+								if ((i == 0) or (zfactors[i] != zfactors[i-1])) {
 									create_grid(false,zfactors[i]);
+								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
 							output_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, srcflux[i], true);
@@ -4117,10 +4118,7 @@ void Lens::process_commands(bool read_file)
 						}
 						else show_multiple = true;
 					}
-					if (show_multiple) {
-						reset();
-						create_grid(false,reference_zfactor);
-					} else {
+					if (!show_multiple) {
 						reset();
 						create_grid(false,zfactors[dataset]);
 					}
@@ -4174,7 +4172,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						reset();
 						for (int i=min_dataset; i <= max_dataset; i++) {
-							if ((i != min_dataset) and (zfactors[i] != zfactors[i-1]))
+							if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
 								create_grid(false,zfactors[i]);
 							if (mpi_id==0) {
 								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }

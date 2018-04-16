@@ -2633,9 +2633,7 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		imgs[i].pos[0] += sim_err_pos*NormalDeviate();
 		imgs[i].pos[1] += sim_err_pos*NormalDeviate();
 		imgs[i].mag *= source_flux; // now imgs[i].mag is in fact the flux, not just the magnification
-		cout << "mag0=" << imgs[i].mag;
 		imgs[i].mag += sim_err_flux*NormalDeviate();
-		cout << " mag=" << imgs[i].mag << endl;
 		if (include_time_delays) {
 			imgs[i].td += sim_err_td*NormalDeviate();
 			if (imgs[i].td < min_td) min_td = imgs[i].td;
@@ -6252,7 +6250,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			if (max_external_sb > 0) {
 				sb_outside_window = true;
-				chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),40) - 1.0;
+				chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),60) - 1.0;
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_pixel_sb << ") has been found outside the selected fit region" << endl;
 			}
 			image_pixel_grid->set_fit_window((*image_pixel_data));
