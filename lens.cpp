@@ -897,9 +897,10 @@ void Lens::set_new_lens_vary_parameters(boolvector &vary_flags)
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
 	get_parameter_names();
-	get_lens_parameter_numbers(nlens-1,pi,pf);
-	get_automatic_initial_stepsizes(stepsizes);
-	param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+	if (get_lens_parameter_numbers(nlens-1,pi,pf) == true) {
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+	}
 }
 
 void Lens::remove_lens(int lensnumber)
@@ -4211,6 +4212,7 @@ bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 	if (pi == n_fit_parameters) return false;
 	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	pf = dummy.size();
+	cout << "WTF " << pf << " " << pi << endl;
 	if (pf==pi) return false;
 	return true;
 }
