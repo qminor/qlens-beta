@@ -3169,6 +3169,7 @@ void ImageData::input(const int &nn)
 	sigma_pos = new double[n_images];
 	sigma_f = new double[n_images];
 	sigma_t = new double[n_images];
+	use_in_chisq = new bool[n_images];
 	max_distsqr = 1e30;
 }
 
@@ -3182,6 +3183,7 @@ void ImageData::input(const ImageData& imgs_in)
 		delete[] sigma_pos;
 		delete[] sigma_f;
 		delete[] sigma_t;
+		delete[] use_in_chisq;
 	}
 	n_images = imgs_in.n_images;
 	pos = new lensvector[n_images];
@@ -3190,6 +3192,7 @@ void ImageData::input(const ImageData& imgs_in)
 	sigma_pos = new double[n_images];
 	sigma_f = new double[n_images];
 	sigma_t = new double[n_images];
+	use_in_chisq = new bool[n_images];
 	for (int i=0; i < n_images; i++) {
 		pos[i] = imgs_in.pos[i];
 		flux[i] = imgs_in.flux[i];
@@ -3197,6 +3200,7 @@ void ImageData::input(const ImageData& imgs_in)
 		sigma_pos[i] = imgs_in.sigma_pos[i];
 		sigma_f[i] = imgs_in.sigma_f[i];
 		sigma_t[i] = imgs_in.sigma_t[i];
+		use_in_chisq[i] = true;
 	}
 	max_distsqr = imgs_in.max_distsqr;
 }
@@ -3213,6 +3217,7 @@ void ImageData::input(const int &nn, image* images, const double sigma_pos_in, c
 	sigma_pos = new double[n_images];
 	sigma_f = new double[n_images];
 	sigma_t = new double[n_images];
+	use_in_chisq = new bool[n_images];
 	int j=0;
 	for (int i=0; i < nn; i++) {
 		if (!include[i]) continue;
@@ -3225,6 +3230,7 @@ void ImageData::input(const int &nn, image* images, const double sigma_pos_in, c
 		else { time_delays[j] = 0; sigma_t[j] = 0; }
 		sigma_pos[j] = sigma_pos_in;
 		sigma_f[j] = sigma_flux_in;
+		use_in_chisq[j] = true;
 		j++;
 	}
 	max_distsqr = 1e30;
@@ -3241,6 +3247,7 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 		double *new_sigma_pos = new double[n_images_new];
 		double *new_sigma_f = new double[n_images_new];
 		double *new_sigma_t = new double[n_images_new];
+		bool *new_use_in_chisq = new bool[n_images_new];
 		for (int i=0; i < n_images; i++) {
 			new_pos[i][0] = pos[i][0];
 			new_pos[i][1] = pos[i][1];
@@ -3249,6 +3256,7 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 			new_sigma_pos[i] = sigma_pos[i];
 			new_sigma_f[i] = sigma_f[i];
 			new_sigma_t[i] = sigma_t[i];
+			new_use_in_chisq[i] = use_in_chisq[i];
 		}
 		delete[] pos;
 		delete[] flux;
@@ -3256,12 +3264,14 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 		delete[] sigma_pos;
 		delete[] sigma_f;
 		delete[] sigma_t;
+		delete[] use_in_chisq;
 		pos = new_pos;
 		flux = new_flux;
 		time_delays = new_time_delays;
 		sigma_pos = new_sigma_pos;
 		sigma_f = new_sigma_f;
 		sigma_t = new_sigma_t;
+		use_in_chisq = new_use_in_chisq;
 		n_images++;
 	} else {
 		n_images = 1;
@@ -3271,6 +3281,7 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 		sigma_pos = new double[n_images];
 		sigma_f = new double[n_images];
 		sigma_t = new double[n_images];
+		use_in_chisq = new bool[n_images];
 	}
 	pos[n_images-1][0] = pos_in[0];
 	pos[n_images-1][1] = pos_in[1];
@@ -3279,6 +3290,14 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 	sigma_pos[n_images-1] = sigma_pos_in;
 	sigma_f[n_images-1] = sigma_f_in;
 	sigma_t[n_images-1] = sigma_t_in;
+	use_in_chisq[n_images-1] = true;
+}
+
+bool ImageData::set_use_in_chisq(int image_i, bool use_in_chisq_in)
+{
+	if (image_i >= n_images) return false;
+	use_in_chisq[image_i] = use_in_chisq_in;
+	return true;
 }
 
 void ImageData::print_list(bool print_errors, bool use_sci)
@@ -3303,6 +3322,7 @@ void ImageData::print_list(bool print_errors, bool use_sci)
 			cout << "\t" << time_delays[i];
 			if (print_errors) cout << "\t\t" << sigma_t[i];
 		}
+		if (!use_in_chisq[i]) cout << "   (excluded from chisq)";
 		cout << endl;
 	}
 	cout << endl;
@@ -3334,6 +3354,7 @@ ImageData::~ImageData()
 		delete[] sigma_pos;
 		delete[] sigma_f;
 		delete[] sigma_t;
+		delete[] use_in_chisq;
 	}
 }
 
@@ -3605,14 +3626,16 @@ double Lens::chisq_pos_source_plane()
 		}
 
 		for (j=0; j < image_data[i].n_images; j++) {
-			delta_beta[0] = (*beta)[0] - beta_ji[j][0];
-			delta_beta[1] = (*beta)[1] - beta_ji[j][1];
-			if (use_magnification_in_chisq) {
-				delta_theta[0] = mag00[j] * delta_beta[0] + mag01[j] * delta_beta[1];
-				delta_theta[1] = mag01[j] * delta_beta[0] + mag11[j] * delta_beta[1];
-				chisq += delta_theta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
-			} else {
-				chisq += delta_beta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
+			if (image_data[i].use_in_chisq[j]) {
+				delta_beta[0] = (*beta)[0] - beta_ji[j][0];
+				delta_beta[1] = (*beta)[1] - beta_ji[j][1];
+				if (use_magnification_in_chisq) {
+					delta_theta[0] = mag00[j] * delta_beta[0] + mag01[j] * delta_beta[1];
+					delta_theta[1] = mag01[j] * delta_beta[0] + mag11[j] * delta_beta[1];
+					chisq += delta_theta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
+				} else {
+					chisq += delta_beta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
+				}
 			}
 		}
 	}
@@ -3729,11 +3752,13 @@ double Lens::chisq_pos_image_plane()
 			}
 
 			for (k=0; k < image_data[i].n_images; k++) {
-				if (closest_image_j[k] != -1) {
-					chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
-				} else {
-					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-					chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+				if (image_data[i].use_in_chisq[k]) {
+					if (closest_image_j[k] != -1) {
+						chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+					} else {
+						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
+						chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+					}
 				}
 			}
 			chisq_part += chisq_each_srcpt;

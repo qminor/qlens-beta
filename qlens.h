@@ -882,6 +882,7 @@ struct ImageData
 	double *flux;
 	double *time_delays;
 	double *sigma_pos, *sigma_f, *sigma_t;
+	bool *use_in_chisq;
 	double max_distsqr; // maximum squared distance between any pair of images
 	ImageData() { n_images = 0; }
 	void input(const int &nn);
@@ -890,6 +891,7 @@ struct ImageData
 	void add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
 	void print_list(bool print_errors, bool use_sci);
 	void write_to_file(ofstream &outfile);
+	bool set_use_in_chisq(int image_i, bool use_in_chisq_in);
 	~ImageData();
 };
 

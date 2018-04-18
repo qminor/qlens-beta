@@ -863,7 +863,8 @@ void Lens::process_commands(bool read_file)
 							"imgdata write <filename>\n"
 							"imgdata plot [dataset_number]\n"
 							"imgdata clear [dataset_number]\n"
-							"imgdata add_from_centroid <...>\n\n"
+							"imgdata add_from_centroid ...\n"
+							"imgdata use_in_chisq ...\n\n"
 							"Commands for loading (or simulating) point image data for lens model fitting. For help\n"
 							"on each command type 'help imgdata <command>'. If 'imgdata' is typed with no argument,\n"
 							"displays the current image data that has been loaded.\n";
@@ -924,6 +925,14 @@ void Lens::process_commands(bool read_file)
 								"flux is also calculated (note however that the image is large enough, the total flux may be\n"
 								"unreliable as an approximation to the flux at the centroid point). The position error is simply\n"
 								"the pixel width, whereas the flux error is determined from the pixel noise (data_pixel_noise).\n";
+						else if (words[2]=="use_in_chisq")
+							cout << "imgdata use_in_chisq <n_imgset> <nimg> [on/off]\n\n"
+								"Specify whether to include a particular data image in the position chi-square. By default, all of the\n"
+								"images are included in the chi-square, unless a particular image is set to 'off'. Note that if an\n"
+								"image is set to 'off' and the image plane chi-square is being used, the data image is still matched to\n"
+								"the closest model image, but the matching pair is then excluded from the chi-square. When the list of\n"
+								"images is plotted using the 'imgdata' command, the message 'excluded from chisq' is printed next to\n"
+								"any image that is being excluded from the chi-square.\n";
 						else Complain("imgdata command not recognized");
 					}
 				}
@@ -4476,6 +4485,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="imgdata")
 		{
 			if (nwords == 1) {
+				if (n_sourcepts_fit==0) Complain("no image data has been loaded");
 				print_image_data(true);
 				// print the image data that is being used
 			} else if (nwords >= 2) {
@@ -4579,6 +4589,22 @@ void Lens::process_commands(bool read_file)
 						image_data = new ImageData[1];
 					}
 					image_pixel_data->add_point_image_from_centroid(image_data+n_sourcepts_fit-1,xmin,xmax,ymin,ymax,sb_threshold,data_pixel_noise); // this assumes centroids are added to last dataset
+				} else if (words[1]=="use_in_chisq") {
+					if ((nwords < 4) or (nwords > 5)) Complain("Two or three arguments are required for 'imgdata use_in_chisq' (imageset, image_number, on/off)");
+					if (image_data == NULL) Complain("no image data has been loaded");
+					int n_imgset, n_img;
+					bool use_in_chisq;
+					if (!(ws[2] >> n_imgset)) Complain("invalid image set number");
+					if (!(ws[3] >> n_img)) Complain("invalid image number");
+					if (n_imgset >= n_sourcepts_fit) Complain("image set number has not been loaded");
+					if (nwords == 5) {
+						if (!(ws[4] >> setword)) Complain("invalid argument to 'use_in_chisq' command; must specify 'on' or 'off'");
+						set_switch(use_in_chisq,setword);
+						if (image_data[n_imgset].set_use_in_chisq(n_img,use_in_chisq) == false) Complain("specified image number does not exist");
+					} else {
+						if (n_img >= image_data[n_imgset].n_images) Complain("specified image number does not exist");
+						if (mpi_id==0) cout << "Include image (" << n_imgset << "," << n_img << ") in chisq: " << display_switch(image_data[n_imgset].use_in_chisq[n_img]) << endl;
+					}
 				} else Complain("invalid argument to command 'imgdata'");
 			}
 		}
