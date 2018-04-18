@@ -3527,23 +3527,25 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 		beta_i[i][0] = beta_i[i][1] = 0;
 		src_norm=0;
 		for (j=0; j < image_data[i].n_images; j++) {
-			if (use_magnification_in_chisq) {
-				sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i]);
-				mag = jac.inverse();
-				lensmatsqr(mag,magsqr);
-				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-				amatrix[0][0] += magsqr[0][0]*siginv;
-				amatrix[1][0] += magsqr[1][0]*siginv;
-				amatrix[0][1] += magsqr[0][1]*siginv;
-				amatrix[1][1] += magsqr[1][1]*siginv;
-				bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
-				bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
-			} else {
-				find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
-				siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-				beta_i[i][0] += beta_ji[0]*siginv;
-				beta_i[i][1] += beta_ji[1]*siginv;
-				src_norm += siginv;
+			if (image_data[i].use_in_chisq[j]) {
+				if (use_magnification_in_chisq) {
+					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i]);
+					mag = jac.inverse();
+					lensmatsqr(mag,magsqr);
+					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+					amatrix[0][0] += magsqr[0][0]*siginv;
+					amatrix[1][0] += magsqr[1][0]*siginv;
+					amatrix[0][1] += magsqr[0][1]*siginv;
+					amatrix[1][1] += magsqr[1][1]*siginv;
+					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
+					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
+				} else {
+					find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
+					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+					beta_i[i][0] += beta_ji[0]*siginv;
+					beta_i[i][1] += beta_ji[1]*siginv;
+					src_norm += siginv;
+				}
 			}
 		}
 		if (use_magnification_in_chisq) {
@@ -3585,30 +3587,32 @@ double Lens::chisq_pos_source_plane()
 		src_bf[0] = src_bf[1] = 0;
 		src_norm=0;
 		for (j=0; j < image_data[i].n_images; j++) {
-			if (use_magnification_in_chisq) {
-				sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,zfactors[i]);
-				mag = jac.inverse();
-				mag00[j] = mag[0][0];
-				mag01[j] = mag[0][1];
-				mag11[j] = mag[1][1];
+			if (image_data[i].use_in_chisq[j]) {
+				if (use_magnification_in_chisq) {
+					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,zfactors[i]);
+					mag = jac.inverse();
+					mag00[j] = mag[0][0];
+					mag01[j] = mag[0][1];
+					mag11[j] = mag[1][1];
 
-				if (use_analytic_bestfit_src) {
-					lensmatsqr(mag,magsqr);
-					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-					amatrix[0][0] += magsqr[0][0]*siginv;
-					amatrix[1][0] += magsqr[1][0]*siginv;
-					amatrix[0][1] += magsqr[0][1]*siginv;
-					amatrix[1][1] += magsqr[1][1]*siginv;
-					bvec[0] += (magsqr[0][0]*beta_ji[j][0] + magsqr[0][1]*beta_ji[j][1])*siginv;
-					bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
-				}
-			} else {
-				find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i]);
-				if (use_analytic_bestfit_src) {
-					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
-					src_bf[0] += beta_ji[j][0]*siginv;
-					src_bf[1] += beta_ji[j][1]*siginv;
-					src_norm += siginv;
+					if (use_analytic_bestfit_src) {
+						lensmatsqr(mag,magsqr);
+						siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+						amatrix[0][0] += magsqr[0][0]*siginv;
+						amatrix[1][0] += magsqr[1][0]*siginv;
+						amatrix[0][1] += magsqr[0][1]*siginv;
+						amatrix[1][1] += magsqr[1][1]*siginv;
+						bvec[0] += (magsqr[0][0]*beta_ji[j][0] + magsqr[0][1]*beta_ji[j][1])*siginv;
+						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
+					}
+				} else {
+					find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i]);
+					if (use_analytic_bestfit_src) {
+						siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+						src_bf[0] += beta_ji[j][0]*siginv;
+						src_bf[1] += beta_ji[j][1]*siginv;
+						src_norm += siginv;
+					}
 				}
 			}
 		}
