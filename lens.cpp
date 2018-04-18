@@ -4201,7 +4201,7 @@ void Lens::get_parameter_names()
 
 bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 {
-	if (lens_i >= nlens) return false;
+	if (lens_i >= nlens) { pf=pi=0; return false; }
 	get_n_fit_parameters(n_fit_parameters);
 	vector<string> dummy, dummy2, dummy3;
 	int i,j;
@@ -4209,10 +4209,9 @@ bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 		lens_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	}
 	pi = dummy.size();
-	if (pi == n_fit_parameters) return false;
+	if (pi == n_fit_parameters) { pf=pi=0; return false; }
 	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	pf = dummy.size();
-	cout << "WTF " << pf << " " << pi << endl;
 	if (pf==pi) return false;
 	return true;
 }
