@@ -472,6 +472,13 @@ void McmcEval::output_min_chisq_pt(void)
 	cout << endl;
 }
 
+void McmcEval::min_chisq_pt(double* bestfit)
+{
+	for (int k=0; k < numOfParam; k++) {
+		bestfit[k] = points[min_chisq_pt_j][min_chisq_pt_m][k];
+	}
+}
+
 void McmcEval::FindDerivedSigs(double &center, double &sig)
 {
 	sig = 0;
@@ -491,9 +498,7 @@ void McmcEval::FindDerivedSigs(double &center, double &sig)
 
 void McmcEval::FindCoVar(const char *name, double *avg, double *sigs, double *minvals, double *maxvals)
 {
-	bool use_ranges = false;
 	bool allocated_avgs = false;
-	if ((minvals != NULL) and (maxvals != NULL)) use_ranges = true;
 	if (avg == NULL) {
 		avg = matrix <double> (numOfParam, 0.0);
 		allocated_avgs = true;
@@ -3296,7 +3301,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 	return;
 }
 
-double McmcEval::cl(const double a, const int iin, const char flag)
+double McmcEval::cl(const double a, const int iin, const double minval, const double maxval, const char flag)
 {
 	double (*fx)(double);
 	int f, i;
@@ -3309,18 +3314,22 @@ double McmcEval::cl(const double a, const int iin, const char flag)
 	double *wsort = new double[totPts];
 	double *sortptr = sort;
 	double *wsortptr = wsort;
+	int totPts_subset = 0;
 	for (f = 0; f < numOfFiles; f++)
 	{
 		for (i = cut[f]; i < numOfPoints[f]; i++)
 		{
-			*(sortptr++) = fx(points[f][i][iin]);
-			*(wsortptr++) = mults[f][i];
-			tot += mults[f][i];
+			if ((points[f][i][iin] >= minval) and (points[f][i][iin] <= maxval)) {
+				*(sortptr++) = fx(points[f][i][iin]);
+				*(wsortptr++) = mults[f][i];
+				tot += mults[f][i];
+				totPts_subset++;
+			}
 		}
 	}
-	Sort(sort, wsort, totPts);
+	Sort(sort, wsort, totPts_subset);
 	double totsofar = 0.0;
-	for (i = 0; i < totPts; i++)
+	for (i = 0; i < totPts_subset; i++)
 	{
 		totsofar += wsort[i];
 		if (a <= totsofar/tot)

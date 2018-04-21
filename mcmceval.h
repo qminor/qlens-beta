@@ -85,6 +85,7 @@ class McmcEval
 		void transform_parameter_names(string *paramnames);
 		void calculate_derived_param();
 		void output_min_chisq_pt(void);
+		void min_chisq_pt(double*);
 		void get_final_points(const int nlist, double **params, double *chisq);
 		void FindCoVar(const char *, double *avgs = NULL, double *sigs = NULL, double *minvals = NULL, double *maxvals = NULL);
 		void FindCoVar(const char *, int *, const int);
@@ -103,7 +104,7 @@ class McmcEval
 		void MkHistTest(double, double, int, const char *, int, const char flag = LINEAR);
 		void MkHist2D(double, double, double, double, int, int, const char *, int, int, const char flag = LINEAR);
 		void MkHist3D(double, double, double, double, int, int, const char *, int, int, int, const char flag = LINEAR);
-		double cl(const double, const int, const char flag = LINEAR);
+		double cl(const double, const int, const double, const double, const char flag = LINEAR);
 		double derived_cl(const double a, const char flag = LINEAR);
 
 		void Prob(double, double, const int, const char *, const int, const char flag = LOWER);
