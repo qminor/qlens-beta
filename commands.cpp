@@ -2161,6 +2161,7 @@ void Lens::process_commands(bool read_file)
 							get_lens_parameter_numbers(i,pi,pf);
 							param_settings->remove_params(pi,pf);
 							remove_lens(i);
+							get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 						}
 					} else {
 						if (!(ws[2] >> lensnumber)) Complain("invalid lens number");
@@ -2168,7 +2169,7 @@ void Lens::process_commands(bool read_file)
 						get_lens_parameter_numbers(lensnumber,pi,pf);
 						param_settings->remove_params(pi,pf);
 						remove_lens(lensnumber);
-						// you should have it update the param_settings so that it eliminates the parameters associated with the lens being cleared
+						get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 					}
 				} else Complain("'lens clear' command requires either one or zero arguments");
 			}
@@ -4272,9 +4273,9 @@ void Lens::process_commands(bool read_file)
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
 					dvector stepsizes(nparams);
-					get_parameter_names();
-					get_automatic_initial_stepsizes(stepsizes);
-					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					//get_parameter_names();
+					//get_automatic_initial_stepsizes(stepsizes);
+					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4311,9 +4312,9 @@ void Lens::process_commands(bool read_file)
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
 					dvector stepsizes(nparams);
-					get_parameter_names();
-					get_automatic_initial_stepsizes(stepsizes);
-					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					//get_parameter_names();
+					//get_automatic_initial_stepsizes(stepsizes);
+					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4344,15 +4345,15 @@ void Lens::process_commands(bool read_file)
 				{
 					int nparams;
 					get_n_fit_parameters(nparams);
-					dvector stepsizes(nparams);
-					get_parameter_names();
-					get_automatic_initial_stepsizes(stepsizes);
-					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					//get_parameter_names();
+					//get_automatic_initial_stepsizes(stepsizes);
+					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_stepsizes(); }
 					else if (nwords == 3) {
 						if (words[2]=="double") param_settings->scale_stepsizes(2);
 						else if (words[2]=="half") param_settings->scale_stepsizes(0.5);
 						else if (words[2]=="reset") {
+							dvector stepsizes(nparams);
 							get_automatic_initial_stepsizes(stepsizes);
 							param_settings->reset_stepsizes(stepsizes.array());
 						}
@@ -4379,9 +4380,9 @@ void Lens::process_commands(bool read_file)
 					int nparams;
 					get_n_fit_parameters(nparams);
 					dvector stepsizes(nparams);
-					get_parameter_names();
-					get_automatic_initial_stepsizes(stepsizes);
-					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					//get_parameter_names();
+					//get_automatic_initial_stepsizes(stepsizes);
+					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					set_default_plimits();
 					if (nwords==2) { if (mpi_id==0) param_settings->print_penalty_limits(); }
 					else if (nwords == 3) {
@@ -4498,9 +4499,25 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
 					add_simulated_image_data(src);
+					int nparams;
+					get_n_fit_parameters(nparams);
+					if (nparams!=0) {
+						dvector stepsizes(nparams);
+						get_parameter_names();
+						get_automatic_initial_stepsizes(stepsizes);
+						param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					}
 				} else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'imgdata read' (filename)");
 					if (load_image_data(words[2])==false) Complain("unable to load image data");
+					int nparams;
+					get_n_fit_parameters(nparams);
+					if (nparams!=0) {
+						dvector stepsizes(nparams);
+						get_parameter_names();
+						get_automatic_initial_stepsizes(stepsizes);
+						param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+					}
 				} else if (words[1]=="write") {
 					if (nwords != 3) Complain("One argument required for 'imgdata write' (filename)");
 					write_image_data(words[2]);

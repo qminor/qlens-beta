@@ -357,6 +357,7 @@ Lens::Lens() : UCMC()
 	LensProfile::integral_method = Gauss_Patterson_Quadrature;
 	LensProfile::orient_major_axis_north = true;
 	LensProfile::use_ellipticity_components = false;
+	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
@@ -3945,7 +3946,9 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 				double grid_ycenter0 = grid_ycenter;
 				double grid_xlength0 = grid_xlength;
 				double grid_ylength0 = grid_ylength;
+				LensProfile::output_integration_errors = false; // high precision is not required for the source point stepsizes
 				autogrid();
+				LensProfile::output_integration_errors = true;
 				grid_xcenter = grid_xcenter0;
 				grid_ycenter = grid_ycenter0;
 				grid_xlength = grid_xlength0;
@@ -5209,19 +5212,52 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	loglike = chisq_total/2.0;
 	if (chisq*0.0 != 0.0) {
 		warn("chi-square is returning NaN (%g)",chisq);
-		//if (group_id==0) {
-			//if (fitmodel->logfile.is_open()) {
-				//for (int i=0; i < n_fit_parameters; i++) cerr << params[i] << " ";
-			//}
-			//cerr << "chisq=NaN" << flush << endl;
-			//fitmodel->output_lens_commands("nan_model.in");
-		//}
-		//die();
 	}
 
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	fitmodel->chisq_it++;
+	return loglike;
+}
+
+double Lens::fitmodel_loglike_pixellated_source(double* params)
+{
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+			if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+		}
+	}
+	double transformed_params[n_fit_parameters];
+	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+	if (update_fitmodel(transformed_params)==false) return 1e30;
+	if (group_id==0) {
+		if (fitmodel->logfile.is_open()) {
+			for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+			fitmodel->logfile << flush;
+		}
+	}
+	double loglike, chisq=0, chisq0;
+	//for (int i=0; i < nlens; i++) {
+		//if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
+			//double subparams[10];
+			//lens_list[i]->get_parameters(subparams);
+			//if (subparams[2] > subparams[1]) chisq=2e30; // don't allow s to be larger than a
+		//}
+	//}
+	if (chisq != 2e30) {
+		if (fitmodel->regularization_parameter < 0) chisq = 2e30;
+		else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;
+		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
+	}
+
+	loglike = chisq/2.0;
+	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
+	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	if ((display_chisq_status) and (mpi_id==0)) {
+		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike=" << loglike << "              " << endl;
+		cout << "\033[1A";
+	}
+
 	return loglike;
 }
 
@@ -5285,47 +5321,6 @@ double Lens::loglike_point_source(double* params)
 	param_settings->add_prior_terms_to_loglike(params,loglike);
 	param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	chisq_it++;
-	return loglike;
-}
-
-double Lens::fitmodel_loglike_pixellated_source(double* params)
-{
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-			if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
-		}
-	}
-	double transformed_params[n_fit_parameters];
-	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (update_fitmodel(transformed_params)==false) return 1e30;
-	if (group_id==0) {
-		if (fitmodel->logfile.is_open()) {
-			for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
-			fitmodel->logfile << flush;
-		}
-	}
-	double loglike, chisq=0, chisq0;
-	//for (int i=0; i < nlens; i++) {
-		//if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
-			//double subparams[10];
-			//lens_list[i]->get_parameters(subparams);
-			//if (subparams[2] > subparams[1]) chisq=2e30; // don't allow s to be larger than a
-		//}
-	//}
-	if (chisq != 2e30) {
-		if (fitmodel->regularization_parameter < 0) chisq = 2e30;
-		else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;
-		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
-	}
-
-	loglike = chisq/2.0;
-	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
-	if ((display_chisq_status) and (mpi_id==0)) {
-		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike=" << loglike << "              " << endl;
-		cout << "\033[1A";
-	}
-
 	return loglike;
 }
 

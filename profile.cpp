@@ -15,6 +15,7 @@ IntegrationMethod LensProfile::integral_method;
 bool LensProfile::orient_major_axis_north;
 bool LensProfile::use_ellipticity_components;
 int LensProfile::default_ellipticity_mode;
+bool LensProfile::output_integration_errors;
 
 LensProfile::LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in)
 {
@@ -1500,7 +1501,7 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 
 inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
-	if (!converged) {
+	if ((!converged) and (output_integration_errors)) {
 		if (integral_method==Gauss_Patterson_Quadrature) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points (x=%g,y=%g); switched to Gauss-Legendre with 1023 points",x,y);
 	}
 }

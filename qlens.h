@@ -1136,6 +1136,7 @@ struct ParamSettings
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
+			new_param_names[i] = param_names[i];
 		}
 		for (i=pf,j=pi; i < nparams; i++, j++) {
 			newpriors[j] = new ParamPrior(priors[i]);

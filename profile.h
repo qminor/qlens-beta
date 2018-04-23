@@ -160,6 +160,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static IntegrationMethod integral_method;
 	static bool orient_major_axis_north;
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
+	static bool output_integration_errors; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static int default_ellipticity_mode;
 	int ellipticity_mode;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
