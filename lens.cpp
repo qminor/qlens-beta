@@ -904,6 +904,23 @@ void Lens::set_new_lens_vary_parameters(boolvector &vary_flags)
 	}
 }
 
+void Lens::update_parameter_list()
+{
+	// One slight issue that should be fixed: for the "extra" parameters like regularization, hubble constant, etc., the stepsizes
+	// and plimits are not preserved if one of the extra parameters is removed and it's not the last one on the list. There should
+	// be a more specific update such that just those parameters are removed (using remove_params(...))
+	int nparams;
+	get_n_fit_parameters(nparams);
+	if (nparams > 0) {
+		dvector stepsizes(nparams);
+		get_parameter_names();
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+	} else {
+		param_settings->clear_params();
+	}
+}
+
 void Lens::remove_lens(int lensnumber)
 {
 	if ((lensnumber >= nlens) or (nlens==0)) { warn(warnings,"Specified lens does not exist"); return; }

@@ -690,6 +690,7 @@ public:
 
 	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void set_new_lens_vary_parameters(boolvector &vary_flags);
+	void update_parameter_list();
 	void update_anchored_parameters();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);

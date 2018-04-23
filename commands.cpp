@@ -3839,6 +3839,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[3] >> vary_ys)) Complain("Invalid vary flag for source point");
 						vary_sourcepts_x[0] = vary_xs;
 						vary_sourcepts_y[0] = vary_ys;
+						update_parameter_list();
 					} else if (nwords==2) { 
 						bool vary_xs, vary_ys;
 						for (int i=0; i < n_sourcepts_fit; i++) {
@@ -3850,6 +3851,7 @@ void Lens::process_commands(bool read_file)
 							vary_sourcepts_x[i] = vary_xs;
 							vary_sourcepts_y[i] = vary_ys;
 						}
+						update_parameter_list();
 					} else Complain("Invalid number of arguments for source vary flags");
 				}
 				else if (words[1]=="source_mode")
@@ -4273,9 +4275,6 @@ void Lens::process_commands(bool read_file)
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
 					dvector stepsizes(nparams);
-					//get_parameter_names();
-					//get_automatic_initial_stepsizes(stepsizes);
-					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4312,9 +4311,6 @@ void Lens::process_commands(bool read_file)
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
 					dvector stepsizes(nparams);
-					//get_parameter_names();
-					//get_automatic_initial_stepsizes(stepsizes);
-					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4345,9 +4341,6 @@ void Lens::process_commands(bool read_file)
 				{
 					int nparams;
 					get_n_fit_parameters(nparams);
-					//get_parameter_names();
-					//get_automatic_initial_stepsizes(stepsizes);
-					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					if (nwords==2) { if (mpi_id==0) param_settings->print_stepsizes(); }
 					else if (nwords == 3) {
 						if (words[2]=="double") param_settings->scale_stepsizes(2);
@@ -4380,9 +4373,6 @@ void Lens::process_commands(bool read_file)
 					int nparams;
 					get_n_fit_parameters(nparams);
 					dvector stepsizes(nparams);
-					//get_parameter_names();
-					//get_automatic_initial_stepsizes(stepsizes);
-					//param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
 					set_default_plimits();
 					if (nwords==2) { if (mpi_id==0) param_settings->print_penalty_limits(); }
 					else if (nwords == 3) {
@@ -4499,25 +4489,11 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
 					add_simulated_image_data(src);
-					int nparams;
-					get_n_fit_parameters(nparams);
-					if (nparams!=0) {
-						dvector stepsizes(nparams);
-						get_parameter_names();
-						get_automatic_initial_stepsizes(stepsizes);
-						param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
-					}
+					update_parameter_list();
 				} else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'imgdata read' (filename)");
 					if (load_image_data(words[2])==false) Complain("unable to load image data");
-					int nparams;
-					get_n_fit_parameters(nparams);
-					if (nparams!=0) {
-						dvector stepsizes(nparams);
-						get_parameter_names();
-						get_automatic_initial_stepsizes(stepsizes);
-						param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
-					}
+					update_parameter_list();
 				} else if (words[1]=="write") {
 					if (nwords != 3) Complain("One argument required for 'imgdata write' (filename)");
 					write_image_data(words[2]);
@@ -4606,6 +4582,7 @@ void Lens::process_commands(bool read_file)
 						vary_sourcepts_x[0] = true;
 						vary_sourcepts_x[1] = true;
 						image_data = new ImageData[1];
+						update_parameter_list();
 					}
 					image_pixel_data->add_point_image_from_centroid(image_data+n_sourcepts_fit-1,xmin,xmax,ymin,ymax,sb_threshold,data_pixel_noise); // this assumes centroids are added to last dataset
 				} else if (words[1]=="use_in_chisq") {
@@ -5789,22 +5766,8 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Solve for approximate best-fit source coordinates analytically during fit: " << display_switch(use_analytic_bestfit_src) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_bestfit_src' command; must specify 'on' or 'off'");
-				int nparams;
-				//get_n_fit_parameters(nparams);
 				set_switch(use_analytic_bestfit_src,setword);
-				get_n_fit_parameters(nparams);
-				// the following could be done better. Whenever parameters are going to be added/removed by changing a setting, param_settings
-				// should be updated so just those parameters are inserted/removed and everything else left unchanged
-				// update_params(...) only properly adds or removes parameters at the end of the list, which can be dicey if there are other parameters after it
-				if (nparams > 0) {
-					get_n_fit_parameters(nparams);
-					dvector stepsizes(nparams);
-					get_parameter_names();
-					get_automatic_initial_stepsizes(stepsizes);
-					param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
-				} else {
-					param_settings->clear_params();
-				}
+				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisqmag")
@@ -6027,6 +5990,7 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_hubble' command; must specify 'on' or 'off'");
 				set_switch(vary_hubble_parameter,setword);
+				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="omega_m")
@@ -6353,6 +6317,7 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_pixel_fraction' command; must specify 'on' or 'off'");
 				set_switch(vary_pixel_fraction,setword);
+				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="n_mcpoints")
@@ -6535,6 +6500,7 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcpixel_mag_threshold' command; must specify 'on' or 'off'");
 				set_switch(vary_magnification_threshold,setword);
+				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="regparam")
@@ -6564,6 +6530,7 @@ void Lens::process_commands(bool read_file)
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
 				if ((setword=="on") and (source_fit_mode != Pixellated_Source)) Complain("regparam can only be varied if source mode is set to 'pixel' (see 'fit source_mode')");
 				set_switch(vary_regularization_parameter,setword);
+				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="data_pixel_noise")
