@@ -3774,14 +3774,14 @@ double Lens::chisq_pos_image_plane()
 			}
 
 			for (k=0; k < image_data[i].n_images; k++) {
-				if (image_data[i].use_in_chisq[k]) {
 					if (closest_image_j[k] != -1) {
-						chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+						if (image_data[i].use_in_chisq[k]) {
+							chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+						}
 					} else {
 						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
 						chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
 					}
-				}
 			}
 			chisq_part += chisq_each_srcpt;
 			delete[] ignore;

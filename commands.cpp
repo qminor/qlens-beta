@@ -930,11 +930,11 @@ void Lens::process_commands(bool read_file)
 								"Specify whether to include a particular data image in the position chi-square. By default, all of the\n"
 								"images are included in the chi-square, unless a particular image is set to 'off'. Note that if an\n"
 								"image is set to 'off' and the image plane chi-square is being used, the data image is still matched to\n"
-								"the closest model image, but the matching pair is then excluded from the chi-square. If the source\n"
-								"positions are being solved for analytically (using 'analytic_bestfit_src'), the images set to 'off'\n"
-								"are not included in the calculation of the best-fit source points. When the list of images is plotted\n"
-								"using the 'imgdata' command, the message 'excluded from chisq' is printed next to any image that is\n"
-								"being excluded from the chi-square.\n";
+								"the closest model image, but the matching pair is then excluded from the chi-square (however, a penalty\n"
+								"is still incurred if there is no matching image at all). If the source positions are being solved for\n"
+								"analytically (using 'analytic_bestfit_src'), the images set to 'off' are not included in the calculation\n"
+								"of the best-fit source points. When the list of images is plotted using the 'imgdata' command, the\n"
+								"message 'excluded from chisq' is printed next to any image that is being excluded from the chi-square.\n";
 						else Complain("imgdata command not recognized");
 					}
 				}
