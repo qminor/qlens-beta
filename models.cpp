@@ -351,6 +351,22 @@ double Alpha::rho3d_r_integrand_analytic(const double r)
 	return B/pow(rsq+s*s,a2);
 }
 
+bool Alpha::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
+{
+	if (alpha != 1.0) return false;
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double kpc_to_km = 3.086e16;
+	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
+	double c = 2.998e5;
+	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
+	b_kpc = b / kpc_to_arcsec;
+	sigma = c * sqrt(b_kpc*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
+	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	return true;
+}
+
 /********************************** PseudoJaffe **********************************/
 
 PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
@@ -1293,7 +1309,7 @@ void Shear::set_auto_stepsizes()
 		stepsizes[0] = 0.035;
 		stepsizes[1] = 0.035;
 	} else {
-		stepsizes[0] = 0.05;
+		stepsizes[0] = 0.03;
 		stepsizes[1] = 20;
 	}
 	stepsizes[2] = 0.1; // very arbitrary, but shear is usually center_anchored anyway

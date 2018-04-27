@@ -3710,13 +3710,6 @@ double Lens::chisq_pos_image_plane()
 			for (j=0; j < n_images; j++) ignore[j] = false;
 
 			for (j=0; j < n_images; j++) {
-				// central images are already tested for during the image searching, so the following lines should be redundant
-				//if (!include_central_image) {
-					//if ((img[j].parity == 1) and (kappa(img[j].pos,zfactors[i]) > 1)) {
-						//ignore[j] = true;
-						//n_visible_images--;
-					//}
-				//}
 				if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
 					ignore[j] = true;
 					n_visible_images--;
@@ -3956,27 +3949,28 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
 			if (nlens > 0) {
-				// autogrid sets source_plane_rscale, which is the scale for the source plane caustics (alternative would be to map
-				// data points to source plane and use their average separations to set the scale--implement this later. but we'll
-				// keep the grid size the same, otherwise it's confusing
-				double grid_xcenter0 = grid_xcenter;
-				double grid_ycenter0 = grid_ycenter;
-				double grid_xlength0 = grid_xlength;
-				double grid_ylength0 = grid_ylength;
-				LensProfile::output_integration_errors = false; // high precision is not required for the source point stepsizes
-				autogrid();
-				LensProfile::output_integration_errors = true;
-				grid_xcenter = grid_xcenter0;
-				grid_ycenter = grid_ycenter0;
-				grid_xlength = grid_xlength0;
-				grid_ylength = grid_ylength0;
+				double avg_srcdist;
+				int j,k,n_srcpts,n_src_pairs;
 				for (i=0; i < n_sourcepts_fit; i++) {
-					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.33*source_plane_rscale;
-					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.33*source_plane_rscale;
+					avg_srcdist=0;
+					n_src_pairs=0;
+					n_srcpts = image_data[i].n_images;
+					lensvector *srcpts = new lensvector[n_srcpts];
+					for (j=0; j < n_srcpts; j++) {
+						find_sourcept(image_data[i].pos[j],srcpts[j],0,zfactors[i]);
+						for (k=0; k < j; k++) {
+							avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
+							n_src_pairs++;
+						}
+					}
+					avg_srcdist /= n_src_pairs;
+					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.25*avg_srcdist;
+					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.25*avg_srcdist;
+					delete[] srcpts;
 				}
 			} else {
 				for (i=0; i < n_sourcepts_fit; i++) {
-					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.1*grid_xlength;
+					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.1*grid_xlength; // nothing else to use, since there's no lens model yet
 					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.1*grid_ylength;
 				}
 			}

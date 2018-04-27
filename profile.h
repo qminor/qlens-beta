@@ -349,6 +349,7 @@ class Alpha : public LensProfile
 	bool core_present() { return (sprime==0) ? false : true; }
 	double get_inner_logslope() { return -alpha; }
 	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
+	bool output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number);
 };
 
 class PseudoJaffe : public LensProfile
