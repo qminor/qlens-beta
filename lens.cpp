@@ -652,6 +652,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created
 }
 
 void Lens::add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)

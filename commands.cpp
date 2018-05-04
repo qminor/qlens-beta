@@ -1939,7 +1939,7 @@ void Lens::process_commands(bool read_file)
 			if (!(ws[1] >> lnum)) Complain("invalid lens number");
 			if (lnum >= nlens) Complain("specified lens number does not exist");
 			if (!(ws[2] >> r_arcsec)) Complain("invalid radius");
-			output_mass_r(r_arcsec,lnum);
+			if (mpi_id==0) output_mass_r(r_arcsec,lnum);
 		}
 		else if ((words[0]=="lens") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="lens")))
 		{
