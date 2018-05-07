@@ -4135,6 +4135,9 @@ void Lens::process_commands(bool read_file)
 					if (!show_multiple) {
 						reset();
 						create_grid(false,zfactors[dataset]);
+					} else {
+						reset();
+						create_grid(false,zfactors[min_dataset]);
 					}
 					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");

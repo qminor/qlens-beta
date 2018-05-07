@@ -84,7 +84,6 @@ class Grid : public Brent
 	static int nthreads;
 	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
 	Grid* parent_cell;
-	Grid** search_subcells;
 
 	static double zfactor; // kappa ratio used for modeling source points at different redshifts
 	static const int u_split, w_split;
@@ -106,7 +105,6 @@ class Grid : public Brent
 	lensvector *corner_sourcept[4];
 	double *corner_invmag[4];
 	double *corner_kappa[4];
-	bool *corner_parity[4];
 	bool allocated_corner[4];
 
 	// all functions in class Grid are contained in imgsrch.cpp
@@ -122,7 +120,7 @@ class Grid : public Brent
 	void reassign_subcell_lensing_properties_firstlevel();
 	void assign_subcell_lensing_properties(const int& thread);
 
-	// Used for image searching. If you ever multi-thread, be careful about making these static variables
+	// Used for image searching. If you ever multi-thread the image search, be careful about making these static variables
 	static lensvector *d1, *d2, *d3, *d4;
 	static double *product1, *product2, *product3;
 	static int *maxlevs;

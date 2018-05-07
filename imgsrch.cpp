@@ -123,7 +123,6 @@ Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength,
 		corner_pt[i][1]=0;
 		corner_sourcept[i]=NULL;
 		corner_invmag[i]=NULL;
-		corner_parity[i]=NULL;
 		corner_kappa[i]=NULL;
 		neighbor[i]=NULL;
 		allocated_corner[i]=false;
@@ -211,7 +210,6 @@ Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, dou
 		corner_pt[i][1]=0;
 		corner_sourcept[i]=NULL;
 		corner_invmag[i]=NULL;
-		corner_parity[i]=NULL;
 		corner_kappa[i]=NULL;
 		neighbor[i]=NULL;
 		allocated_corner[i]=false;
@@ -297,9 +295,6 @@ Grid::Grid(lensvector** xij, const int& i, const int& j, const int& level_in, Gr
 
 	corner_invmag[0] = new double;
 	corner_invmag[1] = corner_invmag[2] = corner_invmag[3] = NULL;
-
-	corner_parity[0] = new bool;
-	corner_parity[1] = corner_parity[2] = corner_parity[3] = NULL;
 
 	corner_sourcept[0] = new lensvector;
 	corner_sourcept[1] = corner_sourcept[2] = corner_sourcept[3] = NULL;
@@ -475,7 +470,6 @@ void Grid::assign_lensing_properties(const int& thread)
 	else cell_area=0;
 
 	lens->kappa_inverse_mag_sourcept(corner_pt[0],(*corner_sourcept[0]),(*corner_kappa[0]),(*corner_invmag[0]),thread,zfactor);
-	(*corner_parity[0]) = sign_bool(*corner_invmag[0]);
 }
 
 inline void Grid::set_grid_xvals(lensvector** xv, const int& i, const int& j)
@@ -639,7 +633,7 @@ inline void Grid::check_if_central_image_region()
 	// from searches if no central image is observed in the data
 	cell_in_central_image_region = true;
 	for (int k=0; k < 4; k++)
-		if ((*corner_parity[k] == false) or (*corner_kappa[k] < 1)) { cell_in_central_image_region = false; break; }
+		if ((*corner_invmag[k] < 0) or (*corner_kappa[k] < 1)) { cell_in_central_image_region = false; break; }
 }
 
 bool Grid::split_cells(const int& thread)
@@ -658,7 +652,6 @@ bool Grid::split_cells(const int& thread)
 			for (j=0; j <= w_N; j++) {
 				xvals_threads[thread][i][j][0] = ((corner_pt[0][0]*(w_N-j) + corner_pt[1][0]*j)*(u_N-i) + (corner_pt[2][0]*(w_N-j) + corner_pt[3][0]*j)*i)/(u_N*w_N);
 				xvals_threads[thread][i][j][1] = ((corner_pt[0][1]*(w_N-j) + corner_pt[1][1]*j)*(u_N-i) + (corner_pt[2][1]*(w_N-j) + corner_pt[3][1]*j)*i)/(u_N*w_N);
-				//set_grid_xvals(xvals_threads[thread],i,j);
 			}
 		}
 
@@ -904,55 +897,44 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 			// unless we're at the rightmost or bottommost cell, or both (see else cases below)
 			if (cell[i][j]->neighbor[2] != NULL) {
 				cell[i][j]->corner_invmag[1] = cell[i][j]->neighbor[2]->corner_invmag[0];
-				cell[i][j]->corner_parity[1] = cell[i][j]->neighbor[2]->corner_parity[0];
 				cell[i][j]->corner_sourcept[1] = cell[i][j]->neighbor[2]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[1] = cell[i][j]->neighbor[2]->corner_kappa[0];
 			} else {
 				cell[i][j]->corner_invmag[1] = new double;
-				cell[i][j]->corner_parity[1] = new bool;
 				cell[i][j]->corner_sourcept[1] = new lensvector;
 				cell[i][j]->corner_kappa[1] = new double;
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,zfactor);
-				(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
 
 				cell[i][j]->allocated_corner[1] = true;
 			}
 
 			if (cell[i][j]->neighbor[0] != NULL) {
 				cell[i][j]->corner_invmag[2] = cell[i][j]->neighbor[0]->corner_invmag[0];
-				cell[i][j]->corner_parity[2] = cell[i][j]->neighbor[0]->corner_parity[0];
 				cell[i][j]->corner_sourcept[2] = cell[i][j]->neighbor[0]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[2] = cell[i][j]->neighbor[0]->corner_kappa[0];
 				if (cell[i][j]->neighbor[0]->neighbor[2] != NULL) {
 					cell[i][j]->corner_invmag[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_invmag[0];
-					cell[i][j]->corner_parity[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_parity[0];
 					cell[i][j]->corner_sourcept[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_kappa[0];
 				} else {
 					cell[i][j]->corner_invmag[3] = new double;
-					cell[i][j]->corner_parity[3] = new bool;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
 					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
-					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			} else {
 				cell[i][j]->corner_invmag[2] = new double;
-				cell[i][j]->corner_parity[2] = new bool;
 				cell[i][j]->corner_sourcept[2] = new lensvector;
 				cell[i][j]->corner_kappa[2] = new double;
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,zfactor);
-				(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
 				cell[i][j]->allocated_corner[2] = true;
 
 				cell[i][j]->corner_invmag[3] = new double;
-				cell[i][j]->corner_parity[3] = new bool;
 				cell[i][j]->corner_sourcept[3] = new lensvector;
 				cell[i][j]->corner_kappa[3] = new double;
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
-				(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 				cell[i][j]->allocated_corner[3] = true;
 			}
 			cell[i][j]->check_if_cc_inside();
@@ -975,40 +957,33 @@ void Grid::reassign_subcell_lensing_properties_firstlevel()
 			// unless we're at the rightmost or bottommost cell, or both (see else cases below)
 			if (cell[i][j]->neighbor[2] != NULL) {
 				cell[i][j]->corner_invmag[1] = cell[i][j]->neighbor[2]->corner_invmag[0];
-				cell[i][j]->corner_parity[1] = cell[i][j]->neighbor[2]->corner_parity[0];
 				cell[i][j]->corner_sourcept[1] = cell[i][j]->neighbor[2]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[1] = cell[i][j]->neighbor[2]->corner_kappa[0];
 			} else {
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,zfactor);
-				(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
 
 				cell[i][j]->allocated_corner[1] = true;
 			}
 
 			if (cell[i][j]->neighbor[0] != NULL) {
 				cell[i][j]->corner_invmag[2] = cell[i][j]->neighbor[0]->corner_invmag[0];
-				cell[i][j]->corner_parity[2] = cell[i][j]->neighbor[0]->corner_parity[0];
 				cell[i][j]->corner_sourcept[2] = cell[i][j]->neighbor[0]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[2] = cell[i][j]->neighbor[0]->corner_kappa[0];
 				if (cell[i][j]->neighbor[0]->neighbor[2] != NULL) {
 					cell[i][j]->corner_invmag[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_invmag[0];
-					cell[i][j]->corner_parity[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_parity[0];
 					cell[i][j]->corner_sourcept[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_kappa[0];
 				} else {
 					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
-					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			} else {
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,zfactor);
-				(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
 
 				cell[i][j]->allocated_corner[2] = true;
 
 				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,zfactor);
-				(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 
 				cell[i][j]->allocated_corner[3] = true;
 			}
@@ -1028,10 +1003,6 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 	cell[u_N-1][0]->corner_invmag[2] = corner_invmag[2];
 	cell[u_N-1][w_N-1]->corner_invmag[3] = corner_invmag[3];
 
-	cell[0][w_N-1]->corner_parity[1] = corner_parity[1];
-	cell[u_N-1][0]->corner_parity[2] = corner_parity[2];
-	cell[u_N-1][w_N-1]->corner_parity[3] = corner_parity[3];
-
 	cell[0][w_N-1]->corner_sourcept[1] = corner_sourcept[1];
 	cell[u_N-1][0]->corner_sourcept[2] = corner_sourcept[2];
 	cell[u_N-1][w_N-1]->corner_sourcept[3] = corner_sourcept[3];
@@ -1049,16 +1020,13 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 			if (cell[i][j]->corner_invmag[1]==NULL) {
 				if ((cell[i][j]->neighbor[2] != NULL) and (cell[i][j]->neighbor[2]->level == cell[i][j]->level)) {
 					cell[i][j]->corner_invmag[1] = cell[i][j]->neighbor[2]->corner_invmag[0];
-					cell[i][j]->corner_parity[1] = cell[i][j]->neighbor[2]->corner_parity[0];
 					cell[i][j]->corner_sourcept[1] = cell[i][j]->neighbor[2]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[1] = cell[i][j]->neighbor[2]->corner_kappa[0];
 				} else {
 					cell[i][j]->corner_invmag[1] = new double;
-					cell[i][j]->corner_parity[1] = new bool;
 					cell[i][j]->corner_sourcept[1] = new lensvector;
 					cell[i][j]->corner_kappa[1] = new double;
 					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),thread,zfactor);
-					(*cell[i][j]->corner_parity[1]) = sign_bool(*cell[i][j]->corner_invmag[1]);
 
 					cell[i][j]->allocated_corner[1] = true;
 				}
@@ -1067,25 +1035,21 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 			if ((cell[i][j]->neighbor[0] != NULL) and (cell[i][j]->neighbor[0]->level == cell[i][j]->level)) {
 				if (cell[i][j]->corner_invmag[2]==NULL) {
 					cell[i][j]->corner_invmag[2] = cell[i][j]->neighbor[0]->corner_invmag[0];
-					cell[i][j]->corner_parity[2] = cell[i][j]->neighbor[0]->corner_parity[0];
 					cell[i][j]->corner_sourcept[2] = cell[i][j]->neighbor[0]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[2] = cell[i][j]->neighbor[0]->corner_kappa[0];
 				}
 				if ((cell[i][j]->neighbor[0]->neighbor[2] != NULL) and (cell[i][j]->neighbor[0]->neighbor[2]->level == cell[i][j]->level)) {
 					if (cell[i][j]->corner_invmag[3]==NULL) {
 						cell[i][j]->corner_invmag[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_invmag[0];
-						cell[i][j]->corner_parity[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_parity[0];
 						cell[i][j]->corner_sourcept[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_sourcept[0];
 						cell[i][j]->corner_kappa[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_kappa[0];
 					}
 				} else {
 					if (cell[i][j]->corner_invmag[3]==NULL) {
 						cell[i][j]->corner_invmag[3] = new double;
-						cell[i][j]->corner_parity[3] = new bool;
 						cell[i][j]->corner_sourcept[3] = new lensvector;
 						cell[i][j]->corner_kappa[3] = new double;
 						lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,zfactor);
-						(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 
 						cell[i][j]->allocated_corner[3] = true;
 					}
@@ -1093,20 +1057,16 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 			} else {
 				if (cell[i][j]->corner_invmag[2]==NULL) {
 					cell[i][j]->corner_invmag[2] = new double;
-					cell[i][j]->corner_parity[2] = new bool;
 					cell[i][j]->corner_sourcept[2] = new lensvector;
 					cell[i][j]->corner_kappa[2] = new double;
 					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),thread,zfactor);
-					(*cell[i][j]->corner_parity[2]) = sign_bool(*cell[i][j]->corner_invmag[2]);
 					cell[i][j]->allocated_corner[2] = true;
 				}
 					if (cell[i][j]->corner_invmag[3]==NULL) {
 					cell[i][j]->corner_invmag[3] = new double;
-					cell[i][j]->corner_parity[3] = new bool;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
 					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,zfactor);
-					(*cell[i][j]->corner_parity[3]) = sign_bool(*cell[i][j]->corner_invmag[3]);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
@@ -1446,13 +1406,13 @@ edge_sourcept_status Grid::check_subgrid_neighbor_boundaries(const int& neighbor
 	inside_cell inside_sourceplane_cell;
 	lensvector *interior_edge_point, *edgept1, *edgept2;
 	lensvector *interior_edge_point_src, *edgept1_src, *edgept2_src;
-	bool *edgept1_parity, *edgept2_parity; // make static multithreaded variables?
+	bool edgept1_parity, edgept2_parity; // make static multithreaded variables?
 	if (neighbor_direction==0) {
 		interior_edge_point_src = neighbor_subcell->cell[0][0]->corner_sourcept[1];
 		edgept1_src = neighbor_subcell->corner_sourcept[0];
 		edgept2_src = neighbor_subcell->corner_sourcept[1];
-		edgept1_parity = neighbor_subcell->cell[0][0]->corner_parity[0];
-		edgept2_parity = neighbor_subcell->cell[0][0]->corner_parity[1];
+		edgept1_parity = sign_bool(*neighbor_subcell->cell[0][0]->corner_invmag[0]);
+		edgept2_parity = sign_bool(*neighbor_subcell->cell[0][0]->corner_invmag[1]);
 		d1[thread][0] = (*edgept1_src)[0] - (*edgept2_src)[0];
 		d1[thread][1] = (*edgept1_src)[1] - (*edgept2_src)[1];
 		d2[thread][0] = (*interior_edge_point_src)[0] - (*edgept2_src)[0];
@@ -1461,8 +1421,8 @@ edge_sourcept_status Grid::check_subgrid_neighbor_boundaries(const int& neighbor
 		interior_edge_point_src = neighbor_subcell->cell[1][0]->corner_sourcept[3];
 		edgept1_src = neighbor_subcell->corner_sourcept[2];
 		edgept2_src = neighbor_subcell->corner_sourcept[3];
-		edgept1_parity = neighbor_subcell->cell[1][0]->corner_parity[2];
-		edgept2_parity = neighbor_subcell->cell[1][0]->corner_parity[3];
+		edgept1_parity = sign_bool(*neighbor_subcell->cell[1][0]->corner_invmag[2]);
+		edgept2_parity = sign_bool(*neighbor_subcell->cell[1][0]->corner_invmag[3]);
 		d1[thread][0] = (*edgept2_src)[0] - (*edgept1_src)[0];
 		d1[thread][1] = (*edgept2_src)[1] - (*edgept1_src)[1];
 		d2[thread][0] = (*interior_edge_point_src)[0] - (*edgept1_src)[0];
@@ -1471,8 +1431,8 @@ edge_sourcept_status Grid::check_subgrid_neighbor_boundaries(const int& neighbor
 		interior_edge_point_src = neighbor_subcell->cell[0][0]->corner_sourcept[2];
 		edgept1_src = neighbor_subcell->corner_sourcept[0];
 		edgept2_src = neighbor_subcell->corner_sourcept[2];
-		edgept1_parity = neighbor_subcell->cell[0][0]->corner_parity[0];
-		edgept2_parity = neighbor_subcell->cell[0][0]->corner_parity[2];
+		edgept1_parity = sign_bool(*neighbor_subcell->cell[0][0]->corner_invmag[0]);
+		edgept2_parity = sign_bool(*neighbor_subcell->cell[0][0]->corner_invmag[2]);
 		d1[thread][0] = (*edgept2_src)[0] - (*edgept1_src)[0];
 		d1[thread][1] = (*edgept2_src)[1] - (*edgept1_src)[1];
 		d2[thread][0] = (*interior_edge_point_src)[0] - (*edgept1_src)[0];
@@ -1481,16 +1441,16 @@ edge_sourcept_status Grid::check_subgrid_neighbor_boundaries(const int& neighbor
 		interior_edge_point_src = neighbor_subcell->cell[0][1]->corner_sourcept[3];
 		edgept1_src = neighbor_subcell->corner_sourcept[1];
 		edgept2_src = neighbor_subcell->corner_sourcept[3];
-		edgept1_parity = neighbor_subcell->cell[0][1]->corner_parity[1];
-		edgept2_parity = neighbor_subcell->cell[0][1]->corner_parity[3];
+		edgept1_parity = sign_bool(*neighbor_subcell->cell[0][1]->corner_invmag[1]);
+		edgept2_parity = sign_bool(*neighbor_subcell->cell[0][1]->corner_invmag[3]);
 		d1[thread][0] = (*edgept1_src)[0] - (*edgept2_src)[0];
 		d1[thread][1] = (*edgept1_src)[1] - (*edgept2_src)[1];
 		d2[thread][0] = (*interior_edge_point_src)[0] - (*edgept2_src)[0];
 		d2[thread][1] = (*interior_edge_point_src)[1] - (*edgept2_src)[1];
 	}
-	if ((*edgept1_parity) == (*edgept2_parity)) {
+	if (edgept1_parity == edgept2_parity) {
 		product1[thread] = d1[thread] ^ d2[thread];
-		if (*edgept1_parity == true) inside_sourceplane_cell = (product1[thread] < 0) ? Inside : (product1[thread] > 0) ? Outside : Edge; // positive parity
+		if (edgept1_parity == true) inside_sourceplane_cell = (product1[thread] < 0) ? Inside : (product1[thread] > 0) ? Outside : Edge; // positive parity
 		else inside_sourceplane_cell = (product1[thread] > 0) ? Inside : (product1[thread] < 0) ? Outside : Edge; // negative parity
 	} else {
 		inside_sourceplane_cell = test_if_inside_sourceplane_cell(interior_edge_point_src,thread);
@@ -2330,13 +2290,11 @@ Grid::~Grid()
 	}
 	if (level > 0) {
 		delete corner_invmag[0];
-		delete corner_parity[0];
 		delete corner_sourcept[0];
 		delete corner_kappa[0];
 		for (int k=1; k < 4; k++) {
 			if (allocated_corner[k]) {
 				delete corner_invmag[k];
-				delete corner_parity[k];
 				delete corner_sourcept[k];
 				delete corner_kappa[k];
 			}

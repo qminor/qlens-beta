@@ -652,7 +652,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created
+	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 
 void Lens::add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
@@ -2839,6 +2839,7 @@ bool Lens::load_image_data(string filename)
 		if (!user_changed_zsource) {
 			source_redshift = source_redshifts[0];
 			if (auto_zsource_scaling) reference_source_redshift = source_redshifts[0];
+			else reference_zfactor = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
 		}
 		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)
 		auto_zsource_scaling = false;
