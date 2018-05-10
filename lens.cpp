@@ -2328,6 +2328,8 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	if (kdname != NULL) kdout.open(kdname);
 	if (use_scientific_notation) kout << setiosflags(ios::scientific);
 	if (use_scientific_notation) kdout << setiosflags(ios::scientific);
+	double arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = sigma_crit_kpc(lens_redshift, reference_source_redshift);
 	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
@@ -2354,8 +2356,8 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		}
 		total_kappa /= thetasteps;
 		total_dkappa /= thetasteps;
-		kout << r << " " << total_kappa << endl;
-		if (kdname != NULL) kdout << r << " " << total_dkappa << endl;
+		kout << r << " " << total_kappa << " " << r*arcsec_to_kpc << " " << total_kappa*sigma_cr_kpc << endl;
+		if (kdname != NULL) kdout << r << " " << total_dkappa << r*arcsec_to_kpc << " " << total_dkappa*sigma_cr_kpc/arcsec_to_kpc << endl;
 	}
 
 	/*
