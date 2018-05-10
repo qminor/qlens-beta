@@ -147,6 +147,7 @@ Lens::Lens() : UCMC()
 	hubble_upper_limit = 1e30; // These must be specified by user
 
 	chisq_it=0;
+	chisq_diagnostic = false;
 	chisq_bestfit = 1e30;
 	bestfit_flux = 0;
 	display_chisq_status = false;
@@ -368,6 +369,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 {
 	verbal_mode = lens_in->verbal_mode;
 	chisq_it=0;
+	chisq_diagnostic = lens_in->chisq_diagnostic;
 	chisq_bestfit = lens_in->chisq_bestfit;
 	bestfit_flux = lens_in->bestfit_flux;
 	display_chisq_status = lens_in->display_chisq_status;
@@ -2345,8 +2347,8 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 			y = grid_ycenter + r*sin(theta);
 			x2 = (r+dr)*cos(theta);
 			y2 = (r+dr)*sin(theta);
-			kap = kappa(x,y,reference_zfactor);
-			kap2 = kappa(x2,y2,reference_zfactor);
+			kap = kappa(x,y,1.0);
+			kap2 = kappa(x2,y2,1.0);
 			total_kappa += kap;
 			total_dkappa += (kap2 - kap)/dr;
 		}
@@ -2397,8 +2399,8 @@ double Lens::total_kappa(const double r, const int lensnum)
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r*cos(theta);
 		y = grid_ycenter + r*sin(theta);
-		if (lensnum==-1) kap = kappa(x,y,reference_zfactor);
-		else kap = reference_zfactor*lens_list[lensnum]->kappa(x,y);
+		if (lensnum==-1) kap = kappa(x,y,1.0);
+		else kap = lens_list[lensnum]->kappa(x,y);
 		total_kappa += kap;
 	}
 	total_kappa /= thetasteps;
@@ -2427,11 +2429,11 @@ double Lens::total_dkappa(const double r, const int lensnum)
 		x2 = (r+dr)*cos(theta);
 		y2 = (r+dr)*sin(theta);
 		if (lensnum==-1) {
-			kap = kappa(x,y,reference_zfactor);
-			kap2 = kappa(x2,y2,reference_zfactor);
+			kap = kappa(x,y,1.0);
+			kap2 = kappa(x2,y2,1.0);
 		} else {
-			kap = reference_zfactor*lens_list[lensnum]->kappa(x,y);
-			kap2 = reference_zfactor*lens_list[lensnum]->kappa(x2,y2);
+			kap = lens_list[lensnum]->kappa(x,y);
+			kap2 = lens_list[lensnum]->kappa(x2,y2);
 		}
 		total_dkappa += (kap2 - kap)/dr;
 	}
@@ -2452,7 +2454,7 @@ void Lens::plot_mass_profile(double rmin, double rmax, int rpts, const char *mas
 	for (i=0, r=rmin; i < rpts; i++, r *= rstep) {
 		kavg = 0;
 		for (int j=0; j < nlens; j++) {
-			kavg += reference_zfactor*lens_list[j]->kappa_avg_r(r);
+			kavg += lens_list[j]->kappa_avg_r(r);
 		}
 		mout << r << " " << sigma_cr_arcsec*M_PI*kavg*r*r << " " << r*arcsec_to_kpc << endl;
 	}
@@ -3802,6 +3804,145 @@ double Lens::chisq_pos_image_plane()
 	return chisq;
 }
 
+double Lens::chisq_pos_image_plane_verbose()
+{
+	int n_redshift_groups = source_redshift_groups.size()-1;
+	int mpi_chunk=n_redshift_groups, mpi_start=0;
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+#endif
+
+	if (group_np > 1) {
+		if (group_np > n_redshift_groups) die("Number of MPI processes per group cannot be greater than number of source planes in data being fit");
+		mpi_chunk = n_redshift_groups / group_np;
+		mpi_start = group_id*mpi_chunk;
+		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
+	}
+
+	if (use_analytic_bestfit_src) {
+		lensvector *srcpts = new lensvector[n_sourcepts_fit];
+		output_analytic_srcpos(srcpts);
+		for (int i=0; i < n_sourcepts_fit; i++) {
+			sourcepts_fit[i][0] = srcpts[i][0];
+			sourcepts_fit[i][1] = srcpts[i][1];
+		}
+		delete[] srcpts;
+	}
+
+	double chisq=0, chisq_part=0;
+
+	int n_images, n_tot_images=0, n_tot_images_part=0;
+	double chisq_each_srcpt, dist;
+	int i,j,k,m,n;
+	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
+		create_grid(false,zfactors[source_redshift_groups[m]],m);
+		if (group_id==0) cout << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
+			chisq_each_srcpt = 0;
+			image *img = get_images(sourcepts_fit[i], n_images, false);
+			n_visible_images = n_images;
+			bool *ignore = new bool[n_images];
+			for (j=0; j < n_images; j++) ignore[j] = false;
+
+			for (j=0; j < n_images; j++) {
+				if ((!ignore[j]) and (abs(img[j].mag) < chisq_magnification_threshold)) {
+					ignore[j] = true;
+					n_visible_images--;
+				}
+				if ((chisq_imgsep_threshold > 0) and (!ignore[j])) {
+					for (k=j+1; k < n_images; k++) {
+						if (!ignore[k]) {
+							dist = sqrt(SQR(img[k].pos[0] - img[j].pos[0]) + SQR(img[k].pos[1] - img[j].pos[1]));
+							if (dist < chisq_imgsep_threshold) {
+								ignore[k] = true;
+								n_visible_images--;
+							}
+						}
+					}
+				}
+			}
+
+			n_tot_images_part += n_visible_images;
+			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+				chisq_part += 1e30;
+				continue;
+			}
+
+			int n_dists = n_visible_images*image_data[i].n_images;
+			double *distsqrs = new double[n_dists];
+			int *data_k = new int[n_dists];
+			int *model_j = new int[n_dists];
+			n=0;
+			for (k=0; k < image_data[i].n_images; k++) {
+				for (j=0; j < n_images; j++) {
+					if (ignore[j]) continue;
+					distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
+					data_k[n] = k;
+					model_j[n] = j;
+					n++;
+				}
+			}
+			if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
+			sort(n_dists,distsqrs,data_k,model_j);
+			int *closest_image_j = new int[image_data[i].n_images];
+			int *closest_image_k = new int[n_images];
+			double *closest_distsqrs = new double[image_data[i].n_images];
+			for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
+			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
+			int m=0;
+			int mmax = dmin(n_visible_images,image_data[i].n_images);
+			for (n=0; n < n_dists; n++) {
+				if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
+					closest_image_j[data_k[n]] = model_j[n];
+					closest_image_k[model_j[n]] = data_k[n];
+					closest_distsqrs[data_k[n]] = distsqrs[n];
+					m++;
+					if (m==mmax) n = n_dists; // force loop to exit
+				}
+			}
+
+			double chisq_this_img;
+			for (k=0; k < image_data[i].n_images; k++) {
+				if (group_id==0) cout << "Dataset " << i << ", image " << k << ": ";
+					if (closest_image_j[k] != -1) {
+						if (image_data[i].use_in_chisq[k]) {
+							chisq_this_img = closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+							cout << chisq_this_img << " (matched image)" << endl << flush;
+							chisq_each_srcpt += chisq_this_img;
+						}
+						else cout << " ignored in chisq" << endl << flush;
+					} else {
+						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
+						chisq_this_img += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+						cout << chisq_this_img << " (not matched to model image)" << endl << flush;
+						chisq_each_srcpt += chisq_this_img;
+					}
+			}
+			chisq_part += chisq_each_srcpt;
+			delete[] ignore;
+			delete[] distsqrs;
+			delete[] data_k;
+			delete[] model_j;
+			delete[] closest_image_j;
+			delete[] closest_image_k;
+			delete[] closest_distsqrs;
+		}
+	}
+#ifdef USE_MPI
+	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
+	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
+	MPI_Comm_free(&sub_comm);
+#else
+	chisq = chisq_part;
+	n_tot_images = n_tot_images_part;
+#endif
+
+	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
+	n_visible_images = n_tot_images; // save the total number of visible images produced
+	return chisq;
+}
+
 void Lens::output_model_source_flux(double *bestfit_flux)
 {
 	double chisq=0;
@@ -4305,6 +4446,7 @@ void Lens::chisq_single_evaluation()
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	//chisq_diagnostic = true;
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (mpi_id==0) {
 		if (display_chisq_status) cout << endl;
@@ -4318,6 +4460,7 @@ void Lens::chisq_single_evaluation()
 	}
 #endif
 	display_chisq_status = false;
+	//chisq_diagnostic = false;
 
 	fit_restore_defaults();
 }
@@ -5178,13 +5321,15 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
 	if (use_image_plane_chisq) {
 		used_imgplane_chisq = true;
-		chisq = fitmodel->chisq_pos_image_plane();
+		if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
+		else chisq = fitmodel->chisq_pos_image_plane();
 	}
 	else {
 		used_imgplane_chisq = false;
 		chisq = fitmodel->chisq_pos_source_plane();
 		if (chisq < chisq_imgplane_substitute_threshold) {
-			chisq = fitmodel->chisq_pos_image_plane();
+			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
+			else chisq = fitmodel->chisq_pos_image_plane();
 			used_imgplane_chisq = true;
 		}
 	}
@@ -5443,7 +5588,7 @@ bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
 
 double Lens::mass2d_r(const double r_arcsec, const int lensnum)
 {
-	double sigma_cr, kpc_to_arcsec, mass_r_2d;
+	double sigma_cr, mass_r_2d;
 	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	return mass_r_2d;
@@ -5451,7 +5596,7 @@ double Lens::mass2d_r(const double r_arcsec, const int lensnum)
 
 double Lens::mass3d_r(const double r_arcsec, const int lensnum)
 {
-	double sigma_cr, kpc_to_arcsec, mass_r_3d;
+	double sigma_cr, mass_r_3d;
 	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;

@@ -677,13 +677,18 @@ void Lens::process_commands(bool read_file)
 							"sourcept_num corresponds to the number assigned to a given source point which is listed by the 'fit'\n"
 							"command (to set the initial values for the model source points, use the 'fit sourcept' command).\n";
 					else if (words[2]=="plotimg")
-						cout << "fit plotimg [src=SOURCEPT_NUM]\n"
-							"fit plotimg [src=SOURCEPT_NUM] <sourcepic_file> <imagepic_file>\n\n"
-							"Plot the images produced by the current lens model and source point specified by [SOURCEPT_NUM] to\n"
-							"the screen, along with the image data that is being fit (listed by the 'imgdata' command).\n"
-							"If only one source is being modeled, no argument is necessary; otherwise, for multiple source points,\n"
-							"SOURCEPT_NUM corresponds to the number assigned to a given source point which is listed by the 'fit'\n"
-							"command (to set the initial values for the model source points, use the 'fit sourcept' command).\n";
+						cout << "fit plotimg [src=#]\n"
+							"fit plotimg [src=#] <sourcepic_file> <imagepic_file>\n\n"
+							"Plot the images produced by the current lens model and source point(s) specified by [src=#] to the\n"
+							"screen, along with the image data that is being fit (listed by the 'imgdata' command). If no\n"
+							"argument is given, images from all source points are plotted; otherwise, # corresponds to the\n"
+							"number assigned to a given source point listed by the 'imgdata' command. To plot for a subset of\n"
+							"sources, you can use a hyphen, e.g. 'fit plotimg src=3-5' plots for source points 3 through 5\n"
+							"only. If all the sources are being plotted (i.e. no 'src=' argument given), critical curves are\n"
+							"plotted that correspond to the source redshift given by 'zsrc'; otherwise if plotting for a subset\n"
+							"of sources, the critical curves and caustics shown correspond to the source redshift of the first\n"
+							"source point being plotted. So in the above example, critical curves are plotted for the source\n"
+							"redshift corresponding to image set 3.\n";
 					else if (words[2]=="run")
 						cout << "fit run\n\n"
 							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's\n"

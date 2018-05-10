@@ -428,6 +428,13 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 				if (!(ws[3] >> sig)) die("Invalid dispersion value for inverse Gaussian transformation");
 				param_transforms[param_num].set_inverse_gaussian(pos,sig);
 			}
+			else if (words[1]=="linear") {
+				if (nwords != 4) die("linear requires two additional arguments (A,b)");
+				double aparam, bparam;
+				if (!(ws[2] >> aparam)) die("Invalid A value for linear transformation");
+				if (!(ws[3] >> bparam)) die("Invalid b value for linear transformation");
+				param_transforms[param_num].set_linear(aparam,bparam);
+			}
 			else die("transformation type not recognized");
 		}
 		else die("the parameter transformation file requires at least two arguments (param_number,transformation_type)");

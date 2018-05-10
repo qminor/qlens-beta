@@ -28,11 +28,12 @@ const char LOGAXIS = 0x10;
 const char ZLOG = 0x04;
 const char LIKE = 0x02;
 
-enum EvalTransform { EVAL_NONE, EVAL_LOG_TRANSFORM, EVAL_GAUSS_TRANSFORM, INVERSE_EVAL_GAUSS_TRANSFORM, EVAL_EXP_TRANSFORM };
+enum EvalTransform { EVAL_NONE, EVAL_LOG_TRANSFORM, EVAL_GAUSS_TRANSFORM, INVERSE_EVAL_GAUSS_TRANSFORM, EVAL_EXP_TRANSFORM, EVAL_LINEAR_TRANSFORM };
 
 struct EvalParamTransform
 {
 	double gaussian_pos, gaussian_sig;
+	double linear_A, linear_b;
 	bool transform_name;
 	string transformed_param_name;
 	EvalTransform transform;
@@ -40,6 +41,7 @@ struct EvalParamTransform
 	void set_none() { transform = EVAL_NONE; }
 	void set_log() { transform = EVAL_LOG_TRANSFORM; }
 	void set_exp() { transform = EVAL_EXP_TRANSFORM; }
+	void set_linear(double &A_in, double &b_in) { transform = EVAL_LINEAR_TRANSFORM; linear_A = A_in; linear_b = b_in; }
 	void set_gaussian(double &pos_in, double &sig_in) { transform = EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void set_inverse_gaussian(double &pos_in, double &sig_in) { transform = INVERSE_EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void transform_param_name(string &name_in) { transform_name = true; transformed_param_name = name_in; }
@@ -53,6 +55,8 @@ struct EvalParamTransform
 			param = erff((p - gaussian_pos)/(M_SQRT2*gaussian_sig));
 		else if (transform==INVERSE_EVAL_GAUSS_TRANSFORM)
 			param = (gaussian_pos + M_SQRT2*gaussian_sig*erfinv(p));
+		else if (transform==EVAL_LINEAR_TRANSFORM)
+			param = linear_A*p + linear_b;
 	}
 };
 

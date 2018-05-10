@@ -228,6 +228,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static int *indxs;
 
 	int chisq_it;
+	bool chisq_diagnostic;
 	ofstream logfile;
 	bool show_wtime;
 
@@ -787,6 +788,7 @@ public:
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
+	double chisq_pos_image_plane_verbose();
 	double chisq_flux();
 	double chisq_time_delays();
 	void output_model_source_flux(double *bestfit_flux);
