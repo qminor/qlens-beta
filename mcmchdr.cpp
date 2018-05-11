@@ -3398,6 +3398,8 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			avg[j] /= weighttot;
 			cov[j] = cov[j]/weighttot - avg[j]*avg[j];
 		}
+		/*
+		// The following doesn't work if the likelihood is parallelized with MPI subgroups; need to rewrite
 		double avg_loglike = LOGLIKE(avg) + LogPrior(cpt);
 		if (avg_loglike < minloglike) {
 			// if the posterior is Gaussian enough, the mean parameters might produce a better fit than any individual
@@ -3405,6 +3407,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			minloglike = avg_loglike;
 			for (j = 0; j < ma; j++) best_fit_params[j] = avg[j];
 		}
+		*/
 		for (j = 0; j < ma; j++) {
 			parameter_errors[j] = sqrt(cov[j]);
 		}
@@ -3433,7 +3436,10 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			logout << count+N << " points, Z = " << exp(lnZ) << endl;
 			logout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << endl;
 		} else {
-			cout << "\033[5A\033[KStatus:  Finished\r\033[4B" << endl;
+			if (NDerivedParams > 0)
+				cout << "\033[7A\033[KStatus:  Finished\r\033[6B" << endl;
+			else
+				cout << "\033[6A\033[KStatus:  Finished\r\033[5B" << endl;
 			cout << count+N << " points, Z = " << exp(lnZ) << "                                                   " << endl;
 			cout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << "                                                   " << endl;
 		}
