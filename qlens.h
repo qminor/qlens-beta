@@ -736,7 +736,7 @@ public:
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	void chisq_single_evaluation();
+	void chisq_single_evaluation(bool showdiag);
 	bool setup_fit_parameters(bool include_limits);
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();

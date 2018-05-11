@@ -696,10 +696,11 @@ void Lens::process_commands(bool read_file)
 							"fit method that has been selected. For more information about the output produced,\n"
 							"type 'help fit method <method>' for whichever fit method is selected.\n";
 					else if (words[2]=="chisq")
-						cout << "fit chisq\n\n"
+						cout << "fit chisq [diag]\n\n"
 							"Output the chi-square value for the current model and data. If using more than one chi-square\n"
 							"component (e.g. fluxes and time delays), each chi-square will be printed separately in addition\n"
-							"to the total chi-square value.\n";
+							"to the total chi-square value. If argument 'diag' is added, diagnostic information is printed\n"
+							"for image plane chi-square.\n";
 					else if (words[2]=="method") {
 						if (nwords==3)
 							cout << "fit method <fit_method>\n\n"
@@ -4269,7 +4270,12 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="chisq")
 				{
-					chisq_single_evaluation();
+					bool showdiag = false;
+					if (nwords == 3) {
+						if (words[2]=="diag") showdiag = true;
+						else Complain("invalid argument to 'fit chisq'");
+					}
+					chisq_single_evaluation(showdiag);
 				}
 				else if (words[1]=="label")
 				{

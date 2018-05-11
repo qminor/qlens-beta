@@ -2276,6 +2276,7 @@ MassSheet::MassSheet(const MassSheet* lens_in)
 {
 	kext = lens_in->kext;
 	copy_base_lensdata(lens_in);
+	update_meta_parameters_and_pointers();
 }
 
 void MassSheet::assign_paramnames()

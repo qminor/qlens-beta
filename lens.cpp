@@ -3839,7 +3839,7 @@ double Lens::chisq_pos_image_plane_verbose()
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],m);
-		if (group_id==0) cout << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		if (group_num==0) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			image *img = get_images(sourcepts_fit[i], n_images, false);
@@ -3868,6 +3868,7 @@ double Lens::chisq_pos_image_plane_verbose()
 			n_tot_images_part += n_visible_images;
 			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
 				chisq_part += 1e30;
+				if (group_num==0) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
 				continue;
 			}
 
@@ -3906,18 +3907,18 @@ double Lens::chisq_pos_image_plane_verbose()
 
 			double chisq_this_img;
 			for (k=0; k < image_data[i].n_images; k++) {
-				if (group_id==0) cout << "Dataset " << i << ", image " << k << ": ";
+				if (group_num==0) cout << "source " << i << ", image " << k << ": ";
 					if (closest_image_j[k] != -1) {
 						if (image_data[i].use_in_chisq[k]) {
 							chisq_this_img = closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
-							cout << chisq_this_img << " (matched image)" << endl << flush;
+							if (group_num==0) cout << "chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 							chisq_each_srcpt += chisq_this_img;
 						}
-						else cout << " ignored in chisq" << endl << flush;
+						else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 					} else {
 						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
 						chisq_this_img += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
-						cout << chisq_this_img << " (not matched to model image)" << endl << flush;
+						if (group_num==0) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
 					}
 			}
@@ -3931,6 +3932,7 @@ double Lens::chisq_pos_image_plane_verbose()
 			delete[] closest_distsqrs;
 		}
 	}
+	if (group_num==0) cout << endl;
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
@@ -4427,7 +4429,7 @@ void Lens::fit_restore_defaults()
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-void Lens::chisq_single_evaluation()
+void Lens::chisq_single_evaluation(bool show_diagnostics)
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -4448,7 +4450,7 @@ void Lens::chisq_single_evaluation()
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	//chisq_diagnostic = true;
+	if (show_diagnostics) chisq_diagnostic = true;
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (mpi_id==0) {
 		if (display_chisq_status) cout << endl;
@@ -4462,7 +4464,7 @@ void Lens::chisq_single_evaluation()
 	}
 #endif
 	display_chisq_status = false;
-	//chisq_diagnostic = false;
+	if (show_diagnostics) chisq_diagnostic = false;
 
 	fit_restore_defaults();
 }
