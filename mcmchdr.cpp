@@ -3308,7 +3308,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 					<< "\n\tneg loglike = " << blank << likeMin  << blank << "(" << likeMax << ")"
 					<< "\n\tF = " << blank << group->F() << bblank << " (";
 				group->printbads();
-				cout << ")                                                         " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
+				cout << ")                                                            " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
 #ifdef USE_OPENMP
 				cout << " t_it = " << blank << time_per_it << endl;
 #else

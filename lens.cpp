@@ -812,7 +812,7 @@ bool Lens::add_tabulated_lens_from_file(const double kscale, const double rscale
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, tabfile);
+	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, tabfile, tabfilename);
 
 	lens_list = newlist;
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;

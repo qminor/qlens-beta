@@ -226,7 +226,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void print_parameters();
 	void print_vary_parameters();
-	void print_lens_command(ofstream& scriptout);
+	virtual void print_lens_command(ofstream& scriptout);
+	void output_lens_command_nofit(string& command);
 	virtual void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
@@ -765,6 +766,9 @@ class Tabulated_Model : public LensProfile
 	double grid_logrlength;
 	double *grid_logrvals, *grid_phivals;
 	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
+	string original_lens_command; // used for saving commands to reproduce this model
+	double original_kscale, original_rscale;
+	bool loaded_from_file;
 
 	double kappa_rsq(const double rsq);
 	double kappa_rsq_deriv(const double rsq) { return 0; } // will not be used
@@ -772,7 +776,7 @@ class Tabulated_Model : public LensProfile
 	public:
 	Tabulated_Model() : LensProfile() {}
 	Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N);
-	Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile);
+	Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename);
 
 	Tabulated_Model(const Tabulated_Model* lens_in);
 	~Tabulated_Model();
@@ -783,6 +787,7 @@ class Tabulated_Model : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	void print_lens_command(ofstream& scriptout);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);

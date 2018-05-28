@@ -574,6 +574,7 @@ void LensProfile::print_vary_parameters()
 
 void LensProfile::print_lens_command(ofstream& scriptout)
 {
+	scriptout << setprecision(16);
 	scriptout << "fit lens " << model_name << " ";
 	if (ellipticity_mode != default_ellipticity_mode) {
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
@@ -608,6 +609,48 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 			}
 		}
 	}
+}
+
+void LensProfile::output_lens_command_nofit(string& command)
+{
+	command += "lens " + model_name + " ";
+	if (ellipticity_mode != default_ellipticity_mode) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+		{
+			stringstream emodestr;
+			string emodestring;
+			emodestr << ellipticity_mode;
+			emodestr >> emodestring;
+			command += "emode=" + emodestring + " ";
+		}
+	}
+	if (special_parameter_command != "") command += special_parameter_command += " ";
+
+	for (int i=0; i < n_params-2; i++) {
+			stringstream paramstr;
+			paramstr << setprecision(16);
+			string paramstring;
+		if (i==angle_paramnum) {
+			paramstr << radians_to_degrees(*(param[i]));
+		}
+		else {
+			paramstr << *(param[i]);
+		}
+		paramstr >> paramstring;
+		command += paramstring + " ";
+	}
+	stringstream xcstr;
+	string xcstring;
+	stringstream ycstr;
+	string ycstring;
+	xcstr << setprecision(16);
+	xcstr << x_center;
+	xcstr >> xcstring;
+	ycstr << setprecision(16);
+	ycstr << y_center;
+	ycstr >> ycstring;
+
+	command += xcstring + " " + ycstring;
 }
 
 bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
@@ -1482,6 +1525,9 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& 
 
 void LensProfile::deflection_and_hessian_numerical(const double x, const double y, lensvector& def, lensmatrix& hess)
 {
+	// You should make it save the kappa and kappa' values evaluated during J0 and K0 so it doesn't have to evaluate them again for
+	// J1, K1 and K2 (unless higher order quadrature is required for convergence, in which case extra evaluations must be done). This
+	// will save a significant amount of time, but might take some doing to implement
 	bool converged;
 	double jint0, jint1;
 	jint0 = j_integral(x,y,0,converged);

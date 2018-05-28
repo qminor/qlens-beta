@@ -2371,11 +2371,6 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 
 Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N)
 {
-	// TO DO:
-	// 1) allow for radial scaling parameter
-	// 2) make a new tabulated model that allows for interpolation in q (tricubic interpolation)
-
-	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
@@ -2445,6 +2440,12 @@ Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_i
 			hess_xy[i][j] = hess_in[0][1] / kscale;
 		}
 	}
+
+	// the following data are stored so this model can be reproduced later if needed
+	lens_in->output_lens_command_nofit(original_lens_command);
+	original_kscale = kscale;
+	original_rscale = rscale;
+	loaded_from_file = false;
 }
 
 Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
@@ -2495,11 +2496,17 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 		}
 	}
 	update_meta_parameters_and_pointers();
+
+	loaded_from_file = lens_in->loaded_from_file;
+	original_lens_command = lens_in->original_lens_command;
+	if (!loaded_from_file) {
+		original_kscale = lens_in->original_kscale;
+		original_rscale = lens_in->original_rscale;
+	}
 }
 
-Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
+Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename)
 {
-
 	lenstype = TABULATED;
 	special_parameter_command = "";
 	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
@@ -2549,6 +2556,8 @@ Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_i
 		}
 	}
 	grid_logrlength = grid_logrvals[grid_logr_N-1] - grid_logrvals[0];
+	loaded_from_file = true;
+	original_lens_command = tab_filename;
 }
 
 void Tabulated_Model::output_tables(const string tabfile_root)
@@ -2923,6 +2932,60 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
+}
+
+void Tabulated_Model::print_lens_command(ofstream& scriptout)
+{
+	scriptout << setprecision(16);
+	if (loaded_from_file) {
+		scriptout << "fit lens tab " << original_lens_command << " ";
+	}
+	else {
+		scriptout << original_lens_command << endl;
+		scriptout << "fit lens tab lens=" << lens_number << " ";
+	}
+	if (ellipticity_mode != default_ellipticity_mode) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+			scriptout << "emode=" << ellipticity_mode << " ";
+	}
+	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
+
+	for (int i=0; i < n_params-2; i++) {
+		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+		else {
+			if (i==0) {
+				if (loaded_from_file) scriptout << kscale;
+				else scriptout << original_kscale;
+			}
+			else if (i==1) {
+				if (loaded_from_file) scriptout << rscale;
+				else scriptout << original_rscale;
+			}
+			else if (i==2) scriptout << radians_to_degrees(*(param[i]));
+			else scriptout << *(param[i]);
+			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+			scriptout << " ";
+		}
+	}
+	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
+	else scriptout << x_center << " " << y_center << endl;
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) scriptout << "1 ";
+		else scriptout << "0 ";
+	}
+	scriptout << endl;
+	if (include_limits) {
+		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
+		else {
+			for (int i=0; i < n_vary_params; i++) {
+				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
+					scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
+				else
+					scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+			}
+		}
+	}
+	scriptout << "lens update " << lens_number << " " << kscale << " " << rscale << " " << radians_to_degrees(theta) << " " << x_center << " " << y_center << endl;
 }
 
 Tabulated_Model::~Tabulated_Model() {

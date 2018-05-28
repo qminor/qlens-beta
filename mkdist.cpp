@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
 		usage_error();
 		return 0;
 	}
+	if (file_label=="-T") show_transform_usage();
 	string output_dir = "chains_" + file_label;
 	struct stat sb;
 	stat(output_dir.c_str(),&sb);
