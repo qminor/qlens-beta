@@ -896,7 +896,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
-	if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for corecusp model");
+	//if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for Cored NFW model");
 }
 
 void Cored_NFW::set_auto_stepsizes()

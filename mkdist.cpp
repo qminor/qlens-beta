@@ -265,7 +265,17 @@ int main(int argc, char *argv[])
 	}
 	paramnames_file.close();
 
-	if (!use_fisher_matrix) Eval.transform_parameter_names(param_names); // should have this option for the Fisher analysis version too
+	string *latex_param_names = new string[nparams];
+	string latex_paramnames_filename = file_root + ".latex_paramnames";
+	ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
+	string dummy;
+	for (i=0; i < nparams; i++) {
+		if (!(latex_paramnames_file >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+		if (!(latex_paramnames_file >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+	}
+	latex_paramnames_file.close();
+
+	if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
 
 	string out_paramnames_filename = file_root + ".py_paramnames";
 	ofstream paramnames_out(out_paramnames_filename.c_str());
@@ -273,6 +283,13 @@ int main(int argc, char *argv[])
 		paramnames_out << param_names[i] << endl;
 	}
 	paramnames_out.close();
+
+	string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
+	ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
+	for (i=0; i < nparams_eff; i++) {
+		latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+	}
+	latex_paramnames_out.close();
 
 	if (use_fisher_matrix) {
 		if (make_1d_posts) {
@@ -294,7 +311,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		Eval.transform_parameter_names(param_names);
+		//Eval.transform_parameter_names(param_names, latex_paramnames);
 
 		double *minvals = new double[nparams];
 		double *maxvals = new double[nparams];
@@ -501,6 +518,7 @@ int main(int argc, char *argv[])
 	}
 
 	delete[] param_names;
+	delete[] latex_param_names;
 	return 0;
 }
 
@@ -551,10 +569,10 @@ void show_transform_usage()
 	cout << "Usage: mkdist <file_root> -T:<file>\n\n"
 			"Use this option to transform parameters and obtain posteriors in the transformed parameters.\n"
 			"In the script <file>, the format is as follows:\n\n"
-			"<paramnum> <transform_type> <params> [name=...]\n\n"
-			"where the number of parameters <params> depends on the transformation type, and the 'name=...' is\n"
-			"optional and allows you to rename the parameter. The transformation types are as follows:\n\n"
-			"log      -- transform to log(p) using the base 10 logarithm; no parameters to enter\n"
+			"<paramnum> <transform_type> <params> [name=...] [latex_name=...]\n\n"
+			"where the number of parameters <params> depends on the transformation type, and the 'name=...' and\n"
+			"'latex_name=...' are optional and allow you to rename the parameter. The transformation types are as follows:\n\n"
+			"log      -- transform to log(p) using the base 10 logarithm; no parameters to enter.\n"
 			"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
 			"              linear 2 5' will transform p --> 2*p + 5.\n"
 			"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"
@@ -563,7 +581,8 @@ void show_transform_usage()
 			"inverse_gaussian -- inverse of the Gaussian transformation, with the same parameters <mean> and <sig>\n\n"
 			"For example, to apply a linear transformation p --> 2*p - 1 to parameter 2, enter:\n"
 			"2 linear 2 -1 name=newparam\n\n"
-			"Again, the renaming is optional. In the script file, you can transform as many parameters as you like by\n"
+			"Again, the renaming is optional; for the log transformation, the parameter name is automatically changed from\n"
+			"name --> log(name) by default. In the script file, you can transform as many parameters as you like by\n"
 			"entering transform commands on separate lines.\n\n";
 	exit(1);
 }

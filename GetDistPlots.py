@@ -265,7 +265,7 @@ class GetDistPlotter():
         return args.get('alpha', default)
 
     def paramNamesForRoot(self, root):
-        labelParams = 'latex_paramnames'
+        labelParams = 'py_latex_paramnames'
         if not root in self.param_name_sets: self.param_name_sets[root] = self.sampleAnalyser.paramsForRoot(root, labelParams)
         return self.param_name_sets[root]
 

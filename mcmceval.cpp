@@ -377,6 +377,7 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 
 	while (!transform_file.eof()) {
 		bool transform_name = false;
+		bool transform_latex_name = false;
 		getline(transform_file,line);
 		words.clear();
 		if (line.empty()) continue;
@@ -389,7 +390,7 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 		ws = new stringstream[nwords];
 		for (int i=0; i < nwords; i++) ws[i] << words[i];
 
-		string new_name;
+		string new_name, new_latex_name;
 		if (words[nwords-1].find("name=")==0) {
 			string lstr = words[nwords-1].substr(5);
 			stringstream lstream;
@@ -406,11 +407,28 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 			nwords--;
 		}
 
+		if (words[nwords-1].find("latex_name=")==0) {
+			string lstr = words[nwords-1].substr(11);
+			stringstream lstream;
+			lstream << lstr;
+			if (!(lstream >> new_latex_name)) die("invalid parameter name");
+			transform_latex_name = true;
+			stringstream* new_ws = new stringstream[nwords-1];
+			words.erase(words.begin()+nwords-1);
+			for (int i=0; i < nwords-1; i++) {
+				new_ws[i] << words[i];
+			}
+			delete[] ws;
+			ws = new_ws;
+			nwords--;
+		}
+
 		if (nwords >= 2) {
 			int param_num;
 			if (!(ws[0] >> param_num)) die("Invalid parameter number");
 			if (param_num >= numOfParam) die("Parameter number does not exist");
 			if (transform_name) param_transforms[param_num].transform_param_name(new_name);
+			if (transform_latex_name) param_transforms[param_num].transform_latex_param_name(new_latex_name);
 			if (words[1]=="none") param_transforms[param_num].set_none();
 			else if (words[1]=="log") param_transforms[param_num].set_log();
 			else if (words[1]=="exp") param_transforms[param_num].set_exp();
@@ -450,13 +468,21 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 	//}
 }
 
-void McmcEval::transform_parameter_names(string *paramnames)
+void McmcEval::transform_parameter_names(string *paramnames, string *latex_paramnames)
 {
 	for (int i=0; i < numOfParam; i++) {
-		if (param_transforms[i].transform_name==true) paramnames[i] = param_transforms[i].transformed_param_name;
+		if (param_transforms[i].transform_name==true) {
+			paramnames[i] = param_transforms[i].transformed_param_name;
+		} else if (param_transforms[i].transform==EVAL_LOG_TRANSFORM) {
+			paramnames[i] = "log(" + paramnames[i] + ")";
+		}
+		if (param_transforms[i].transform_latex_name==true) {
+			latex_paramnames[i] = param_transforms[i].transformed_latex_name;
+		} else if (param_transforms[i].transform==EVAL_LOG_TRANSFORM) {
+			latex_paramnames[i] = "log(" + latex_paramnames[i] + ")";
+		}
 	}
 }
-
 
 void McmcEval::calculate_derived_param()
 {

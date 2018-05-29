@@ -34,10 +34,10 @@ struct EvalParamTransform
 {
 	double gaussian_pos, gaussian_sig;
 	double linear_A, linear_b;
-	bool transform_name;
-	string transformed_param_name;
+	bool transform_name, transform_latex_name;
+	string transformed_param_name, transformed_latex_name;
 	EvalTransform transform;
-	EvalParamTransform() { transform = EVAL_NONE; transform_name = false; }
+	EvalParamTransform() { transform = EVAL_NONE; transform_name = false; transform_latex_name = false; }
 	void set_none() { transform = EVAL_NONE; }
 	void set_log() { transform = EVAL_LOG_TRANSFORM; }
 	void set_exp() { transform = EVAL_EXP_TRANSFORM; }
@@ -45,6 +45,7 @@ struct EvalParamTransform
 	void set_gaussian(double &pos_in, double &sig_in) { transform = EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void set_inverse_gaussian(double &pos_in, double &sig_in) { transform = INVERSE_EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void transform_param_name(string &name_in) { transform_name = true; transformed_param_name = name_in; }
+	void transform_latex_param_name(string &name_in) { transform_latex_name = true; transformed_latex_name = name_in; }
 	void transform_parameter(double& param)
 	{
 		double p = param;
@@ -86,7 +87,7 @@ class McmcEval
 		McmcEval() { numOfParam = 0; mults = chi2 = NULL; cut = numOfPoints = NULL; points = NULL; minvals = maxvals = derived_param = derived_mults = NULL; param_transforms = NULL; }
 		void input(const char *, int, int, double *, double *, const int mpi_np = 1, const int cut_val = 0, const char flag = 0x00, const bool silent = false, const int n_freeparams = -1, const bool transform_params=false, const char *transform_filename = NULL);
 		void input_parameter_transforms(const char *transform_filename);
-		void transform_parameter_names(string *paramnames);
+		void transform_parameter_names(string *paramnames, string *latex_paramnames);
 		void calculate_derived_param();
 		void output_min_chisq_pt(void);
 		void min_chisq_pt(double*);
