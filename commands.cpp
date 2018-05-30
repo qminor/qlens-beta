@@ -2643,7 +2643,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model cnfw");
 						}
 					}
-					if (rc >= rs) Complain("core radius (rc) must be smaller than scale radius (rs) for model cnfw");
+					//if (rc >= rs) Complain("core radius (rc) must be smaller than scale radius (rs) for model cnfw");
 					param_vals.input(7);
 					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=rc; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;

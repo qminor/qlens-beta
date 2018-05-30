@@ -933,6 +933,9 @@ double Cored_NFW::kappa_rsq(const double rsq)
 		rcterm = 0;
 	}
 	else {
+		if (abs(1-beta) < 5e-4) {
+			return ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1); // formulas becomes unstable for beta close to 1, series expansion here
+		}
 		double xcsq = rsq/(rc*rc);
 		if (xcsq < 1e-8) {
 			if (xsq < 1e-14) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta);
@@ -952,7 +955,17 @@ double Cored_NFW::kappa_rsq_deriv(const double rsq)
 	xsq = rsq/(rs*rs);
 	xcsq = rsq/(rc*rc);
 	if (rc==0.0) rcterm = 0;
-	else if ((xcsq < 1e-12) and (xsq < 1e-14)) return 0; // this could be improved on for a more seamless transition, but it's at such a small r it really doesn't matter
+	else if ((xcsq < 1e-1) and (xsq < 1e-14)) return 0; // this could be improved on for a more seamless transition, but it's at such a small r it really doesn't matter
+	else if (abs(1-beta) < 5e-4) {
+		// can't get the formulas right now, too much horrible algebra. This is a really unlikely special case anyway.
+		const double precision = 1e-6;
+		double temp, h;
+		h = precision*rsq;
+		temp = rsq + h;
+		h = temp - rsq; // silly NR trick
+		return (kappa_rsq(rsq+h)-kappa_rsq(rsq-h))/(2*h);
+		//return ks/SQR(rs)*(-5.5 - 2*xsq + (3 - 4.5*xsq)*lens_function_xsq(xsq))/CUBE(xsq-1); doesn't work
+	}
 	else rcterm = (lens_function_xsq(xcsq) - 1.0/xcsq) / (xsq - beta*beta);
 
 	if (xsq < 1e-10) rsterm = -1.0/xsq;

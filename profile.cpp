@@ -689,7 +689,6 @@ bool LensProfile::calculate_total_scaled_mass(double& total_mass)
 		mass_u = mass_inverse_rsq(u);
 		if (++n == nmax) break;
 	} while (abs(mass_u-mass_u_prev) > (mtol*mass_u));
-	//cout << "iterations: " << n << endl;
 	total_mass = M_PI*mass_u;
 	if (n==nmax) return false;
 	else return true;
