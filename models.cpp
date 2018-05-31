@@ -934,7 +934,21 @@ double Cored_NFW::kappa_rsq(const double rsq)
 	}
 	else {
 		if (abs(1-beta) < 5e-4) {
-			return ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1); // formulas becomes unstable for beta close to 1, series expansion here
+			// formulae are unstable near beta=1, so we use a series expansion here
+			if (abs(xsq-1) < 6e-5) {
+				double ans1, ans2;
+				// the following is a quick and dirty way to avoid singularity which is very close to x=1
+				xsq += 1.0e-4;
+				ans1 = ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
+				xsq -= 2.0e-4;
+				ans2 = ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
+				return (ans1+ans2)/2;
+			} else {
+				if (xsq < 1e-5)
+					return ks*(1+2*xsq - 1.5*xsq)/SQR(xsq-1);
+				else
+					return ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
+			}
 		}
 		double xcsq = rsq/(rc*rc);
 		if (xcsq < 1e-8) {
@@ -957,14 +971,19 @@ double Cored_NFW::kappa_rsq_deriv(const double rsq)
 	if (rc==0.0) rcterm = 0;
 	else if ((xcsq < 1e-1) and (xsq < 1e-14)) return 0; // this could be improved on for a more seamless transition, but it's at such a small r it really doesn't matter
 	else if (abs(1-beta) < 5e-4) {
-		// can't get the formulas right now, too much horrible algebra. This is a really unlikely special case anyway.
-		const double precision = 1e-6;
-		double temp, h;
-		h = precision*rsq;
-		temp = rsq + h;
-		h = temp - rsq; // silly NR trick
-		return (kappa_rsq(rsq+h)-kappa_rsq(rsq-h))/(2*h);
-		//return ks/SQR(rs)*(-5.5 - 2*xsq + (3 - 4.5*xsq)*lens_function_xsq(xsq))/CUBE(xsq-1); doesn't work
+		// formulae are unstable near beta=1, so we use a series expansion here
+		if (abs(xsq-1) < 1.2e-3) {
+			// the following is a quick and dirty way to avoid singularity which is very close to x=1
+			double ans1, ans2;
+			xsq += 2.4e-3;
+			ans1 = ks/SQR(rs)*(-5.5 - 2*xsq + 3*(1 + 1.5*xsq)*lens_function_xsq(xsq))/CUBE(xsq-1);
+			xsq -= 4.8e-3;
+			ans2 = ks/SQR(rs)*(-5.5 - 2*xsq + 3*(1 + 1.5*xsq)*lens_function_xsq(xsq))/CUBE(xsq-1);
+			return (ans1+ans2)/2;
+		} else {
+			if (xsq < 1e-10) return 0;
+			else return ks/SQR(rs)*(-5.5 - 2*xsq + 3*(1 + 1.5*xsq)*lens_function_xsq(xsq))/CUBE(xsq-1);
+		}
 	}
 	else rcterm = (lens_function_xsq(xcsq) - 1.0/xcsq) / (xsq - beta*beta);
 
@@ -1024,8 +1043,22 @@ double Cored_NFW::kapavg_spherical_rsq(const double rsq)
 		rcterm = 0;
 	}
 	else {
+		if (abs(1-beta) < 5e-4) {
+			// formulae are unstable near beta=1, so we use a series expansion here
+			if (abs(xsq-1) < 1e-9) {
+				double ans1, ans2;
+				// the following is a quick and dirty way to avoid singularity which is very close to x=1
+				xsq += 1.0e-8;
+				ans1 = 2*(ks/xsq)*(log(xsq/4) + (-xsq + (3*xsq-2)*lens_function_xsq(xsq))/(xsq-1));
+				xsq -= 2.0e-8;
+				ans2 = 2*(ks/xsq)*(log(xsq/4) + (-xsq + (3*xsq-2)*lens_function_xsq(xsq))/(xsq-1));
+				return (ans1+ans2)/2;
+			} else {
+				return 2*(ks/xsq)*(log(xsq/4) + (-xsq + (3*xsq-2)*lens_function_xsq(xsq))/(xsq-1));
+			}
+		}
 		double xcsq = rsq/(rc*rc);
-		if ((xcsq < 1e-5) and (xsq < 1e-6)) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta); // inside the core, kappa_avg = kappa (constant density)
+		if ((xcsq < 1e-5) and (xsq < 1e-5)) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta); // inside the core, kappa_avg = kappa (constant density)
 		rcterm = 2*(betasq - xsq)*lens_function_xsq(xcsq) - betasq*log(betasq);
 	}
 	if (xsq > 1e-5)
