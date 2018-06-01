@@ -825,6 +825,9 @@ void Lens::process_commands(bool read_file)
 							"log      -- transform to log(p) using the base 10 logarithm\n"
 							"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
 							"              linear 2 5' will transform p --> 2*p + 5.\n"
+							"ratio   -- transform p1 --> p1/p2, that is, to the ratio of two parameters. There is one argument, which is\n"
+							"              the parameter number for p2. e.g., 'fit transform 3 ratio 4' will transform to the ratio of\n"
+							"              parameter 3 over parameter 4.\n"
 							"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"
 							"              the original parameter. There are two arguments, mean value <mean> and dispersion <sig>\n"
 							"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
@@ -4348,6 +4351,13 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> a)) Complain("Invalid A value for linear transformation");
 							if (!(ws[5] >> b)) Complain("Invalid b value for Gaussian transformation");
 							param_settings->transforms[param_num]->set_linear(a,b);
+						}
+						else if (words[3]=="ratio") {
+							if (nwords != 5) Complain("'fit transform ratio' requires one additional argument (paramnum)");
+							int ratio_pnum;
+							if (!(ws[4] >> ratio_pnum)) Complain("Invalid parameter number for ratio transformation");
+							if ((ratio_pnum >= nparams) or (ratio_pnum < 0)) Complain("Parameter number specified for ratio transformation does not exist");
+							param_settings->transforms[param_num]->set_ratio(ratio_pnum);
 						}
 						else Complain("transformation type not recognized");
 						param_settings->transforms[param_num]->set_include_jacobian(include_jac);

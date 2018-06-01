@@ -39,7 +39,7 @@ enum inside_cell { Inside, Outside, Edge };
 enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR };
-enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM };
+enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
 	Area_Overlap,
 	Interpolate,
@@ -919,6 +919,7 @@ struct ParamTransform
 	double gaussian_pos, gaussian_sig;
 	double a, b; // for linear transformations
 	bool include_jacobian;
+	int ratio_paramnum;
 	Transform transform;
 	ParamTransform() { transform = NONE; include_jacobian = false; }
 	ParamTransform(ParamTransform *transform_in)
@@ -931,12 +932,15 @@ struct ParamTransform
 		} else if (transform==LINEAR_TRANSFORM) {
 			a = transform_in->a;
 			b = transform_in->b;
+		} else if (transform==RATIO) {
+			ratio_paramnum = transform_in->ratio_paramnum;
 		}
 	}
 	void set_none() { transform = NONE; }
 	void set_log() { transform = LOG_TRANSFORM; }
 	void set_linear(double &a_in, double &b_in) { transform = LINEAR_TRANSFORM; a = a_in; b = b_in; }
 	void set_gaussian(double &pos_in, double &sig_in) { transform = GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	void set_ratio(int &paramnum_in) { transform = RATIO; ratio_paramnum = paramnum_in; }
 	void set_include_jacobian(bool &include) { include_jacobian = include; }
 };
 
@@ -1203,6 +1207,7 @@ struct ParamSettings
 			else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) cout << ", gaussian transformation (mean=" << transforms[i]->gaussian_pos << ", sigma=" << transforms[i]->gaussian_sig << ")";
 			else if (transforms[i]->transform==LINEAR_TRANSFORM) cout << ", linear transformation A*" << param_names[i] << " + b (A=" << transforms[i]->a << ", b=" << transforms[i]->b << ")";
+			else if (transforms[i]->transform==RATIO) cout << ", ratio transformation " << param_names[i] << "/" << param_names[transforms[i]->ratio_paramnum];
 			if (transforms[i]->include_jacobian==true) cout << " (include Jacobian in likelihood)";
 			cout << endl;
 		}
@@ -1316,6 +1321,8 @@ struct ParamSettings
 				params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				params[i] = transforms[i]->a * params[i] + transforms[i]->b;
+			} else if (transforms[i]->transform==RATIO) {
+				params[i] = params[i]/params[transforms[i]->ratio_paramnum];
 			}
 		}
 	}
@@ -1333,6 +1340,12 @@ struct ParamSettings
 				if (lower[i] > upper[i]) {
 					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
 				}
+			} else if (transforms[i]->transform==RATIO) {
+				lower[i] = lower[i]/upper[transforms[i]->ratio_paramnum];
+				upper[i] = upper[i]/lower[transforms[i]->ratio_paramnum];
+				// CUSTOM LIMITS CAN BE USED HERE (in which case, you should comment out the above two lines and uncomment the lines below):
+				// lower[i] = 0; // these can be customized
+				// upper[i] = 1; // these can be customized
 			}
 		}
 	}
@@ -1345,6 +1358,8 @@ struct ParamSettings
 				transformed_params[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(params[i]);
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
+			} else if (transforms[i]->transform==RATIO) {
+				transformed_params[i] = params[i]*params[transforms[i]->ratio_paramnum];
 			}
 		}
 	}
@@ -1365,6 +1380,10 @@ struct ParamSettings
 				transformed_names[i] = "L{" + names[i] + "}";
 				transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
 			}
+			else if (transforms[i]->transform==RATIO) {
+				transformed_names[i] = names[i] + "_over_" + names[transforms[i]->ratio_paramnum];
+				transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
+			}
 		}
 	}
 	void add_prior_terms_to_loglike(double *params, double& loglike)
@@ -1380,6 +1399,7 @@ struct ParamSettings
 			if (transforms[i]->include_jacobian==true) {
 				if (transforms[i]->transform==LOG_TRANSFORM) loglike -= log(params[i]);
 				else if (transforms[i]->transform==GAUSS_TRANSFORM) loglike -= SQR((params[i] - transforms[i]->gaussian_pos)/transforms[i]->gaussian_sig)/2.0;
+				else if (transforms[i]->transform==RATIO) loglike += log(params[transforms[i]->ratio_paramnum]);
 			}
 		}
 	}
