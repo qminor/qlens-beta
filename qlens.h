@@ -1341,11 +1341,11 @@ struct ParamSettings
 					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
 				}
 			} else if (transforms[i]->transform==RATIO) {
-				lower[i] = lower[i]/upper[transforms[i]->ratio_paramnum];
-				upper[i] = upper[i]/lower[transforms[i]->ratio_paramnum];
-				// CUSTOM LIMITS CAN BE USED HERE (in which case, you should comment out the above two lines and uncomment the lines below):
-				// lower[i] = 0; // these can be customized
-				// upper[i] = 1; // these can be customized
+				//lower[i] = lower[i]/upper[transforms[i]->ratio_paramnum];
+				//upper[i] = upper[i]/lower[transforms[i]->ratio_paramnum];
+				// CUSTOM LIMITS CAN BE USED HERE:
+				lower[i] = 0; // these can be customized
+				upper[i] = 1; // these can be customized
 			}
 		}
 	}
