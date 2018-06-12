@@ -51,6 +51,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double power_k_normalization, variance_normalization;
 	double A_s; // dimensionless curvature power spectrum at the pivot scale
 	double ns, running;
+	double zroot;
 
 	double k_pivot; // CMB pivot scale
 	static const double default_k_pivot;
@@ -58,11 +59,15 @@ class Cosmology : public Spline, public Romberg, public Brent
 	static const double default_running;
 	static const double default_n_massive_neutrinos; // effective neutrino number; following Planck convention
 	static const double default_neutrino_mass; // in eV; this is the minimal mass required to explain neutrino oscillation experiments
-	double croot_const; // used for solving for the concentration of NFW halo using root finder
+	static const double min_tophat_mass;
+	static const double max_tophat_mass;
+	static const double default_sigma8;
+	double croot_const, beta_const; // used for solving for the concentration of NFW (or cored NFW) halo using root finder
 
 	private:
 	double tophat_window_R;
 	Spline comoving_distance_spline;
+	Spline rms_sigma;
 
 	// See bottom of this file for a description of the following variables, used in the transfer function
 	double alpha_gamma, alpha_nu, beta_c, num_degen_hdm, f_baryon, f_bnu, f_cb, f_cdm, f_hdm, growth_small_k, growth_to_z0, k_equality,
@@ -72,39 +77,39 @@ class Cosmology : public Spline, public Romberg, public Brent
 
 	public:
 	Cosmology() { k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; }
+	int set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double degen_hdm, double omega_lamb, double hub, double del_R, bool normalize_by_sigma8);
 	Cosmology(CosmologyParams &cosmo) {
 		k_pivot = default_k_pivot;
 		ns = cosmo.spectral_index;
 		running = cosmo.running;
-		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s);
+		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R);
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_lamb, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R);
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_hdm, int degen_hdm, double omega_lamb, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R);
+		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R,true);
 	}
 	void set_cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
 	// if this function is called, we assume a flat universe, three massless neutrinos, and find transfer function at redshift zero
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R);
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,true);
 	}
 	void set_cosmology(double omega_matter, double omega_baryon, double omega_lamb, double hub, double del_R) {
 		// similar to above, except universe is not necessarily flat
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R);
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
 	}
 	void set_cosmology(CosmologyParams &cosmo) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s);
+		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
 	}
-	int set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double degen_hdm, double omega_lamb, double hub, double del_R);
 
 	void set_pivot_scale(double pscale) { k_pivot = pscale; }
 	void set_power_spectrum_scale_params(double index, double run) { ns = index; running = run; }
@@ -119,10 +124,21 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double matter_power_spectrum(double k, double z);
 	double variance(double k);
 	double variance(double k, double z);
-	double sigma8();
+	void rms_tophat_spline();
+	double rms_sigma_tophat(const double mass, const double z);
+	double rms_sigma8();
 	void plot_power_k(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 	void plot_primordial_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
+
+	double median_concentration_bullock(const double mass, const double z);
+	double mstar(const double z);
+	double sigma_root(const double mass);
+	double delta_z(const double z);
+	double d_plus(const double z);
+	double rms_lsig(const double rad);
+	double mass_function_ST(const double mass, const double z);
+
 
 	// note: the following distance functions assume a flat universe
 	void spline_comoving_distance(void);
@@ -134,6 +150,9 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double critical_density(const double z);
 	double matter_density(const double z) { return omega_m*dcrit0*CUBE(1+z); }
 	void get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir);
+	void get_cored_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, const double beta, double &mvir, double &rvir);
+	double cored_concentration_root_equation(const double c);
+
 	double concentration_root_equation(const double c);
 	double sigma_crit_kpc(double zl, double zs); // for lensing
 	double sigma_crit_arcsec(double zl, double zs); // for lensing

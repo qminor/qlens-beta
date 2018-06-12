@@ -16,12 +16,17 @@ bool LensProfile::orient_major_axis_north;
 bool LensProfile::use_ellipticity_components;
 int LensProfile::default_ellipticity_mode;
 bool LensProfile::output_integration_errors;
+Lens* LensProfile::cosmo;
 
-LensProfile::LensProfile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in)
+LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in)
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -34,8 +39,9 @@ LensProfile::LensProfile(const char *splinefile, const double &q_in, const doubl
 	set_integration_pointers();
 }
 
-void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens)
+void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in)
 {
+	parameter_mode = pmode_in;
 	set_nparams_and_anchordata(np);
 	center_anchored = false;
 	anchor_special_parameter = false;
@@ -67,6 +73,11 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
+	zlens = lens_in->zlens;
+	zsrc_ref = lens_in->zsrc_ref;
+	sigma_cr = lens_in->sigma_cr;
+	kpc_to_arcsec = lens_in->kpc_to_arcsec;
+
 	center_anchored = lens_in->center_anchored;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	center_anchor_lens = lens_in->center_anchor_lens;
@@ -653,14 +664,14 @@ void LensProfile::output_lens_command_nofit(string& command)
 	command += xcstring + " " + ycstring;
 }
 
-bool LensProfile::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
+bool LensProfile::output_cosmology_info(const int lens_number)
 {
 	bool mass_converged, rhalf_converged;
 	double sigma_cr, mtot, rhalf;
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc);
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;

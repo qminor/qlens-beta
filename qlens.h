@@ -38,7 +38,7 @@ enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
 enum inside_cell { Inside, Outside, Edge };
 enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source };
-enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR };
+enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
 	Area_Overlap,
@@ -675,19 +675,19 @@ public:
 	void lens_equation(const lensvector&, lensvector&, const int& thread, const double zfactor); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
-	void add_lens(LensProfileName, const int emode, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const bool optional_setting = false);
-	void add_shear_lens(const double shear, const double theta, const double xc, const double yc); // specific version for shear model
-	void add_ptmass_lens(const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
-	void add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
+	void add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
+	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
+	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
+	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 
-	void add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
-	void add_tabulated_lens(int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
-	bool add_tabulated_lens_from_file(const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
-	bool add_qtabulated_lens_from_file(const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
+	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
+	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
+	bool add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
+	bool add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
 	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
-	void add_qtabulated_lens(int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
+	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 
-	void add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void set_new_lens_vary_parameters(boolvector &vary_flags);
 	void update_parameter_list();
 	void update_anchored_parameters();
@@ -899,6 +899,9 @@ struct ImageData
 struct ParamPrior
 {
 	double gaussian_pos, gaussian_sig;
+	dmatrix covariance_matrix, inv_covariance_matrix;
+	dvector gauss_meanvals;
+	ivector gauss_paramnums;
 	Prior prior;
 	ParamPrior() { prior = UNIFORM_PRIOR; }
 	ParamPrior(ParamPrior *prior_in)
@@ -908,10 +911,37 @@ struct ParamPrior
 			gaussian_pos = prior_in->gaussian_pos;
 			gaussian_sig = prior_in->gaussian_sig;
 		}
+		else if (prior==GAUSS2_PRIOR) {
+			gauss_paramnums.input(prior_in->gauss_paramnums);
+			gauss_meanvals.input(prior_in->gauss_meanvals);
+			inv_covariance_matrix.input(prior_in->inv_covariance_matrix);
+		}
 	}
 	void set_uniform() { prior = UNIFORM_PRIOR; }
 	void set_log() { prior = LOG_PRIOR; }
 	void set_gaussian(double &pos_in, double &sig_in) { prior = GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	void set_gauss2(int p1, int p2, double &pos1_in, double &pos2_in, double &sig1_in, double &sig2_in, double &sig12_in) {
+		prior = GAUSS2_PRIOR;
+		gauss_paramnums.input(2);
+		gauss_meanvals.input(2);
+		covariance_matrix.input(2,2);
+		gauss_paramnums[0] = p1;
+		gauss_paramnums[1] = p2;
+		gauss_meanvals[0] = pos1_in;
+		gauss_meanvals[1] = pos2_in;
+		covariance_matrix[0][0] = SQR(sig1_in);
+		covariance_matrix[1][1] = SQR(sig2_in);
+		covariance_matrix[0][1] = SQR(sig12_in);
+		covariance_matrix[1][0] = covariance_matrix[0][1];
+		inv_covariance_matrix.input(2,2);
+		inv_covariance_matrix = covariance_matrix.inverse();
+	}
+	void set_gauss2_secondary(int p1, int p2) {
+		prior = GAUSS2_PRIOR_SECONDARY;
+		gauss_paramnums.input(2);
+		gauss_paramnums[0] = p1;
+		gauss_paramnums[1] = p2;
+	}
 };
 
 struct ParamTransform
@@ -1202,6 +1232,11 @@ struct ParamSettings
 			else if (priors[i]->prior==GAUSS_PRIOR) {
 				cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ", sigma=" << priors[i]->gaussian_sig << ")";
 			}
+			else if (priors[i]->prior==GAUSS2_PRIOR) {
+				cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
+			} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
+				cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
+			}
 			else die("Prior type unknown");
 			if (transforms[i]->transform==NONE) ;
 			else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
@@ -1391,6 +1426,16 @@ struct ParamSettings
 		for (int i=0; i < nparams; i++) {
 			if (priors[i]->prior==LOG_PRIOR) loglike += log(params[i]);
 			else if (priors[i]->prior==GAUSS_PRIOR) loglike += SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
+			else if (priors[i]->prior==GAUSS2_PRIOR) {
+				int j = priors[i]->gauss_paramnums[1];
+				dvector bvec, cvec;
+				bvec.input(2);
+				cvec.input(2);
+				bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
+				bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
+				cvec = priors[i]->inv_covariance_matrix * bvec;
+				loglike += (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
+			}
 		}
 	}
 	void add_jacobian_terms_to_loglike(double *params, double& loglike)

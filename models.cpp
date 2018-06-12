@@ -18,12 +18,16 @@ const double Alpha::def_tolerance = 1e-16;
 
 /*************************** Softened power law model (alpha) *****************************/
 
-Alpha::Alpha(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
+Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = ALPHA;
 	model_name = "alpha";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 
@@ -351,29 +355,32 @@ double Alpha::rho3d_r_integrand_analytic(const double r)
 	return B/pow(rsq+s*s,a2);
 }
 
-bool Alpha::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
+bool Alpha::output_cosmology_info(const int lens_number)
 {
 	if (alpha != 1.0) return false;
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
-	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
 	double kpc_to_km = 3.086e16;
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
 	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
 	b_kpc = b / kpc_to_arcsec;
-	sigma = c * sqrt(b_kpc*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
+	sigma = c * sqrt(b_kpc*(Rs_sun_km/kpc_to_km)*sigma_cr_kpc/2);
 	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
 	return true;
 }
 
 /********************************** PseudoJaffe **********************************/
 
-PseudoJaffe::PseudoJaffe(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 
@@ -540,21 +547,20 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	return ans;
 }
 
-bool PseudoJaffe::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
+bool PseudoJaffe::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
-	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
 	double kpc_to_km = 3.086e16;
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
 	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
 	b_kpc = b / kpc_to_arcsec;
-	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr/2);
+	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr_kpc/2);
 	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
 	calculate_total_scaled_mass(mtot);
 	bool rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-	mtot *= sigma_cr/(kpc_to_arcsec*kpc_to_arcsec);
+	mtot *= sigma_cr_kpc/(kpc_to_arcsec*kpc_to_arcsec);
 	cout << "total mass = " << mtot << " M_sol" << endl;
 	if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 
@@ -587,27 +593,46 @@ double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
 
 /************************************* NFW *************************************/
 
-NFW::NFW(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
 {
 	lenstype = nfw;
 	model_name = "nfw";
 	special_parameter_command = "";
-	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	setup_base_lens(6,true,parameter_mode_in); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
 
-	ks = ks_in;
-	rs = rs_in;
+	if (parameter_mode==2) {
+		m200 = p1_in;
+		rs = p2_in;
+	} else if (parameter_mode==1) {
+		m200 = p1_in;
+		c200 = p2_in;
+	} else {
+		ks = p1_in;
+		rs = p2_in;
+	}
 
 	update_meta_parameters_and_pointers();
 }
 
 NFW::NFW(const NFW* lens_in)
 {
+	parameter_mode = lens_in->parameter_mode;
 	ks = lens_in->ks;
 	rs = lens_in->rs;
+	if (parameter_mode==2) {
+		m200 = lens_in->m200;
+	} else if (parameter_mode==1) {
+		m200 = lens_in->m200;
+		c200 = lens_in->c200;
+	}
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -615,28 +640,71 @@ NFW::NFW(const NFW* lens_in)
 
 void NFW::assign_paramnames()
 {
-	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
-	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	if (parameter_mode==2) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	} else if (parameter_mode==1) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "c"; latex_paramnames[1] = "c"; latex_param_subscripts[1] = "";
+	} else {
+		paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	}
 	set_geometric_paramnames(2);
 }
 
 void NFW::assign_param_pointers()
 {
-	param[0] = &ks;
-	param[1] = &rs;
+	if (parameter_mode==2) {
+		param[0] = &m200;
+		param[1] = &rs;
+	} else if (parameter_mode==1) {
+		param[0] = &m200;
+		param[1] = &c200;
+	} else {
+		param[0] = &ks;
+		param[1] = &rs;
+	}
 	set_geometric_param_pointers(2);
 }
 
 void NFW::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
+	if (parameter_mode==2) set_ks_c200_from_m200_rs();
+	else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
+}
+
+void NFW::assign_special_anchored_parameters(LensProfile *host_in)
+{
+	// the following special anchoring is to enforce a mass-concentration relation
+	anchor_special_parameter = true;
+	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
+	c200 = cosmo->median_concentration_bullock(m200,zlens);
+	update_meta_parameters();
+}
+
+void NFW::update_special_anchored_params()
+{
+	if (anchor_special_parameter) {
+		c200 = cosmo->median_concentration_bullock(m200,zlens);
+		update_meta_parameters();
+	}
 }
 
 void NFW::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*ks;
-	stepsizes[1] = 0.2*rs;
+	if (parameter_mode==2) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*rs;
+	} else if (parameter_mode==1) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*c200;
+	} else {
+		stepsizes[0] = 0.2*ks;
+		stepsizes[1] = 0.2*rs;
+	}
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[5] = 0.5;
@@ -653,6 +721,24 @@ void NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
+}
+
+void NFW::set_ks_c200_from_m200_rs()
+{
+	double rvir_kpc, rs_kpc;
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rs / kpc_to_arcsec;
+	c200 = rvir_kpc / rs_kpc;
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
+}
+
+void NFW::set_ks_rs_from_m200_c200()
+{
+	double rvir_kpc, rs_kpc;
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rvir_kpc / c200;
+	rs = rs_kpc * kpc_to_arcsec;
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -713,36 +799,46 @@ double NFW::calculate_scaled_mass_3d(const double r)
 	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
 }
 
-/*
-bool NFW::output_cosmology_info(const double zlens, const double zsrc, Lens* cosmo, const int lens_number)
+bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc);
-	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	double rs_kpc, ds, c, m200, r200;
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	double rs_kpc, ds, r200;
 	rs_kpc = rs / kpc_to_arcsec;
-	ds = ks * sigma_cr / rs_kpc;
-	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-	c = r200/rs_kpc;
+	ds = ks * sigma_cr_kpc / rs_kpc;
+	if (parameter_mode > 0) {
+		r200 = c200 * rs_kpc;
+	} else {
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		c200 = r200/rs_kpc;
+	}
 
 	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
 	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
-	cout << "c = " << c << endl;
-	cout << "M_200 = " << m200 << " M_sol\n";
-	cout << "r_200 = " << r200 << " kpc\n";
+	cout << "c = " << c200 << endl;
+	if (parameter_mode > 0) {
+		cout << "ks = " << ks << endl;
+		cout << "r_200 = " << r200 << " kpc\n";
+	} else {
+		cout << "M_200 = " << m200 << " M_sol\n";
+		cout << "r_200 = " << r200 << " kpc\n";
+	}
 	cout << endl;
 	return true;
 }
-*/
 
 /********************************** Truncated_NFW **********************************/
 
-Truncated_NFW::Truncated_NFW(const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
+Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = TRUNCATED_nfw;
 	model_name = "tnfw";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -848,29 +944,51 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 
 /********************************** Cored_NFW **********************************/
 
-Cored_NFW::Cored_NFW(const double &ks_in, const double &rs_in, const double &rc_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
 {
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
 	special_parameter_command = "";
-	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	setup_base_lens(7,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
 
-	ks = ks_in;
-	rs = rs_in;
-	rc = rc_in;
+	if (parameter_mode==2) {
+		m200 = p1_in;
+		rs = p2_in;
+		beta = p3_in;
+	} else if (parameter_mode==1) {
+		m200 = p1_in;
+		c200 = p2_in;
+		beta = p3_in;
+	} else {
+		ks = p1_in;
+		rs = p2_in;
+		rc = p3_in;
+	}
 
 	update_meta_parameters_and_pointers();
 }
 
 Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 {
+	parameter_mode = lens_in->parameter_mode;
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rc = lens_in->rc;
+	beta = lens_in->beta;
+	if (parameter_mode==2) {
+		m200 = lens_in->m200;
+	} else if (parameter_mode==1) {
+		m200 = lens_in->m200;
+		c200 = lens_in->c200;
+	}
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -878,32 +996,88 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 
 void Cored_NFW::assign_paramnames()
 {
-	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
-	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
-	paramnames[2] = "rc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
+	if (parameter_mode==2) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[2] = "beta"; latex_paramnames[2] = "\\beta"; latex_param_subscripts[2] = "c";
+	} else if (parameter_mode==1) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "c"; latex_paramnames[1] = "c"; latex_param_subscripts[1] = "";
+		paramnames[2] = "beta"; latex_paramnames[2] = "\\beta"; latex_param_subscripts[2] = "c";
+	} else {
+		paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[2] = "rc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
+	}
 	set_geometric_paramnames(3);
 }
 
 void Cored_NFW::assign_param_pointers()
 {
-	param[0] = &ks;
-	param[1] = &rs;
-	param[2] = &rc;
+	if (parameter_mode==2) {
+		param[0] = &m200;
+		param[1] = &rs;
+		param[2] = &beta;
+	} else if (parameter_mode==1) {
+		param[0] = &m200;
+		param[1] = &c200;
+		param[2] = &beta;
+	} else {
+		param[0] = &ks;
+		param[1] = &rs;
+		param[2] = &rc;
+	}
 	set_geometric_param_pointers(3);
 }
 
 void Cored_NFW::update_meta_parameters()
 {
 	update_ellipticity_meta_parameters();
+	if (parameter_mode==2) {
+		set_ks_c200_from_m200_rs();
+		rc = beta*rs;
+	} else if (parameter_mode==1) {
+		set_ks_rs_from_m200_c200();
+		rc = beta*rs;
+	} else {
+		beta = rc/rs;
+	}
 	rmin_einstein_radius = 1e-6*rs;
 	//if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for Cored NFW model");
 }
 
+void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in)
+{
+	// the following special anchoring is to enforce a mass-concentration relation
+	anchor_special_parameter = true;
+	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
+	c200 = cosmo->median_concentration_bullock(m200,zlens);
+	update_meta_parameters();
+}
+
+void Cored_NFW::update_special_anchored_params()
+{
+	if (anchor_special_parameter) {
+		c200 = cosmo->median_concentration_bullock(m200,zlens);
+		update_meta_parameters();
+	}
+}
+
 void Cored_NFW::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*ks;
-	stepsizes[1] = 0.2*rs;
-	stepsizes[2] = 0.2*rc;
+	if (parameter_mode==2) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*rs;
+		stepsizes[2] = 0.2*beta;
+	} else if (parameter_mode==1) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*c200;
+		stepsizes[2] = 0.2*beta;
+	} else {
+		stepsizes[0] = 0.2*ks;
+		stepsizes[1] = 0.2*rs;
+		stepsizes[2] = 0.2*rc;
+	}
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[6] = 0.5;
@@ -923,10 +1097,33 @@ void Cored_NFW::set_model_specific_integration_pointers()
 	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::potential_spherical_rsq);
 }
 
+void Cored_NFW::set_ks_rs_from_m200_c200()
+{
+	double rvir_kpc, rs_kpc;
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rvir_kpc / c200;
+	rs = rs_kpc * kpc_to_arcsec;
+	double rcterm;
+	if (beta==0.0) rcterm = 0;
+	else rcterm = beta*beta*log(1+c200/beta);
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*((1-2*beta)*log(1+c200) + rcterm - (1-beta)*c200/(1+c200))/SQR(1-beta));
+}
+
+void Cored_NFW::set_ks_c200_from_m200_rs()
+{
+	double rvir_kpc, rs_kpc;
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rs / kpc_to_arcsec;
+	c200 = rvir_kpc / rs_kpc;
+	double rcterm;
+	if (beta==0.0) rcterm = 0;
+	else rcterm = beta*beta*log(1+c200/beta);
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*((1-2*beta)*log(1+c200) + rcterm - (1-beta)*c200/(1+c200))/SQR(1-beta));
+}
+
 double Cored_NFW::kappa_rsq(const double rsq)
 {
-	double beta, xsq, rsterm, rcterm;
-	beta = rc/rs;
+	double xsq, rsterm, rcterm;
 	xsq = rsq/(rs*rs);
 	if (rc==0.0) {
 		if (xsq < 1e-6) return -ks*(2+log(xsq/4));
@@ -939,20 +1136,20 @@ double Cored_NFW::kappa_rsq(const double rsq)
 				double ans1, ans2;
 				// the following is a quick and dirty way to avoid singularity which is very close to x=1
 				xsq += 1.0e-4;
-				ans1 = ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
+				ans1 = ks*(1 + 2*xsq - 3*xsq*lens_function_xsq(xsq)) / SQR(xsq-1);
 				xsq -= 2.0e-4;
-				ans2 = ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
-				return (ans1+ans2)/2;
+				ans2 = ks*(1 + 2*xsq - 3*xsq*lens_function_xsq(xsq)) / SQR(xsq-1);
+				return (ans1 + ans2)/2;
 			} else {
 				if (xsq < 1e-5)
-					return ks*(1+2*xsq - 1.5*xsq)/SQR(xsq-1);
+					return ks*(1 + 2*xsq - 1.5*xsq)/SQR(xsq-1);
 				else
-					return ks*(1+2*xsq - 3*xsq*lens_function_xsq(xsq))/SQR(xsq-1);
+					return ks*(1 + 2*xsq - 3*xsq*lens_function_xsq(xsq)) / SQR(xsq-1);
 			}
 		}
 		double xcsq = rsq/(rc*rc);
 		if (xcsq < 1e-8) {
-			if (xsq < 1e-14) return -ks*(log(beta*beta) + 2*(1-beta))/SQR(1-beta);
+			if (xsq < 1e-14) return -ks*(log(beta*beta) + 2*(1-beta)) / SQR(1-beta);
 			rcterm = -log(xcsq/4)/2;
 		} else rcterm = lens_function_xsq(xcsq);
 	}
@@ -964,8 +1161,7 @@ double Cored_NFW::kappa_rsq(const double rsq)
 
 double Cored_NFW::kappa_rsq_deriv(const double rsq)
 {
-	double beta, xsq, xcsq, rsterm, rcterm;
-	beta = rc/rs;
+	double xsq, xcsq, rsterm, rcterm;
 	xsq = rsq/(rs*rs);
 	xcsq = rsq/(rc*rc);
 	if (rc==0.0) rcterm = 0;
@@ -1008,8 +1204,7 @@ inline double Cored_NFW::potential_lens_function_xsq(const double &xsq)
 double Cored_NFW::potential_spherical_rsq(const double rsq)
 {
 	// Something is wrong with these formulae, but I don't have time to fix now. Figure out later
-	double beta, betasq, xsq, xcsq, rsfac, rcfac, logbterm;
-	beta = rc/rs;
+	double betasq, xsq, xcsq, rsfac, rcfac, logbterm;
 	betasq = beta*beta;
 	xsq = rsq/(rs*rs);
 	if (xsq < 1e-6) rsfac = log(xsq/4)/2;
@@ -1034,8 +1229,7 @@ double Cored_NFW::potential_spherical_rsq(const double rsq)
 
 double Cored_NFW::kapavg_spherical_rsq(const double rsq)
 {
-	double beta, betasq, xsq, rsterm, rcterm;
-	beta = rc/rs;
+	double betasq, xsq, rsterm, rcterm;
 	betasq = beta*beta;
 	xsq = rsq/(rs*rs);
 	if (rc==0.0) {
@@ -1075,20 +1269,58 @@ double Cored_NFW::rho3d_r_integrand_analytic(const double r)
 
 double Cored_NFW::calculate_scaled_mass_3d(const double r)
 {
-	double beta = rc/rs, rcterm;
+	double rcterm;
 	if (rc==0.0) rcterm = 0;
 	else rcterm = beta*beta*log(1+r/rc);
 	return 4*M_PI*ks*rs*rs*((1-2*beta)*log(1+r/rs) + rcterm - (1-beta)*r/(r+rs))/SQR(1-beta);
 }
 
+bool Cored_NFW::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	double rs_kpc, rc_kpc, ds, r200;
+	rs_kpc = rs / kpc_to_arcsec;
+	rc_kpc = beta * rs_kpc;
+	ds = ks * sigma_cr_kpc / rs_kpc;
+	if (parameter_mode > 0) {
+		r200 = c200 * rs_kpc;
+		double mcrap, rcrap;
+		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,mcrap,rcrap);
+		cout << "m: " << m200 << " " << mcrap << endl;
+		cout << "r: " << r200 << " " << rcrap << endl;
+	} else {
+		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
+		c200 = r200/rs_kpc;
+	}
+
+	cout << "rho_s = " << ds << " M_sol/kpc^3 (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc (scale radius)" << endl;
+	cout << "r_c = " << rc_kpc << " kpc (core radius)" << endl;
+	cout << "c = " << c200 << endl;
+	if (parameter_mode > 0) {
+		cout << "ks = " << ks << endl;
+		cout << "r_200 = " << r200 << " kpc\n";
+	} else {
+		cout << "M_200 = " << m200 << " M_sol\n";
+		cout << "r_200 = " << r200 << " kpc\n";
+	}
+	cout << endl;
+	return true;
+}
+
 /********************************** Hernquist **********************************/
 
-Hernquist::Hernquist(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
+Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = HERNQUIST;
 	model_name = "hern";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -1190,12 +1422,16 @@ double Hernquist::rho3d_r_integrand_analytic(const double r)
 
 /********************************** Exponential Disk **********************************/
 
-ExpDisk::ExpDisk(const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees,
+ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = EXPDISK;
 	model_name = "expdisk";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -1281,11 +1517,15 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 
 /***************************** External shear *****************************/
 
-Shear::Shear(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in)
+Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in)
 {
 	lenstype = SHEAR;
 	model_name = "shear";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(4,false); // number of parameters = 4, is_elliptical_lens = false
 
 	if (use_shear_component_params) {
@@ -1443,7 +1683,7 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 
 /***************************** Multipole term *******************************/
 
-Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine)
+Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine)
 {
 	lenstype = MULTIPOLE;
 	model_name = (kap==true) ? "kmpole" : "mpole";
@@ -1454,6 +1694,10 @@ Multipole::Multipole(const double &A_m_in, const double n_in, const int m_in, co
 	special_parameter_command = "m=" + mstring;
 	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
 	sine_term = sine;
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(5,false); // number of parameters = 5, is_elliptical_lens = false
 
 	n = n_in;
@@ -1780,11 +2024,15 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 
 /***************************** Point mass *****************************/
 
-PointMass::PointMass(const double &bb, const double &xc_in, const double &yc_in)
+PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in)
 {
 	lenstype = PTMASS;
 	model_name = "ptmass";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
 	b = bb;
 	x_center = xc_in;
@@ -1908,13 +2156,16 @@ double PointMass::calculate_scaled_mass_3d(const double r)
 
 /***************************** Core/Cusp Model *****************************/
 
-CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, bool parametrize_einstein_radius)
+CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
 {
 	lenstype = CORECUSP;
 	model_name = "corecusp";
-	special_parameter_command = ((parametrize_einstein_radius==true) ? "re_param" : "");
-	set_k0_by_einstein_radius = parametrize_einstein_radius;
-	setup_base_lens(9,true); // number of parameters = 9, is_elliptical_lens = true
+	special_parameter_command = ((parameter_mode_in==1) ? "re_param" : "");
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	setup_base_lens(9,true,parameter_mode_in); // number of parameters = 9, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -1929,7 +2180,7 @@ CoreCusp::CoreCusp(const double &mass_param_in, const double &gamma_in, const do
 	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
 	if (gamma >= 3) die("inner slope cannot be equal to or greater than 3 for corecusp model (mass diverges at r=0)");
 	if (n <= 1) die("outer slope cannot be equal to or less than 1 for corecusp model");
-	if (set_k0_by_einstein_radius) {
+	if (parameter_mode==1) {
 		einstein_radius = mass_param_in;
 		if (einstein_radius < 0) einstein_radius = -einstein_radius; // don't allow negative einstein radius
 		k0 = 1.0; // This will be reset when update_meta_parameters() is called
@@ -1946,8 +2197,8 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 	n = lens_in->n;
 	a = lens_in->a;
 	s = lens_in->s;
-	set_k0_by_einstein_radius = lens_in->set_k0_by_einstein_radius;
-	if (set_k0_by_einstein_radius) einstein_radius = lens_in->einstein_radius;
+	parameter_mode = lens_in->parameter_mode;
+	if (parameter_mode==1) einstein_radius = lens_in->einstein_radius;
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -1955,7 +2206,7 @@ CoreCusp::CoreCusp(const CoreCusp* lens_in)
 
 void CoreCusp::assign_paramnames()
 {
-	if (set_k0_by_einstein_radius) {
+	if (parameter_mode==1) {
 		paramnames[0] = "Re"; latex_paramnames[0] = "R";       latex_param_subscripts[0] = "e";
 	} else {
 		paramnames[0] = "k0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
@@ -1969,7 +2220,7 @@ void CoreCusp::assign_paramnames()
 
 void CoreCusp::assign_param_pointers()
 {
-	if (set_k0_by_einstein_radius) param[0] = &einstein_radius;
+	if (parameter_mode==1) param[0] = &einstein_radius;
 	else param[0] = &k0;
 	param[1] = &gamma;
 	param[2] = &n;
@@ -1989,7 +2240,7 @@ void CoreCusp::update_meta_parameters()
 	double p = (n-1.0)/2;
 	beta_p1 = Beta(p,0.5);
 	beta_p2 = beta_p1/(1+1.0/(2*p)); // Beta(p,1.5)
-	if (set_k0_by_einstein_radius) {
+	if (parameter_mode==1) {
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
 	}
@@ -2003,7 +2254,7 @@ void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
 	special_anchor_lens = host_in;
 	double rm, ravg;
 	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-	if (set_k0_by_einstein_radius) {
+	if (parameter_mode==1) {
 		a = sqrt(ravg*einstein_radius); // Not good! Only true for Pseudo-Jaffe subhalo. Fix this later (if it can be fixed)
 		if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 		k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
@@ -2020,7 +2271,7 @@ void CoreCusp::update_special_anchored_params()
 	if (anchor_special_parameter) {
 		double rm, ravg;
 		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-		if (set_k0_by_einstein_radius) {
+		if (parameter_mode==1) {
 			a = sqrt(ravg*einstein_radius);
 			if (s != 0) set_core_enclosed_mass(); else core_enclosed_mass = 0;
 			k0 = k0 / kapavg_spherical_rsq(einstein_radius*einstein_radius);
@@ -2036,14 +2287,14 @@ void CoreCusp::update_special_anchored_params()
 
 void CoreCusp::set_auto_stepsizes()
 {
-	if (set_k0_by_einstein_radius) stepsizes[0] = 0.1*einstein_radius;
+	if (parameter_mode==1) stepsizes[0] = 0.1*einstein_radius;
 	else stepsizes[0] = 0.1*k0;
 	stepsizes[1] = 0.1;
 	stepsizes[2] = 0.1;
 	stepsizes[3] = 0.1*a;
 	stepsizes[4] = 0.02*a;
 	set_auto_eparam_stepsizes(5,6);
-	if (set_k0_by_einstein_radius) {
+	if (parameter_mode==1) {
 		// take advantage of the fact that we're keeping track of the Einstein radius
 		stepsizes[7] = 0.1*einstein_radius;
 		stepsizes[8] = 0.1*einstein_radius;
@@ -2208,12 +2459,15 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 
 /***************************** SersicLens profile *****************************/
 
-
-SersicLens::SersicLens(const double &kappa_e_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &kappa_e_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -2305,11 +2559,15 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 
 /***************************** Mass sheet *****************************/
 
-MassSheet::MassSheet(const double &kext_in, const double &xc_in, const double &yc_in)
+MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in)
 {
 	lenstype = SHEET;
 	model_name = "sheet";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kext = kext_in;
@@ -2415,11 +2673,15 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 
 /******************************* Tabulated Model *******************************/
 
-Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N)
+Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N)
 {
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
@@ -2551,7 +2813,7 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 	}
 }
 
-Tabulated_Model::Tabulated_Model(const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename)
+Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename)
 {
 	lenstype = TABULATED;
 	special_parameter_command = "";
@@ -3059,12 +3321,16 @@ Tabulated_Model::~Tabulated_Model() {
 
 
 /***************************** Tabulated Model that interpolates in q *****************************/
-QTabulated_Model::QTabulated_Model(const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N)
+QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N)
 {
 	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
@@ -3232,7 +3498,7 @@ QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
-QTabulated_Model::QTabulated_Model(const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
+QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
 {
 	lenstype = QTABULATED;
 	special_parameter_command = "";
@@ -3750,11 +4016,15 @@ QTabulated_Model::~QTabulated_Model() {
 
 /***************************** Test Model (for testing purposes only) *****************************/
 
-TestModel::TestModel(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	lenstype = TESTMODEL;
 	model_name = "test";
 	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	//setup_base_lens(X,false); // number of parameters = X, is_elliptical_lens = false
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);

@@ -360,6 +360,7 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
+	LensProfile::cosmo = this;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
@@ -387,6 +388,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	my_group = lens_in->my_group;
 #endif
 
+	LensProfile::cosmo = this;
 	omega_matter = lens_in->omega_matter;
 	hubble = lens_in->hubble;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
@@ -602,7 +604,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
-void Lens::add_lens(LensProfileName name, const int emode, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const bool optional_setting)
+void Lens::add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	LensProfile** newlist = new LensProfile*[nlens+1];
@@ -618,33 +620,33 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 
 	switch (name) {
 		case PTMASS:
-			newlist[nlens] = new PointMass(mass_parameter, xc, yc); break;
+			newlist[nlens] = new PointMass(zl, zs, mass_parameter, xc, yc); break;
 		case SHEET:
-			newlist[nlens] = new MassSheet(mass_parameter, xc, yc); break;
+			newlist[nlens] = new MassSheet(zl, zs, mass_parameter, xc, yc); break;
 		case ALPHA:
-			newlist[nlens] = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case SHEAR:
-			newlist[nlens] = new Shear(eparam, theta, xc, yc); break;
+			newlist[nlens] = new Shear(zl, zs, eparam, theta, xc, yc); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(...) because one of the input parameters is an int
 		case nfw:
-			newlist[nlens] = new NFW(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
 		case TRUNCATED_nfw:
-			newlist[nlens] = new Truncated_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case CORED_nfw:
-			newlist[nlens] = new Cored_NFW(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
 		case PJAFFE:
-			newlist[nlens] = new PseudoJaffe(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case EXPDISK:
-			newlist[nlens] = new ExpDisk(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case HERNQUIST:
-			newlist[nlens] = new Hernquist(mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case CORECUSP:
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
-			newlist[nlens] = new CoreCusp(mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, optional_setting); break;
+			newlist[nlens] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
 		case SERSIC_LENS:
-			newlist[nlens] = new SersicLens(mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		case TESTMODEL: // Model for testing purposes
-			newlist[nlens] = new TestModel(eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		default:
 			die("Lens type not recognized");
 	}
@@ -657,7 +659,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double mass_par
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 
-void Lens::add_lens(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
+void Lens::add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
@@ -667,7 +669,7 @@ void Lens::add_lens(const char *splinefile, const int emode, const double q, con
 	}
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
-	newlist[nlens++] = new LensProfile(splinefile, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f);
+	newlist[nlens++] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	lens_list = newlist;
@@ -676,22 +678,22 @@ void Lens::add_lens(const char *splinefile, const int emode, const double q, con
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_shear_lens(const double shear_p1, const double shear_p2, const double xc, const double yc)
+void Lens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
 {
-	add_lens(SHEAR,-1,0,0,0,shear_p1,shear_p2,xc,yc);
+	add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
-void Lens::add_ptmass_lens(const double mass_parameter, const double xc, const double yc)
+void Lens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
 {
-	add_lens(PTMASS,-1,mass_parameter,0,0,0,0,xc,yc);
+	add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
 }
 
-void Lens::add_mass_sheet_lens(const double mass_parameter, const double xc, const double yc)
+void Lens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
 {
-	add_lens(SHEET,-1,mass_parameter,0,0,0,0,xc,yc);
+	add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
 }
 
-void Lens::add_multipole_lens(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
+void Lens::add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	if (nlens > 0) {
@@ -699,7 +701,7 @@ void Lens::add_multipole_lens(int m, const double a_m, const double n, const dou
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Multipole(a_m, n, m, theta, xc, yc, kap, sine_term);
+	newlist[nlens++] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, sine_term);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -707,7 +709,7 @@ void Lens::add_multipole_lens(int m, const double a_m, const double n, const dou
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_tabulated_lens(int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
+void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
 {
 	// automatically set gridsize if the appropriate settings are turned on
 	if (autogrid_before_grid_creation) autogrid();
@@ -732,7 +734,7 @@ void Lens::add_tabulated_lens(int lnum, const double kscale, const double rscale
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N);
+	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -740,7 +742,7 @@ void Lens::add_tabulated_lens(int lnum, const double kscale, const double rscale
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_qtabulated_lens(int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
+void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
 {
 	// automatically set gridsize if the appropriate settings are turned on
 	if (autogrid_before_grid_creation) autogrid();
@@ -765,7 +767,7 @@ void Lens::add_qtabulated_lens(int lnum, const double kscale, const double rscal
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new QTabulated_Model(kscale, rscale, q, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N);
+	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -773,7 +775,7 @@ void Lens::add_qtabulated_lens(int lnum, const double kscale, const double rscal
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-bool Lens::add_tabulated_lens_from_file(const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
+bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
 {
 	string tabfilename;
 	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
@@ -812,7 +814,7 @@ bool Lens::add_tabulated_lens_from_file(const double kscale, const double rscale
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(kscale, rscale, theta, xc, yc, tabfile, tabfilename);
+	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename);
 
 	lens_list = newlist;
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -821,7 +823,7 @@ bool Lens::add_tabulated_lens_from_file(const double kscale, const double rscale
 	return true;
 }
 
-bool Lens::add_qtabulated_lens_from_file(const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot)
+bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot)
 {
 	string tabfilename;
 	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
@@ -866,7 +868,7 @@ bool Lens::add_qtabulated_lens_from_file(const double kscale, const double rscal
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new QTabulated_Model(kscale, rscale, q, theta, xc, yc, tabfile);
+	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile);
 
 	lens_list = newlist;
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -5557,11 +5559,20 @@ void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 	if (lmax >= nlens) return;
 	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
 	double dlens = angular_diameter_distance(lens_redshift);
+	cout << "H0 = " << hubble*100 << " km/s/Mpc" << endl;
+	cout << "omega_m = " << omega_matter << endl;
+	//cout << "omega_lambda = " << 1-omega_matter << endl;
+	cout << "zlens = " << lens_redshift << endl;
+	cout << "zsrc = " << source_redshift << endl;
 	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
-	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl << endl;
+	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl;
+	double kpc_to_arcsec = 206.264806/angular_diameter_distance(lens_redshift);
+	cout << "1 arcsec = " << (1.0/kpc_to_arcsec) << " kpc" << endl;
+	cout << "sigma8 = " << rms_sigma8() << endl;
+	cout << endl;
 	if (nlens > 0) {
 		for (int i=lmin; i <= lmax; i++) {
-			lens_list[i]->output_cosmology_info(lens_redshift,reference_source_redshift,this,i);
+			lens_list[i]->output_cosmology_info(i);
 		}
 	}
 	else cout << "No lens models have been specified" << endl << endl;

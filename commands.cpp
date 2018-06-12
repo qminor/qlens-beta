@@ -466,10 +466,12 @@ void Lens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="nfw")
-						cout << "lens nfw <ks> <rs> <q/e> [theta] [x-center] [y-center]\n\n"
-							"where <ks> is the mass parameter, <rs> is the scale radius, <q/e> is the axis ratio or ellipticity\n"
-							"(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in\n"
-							"degrees) about the center (all defaults = 0).\n"
+						cout << "lens nfw <ks> <rs> <q/e> [theta] [x-center] [y-center]         (pmode=0)\n"
+								  "lens nfw <mvir> <c> <q/e> [theta] [x-center] [y-center]        (pmode=1)\n"
+								  "lens nfw <mvir> <rs> <q/e> [theta] [x-center] [y-center]       (pmode=2)\n\n"
+							"where <ks>/<mvir> is the mass parameter, <rs> is the scale radius (or <c> is concentration for pmode=1), <q/e>\n"
+							"is the axis ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
@@ -482,11 +484,13 @@ void Lens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="cnfw")
-						cout << "lens cnfw <ks> <rs> <rc> <q/e> [theta] [x-center] [y-center]\n\n"
+						cout << "lens cnfw <ks> <rs> <rc> <q/e> [theta] [x-center] [y-center]         (pmode=0)\n"
+								  "lens cnfw <mvir> <c> <beta> <q/e> [theta] [x-center] [y-center]        (pmode=1)\n"
+								  "lens cnfw <mvir> <rs> <beta> <q/e> [theta] [x-center] [y-center]       (pmode=2)\n\n"
 							"Cored NFW profile with 3d density given by rho = rho_s/((r+rc)*(r+rs)^2), used in Penarrubia et al. (2012).\n"
-							"Here, <ks> is the mass parameter, <rs> is the scale radius, <rc> is the core radius, <q/e> is the axis\n"
-							"ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
-							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
+							"Here, <ks>/<mvir> is the mass parameter, <rs> is the scale radius (or <c> is concentration for pmode=1), <rc>\n"
+							"is the core radius (or <beta> = rc/rs for pmodes 1,2), <q/e> is the axis ratio or ellipticity (depending on the\n"
+							"ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees) about the center.\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="expdisk")
@@ -805,7 +809,11 @@ void Lens::process_commands(bool read_file)
 							"uniform  -- this is the default prior for all parameters\n"
 							"log      -- prior 1/p, where p is the parameter; this is equivalent to a uniform prior in log(p)\n"
 							"gaussian -- Gaussian prior with two parameter arguments, mean value <mean> and dispersion <sig>\n"
-							"              (e.g., 'fit priors # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
+							"              (e.g., 'fit priors # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n"
+							"gauss2 -- Gaussian prior in two parameters, with arguments (p2,mean1,mean2,sig1,sig2,sig12), where p2 gives\n"
+							"            the second parameter and sig1,sig2,sig12 are the square root of the elements of the covariance\n"
+							"            matrix between the two parameters.\n"
+							"            (e.g., 'fit priors 0 gauss2 1 0.5 0.5 0.1 0.2 0.05' is a Gaussian prior in parameters 0,1.)\n\n";
 					else if (words[2]=="transform")
 						cout << "fit transform\n"
 							"fit transform <param_num> <transform_type> [transform_params] ... [include_jac]\n\n"
@@ -2270,7 +2278,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(ALPHA, emode, b, alpha, s, q, theta, xc, yc);
+						add_lens(ALPHA, emode, lens_redshift, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2355,7 +2363,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(PJAFFE, emode, b, a, s, q, theta, xc, yc);
+						add_lens(PJAFFE, emode, lens_redshift, reference_source_redshift, b, a, s, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
@@ -2465,7 +2473,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_multipole_lens(m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
+						add_multipole_lens(lens_redshift, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2475,12 +2483,39 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="nfw")
 			{
+				int pmode = 0;
+				bool set_median_concentration = false;
+				if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
+					set_median_concentration = true;
+					pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
+				} else for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("pmode=")) != string::npos) {
+						string pnumstring = words[i].substr(pos+6);
+						stringstream pnumstr;
+						pnumstr << pnumstring;
+						if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
+						if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}	
+
 				if (nwords > 8) Complain("more than 6 parameters not allowed for model nfw");
 				if (nwords >= 5) {
-					double ks, rs;
+					double p1, p2;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model nfw");
-					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model nfw");
+					if (pmode==2) {
+						if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
+						if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
+					} else if (pmode==1) {
+						if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
+						if (words[3]=="cmed") set_median_concentration = true;
+						else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
+					} else {
+						if (!(ws[2] >> p1)) Complain("invalid ks parameter for model nfw");
+						if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
+					}
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model nfw");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfw");
@@ -2502,7 +2537,7 @@ void Lens::process_commands(bool read_file)
 					}
 					param_vals.input(6);
 					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+					param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
@@ -2513,9 +2548,9 @@ void Lens::process_commands(bool read_file)
 								if (nwords==tot_nparams_to_vary+2) {
 									if ((words[4] != "0") or (words[5] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for four parameters (ks,rs,q,theta) in model nfw";
+								} else complain_str = "Must specify vary flags for four parameters (p1,p2,q,theta) in model nfw";
 							}
-							else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model nfw";
+							else complain_str = "Must specify vary flags for six parameters (p1,p2,q,theta,xc,yc) in model nfw";
 							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -2537,9 +2572,12 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(nfw, emode, ks, rs, 0.0, q, theta, xc, yc);
+						add_lens(nfw, emode, lens_redshift, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+						if (set_median_concentration) {
+							lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
+						}
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
 					}
 				}
@@ -2610,7 +2648,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(TRUNCATED_nfw, emode, ks, rs, rt, q, theta, xc, yc);
+						add_lens(TRUNCATED_nfw, emode, lens_redshift, reference_source_redshift, ks, rs, rt, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2620,13 +2658,42 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="cnfw")
 			{
+				int pmode = 0;
+				bool set_median_concentration = false;
+				if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
+					set_median_concentration = true;
+					pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
+				} else for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("pmode=")) != string::npos) {
+						string pnumstring = words[i].substr(pos+6);
+						stringstream pnumstr;
+						pnumstr << pnumstring;
+						if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
+						if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}	
+
 				if (nwords > 9) Complain("more than 7 parameters not allowed for model cnfw");
 				if (nwords >= 6) {
-					double ks, rs, rc;
+					double p1, p2, p3;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> ks)) Complain("invalid ks parameter for model cnfw");
-					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model cnfw");
-					if (!(ws[4] >> rc)) Complain("invalid rc parameter for model cnfw");
+					if (pmode==2) {
+						if (!(ws[2] >> p1)) Complain("invalid m200 parameter for model cnfw");
+						if (!(ws[3] >> p2)) Complain("invalid rs parameter for model cnfw");
+						if (!(ws[4] >> p3)) Complain("invalid beta parameter for model cnfw");
+					} else if (pmode==1) {
+						if (!(ws[2] >> p1)) Complain("invalid m200 parameter for model cnfw");
+						if (words[3]=="cmed") set_median_concentration = true;
+						else if (!(ws[3] >> p2)) Complain("invalid c parameter for model cnfw");
+						if (!(ws[4] >> p3)) Complain("invalid beta parameter for model cnfw");
+					} else {
+						if (!(ws[2] >> p1)) Complain("invalid ks parameter for model cnfw");
+						if (!(ws[3] >> p2)) Complain("invalid rs parameter for model cnfw");
+						if (!(ws[4] >> p3)) Complain("invalid rc parameter for model cnfw");
+					}
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model cnfw");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model cnfw");
@@ -2646,10 +2713,10 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model cnfw");
 						}
 					}
-					//if (rc >= rs) Complain("core radius (rc) must be smaller than scale radius (rs) for model cnfw");
+					//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
 					param_vals.input(7);
 					for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-					param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=rc; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+					param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 					if (vary_parameters) {
 						nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 						tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
@@ -2660,9 +2727,9 @@ void Lens::process_commands(bool read_file)
 								if (nwords==tot_nparams_to_vary+2) {
 									if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 									else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-								} else complain_str = "Must specify vary flags for five parameters (ks,rs,rc,q,theta) in model cnfw";
+								} else complain_str = "Must specify vary flags for five parameters (p1,p2,p3,q,theta) in model cnfw";
 							}
-							else complain_str = "Must specify vary flags for seven parameters (ks,rs,rc,q,theta,xc,yc) in model cnfw";
+							else complain_str = "Must specify vary flags for seven parameters (p1,p2,p3,q,theta,xc,yc) in model cnfw";
 							if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 								complain_str += ",\n     plus two shear parameters ";
 								complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -2684,9 +2751,12 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(CORED_nfw, emode, ks, rs, rc, q, theta, xc, yc);
+						add_lens(CORED_nfw, emode, lens_redshift, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+						if (set_median_concentration) {
+							lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
+						}
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
 					}
 				}
@@ -2756,7 +2826,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(EXPDISK, emode, k0, R_d, 0.0, q, theta, xc, yc);
+						add_lens(EXPDISK, emode, lens_redshift, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2835,7 +2905,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(filename.c_str(), emode, q, theta, qx, f, xc, yc);
+						add_lens(filename.c_str(), emode, lens_redshift, reference_source_redshift, q, theta, qx, f, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2907,7 +2977,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(HERNQUIST, emode, ks, rs, 0.0, q, theta, xc, yc);
+						add_lens(HERNQUIST, emode, lens_redshift, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -2918,12 +2988,12 @@ void Lens::process_commands(bool read_file)
 			else if (words[1]=="corecusp")
 			{
 				bool set_tidal_host = false;
-				bool parametrize_einstein_radius = false;
+				int pmode = 0;
 				int hostnum;
 				if (nwords > 12) Complain("more than 10 parameters not allowed for model corecusp");
 				if ((nwords >= 8) and (words[2].find("re_param")==0)) {
 					if (update_parameters) Complain("Einstein radius parameterization cannot be changed when updating corecusp");
-					parametrize_einstein_radius = true;
+					pmode = 1;
 					stringstream* new_ws = new stringstream[nwords-1];
 					words.erase(words.begin()+2);
 					for (int i=0; i < nwords-1; i++) {
@@ -3009,7 +3079,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(CORECUSP, emode, k0, a, s, q, theta, xc, yc, gamma, n, parametrize_einstein_radius);
+						add_lens(CORECUSP, emode, lens_redshift, reference_source_redshift, k0, a, s, q, theta, xc, yc, gamma, n, pmode);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (set_tidal_host) {
@@ -3080,7 +3150,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_ptmass_lens(b, xc, yc);
+						add_ptmass_lens(lens_redshift, reference_source_redshift, b, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -3156,7 +3226,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_lens(SERSIC_LENS, emode, kappe_e, re, n, q, theta, xc, yc);
+						add_lens(SERSIC_LENS, emode, lens_redshift, reference_source_redshift, kappe_e, re, n, q, theta, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -3224,7 +3294,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_mass_sheet_lens(kappa, xc, yc);
+						add_mass_sheet_lens(lens_redshift, reference_source_redshift, kappa, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -3290,7 +3360,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
-						add_shear_lens(shear_p1, shear_p2, xc, yc);
+						add_shear_lens(lens_redshift, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 						if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
@@ -3389,9 +3459,9 @@ void Lens::process_commands(bool read_file)
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
 						if (tabulate_existing_lens) {
-							add_tabulated_lens(lnum, kscale, rscale, theta, xc, yc);
+							add_tabulated_lens(lens_redshift, reference_source_redshift, lnum, kscale, rscale, theta, xc, yc);
 						} else {
-							if (!add_tabulated_lens_from_file(kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
+							if (!add_tabulated_lens_from_file(lens_redshift, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 						}
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
@@ -3490,9 +3560,9 @@ void Lens::process_commands(bool read_file)
 						if (auto_ccspline) automatically_determine_ccspline_mode();
 					} else {
 						if (qtabulate_existing_lens) {
-							add_qtabulated_lens(lnum, kscale, rscale, q, theta, xc, yc);
+							add_qtabulated_lens(lens_redshift, reference_source_redshift, lnum, kscale, rscale, q, theta, xc, yc);
 						} else {
-							if (!add_qtabulated_lens_from_file(kscale, rscale, q, theta, xc, yc, filename)) Complain("input file for qtabulated model either does not exist, or is in incorrect format");
+							if (!add_qtabulated_lens_from_file(lens_redshift, reference_source_redshift, kscale, rscale, q, theta, xc, yc, filename)) Complain("input file for qtabulated model either does not exist, or is in incorrect format");
 						}
 						if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
@@ -3517,7 +3587,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[5] >> yc)) Complain("invalid y-center parameter for model testmodel");
 						}
 					}
-					add_lens(TESTMODEL, emode, 0, 0, 0, q, theta, xc, yc);
+					add_lens(TESTMODEL, emode, lens_redshift, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 					if (vary_parameters) Complain("vary parameters not supported for testmodel");
 				}
 				else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
@@ -3564,7 +3634,7 @@ void Lens::process_commands(bool read_file)
 				}
 			}
 			if (add_shear) {
-				add_shear_lens(shear_param_vals[0], shear_param_vals[1], 0, 0);
+				add_shear_lens(lens_redshift, reference_source_redshift, shear_param_vals[0], shear_param_vals[1], 0, 0);
 				lens_list[nlens-1]->anchor_center_to_lens(lens_list,nlens-2);
 				if (vary_parameters) set_new_lens_vary_parameters(shear_vary_flags);
 				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
@@ -4308,6 +4378,20 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> pos)) Complain("Invalid mean value for Gaussian prior");
 							if (!(ws[5] >> sig)) Complain("Invalid dispersion value for Gaussian prior");
 							param_settings->priors[param_num]->set_gaussian(pos,sig);
+						}
+						else if (words[3]=="gauss2") {
+							if (nwords != 10) Complain("'fit priors gauss2' requires six additional arguments (pnum,mean1,mean2,sig1,sig2,sig12)");
+							int param_num2;
+							double mean1, mean2;
+							double sig1, sig2, sig12;
+							if (!(ws[4] >> param_num2)) Complain("Invalid value for second parameter for multivariate Gaussian prior");
+							if (!(ws[5] >> mean1)) Complain("Invalid mean value for Gaussian prior");
+							if (!(ws[6] >> mean2)) Complain("Invalid mean value for Gaussian prior");
+							if (!(ws[7] >> sig1)) Complain("Invalid sigma1 value for Gaussian prior");
+							if (!(ws[8] >> sig2)) Complain("Invalid sigma2 value for Gaussian prior");
+							if (!(ws[9] >> sig12)) Complain("Invalid sigma12 value for Gaussian prior");
+							param_settings->priors[param_num]->set_gauss2(param_num,param_num2,mean1,mean2,sig1,sig2,sig12);
+							param_settings->priors[param_num2]->set_gauss2_secondary(param_num,param_num2);
 						}
 						else Complain("prior type not recognized");
 					}

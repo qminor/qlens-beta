@@ -16,6 +16,9 @@ const double Cosmology::default_spectral_index = 0.96;
 const double Cosmology::default_running = 0;
 const double Cosmology::default_n_massive_neutrinos = 1.015; // effective neutrino number; following Planck convention
 const double Cosmology::default_neutrino_mass = 0.06; // in eV; this is the minimal mass required to explain neutrino oscillation experiments
+const double Cosmology::min_tophat_mass = 1e2;
+const double Cosmology::max_tophat_mass = 1e18;
+const double Cosmology::default_sigma8 = 0.82; // Only used if normalizing by sigma8 rather than A_s
 
 void CosmologyParams::remove_comments(string& instring)
 {
@@ -102,7 +105,7 @@ bool CosmologyParams::load_params(string filename)
 	return true;
 }
 
-int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in)
+int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in, bool normalize_by_sigma8)
 {
 	omega_m = omega_matter;
 	omega_b = omega_baryon;
@@ -121,8 +124,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	//double growth_factor = growth_function(1);
 	variance_normalization = (4.0/25.0)*A_s*QUARTIC(hubble_length)*SQR(growth_factor/omega_m);
 	power_k_normalization = variance_normalization*(2*M_PI*M_PI);
-
-	// Now set up the transfer function. Fitting Formulae are for CDM + Baryon + Massive Neutrino (MDM) cosmologies.
+		// Now set up the transfer function. Fitting Formulae are for CDM + Baryon + Massive Neutrino (MDM) cosmologies.
 	// Daniel J. Eisenstein & Wayne Hu, Institute for Advanced Study
 	
 	theta_cmb = 2.7255/2.7;	// Assuming T_cmb = 2.7255 K
@@ -188,7 +190,14 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	alpha_gamma = sqrt(alpha_nu);
 	beta_c = 1/(1-0.949*f_bnu);
 
+	if (normalize_by_sigma8) {
+		double sig8 = rms_sigma8();
+		variance_normalization *= SQR(default_sigma8/sig8); // enforce sigma8 = 0.8 as temporary fix... need to understand why A_s giving crazy sigma8
+		power_k_normalization = variance_normalization*(2*M_PI*M_PI);
+	}
+
 	 spline_comoving_distance();
+	 //rms_tophat_spline();
 
 	 return qwarn;
 }
@@ -334,10 +343,21 @@ double Cosmology::variance(double k, double z)
 	return variance_normalization*SQR(redshift_factor)*QUARTIC(k)*SQR(transfer_function(k))*scaled_curvature_perturbation(logkappa);
 }
 
-double Cosmology::sigma8() // dM/M: rms mass fluctuation of CDM halos
+double Cosmology::rms_sigma_tophat(const double mass, const double z) // dM/M: rms mass fluctuation of CDM halos
 {
 	double mass_fluctuation;
+	tophat_window_R = pow(3 * mass / (M_4PI*omega_m*dcrit0*CUBE(1+z)), (1.0/3.0)); // unit of length is Mpc
 
+	//tophat_window_R = 8.0/hubble;
+	double (Romberg::*tophat_ptr)(const double);
+	tophat_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::tophat_window_k);
+	mass_fluctuation = romberg_open(tophat_ptr, 0, 10, 1.0e-6, 5) + romberg_improper(tophat_ptr, 10, 1e30, 1.0e-6, 5);
+	return sqrt(mass_fluctuation);
+}
+
+double Cosmology::rms_sigma8() // dM/M: rms mass fluctuation of CDM halos
+{
+	double mass_fluctuation;
 	tophat_window_R = 8.0/hubble;
 	double (Romberg::*tophat_ptr)(const double);
 	tophat_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::tophat_window_k);
@@ -351,6 +371,24 @@ double Cosmology::tophat_window_k(const double k)
 	x = k*tophat_window_R;
 	W_k = SQR(sin(x)/(x*x*x) - cos(x)/(x*x));
 	return (9.0*variance(k)*W_k/k);
+}
+
+void Cosmology::rms_tophat_spline()
+{
+	const int sigma_nn = 100;
+	dvector mass_table(sigma_nn), sigma_table(sigma_nn);
+	double mass, mass_step;
+	mass_step = pow(max_tophat_mass/min_tophat_mass, 1.0/(sigma_nn-1));
+	int i;
+	for (i=0, mass = min_tophat_mass; i < sigma_nn; i++, mass *= mass_step) {
+		mass_table[i] = mass;
+		sigma_table[i] = rms_sigma_tophat(mass, 0); // rms_sigma is evaluated at z=0 for the mass function
+	}
+	rms_sigma.input(mass_table, sigma_table);
+	//inverse_sigma.input(sigma_table, mass_table);
+	//rms_sigma.output("tophat.spl");
+	//inverse_sigma.output("tophatin.spl");
+	return;
 }
 
 void Cosmology::spline_comoving_distance(void)
@@ -407,6 +445,27 @@ void Cosmology::get_halo_parameters_from_rs_ds(const double z, const double rs, 
 double Cosmology::concentration_root_equation(const double c)
 {
 	return croot_const*c*c*c - log(1+c) + c/(1+c);
+}
+
+void Cosmology::get_cored_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, const double beta, double &mvir, double &rvir)
+{
+	static const double virial_ratio = 200.0;
+	double (Brent::*croot)(const double);
+	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::cored_concentration_root_equation);
+	croot_const = virial_ratio*critical_density(z)*SQR(1-beta)/(3*ds*1e9);
+	beta_const = beta;
+	double c;
+	c = BrentsMethod(croot, 0.01, 1000, 1e-4);
+	rvir = c * rs;
+	mvir = 4.0*M_PI/3.0*CUBE(rvir)*1e-9*virial_ratio*critical_density(z);
+}
+
+double Cosmology::cored_concentration_root_equation(const double c)
+{
+	if (beta_const==0)
+		return croot_const*c*c*c - log(1+c) + c/(1+c);
+	else
+		return croot_const*c*c*c - (1-2*beta_const)*log(1+c) - beta_const*beta_const*log(1+c/beta_const) + (1-beta_const)*c/(1+c);
 }
 
 double Cosmology::time_delay_factor_arcsec(double zl, double zs) // for lensing
@@ -557,5 +616,72 @@ void Cosmology::plot_angular_power_spectrum(int nsteps, const double log10k_min,
 		else
 			pout << l << " " << power << endl;
 	}
+}
+
+double Cosmology::median_concentration_bullock(const double mass, const double z)
+{
+	double ans;
+	ans = (9/(1.0 + z))*pow(mass/mstar(0), -0.13); // For c_Bullock we take mstar at z=0, since we know evolution goes like 1/(1+z)
+	return ans;
+}
+
+double Cosmology::mstar(const double z)
+{
+	double mstar_root;
+	zroot = z;
+	double (Brent::*mroot_eq)(const double);
+	mroot_eq = static_cast<double (Brent::*)(const double)> (&Cosmology::sigma_root);
+	mstar_root = BrentsMethod(mroot_eq, min_tophat_mass, 1e15, 1e-6*min_tophat_mass);
+	return mstar_root;
+}
+
+double Cosmology::sigma_root(const double mass)
+{
+	//double ans = (rms_sigma.splint(mass)-delta_z(zroot));
+	//cout << mass << " " << ans << endl;
+	return (rms_sigma_tophat(mass,0)-delta_z(zroot));
+}
+
+double Cosmology::delta_z(const double z)
+{
+	return 1.686 * (d_plus(0)/d_plus(z)); // delta_c = 1.686
+}
+
+double Cosmology::d_plus(const double z)   // empirical fitting function for growth function (oguri p. 112)
+{
+	double g, omega_m_z, omega_lambda_z;
+
+	omega_m_z = omega_m*CUBE(1+z)/(omega_m*CUBE(1+z)+1-omega_m);
+	omega_lambda_z = 1 - omega_m_z;
+	g = (5.0/2.0)*omega_m_z*(1.0/(pow(omega_m_z, 4.0/7.0) - omega_lambda_z + (1 + omega_m_z/2)*(1 + omega_lambda_z/70)));
+	return g/(1+z);
+}
+
+double Cosmology::rms_lsig(const double rad)
+{
+	double sigma_spline;
+	double mass = omega_m*dcrit0*M_PI*(4.0/3.0)*CUBE(rad);
+	sigma_spline = rms_sigma.splint(mass);
+	return sigma_spline;
+}
+
+double Cosmology::mass_function_ST(const double mass, const double z)
+{
+	double dsigma_dlogm, dr_dm, matter_density, sig, rad, der, nu, ans;
+	matter_density = omega_m*dcrit0;
+	sig = rms_sigma.splint(mass);
+	rad = pow(3 * mass / (M_4PI*omega_m*dcrit0), (1.0/3.0)); // unit of length is Mpc
+
+	dr_dm = -(1.0/3.0)*pow(3/(4*M_PI*omega_m*dcrit0), 1.0/3.0)*pow(mass, -2.0/3.0);  // dr/dm (chain rule)
+
+	// this is d(ln(sigma^-1))/dln(M), which goes roughly like M^(-1/2)
+	//der = derivative(rms_lsig, rad, 1e-6);
+	double h=1e-6;
+	der = (rms_lsig(rad+h) - rms_lsig(rad-h)) / (2*h);
+	dsigma_dlogm = (mass/sig)*dr_dm*der;
+
+	nu = (SQR(delta_z(z)) * .707) / (sig*sig);
+	ans = ((matter_density/(mass*mass)) * .322 * dsigma_dlogm * sqrt(2*nu/M_PI) * (1 + pow(nu,-0.3)) * exp(-nu/2));
+	return ans;
 }
 
