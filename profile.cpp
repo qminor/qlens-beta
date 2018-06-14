@@ -16,10 +16,10 @@ bool LensProfile::orient_major_axis_north;
 bool LensProfile::use_ellipticity_components;
 int LensProfile::default_ellipticity_mode;
 bool LensProfile::output_integration_errors;
-Lens* LensProfile::cosmo;
 
-LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in)
+LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Lens* lens_in)
 {
+	cosmo = lens_in;
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	special_parameter_command = "";
@@ -70,6 +70,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 {
+	cosmo = lens_in->cosmo;
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;

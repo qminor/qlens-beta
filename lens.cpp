@@ -360,7 +360,6 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
-	LensProfile::cosmo = this;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
@@ -388,7 +387,6 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	my_group = lens_in->my_group;
 #endif
 
-	LensProfile::cosmo = this;
 	omega_matter = lens_in->omega_matter;
 	hubble = lens_in->hubble;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
@@ -620,31 +618,31 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 
 	switch (name) {
 		case PTMASS:
-			newlist[nlens] = new PointMass(zl, zs, mass_parameter, xc, yc); break;
+			newlist[nlens] = new PointMass(zl, zs, mass_parameter, xc, yc, this); break;
 		case SHEET:
-			newlist[nlens] = new MassSheet(zl, zs, mass_parameter, xc, yc); break;
+			newlist[nlens] = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
 		case ALPHA:
-			newlist[nlens] = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case SHEAR:
-			newlist[nlens] = new Shear(zl, zs, eparam, theta, xc, yc); break;
-		// Note: the Multipole profile is added using the function add_multipole_lens(...) because one of the input parameters is an int
+			newlist[nlens] = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
+		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
 		case nfw:
-			newlist[nlens] = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
+			newlist[nlens] = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TRUNCATED_nfw:
-			newlist[nlens] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case CORED_nfw:
-			newlist[nlens] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
+			newlist[nlens] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case PJAFFE:
-			newlist[nlens] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case EXPDISK:
-			newlist[nlens] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case HERNQUIST:
-			newlist[nlens] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case CORECUSP:
-			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
-			newlist[nlens] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode); break;
+			if ((special_param1==-1000, this) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
+			newlist[nlens] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case SERSIC_LENS:
-			newlist[nlens] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			newlist[nlens] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case TESTMODEL: // Model for testing purposes
 			newlist[nlens] = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		default:
@@ -669,7 +667,7 @@ void Lens::add_lens(const char *splinefile, const int emode, const double zl, co
 	}
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
-	newlist[nlens++] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f);
+	newlist[nlens++] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f, this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	lens_list = newlist;
@@ -701,7 +699,7 @@ void Lens::add_multipole_lens(const double zl, const double zs, int m, const dou
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, sine_term);
+	newlist[nlens++] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this, sine_term);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -734,7 +732,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N);
+	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -767,7 +765,7 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N);
+	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, newlist[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this);
 
 	lens_list = newlist;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -814,7 +812,7 @@ bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const 
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename);
+	newlist[nlens++] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this);
 
 	lens_list = newlist;
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -868,7 +866,7 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 			newlist[i] = lens_list[i];
 		delete[] lens_list;
 	}
-	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile);
+	newlist[nlens++] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this);
 
 	lens_list = newlist;
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
@@ -3464,6 +3462,7 @@ void Lens::initialize_fitmodel()
 			default:
 				die("lens type not supported for fitting");
 		}
+		fitmodel->lens_list[i]->cosmo = fitmodel; // point to the cosmology in fitmodel, since this may be varied (by varying H0, e.g.)
 	}
 	for (int i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding

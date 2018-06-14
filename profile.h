@@ -164,7 +164,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static bool output_integration_errors; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static int default_ellipticity_mode;
-	static Lens* cosmo;
+	Lens* cosmo;
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
@@ -174,7 +174,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		set_default_base_settings(20,5e-3); // is this really necessary? check...
 		zfac = 1.0;
 	}
-	LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in);
+	LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens*);
 	LensProfile(const LensProfile* lens_in);
 	~LensProfile() {
 		if (param != NULL) delete[] param;
@@ -341,7 +341,7 @@ class Alpha : public LensProfile
 	public:
 	Alpha() : LensProfile() {}
 	Alpha(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+			const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in);
 	Alpha(const Alpha* lens_in);
 
 	void assign_paramnames();
@@ -381,7 +381,7 @@ class PseudoJaffe : public LensProfile
 	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	PseudoJaffe() : LensProfile() {}
-	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in);
 	PseudoJaffe(const PseudoJaffe* lens_in);
 
 	void assign_paramnames();
@@ -421,7 +421,7 @@ class NFW : public LensProfile
 
 	public:
 	NFW() : LensProfile() {}
-	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in);
+	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* lens_in);
 	NFW(const NFW* lens_in);
 
 	void assign_paramnames();
@@ -453,7 +453,7 @@ class Truncated_NFW : public LensProfile
 
 	public:
 	Truncated_NFW() : LensProfile() {}
-	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in);
 	Truncated_NFW(const Truncated_NFW* lens_in);
 
 	void assign_paramnames();
@@ -485,7 +485,7 @@ class Cored_NFW : public LensProfile
 
 	public:
 	Cored_NFW() : LensProfile() {}
-	Cored_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in);
+	Cored_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* lens_in);
 	Cored_NFW(const Cored_NFW* lens_in);
 
 	void assign_paramnames();
@@ -516,7 +516,7 @@ class Hernquist : public LensProfile
 	public:
 	Hernquist() : LensProfile() {}
 	Hernquist(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+			const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens*);
 	Hernquist(const Hernquist* lens_in);
 
 	void assign_paramnames();
@@ -538,7 +538,7 @@ class ExpDisk : public LensProfile
 
 	public:
 	ExpDisk() : LensProfile() {}
-	ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens*);
 	ExpDisk(const ExpDisk* lens_in);
 
 	void assign_paramnames();
@@ -562,7 +562,7 @@ class Shear : public LensProfile
 
 	public:
 	Shear() : LensProfile() {}
-	Shear(const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	Shear(const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Lens*);
 	Shear(const Shear* lens_in);
 	static bool use_shear_component_params; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
 
@@ -603,7 +603,7 @@ class Multipole : public LensProfile
 	public:
 
 	Multipole() : LensProfile() {}
-	Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine=false);
+	Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, Lens*, const bool sine=false);
 	Multipole(const Multipole* lens_in);
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
@@ -637,7 +637,7 @@ class PointMass : public LensProfile
 
 	public:
 	PointMass() : LensProfile() {}
-	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in);
+	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, Lens*);
 	PointMass(const PointMass* lens_in);
 
 	void assign_paramnames();
@@ -696,7 +696,7 @@ class CoreCusp : public LensProfile
 	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	CoreCusp() : LensProfile() {}
-	CoreCusp(const double zlens_in, const double zsrc_in, const double &k0_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in);
+	CoreCusp(const double zlens_in, const double zsrc_in, const double &k0_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens*);
 	CoreCusp(const CoreCusp* lens_in);
 
 	void assign_paramnames();
@@ -727,7 +727,7 @@ class SersicLens : public LensProfile
 	public:
 
 	SersicLens() : LensProfile() {}
-	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc);
+	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens*);
 	SersicLens(const SersicLens* lens_in);
 
 	void assign_paramnames();
@@ -750,7 +750,7 @@ class MassSheet : public LensProfile
 
 	public:
 	MassSheet() : LensProfile() {}
-	MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in);
+	MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Lens*);
 	MassSheet(const MassSheet* lens_in);
 
 	void assign_paramnames();
@@ -794,8 +794,8 @@ class Tabulated_Model : public LensProfile
 
 	public:
 	Tabulated_Model() : LensProfile() {}
-	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N);
-	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename);
+	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, Lens*);
+	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, Lens*);
 
 	Tabulated_Model(const Tabulated_Model* lens_in);
 	~Tabulated_Model();
@@ -836,8 +836,8 @@ class QTabulated_Model : public LensProfile
 
 	public:
 	QTabulated_Model() : LensProfile() {}
-	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin, const int q_N);
-	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile);
+	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin, const int q_N, Lens*);
+	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, Lens*);
 
 	QTabulated_Model(const QTabulated_Model* lens_in);
 	~QTabulated_Model();

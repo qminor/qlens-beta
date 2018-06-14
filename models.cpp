@@ -19,8 +19,9 @@ const double Alpha::def_tolerance = 1e-16;
 /*************************** Softened power law model (alpha) *****************************/
 
 Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = ALPHA;
 	model_name = "alpha";
 	special_parameter_command = "";
@@ -372,8 +373,9 @@ bool Alpha::output_cosmology_info(const int lens_number)
 
 /********************************** PseudoJaffe **********************************/
 
-PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
 	special_parameter_command = "";
@@ -593,9 +595,9 @@ double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
 
 /************************************* NFW *************************************/
 
-NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
+NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = nfw;
 	model_name = "nfw";
 	special_parameter_command = "";
@@ -829,9 +831,9 @@ bool NFW::output_cosmology_info(const int lens_number)
 
 /********************************** Truncated_NFW **********************************/
 
-Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = TRUNCATED_nfw;
 	model_name = "tnfw";
 	special_parameter_command = "";
@@ -945,8 +947,9 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 /********************************** Cored_NFW **********************************/
 
 Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
 	special_parameter_command = "";
@@ -1312,8 +1315,9 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 /********************************** Hernquist **********************************/
 
 Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = HERNQUIST;
 	model_name = "hern";
 	special_parameter_command = "";
@@ -1423,8 +1427,9 @@ double Hernquist::rho3d_r_integrand_analytic(const double r)
 /********************************** Exponential Disk **********************************/
 
 ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = EXPDISK;
 	model_name = "expdisk";
 	special_parameter_command = "";
@@ -1517,8 +1522,9 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 
 /***************************** External shear *****************************/
 
-Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in)
+Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = SHEAR;
 	model_name = "shear";
 	special_parameter_command = "";
@@ -1683,8 +1689,9 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 
 /***************************** Multipole term *******************************/
 
-Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine)
+Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, Lens* cosmo_in, const bool sine)
 {
+	cosmo = cosmo_in;
 	lenstype = MULTIPOLE;
 	model_name = (kap==true) ? "kmpole" : "mpole";
 	stringstream mstr;
@@ -2024,8 +2031,9 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 
 /***************************** Point mass *****************************/
 
-PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in)
+PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = PTMASS;
 	model_name = "ptmass";
 	special_parameter_command = "";
@@ -2156,8 +2164,9 @@ double PointMass::calculate_scaled_mass_3d(const double r)
 
 /***************************** Core/Cusp Model *****************************/
 
-CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in)
+CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = CORECUSP;
 	model_name = "corecusp";
 	special_parameter_command = ((parameter_mode_in==1) ? "re_param" : "");
@@ -2459,8 +2468,9 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 
 /***************************** SersicLens profile *****************************/
 
-SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &kappa_e_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &kappa_e_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
 	special_parameter_command = "";
@@ -2559,8 +2569,9 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 
 /***************************** Mass sheet *****************************/
 
-MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in)
+MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = SHEET;
 	model_name = "sheet";
 	special_parameter_command = "";
@@ -2673,8 +2684,9 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 
 /******************************* Tabulated Model *******************************/
 
-Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N)
+Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
@@ -2813,8 +2825,9 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 	}
 }
 
-Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename)
+Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = TABULATED;
 	special_parameter_command = "";
 	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
@@ -3321,9 +3334,10 @@ Tabulated_Model::~Tabulated_Model() {
 
 
 /***************************** Tabulated Model that interpolates in q *****************************/
-QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N)
+QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N, Lens* cosmo_in)
 {
 	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
+	cosmo = cosmo_in;
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
@@ -3498,8 +3512,9 @@ QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
-QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile)
+QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, Lens* cosmo_in)
 {
+	cosmo = cosmo_in;
 	lenstype = QTABULATED;
 	special_parameter_command = "";
 	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
