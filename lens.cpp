@@ -639,7 +639,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 		case HERNQUIST:
 			newlist[nlens] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case CORECUSP:
-			if ((special_param1==-1000, this) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
+			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
 			newlist[nlens] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case SERSIC_LENS:
 			newlist[nlens] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
@@ -2842,7 +2842,10 @@ bool Lens::load_image_data(string filename)
 	if (zsrc_given_in_datafile) {
 		if (!user_changed_zsource) {
 			source_redshift = source_redshifts[0];
-			if (auto_zsource_scaling) reference_source_redshift = source_redshifts[0];
+			if (auto_zsource_scaling) {
+				reference_source_redshift = source_redshifts[0];
+				reference_zfactor = 1.0;
+			}
 			else reference_zfactor = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
 		}
 		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)

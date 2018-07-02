@@ -521,10 +521,10 @@ void Lens::process_commands(bool read_file)
 						cout << "lens sersic <kappa_e> <R_eff> <n> <q/e> [theta] [x-center] [y-center]\n\n"
 							"The sersic profile is defined by kappa = kappa_e * exp(-b*((R/R_eff)^(1/n)-1)), where kappa_e is the\n"
 							"kappa value at the effective (half-mass) radius R_eff, and b is a factor automatically determined from\n"
-							"the value for n to ensure that R_eff contains half the total mass. Here, [theta] is the angle of\n"
-							"rotation (counterclockwise, in degrees) about the center (defaults=0). Note that for theta=0, the major\n"
-							"axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for\n"
-							"theta=0 is toggled by setting major_axis_along_y on/off).\n";
+							"the value for n to ensure that R_eff contains half the total mass (from Cardone et al. 2003). Here,\n"
+							"[theta] is the angle of rotation (counterclockwise, in degrees) about the center (defaults=0). Note that\n"
+							"for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major\n"
+							"axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kspline")
 						cout << "lens kspline <filename> [qx] [f] [q/e] [theta] [x-center] [y-center]\n\n"
 							"where <filename> gives the input file containing the tabulated radial profile, <q/e> is the axis ratio\n"

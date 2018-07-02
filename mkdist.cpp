@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
 	bool output_transform_usage = false;
 	bool use_fisher_matrix = false;
 	bool exclude_derived_params = false;
+	bool include_log_evidence = false;
 	char mprofile_name[100] = "mprofile.dat";
 	char param_transform_filename[100] = "";
 	bool smoothing = false;
@@ -105,6 +106,7 @@ int main(int argc, char *argv[])
 						}
 						else output_transform_usage = true;
 						break;
+					case 'l': include_log_evidence = true; break;
 					case 'D': // find posterior in a derived parameter, which is defined in the function DerivedParam(...) in mcmceval.cpp
 						if (sscanf(argv[i], "D%lf", &radius)==0) usage_error();
 						make_derived_posterior = true;
@@ -248,7 +250,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		Eval.input(file_root.c_str(),-1,nthreads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename);
+		Eval.input(file_root.c_str(),-1,nthreads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,include_log_evidence);
 		Eval.get_nparams(nparams);
 	}
 	if (nparams==0) die();

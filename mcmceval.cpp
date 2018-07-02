@@ -107,7 +107,7 @@ class Fit : private Minimize, private LevenMarq
 		}
 };
 
-void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename)
+void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool include_log_evidence)
 {
 	if (a < 0)
 	{
@@ -130,6 +130,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		}
 		string str;
 		getline(inlen, str);
+		if (include_log_evidence) getline(inlen, str);
 		istringstream iss(str);
 		a = 0;
 		while(iss >> str) a++;
@@ -222,6 +223,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 				name2 += "_" + name1;
 			}
 			ifstream in(name2.c_str());
+			if (include_log_evidence) in.getline(line,n_characters);
 			while ((in.getline(line,n_characters)) && (!in.eof())) {
 				istringstream instream(line);
 				if (instream >> dum) {
