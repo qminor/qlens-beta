@@ -26,7 +26,7 @@ using namespace std;
 const double Lens::default_autogrid_initial_step = 1.0e-3;
 const double Lens::default_autogrid_rmin = 1.0e-5;
 const double Lens::default_autogrid_rmax = 1.0e5;
-const double Lens::default_autogrid_frac = 1.95; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
+const double Lens::default_autogrid_frac = 2.1; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
 const int Lens::max_cc_search_iterations = 8;
 double Lens::galsubgrid_radius_fraction; // radius of satellite subgridding in terms of fraction of Einstein radius
 double Lens::galsubgrid_min_cellsize_fraction; // minimum cell size for satellite subgridding in terms of fraction of Einstein radius
