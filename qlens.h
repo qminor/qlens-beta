@@ -170,7 +170,7 @@ class Grid : public Brent
 	bool LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& p, lensvector& x, double& f, double stpmax, bool &check, const int& thread);
 	bool NewtonsMethod(lensvector& x, bool &check, const int& thread);
 	void SolveLinearEqs(lensmatrix&, lensvector&);
-	bool redundancy(const lensvector&);
+	bool redundancy(const lensvector&, double &);
 	double max_component(const lensvector&);
 
 	static const int max_iterations, max_step_length;
@@ -196,8 +196,6 @@ public:
 
 	static int nfound;
 	static double image_pos_accuracy;
-	static double redundancy_separation_threshold;
-	static double warning_magnification_threshold;
 	image* tree_search();
 	static void set_lens(Lens* lensptr) { lens = lensptr; }
 	void subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
@@ -208,7 +206,6 @@ public:
 	void find_and_store_critical_curve_pt(const int icorner, const int fcorner, int &added_pts);
 	static void set_imagepos_accuracy(const double& setting) {
 		image_pos_accuracy = setting;
-		redundancy_separation_threshold = 10*setting;
 	}
 	static void set_enforce_min_area(const bool& setting) { enforce_min_area = setting; }
 
@@ -326,6 +323,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool display_chisq_status;
 	int n_visible_images;
 	int chisq_display_frequency;
+	double redundancy_separation_threshold;
 	double chisq_magnification_threshold, chisq_imgsep_threshold, chisq_imgplane_substitute_threshold;
 	bool use_magnification_in_chisq;
 	bool use_magnification_in_chisq_during_repeats;
@@ -403,6 +401,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool cc_splined;
 	bool effectively_spherical;
 	double newton_magnification_threshold;
+	bool reject_himag_images;
+	bool reject_images_found_outside_cell;
 
 	Defspline *defspline;
 

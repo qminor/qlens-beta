@@ -336,6 +336,9 @@ Lens::Lens() : UCMC()
 	n_singular_points = 0;
 	auto_store_cc_points = true;
 	newton_magnification_threshold = 1000;
+	reject_himag_images = true;
+	reject_images_found_outside_cell = false;
+	redundancy_separation_threshold = 1e-5;
 
 	warnings = true;
 	newton_warnings = false;
@@ -582,6 +585,9 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	auto_store_cc_points = lens_in->auto_store_cc_points;
 	n_singular_points = lens_in->n_singular_points;
 	newton_magnification_threshold = lens_in->newton_magnification_threshold;
+	reject_himag_images = lens_in->reject_himag_images;
+	reject_images_found_outside_cell = lens_in->reject_images_found_outside_cell;
+	redundancy_separation_threshold = lens_in->redundancy_separation_threshold;
 
 	include_time_delays = lens_in->include_time_delays;
 	autocenter = lens_in->autocenter;

@@ -141,6 +141,7 @@ void Lens::process_commands(bool read_file)
 						"\n"
 						"\033[4mMiscellaneous settings\033[0m\n"
 						"warnings -- set warning flags on/off\n"
+						"imgsrch_warnings -- set warning flags related to image searching on/off\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
 						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
 						"sim_err_flux -- random error in image fluxes, added when producing simulated image data\n"
@@ -176,7 +177,10 @@ void Lens::process_commands(bool read_file)
 						"ysplit -- set initial number of grid columns in the y-direction\n") <<
 						"cc_splitlevels -- set # of times grid squares are split when containing critical curve\n"
 						"cc_split_neighbors -- when splitting cells that contain critical curves, also split neighbors\n"
-						"imagepos_accuracy -- required accuracy in the calculated image positions\n"
+						"imgpos_accuracy -- required accuracy in the calculated image positions\n"
+						"imgsep_threshold -- if image distance to other images < threshold, discard one as 'duplicate'\n"
+						"imgsrch_mag_threshold -- warn if images have mag > threshold (or reject if reject_himag = on)\n"
+						"reject_himag -- reject images found that have magnification higher than imgsrch_mag_threshold\n"
 						"rmin_frac -- set minimum radius of innermost cells in radial grid (fraction of max radius)\n"
 						"galsubgrid -- subgrid around satellite galaxies not co-centered with primary lens (on/off)\n"
 						"galsub_radius -- scale factor for the optimal radius of satellite subgridding\n"
@@ -235,7 +239,7 @@ void Lens::process_commands(bool read_file)
 						"chisq_parity -- include parity information in flux chi-square fit (on/off)\n"
 						"analytic_bestfit_src -- find (approx) best-fit source coordinates automatically during fit\n"
 						"chisq_mag_threshold -- exclude images from chi-square whose magnification is below threshold\n"
-						"chisq_imgsep_threshold -- exclude images whose separation from other images is below threshold\n"
+						"chisq_imgsep_threshold -- if any image pairs are closer than threshold, exclude one from chisq\n"
 						"chisq_imgplane_threshold -- switch to imgplane_chisq if below threshold (if imgplane_chisq off)\n"
 						"nimg_penalty -- penalize chi-square if too many images are produced (if imgplane_chisq on)\n"
 						"chisqtol -- chi-square required accuracy during fit\n"
@@ -1344,12 +1348,15 @@ void Lens::process_commands(bool read_file)
 						"if off (this is on by default, in accordance with the usual convention).\n";
 				else if (words[1]=="warnings")
 					cout << "warnings <on/off>\n"
-						"warnings newton <on/off>\n\n"
-						"Set warnings or newton_warnings on/off. Warnings are given if, e.g.:\n"
+						"Set warnings on/off. Warnings are given if, e.g.:\n"
 						"  --an image of the wrong parity is discovered\n"
-						"  --critical curves could not be located, etc.\n"
-						"newton_warnings refers to warnings related to the image finding routine (Newton's method)\n"
-						"which may find a redundant image, converge to a local minimum etc.\n";
+						"  --critical curves could not be located, etc.\n";
+				else if (words[1]=="imgsrch_warnings")
+					cout << "imgsrch_warnings <on/off>\n"
+						"imgsrch_warnings <on/off>\n\n"
+						"Warnings related to the root finding routine (Newton's Method) used to locate images. This includes warnings\n"
+						"if a duplicate image is found (where the condition for duplicates is set by 'imgsep_threshold', if the root\n"
+						"finder converges to a local minimum rather than a root, if a probable false root was found, etc.\n";
 				else if (words[1]=="sci_notation")
 					cout << "sci_notation <on/off>\n\n"
 						"Display results in scientific notation (default=on).\n\n";
@@ -1473,10 +1480,27 @@ void Lens::process_commands(bool read_file)
 					cout << "cc_splitlevels <#>\n\n"
 						"Sets the number of times that cells containing the critical curves are recursively\n"
 						"split. If no arguments are given, prints the current cc_splitlevels value.\n";
-				else if (words[1]=="imagepos_accuracy")
-					cout << "imagepos_accuracy <#>\n\n"
+				else if (words[1]=="imgpos_accuracy")
+					cout << "imgpos_accuracy <#>\n\n"
 						"Sets the accuracy in the image position (x- and y-coordinates) required for Newton's\n"
 						"method. If no arguments are given, prints the current accuracy setting.\n";
+				else if (words[1]=="imgsrch_mag_threshold")
+					cout << "imgsrch_mag_threshold <#>\n\n"
+						"Sets the magnification threshold, such that a warning is printed is images are found with\n"
+						"magnifications greater than this threshold. If 'reject_himag' is turned on, any images found\n"
+						"above the threshold are discarded during the image searching. In most cases, magnifications\n"
+						"above ~1000 carry a high risk of phantom images or inaccuracies in the root finder algorithm,\n"
+						"often creating duplicate images, due to their proximity to a critical curve. Turning on\n"
+						"'reject_himag' can alleviate this issue, however if the lens is very symmetric and the source's\n"
+						"project position is near the center of the lens, imgsrch_mag_threshold must be raised since\n"
+						"the expected magnifications are high (increasing cc_splitlevels will reduce the possibility\n"
+						"of missing an image in this situation). During fitting, duplicate images can also be dealt\n"
+						"with by using 'chisq_imgsep_threshold' to discard duplicates.\n";
+				else if (words[1]=="reject_himag")
+					cout << "reject_himag <on/off>\n"
+						"If is turned on, any images found with magnifications higher than 'imgsrch_mag_threshold' are\n"
+						"discarded during the image searching. See 'help imgsrch_mag_threshold' for more information\n"
+						"on the use of these commands and their pros/cons in lens modeling.\n";
 				else if (words[1]=="min_cellsize")
 					cout << "min_cellsize <#>\n\n"
 						"Specifies the minimum (average) length a cell can have and still be split (e.g. around\n"
@@ -1632,15 +1656,15 @@ void Lens::process_commands(bool read_file)
 				}
 				if (show_imgsrch_settings) {
 					cout << "\033[4mImage search grid settings\033[0m\n";
-					if (radial_grid) cout << "gridtype): radial" << endl;
-					else cout << "gridtype): Cartesian" << endl;
-					cout << "autogrid_from_Re): " << display_switch(auto_gridsize_from_einstein_radius) << endl;
-					cout << "autogrid_before_mkgrid): " << display_switch(autogrid_before_grid_creation) << endl;
-					cout << "autocenter): ";
+					if (radial_grid) cout << "gridtype: radial" << endl;
+					else cout << "gridtype: Cartesian" << endl;
+					cout << "autogrid_from_Re: " << display_switch(auto_gridsize_from_einstein_radius) << endl;
+					cout << "autogrid_before_mkgrid: " << display_switch(autogrid_before_grid_creation) << endl;
+					cout << "autocenter: ";
 					if (autocenter==false) cout << "off\n";
 					else cout << "centers on lens " << autocenter_lens_number << endl;
-					cout << "central_image): " << display_switch(include_central_image) << endl;
-					cout << "time_delays): " << display_switch(include_time_delays) << endl;
+					cout << "central_image: " << display_switch(include_central_image) << endl;
+					cout << "time_delays: " << display_switch(include_time_delays) << endl;
 					cout << "min_cellsize = " << sqrt(min_cell_area) << endl;
 					cout << resetiosflags(ios::scientific);
 					if (radial_grid) {
@@ -1653,7 +1677,10 @@ void Lens::process_commands(bool read_file)
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 					cout << "cc_splitlevels = " << cc_splitlevels << endl;
 					cout << "cc_split_neighbors: " << display_switch(cc_neighbor_splittings) << endl;
-					cout << "imagepos_accuracy = " << Grid::image_pos_accuracy << endl;
+					cout << "imgpos_accuracy = " << Grid::image_pos_accuracy << endl;
+					cout << "imgsep_threshold = " << redundancy_separation_threshold << endl;
+					cout << "imgsrch_mag_threshold = " << newton_magnification_threshold << endl;
+					cout << "reject_himag: " << display_switch(reject_himag_images) << endl;
 					cout << "rmin_frac = " << rmin_frac << endl;
 					cout << "galsubgrid: " << display_switch(subgrid_around_satellites) << endl;
 					cout << "galsub_radius = " << galsubgrid_radius_fraction << endl;
@@ -1771,6 +1798,7 @@ void Lens::process_commands(bool read_file)
 					cout << endl;
 					cout << "\033[4mMiscellaneous settings\033[0m\n";
 					cout << "warnings: " << display_switch(warnings) << endl;
+					cout << "imgsrch_warnings: " << display_switch(newton_warnings) << endl;
 					cout << "sci_notation: " << display_switch(use_scientific_notation) << endl;
 					cout << "sim_err_pos = " << sim_err_pos << endl;
 					cout << "sim_err_flux = " << sim_err_flux << endl;
@@ -5623,18 +5651,20 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Warnings: " << display_switch(warnings) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'warnings' command; must specify 'on' or 'off'");
-				if (setword=="newton") {
-					if (mpi_id==0) cout << "Warnings for Newton's method: " << display_switch(newton_warnings) << endl;
-				}
 				else set_switch(warnings,setword);
-			} else if (nwords==3) {
-				string warning_type, setword;
-				if (!(ws[1] >> warning_type)) Complain("invalid argument to 'warnings' command");
-				if (!(ws[2] >> setword)) Complain("invalid argument to 'warnings' command");
-				if (warning_type=="newton") set_switch(newton_warnings,setword);
-				else Complain("invalid warning type");
 			}
-			else Complain("invalid number of arguments; can only specify 'newton', 'on' or 'off'");
+			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="imgsrch_warnings")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Warnings for image search: " << display_switch(newton_warnings) << endl;
+			} else if (nwords==2) {
+				string setword;
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'warnings' command");
+				else set_switch(newton_warnings,setword);
+			}
+			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="sci_notation")
 		{
@@ -5909,6 +5939,16 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "magnification threshold for including image in chi-square function = " << chisq_magnification_threshold << endl;
 			} else Complain("must specify either zero or one argument (chi-square magnification threshold)");
 		}
+		else if (words[0]=="imgsep_threshold")
+		{
+			double imgsepthresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> imgsepthresh)) Complain("invalid image separation threshold for rejecting duplicate images");
+				redundancy_separation_threshold = imgsepthresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "image separation threshold for rejecting duplicate images = " << redundancy_separation_threshold << endl;
+			} else Complain("must specify either zero or one argument (image separation threshold for redundant images)");
+		}
 		else if (words[0]=="chisq_imgsep_threshold")
 		{
 			double imgsepthresh;
@@ -6173,16 +6213,44 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "split levels = " << splitlevels << endl;
 			} else Complain("must specify either zero or one argument (number of split levels)");
 		}
-		else if (words[0]=="imagepos_accuracy")
+		else if (words[0]=="imgpos_accuracy")
 		{
-			double imagepos_accuracy;
+			double imgpos_accuracy;
 			if (nwords == 2) {
-				if (!(ws[1] >> imagepos_accuracy)) Complain("invalid imagepos_accuracy setting");
-				set_imagepos_accuracy(imagepos_accuracy);
+				if (!(ws[1] >> imgpos_accuracy)) Complain("invalid imgpos_accuracy setting");
+				set_imagepos_accuracy(imgpos_accuracy);
 			} else if (nwords==1) {
-				imagepos_accuracy = Grid::image_pos_accuracy;
-				if (mpi_id==0) cout << "image position imagepos_accuracy = " << imagepos_accuracy << endl;
+				imgpos_accuracy = Grid::image_pos_accuracy;
+				if (mpi_id==0) cout << "image position imgpos_accuracy = " << imgpos_accuracy << endl;
 			} else Complain("must specify either zero or one argument (image position accuracy)");
+		}
+		else if (words[0]=="imgsrch_mag_threshold")
+		{
+			double thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> thresh)) Complain("invalid imgsrch_mag_threshold setting");
+				newton_magnification_threshold = thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Threshold to reject or warn about high magnification images: imgsrch_mag_threshold = " << newton_magnification_threshold << endl;
+			} else Complain("must specify either zero or one argument for imgsrch_mag_threshold");
+		}
+		else if (words[0]=="reject_himag")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Reject images found that have magnification higher than imgsrch_mag_threshold: " << display_switch(reject_himag_images) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'reject_himag' command; must specify 'on' or 'off'");
+				set_switch(reject_himag_images,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="reject_img_outside_cell")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Reject images found by Newton's method that lie outside original grid cell: " << display_switch(reject_images_found_outside_cell) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'reject_img_outside_cell' command; must specify 'on' or 'off'");
+				set_switch(reject_images_found_outside_cell,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisqtol")
 		{

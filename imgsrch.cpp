@@ -11,8 +11,6 @@ using namespace std;
 
 int Grid::nthreads;
 double Grid::image_pos_accuracy = 1e-6; // default
-double Grid::redundancy_separation_threshold;
-double Grid::warning_magnification_threshold = 10; // if redundant images are found with magnification higher than this, no warning is printed
 const int Grid::max_images = 10;
 const int Grid::max_level = 10;
 double Grid::theta_offset = 0; // slight offset in the initial angle for creating the grid; obsolete, but keeping it here just in case
@@ -113,7 +111,6 @@ Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength,
 	levels = 0;
 	cell = NULL;
 	parent_cell = NULL;
-	redundancy_separation_threshold = 1e-5;
 	singular_pt_inside = false;
 	cell_in_central_image_region = false;
 	zfactor = zfactor_in;
@@ -199,7 +196,6 @@ Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, dou
 	levels = 0;
 	cell = NULL;
 	parent_cell = NULL;
-	redundancy_separation_threshold = 1e-5;
 	singular_pt_inside = false;
 	cell_in_central_image_region = false;
 	zfactor = zfactor_in;
@@ -1697,14 +1693,16 @@ image* Grid::tree_search()
    return images;
 }
 
-inline bool Grid::redundancy(const lensvector& xroot)
+inline bool Grid::redundancy(const lensvector& xroot, double &sep)
 {
 	bool redundancy = false;
 	for (int k = 0; k < nfound; k++)
 	{
-		if ((abs(xroot[0]-images[k].pos[0]) < redundancy_separation_threshold) and (abs(xroot[1]-images[k].pos[1]) < redundancy_separation_threshold))
+		sep = sqrt(SQR(xroot[0]-images[k].pos[0]) + SQR(xroot[1]-images[k].pos[1]));
+		if (sep < lens->redundancy_separation_threshold)
 		{
 			redundancy = true;
+
 			break;
 		}
 	}
@@ -2031,10 +2029,18 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 		warn(lens->newton_warnings,"Newton's method failed for source (%g,%g), level %i, cell center (%g,%g)",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
 		return false;
 	}
-	if (test_if_inside_cell(xroot,thread)==false) {
-		warn(lens->newton_warnings,"Newton's method converged to images outside cell for source (%g,%g), level %i, cell center (%g,%g)",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
+	if (lens->reject_images_found_outside_cell) {
+		if (test_if_inside_cell(xroot,thread)==false) {
+			warn(lens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
+			return false;
+		}
 	}
 
+	lensvector lens_eq_f;
+	lens->lens_equation(xroot,lens_eq_f,thread,zfactor);
+	//double lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
+	//double tryacc = image_pos_accuracy / sqrt(abs(lens->magnification(xroot,thread,zfactor)));
+	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(lens->magnification(xroot,thread,zfactor))) << endl;
 	if (newton_check[thread]==true) { warn(lens->newton_warnings, "false image--converged to local minimum"); return false; }
 	if (lens->n_singular_points > 0) {
 		double singular_pt_accuracy = 2*image_pos_accuracy;
@@ -2048,29 +2054,31 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	if (((xroot[0]==center_imgplane[0]) and (center_imgplane[0] != 0)) and ((xroot[1]==center_imgplane[1]) and (center_imgplane[1] != 0)))
 		warn(lens->newton_warnings, "Newton's method returned center of grid cell");
 	double mag = lens->magnification(xroot,thread,zfactor);
-	lensvector lens_eq_f;
-	lens->lens_equation(xroot,lens_eq_f,thread,zfactor);
 	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy)) {
-		if ((lens->newton_warnings==true) and (abs(mag) < warning_magnification_threshold)) {
-			warn(lens->newton_warnings,"Newton's method found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
+		if (lens->newton_warnings==true) {
+			warn(lens->newton_warnings,"Newton's method found probable false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
 		}
 		return false;
 	}
 	if (abs(mag) > lens->newton_magnification_threshold) {
-		warn(lens->newton_warnings,"Newton's method found image that exceeded magnification threshold for source (%g,%g), level %i, cell center (%g,%g)",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
-		return false;
+		if (lens->reject_himag_images) {
+			warn(lens->warnings,"Rejecting image that exceeds imgsrch_mag_threshold (%g vs. %g) (source (%g,%g), x=(%g,%g)",abs(mag),lens->newton_magnification_threshold,lens->source[0],lens->source[1],level,xroot[0],xroot[1]);
+			return false;
+		} else {
+			warn(lens->warnings,"Image exceeds imgsrch_mag_threshold (%g vs. %g), risk of duplicates/phantom image (source (%g,%g), x=(%g,%g)",abs(mag),lens->newton_magnification_threshold,lens->source[0],lens->source[1],level,xroot[0],xroot[1]);
+		}
 	}
 	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,zfactor) > 1)) return false; // discard central image if not desired
 	bool status = true;
 	#pragma omp critical
 	{
-		if (redundancy(xroot)) {
+		double sep;
+		if (redundancy(xroot,sep)) {
 			// generally, this only occurs very close to critical curves and is best solved by further cell splittings
-			// around said curves. However, it happens rarely enough that I won't bother printing an error message for it
-			// unless the magnification is low (meaning not close to critical curve)
-			if ((lens->newton_warnings==true) and (abs(mag) < warning_magnification_threshold)) {
-				if (cc_inside) warn(lens->newton_warnings,"redundant image (c.c. inside): src (%g,%g), level %i, cell (%g,%g), image (%g,%g), mag %g",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
-				else warn(lens->newton_warnings,"redundant image (no c.c. inside): src (%g,%g), level %i, cell (%g,%g), image (%g,%g), mag %g",lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
+			// around said curves. However for extreme magnifications (near Einstein-ring images), even cell splittings
+			// does not solve the issue.
+			if (lens->newton_warnings==true) {
+				warn(lens->newton_warnings,"rejecting probable duplicate image (imgsep=%g): src (%g,%g), level %i, image (%g,%g), mag %g",sep,lens->source[0],lens->source[1],level,xroot[0],xroot[1],mag);
 			}
 			status = false;
 		}
@@ -2157,6 +2165,29 @@ bool Grid::NewtonsMethod(lensvector& x, bool &check, const int& thread)
 			warn(lens->newton_warnings, "Newton blew up!");
 			return false;
 		}
+		/*
+		lens->lens_equation(x, fvec[thread], thread, zfactor);
+		double magfac = sqrt(abs(lens->magnification(x,thread,zfactor)));
+		double tryacc;
+		lensvector dx = x - xold;
+		double dxnorm = dx.norm();
+		dx[0] /= dxnorm;
+		dx[1] /= dxnorm;
+		lensmatrix magmat;
+		lensvector bb;
+		lens->sourcept_jacobian(x,bb,magmat,thread,zfactor);
+		bb = magmat*dx;
+		lensvector dy;
+		dy[1] = -dx[0];
+		dy[0] = dx[1];
+		lensvector cc;
+		tryacc = image_pos_accuracy * bb.norm();
+		*/
+		//if (max_component(fvec[thread]) < 4*tryacc) {
+
+		// Maybe someday revisit this and see if you can make it more robust. As it is, it's
+		// frustrating that image_pos_accuracy has no simple interpretation, and occasionally
+		// spurious images close to critical curves do are found.
 		if (max_component(fvec[thread]) < image_pos_accuracy) {
 			check = false; 
 			return true; 
