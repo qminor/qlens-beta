@@ -257,6 +257,9 @@ void usage_error(const int mpi_id)
 #ifdef USE_MPI
 		cout << "  -g##      # of MPI groups for MCMC/nested sampling (default=# of MPI processes)\n";
 #endif
+#ifdef USE_MUMPS
+		cout << "  -p        Run MUMPS in serial mode, rather than parallel mode\n";
+#endif
 		cout << endl;
 	}
 #ifdef USE_MPI

@@ -338,7 +338,7 @@ Lens::Lens() : UCMC()
 	newton_magnification_threshold = 1000;
 	reject_himag_images = true;
 	reject_images_found_outside_cell = false;
-	redundancy_separation_threshold = 1e-5;
+	redundancy_separation_threshold = 0;
 
 	warnings = true;
 	newton_warnings = false;
@@ -5255,17 +5255,20 @@ void Lens::output_bestfit_model()
 	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
 	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
 
+	int i;
 	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 	ofstream pnamefile(pnamefile_str.c_str());
-	for (int i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+	for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
 	pnamefile.close();
 	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 	ofstream lpnamefile(lpnamefile_str.c_str());
-	for (int i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+	for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
 	lpnamefile.close();
 
 	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
-	int n,i,j;
+	int n,j;
 	ofstream bf_out(bestfit_filename.c_str());
 	for (i=0; i < n_fit_parameters; i++) bf_out << bestfitparams[i] << " ";
 	bf_out << endl;
@@ -6216,17 +6219,35 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	if (image_pixel_grid == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
 
 	if (subhalo_prior) {
-		double xc, yc;
-		for (int i=0; i < nlens; i++) {
-			if ((lens_list[i]->get_lenstype()==PJAFFE) or (lens_list[i]->get_lenstype()==CORECUSP)) {
-				lens_list[i]->get_center_coords(xc,yc);
+		int i;
+		double largest_einstein_radius = 0, xch, ych;
+		dvector einstein_radii(nlens);
+		double re_avg; // won't use this
+		for (i=0; i < nlens; i++) {
+			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,reference_zfactor);
+			if (einstein_radii[i] > largest_einstein_radius) {
+				lens_list[i]->get_center_coords(xch,ych);
+				largest_einstein_radius = einstein_radii[i];
+			}
+		}
+		// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered satellites.
+
+		double xc,yc;
+		for (i=0; i < nlens; i++) {
+			lens_list[i]->get_center_coords(xc,yc);
+			if ((xc==xch) and (yc==ych)) continue;
+			//cout << "ER: " << einstein_radii[i] << " " << largest_einstein_radius << endl;
+			// This doesn't work well, because the satellite can have miniscule Einstein radius (which comes up as zero) and still
+			// produce a sizeable perturbation if near a critical curve. Fix this!
+			//if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
+				//cout << "Lens " << i << " is a subhalo, with CENTER: " << xc << " " << yc << endl;
 				if (!image_pixel_data->test_if_in_fit_region(xc,yc)) {
 					if ((mpi_id==0) and (verbal)) cout << "Subhalo outside fit region --> chisq = 2e30, will not invert image\n";
 					if (logfile.is_open()) 
 						logfile << "it=" << chisq_it << " chisq0=2e30" << endl;
 					return 2e30;
 				}
-			}
+			//}
 		}
 	}
 
