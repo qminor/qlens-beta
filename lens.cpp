@@ -2687,10 +2687,10 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 	if (sourcepts_upper_limit != NULL) {
 		delete[] sourcepts_upper_limit;
 		delete[] sourcepts_lower_limit;
-		new_sourcepts_lower_limit[n_sourcepts_fit][0] = -1e30;
-		new_sourcepts_lower_limit[n_sourcepts_fit][1] = -1e30;
-		new_sourcepts_upper_limit[n_sourcepts_fit][0] = 1e30;
-		new_sourcepts_upper_limit[n_sourcepts_fit][1] = 1e30;
+		new_sourcepts_lower_limit[n_sourcepts_fit-1][0] = -1e30;
+		new_sourcepts_lower_limit[n_sourcepts_fit-1][1] = -1e30;
+		new_sourcepts_upper_limit[n_sourcepts_fit-1][0] = 1e30;
+		new_sourcepts_upper_limit[n_sourcepts_fit-1][1] = 1e30;
 		sourcepts_upper_limit = new_sourcepts_upper_limit;
 		sourcepts_lower_limit = new_sourcepts_lower_limit;
 	}
