@@ -562,6 +562,7 @@ public:
 	friend class ImagePixelGrid;
 	friend class ImagePixelData;
 	friend struct DerivedParam;
+	friend class LensProfile;
 	Lens();
 	Lens(Lens *lens_in);
 	static void allocate_multithreaded_variables(const int& threads);

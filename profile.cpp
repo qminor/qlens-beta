@@ -1559,7 +1559,7 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
 	if ((!converged) and (output_integration_errors)) {
-		if (integral_method==Gauss_Patterson_Quadrature) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points (x=%g,y=%g); switched to Gauss-Legendre with 1023 points",x,y);
+		if (integral_method==Gauss_Patterson_Quadrature) warn(cosmo->warnings,"Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points (x=%g,y=%g); switched to Gauss-Legendre with 1023 points",x,y);
 	}
 }
 
