@@ -32,7 +32,7 @@ imgdata                      # Shows the image data so you can see what it looks
 
 # Here, we choose an initial model that is not a great fit, and will fail utterly if no simulated annealing is used
 
-fit lens alpha 4.5 1 0 0.5 120 0.7 0.2 shear=0.05 20 # Now we put our initial guess for the lens parameters
+fit lens alpha 4.5 1 0 0.5 60 0.7 0.2 shear=0.05 20 # Now we put our initial guess for the lens parameters
 1 0 0 1 1 1 1 1 1                                    #vary flags; here we vary everything except for alpha and s (core size)
 
 fit sourcept auto   # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).

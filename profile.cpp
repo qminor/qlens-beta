@@ -1571,7 +1571,6 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 				}
 				cout << "     " << endl;
 				if (cosmo->running_fit) {
-					//cout << "HI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
 					cout << "\033[2A";
 				}
 			}

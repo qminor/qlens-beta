@@ -2064,15 +2064,19 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 		if (lens->reject_himag_images) {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
 				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
-				cout << "                                                                                                                            " << endl;
-				if (lens->running_fit) cout << "\033[2A";
+				if (lens->running_fit) {
+					cout << "                                                                                                                            " << endl;
+					cout << "\033[2A";
+				}
 			}
 			return false;
 		} else {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
 				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
-				cout << "                                                                                                                            " << endl;
-				if (lens->running_fit) cout << "\033[2A";
+				if (lens->running_fit) {
+					cout << "                                                                                                                            " << endl;
+					cout << "\033[2A";
+				}
 			}
 		}
 	}

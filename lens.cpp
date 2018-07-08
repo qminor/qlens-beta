@@ -214,7 +214,7 @@ Lens::Lens() : UCMC()
 	defspline = NULL;
 
 	source_fit_mode = Point_Source;
-	running_fit = true;
+	running_fit = false;
 	chisq_tolerance = 1e-3;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
@@ -4448,6 +4448,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
 	initialize_fitmodel();
+	fitmodel->running_fit = false;
 
 	double (Lens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -4466,7 +4467,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 	if (show_diagnostics) chisq_diagnostic = true;
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (mpi_id==0) {
-		if (display_chisq_status) cout << endl;
+		//if (display_chisq_status) cout << endl;
 		cout << "loglike: " << chisqval/2 << endl;
 	}
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
@@ -4635,6 +4636,7 @@ double Lens::chi_square_fit_simplex()
 	bool verbal = (mpi_id==0) ? true : false;
 	//if (simplex_show_bestfit) cout << endl; // since we'll need an extra line to display best-fit parameters during annealing
 	//cout << "HI!";
+	running_fit = true;
 	n_iterations = downhill_simplex_anneal(verbal);
 	simplex_minval(fitparams.array(),chisq_bestfit);
 	chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
@@ -4643,6 +4645,7 @@ double Lens::chi_square_fit_simplex()
 		(this->*loglikeptr)(fitparams.array());
 		if (mpi_id==0) cout << endl << endl;
 	}
+	//running_fit = false;
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
@@ -4656,7 +4659,9 @@ double Lens::chi_square_fit_simplex()
 		set_annealing_schedule_parameters(0,simplex_temp_final,simplex_cooling_factor,simplex_nmax_anneal,simplex_nmax); // repeats have zero temperature (just minimization)
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")                                                  \n\n\n" << flush;
+			//running_fit = true;
 			n_iterations = downhill_simplex_anneal(verbal);
+			//running_fit = false;
 			simplex_minval(fitparams.array(),chisq_bestfit);
 			chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
 			if (display_chisq_status) {
@@ -4666,6 +4671,7 @@ double Lens::chi_square_fit_simplex()
 			}
 		}
 	}
+	running_fit = false;
 	bestfitparams.input(fitparams);
 
 	display_chisq_status = false;
@@ -4795,7 +4801,9 @@ double Lens::chi_square_fit_powell()
 	display_chisq_status = true;
 
 	fitmodel->chisq_it = 0;
+	running_fit = true;
 	powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
+	running_fit = false;
 	chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
 	if (display_chisq_status) {
 		fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
@@ -4813,7 +4821,9 @@ double Lens::chi_square_fit_powell()
 		}
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")\n";
+			running_fit = true;
 			powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
+			running_fit = false;
 			chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
 			if (display_chisq_status) {
 				fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
@@ -4965,7 +4975,9 @@ void Lens::nested_sampling()
 
 	display_chisq_status = false; // just in case it was turned on
 
+	running_fit = true;
 	MonoSample(filename.c_str(),n_mcpoints,fitparams.array(),param_errors,mcmc_logfile);
+	running_fit = false;
 	bestfitparams.input(fitparams);
 
 	//if (display_chisq_status) {
@@ -5090,7 +5102,9 @@ void Lens::chi_square_twalk()
 
 	display_chisq_status = false; // just in case it was turned on
 
+	running_fit = true;
 	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
+	running_fit = false;
 	bestfitparams.input(fitparams);
 
 	//if (display_chisq_status) {
@@ -5355,7 +5369,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		}
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
-		cout << "\033[2A" << flush;
+		if (running_fit) cout << "\033[2A" << flush;
 		if (used_imgplane_chisq) {
 			if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
 			int tot_data_images = 0;
@@ -5385,7 +5399,8 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "                ";
-		cout << endl << endl;
+		cout << endl;
+		if (running_fit) cout << endl;
 		//cout << "\033[1A";
 	}
 
@@ -5434,8 +5449,9 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	if ((display_chisq_status) and (mpi_id==0)) {
+		if (running_fit) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike=" << loglike << "              " << endl;
-		cout << "\033[1A";
+		//cout << "\033[1A";
 	}
 
 	return loglike;
@@ -5493,7 +5509,7 @@ double Lens::loglike_point_source(double* params)
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "               ";
 		cout << endl;
-		cout << "\033[1A";
+		//cout << "\033[1A";
 	}
 
 	loglike = chisq_total/2.0;
