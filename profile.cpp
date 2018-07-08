@@ -233,11 +233,11 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 
 void LensProfile::update_ellipticity_parameter(const double eparam)
 {
+	// This function is only used by the "qtab" model at the moment
 	*(param[ellipticity_paramnum]) = eparam;
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
-	cout << "q=" << q << " epsilon=" << epsilon << endl;
 }
 
 // You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
@@ -1559,7 +1559,23 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
 	if ((!converged) and (output_integration_errors)) {
-		if (integral_method==Gauss_Patterson_Quadrature) warn(cosmo->warnings,"Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points (x=%g,y=%g); switched to Gauss-Legendre with 1023 points",x,y);
+		if (integral_method==Gauss_Patterson_Quadrature) {
+			if ((cosmo->mpi_id==0) and (cosmo->warnings)) {
+				cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << "); switched to 1023-pt. Gauss-Legendre                  " << endl;
+				cout << "Lens: " << model_name << ", Params: ";
+				for (int i=0; i < n_params; i++) {
+					cout << paramnames[i] << "=";
+					if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
+					else cout << *(param[i]);
+					if (i != n_params-1) cout << ", ";
+				}
+				cout << "     " << endl;
+				if (cosmo->running_fit) {
+					//cout << "HI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
+					cout << "\033[2A";
+				}
+			}
+		}
 	}
 }
 

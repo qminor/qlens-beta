@@ -2062,10 +2062,18 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	}
 	if (abs(mag) > lens->newton_magnification_threshold) {
 		if (lens->reject_himag_images) {
-			warn(lens->warnings,"Rejecting image that exceeds imgsrch_mag_threshold (%g vs. %g) (source (%g,%g), x=(%g,%g)",abs(mag),lens->newton_magnification_threshold,lens->source[0],lens->source[1],level,xroot[0],xroot[1]);
+			if ((lens->mpi_id==0) and (lens->warnings)) {
+				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
+				cout << "                                                                                                                            " << endl;
+				if (lens->running_fit) cout << "\033[2A";
+			}
 			return false;
 		} else {
-			warn(lens->warnings,"Image exceeds imgsrch_mag_threshold (%g vs. %g), risk of duplicates/phantom image (source (%g,%g), x=(%g,%g)",abs(mag),lens->newton_magnification_threshold,lens->source[0],lens->source[1],level,xroot[0],xroot[1]);
+			if ((lens->mpi_id==0) and (lens->warnings)) {
+				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
+				cout << "                                                                                                                            " << endl;
+				if (lens->running_fit) cout << "\033[2A";
+			}
 		}
 	}
 	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,zfactor) > 1)) return false; // discard central image if not desired

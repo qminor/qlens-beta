@@ -304,6 +304,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double bestfit_flux;
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
+	bool running_fit;
 	int lensmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	vector<string> fit_parameter_names, transformed_parameter_names;
 	vector<string> latex_parameter_names, transformed_latex_parameter_names;
