@@ -41,6 +41,7 @@ class Lens;
 class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
 {
 	friend class LensIntegral;
+	friend class Lens;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:

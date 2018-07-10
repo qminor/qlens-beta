@@ -519,7 +519,7 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 void LensProfile::print_parameters()
 {
 	if (ellipticity_mode==3) cout << "pseudo-";
-	cout << model_name << ": ";
+	cout << model_name << "(z=" << zlens << "): ";
 	for (int i=0; i < n_params-2; i++) {
 		cout << paramnames[i] << "=";
 		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";

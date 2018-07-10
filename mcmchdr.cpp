@@ -2982,7 +2982,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		//}
 		//cout << logLikes[i] << endl;
 
-		if ((logLikes[i]*0.0) or (isinf(logLikes[i])))
+		if ((logLikes[i]*0.0) or (std::isinf(logLikes[i])))
 		{
 			i -= mpi_ngroups;
 		}

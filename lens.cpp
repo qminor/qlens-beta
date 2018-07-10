@@ -1731,7 +1731,7 @@ void Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 		cout << "rmax_numerical = " << rmax_numerical << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
 		cout << "mass_enclosed/alpha = " << menc/alpha << endl;
-		cout << "eta=" << eta << endl;
+		//cout << "eta=" << eta << endl;
 	}
 }
 
@@ -2954,7 +2954,6 @@ void Lens::sort_image_data_into_redshift_groups()
 			source_redshift_groups.push_back(j); // this stores the last index for each group of image sets with the same redshift
 		}
 	}
-	if (j != n_sourcepts_fit) die("something got fucked up");
 	delete[] image_data;
 	delete[] source_redshifts;
 	delete[] zfactors;
@@ -3396,7 +3395,7 @@ ImageData::~ImageData()
 
 /******************************************** Functions for lens model fitting ******************************************/
 
-void Lens::initialize_fitmodel()
+void Lens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
 		if ((sourcepts_fit==NULL) or (image_data==NULL)) { warn("cannot do fit; image data points have not been defined"); return; }
@@ -3405,7 +3404,7 @@ void Lens::initialize_fitmodel()
 	}
 	if (fitmodel != NULL) delete fitmodel;
 	fitmodel = new Lens(this);
-	fitmodel->running_fit = true;
+	fitmodel->running_fit = running_fit_in;
 	fitmodel->auto_ccspline = false;
 	//fitmodel->set_gridcenter(grid_xcenter,grid_ycenter);
 
@@ -4447,8 +4446,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
-	fitmodel->running_fit = false;
+	initialize_fitmodel(false);
 
 	double (Lens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -4488,7 +4486,7 @@ void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
+	initialize_fitmodel(false);
 
 	if (param1 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param1,n_fit_parameters); return; }
 	if (param2 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param2,n_fit_parameters); return; }
@@ -4560,7 +4558,7 @@ void Lens::plot_chisq_1d(const int param, const int n, const double ip, const do
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
+	initialize_fitmodel(false);
 
 	if (param >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param,n_fit_parameters); return; }
 
@@ -4599,7 +4597,7 @@ double Lens::chi_square_fit_simplex()
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
+	initialize_fitmodel(true);
 
 	if (fit_output_dir != ".") create_output_directory();
 
@@ -4777,7 +4775,7 @@ double Lens::chi_square_fit_powell()
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
+	initialize_fitmodel(true);
 
 	double (Powell::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -4928,7 +4926,7 @@ void Lens::nested_sampling()
 		create_output_directory();
 	}
 
-	initialize_fitmodel();
+	initialize_fitmodel(true);
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
 	SetNDerivedParams(n_derived_params);
 
@@ -5035,7 +5033,7 @@ void Lens::test_fitmodel_invert()
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel();
+	initialize_fitmodel(false);
 	fitmodel_loglike_pixellated_source_test(fitparams.array());
 	if (mpi_id==0) {
 		cout << endl;
@@ -5056,7 +5054,7 @@ void Lens::chi_square_twalk()
 		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		create_output_directory();
 	}
-	initialize_fitmodel();
+	initialize_fitmodel(true);
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
 	SetNDerivedParams(n_derived_params);
 
@@ -5613,9 +5611,10 @@ void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
 {
 	if (lensnum >= nlens) return false;
-	double sigma_cr, kpc_to_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
-	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
-	kpc_to_arcsec = 206.264806/angular_diameter_distance(lens_redshift);
+	double zlens, sigma_cr, kpc_to_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
+	zlens = lens_list[lensnum]->zlens;
+	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
+	kpc_to_arcsec = 206.264806/angular_diameter_distance(zlens);
 	r_kpc = r_arcsec/kpc_to_arcsec;
 	cout << "Radius: " << r_kpc << " kpc (" << r_arcsec << " arcsec)\n";
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
@@ -5635,16 +5634,18 @@ bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
 
 double Lens::mass2d_r(const double r_arcsec, const int lensnum)
 {
-	double sigma_cr, mass_r_2d;
-	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
+	double sigma_cr, mass_r_2d, zlens;
+	zlens = lens_list[lensnum]->zlens;
+	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	return mass_r_2d;
 }
 
 double Lens::mass3d_r(const double r_arcsec, const int lensnum)
 {
-	double sigma_cr, mass_r_3d;
-	sigma_cr = sigma_crit_arcsec(lens_redshift,reference_source_redshift);
+	double sigma_cr, mass_r_3d, zlens;
+	zlens = lens_list[lensnum]->zlens;
+	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;
 }

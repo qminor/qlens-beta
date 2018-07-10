@@ -746,7 +746,7 @@ public:
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
-	void initialize_fitmodel();
+	void initialize_fitmodel(const bool running_fit_in);
 	bool update_fitmodel(const double* params);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_pixellated_source(double* params);

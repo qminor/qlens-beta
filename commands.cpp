@@ -6977,10 +6977,10 @@ void Lens::process_commands(bool read_file)
 			//calculate_critical_curve_deformation_radius(nlens-1);
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);
 			//plot_shear_field(-3,3,50,-3,3,50);
-		} else if (words[0]=="test2") {
+		} else if (words[0]=="subhalo_rmax") {
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
 			double rmax,menc;
-			calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
+			calculate_critical_curve_deformation_radius_numerical(nlens-1,true,rmax,menc);
 		}
 		else if (mpi_id==0) Complain("command not recognized");
 	}
