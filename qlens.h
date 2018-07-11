@@ -414,7 +414,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_satellite_galaxies(const double zfac, const int redshift_index);
 	void calculate_critical_curve_deformation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
-	void calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
+	bool calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
 
 	double subhalo_perturbation_radius_equation(const double r);
 	// needed for calculating the subhalo perturbation radius

@@ -1683,7 +1683,7 @@ void Lens::calculate_critical_curve_deformation_radius(int lens_number, bool ver
 	rmax = rmax_analytic;
 }
 
-void Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed)
+bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed)
 {
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
 	double xc, yc, theta_s, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p, eta;
@@ -1716,6 +1716,10 @@ void Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	subhalo_lens_number = lens_number;
 	subhalo_center[0]=xc; subhalo_center[1]=yc;
 	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,reference_zfactor);
+	if (shear_angle*0.0 != 0.0) {
+		warn("could not calculate shear at position of perturber");
+		return false;
+	}
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
@@ -1733,6 +1737,7 @@ void Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 		cout << "mass_enclosed/alpha = " << menc/alpha << endl;
 		//cout << "eta=" << eta << endl;
 	}
+	return true;
 }
 
 double Lens::subhalo_perturbation_radius_equation(const double r)
