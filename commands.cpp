@@ -4019,7 +4019,7 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) if (source_redshifts[i] != source_redshift) different_zsrc = true;
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							if (different_zsrc) {
-								if ((i == 0) or (zfactors[i] != zfactors[i-1])) {
+								if ((i == 0) or (source_redshifts[i] != source_redshifts[i-1])) {
 									create_grid(false,zfactors[i]);
 								}
 							}
@@ -4028,7 +4028,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (different_zsrc) {
 							reset();
-							//create_grid(false,reference_zfactor);
+							//create_grid(false);
 						}
 					} else {
 						if (source_redshifts[dataset] != source_redshift) {
@@ -4038,7 +4038,7 @@ void Lens::process_commands(bool read_file)
 						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, srcflux[dataset], true);
 						if (source_redshifts[dataset] != source_redshift) {
 							reset();
-							//create_grid(false,reference_zfactor);
+							//create_grid(false);
 						}
 					}
 					delete[] srcflux;
@@ -4118,7 +4118,7 @@ void Lens::process_commands(bool read_file)
 					}
 					if (show_multiple) {
 						reset();
-						create_grid(false,reference_zfactor); // even though we're not finding images, still need to plot caustics
+						create_grid(false,reference_zfactors); // even though we're not finding images, still need to plot caustics
 					} else {
 						reset();
 						create_grid(false,zfactors[dataset]); // even though we're not finding images, still need to plot caustics
@@ -4190,7 +4190,7 @@ void Lens::process_commands(bool read_file)
 						else run_plotter("srcptfit");
 					}
 					reset();
-					create_grid(false,reference_zfactor);
+					create_grid(false,reference_zfactors);
 					delete[] srcflux;
 					delete[] srcpts;
 				}
@@ -4341,7 +4341,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					reset();
-					create_grid(false,reference_zfactor);
+					create_grid(false,reference_zfactors);
 					delete[] srcflux;
 					delete[] srcpts;
 				}
@@ -4848,7 +4848,7 @@ void Lens::process_commands(bool read_file)
 			if (nwords != 1) {
 				Complain("no arguments are allowed for 'mkgrid' command");
 			} else {
-				if (create_grid(verbal_mode,reference_zfactor)==false)
+				if (create_grid(verbal_mode,reference_zfactors)==false)
 					Complain("could not generate recursive grid");
 			}
 		}
@@ -5061,7 +5061,7 @@ void Lens::process_commands(bool read_file)
 			if (!islens()) Complain("must specify lens model first");
 			if (nwords==1) {
 				double re, re_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
-				re = einstein_radius_of_primary_lens(reference_zfactor);
+				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]]);
 				arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
 				re_kpc = re*arcsec_to_kpc;
 				sigma_cr_kpc = sigma_crit_kpc(lens_redshift, source_redshift);
@@ -5581,18 +5581,18 @@ void Lens::process_commands(bool read_file)
 				lensvector point, alpha, beta;
 				double sheartot, shear_angle;
 				point[0] = x; point[1] = y;
-				deflection(point,alpha,reference_zfactor);
-				shear(point,sheartot,shear_angle,0,reference_zfactor);
+				deflection(point,alpha,reference_zfactors);
+				shear(point,sheartot,shear_angle,0,reference_zfactors);
 				beta[0] = point[0] - alpha[0];
 				beta[1] = point[1] - alpha[1];
-				cout << "kappa = " << kappa(point,reference_zfactor) << endl;
+				cout << "kappa = " << kappa(point,reference_zfactors) << endl;
 				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
-				cout << "potential = " << potential(point,reference_zfactor) << endl;
-				cout << "magnification = " << magnification(point,0,reference_zfactor) << endl;
+				cout << "potential = " << potential(point,reference_zfactors) << endl;
+				cout << "magnification = " << magnification(point,0,reference_zfactors) << endl;
 				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
 				//cout << "shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
 				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n\n";
-				//cout << "shear/kappa = " << sheartot/kappa(point,reference_zfactor) << endl;
+				//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
 			}
 		}
 		else if (words[0]=="plotlensinfo")
@@ -6066,9 +6066,6 @@ void Lens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> zlens)) Complain("invalid zlens setting");
 				lens_redshift = zlens;
-				for (int i=0; i < n_sourcepts_fit; i++) {
-					zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
-				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "lens redshift = " << lens_redshift << endl;
 			} else Complain("must specify either zero or one argument (redshift of lens galaxy)");
@@ -6079,14 +6076,17 @@ void Lens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> zsource)) Complain("invalid zsrc setting");
 				source_redshift = zsource;
+				int i,j;
 				if (auto_zsource_scaling) {
 					reference_source_redshift = source_redshift;
-					reference_zfactor = 1.0;
-					for (int i=0; i < n_sourcepts_fit; i++) {
-						zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
+					for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
+					for (i=0; i < n_sourcepts_fit; i++) {
+						for (j=0; j < n_lens_redshifts; j++) {
+							zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
+						}
 					}
 				} else {
-					reference_zfactor = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
+					for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 				}
 				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
 				reset();
@@ -6098,16 +6098,20 @@ void Lens::process_commands(bool read_file)
 		{
 			double zrsource;
 			if (nwords == 2) {
+				int i,j;
 				if (!(ws[1] >> zrsource)) Complain("invalid zrsource_ref setting");
 				reference_source_redshift = zrsource;
 				if (auto_zsource_scaling==true) auto_zsource_scaling = false;
-				reference_zfactor = kappa_ratio(lens_redshift,source_redshift,reference_source_redshift);
+				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 				reset();
 				if (n_sourcepts_fit > 0) {
-					for (int i=0; i < n_sourcepts_fit; i++) {
-						zfactors[i] = kappa_ratio(lens_redshift,source_redshifts[i],reference_source_redshift);
+					for (i=0; i < n_sourcepts_fit; i++) {
+						for (j=0; j < n_lens_redshifts; j++) {
+							zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
+						}
 					}
 				}
+
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "reference source redshift = " << reference_source_redshift << endl;
 			} else Complain("must specify either zero or one argument (reference source redshift)");
@@ -6978,8 +6982,13 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			add_derived_param(KappaR,5.0,-1);
-			add_derived_param(DKappaR,5.0,-1);
+			//cout << "redshifts:\n";
+			//for (int k=0; k < n_lens_redshifts; k++) cout << k << " " << lens_redshifts[k] << endl;
+			//cout << "\nredshift indices:\n";
+			//for (int k=0; k < nlens; k++) cout << k << " " << lens_redshift_idx[k] << endl;
+
+			//add_derived_param(KappaR,5.0,-1);
+			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
 			// These are experimental functions that I either need to make official, or else remove
 			//plot_chisq_1d(0,30,50,450);

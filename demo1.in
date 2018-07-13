@@ -2,7 +2,6 @@
 lens clear
 # We create our primary lens galaxy with an isothermal ellipsoid profile (axis ratio=0.7):
 lens alpha 10 1 1 0.7 90
-ccspline off
 autogrid
 mkgrid
 # Now we create a "source galaxy" which consists of an ellipsoidal grid of source points:

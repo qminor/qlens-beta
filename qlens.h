@@ -85,7 +85,7 @@ class Grid : public Brent
 	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
 	Grid* parent_cell;
 
-	static double zfactor; // kappa ratio used for modeling source points at different redshifts
+	static double* grid_zfactors; // kappa ratio used for modeling source points at different redshifts
 	static const int u_split, w_split;
 	static bool radial_grid; // if false, a Cartesian grid is assumed
 	static bool enforce_min_area;
@@ -182,10 +182,10 @@ class Grid : public Brent
 	static image images[];
 
 public:
-	Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double zfactor_in); 
-	Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double zfactor_in);
-	void redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double zfactor_in);
-	void redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double zfactor_in);
+	Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double* zfactor_in); 
+	Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in);
+	void redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double* zfactor_in);
+	void redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in);
 	void reassign_coordinates(lensvector** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
 
 	static void set_splitting(int rs0, int ts0, int sl, int ccsl, double max_cs, bool neighbor_split);
@@ -220,8 +220,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
-	static lensvector *defs, *defs_i;
-	static lensmatrix *jacs, *hesses, *hesses_i;
+	static lensvector *defs, *defs_subtot, *defs_i;
+	static lensmatrix *jacs, *hesses, *hesses_subtot, *hesses_i;
 	static int *indxs;
 
 	int chisq_it;
@@ -273,12 +273,19 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	ImageSystemType system_type;
 
 	double lens_redshift;
-	double source_redshift, reference_source_redshift, reference_zfactor; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
+	//double source_redshift, reference_source_redshift, reference_zfactor; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
+	double source_redshift, reference_source_redshift; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
+	double *reference_zfactors;
 	bool user_changed_zsource;
 	bool auto_zsource_scaling;
 	double *source_redshifts; // used for modeling source points
 	vector<int> source_redshift_groups;
-	double *zfactors;
+	double **zfactors;
+	double *lens_redshifts;
+	int *lens_redshift_idx;
+	int *zlens_group_size;
+	int **zlens_group_lens_indx;
+	int n_lens_redshifts;
 	bool vary_hubble_parameter;
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
@@ -412,7 +419,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_satellite_galaxies(const double zfac, const int redshift_index);
+	void subgrid_around_satellite_galaxies(double* zfacs, const int redshift_index);
 	void calculate_critical_curve_deformation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
 
@@ -579,49 +586,49 @@ public:
 #endif
 	static void delete_mumps();
 
-	double kappa(const double& x, const double& y, const double zfactor);
-	double potential(const double&, const double&, const double zfactor);
-	void deflection(const double&, const double&, lensvector&, const int &thread, const double zfactor);
-	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, const double zfactor);
-	void hessian(const double&, const double&, lensmatrix&, const int &thread, const double zfactor);
-	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, const double zfactor);
-	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, const double zfactor);
-	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, const double zfactor);
-	void sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, const double zfactor);
+	double kappa(const double& x, const double& y, double* zfacs);
+	double potential(const double&, const double&, double* zfacs);
+	void deflection(const double&, const double&, lensvector&, const int &thread, double* zfacs);
+	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs);
+	void hessian(const double&, const double&, lensmatrix&, const int &thread, double* zfacs);
+	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, double* zfacs);
+	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs);
+	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs);
+	void sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs);
 
 	// non-multithreaded versions
-	//void deflection(const double& x, const double& y, lensvector &def_in, const double zfactor) { deflection(x,y,def_in,0,zfactor); }
-	//void hessian(const double& x, const double& y, lensmatrix &hess_in, const double zfactor) { hessian(x,y,hess_in,0,zfactor); }
-	//void find_sourcept(const lensvector& x, lensvector& srcpt, const double zfactor) { find_sourcept(x,srcpt,0,zfactor); }
+	//void deflection(const double& x, const double& y, lensvector &def_in, double* zfacs) { deflection(x,y,def_in,0,zfacs); }
+	//void hessian(const double& x, const double& y, lensmatrix &hess_in, double* zfacs) { hessian(x,y,hess_in,0,zfacs); }
+	//void find_sourcept(const lensvector& x, lensvector& srcpt, double* zfacs) { find_sourcept(x,srcpt,0,zfacs); }
 
 	// versions of the above functions that use lensvector for (x,y) coordinates
-	double kappa(const lensvector &x, const double zfactor) { return kappa(x[0], x[1], zfactor); }
-	double potential(const lensvector& x, const double zfactor) { return potential(x[0],x[1], zfactor); }
-	void deflection(const lensvector& x, lensvector& def, const double zfactor) { deflection(x[0], x[1], def, 0, zfactor); }
-	void hessian(const lensvector& x, lensmatrix& hess, const double zfactor) { hessian(x[0], x[1], hess, 0, zfactor); }
+	double kappa(const lensvector &x, double* zfacs) { return kappa(x[0], x[1], zfacs); }
+	double potential(const lensvector& x, double* zfacs) { return potential(x[0],x[1], zfacs); }
+	void deflection(const lensvector& x, lensvector& def, double* zfacs) { deflection(x[0], x[1], def, 0, zfacs); }
+	void hessian(const lensvector& x, lensmatrix& hess, double* zfacs) { hessian(x[0], x[1], hess, 0, zfacs); }
 
-	double inverse_magnification(const lensvector&, const int &thread, const double zfactor);
-	double magnification(const lensvector &x, const int &thread, const double zfactor);
-	double shear(const lensvector &x, const int &thread, const double zfactor);
-	void shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, const double zfactor);
-
-	// non-multithreaded versions
-	//double inverse_magnification(const lensvector& x, const double zfactor) { return inverse_magnification(x,0,zfactor); }
-	//double magnification(const lensvector &x, const double zfactor) { return magnification(x,0,zfactor); }
-	//double shear(const lensvector &x, const double zfactor) { return shear(x,0,zfactor); }
-	//void shear(const lensvector &x, double& shear_tot, double& angle, const double zfactor) { return shear(x,shear_tot,angle,0,zfactor); }
-
-	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, const double zfactor);
-	double magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, const double zfactor);
-	double shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, const double zfactor);
-	void shear_exclude(const lensvector &x, double& shear, double& angle, const int& exclude_i, const int& thread, const double zfactor);
-	double kappa_exclude(const lensvector &x, const int& exclude_i, const double zfactor);
+	double inverse_magnification(const lensvector&, const int &thread, double* zfacs);
+	double magnification(const lensvector &x, const int &thread, double* zfacs);
+	double shear(const lensvector &x, const int &thread, double* zfacs);
+	void shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs);
 
 	// non-multithreaded versions
-	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const double zfactor) { hessian_exclude(x,y,exclude_i,hess_tot,0,zfactor); }
-	double magnification_exclude(const lensvector &x, const int& exclude_i, const double zfactor) { return magnification_exclude(x,exclude_i,0,zfactor); }
-	double shear_exclude(const lensvector &x, const int& exclude_i, const double zfactor) { return shear_exclude(x,exclude_i,0,zfactor); }
-	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const double zfactor) { shear_exclude(x,shear,angle,exclude_i,0,zfactor); }
+	//double inverse_magnification(const lensvector& x, double* zfacs) { return inverse_magnification(x,0,zfacs); }
+	//double magnification(const lensvector &x, double* zfacs) { return magnification(x,0,zfacs); }
+	//double shear(const lensvector &x, double* zfacs) { return shear(x,0,zfacs); }
+	//void shear(const lensvector &x, double& shear_tot, double& angle, double* zfacs) { return shear(x,shear_tot,angle,0,zfacs); }
+
+	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs);
+	double magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs);
+	double shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs);
+	void shear_exclude(const lensvector &x, double& shear, double& angle, const int& exclude_i, const int& thread, double* zfacs);
+	double kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs);
+
+	// non-multithreaded versions
+	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, double* zfacs) { hessian_exclude(x,y,exclude_i,hess_tot,0,zfacs); }
+	double magnification_exclude(const lensvector &x, const int& exclude_i, double* zfacs) { return magnification_exclude(x,exclude_i,0,zfacs); }
+	double shear_exclude(const lensvector &x, const int& exclude_i, double* zfacs) { return shear_exclude(x,exclude_i,0,zfacs); }
+	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, double* zfacs) { shear_exclude(x,shear,angle,exclude_i,0,zfacs); }
 
 	bool test_for_elliptical_symmetry();
 	bool test_for_singularity();
@@ -674,13 +681,16 @@ public:
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
-	void lens_equation(const lensvector&, lensvector&, const int& thread, const double zfactor); // Used by Newton's method to find images
+	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
+	int add_new_lens_redshift(const double zl);
+	void remove_old_lens_redshift(const int znum, const int lens_i);
+	void add_new_lens_entry(const double zl);
 
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
 	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
@@ -713,7 +723,7 @@ public:
 	void clear_derived_params();
 	void print_derived_param_list();
 
-	bool create_grid(bool verbal, const double zfac, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+	bool create_grid(bool verbal, double *zfacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 	void clear_lenses();
 	void clear();
 	void reset();
@@ -1570,56 +1580,107 @@ class Defspline
 	}
 };
 
-inline double Lens::kappa(const double& x, const double& y, const double zfactor)
+inline double Lens::kappa(const double& x, const double& y, double* zfacs)
 {
-	double kappa=0;
-	for (int i=0; i < nlens; i++)
-		kappa += lens_list[i]->kappa(x,y);
-	return zfactor*kappa;
+	double kappa=0, kappa_subtot;
+	int i,j;
+	for (i=0; i < n_lens_redshifts; i++) {
+		kappa_subtot=0;
+		for (j=0; j < zlens_group_size[i]; j++) {
+			kappa_subtot += lens_list[zlens_group_lens_indx[i][j]]->kappa(x,y);
+		}
+		kappa += zfacs[i]*kappa_subtot;
+	}
+	return kappa;
 }
 
-inline double Lens::potential(const double& x, const double& y, const double zfactor)
+inline double Lens::potential(const double& x, const double& y, double* zfacs)
 {
-	double pot = 0;
-	for (int i=0; i < nlens; i++)
-		pot += lens_list[i]->potential(x,y);
-	return zfactor*pot;
+	double pot=0, pot_subtot;
+	int i,j;
+	for (i=0; i < n_lens_redshifts; i++) {
+		pot_subtot=0;
+		for (j=0; j < zlens_group_size[i]; j++) {
+			pot_subtot += lens_list[zlens_group_lens_indx[i][j]]->potential(x,y);
+		}
+		pot += zfacs[i]*pot_subtot;
+	}
+	return pot;
 }
 
-inline void Lens::deflection(const double& x, const double& y, lensvector& def_tot, const int &thread, const double zfactor)
+inline void Lens::deflection(const double& x, const double& y, lensvector& def_tot, const int &thread, double* zfacs)
 {
 	if (!defspline)
 	{
 		lensvector *def_i = &defs_i[thread];
+		lensvector *def_subtot = &defs_subtot[thread];
+
+		int i,j;
+		def_tot[0] = 0;
+		def_tot[1] = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*def_subtot)[0] = 0;
+			(*def_subtot)[1] = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				lens_list[zlens_group_lens_indx[i][j]]->deflection(x,y,(*def_i));
+				(*def_subtot)[0] += (*def_i)[0];
+				(*def_subtot)[1] += (*def_i)[1];
+			}
+			def_tot[0] += zfacs[i]*(*def_subtot)[0];
+			def_tot[1] += zfacs[i]*(*def_subtot)[1];
+		}
+
+		/*
 		lens_list[0]->deflection(x,y,def_tot);
+		def_tot[0] *= zfacs[lens_redshift_idx[0]];
+		def_tot[1] *= zfacs[lens_redshift_idx[0]];
 		int indx;
 		for (indx=1; indx < nlens; indx++) {
 			lens_list[indx]->deflection(x,y,(*def_i));
-			def_tot[0] += (*def_i)[0];
-			def_tot[1] += (*def_i)[1];
+			def_tot[0] += zfacs[lens_redshift_idx[indx]]*(*def_i)[0];
+			def_tot[1] += zfacs[lens_redshift_idx[indx]]*(*def_i)[1];
 		}
+		*/
 	}
 	else {
 		def_tot = defspline->deflection(x,y);
 	}
-	def_tot[0] *= zfactor;
-	def_tot[1] *= zfactor;
 }
 
-inline void Lens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, const double zfactor)
+inline void Lens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs)
 {
 	if (!defspline)
 	{
+
+		lensvector *def_i = &defs_i[thread];
+		lensvector *def_subtot = &defs_subtot[thread];
+		int i,j;
+		def_tot_x = 0;
+		def_tot_y = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*def_subtot)[0] = 0;
+			(*def_subtot)[1] = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				lens_list[zlens_group_lens_indx[i][j]]->deflection(x,y,(*def_i));
+				(*def_subtot)[0] += (*def_i)[0];
+				(*def_subtot)[1] += (*def_i)[1];
+			}
+			def_tot_x += zfacs[i]*(*def_subtot)[0];
+			def_tot_y += zfacs[i]*(*def_subtot)[1];
+		}
+
+		/*
 		lensvector *def_i = &defs_i[thread];
 		lens_list[0]->deflection(x,y,(*def_i));
-		def_tot_x = (*def_i)[0];
-		def_tot_y = (*def_i)[1];
+		def_tot_x = zfacs[lens_redshift_idx[0]] * (*def_i)[0];
+		def_tot_y = zfacs[lens_redshift_idx[0]] * (*def_i)[1];
 		int indx;
 		for (indx=1; indx < nlens; indx++) {
 			lens_list[indx]->deflection(x,y,(*def_i));
-			def_tot_x += (*def_i)[0];
-			def_tot_y += (*def_i)[1];
+			def_tot_x += zfacs[lens_redshift_idx[indx]]*(*def_i)[0];
+			def_tot_y += zfacs[lens_redshift_idx[indx]]*(*def_i)[1];
 		}
+		*/
 	}
 	else {
 		lensvector *def_i = &defs_i[thread];
@@ -1627,74 +1688,146 @@ inline void Lens::deflection(const double& x, const double& y, double& def_tot_x
 		def_tot_x = (*def_i)[0];
 		def_tot_y = (*def_i)[1];
 	}
-	def_tot_x *= zfactor;
-	def_tot_y *= zfactor;
 }
 
-inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, const double zfactor) // calculates the Hessian of the lensing potential
+inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential
 {
 	if (!defspline)
 	{
 		lensmatrix *hess_i = &hesses_i[thread];
+		lensmatrix *hess_subtot = &hesses_subtot[thread];
+
+		int i,j;
+		hess_tot[0][0] = 0;
+		hess_tot[1][1] = 0;
+		hess_tot[0][1] = 0;
+		hess_tot[1][0] = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*hess_subtot)[0][0] = 0;
+			(*hess_subtot)[1][1] = 0;
+			(*hess_subtot)[0][1] = 0;
+			(*hess_subtot)[1][0] = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				lens_list[zlens_group_lens_indx[i][j]]->hessian(x,y,(*hess_i));
+				(*hess_subtot)[0][0] += (*hess_i)[0][0];
+				(*hess_subtot)[1][1] += (*hess_i)[1][1];
+				(*hess_subtot)[0][1] += (*hess_i)[0][1];
+				(*hess_subtot)[1][0] += (*hess_i)[1][0];
+			}
+			hess_tot[0][0] += zfacs[i]*(*hess_subtot)[0][0];
+			hess_tot[1][1] += zfacs[i]*(*hess_subtot)[1][1];
+			hess_tot[0][1] += zfacs[i]*(*hess_subtot)[0][1];
+			hess_tot[1][0] += zfacs[i]*(*hess_subtot)[1][0];
+		}
+
+		/*
 		lens_list[0]->hessian(x,y,hess_tot);
+		hess_tot[0][0] *= zfacs[lens_redshift_idx[0]];
+		hess_tot[1][1] *= zfacs[lens_redshift_idx[0]];
+		hess_tot[0][1] *= zfacs[lens_redshift_idx[0]];
+		hess_tot[1][0] *= zfacs[lens_redshift_idx[0]];
 		int indx;
 		for (indx=1; indx < nlens; indx++) {
 			lens_list[indx]->hessian(x,y,(*hess_i));
-			hess_tot[0][0] += (*hess_i)[0][0];
-			hess_tot[1][1] += (*hess_i)[1][1];
-			hess_tot[0][1] += (*hess_i)[0][1];
-			hess_tot[1][0] += (*hess_i)[1][0];
+			hess_tot[0][0] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][0];
+			hess_tot[1][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[1][1];
+			hess_tot[0][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][1];
+			hess_tot[1][0] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[1][0];
 		}
+		*/
 	}
 	else {
 		hess_tot = defspline->hessian(x,y);
 	}
-	hess_tot[0][0] *= zfactor;
-	hess_tot[1][1] *= zfactor;
-	hess_tot[0][1] *= zfactor;
-	hess_tot[1][0] *= zfactor;
 }
 
-inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, const double zfactor)
+inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs)
 {
 	double x = xvec[0], y = xvec[1];
-	double kap;
+	double kap, kap_subtot;
 	lensmatrix *jac = &jacs[thread];
 	lensvector *def_tot = &defs[thread];
 
 	if (!defspline)
 	{
 		lensvector *def_i = &defs_i[thread];
+		lensvector *def_subtot = &defs_subtot[thread];
 		lensmatrix *hess_i = &hesses_i[thread];
-		lens_list[0]->kappa_and_potential_derivatives(x,y,kap_tot,(*def_tot),(*jac));
+		lensmatrix *hess_subtot = &hesses_subtot[thread];
+		int i,j;
+		(*jac)[0][0] = 0;
+		(*jac)[1][1] = 0;
+		(*jac)[0][1] = 0;
+		(*jac)[1][0] = 0;
+		(*def_tot)[0] = 0;
+		(*def_tot)[1] = 0;
+		kap_tot = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*hess_subtot)[0][0] = 0;
+			(*hess_subtot)[1][1] = 0;
+			(*hess_subtot)[0][1] = 0;
+			(*hess_subtot)[1][0] = 0;
+			(*def_subtot)[0] = 0;
+			(*def_subtot)[1] = 0;
+			kap_subtot = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				lens_list[zlens_group_lens_indx[i][j]]->kappa_and_potential_derivatives(x,y,kap,(*def_i),(*hess_i));
+				(*hess_subtot)[0][0] += (*hess_i)[0][0];
+				(*hess_subtot)[1][1] += (*hess_i)[1][1];
+				(*hess_subtot)[0][1] += (*hess_i)[0][1];
+				(*hess_subtot)[1][0] += (*hess_i)[1][0];
+				(*def_subtot)[0] += (*def_i)[0];
+				(*def_subtot)[1] += (*def_i)[1];
+				kap_subtot += kap;
+			}
+			(*jac)[0][0] += zfacs[i]*(*hess_subtot)[0][0];
+			(*jac)[1][1] += zfacs[i]*(*hess_subtot)[1][1];
+			(*jac)[0][1] += zfacs[i]*(*hess_subtot)[0][1];
+			(*jac)[1][0] += zfacs[i]*(*hess_subtot)[1][0];
+			(*def_tot)[0] += zfacs[i]*(*def_subtot)[0];
+			(*def_tot)[1] += zfacs[i]*(*def_subtot)[1];
+			kap_tot += zfacs[i]*kap_subtot;
+		}
+
+		/*
+		lensvector *def_i = &defs_i[thread];
+		lensmatrix *hess_i = &hesses_i[thread];
+		lens_list[0]->kappa_and_potential_derivatives(x,y,kap_tot,(*def_tot),(*jac)); // here, jac is actually the Hessian (will become the Jacobian further down)
+		kap_tot *= zfacs[lens_redshift_idx[0]];
+		(*def_tot)[0] *= zfacs[lens_redshift_idx[0]];
+		(*def_tot)[1] *= zfacs[lens_redshift_idx[0]];
+		(*jac)[0][0] *= zfacs[lens_redshift_idx[0]];
+		(*jac)[1][1] *= zfacs[lens_redshift_idx[0]];
+		(*jac)[0][1] *= zfacs[lens_redshift_idx[0]];
+		(*jac)[1][0] *= zfacs[lens_redshift_idx[0]];
+
 		for (int indx=1; indx < nlens; indx++) {
 			lens_list[indx]->kappa_and_potential_derivatives(x,y,kap,(*def_i),(*hess_i));
-			kap_tot += kap;
-			(*def_tot)[0] += (*def_i)[0];
-			(*def_tot)[1] += (*def_i)[1];
-			(*jac)[0][0] += (*hess_i)[0][0];
-			(*jac)[1][1] += (*hess_i)[1][1];
-			(*jac)[0][1] += (*hess_i)[0][1];
-			(*jac)[1][0] += (*hess_i)[1][0];
+			kap_tot += zfacs[lens_redshift_idx[indx]]*kap;
+			(*def_tot)[0] += zfacs[lens_redshift_idx[indx]]*(*def_i)[0];
+			(*def_tot)[1] += zfacs[lens_redshift_idx[indx]]*(*def_i)[1];
+			(*jac)[0][0] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][0];
+			(*jac)[1][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[1][1];
+			(*jac)[0][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][1];
 		}
+		*/
 	}
 	else {
 		(*def_tot) = defspline->deflection(x,y);
 		(*jac) = defspline->hessian(x,y);
-		kap_tot = kappa(x,y,zfactor);
+		kap_tot = kappa(x,y,zfacs);
 	}
-	kap_tot *= zfactor;
-	srcpt[0] = x - zfactor*(*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - zfactor*(*def_tot)[1];
+	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
+	srcpt[1] = y - (*def_tot)[1];
 
-	(*jac)[0][0] = 1 - zfactor*(*jac)[0][0];
-	(*jac)[1][1] = 1 - zfactor*(*jac)[1][1];
-	(*jac)[0][1] = -zfactor*(*jac)[0][1];
-	(*jac)[1][0] = -zfactor*(*jac)[1][0];
+	(*jac)[0][0] = 1 - (*jac)[0][0];
+	(*jac)[1][1] = 1 - (*jac)[1][1];
+	(*jac)[0][1] = -(*jac)[0][1];
+	(*jac)[1][0] = -(*jac)[1][0];
 	invmag = determinant((*jac));
 }
 
-inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, const double zfactor)
+inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs)
 {
 	double kap;
 	double x = xvec[0], y = xvec[1];
@@ -1702,50 +1835,96 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 
 	if (!defspline)
 	{
+
+		lensvector *def_i = &defs_i[thread];
+		lensvector *def_subtot = &defs_subtot[thread];
+		lensmatrix *hess_i = &hesses_i[thread];
+		lensmatrix *hess_subtot = &hesses_subtot[thread];
+		int i,j;
+		jac_tot[0][0] = 0;
+		jac_tot[1][1] = 0;
+		jac_tot[0][1] = 0;
+		jac_tot[1][0] = 0;
+		(*def_tot)[0] = 0;
+		(*def_tot)[1] = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*hess_subtot)[0][0] = 0;
+			(*hess_subtot)[1][1] = 0;
+			(*hess_subtot)[0][1] = 0;
+			(*hess_subtot)[1][0] = 0;
+			(*def_subtot)[0] = 0;
+			(*def_subtot)[1] = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives(x,y,(*def_i),(*hess_i));
+				(*hess_subtot)[0][0] += (*hess_i)[0][0];
+				(*hess_subtot)[1][1] += (*hess_i)[1][1];
+				(*hess_subtot)[0][1] += (*hess_i)[0][1];
+				(*hess_subtot)[1][0] += (*hess_i)[1][0];
+				(*def_subtot)[0] += (*def_i)[0];
+				(*def_subtot)[1] += (*def_i)[1];
+			}
+			jac_tot[0][0] += zfacs[i]*(*hess_subtot)[0][0];
+			jac_tot[1][1] += zfacs[i]*(*hess_subtot)[1][1];
+			jac_tot[0][1] += zfacs[i]*(*hess_subtot)[0][1];
+			jac_tot[1][0] += zfacs[i]*(*hess_subtot)[1][0];
+			(*def_tot)[0] += zfacs[i]*(*def_subtot)[0];
+			(*def_tot)[1] += zfacs[i]*(*def_subtot)[1];
+		}
+
+		/*
 		lensvector *def_i = &defs_i[thread];
 		lensmatrix *hess_i = &hesses_i[thread];
 		lens_list[0]->potential_derivatives(x,y,(*def_tot),jac_tot); // kap is wasted here, but that's pretty small overhead
+		(*def_tot)[0] *= zfacs[lens_redshift_idx[0]];
+		(*def_tot)[1] *= zfacs[lens_redshift_idx[0]];
+		jac_tot[0][0] *= zfacs[lens_redshift_idx[0]];
+		jac_tot[1][1] *= zfacs[lens_redshift_idx[0]];
+		jac_tot[0][1] *= zfacs[lens_redshift_idx[0]];
+		jac_tot[1][0] *= zfacs[lens_redshift_idx[0]];
+
+
 		for (int indx=1; indx < nlens; indx++) {
 			lens_list[indx]->potential_derivatives(x,y,(*def_i),(*hess_i));
-			(*def_tot)[0] += (*def_i)[0];
-			(*def_tot)[1] += (*def_i)[1];
-			jac_tot[0][0] += (*hess_i)[0][0];
-			jac_tot[1][1] += (*hess_i)[1][1];
-			jac_tot[0][1] += (*hess_i)[0][1];
-			jac_tot[1][0] += (*hess_i)[1][0];
+			(*def_tot)[0] += zfacs[lens_redshift_idx[indx]]*(*def_i)[0];
+			(*def_tot)[1] += zfacs[lens_redshift_idx[indx]]*(*def_i)[1];
+			jac_tot[0][0] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][0];
+			jac_tot[1][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[1][1];
+			jac_tot[0][1] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[0][1];
+			jac_tot[1][0] += zfacs[lens_redshift_idx[indx]]*(*hess_i)[1][0];
 		}
+		*/
 	}
 	else {
 		(*def_tot) = defspline->deflection(x,y);
 		jac_tot = defspline->hessian(x,y);
 	}
-	srcpt[0] = x - zfactor*(*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - zfactor*(*def_tot)[1];
+	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
+	srcpt[1] = y - (*def_tot)[1];
 
-	jac_tot[0][0] = 1 - zfactor*jac_tot[0][0];
-	jac_tot[1][1] = 1 - zfactor*jac_tot[1][1];
-	jac_tot[0][1] = -zfactor*jac_tot[0][1];
-	jac_tot[1][0] = -zfactor*jac_tot[1][0];
+	jac_tot[0][0] = 1 - jac_tot[0][0];
+	jac_tot[1][1] = 1 - jac_tot[1][1];
+	jac_tot[0][1] = -jac_tot[0][1];
+	jac_tot[1][0] = -jac_tot[1][0];
 }
 
-inline void Lens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, const double zfactor)
+inline void Lens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, double* zfacs)
 {
-	deflection(x[0],x[1],srcpt,thread,zfactor);
+	deflection(x[0],x[1],srcpt,thread,zfacs);
 	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
 	srcpt[1] = x[1] - srcpt[1];
 }
 
-inline void Lens::find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int& thread, const double zfactor)
+inline void Lens::find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs)
 {
-	deflection(x[0],x[1],srcpt_x,srcpt_y,thread,zfactor);
+	deflection(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs);
 	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
 	srcpt_y = x[1] - srcpt_y;
 }
 
-inline double Lens::inverse_magnification(const lensvector& x, const int &thread, const double zfactor)
+inline double Lens::inverse_magnification(const lensvector& x, const int &thread, double* zfacs)
 {
 	lensmatrix *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfactor);
+	hessian(x[0],x[1],(*jac),thread,zfacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -1753,10 +1932,10 @@ inline double Lens::inverse_magnification(const lensvector& x, const int &thread
 	return determinant((*jac));
 }
 
-inline double Lens::magnification(const lensvector &x, const int &thread, const double zfactor)
+inline double Lens::magnification(const lensvector &x, const int &thread, double* zfacs)
 {
 	lensmatrix *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfactor);
+	hessian(x[0],x[1],(*jac),thread,zfacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -1764,20 +1943,20 @@ inline double Lens::magnification(const lensvector &x, const int &thread, const 
 	return 1.0/determinant((*jac));
 }
 
-inline double Lens::shear(const lensvector &x, const int &thread, const double zfactor)
+inline double Lens::shear(const lensvector &x, const int &thread, double* zfacs)
 {
 	lensmatrix *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfactor);
+	hessian(x[0],x[1],(*hess),thread,zfacs);
 	double shear1, shear2;
 	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
 	shear2 = (*hess)[0][1];
 	return sqrt(shear1*shear1+shear2*shear2);
 }
 
-inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, const double zfactor)
+inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs)
 {
 	lensmatrix *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfactor);
+	hessian(x[0],x[1],(*hess),thread,zfacs);
 	double shear1, shear2;
 	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
 	shear2 = (*hess)[0][1];
@@ -1802,8 +1981,38 @@ inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, c
 // the following functions find the shear, kappa and magnification at the position where a satellite is placed;
 // this information is used to determine the optimal subgrid size and resolution
 
-inline void Lens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, const double zfactor)
+inline void Lens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs)
 {
+
+		lensmatrix *hess_i = &hesses[thread];
+		lensmatrix *hess_subtot = &hesses_subtot[thread];
+
+		int i,j;
+		hess_tot[0][0] = 0;
+		hess_tot[1][1] = 0;
+		hess_tot[0][1] = 0;
+		hess_tot[1][0] = 0;
+		for (i=0; i < n_lens_redshifts; i++) {
+			(*hess_subtot)[0][0] = 0;
+			(*hess_subtot)[1][1] = 0;
+			(*hess_subtot)[0][1] = 0;
+			(*hess_subtot)[1][0] = 0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				if (zlens_group_lens_indx[i][j] != exclude_i) {
+					lens_list[zlens_group_lens_indx[i][j]]->hessian(x,y,(*hess_i));
+					(*hess_subtot)[0][0] += (*hess_i)[0][0];
+					(*hess_subtot)[1][1] += (*hess_i)[1][1];
+					(*hess_subtot)[0][1] += (*hess_i)[0][1];
+					(*hess_subtot)[1][0] += (*hess_i)[1][0];
+				}
+			}
+			hess_tot[0][0] += zfacs[i]*(*hess_subtot)[0][0];
+			hess_tot[1][1] += zfacs[i]*(*hess_subtot)[1][1];
+			hess_tot[0][1] += zfacs[i]*(*hess_subtot)[0][1];
+			hess_tot[1][0] += zfacs[i]*(*hess_subtot)[1][0];
+		}
+
+	/*
 	lensmatrix *hess = &hesses[thread];
 	hess_tot[0][0] = 0;
 	hess_tot[1][1] = 0;
@@ -1813,22 +2022,19 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 	for (indx=0; indx < nlens; indx++) {
 		if (indx != exclude_i) {
 			lens_list[indx]->hessian(x,y,(*hess));
-			hess_tot[0][0] += (*hess)[0][0];
-			hess_tot[1][1] += (*hess)[1][1];
-			hess_tot[0][1] += (*hess)[0][1];
-			hess_tot[1][0] += (*hess)[1][0];
+			hess_tot[0][0] += zfacs[lens_redshift_idx[indx]]*(*hess)[0][0];
+			hess_tot[1][1] += zfacs[lens_redshift_idx[indx]]*(*hess)[1][1];
+			hess_tot[0][1] += zfacs[lens_redshift_idx[indx]]*(*hess)[0][1];
+			hess_tot[1][0] += zfacs[lens_redshift_idx[indx]]*(*hess)[1][0];
 		}
 	}
-	hess_tot[0][0] *= zfactor;
-	hess_tot[1][1] *= zfactor;
-	hess_tot[0][1] *= zfactor;
-	hess_tot[1][0] *= zfactor;
+	*/
 }
 
-inline double Lens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, const double zfactor)
+inline double Lens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs)
 {
 	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfactor);
+	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -1837,10 +2043,10 @@ inline double Lens::magnification_exclude(const lensvector &x, const int& exclud
 	return 1.0/determinant((*jac));
 }
 
-inline double Lens::shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, const double zfactor)
+inline double Lens::shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs)
 {
 	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfactor);
+	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -1851,10 +2057,10 @@ inline double Lens::shear_exclude(const lensvector &x, const int& exclude_i, con
 	return sqrt(shear1*shear1+shear2*shear2);
 }
 
-inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const int& thread, const double zfactor)
+inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const int& thread, double* zfacs)
 {
 	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfactor);
+	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -1880,13 +2086,21 @@ inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angl
 	angle = 0.5*radians_to_degrees(angle);
 }
 
-inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, const double zfactor)
+inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs)
 {
-	double kappa=0;
-	for (int i=0; i < nlens; i++)
-		if (i != exclude_i) kappa += lens_list[i]->kappa(x[0],x[1]);
 
-	return zfactor*kappa;
+	double kappa=0, kappa_subtot;
+	int i,j;
+	for (i=0; i < n_lens_redshifts; i++) {
+		kappa_subtot=0;
+		for (j=0; j < zlens_group_size[i]; j++) {
+			if (zlens_group_lens_indx[i][j] != exclude_i) {
+				kappa_subtot += lens_list[zlens_group_lens_indx[i][j]]->kappa(x[0],x[1]);
+			}
+		}
+		kappa += zfacs[i]*kappa_subtot;
+	}
+	return kappa;
 }
 
 #endif // QLENS_H
