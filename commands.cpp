@@ -6108,6 +6108,7 @@ void Lens::process_commands(bool read_file)
 		{
 			double zrsource;
 			if (nwords == 2) {
+				if (nlens > 0) Complain("zsrc_ref cannot be changed if any lenses have already been created");
 				int i,j;
 				if (!(ws[1] >> zrsource)) Complain("invalid zrsource_ref setting");
 				reference_source_redshift = zrsource;
