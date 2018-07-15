@@ -17,7 +17,7 @@ Optional packages:
 
 Upgrades since Apr. 11:
 
-QLens now allows for the creation of lenses at multiple redshifts. To create lenses at different redshifts, simply change 'zlens' before creating a new lens. When you type 'lens' to list the lenses, it will show the redshift of each lens. You cannot change the redshift of a lens once you have created it. The full nonlinear effect of having multiple lens planes is taken into account when calculating the deflections and magnifications (I have not done this for time delays yet, however; it's on the to-do list). In general, any combination of multiple lens planes and multiple sources are now allowed in qlens.
+QLens now allows for the creation of lenses at multiple redshifts. To create lenses at different redshifts, you can either change 'zlens' before creating a new lens, or include the argument 'z=#' in the line when creating the lens. When you type 'lens' to list the lenses, it will show the redshift of each lens. Note that you cannot change the redshift of a lens once you have created it. The full nonlinear effect of having multiple lens planes is taken into account when calculating the deflections and magnifications (I have not done this for time delays yet, however; it's on the to-do list). In general, any combination of multiple lens planes and multiple sources are now allowed in qlens.
 
 Upgrades since Mar. 18:
 
