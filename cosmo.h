@@ -159,6 +159,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double time_delay_factor_arcsec(double zl, double zs); // for lensing
 	double time_delay_factor_kpc(double zl, double zs); // for lensing
 	double kappa_ratio(double zl, double zs, double zs0); // for lensing
+	double calculate_beta_factor(double zl1, double zl2, double zs); // for multi-plane lensing
 
 	double growth_function(double a);
 	double dt_dz(const double z) { return (hubble_length*pow(omega_m*CUBE(1+z)+1-omega_m, -0.5)/(1+z)); }

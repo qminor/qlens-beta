@@ -20,6 +20,7 @@ double Grid::cclength1, Grid::cclength2, Grid::long_diagonal_length;
 bool Grid::enforce_min_area;
 bool Grid::cc_neighbor_splittings;
 double *Grid::grid_zfactors;
+double **Grid::grid_betafactors;
 
 // parameters for creating the recursive grid
 const int Grid::u_split = 2;
@@ -98,7 +99,7 @@ void Grid::deallocate_multithreaded_variables()
 	delete[] xvals_threads;
 }
 
-Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double *zfactor_in)	// use for top-level cell only; subcells use constructor below
+Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double *zfactor_in, double **betafactor_in)	// use for top-level cell only; subcells use constructor below
 {
 	// this constructor is used for a Cartesian grid
 	radial_grid = false;
@@ -114,6 +115,7 @@ Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength,
 	singular_pt_inside = false;
 	cell_in_central_image_region = false;
 	grid_zfactors = zfactor_in;
+	grid_betafactors = betafactor_in;
 
 	for (int i=0; i < 4; i++) {
 		corner_pt[i][0]=0;
@@ -183,7 +185,7 @@ Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength,
 	}
 }
 
-Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double *zfactor_in) // use for top-level cell only; subcells use constructor below
+Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double *zfactor_in, double **betafactor_in) // use for top-level cell only; subcells use constructor below
 {
 	// this constructor is used for a radial grid
 	radial_grid = true;
@@ -199,6 +201,7 @@ Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, dou
 	singular_pt_inside = false;
 	cell_in_central_image_region = false;
 	grid_zfactors = zfactor_in;
+	grid_betafactors = betafactor_in;
 
 	int i,j;
 	for (i=0; i < 4; i++) {
@@ -302,7 +305,7 @@ Grid::Grid(lensvector** xij, const int& i, const int& j, const int& level_in, Gr
 	allocated_corner[1] = allocated_corner[2] = allocated_corner[3] = false;
 }
 
-void Grid::redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double *zfactor_in)  // for radial grid
+void Grid::redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double *zfactor_in, double **betafactor_in)  // for radial grid
 {
 	if (radial_grid==false) radial_grid = true;
 	rmin = r_min; rmax = r_max;
@@ -310,6 +313,7 @@ void Grid::redraw_grid(double r_min, double r_max, double xcenter_in, double yce
 	ycenter = ycenter_in;
 	grid_q = grid_q_in;
 	grid_zfactors = zfactor_in;
+	grid_betafactors = betafactor_in;
 
 	double r, theta, rstep, thetastep;
 	rstep = (rmax-rmin)/u_N;
@@ -369,12 +373,13 @@ void Grid::redraw_grid(double r_min, double r_max, double xcenter_in, double yce
 	}
 }
 
-void Grid::redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double *zfactor_in)  // for Cartesian grid
+void Grid::redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double *zfactor_in, double **betafactor_in)  // for Cartesian grid
 {
 	if (radial_grid==true) radial_grid = false;
 	xcenter = xcenter_in;
 	ycenter = ycenter_in;
 	grid_zfactors = zfactor_in;
+	grid_betafactors = betafactor_in;
 
 	double x_min, x_max, y_min, y_max;
 	x_min = xcenter - 0.5*xlength;
@@ -465,7 +470,7 @@ void Grid::assign_lensing_properties(const int& thread)
 	if (enforce_min_area) find_cell_area(thread);
 	else cell_area=0;
 
-	lens->kappa_inverse_mag_sourcept(corner_pt[0],(*corner_sourcept[0]),(*corner_kappa[0]),(*corner_invmag[0]),thread,grid_zfactors);
+	lens->kappa_inverse_mag_sourcept(corner_pt[0],(*corner_sourcept[0]),(*corner_kappa[0]),(*corner_invmag[0]),thread,grid_zfactors,grid_betafactors);
 }
 
 inline void Grid::set_grid_xvals(lensvector** xv, const int& i, const int& j)
@@ -899,7 +904,7 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_invmag[1] = new double;
 				cell[i][j]->corner_sourcept[1] = new lensvector;
 				cell[i][j]->corner_kappa[1] = new double;
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,grid_zfactors,grid_betafactors);
 
 				cell[i][j]->allocated_corner[1] = true;
 			}
@@ -916,7 +921,7 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 					cell[i][j]->corner_invmag[3] = new double;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
-					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors,grid_betafactors);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
@@ -924,13 +929,13 @@ void Grid::assign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_invmag[2] = new double;
 				cell[i][j]->corner_sourcept[2] = new lensvector;
 				cell[i][j]->corner_kappa[2] = new double;
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,grid_zfactors,grid_betafactors);
 				cell[i][j]->allocated_corner[2] = true;
 
 				cell[i][j]->corner_invmag[3] = new double;
 				cell[i][j]->corner_sourcept[3] = new lensvector;
 				cell[i][j]->corner_kappa[3] = new double;
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors,grid_betafactors);
 				cell[i][j]->allocated_corner[3] = true;
 			}
 			cell[i][j]->check_if_cc_inside();
@@ -956,7 +961,7 @@ void Grid::reassign_subcell_lensing_properties_firstlevel()
 				cell[i][j]->corner_sourcept[1] = cell[i][j]->neighbor[2]->corner_sourcept[0];
 				cell[i][j]->corner_kappa[1] = cell[i][j]->neighbor[2]->corner_kappa[0];
 			} else {
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),0,grid_zfactors,grid_betafactors);
 
 				cell[i][j]->allocated_corner[1] = true;
 			}
@@ -970,16 +975,16 @@ void Grid::reassign_subcell_lensing_properties_firstlevel()
 					cell[i][j]->corner_sourcept[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_sourcept[0];
 					cell[i][j]->corner_kappa[3] = cell[i][j]->neighbor[0]->neighbor[2]->corner_kappa[0];
 				} else {
-					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors,grid_betafactors);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
 			} else {
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),0,grid_zfactors,grid_betafactors);
 
 				cell[i][j]->allocated_corner[2] = true;
 
-				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors);
+				lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),0,grid_zfactors,grid_betafactors);
 
 				cell[i][j]->allocated_corner[3] = true;
 			}
@@ -1022,7 +1027,7 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 					cell[i][j]->corner_invmag[1] = new double;
 					cell[i][j]->corner_sourcept[1] = new lensvector;
 					cell[i][j]->corner_kappa[1] = new double;
-					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),thread,grid_zfactors);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[1],(*cell[i][j]->corner_sourcept[1]),(*cell[i][j]->corner_kappa[1]),(*cell[i][j]->corner_invmag[1]),thread,grid_zfactors,grid_betafactors);
 
 					cell[i][j]->allocated_corner[1] = true;
 				}
@@ -1045,7 +1050,7 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 						cell[i][j]->corner_invmag[3] = new double;
 						cell[i][j]->corner_sourcept[3] = new lensvector;
 						cell[i][j]->corner_kappa[3] = new double;
-						lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,grid_zfactors);
+						lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,grid_zfactors,grid_betafactors);
 
 						cell[i][j]->allocated_corner[3] = true;
 					}
@@ -1055,14 +1060,14 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 					cell[i][j]->corner_invmag[2] = new double;
 					cell[i][j]->corner_sourcept[2] = new lensvector;
 					cell[i][j]->corner_kappa[2] = new double;
-					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),thread,grid_zfactors);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[2],(*cell[i][j]->corner_sourcept[2]),(*cell[i][j]->corner_kappa[2]),(*cell[i][j]->corner_invmag[2]),thread,grid_zfactors,grid_betafactors);
 					cell[i][j]->allocated_corner[2] = true;
 				}
 					if (cell[i][j]->corner_invmag[3]==NULL) {
 					cell[i][j]->corner_invmag[3] = new double;
 					cell[i][j]->corner_sourcept[3] = new lensvector;
 					cell[i][j]->corner_kappa[3] = new double;
-					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,grid_zfactors);
+					lens->kappa_inverse_mag_sourcept(cell[i][j]->corner_pt[3],(*cell[i][j]->corner_sourcept[3]),(*cell[i][j]->corner_kappa[3]),(*cell[i][j]->corner_invmag[3]),thread,grid_zfactors,grid_betafactors);
 
 					cell[i][j]->allocated_corner[3] = true;
 				}
@@ -1083,7 +1088,7 @@ bool Lens::plot_recursive_grid(const char filename[])
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
 	(this->*plot_critical_curves)("crit.dat");
-	if ((grid==NULL) and (create_grid(true,reference_zfactors)==false)) return false;
+	if ((grid==NULL) and (create_grid(true,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (mpi_id==0) {
 		Grid::xgrid.open(filename, ifstream::out);
@@ -1161,14 +1166,14 @@ void Grid::find_and_store_critical_curve_pt(const int icorner, const int fcorner
 	ccroot[1] = ccsearch_initial_pt[1] + ccroot_t*ccsearch_interval[1];
 	lens->critical_curve_pts.push_back(ccroot);
 	lensvector new_srcpt;
-	lens->find_sourcept(ccroot,new_srcpt,0,grid_zfactors);
+	lens->find_sourcept(ccroot,new_srcpt,0,grid_zfactors,grid_betafactors);
 	lens->caustic_pts.push_back(new_srcpt);
 	added_pts++;
 }
 
 double Grid::invmag_along_diagonal(const double t)
 {
-	return lens->inverse_magnification(ccsearch_initial_pt + t*ccsearch_interval,0,grid_zfactors);
+	return lens->inverse_magnification(ccsearch_initial_pt + t*ccsearch_interval,0,grid_zfactors,grid_betafactors);
 }
 
 inline bool Grid::image_test(const int& thread)
@@ -1746,7 +1751,7 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 		if (spline_critical_curves()==false) return;
 	}
 	if (grid==NULL) {
-		if (create_grid(verbal,reference_zfactors)==false) return;
+		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return;
 	}
 
 	if (use_scientific_notation==false) {
@@ -1796,7 +1801,7 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
-	if ((grid==NULL) and (create_grid(verbal,reference_zfactors)==false)) return false;
+	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (use_scientific_notation==false) {
 		cout << setprecision(6);
@@ -1853,7 +1858,7 @@ image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 		if (spline_critical_curves(verbal)==false) return NULL;
 	}
 	if (grid==NULL) {
-		if (create_grid(verbal,reference_zfactors)==false) return NULL;
+		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return NULL;
 	}
 
 	find_images();
@@ -1865,7 +1870,7 @@ bool Lens::plot_images(const char *sourcefile, const char *imagefile, bool verba
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
 	if ((this->*plot_critical_curves)("crit.dat")==false) return false;
-	if ((grid==NULL) and (create_grid(verbal,reference_zfactors)==false)) return false;
+	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	ifstream sources(sourcefile);
 	ofstream imagedat;
@@ -2011,9 +2016,9 @@ inline void Grid::SolveLinearEqs(lensmatrix& a, lensvector& b)
 	b[0] = temp;
 }
 
-inline void Lens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs)
+inline void Lens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
 {
-	deflection(x[0],x[1],f,thread,zfacs);
+	deflection(x[0],x[1],f,thread,zfacs,betafacs);
 	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
 	f[1] = source[1] - x[1] + f[1];
 }
@@ -2037,7 +2042,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	}
 
 	lensvector lens_eq_f;
-	lens->lens_equation(xroot,lens_eq_f,thread,grid_zfactors);
+	lens->lens_equation(xroot,lens_eq_f,thread,grid_zfactors,grid_betafactors);
 	//double lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
 	//double tryacc = image_pos_accuracy / sqrt(abs(lens->magnification(xroot,thread,zfactor)));
 	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(lens->magnification(xroot,thread,zfactor))) << endl;
@@ -2053,7 +2058,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	}
 	if (((xroot[0]==center_imgplane[0]) and (center_imgplane[0] != 0)) and ((xroot[1]==center_imgplane[1]) and (center_imgplane[1] != 0)))
 		warn(lens->newton_warnings, "Newton's method returned center of grid cell");
-	double mag = lens->magnification(xroot,thread,grid_zfactors);
+	double mag = lens->magnification(xroot,thread,grid_zfactors,grid_betafactors);
 	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy)) {
 		if (lens->newton_warnings==true) {
 			warn(lens->newton_warnings,"Newton's method found probable false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
@@ -2080,7 +2085,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 			}
 		}
 	}
-	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,grid_zfactors) > 1)) return false; // discard central image if not desired
+	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,grid_zfactors,grid_betafactors) > 1)) return false; // discard central image if not desired
 	bool status = true;
 	#pragma omp critical
 	{
@@ -2098,9 +2103,9 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 		else {
 			images[nfound].pos[0] = xroot[0];
 			images[nfound].pos[1] = xroot[1];
-			images[nfound].mag = lens->magnification(xroot,0,grid_zfactors);
+			images[nfound].mag = lens->magnification(xroot,0,grid_zfactors,grid_betafactors);
 			if (lens->include_time_delays) {
-				double potential = lens->potential(xroot,grid_zfactors);
+				double potential = lens->potential(xroot,grid_zfactors,grid_betafactors);
 				images[nfound].td = 0.5*(SQR(xroot[0]-lens->source[0])+SQR(xroot[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the Lens class
 			} else {
 				images[nfound].td = 0;
@@ -2152,7 +2157,7 @@ bool Grid::NewtonsMethod(lensvector& x, bool &check, const int& thread)
 	lensvector g, p, xold;
 	lensmatrix fjac;
 
-	lens->lens_equation(x, fvec[thread], thread, grid_zfactors);
+	lens->lens_equation(x, fvec[thread], thread, grid_zfactors, grid_betafactors);
 	double f = 0.5*fvec[thread].sqrnorm();
 	if (max_component(fvec[thread]) < 0.01*image_pos_accuracy)
 		return true; 
@@ -2160,7 +2165,7 @@ bool Grid::NewtonsMethod(lensvector& x, bool &check, const int& thread)
 	double fold, stpmax, temp, test;
 	stpmax = max_step_length * dmax(x.norm(), 2.0); 
 	for (int its=0; its < max_iterations; its++) {
-		lens->hessian(x[0],x[1],fjac,thread,grid_zfactors);
+		lens->hessian(x[0],x[1],fjac,thread,grid_zfactors,grid_betafactors);
 		fjac[0][0] = -1 + fjac[0][0];
 		fjac[1][1] = -1 + fjac[1][1];
 		g[0] = fjac[0][0] * fvec[thread][0] + fjac[0][1]*fvec[thread][1];
@@ -2250,7 +2255,7 @@ bool Grid::LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& 
 			warn(lens->newton_warnings, "Newton blew up!");
 			return false;
 		}
-		lens->lens_equation(x, fvec[thread], thread, grid_zfactors);
+		lens->lens_equation(x, fvec[thread], thread, grid_zfactors, grid_betafactors);
 		f = 0.5 * fvec[thread].sqrnorm();
 		if (alam < alamin) {
 			x[0] = xold[0];

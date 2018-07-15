@@ -210,6 +210,7 @@ public:
 		ans[1] = j[0][1] * b[0] + j[1][1] * b[1];
 		return ans;
 	}
+
 	void rotate(const double theta)
 	{
 		double x_prime, cs, ss;
@@ -348,4 +349,24 @@ inline void lensmatsqr(const lensmatrix a, lensmatrix& b)
 	b[1][0] = b[0][1];
 	b[1][1] = a[1][1]*a[1][1] + a[1][0]*a[1][0];
 }
+inline lensmatrix operator * (const double num, const lensmatrix a)
+{
+	lensmatrix ans;
+	ans[0][0] = num * a[0][0];
+	ans[1][1] = num * a[1][1];
+	ans[1][0] = num * a[1][0];
+	ans[0][1] = num * a[0][1];
+	return ans;
+}
+
+inline lensmatrix operator * (const lensmatrix a, const lensmatrix b)
+{
+	lensmatrix ans;
+	ans[0][0] = a[0][0]*b[0][0] + a[1][0]*b[0][1];
+	ans[1][0] = a[0][0]*b[1][0] + a[1][0]*b[1][1];
+	ans[0][1] = a[0][1]*b[0][0] + a[1][1]*b[0][1];
+	ans[1][1] = a[0][1]*b[1][0] + a[1][1]*b[1][1];
+	return ans;
+}
+
 #endif // LENSVEC_H

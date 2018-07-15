@@ -525,7 +525,24 @@ double Cosmology::kappa_ratio(double zl, double zs, double zs0) // for lensing
 	da_ls = dc_ls / (1 + zs);
 	da_ls0 = dc_ls0 / (1 + zs0);
 	
-	return (da_ls/da_ls0) * (da_s0/da_s);
+	return ((da_ls/da_ls0) * (da_s0/da_s));
+}
+
+double Cosmology::calculate_beta_factor(double zl1, double zl2, double zs) // for multi-plane lensing
+{
+	if (zl1 > zl2) die("zl2 must be greater than zl1");
+	double dc_l1, dc_l2, dc_s;
+	double da_12, da_l2, da_s, da_l1s;
+	dc_l1 = comoving_distance_spline.splint(zl1);
+	dc_l2 = comoving_distance_spline.splint(zl2);
+	dc_s = comoving_distance_spline.splint(zs);
+	if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
+	if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
+	da_12 = (dc_l2-dc_l1) / (1 + zl2);
+	da_l2 = dc_l2 / (1 + zl2);
+	da_s = dc_s / (1 + zs);
+	da_l1s = (dc_s - dc_l1) / (1 + zs);
+	return ((da_12/da_l2) * (da_s/da_l1s));
 }
 
 double Cosmology::sigma_crit_arcsec(double zl, double zs) // for lensing

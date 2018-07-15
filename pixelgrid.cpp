@@ -36,6 +36,8 @@ lensvector **SourcePixelGrid::interpolation_pts[3];
 int *SourcePixelGrid::n_interpolation_pts;
 double *SourcePixelGrid::srcgrid_zfactors;
 double *ImagePixelGrid::imggrid_zfactors;
+double **SourcePixelGrid::srcgrid_betafactors;
+double **ImagePixelGrid::imggrid_betafactors;
 
 // parameters for creating the recursive grid
 double SourcePixelGrid::xcenter, SourcePixelGrid::ycenter;
@@ -125,6 +127,7 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, doub
 	maps_to_image_window = false;
 	active_pixel = false;
 	srcgrid_zfactors = lens->reference_zfactors;
+	srcgrid_betafactors = lens->default_zsrc_beta_factors;
 
 	for (int i=0; i < 4; i++) {
 		corner_pt[i]=0;
@@ -190,6 +193,7 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, cons
 	maps_to_image_window = false;
 	active_pixel = false;
 	srcgrid_zfactors = lens->reference_zfactors;
+	srcgrid_betafactors = lens->default_zsrc_beta_factors;
 
 	for (int i=0; i < 4; i++) {
 		corner_pt[i]=0;
@@ -3268,6 +3272,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
 	}
 	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
@@ -3298,11 +3303,11 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 				if ((i < x_N) and (j < y_N)) {
 					center_pts[i][j][0] = x + 0.5*pixel_xlength;
 					center_pts[i][j][1] = y + 0.5*pixel_ylength;
-					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors);
+					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 				}
 				corner_pts[i][j][0] = x;
 				corner_pts[i][j][1] = y;
-				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors);
+				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
 		#pragma omp for private(i,j) schedule(dynamic)
@@ -3370,6 +3375,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 			maps_to_source_pixel[i][j] = input_pixel_grid->maps_to_source_pixel[i][j];
 	}
 	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
 
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 	lensvector d1,d2,d3,d4;
@@ -3439,6 +3445,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
 	}
 	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
@@ -3470,14 +3477,14 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 				if ((i < x_N) and (j < y_N)) {
 					center_pts[i][j][0] = x + 0.5*pixel_xlength;
 					center_pts[i][j][1] = y + 0.5*pixel_ylength;
-					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors);
+					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 					surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
 					fit_to_data[i][j] = pixel_data.require_fit[i][j];
 					if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
 				}
 				corner_pts[i][j][0] = x;
 				corner_pts[i][j][1] = y;
-				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors);
+				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
 		#pragma omp for private(i,j) schedule(dynamic)
@@ -3504,7 +3511,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 #endif
 }
 
-ImagePixelGrid::ImagePixelGrid(double* zfactor_in, RayTracingMethod method, ImagePixelData& pixel_data)
+ImagePixelGrid::ImagePixelGrid(double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data)
 {
 	ray_tracing_method = method;
 	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
@@ -3538,6 +3545,7 @@ ImagePixelGrid::ImagePixelGrid(double* zfactor_in, RayTracingMethod method, Imag
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
 	}
 	imggrid_zfactors = zfactor_in;
+	imggrid_betafactors = betafactor_in;
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
@@ -3648,7 +3656,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 		for (n=mpi_start; n < mpi_end; n++) {
 			j = n / (x_N+1);
 			i = n % (x_N+1);
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors);
+			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 #ifdef USE_MPI
 		#pragma omp master
@@ -3668,7 +3676,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
 			j = n_cell / x_N;
 			i = n_cell % x_N;
-			lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors);
+			lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
 
 			n = j*(x_N+1)+i;
 			n_yp = (j+1)*(x_N+1)+i;

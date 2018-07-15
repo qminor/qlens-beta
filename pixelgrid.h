@@ -35,6 +35,7 @@ class SourcePixelGrid
 	int ii, jj; // this is the index assigned to this cell in the grid of the parent cell
 
 	static double* srcgrid_zfactors; // kappa ratio used for modeling source points at different redshifts
+	static double** srcgrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 	static double xcenter, ycenter;
 	static double srcgrid_xmin, srcgrid_xmax, srcgrid_ymin, srcgrid_ymax;
 	int u_N, w_N;
@@ -190,12 +191,13 @@ class ImagePixelGrid : public Sort
 	double pixel_xlength, pixel_ylength;
 	inline bool test_if_inside_cell(const lensvector& point);
 	static double* imggrid_zfactors;
+	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data);
 	ImagePixelGrid(Lens* lens_in, ImagePixelGrid* pixel_grid);
-	ImagePixelGrid(double* zfactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
 

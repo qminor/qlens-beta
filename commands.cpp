@@ -4020,7 +4020,7 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							if (different_zsrc) {
 								if ((i == 0) or (source_redshifts[i] != source_redshifts[i-1])) {
-									create_grid(false,zfactors[i]);
+									create_grid(false,zfactors[i],beta_factors[i]);
 								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
@@ -4033,7 +4033,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						if (source_redshifts[dataset] != source_redshift) {
 							reset();
-							create_grid(false,zfactors[dataset]);
+							create_grid(false,zfactors[dataset],beta_factors[dataset]);
 						}
 						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, srcflux[dataset], true);
 						if (source_redshifts[dataset] != source_redshift) {
@@ -4118,10 +4118,10 @@ void Lens::process_commands(bool read_file)
 					}
 					if (show_multiple) {
 						reset();
-						create_grid(false,reference_zfactors); // even though we're not finding images, still need to plot caustics
+						create_grid(false,reference_zfactors,default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					} else {
 						reset();
-						create_grid(false,zfactors[dataset]); // even though we're not finding images, still need to plot caustics
+						create_grid(false,zfactors[dataset],default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					}
 					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
@@ -4190,7 +4190,7 @@ void Lens::process_commands(bool read_file)
 						else run_plotter("srcptfit");
 					}
 					reset();
-					create_grid(false,reference_zfactors);
+					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
 				}
@@ -4242,14 +4242,17 @@ void Lens::process_commands(bool read_file)
 						}
 						else show_multiple = true;
 					}
+					// If showing multiple sources, plot critical curves using zsrc
+					if ((show_multiple) and (show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if (!show_multiple) {
 						reset();
-						create_grid(false,zfactors[dataset]);
+						create_grid(false,zfactors[dataset],beta_factors[dataset]);
+						// Plot critical curves corresponding to the particular source redshift being plotted
+						if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
 						reset();
-						create_grid(false,zfactors[min_dataset]);
+						create_grid(false,zfactors[min_dataset],beta_factors[min_dataset]);
 					}
-					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
 					double* srcflux = new double[n_sourcepts_fit];
 					lensvector *srcpts = new lensvector[n_sourcepts_fit];
@@ -4300,7 +4303,7 @@ void Lens::process_commands(bool read_file)
 						reset();
 						for (int i=min_dataset; i <= max_dataset; i++) {
 							if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
-								create_grid(false,zfactors[i]);
+								create_grid(false,zfactors[i],beta_factors[i]);
 							if (mpi_id==0) {
 								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 								imgfile << "\"image set " << i << "\"" << endl;
@@ -4341,7 +4344,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					reset();
-					create_grid(false,reference_zfactors);
+					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
 				}
@@ -4848,7 +4851,7 @@ void Lens::process_commands(bool read_file)
 			if (nwords != 1) {
 				Complain("no arguments are allowed for 'mkgrid' command");
 			} else {
-				if (create_grid(verbal_mode,reference_zfactors)==false)
+				if (create_grid(verbal_mode,reference_zfactors,default_zsrc_beta_factors)==false)
 					Complain("could not generate recursive grid");
 			}
 		}
@@ -5581,14 +5584,14 @@ void Lens::process_commands(bool read_file)
 				lensvector point, alpha, beta;
 				double sheartot, shear_angle;
 				point[0] = x; point[1] = y;
-				deflection(point,alpha,reference_zfactors);
-				shear(point,sheartot,shear_angle,0,reference_zfactors);
+				deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+				shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 				beta[0] = point[0] - alpha[0];
 				beta[1] = point[1] - alpha[1];
-				cout << "kappa = " << kappa(point,reference_zfactors) << endl;
+				cout << "kappa = " << kappa(point,reference_zfactors,default_zsrc_beta_factors) << endl;
 				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
-				cout << "potential = " << potential(point,reference_zfactors) << endl;
-				cout << "magnification = " << magnification(point,0,reference_zfactors) << endl;
+				cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
+				cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
 				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
 				//cout << "shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
 				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n\n";
@@ -6087,6 +6090,13 @@ void Lens::process_commands(bool read_file)
 					}
 				} else {
 					for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+				}
+				if (n_lens_redshifts > 1) {
+					// later you can improve on this so it doesn't have to recalculate previous beta matrix elements, but for now I just want to get
+					// it up and running quickly
+					for (i=1; i < n_lens_redshifts; i++) {
+						for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+					}
 				}
 				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
 				reset();

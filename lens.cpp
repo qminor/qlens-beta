@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 using namespace std;
 
+const int Lens::nmax_lens_planes = 100;
 const double Lens::default_autogrid_initial_step = 1.0e-3;
 const double Lens::default_autogrid_rmin = 1.0e-5;
 const double Lens::default_autogrid_rmax = 1.0e5;
@@ -43,31 +44,43 @@ int Lens::resplinesteps; // for creating deflection spline
 string Lens::fit_output_filename;
 
 int Lens::nthreads;
-lensvector *Lens::defs, *Lens::defs_subtot, *Lens::defs_i;
-lensmatrix *Lens::jacs, *Lens::hesses, *Lens::hesses_subtot, *Lens::hesses_i;
+lensvector *Lens::defs, **Lens::defs_subtot, *Lens::defs_i, *Lens::xvals_i;
+lensmatrix *Lens::jacs, *Lens::hesses, **Lens::hesses_subtot, *Lens::hesses_i, *Lens::Amats_i;
 int *Lens::indxs;
 
 void Lens::allocate_multithreaded_variables(const int& threads)
 {
 	nthreads = threads;
+	xvals_i = new lensvector[nthreads];
 	defs = new lensvector[nthreads];
-	defs_subtot = new lensvector[nthreads];
+	defs_subtot = new lensvector*[nthreads];
 	defs_i = new lensvector[nthreads];
 	jacs = new lensmatrix[nthreads];
 	hesses = new lensmatrix[nthreads];
-	hesses_subtot = new lensmatrix[nthreads];
+	hesses_subtot = new lensmatrix*[nthreads];
+	Amats_i = new lensmatrix[nthreads];
 	hesses_i = new lensmatrix[nthreads];
+	for (int i=0; i < nthreads; i++) {
+		defs_subtot[i] = new lensvector[nmax_lens_planes];
+		hesses_subtot[i] = new lensmatrix[nmax_lens_planes];
+	}
 }
 
 void Lens::deallocate_multithreaded_variables()
 {
+	delete[] xvals_i;
 	delete[] defs;
-	delete[] defs_subtot;
 	delete[] defs_i;
 	delete[] jacs;
 	delete[] hesses;
-	delete[] hesses_subtot;
 	delete[] hesses_i;
+	delete[] Amats_i;
+	for (int i=0; i < nthreads; i++) {
+		delete[] defs_subtot[i];
+		delete[] hesses_subtot[i];
+	}
+	delete[] defs_subtot;
+	delete[] hesses_subtot;
 }
 
 #ifdef USE_MUMPS
@@ -143,10 +156,11 @@ Lens::Lens() : UCMC()
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = true; // this automatically sets the reference source redshift (for kappa scaling) equal to the source redshift being used
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
-	//reference_zfactor = 1.0; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	reference_zfactors = NULL;
+	default_zsrc_beta_factors = NULL;
 	source_redshifts = NULL;
 	zfactors = NULL;
+	beta_factors = NULL;
 	lens_redshifts = NULL;
 	lens_redshift_idx = NULL;
 	zlens_group_size = NULL;
@@ -410,12 +424,13 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	user_changed_zsource = lens_in->user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = lens_in->auto_zsource_scaling;
 	reference_source_redshift = lens_in->reference_source_redshift; // this is the source redshift with respect to which the lens models are defined
-	//reference_zfactor = lens_in->reference_zfactor; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	// Pointer arrays like the ones below should probably just be replaced with container classes, as long as they don't slow down the code significantly (check!)
 	// It would make the code less bug-prone
 	reference_zfactors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
+	default_zsrc_beta_factors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	source_redshifts = NULL;
 	zfactors = NULL;
+	beta_factors = NULL;
 	lens_redshifts = NULL;
 	n_lens_redshifts = lens_in->n_lens_redshifts;
 	lens_redshift_idx = NULL;
@@ -883,16 +898,31 @@ void Lens::add_new_lens_entry(const double zl)
 		delete[] lens_list;
 		delete[] lens_redshift_idx;
 	}
-	new_lens_redshift_idx[nlens] = add_new_lens_redshift(zl);
+	bool new_redshift;
+	new_lens_redshift_idx[nlens] = add_new_lens_redshift(zl,new_redshift);
+	if (new_redshift) {
+		// we inserted a new redshift, so higher redshifts get bumped up an index
+		for (int i=0; i < nlens; i++) if (new_lens_redshift_idx[i] >= new_lens_redshift_idx[nlens]) new_lens_redshift_idx[i]++;
+	}
 	lens_redshift_idx = new_lens_redshift_idx;
 	lens_list = newlist;
 	nlens++;
+
+	//int j,k;
+	//if (n_lens_redshifts > 1) {
+		//cout << "Beta matrix:\n";
+		//for (j=0; j < n_lens_redshifts-1; j++) {
+			//for (k=0; k < j+1; k++) cout << default_zsrc_beta_factors[j][k] << " ";
+			//cout << endl;
+		//}
+		//cout << endl;
+	//}
 }
 
-int Lens::add_new_lens_redshift(const double zl)
+int Lens::add_new_lens_redshift(const double zl, bool& new_redshift)
 {
-	int i, j, znum;
-	bool new_redshift = true;
+	int i, j, k, znum;
+	new_redshift = true;
 	for (i=0; i < n_lens_redshifts; i++) {
 		if (lens_redshifts[i]==zl) { znum = i; new_redshift = false; break; }
 	}
@@ -902,44 +932,99 @@ int Lens::add_new_lens_redshift(const double zl)
 		int *new_zlens_group_size = new int[n_lens_redshifts+1];
 		int **new_zlens_group_lens_indx = new int*[n_lens_redshifts+1];
 		int *new_zlens_group_lens_indx_col = new int[1];
+		double *new_reference_zfactors = new double[n_lens_redshifts+1];
 		new_zlens_group_lens_indx_col[0] = nlens;
 		for (i=0; i < n_lens_redshifts; i++) {
+			if (zl < lens_redshifts[i]) {
+				znum = i;
+				break;
+			}
+		}
+		for (i=0; i < znum; i++) {
 			new_lens_redshifts[i] = lens_redshifts[i];
 			new_zlens_group_lens_indx[i] = zlens_group_lens_indx[i];
 			new_zlens_group_size[i] = zlens_group_size[i];
+			new_reference_zfactors[i] = reference_zfactors[i];
 		}
-		new_lens_redshifts[n_lens_redshifts] = zl;
-		if (lens_redshifts != NULL) delete[] lens_redshifts;
+		new_lens_redshifts[znum] = zl;
+		new_zlens_group_lens_indx[znum] = new_zlens_group_lens_indx_col;
+		new_zlens_group_size[znum] = 1;
+		new_reference_zfactors[znum] = kappa_ratio(zl,source_redshift,reference_source_redshift);
+		for (i=znum; i < n_lens_redshifts; i++) {
+			new_lens_redshifts[i+1] = lens_redshifts[i];
+			new_zlens_group_lens_indx[i+1] = zlens_group_lens_indx[i];
+			new_zlens_group_size[i+1] = zlens_group_size[i];
+			new_reference_zfactors[i+1] = reference_zfactors[i];
+		}
+		if (n_lens_redshifts > 0) {
+			delete[] lens_redshifts;
+			delete[] zlens_group_lens_indx;
+			delete[] zlens_group_size;
+			delete[] reference_zfactors;
+		}
 		lens_redshifts = new_lens_redshifts;
-
-		new_zlens_group_lens_indx[n_lens_redshifts] = new_zlens_group_lens_indx_col;
-		if (n_lens_redshifts > 0) delete[] zlens_group_lens_indx;
 		zlens_group_lens_indx = new_zlens_group_lens_indx;
-		new_zlens_group_size[n_lens_redshifts] = 1;
-		if (n_lens_redshifts > 0) delete[] zlens_group_size;
 		zlens_group_size = new_zlens_group_size;
-
-		double *new_reference_zfactors = new double[n_lens_redshifts+1];
-		for (j=0; j < n_lens_redshifts; j++) new_reference_zfactors[j] = reference_zfactors[j];
-		new_reference_zfactors[n_lens_redshifts] = kappa_ratio(lens_redshifts[n_lens_redshifts],source_redshift,reference_source_redshift);
-		if (reference_zfactors != NULL) delete[] reference_zfactors;
 		reference_zfactors = new_reference_zfactors;
 
+		double **new_default_zsrc_beta_factors;
+		if (n_lens_redshifts > 0) {
+			// later you can improve on this so it doesn't have to recalculate previous beta matrix elements, but for now I just want to get
+			// it up and running quickly
+			new_default_zsrc_beta_factors = new double*[n_lens_redshifts];
+			for (i=1; i < n_lens_redshifts+1; i++) {
+				new_default_zsrc_beta_factors[i-1] = new double[i];
+				for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+			}
+			if (default_zsrc_beta_factors != NULL) {
+				for (i=0; i < n_lens_redshifts-1; i++) {
+					delete[] default_zsrc_beta_factors[i];
+				}
+				delete[] default_zsrc_beta_factors;
+			}
+			default_zsrc_beta_factors = new_default_zsrc_beta_factors;
+		}
+
 		double **new_zfactors;
+		double ***new_beta_factors;
 		if (n_sourcepts_fit > 0) {
 			new_zfactors = new double*[n_sourcepts_fit];
+			new_beta_factors = new double**[n_sourcepts_fit];
 			for (i=0; i < n_sourcepts_fit; i++) {
 				new_zfactors[i] = new double[n_lens_redshifts+1];
-				for (j=0; j < n_lens_redshifts; j++) {
+				for (j=0; j < znum; j++) {
 					new_zfactors[i][j] = zfactors[i][j];
 				}
-				new_zfactors[i][n_lens_redshifts] = kappa_ratio(lens_redshifts[n_lens_redshifts],source_redshifts[i],reference_source_redshift);
+				new_zfactors[i][znum] = kappa_ratio(zl,source_redshifts[i],reference_source_redshift);
+				for (j=znum; j < n_lens_redshifts; j++) {
+					new_zfactors[i][j+1] = zfactors[i][j];
+				}
+
+				if (n_lens_redshifts > 0) {
+					new_beta_factors[i] = new double*[n_lens_redshifts];
+					for (j=1; j < n_lens_redshifts+1; j++) {
+						new_beta_factors[i][j-1] = new double[j];
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+					}
+				} else new_beta_factors[i] = NULL;
 			}
 			if (zfactors != NULL) {
 				for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 				delete[] zfactors;
 			}
+			if (beta_factors != NULL) {
+				for (i=0; i < n_sourcepts_fit; i++) {
+					if (beta_factors[i] != NULL) {
+						for (j=0; j < n_lens_redshifts-1; j++) {
+							delete[] beta_factors[i][j];
+						}
+						delete[] beta_factors[i];
+					}
+				}
+				delete[] beta_factors;
+			}
 			zfactors = new_zfactors;
+			beta_factors = new_beta_factors;
 		}
 		n_lens_redshifts++;
 		//for (i=0; i < n_lens_redshifts; i++) {
@@ -961,7 +1046,7 @@ int Lens::add_new_lens_redshift(const double zl)
 
 void Lens::remove_old_lens_redshift(const int znum, const int lens_i)
 {
-	int i, j, nlenses_with_znum=0, idx=-1;
+	int i, j, k, nlenses_with_znum=0, idx=-1;
 	for (i=0; i < nlens; i++) {
 		if (lens_redshift_idx[i]==znum) {
 			nlenses_with_znum++;
@@ -995,6 +1080,7 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i)
 		}
 
 		double *new_reference_zfactors;
+		double **new_default_zsrc_beta_factors;
 		if (n_lens_redshifts==1) {
 			delete[] reference_zfactors;
 			reference_zfactors = NULL;
@@ -1004,6 +1090,24 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i)
 			for (j=znum; j < n_lens_redshifts-1; j++) new_reference_zfactors[j] = reference_zfactors[j+1];
 			delete[] reference_zfactors;
 			reference_zfactors = new_reference_zfactors;
+			if (n_lens_redshifts==2) {
+				delete[] default_zsrc_beta_factors[0];
+				delete[] default_zsrc_beta_factors;
+				default_zsrc_beta_factors = NULL;
+			} else {
+				new_default_zsrc_beta_factors = new double*[n_lens_redshifts-2];
+				for (i=1; i < n_lens_redshifts-1; i++) {
+					new_default_zsrc_beta_factors[i-1] = new double[i];
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+				}
+				if (default_zsrc_beta_factors != NULL) {
+					for (i=0; i < n_lens_redshifts-1; i++) {
+						delete[] default_zsrc_beta_factors[i];
+					}
+					delete[] default_zsrc_beta_factors;
+				}
+				default_zsrc_beta_factors = new_default_zsrc_beta_factors;
+			}
 		}
 
 		double **new_zfactors;
@@ -1026,12 +1130,41 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i)
 				for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 				delete[] zfactors;
 				zfactors = new_zfactors;
+
+				double ***new_beta_factors;
+				if (n_lens_redshifts==2) {
+					for (i=0; i < n_sourcepts_fit; i++) {
+						delete[] beta_factors[i][0];
+						delete[] beta_factors[i];
+						beta_factors[i] = NULL;
+					}
+					default_zsrc_beta_factors = NULL;
+				} else {
+					new_beta_factors = new double**[n_sourcepts_fit];
+					for (i=0; i < n_sourcepts_fit; i++) {
+						new_beta_factors[i] = new double*[n_lens_redshifts-2];
+						for (j=1; j < n_lens_redshifts-1; j++) {
+							new_beta_factors[i][j-1] = new double[j];
+							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+						}
+					}
+					if (beta_factors != NULL) {
+						for (i=0; i < n_sourcepts_fit; i++) {
+							for (j=0; j < n_lens_redshifts-1; j++) {
+								delete[] beta_factors[i][j];
+							}
+							delete[] beta_factors[i];
+						}
+						delete[] beta_factors;
+					}
+					beta_factors = new_beta_factors;
+				}
 			}
 		}
 		n_lens_redshifts--;
 	} else {
 		int *new_zlens_group_lens_indx_col = new int[zlens_group_size[znum]-1];
-		for (i=0; i < zlens_group_size[znum]; i++) {
+		for (i=0,j=0; i < zlens_group_size[znum]; i++) {
 			if (zlens_group_lens_indx[znum][i] != lens_i) {
 				new_zlens_group_lens_indx_col[j] = zlens_group_lens_indx[znum][i];
 				j++;
@@ -1172,6 +1305,20 @@ void Lens::clear_lenses()
 			delete[] zfactors;
 			zfactors = NULL;
 		}
+		if (default_zsrc_beta_factors != NULL) {
+			for (int i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
+			delete[] default_zsrc_beta_factors;
+			default_zsrc_beta_factors = NULL;
+		}
+		if (beta_factors != NULL) {
+			for (int i=0; i < n_sourcepts_fit; i++) {
+				for (int j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
+				delete[] beta_factors[i];
+			}
+			delete[] beta_factors;
+			beta_factors = NULL;
+		}
+
 		nlens = 0;
 		n_lens_redshifts = 0;
 	}
@@ -1210,6 +1357,19 @@ void Lens::clear()
 			for (int i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 			delete[] zfactors;
 			zfactors = NULL;
+		}
+		if (default_zsrc_beta_factors != NULL) {
+			for (int i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
+			delete[] default_zsrc_beta_factors;
+			default_zsrc_beta_factors = NULL;
+		}
+		if (beta_factors != NULL) {
+			for (int i=0; i < n_sourcepts_fit; i++) {
+				for (int j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
+				delete[] beta_factors[i];
+			}
+			delete[] beta_factors;
+			beta_factors = NULL;
 		}
 		nlens = 0;
 		n_lens_redshifts = 0;
@@ -1503,7 +1663,7 @@ void Lens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool Lens::create_grid(bool verbal, double *zfacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }
 	double mytime0, mytime;
@@ -1556,16 +1716,16 @@ bool Lens::create_grid(bool verbal, double *zfacs, const int redshift_index) // 
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
 		if (radial_grid)
-			grid->redraw_grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs); // setting grid_q to 1 for the moment...I will play with that later
+			grid->redraw_grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 for the moment...I will play with that later
 		else
-			grid->redraw_grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs);
+			grid->redraw_grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	} else {
 		if (radial_grid)
-			grid = new Grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs); // setting grid_q to 1 for the moment...I will play with that later
+			grid = new Grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 for the moment...I will play with that later
 		else
-			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs);
+			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
-	if (subgrid_around_satellites) subgrid_around_satellite_galaxies(zfacs,redshift_index);
+	if (subgrid_around_satellites) subgrid_around_satellite_galaxies(zfacs,betafacs,redshift_index);
 	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
@@ -1580,10 +1740,10 @@ bool Lens::create_grid(bool verbal, double *zfacs, const int redshift_index) // 
 	return true;
 }
 
-void Lens::subgrid_around_satellite_galaxies(double *zfacs, const int redshift_index)
+void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, const int redshift_index)
 {
 	if (grid==NULL) {
-		if (create_grid(false,zfacs)==false) die("Could not create recursive grid");
+		if (create_grid(false,zfacs,betafacs)==false) die("Could not create recursive grid");
 	}
 	int i;
 	if (nlens==0) { warn(warnings,"No galaxies in lens lens_list"); return; }
@@ -1611,8 +1771,8 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, const int redshift_i
 			if ((xc != xch) or (yc != ych)) {
 				center[0]=xc;
 				center[1]=yc;
-				kappas[i] = kappa_exclude(center,i,zfacs);
-				parities[i] = sign(magnification_exclude(center,i,zfacs)); // use the parity to help determine approx. size of critical curves
+				kappas[i] = kappa_exclude(center,i,zfacs,betafacs);
+				parities[i] = sign(magnification_exclude(center,i,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
 				// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
 				if ((parities[i]==1) and (kappas[i] >= 1.0)) continue;
 				else n_satellites++;
@@ -1648,7 +1808,7 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, const int redshift_i
 
 				lens_list[i]->get_einstein_radius(einstein_radius[j],reavg,zfacs[lens_redshift_idx[i]]);
 				//shear_at_center = shear_exclude(galcenter[j],i,zfac);
-				shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfacs);
+				shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfacs,betafacs);
 				if (shear_at_center*0.0 != 0.0) {
 					warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
 					delete[] subgrid;
@@ -1666,7 +1826,7 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, const int redshift_i
 				lambda_minus = 1 - kappa_at_center - shear_at_center;
 				displaced_center[0] = xc + dr*cos(shear_angle);
 				displaced_center[1] = yc + dr*sin(shear_angle);
-				dlambda_dr = ((1 - kappa_exclude(displaced_center,i,zfacs) - shear_exclude(displaced_center,i,zfacs)) - lambda_minus) / dr;
+				dlambda_dr = ((1 - kappa_exclude(displaced_center,i,zfacs,betafacs) - shear_exclude(displaced_center,i,zfacs,betafacs)) - lambda_minus) / dr;
 				if (dlambda_dr < 0) {
 					shear_angle += M_PI;
 					dlambda_dr = -dlambda_dr;
@@ -1742,7 +1902,7 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 	for (i=0, x=xmin; i < nx; i++, x += xstep) {
 		for (j=0, y=ymin; j < ny; j++, y += ystep) {
 			pos[0]=x; pos[1]=y;
-			shear(pos,shearval,shear_angle,0,reference_zfactors);
+			shear(pos,shearval,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 			shear_angle *= M_PI/180.0;
 			for (k=-compass_steps+1; k < compass_steps; k++)
 			{
@@ -1889,7 +2049,7 @@ void Lens::calculate_critical_curve_deformation_radius(int lens_number, bool ver
 	double shear_angle, rmax_numerical, totshear;
 	subhalo_lens_number = lens_number;
 	subhalo_center[0]=xc; subhalo_center[1]=yc;
-	shear_exclude(subhalo_center,totshear,shear_angle,subhalo_lens_number,reference_zfactors);
+	shear_exclude(subhalo_center,totshear,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
@@ -1958,7 +2118,7 @@ bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	double shear_angle, shear_tot;
 	subhalo_lens_number = lens_number;
 	subhalo_center[0]=xc; subhalo_center[1]=yc;
-	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors);
+	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	if (shear_angle*0.0 != 0.0) {
 		warn("could not calculate shear at position of perturber");
 		return false;
@@ -1989,8 +2149,8 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 	lensvector x;
 	x[0] = subhalo_center[0] + r*cos(theta_shear);
 	x[1] = subhalo_center[1] + r*sin(theta_shear);
-	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors);
-	shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors);
+	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	subhalo_avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r);
 	return (1 - kappa0 - shear_tot - subhalo_avg_kappa);
 }
@@ -2005,7 +2165,7 @@ bool Lens::get_einstein_radius(int lens_number, double& re_major_axis, double& r
 double Lens::inverse_magnification_r(const double r)
 {
 	lensmatrix jac;
-	hessian(grid_xcenter + r*cos(theta_crit), grid_ycenter + r*sin(theta_crit), jac, 0, reference_zfactors);
+	hessian(grid_xcenter + r*cos(theta_crit), grid_ycenter + r*sin(theta_crit), jac, 0, reference_zfactors, default_zsrc_beta_factors);
 	jac[0][0] = 1 - jac[0][0];
 	jac[1][1] = 1 - jac[1][1];
 	jac[0][1] = -jac[0][1];
@@ -2018,7 +2178,7 @@ double Lens::source_plane_r(const double r)
 	lensvector x,def;
 	x[0] = grid_xcenter + r*cos(theta_crit);
 	x[1] = grid_ycenter + r*sin(theta_crit);
-	find_sourcept(x,def,0,reference_zfactors);
+	find_sourcept(x,def,0,reference_zfactors,default_zsrc_beta_factors);
 	def[0] -= grid_xcenter; // this assumes the deflection is approximately zero at the center of the grid (roughly true if any satellite gal's are small)
 	def[1] -= grid_ycenter;
 	return def.norm();
@@ -2053,8 +2213,8 @@ void Lens::spline_deflection(double xl, double yl, int steps)
 		xtable[i] = x;
 		for (j=0, y=ymin; j <= steps; j++, y += ystep) {
 			if (i==0) ytable[j] = y;		// Only needs to be done the first time around (hence "if i==0")
-			deflection(x,y,def,0,reference_zfactors);
-			hessian(x,y,hess,0,reference_zfactors);
+			deflection(x,y,def,0,reference_zfactors,default_zsrc_beta_factors);
+			hessian(x,y,hess,0,reference_zfactors,default_zsrc_beta_factors);
 			defxmatrix[i][j] = def[0];
 			defymatrix[i][j] = def[1];
 			defxxmatrix[i][j] = hess[0][0];
@@ -2276,13 +2436,13 @@ bool Lens::spline_critical_curves(bool verbal)
 		xp = cos(theta_table[i]); yp = sin(theta_table[i]);
 		x[0] = grid_xcenter + rcrit[0][i]*xp;
 		x[1] = grid_ycenter + rcrit[0][i]*yp;
-		find_sourcept(x,caust0,0,reference_zfactors);
+		find_sourcept(x,caust0,0,reference_zfactors,default_zsrc_beta_factors);
 		rcaust[0][i] = norm(caust0[0]-grid_xcenter,caust0[1]-grid_ycenter);
 		caust0_theta_table[i] = angle(caust0[0]-grid_xcenter,caust0[1]-grid_ycenter);
 		if (!(isspherical())) {
 			x[0] = grid_xcenter + rcrit[1][i]*xp;
 			x[1] = grid_ycenter + rcrit[1][i]*yp;
-			find_sourcept(x,caust1,0,reference_zfactors);
+			find_sourcept(x,caust1,0,reference_zfactors,default_zsrc_beta_factors);
 			rcaust[1][i] = norm(caust1[0]-grid_xcenter,caust1[1]-grid_ycenter);
 			caust1_theta_table[i] = angle(caust1[0]-grid_xcenter,caust1[1]-grid_ycenter);
 			if ((i==0) and (rcaust[1][i] < 1e-3))
@@ -2508,7 +2668,7 @@ void Lens::sort_critical_curves()
 bool Lens::plot_sorted_critical_curves(const char *critfile)
 {
 	if (grid==NULL) {
-		if (create_grid(false,reference_zfactors)==false) { warn("Could not create recursive grid"); return false; }
+		if (create_grid(false,reference_zfactors,default_zsrc_beta_factors)==false) { warn("Could not create recursive grid"); return false; }
 	}
 	if (!sorted_critical_curves) sort_critical_curves();
 
@@ -2607,8 +2767,8 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 			y = grid_ycenter + r*sin(theta);
 			x2 = (r+dr)*cos(theta);
 			y2 = (r+dr)*sin(theta);
-			kap = kappa(x,y,onezfac);
-			kap2 = kappa(x2,y2,onezfac);
+			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
+			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
 			total_kappa += kap;
 			total_dkappa += (kap2 - kap)/dr;
 		}
@@ -2662,7 +2822,7 @@ double Lens::total_kappa(const double r, const int lensnum)
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r*cos(theta);
 		y = grid_ycenter + r*sin(theta);
-		if (lensnum==-1) kap = kappa(x,y,onezfac);
+		if (lensnum==-1) kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
 		else kap = lens_list[lensnum]->kappa(x,y);
 		total_kappa += kap;
 	}
@@ -2695,8 +2855,8 @@ double Lens::total_dkappa(const double r, const int lensnum)
 		x2 = (r+dr)*cos(theta);
 		y2 = (r+dr)*sin(theta);
 		if (lensnum==-1) {
-			kap = kappa(x,y,onezfac);
-			kap2 = kappa(x2,y2,onezfac);
+			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
+			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
 		} else {
 			kap = lens_list[lensnum]->kappa(x,y);
 			kap2 = lens_list[lensnum]->kappa(x2,y2);
@@ -2870,7 +3030,7 @@ void Lens::plot_satellite_deflection_vs_area()
 
 void Lens::add_simulated_image_data(const lensvector &sourcept)
 {
-	int i,j,n_images;
+	int i,j,k,n_images;
 	image *imgs = get_images(sourcept, n_images, false);
 	if (n_images==0) { warn("could not find any images; no data added"); return; }
 
@@ -2884,9 +3044,10 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		new_sourcepts_lower_limit = new lensvector[n_sourcepts_fit+1];
 		new_sourcepts_upper_limit = new lensvector[n_sourcepts_fit+1];
 	}
-	double *new_redshifts, **new_zfactors;
+	double *new_redshifts, **new_zfactors, ***new_beta_factors;
 	new_redshifts = new double[n_sourcepts_fit+1];
 	if (n_lens_redshifts > 0) new_zfactors = new double*[n_sourcepts_fit+1];
+	new_beta_factors = new double**[n_sourcepts_fit+1];
 	for (i=0; i < n_sourcepts_fit; i++) {
 		new_redshifts[i] = source_redshifts[i];
 		new_sourcepts_fit[i] = sourcepts_fit[i];
@@ -2897,12 +3058,8 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 			new_sourcepts_upper_limit[i] = sourcepts_upper_limit[i];
 			new_sourcepts_lower_limit[i] = sourcepts_lower_limit[i];
 		}
-		if (n_lens_redshifts > 0) {
-			new_zfactors[i] = new double[n_lens_redshifts];
-			for (j=0; j < n_lens_redshifts; j++) {
-				new_zfactors[i][j] = zfactors[i][j];
-			}
-		}
+		if (n_lens_redshifts > 0) new_zfactors[i] = zfactors[i];
+		if (n_lens_redshifts > 1) new_beta_factors[i] = beta_factors[i];
 	}
 	new_redshifts[n_sourcepts_fit] = source_redshift;
 	if (n_lens_redshifts > 0) {
@@ -2911,6 +3068,13 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 			new_zfactors[n_sourcepts_fit][j] = kappa_ratio(lens_redshifts[j],source_redshift,reference_source_redshift);
 		}
 	}
+	if (n_lens_redshifts > 1) {
+		new_beta_factors[n_sourcepts_fit] = new double*[n_lens_redshifts-1];
+		for (j=1; j < n_lens_redshifts; j++) {
+			new_beta_factors[n_sourcepts_fit][j-1] = new double[j];
+			for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshift);
+		}
+	} else new_beta_factors[n_sourcepts_fit] = NULL;
 	if (n_sourcepts_fit > 0) {
 		delete[] image_data;
 		delete[] sourcepts_fit;
@@ -2918,18 +3082,19 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		delete[] vary_sourcepts_y;
 	}
 	if (source_redshifts != NULL) delete[] source_redshifts;
-	if (zfactors != NULL) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
-		delete[] zfactors;
-	}
+	if (zfactors != NULL) delete[] zfactors;
+	if (beta_factors != NULL) delete[] beta_factors;
 	source_redshifts = new_redshifts;
-	if (n_lens_redshifts > 0) zfactors = new_zfactors;
+	if (n_lens_redshifts > 0) {
+		zfactors = new_zfactors;
+		beta_factors = new_beta_factors;
+	}
 
 	bool include_image[n_images];
 	double min_td=1e30;
 	for (i=0; i < n_images; i++) {
 		// central maxima images have positive parity and kappa > 1, so use this to exclude them if desired
-		if ((include_central_image==false) and (imgs[i].parity == 1) and (kappa(imgs[i].pos,reference_zfactors) > 1)) include_image[i] = false;
+		if ((include_central_image==false) and (imgs[i].parity == 1) and (kappa(imgs[i].pos,reference_zfactors,default_zsrc_beta_factors) > 1)) include_image[i] = false;
 		else include_image[i] = true;
 		imgs[i].pos[0] += sim_err_pos*NormalDeviate();
 		imgs[i].pos[1] += sim_err_pos*NormalDeviate();
@@ -2986,7 +3151,7 @@ void Lens::write_image_data(string filename)
 
 bool Lens::load_image_data(string filename)
 {
-	int i,j;
+	int i,j,k;
 	ifstream data_infile(filename.c_str());
 	if (!data_infile.is_open()) { warn("Error: input file '%s' could not be opened",filename.c_str()); return false; }
 
@@ -3017,17 +3182,33 @@ bool Lens::load_image_data(string filename)
 		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 		delete[] zfactors;
 	}
+	if (beta_factors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			if (beta_factors[i] != NULL) {
+				for (j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
+				delete[] beta_factors[i];
+			}
+		}
+		delete[] beta_factors;
+	}
 
 	sourcepts_fit = new lensvector[n_sourcepts_fit];
 	vary_sourcepts_x = new bool[n_sourcepts_fit];
 	vary_sourcepts_y = new bool[n_sourcepts_fit];
 	source_redshifts = new double[n_sourcepts_fit];
-	if (n_lens_redshifts > 0) zfactors = new double*[n_sourcepts_fit];
+	if (n_lens_redshifts > 0) {
+		zfactors = new double*[n_sourcepts_fit];
+		beta_factors = new double**[n_sourcepts_fit];
+	}
 	for (i=0; i < n_sourcepts_fit; i++) {
 		vary_sourcepts_x[i] = true;
 		vary_sourcepts_y[i] = true;
 		source_redshifts[i] = source_redshift;
-		if (n_lens_redshifts > 0) zfactors[i] = new double[n_lens_redshifts];
+		if (n_lens_redshifts > 0) {
+			zfactors[i] = new double[n_lens_redshifts];
+			if (n_lens_redshifts > 1) beta_factors[i] = new double*[n_lens_redshifts-1];
+			else beta_factors[i] = NULL;
+		}
 	}
 	if ((fitmethod != POWELL) and (fitmethod != SIMPLEX)) {
 		// You should replace the pointers here with a container class like Vector. This is too bug-prone!
@@ -3144,6 +3325,15 @@ bool Lens::load_image_data(string filename)
 		}
 	}
 
+	if (n_lens_redshifts > 1) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			for (j=1; j < n_lens_redshifts; j++) {
+				beta_factors[i][j-1] = new double[j];
+				for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+			}
+		}
+	}
+
 	sort_image_data_into_redshift_groups();
 
 	int ncombs, max_combinations = -1;
@@ -3152,7 +3342,6 @@ bool Lens::load_image_data(string filename)
 		ncombs = image_data[i].n_images * (image_data[i].n_images-1) / 2;
 		if (ncombs > max_combinations) max_combinations = ncombs;
 	}
-	int k;
 	double *distsqrs = new double[max_combinations];
 	for (i=0; i < n_sourcepts_fit; i++) {
 		n=0;
@@ -3179,7 +3368,7 @@ void Lens::sort_image_data_into_redshift_groups()
 {
 	// Reorganize, if necessary, so that image sets with the same source redshift are listed together. This makes it easy to assign image sets with
 	// different source planes to different MPI processes in the image plane chi-square.
-	//
+	// We aren't trying to sort the groups from low to high redshift, only to make sure like redshifts occur in groups.
 	//
 
 	bool sort_sourcept_limits = false;
@@ -3188,9 +3377,11 @@ void Lens::sort_image_data_into_redshift_groups()
 	ImageData *sorted_image_data = new ImageData[n_sourcepts_fit];
 	double *sorted_redshifts = new double[n_sourcepts_fit];
 	double **sorted_zfactors;
+	double ***sorted_beta_factors;
 	if (n_lens_redshifts > 0) {
 		sorted_zfactors = new double*[n_sourcepts_fit];
-		for (i=0; i < n_sourcepts_fit; i++) sorted_zfactors[i] = new double[n_lens_redshifts];
+		sorted_beta_factors = new double**[n_sourcepts_fit];
+		for (i=0; i < n_sourcepts_fit; i++) sorted_beta_factors[i] = beta_factors[i];
 	}
 	bool *sorted_vary_sourcepts_x = new bool[n_sourcepts_fit];
 	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
@@ -3216,7 +3407,8 @@ void Lens::sort_image_data_into_redshift_groups()
 				sorted_sourcepts_lower_limit[j] = sourcepts_lower_limit[i];
 			}
 			if (n_lens_redshifts > 0) {
-				for (k=0; k < n_lens_redshifts; k++) sorted_zfactors[j][k] = zfactors[i][k];
+				sorted_zfactors[j] = zfactors[i];
+				sorted_beta_factors[j] = beta_factors[i];
 			}
 			assigned[i] = true;
 			j++;
@@ -3225,7 +3417,8 @@ void Lens::sort_image_data_into_redshift_groups()
 					if (source_redshifts[k]==source_redshifts[i]) {
 						sorted_image_data[j].input(image_data[k]);
 						sorted_redshifts[j] = source_redshifts[k];
-						for (l=0; l < n_lens_redshifts; l++) sorted_zfactors[j][l] = zfactors[k][l];
+						sorted_zfactors[j] = zfactors[k];
+						if (n_lens_redshifts > 0) sorted_beta_factors[j] = beta_factors[k];
 						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
 						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
 						if (sort_sourcept_limits) {
@@ -3243,15 +3436,18 @@ void Lens::sort_image_data_into_redshift_groups()
 	delete[] image_data;
 	delete[] source_redshifts;
 	if (n_lens_redshifts > 0) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 		delete[] zfactors;
 	}
+	if (n_lens_redshifts > 0) delete[] beta_factors;
 	delete[] vary_sourcepts_x;
 	delete[] vary_sourcepts_y;
 	delete[] assigned;
 	image_data = sorted_image_data;
 	source_redshifts = sorted_redshifts;
-	if (n_lens_redshifts > 0) zfactors = sorted_zfactors;
+	if (n_lens_redshifts > 0) {
+		zfactors = sorted_zfactors;
+		beta_factors = sorted_beta_factors;
+	}
 	vary_sourcepts_x = sorted_vary_sourcepts_x;
 	vary_sourcepts_y = sorted_vary_sourcepts_y;
 	if (sort_sourcept_limits) {
@@ -3271,9 +3467,12 @@ void Lens::remove_image_data(int image_set)
 	lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit-1];
 	ImageData *new_image_data = new ImageData[n_sourcepts_fit-1];
 	int i,j,k;
-	double *new_redshifts, **new_zfactors;
+	double *new_redshifts, **new_zfactors, ***new_beta_factors;
 	new_redshifts = new double[n_sourcepts_fit-1];
-	if (n_lens_redshifts > 0) new_zfactors = new double*[n_sourcepts_fit-1];
+	if (n_lens_redshifts > 0) {
+		new_zfactors = new double*[n_sourcepts_fit-1];
+		new_beta_factors = new double**[n_sourcepts_fit-1];
+	}
 	for (i=0,j=0; i < n_sourcepts_fit; i++) {
 		if (i != image_set) {
 			new_image_data[j].input(image_data[i]);
@@ -3282,17 +3481,21 @@ void Lens::remove_image_data(int image_set)
 			new_vary_sourcepts_x[j] = vary_sourcepts_x[i];
 			new_vary_sourcepts_y[j] = vary_sourcepts_y[i];
 			if (n_lens_redshifts > 0) {
-				new_zfactors[j] = new double[n_lens_redshifts];
-				for (k=0; k < n_lens_redshifts; k++) new_zfactors[j][k] = zfactors[i][k];
+				new_zfactors[j] = zfactors[i];
+				new_beta_factors[j] = beta_factors[i];
 			}
 			j++;
+		} else {
+			if (n_lens_redshifts > 0) {
+				delete[] zfactors[i];
+				if (beta_factors[i] != NULL) {
+					for (k=0; k < n_lens_redshifts-1; k++) delete[] beta_factors[i][k];
+					delete[] beta_factors[i];
+				}
+			}
 		}
 	}
 	delete[] source_redshifts;
-	if (n_lens_redshifts > 0) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
-		delete[] zfactors;
-	}
 	delete[] image_data;
 	delete[] sourcepts_fit;
 	delete[] vary_sourcepts_x;
@@ -3302,7 +3505,12 @@ void Lens::remove_image_data(int image_set)
 	image_data = new_image_data;
 	sourcepts_fit = new_sourcepts_fit;
 	source_redshifts = new_redshifts;
-	if (n_lens_redshifts > 0) zfactors = new_zfactors;
+	if (n_lens_redshifts > 0) {
+		delete[] zfactors;
+		delete[] beta_factors;
+		zfactors = new_zfactors;
+		beta_factors = new_beta_factors;
+	}
 	vary_sourcepts_x = new_vary_sourcepts_x;
 	vary_sourcepts_y = new_vary_sourcepts_y;
 
@@ -3318,7 +3526,7 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 	int i,n_srcpts = image_data[dataset_number].n_images;
 	lensvector *srcpts = new lensvector[n_srcpts];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept(image_data[dataset_number].pos[i],srcpts[i],0,zfactors[dataset_number]);
+		find_sourcept(image_data[dataset_number].pos[i],srcpts[i],0,zfactors[dataset_number],beta_factors[dataset_number]);
 	}
 
 	if (use_scientific_notation==false) {
@@ -3336,7 +3544,7 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
-			pot = potential(image_data[dataset_number].pos[i],zfactors[dataset_number]);
+			pot = potential(image_data[dataset_number].pos[i],zfactors[dataset_number],beta_factors[dataset_number]);
 			time_delays_mod[i] = 0.5*(SQR(image_data[dataset_number].pos[i][0] - srcpts[i][0]) + SQR(image_data[dataset_number].pos[i][1] - srcpts[i][1])) - pot;
 			if (time_delays_mod[i] < min_td_mod) min_td_mod = time_delays_mod[i];
 		}
@@ -3357,7 +3565,7 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 			cout << image_data[dataset_number].pos[i][0] << "\t" << image_data[dataset_number].pos[i][1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (srcfile != NULL) (*srcfile) << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (flux != -1) {
-				imgflux = flux/inverse_magnification(image_data[dataset_number].pos[i],0,zfactors[dataset_number]);
+				imgflux = flux/inverse_magnification(image_data[dataset_number].pos[i],0,zfactors[dataset_number],beta_factors[dataset_number]);
 				cout << "\t" << imgflux;
 			}
 			if (include_time_delays) {
@@ -3449,6 +3657,7 @@ bool Lens::datastring_convert(const string& instring, double& outvar)
 
 void Lens::clear_image_data()
 {
+	int i,j;
 	if (image_data != NULL) {
 		delete[] image_data;
 		image_data = NULL;
@@ -3468,9 +3677,22 @@ void Lens::clear_image_data()
 		sourcepts_upper_limit = NULL;
 	}
 	if (zfactors != NULL) {
-		for (int i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
+		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 		delete[] zfactors;
 		zfactors = NULL;
+	}
+	if (default_zsrc_beta_factors != NULL) {
+		for (i=1; i < n_lens_redshifts; i++) delete[] default_zsrc_beta_factors[i-1];
+		delete[] default_zsrc_beta_factors;
+		default_zsrc_beta_factors = NULL;
+	}
+	if (beta_factors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			for (j=1; j < n_lens_redshifts; j++) delete[] beta_factors[i][j-1];
+			delete[] beta_factors[i];
+		}
+		delete[] beta_factors;
+		beta_factors = NULL;
 	}
 	if (source_redshifts != NULL) {
 		delete[] source_redshifts;
@@ -3704,9 +3926,10 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->auto_ccspline = false;
 	//fitmodel->set_gridcenter(grid_xcenter,grid_ycenter);
 
-	int i,j;
+	int i,j,k;
 	if (n_lens_redshifts > 0) {
 		fitmodel->reference_zfactors = new double[n_lens_redshifts];
+		fitmodel->default_zsrc_beta_factors = new double*[n_lens_redshifts-1];
 		fitmodel->lens_redshifts = new double[n_lens_redshifts];
 		fitmodel->lens_redshift_idx = new int[nlens];
 		fitmodel->zlens_group_size = new int[n_lens_redshifts];
@@ -3723,6 +3946,10 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 			}
 			//cout << endl;
 		}
+		for (i=0; i < n_lens_redshifts-1; i++) {
+			fitmodel->default_zsrc_beta_factors[i] = new double[i+1];
+			for (j=0; j < i+1; j++) fitmodel->default_zsrc_beta_factors[i][j] = default_zsrc_beta_factors[i][j];
+		}
 		for (j=0; j < nlens; j++) fitmodel->lens_redshift_idx[j] = lens_redshift_idx[j];
 	}
 
@@ -3735,14 +3962,24 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->vary_sourcepts_y = new bool[n_sourcepts_fit];
 		fitmodel->source_redshifts = new double[n_sourcepts_fit];
 		fitmodel->zfactors = new double*[n_sourcepts_fit];
+		fitmodel->beta_factors = new double**[n_sourcepts_fit];
 		for (i=0; i < n_sourcepts_fit; i++) {
+			//cout << "source " << i << " beta matrix:\n";
 			fitmodel->vary_sourcepts_x[i] = vary_sourcepts_x[i];
 			fitmodel->vary_sourcepts_y[i] = vary_sourcepts_y[i];
 			fitmodel->sourcepts_fit[i][0] = sourcepts_fit[i][0];
 			fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			fitmodel->zfactors[i] = new double[n_lens_redshifts];
+			fitmodel->beta_factors[i] = new double*[n_lens_redshifts-1];
 			for (j=0; j < n_lens_redshifts; j++) fitmodel->zfactors[i][j] = zfactors[i][j];
+			for (j=0; j < n_lens_redshifts-1; j++) {
+				fitmodel->beta_factors[i][j] = new double[j+1];
+				for (k=0; k < j+1; k++) fitmodel->beta_factors[i][j][k] = beta_factors[i][j][k];
+				//for (k=0; k < j+1; k++) cout << beta_factors[i][j][k] << " ";
+				//cout << endl;
+			}
+			//cout << endl;
 		}
 		for (i=0; i < source_redshift_groups.size(); i++) {
 			fitmodel->source_redshift_groups.push_back(source_redshift_groups[i]);
@@ -3884,7 +4121,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i]);
+					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i],beta_factors[i]);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
 					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
@@ -3895,7 +4132,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i]);
+					find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i],beta_factors[i]);
 					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
@@ -3944,7 +4181,7 @@ double Lens::chisq_pos_source_plane()
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,zfactors[i]);
+					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,zfactors[i],beta_factors[i]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -3961,7 +4198,7 @@ double Lens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i]);
+					find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i],beta_factors[i]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -4040,7 +4277,7 @@ double Lens::chisq_pos_image_plane()
 	double chisq_each_srcpt, dist;
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
-		create_grid(false,zfactors[source_redshift_groups[m]],m);
+		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			image *img = get_images(sourcepts_fit[i], n_images, false);
@@ -4171,7 +4408,7 @@ double Lens::chisq_pos_image_plane_verbose()
 	double chisq_each_srcpt, dist;
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
-		create_grid(false,zfactors[source_redshift_groups[m]],m);
+		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
 		if (group_num==0) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
@@ -4295,7 +4532,7 @@ void Lens::output_model_source_flux(double *bestfit_flux)
 		double num=0, denom=0;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,zfactors[i]);
+			hessian(image_data[i].pos[j],jac,zfactors[i],beta_factors[i]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -4331,7 +4568,7 @@ double Lens::chisq_flux()
 		k=0; num=0; denom=0;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,zfactors[i]);
+			hessian(image_data[i].pos[j],jac,zfactors[i],beta_factors[i]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -4395,8 +4632,8 @@ double Lens::chisq_time_delays()
 		min_td_mod=1e30;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_t[j]==0) continue;
-			find_sourcept(image_data[i].pos[j],beta_ij,0,zfactors[i]);
-			pot = potential(image_data[i].pos[j],zfactors[i]);
+			find_sourcept(image_data[i].pos[j],beta_ij,0,zfactors[i],beta_factors[i]);
+			pot = potential(image_data[i].pos[j],zfactors[i],beta_factors[i]);
 			time_delays_mod[j] = 0.5*(SQR(image_data[i].pos[j][0] - beta_ij[0]) + SQR(image_data[i].pos[j][1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
@@ -4437,7 +4674,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 					n_srcpts = image_data[i].n_images;
 					lensvector *srcpts = new lensvector[n_srcpts];
 					for (j=0; j < n_srcpts; j++) {
-						find_sourcept(image_data[i].pos[j],srcpts[j],0,zfactors[i]);
+						find_sourcept(image_data[i].pos[j],srcpts[j],0,zfactors[i],beta_factors[i]);
 						for (k=0; k < j; k++) {
 							avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
 							n_src_pairs++;
@@ -6109,7 +6346,7 @@ void Lens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double y
 		for (i=0, x=xmin; i < x_N; i++, x += pixel_xlength) {
 			corner_pts[i][j][0] = x;
 			corner_pts[i][j][1] = y;
-			find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,reference_zfactors);
+			find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,reference_zfactors,default_zsrc_beta_factors);
 		}
 	}
 	ofstream outfile(filename.c_str());
@@ -6163,7 +6400,9 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			kap = kappa(pos,reference_zfactors);
+			kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
+			double kap_nosat = kappa_exclude(pos,1,reference_zfactors,default_zsrc_beta_factors);
+			kap -= kap_nosat;
 			if (kap < 0) {
 				negkap = true;
 				kap = abs(kap);
@@ -6206,7 +6445,7 @@ void Lens::plot_logpot_map(const int x_N, const int y_N, const string filename)
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			pot = potential(pos,reference_zfactors);
+			pot = potential(pos,reference_zfactors,default_zsrc_beta_factors);
 			logpotout << log(abs(pot))/log(10) << " ";
 		}
 		logpotout << endl;
@@ -6244,7 +6483,7 @@ void Lens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			mag = magnification(pos,0,reference_zfactors);
+			mag = magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
 			logmagout << log(abs(mag))/log(10) << " ";
 		}
 		logmagout << endl;
@@ -6302,12 +6541,12 @@ void Lens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			kap = kappa(pos,reference_zfactors);
-			mag = magnification(pos,0,reference_zfactors);
-			invmag = inverse_magnification(pos,0,reference_zfactors);
-			shearval = shear(pos,0,reference_zfactors);
+			kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
+			mag = magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			invmag = inverse_magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			shearval = shear(pos,0,reference_zfactors,default_zsrc_beta_factors);
 			//pot = lens->potential(pos);
-			deflection(pos,alpha,reference_zfactors);
+			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
 
 			kapout << kap << " ";
 			magout << mag << " ";
@@ -6534,7 +6773,7 @@ void Lens::load_pixel_grid_from_data()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(reference_zfactors, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->lens = this;
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 }
@@ -6543,7 +6782,7 @@ double Lens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(reference_zfactors, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->lens = this;
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	double chisq0;
@@ -7346,7 +7585,7 @@ void Lens::delete_ccspline()
 
 Lens::~Lens()
 {
-	int i;
+	int i,j;
 	if (nlens > 0) {
 		for (i=0; i < nlens; i++) {
 			delete lens_list[i];
@@ -7378,6 +7617,17 @@ Lens::~Lens()
 	if (zfactors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 		delete[] zfactors;
+	}
+	if (default_zsrc_beta_factors != NULL) {
+		for (i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
+		delete[] default_zsrc_beta_factors;
+	}
+	if (beta_factors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			for (j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
+			delete[] beta_factors[i];
+		}
+		delete[] beta_factors;
 	}
 	if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
 	if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
