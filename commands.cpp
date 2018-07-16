@@ -4625,7 +4625,11 @@ void Lens::process_commands(bool read_file)
 					if (nwords > 2) Complain("no arguments allowed for 'use_bestfit' command");
 					if (use_bestfit_model()==false) Complain("could not adopt best-fit model");
 				} else if (words[1]=="save_bestfit") {
-					if (nwords > 2) Complain("no arguments allowed for 'save_bestfit' command");
+					if (nwords > 3) Complain("no more than one argument allowed for 'save_bestfit' command (filename)");
+					if (nwords==3) {
+						if (!(ws[2] >> fit_output_filename)) Complain("Invalid fit label");
+						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+					}
 					if (mpi_id==0) output_bestfit_model();
 				}
 				else Complain("unknown fit command");

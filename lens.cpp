@@ -5829,6 +5829,7 @@ void Lens::output_bestfit_model()
 	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
 	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
 	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
+	if (fit_output_dir != ".") create_output_directory();
 
 	int i;
 	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
