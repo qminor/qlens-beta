@@ -3417,8 +3417,10 @@ void Lens::sort_image_data_into_redshift_groups()
 					if (source_redshifts[k]==source_redshifts[i]) {
 						sorted_image_data[j].input(image_data[k]);
 						sorted_redshifts[j] = source_redshifts[k];
-						sorted_zfactors[j] = zfactors[k];
-						if (n_lens_redshifts > 0) sorted_beta_factors[j] = beta_factors[k];
+						if (n_lens_redshifts > 0) {
+							sorted_zfactors[j] = zfactors[k];
+							sorted_beta_factors[j] = beta_factors[k];
+						}
 						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
 						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
 						if (sort_sourcept_limits) {
