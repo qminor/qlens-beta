@@ -5843,6 +5843,7 @@ void Lens::output_bestfit_model()
 	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
 	int n,j;
 	ofstream bf_out(bestfit_filename.c_str());
+	bf_out << chisq_bestfit << " ";
 	for (i=0; i < n_fit_parameters; i++) bf_out << bestfitparams[i] << " ";
 	bf_out << endl;
 	bf_out.close();
