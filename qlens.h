@@ -2133,7 +2133,6 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 	hess_tot[0][1] = 0;
 	hess_tot[1][0] = 0;
 	for (i=0; i < n_lens_redshifts; i++) {
-		if ((skip_lens_plane) and (i==skip_i)) continue;
 		(*hess_i)[i][0][0] = 0;
 		(*hess_i)[i][1][1] = 0;
 		(*hess_i)[i][0][1] = 0;
@@ -2150,14 +2149,15 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 		(*x_i)[1] = y;
 		for (j=0; j < i; j++) {
 			//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-			if ((!skip_lens_plane) or (j != skip_i)) {
-				(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-				(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-				(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
-			}
+			(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+			(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+			(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
 		}
 		for (j=0; j < zlens_group_size[i]; j++) {
-			if (zlens_group_lens_indx[i][j] != exclude_i) {
+			// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
+			// end when we add up hessian, because we want the nonlinear effects taken into account here
+			if ((zlens_group_lens_indx[i][j] == exclude_i) and ((!skip_lens_plane) or (i != skip_i))) ;
+			else {
 				lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
 				(*hess_i)[i][0][0] += (*hess)[0][0];
 				(*hess_i)[i][1][1] += (*hess)[1][1];
@@ -2178,8 +2178,17 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 		(*hess_i)[i][1][1] *= zfacs[i];
 		(*hess_i)[i][0][1] *= zfacs[i];
 		(*hess_i)[i][1][0] *= zfacs[i];
-		(*hess_i)[i] = (*hess_i)[i]*(*A_i);
-		hess_tot += (*hess_i)[i];
+
+		(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
+		(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
+		(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
+		(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
+		(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
+		(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
+
+		if ((skip_lens_plane) and (i==skip_i)) ;
+		else
+			hess_tot += (*hess_i)[i];
 	}
 
 /*

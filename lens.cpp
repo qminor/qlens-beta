@@ -6401,8 +6401,7 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
 			kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
-			double kap_nosat = kappa_exclude(pos,1,reference_zfactors,default_zsrc_beta_factors);
-			kap -= kap_nosat;
+			//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
 			if (kap < 0) {
 				negkap = true;
 				kap = abs(kap);
