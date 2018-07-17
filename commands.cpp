@@ -771,10 +771,12 @@ void Lens::process_commands(bool read_file)
 						cout << "fit use_bestfit\n\n"
 							"Adopt the current best-fit lens model (this can only be done after a chi-square fit has been performed).\n";
 					else if (words[2]=="save_bestfit")
-						cout << "fit save_bestfit\n\n"
+						cout << "fit save_bestfit\n"
+							"fit save_bestfit <label>\n\n"
 							"Save information on the best-fit model obtained after fitting to data to the file '<label>.bestfit',\n"
 							"where <label> is set by the 'fit label' command, and the output directory is set by 'fit output_dir'.\n"
-							"In addition, the parameter covariance matrix is output to the file '<label>.pcov'.\n"
+							"You can also set the fit label in the same line by adding it as an extra argument. In addition to\n"
+							"the best fit parameters, the parameter covariance matrix is output to the file '<label>.pcov'.\n"
 							"Note that if 'auto_save_bestfit' is set to 'on', the best-fit model is saved automatically after a\n"
 							"fit is performed. If one uses T-Walk or nested Sampling, data from the chains is saved automatically\n"
 							"regardless of whether 'save_bestfit' is invoked.\n";
