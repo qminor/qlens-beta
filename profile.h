@@ -676,6 +676,7 @@ class CoreCusp : public LensProfile
 	double einstein_radius;
 	double core_enclosed_mass;
 	double digamma_term, beta_p1, beta_p2; // used for calculations of kappa, dkappa
+	double r200_const;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double rsq);
@@ -709,6 +710,8 @@ class CoreCusp : public LensProfile
 	void update_special_anchored_params();
 
 	double rho3d_r_integrand_analytic(const double r);
+	bool output_cosmology_info(const int lens_number);
+	double r200_root_eq(const double r);
 	bool core_present() { return (s==0) ? false : true; }
 };
 

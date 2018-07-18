@@ -2460,6 +2460,33 @@ double CoreCusp::enclosed_mass_spherical_nocore_limit(const double rsq, const do
 	return ans;
 }
 
+bool CoreCusp::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	double rs_kpc, ds, m200, r200, r200_arcsec;
+	rs_kpc = a / kpc_to_arcsec;
+	ds = k0 * sigma_cr_kpc / rs_kpc;
+	r200_const = 200.0*cosmo->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
+	double (Brent::*r200root)(const double);
+	r200root = static_cast<double (Brent::*)(const double)> (&CoreCusp::r200_root_eq);
+	r200_arcsec = BrentsMethod(r200root, 0.1, 10000, 1e-4);
+	m200 = sigma_cr*calculate_scaled_mass_3d_from_analytic_rho3d(r200_arcsec);
+	r200 = r200_arcsec/kpc_to_arcsec;
+
+	cout << "rho_0 = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
+	cout << "a = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "M_200 = " << m200 << " M_sol\n";
+	cout << "r_200 = " << r200 << " kpc\n";
+	cout << endl;
+	return true;
+}
+
+double CoreCusp::r200_root_eq(const double r)
+{
+	return r200_const*r*r*r - sigma_cr*calculate_scaled_mass_3d_from_analytic_rho3d(r);
+}
+
 double CoreCusp::rho3d_r_integrand_analytic(const double r)
 {
 	double rsq = r*r;
