@@ -542,6 +542,8 @@ double Cosmology::calculate_beta_factor(double zl1, double zl2, double zs) // fo
 	da_l2 = dc_l2 / (1 + zl2);
 	da_s = dc_s / (1 + zs);
 	da_l1s = (dc_s - dc_l1) / (1 + zs);
+	//double betafac = ((da_12/da_l2) * (da_s/da_l1s));
+	//cout << "BETA: " << betafac << endl;
 	return ((da_12/da_l2) * (da_s/da_l1s));
 }
 

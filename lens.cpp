@@ -2057,7 +2057,11 @@ void Lens::calculate_critical_curve_deformation_radius(int lens_number, bool ver
 	double bound = 2*sqrt(b*bs);
 	rmax_numerical = abs(BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5));
 	double avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(rmax_numerical);
-	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*4.59888e10;
+	double zlsub, zlprim;
+	zlsub = lens_list[subhalo_lens_number]->zlens;
+	zlprim = lens_list[0]->zlens;
+	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*sigma_crit_kpc(zlsub,reference_source_redshift);
+
 	if (verbose) {
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
 		cout << "theta_c=" << theta_on_cc << endl;
@@ -2131,13 +2135,52 @@ bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	rmax_numerical = abs(BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5));
 	double avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(rmax_numerical);
 
-	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
+	double zlsub, zlprim;
+	zlsub = lens_list[subhalo_lens_number]->zlens;
+	zlprim = lens_list[0]->zlens;
+	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*sigma_crit_kpc(zlsub,reference_source_redshift);
 	mass_enclosed = menc/alpha;
+
+	double menc_z = 0;
+	if (zlsub < zlprim) {
+		double kappa0, shear_tot, shear_angle, subhalo_avg_kappa;
+		lensvector x;
+		x[0] = subhalo_center[0] + rmax_numerical*cos(theta_shear);
+		x[1] = subhalo_center[1] + rmax_numerical*sin(theta_shear);
+		kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+
+		int i1,i2;
+		i1 = lens_redshift_idx[0];
+		i2 = lens_redshift_idx[subhalo_lens_number];
+		double beta = default_zsrc_beta_factors[i1-1][i2];
+		double dr = 1e-5;
+		double kappa0_p, shear_tot_p;
+		lensvector xp;
+		xp[0] = subhalo_center[0] + (rmax_numerical+dr)*cos(theta_shear);
+		xp[1] = subhalo_center[1] + (rmax_numerical+dr)*sin(theta_shear);
+		kappa0_p = kappa_exclude(xp,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xp,shear_tot_p,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double kappa0_m, shear_tot_m;
+		lensvector xm;
+		xm[0] = subhalo_center[0] + (rmax_numerical-dr)*cos(theta_shear);
+		xm[1] = subhalo_center[1] + (rmax_numerical-dr)*sin(theta_shear);
+		kappa0_m = kappa_exclude(xm,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xm,shear_tot_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+		//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+		menc_z = menc*mass_scale_factor/alpha;
+	}
+
 	if (verbose) {
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
 		cout << "rmax_numerical = " << rmax_numerical << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
 		cout << "mass_enclosed/alpha = " << menc/alpha << endl;
+		if (menc_z != 0) cout << "mass_lens_plane = " << menc_z << endl;
 		//cout << "eta=" << eta << endl;
 	}
 	return true;
@@ -2152,6 +2195,30 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	subhalo_avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r);
+	double zlsub, zlprim;
+	zlsub = lens_list[subhalo_lens_number]->zlens;
+	zlprim = lens_list[0]->zlens;
+	if (zlsub < zlprim) {
+		int i1,i2;
+		i1 = lens_redshift_idx[0];
+		i2 = lens_redshift_idx[subhalo_lens_number];
+		double beta = default_zsrc_beta_factors[i1-1][i2];
+		double dr = 1e-5;
+		double kappa0_p, shear_tot_p;
+		lensvector xp;
+		xp[0] = subhalo_center[0] + (r+dr)*cos(theta_shear);
+		xp[1] = subhalo_center[1] + (r+dr)*sin(theta_shear);
+		kappa0_p = kappa_exclude(xp,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xp,shear_tot_p,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double kappa0_m, shear_tot_m;
+		lensvector xm;
+		xm[0] = subhalo_center[0] + (r-dr)*cos(theta_shear);
+		xm[1] = subhalo_center[1] + (r-dr)*sin(theta_shear);
+		kappa0_m = kappa_exclude(xm,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xm,shear_tot_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
+		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear_tot + r*k0deriv);
+	}
 	return (1 - kappa0 - shear_tot - subhalo_avg_kappa);
 }
 
