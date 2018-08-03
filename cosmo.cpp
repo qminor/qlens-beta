@@ -473,7 +473,10 @@ double Cosmology::time_delay_factor_arcsec(double zl, double zs) // for lensing
 	double dc_s, dc_l, dc_ls;    // comoving distances
 	dc_s = comoving_distance_spline.splint(zs) * 1e-3;   // The 1e3 factor converts from Mpc to Gpc 
 	dc_l = comoving_distance_spline.splint(zl) * 1e-3;
-	if (dc_l >= dc_s) die("source must be further away than the lensing object (zlens = %f, zsource = %f)", zl, zs);
+	if (dc_l >= dc_s) {
+		//warn("source is further away than the lensing object (zlens = %f, zsource = %f)", zl, zs);
+		return 0.0;
+	}
 	dc_ls = dc_s - dc_l;
 
 	// NOTE: although strictly speaking, angular diameter distances should be used, there is an extra (1+z) time delay factor and it
@@ -515,8 +518,11 @@ double Cosmology::kappa_ratio(double zl, double zs, double zs0) // for lensing
 	dc_s = comoving_distance_spline.splint(zs);
 	dc_s0 = comoving_distance_spline.splint(zs0);
 	dc_l = comoving_distance_spline.splint(zl);
-	if (dc_l >= dc_s) die("source must be further away than the lensing object (zlens = %f, zsource = %f)", zl, zs);
-	if (dc_l >= dc_s0) die("source must be further away than the lensing object (zlens = %f, zsource = %f)", zl, zs0);
+	if (dc_l >= dc_s) {
+		//warn("source is further away than the lensing object (zlens = %f, zsource = %f)", zl, zs);
+		return 0.0;
+	}
+	if (dc_l >= dc_s0) die("reference source must be further away than the lensing object (zlens = %f, zsource = %f)", zl, zs0);
 	dc_ls = dc_s - dc_l;
 	dc_ls0 = dc_s0 - dc_l;
 
@@ -537,7 +543,7 @@ double Cosmology::calculate_beta_factor(double zl1, double zl2, double zs) // fo
 	dc_l2 = comoving_distance_spline.splint(zl2);
 	dc_s = comoving_distance_spline.splint(zs);
 	if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
-	if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
+	//if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
 	da_12 = (dc_l2-dc_l1) / (1 + zl2);
 	da_l2 = dc_l2 / (1 + zl2);
 	da_s = dc_s / (1 + zs);

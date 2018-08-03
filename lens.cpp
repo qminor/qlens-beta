@@ -1184,6 +1184,34 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i)
 
 }
 
+void Lens::print_beta_matrices()
+{
+	cout << "zsrc=" << source_redshift << " beta matrix:\n";
+	int i,j,k;
+	for (j=0; j < n_lens_redshifts-1; j++) {
+		cout << "z=" << lens_redshifts[j] << ": ";
+		for (k=0; k < j+1; k++) cout << default_zsrc_beta_factors[j][k] << " ";
+		cout << endl;
+	}
+
+	if (source_fit_mode == Point_Source) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			cout << "source " << i << " beta matrix:\n";
+			for (j=0; j < n_lens_redshifts-1; j++) {
+				for (k=0; k < j+1; k++) cout << beta_factors[i][j][k] << " ";
+				cout << endl;
+			}
+			cout << endl;
+		}
+	}
+	//lensvector x,y;
+	//x[0] = 2; x[1] = 0;
+	//lensvector defp;
+	//lens_list[0]->deflection(x[0],x[1],defp);
+	//y = x - default_zsrc_beta_factors[0][0]*defp;
+	//cout << "map to lens plane 1: " << y[0] << " " << y[1] << endl;
+}
+
 bool Lens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 {
 	int pos;
@@ -1389,6 +1417,28 @@ void Lens::clear()
 	reset();
 }
 
+void Lens::set_source_redshift(const double zsrc)
+{
+	source_redshift = zsrc;
+	int i,j;
+	if (auto_zsource_scaling) {
+		reference_source_redshift = source_redshift;
+		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
+		for (i=0; i < n_sourcepts_fit; i++) {
+			for (j=0; j < n_lens_redshifts; j++) {
+				zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
+			}
+		}
+	} else {
+		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+	}
+	if (n_lens_redshifts > 1) {
+		for (i=1; i < n_lens_redshifts; i++) {
+			for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+		}
+	}
+}
+
 void Lens::toggle_major_axis_along_y(bool major_axis_along_y)
 {
 	if (LensProfile::orient_major_axis_north != major_axis_along_y) {
@@ -1448,7 +1498,7 @@ bool Lens::test_for_singularity()
 	return singular;
 }
 
-void Lens::record_singular_points()
+void Lens::record_singular_points(double *zfacs)
 {
 	// if kappa goes like r^n near the origin where n <= -1, then a radial critical curve will not form
 	// (this is because the deflection, which goes like r^(n+1), must increase as you go outward in order
@@ -1460,14 +1510,16 @@ void Lens::record_singular_points()
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			singular = false;
-			if ((lens_list[i]->get_lenstype() == PJAFFE) and (lens_list[i]->core_present()==false)) singular = true;
-			else if ((lens_list[i]->get_lenstype() == ALPHA) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
-			else if (lens_list[i]->get_lenstype() == PTMASS) singular = true;
-				// a radial critical curve will occur if a core is present, OR if alpha > 1 (since kappa goes like r^n where n=alpha-2)
-			if (singular) {
-				lens_list[i]->get_center_coords(xc,yc);
-				lensvector singular_pt(xc,yc);
-				singular_pts.push_back(singular_pt);
+			if (zfacs[lens_redshift_idx[i]] != 0.0) {
+				if ((lens_list[i]->get_lenstype() == PJAFFE) and (lens_list[i]->core_present()==false)) singular = true;
+				else if ((lens_list[i]->get_lenstype() == ALPHA) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
+				else if (lens_list[i]->get_lenstype() == PTMASS) singular = true;
+					// a radial critical curve will occur if a core is present, OR if alpha > 1 (since kappa goes like r^n where n=alpha-2)
+				if (singular) {
+					lens_list[i]->get_center_coords(xc,yc);
+					lensvector singular_pt(xc,yc);
+					singular_pts.push_back(singular_pt);
+				}
 			}
 		}
 	}
@@ -1672,6 +1724,11 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 		mytime0=omp_get_wtime();
 	}
 #endif
+	lensvector *centers;
+	if (subgrid_around_satellites) {
+		centers = new lensvector[nlens];
+		find_effective_lens_centers(centers,zfacs,betafacs);
+	}
 	if (grid != NULL) {
 		int rsp, thetasp;
 		grid->get_usplit_initial(rsp);
@@ -1688,7 +1745,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 			sorted_critical_curve.clear();
 		}
 	}
-	record_singular_points(); // grid cells will split around singular points (e.g. center of point mass, etc.)
+	record_singular_points(zfacs); // grid cells will split around singular points (e.g. center of point mass, etc.)
 
 	Grid::set_splitting(rsplit_initial, thetasplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
 	Grid::set_enforce_min_area(enforce_min_cell_area);
@@ -1725,7 +1782,10 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 		else
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
-	if (subgrid_around_satellites) subgrid_around_satellite_galaxies(zfacs,betafacs,redshift_index);
+	if (subgrid_around_satellites) {
+		subgrid_around_satellite_galaxies(centers,zfacs,betafacs,redshift_index);
+		delete[] centers;
+	}
 	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
@@ -1740,7 +1800,30 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	return true;
 }
 
-void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, const int redshift_index)
+void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs)
+{
+	double zlprim, zlsub, re_avg;
+	double einstein_rad, largest_einstein_radius = 0;
+	int i;
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->get_einstein_radius(einstein_rad,re_avg,zfacs[lens_redshift_idx[i]]);
+		if (einstein_rad > largest_einstein_radius) {
+			largest_einstein_radius = einstein_rad;
+			zlprim = lens_list[i]->zlens;
+		}
+	}
+
+	for (i=0; i < nlens; i++) {
+		zlsub = lens_list[i]->zlens;
+		if (zlsub > zlprim) {
+			if (find_lensed_position_of_background_perturber(i,centers[i])==false) die("wtf!");
+		} else {
+			lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
+		}
+	}
+}
+
+void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs, double **betafacs, const int redshift_index)
 {
 	if (grid==NULL) {
 		if (create_grid(false,zfacs,betafacs)==false) die("Could not create recursive grid");
@@ -1750,11 +1833,14 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, c
 	double largest_einstein_radius = 0, xch, ych;
 	dvector einstein_radii(nlens);
 	double re_avg; // won't use this
+	double zlprim, zlsub;
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,zfacs[lens_redshift_idx[i]]);
 		if (einstein_radii[i] > largest_einstein_radius) {
 			largest_einstein_radius = einstein_radii[i];
-			lens_list[i]->get_center_coords(xch,ych);
+			xch = centers[i][0];
+			ych = centers[i][1];
+			zlprim = lens_list[i]->zlens;
 		}
 	}
 	// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered satellites.
@@ -1766,7 +1852,8 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, c
 	double *parities = new double[nlens];
 	for (i=0; i < nlens; i++) {
 		if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
-			lens_list[i]->get_center_coords(xc,yc);
+			xc = centers[i][0];
+			yc = centers[i][1];
 			// lenses co-centered with the primary lens, no matter how small, are not considered satellites
 			if ((xc != xch) or (yc != ych)) {
 				center[0]=xc;
@@ -1795,16 +1882,17 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, c
 	dr = 1e-5;
 	for (i=0; i < nlens; i++) {
 		if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
-			lens_list[i]->get_center_coords(xc,yc);
+			xc = centers[i][0];
+			yc = centers[i][1];
 			// lenses co-centered with the primary lens, no matter how small, are not considered satellites
 			if ((xc != xch) or (yc != ych)) {
+				galcenter[j][0]=xc;
+				galcenter[j][1]=yc;
 				kappa_at_center = kappas[i];
 				parity = parities[i]; // use the parity to help determine approx. size of critical curves
 
 				// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
 				if ((parity==1) and (kappa_at_center >= 1.0)) continue;
-				galcenter[j][0]=xc;
-				galcenter[j][1]=yc;
 
 				lens_list[i]->get_einstein_radius(einstein_radius[j],reavg,zfacs[lens_redshift_idx[i]]);
 				//shear_at_center = shear_exclude(galcenter[j],i,zfac);
@@ -1837,20 +1925,14 @@ void Lens::subgrid_around_satellite_galaxies(double *zfacs, double **betafacs, c
 				else
 					rmax = (lambda_minus + sqrt(lambda_minus*lambda_minus + 4*einstein_radius[j]*dlambda_dr))/(2*dlambda_dr);
 
-				if (parity==1) {
-					// if the parity in the region is positive, typically we get two critical curves (or just one tangential critical curve);
-					// the outer curve can be enlarged by the shear present, so we take this into account when choosing our subgrid radius
-					//cc_major_axis_factor = 1.1/abs(1-kappa_at_center-shear_at_center);
-				} else {
-					// only one (radial) critical curve will form, and its radius is comparable to the Einstein radius. However it can
-					// be enlarged if it is near the radial critical curve, which we account for with the following fitting formula
-					if (kappa_at_center > 1) {
-						axis1 = 1.0/abs(1-kappa_at_center-shear_at_center);
-						axis2 = 1.0/abs(1-kappa_at_center+shear_at_center);
-						ratio = dmax(axis1,axis2)/dmin(axis1,axis2);
-						cc_major_axis_factor = 2.5 + 0.37*(ratio-3.8);
-						rmax = einstein_radius[j]*cc_major_axis_factor;
-					} else cc_major_axis_factor = 1.8;
+				// only one (radial) critical curve will form, and its radius is comparable to the Einstein radius. However it can
+				// be enlarged if it is near the radial critical curve, which we account for with the following fitting formula
+				if (kappa_at_center > 1) {
+					axis1 = 1.0/abs(1-kappa_at_center-shear_at_center);
+					axis2 = 1.0/abs(1-kappa_at_center+shear_at_center);
+					ratio = dmax(axis1,axis2)/dmin(axis1,axis2);
+					cc_major_axis_factor = 2.5 + 0.37*(ratio-3.8);
+					rmax = einstein_radius[j]*cc_major_axis_factor;
 				}
 
 				//cout << j << " " << einstein_radius[j] << " " << cc_major_axis_factor << " " << rmax << endl;
@@ -2089,14 +2171,72 @@ void Lens::calculate_critical_curve_deformation_radius(int lens_number, bool ver
 	rmax = rmax_analytic;
 }
 
+bool Lens::find_lensed_position_of_background_perturber(int lens_number, lensvector& pos)
+{
+	double zlsub;
+	zlsub = lens_list[lens_number]->zlens;
+	lensvector perturber_center;
+	lens_list[lens_number]->get_center_coords(perturber_center[0],perturber_center[1]);
+	double zsrc0 = source_redshift;
+	bool subgrid_setting = subgrid_around_satellites;
+	subgrid_around_satellites = false;
+	create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	auto_gridsize_from_einstein_radius = false;
+	autogrid_before_grid_creation = false;
+	set_source_redshift(zlsub);
+	create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	int n_images, img_i;
+	image *img = get_images(perturber_center, n_images, false);
+	if (n_images == 0) {
+		warn("could not find lensed position of background perturber");
+		return false;
+	}
+	img_i = 0;
+	if (n_images > 1) {
+		warn("Well this is interesting. Perturber maps to more than one place in the primary lens plane! Using image furthest from primary lens center");
+		cout << "Positions of lensed perturber:\n";
+		double rsq, rsqmax=-1e30;
+		double xc0, yc0;
+		lens_list[autocenter_lens_number]->get_center_coords(xc0,yc0);
+		for (int ii=0; ii < n_images; ii++) {
+			rsq = SQR(img[ii].pos[0]-xc0) + SQR(img[ii].pos[1]-yc0);
+			if (rsq > rsqmax) {
+				rsqmax = rsq;
+				img_i = ii;
+			}
+			cout << img[ii].pos[0] << " " << img[ii].pos[1] << endl;
+		}
+	}
+	set_source_redshift(zsrc0);
+	subgrid_around_satellites = subgrid_setting;
+	reset_grid();
+	//create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	pos[0] = img[img_i].pos[0];
+	pos[1] = img[img_i].pos[1];
+	return true;
+}
+
 bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed)
 {
+	subhalo_lens_number = lens_number;
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
-	double xc, yc, theta_s, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p, eta;
-	double reference_zfactor = reference_zfactors[lens_redshift_idx[lens_number]];
-	lens_list[lens_number]->get_center_coords(xc,yc);
+	double xc, yc, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p, eta;
+
+	double zlsub, zlprim;
+	zlsub = lens_list[subhalo_lens_number]->zlens;
+	zlprim = lens_list[0]->zlens;
+
+	double reference_zfactor = reference_zfactors[lens_redshift_idx[subhalo_lens_number]];
+	lens_list[subhalo_lens_number]->get_center_coords(xc,yc);
+	subhalo_center[0]=xc; subhalo_center[1]=yc;
+	if (zlsub > zlprim) {
+		if (find_lensed_position_of_background_perturber(lens_number,subhalo_center)==false) return false;
+		xc = subhalo_center[0];
+		yc = subhalo_center[1];
+		cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
+	}
+
 	lens_list[0]->get_center_coords(host_xc,host_yc);
-	theta_s = sqrt(SQR(xc-host_xc) + SQR(yc-host_yc));
 	phi = atan(abs((yc-host_yc)/(xc-host_xc)));
 	if ((xc-host_xc) < 0) {
 		if ((yc-host_yc) < 0)
@@ -2120,8 +2260,6 @@ bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	eta = (1-shear_ext*shear_ext)/(1 + shear_ext*cos(2*(phi-phi_p))); // isothermal
 
 	double shear_angle, shear_tot;
-	subhalo_lens_number = lens_number;
-	subhalo_center[0]=xc; subhalo_center[1]=yc;
 	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	if (shear_angle*0.0 != 0.0) {
 		warn("could not calculate shear at position of perturber");
@@ -2132,16 +2270,31 @@ bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 	double (Brent::*dthetac_eq)(const double);
 	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
 	double bound = 0.4*b;
-	rmax_numerical = abs(BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5));
-	double avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(rmax_numerical);
+	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5);
+	double rmax_perturber_lensplane;
+	if (zlsub > zlprim) {
+		lensvector x;
+		x[0] = subhalo_center[0] + rmax_numerical*cos(theta_shear);
+		x[1] = subhalo_center[1] + rmax_numerical*sin(theta_shear);
+		lensvector xp, xpc;
+		lens_list[subhalo_lens_number]->get_center_coords(xpc[0],xpc[1]);
+		double zsrc0 = source_redshift;
+		set_source_redshift(zlsub);
+		lensvector defp;
+		deflection(x,defp,reference_zfactors,default_zsrc_beta_factors);
+		set_source_redshift(zsrc0);
+		xp[0] = x[0] - defp[0];
+		xp[1] = x[1] - defp[1];
+		rmax_perturber_lensplane = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
+	} else rmax_perturber_lensplane = abs(rmax_numerical);
 
-	double zlsub, zlprim;
-	zlsub = lens_list[subhalo_lens_number]->zlens;
-	zlprim = lens_list[0]->zlens;
+	double avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(rmax_perturber_lensplane);
+
 	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*sigma_crit_kpc(zlsub,reference_source_redshift);
 	mass_enclosed = menc/alpha;
 
 	double menc_z = 0;
+	double avgkap_z = 0;
 	if (zlsub < zlprim) {
 		double kappa0, shear_tot, shear_angle, subhalo_avg_kappa;
 		lensvector x;
@@ -2168,19 +2321,40 @@ bool Lens::calculate_critical_curve_deformation_radius_numerical(int lens_number
 		kappa0_m = kappa_exclude(xm,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 		shear_exclude(xm,shear_tot_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_lensplane)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
 		//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
 		menc_z = menc*mass_scale_factor/alpha;
+		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
+	} else if (zlsub > zlprim) {
+		double kappa0, shear_tot, shear_angle, subhalo_avg_kappa;
+		lensvector x;
+		x[0] = subhalo_center[0] + rmax_numerical*cos(theta_shear);
+		x[1] = subhalo_center[1] + rmax_numerical*sin(theta_shear);
+		kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		int i1,i2;
+		i1 = lens_redshift_idx[0];
+		i2 = lens_redshift_idx[subhalo_lens_number];
+		double beta = default_zsrc_beta_factors[i2-1][i1];
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+		menc_z = menc*mass_scale_factor/alpha;
+		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot));
 	}
 
 	if (verbose) {
+		lensvector x;
+		x[0] = subhalo_center[0] + rmax_numerical*cos(theta_shear);
+		x[1] = subhalo_center[1] + rmax_numerical*sin(theta_shear);
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
-		cout << "rmax_numerical = " << rmax_numerical << endl;
+		cout << "rmax_numerical = " << abs(rmax_numerical) << endl;
+		cout << "rmax location: (" << x[0] << "," << x[1] << ")\n";
+		if (zlsub > zlprim) cout << "rmax_perturber_lensplane = " << rmax_perturber_lensplane << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
+		if (avgkap_z != 0) cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_z/alpha << endl;
 		cout << "mass_enclosed/alpha = " << menc/alpha << endl;
-		if (menc_z != 0) cout << "mass_lens_plane = " << menc_z << endl;
+		if (menc_z != 0) cout << "mass(primary_lens_plane) = " << menc_z << endl;
 		//cout << "eta=" << eta << endl;
 	}
 	return true;
@@ -2194,10 +2368,27 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 	x[1] = subhalo_center[1] + r*sin(theta_shear);
 	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-	subhalo_avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r);
+
 	double zlsub, zlprim;
 	zlsub = lens_list[subhalo_lens_number]->zlens;
 	zlprim = lens_list[0]->zlens;
+
+	double r_eff;
+	if (zlsub > zlprim) {
+		lensvector xp, xpc;
+		lens_list[subhalo_lens_number]->get_center_coords(xpc[0],xpc[1]);
+		double zsrc0 = source_redshift;
+		set_source_redshift(zlsub);
+		lensvector alpha;
+		deflection(x,alpha,reference_zfactors,default_zsrc_beta_factors);
+		set_source_redshift(zsrc0);
+		xp[0] = x[0] - alpha[0];
+		xp[1] = x[1] - alpha[1];
+		r_eff = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
+	} else {
+		r_eff = r;
+	}
+	subhalo_avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r_eff);
 	if (zlsub < zlprim) {
 		int i1,i2;
 		i1 = lens_redshift_idx[0];
@@ -2218,6 +2409,12 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 		shear_exclude(xm,shear_tot_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
 		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear_tot + r*k0deriv);
+	} else if (zlsub > zlprim) {
+		int i1,i2;
+		i1 = lens_redshift_idx[0];
+		i2 = lens_redshift_idx[subhalo_lens_number];
+		double beta = default_zsrc_beta_factors[i2-1][i1];
+		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear_tot);
 	}
 	return (1 - kappa0 - shear_tot - subhalo_avg_kappa);
 }

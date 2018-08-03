@@ -423,9 +423,11 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_satellite_galaxies(double* zfacs, double** betafacs, const int redshift_index);
+	void subgrid_around_satellite_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
 	void calculate_critical_curve_deformation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
+	bool find_lensed_position_of_background_perturber(int lens_number, lensvector& pos);
+	void find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs);
 
 	double subhalo_perturbation_radius_equation(const double r);
 	// needed for calculating the subhalo perturbation radius
@@ -594,6 +596,7 @@ public:
 	double potential(const double&, const double&, double* zfacs, double** betafacs);
 	void deflection(const double&, const double&, lensvector&, const int &thread, double* zfacs, double** betafacs);
 	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
+	void map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs);
 	void hessian(const double&, const double&, lensmatrix&, const int &thread, double* zfacs, double** betafacs);
 	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, double* zfacs, double** betafacs);
 	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs, double** betafacs);
@@ -636,7 +639,7 @@ public:
 
 	bool test_for_elliptical_symmetry();
 	bool test_for_singularity();
-	void record_singular_points();
+	void record_singular_points(double *zfacs);
 
 	// the following functions and objects are contained in commands.cpp
 	char *buffer;
@@ -695,6 +698,8 @@ public:
 	int add_new_lens_redshift(const double zl, bool& new_redshift);
 	void remove_old_lens_redshift(const int znum, const int lens_i);
 	void add_new_lens_entry(const double zl);
+	void print_beta_matrices();
+	void set_source_redshift(const double zsrc);
 
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
 	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
@@ -1699,6 +1704,39 @@ inline void Lens::deflection(const double& x, const double& y, double& def_tot_x
 	}
 }
 
+inline void Lens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs)
+{
+	if (redshift_i >= n_lens_redshifts) die("lens redshift index does not exist");
+	lensvector *x_i = &xvals_i[thread];
+	lensvector *def = &defs_i[thread];
+	lensvector **def_i = &defs_subtot[thread];
+
+	int i,j;
+	//cout << "n_redshifts=" << n_lens_redshifts << endl;
+	for (i=0; i <= redshift_i; i++) {
+		//cout << "redshift " << i << ":\n";
+		(*def_i)[i][0] = 0;
+		(*def_i)[i][1] = 0;
+		(*x_i)[0] = x;
+		(*x_i)[1] = y;
+		for (j=0; j < i; j++) {
+			//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+			(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+			(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+		}
+		if (i==redshift_i) break;
+		for (j=0; j < zlens_group_size[i]; j++) {
+			lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+			(*def_i)[i][0] += (*def)[0];
+			(*def_i)[i][1] += (*def)[1];
+		}
+		(*def_i)[i][0] *= zfacs[i];
+		(*def_i)[i][1] *= zfacs[i];
+	}
+	xi[0] = (*x_i)[0];
+	xi[1] = (*x_i)[1];
+}
+
 inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
 {
 	if (!defspline)
@@ -1725,10 +1763,8 @@ inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot
 				(*A_i)[1][1] = 1;
 				(*A_i)[0][1] = 0;
 				(*A_i)[1][0] = 0;
-				if (i < n_lens_redshifts-1) {
-					(*def_i)[i][0] = 0;
-					(*def_i)[i][1] = 0;
-				}
+				(*def_i)[i][0] = 0;
+				(*def_i)[i][1] = 0;
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
