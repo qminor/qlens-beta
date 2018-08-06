@@ -2974,13 +2974,6 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		}
 		logPriors[i] = LogPrior(cpt);
 		logLikes[i] = LOGLIKE(cpt) + logPriors[i];
-		//cout << i << " ";
-		//for (j = 0; j < ma; j++)
-		//{
-			//cout << cpt[j] << " ";
-			////cout << ptr1[j] << " ";
-		//}
-		//cout << logLikes[i] << endl;
 
 		if ((logLikes[i]*0.0) or (std::isinf(logLikes[i])))
 		{
@@ -2990,12 +2983,10 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		{
 			icount++;
 			if (mpi_id==0) cout << "\033[5AProgress:  [" << flush;
-			//cout << "[";
 			if (mpi_id==0) {
 			for (j=0; j < icount; j++) cout << "=" << flush;
 			cout << "\033[4B" << endl << flush;
 			}
-			//if (mpi_id==0) cout << "=" << flush;
 		}
 	}
 #ifdef USE_MPI

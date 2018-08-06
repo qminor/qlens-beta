@@ -13,7 +13,19 @@ Optional packages:
 * UMFPACK &mdash; alternative to MUMPS; much easier to install but not quite as fast or parallelized
 * TCMalloc &mdash; recommended if compiling with OpenMP or MPI; speeds up multithreading by reducing lock contention between threads
 
-# change log (Jul. 15, 2018)
+# change log (Aug. 6, 2018)
+
+Upgrades since Jul. 15:
+
+1. A new command has been added, 'fit changevary', that allows you to change the vary flags of an already existing lens. This is useful if you want to do an initial run with fewer parameters, followed by a fit using more free parameters. See 'help fit changevary' for usage.
+
+2. It is now possible to update specific parameters of a lens model. For example, you can do 'lens update 0 b=1.5' and it will only update parameter b for lens model 0. You can also change multiple parameters using the same format, e.g 'lens update 0 b=1.5 q=0.8 theta=30'. However, you can still update lenses using the old format as well, where you enter in all the lens parameters the way you would to create the lens. 
+
+3. The 'subhalo\_rmax' command now works for perturbers that are either in front of or behind the lens. In these cases, in addition to the mass within the perturbation radius, it will also output the mass scaled to the primary lens plane, i.e. what the mass would have to be in order to generate the same perturbation radius if the perturber is a subhalo in the primary lens plane.
+
+4. It is now possible to change the redshift of a lens, using 'lens update'; just put in the argument 'z=#' and it will update the redshift accordingly. Note that if the lens is defined according to an Einstein radius parameter or kappa scaling, changing the redshift will not affect the lensing (unless the source redshift is not equal to zsrc\_ref, which the Einstein radius is defined by; also it may affect the recursive effect if there are lenses at other redshifts). However, if the lens is defined by mass, e.g. the NFW in pmode=1 or 2, the lensing can change dramatically if the lens redshift is updated.
+
+5. The redshift of a given lens can now be varied as a free parameter if desired. (This can be useful to explore the degeneracy of redshift with other parameters.) To do this, when entering the vary flags, at the end of the line enter 'varyz=1'. If doing an MCMC or nested sampling, the lower/upper limits for z will then need to be entered after doing so for the other parameters being varied.
 
 Upgrades since Apr. 11:
 

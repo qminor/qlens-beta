@@ -27,9 +27,7 @@ Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, cons
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -72,6 +70,7 @@ void Alpha::assign_param_pointers()
 
 void Alpha::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
 	bprime = b*f_major_axis;
@@ -87,6 +86,7 @@ void Alpha::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.1*b;
 	stepsizes[6] = 0.1*b;
+	stepsizes[7] = 0.1;
 }
 
 void Alpha::set_auto_ranges()
@@ -381,9 +381,7 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
@@ -425,6 +423,7 @@ void PseudoJaffe::assign_param_pointers()
 
 void PseudoJaffe::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	bprime = b*f_major_axis;
 	sprime = s*f_major_axis;
@@ -461,6 +460,7 @@ void PseudoJaffe::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.2*b;
 	stepsizes[6] = 0.2*b;
+	stepsizes[7] = 0.1;
 }
 
 void PseudoJaffe::set_auto_ranges()
@@ -603,9 +603,7 @@ NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(6,true,parameter_mode_in); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens(7,true,parameter_mode_in); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -672,6 +670,7 @@ void NFW::assign_param_pointers()
 
 void NFW::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (parameter_mode==2) set_ks_c200_from_m200_rs();
 	else if (parameter_mode==1) set_ks_rs_from_m200_c200();
@@ -710,6 +709,7 @@ void NFW::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[5] = 0.5;
+	stepsizes[6] = 0.1;
 }
 
 void NFW::set_auto_ranges()
@@ -839,9 +839,7 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -881,6 +879,7 @@ void Truncated_NFW::assign_param_pointers()
 
 void Truncated_NFW::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
 }
@@ -893,6 +892,7 @@ void Truncated_NFW::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[6] = 0.5;
+	stepsizes[7] = 0.1;
 }
 
 void Truncated_NFW::set_auto_ranges()
@@ -955,9 +955,7 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(7,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -1035,6 +1033,7 @@ void Cored_NFW::assign_param_pointers()
 
 void Cored_NFW::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (parameter_mode==2) {
 		set_ks_c200_from_m200_rs();
@@ -1084,6 +1083,7 @@ void Cored_NFW::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[6] = 0.5;
+	stepsizes[7] = 0.1;
 }
 
 void Cored_NFW::set_auto_ranges()
@@ -1323,9 +1323,7 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -1361,6 +1359,7 @@ void Hernquist::assign_param_pointers()
 
 void Hernquist::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
 }
@@ -1372,6 +1371,7 @@ void Hernquist::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[5] = 0.5;
+	stepsizes[6] = 0.1;
 }
 
 void Hernquist::set_auto_ranges()
@@ -1435,9 +1435,7 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
@@ -1472,6 +1470,7 @@ void ExpDisk::assign_param_pointers()
 
 void ExpDisk::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*R_d;
 }
@@ -1483,6 +1482,7 @@ void ExpDisk::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[5] = 0.5;
+	stepsizes[6] = 0.1;
 }
 
 void ExpDisk::set_auto_ranges()
@@ -1530,9 +1530,7 @@ Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(4,false); // number of parameters = 4, is_elliptical_lens = false
+	setup_base_lens(5,false); // number of parameters = 4, is_elliptical_lens = false
 
 	if (use_shear_component_params) {
 		shear1 = shear_p1_in;
@@ -1585,6 +1583,7 @@ void Shear::assign_param_pointers()
 
 void Shear::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	if (use_shear_component_params) {
 		shear = sqrt(SQR(shear1) + SQR(shear2));
 		set_angle_from_components(shear1,shear2);
@@ -1606,6 +1605,7 @@ void Shear::set_auto_stepsizes()
 	}
 	stepsizes[2] = 0.1; // very arbitrary, but shear is usually center_anchored anyway
 	stepsizes[3] = 0.1;
+	stepsizes[4] = 0.1;
 }
 
 void Shear::set_auto_ranges()
@@ -1703,9 +1703,7 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 	sine_term = sine;
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(5,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
 
 	n = n_in;
 	m = m_in;
@@ -1764,6 +1762,7 @@ void Multipole::assign_param_pointers()
 
 void Multipole::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 	if (sine_term) theta_eff += M_HALFPI/m;
 }
@@ -1775,6 +1774,7 @@ void Multipole::set_auto_stepsizes()
 	stepsizes[2] = 20;
 	stepsizes[3] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
 	stepsizes[4] = 0.1;
+	stepsizes[5] = 0.1;
 }
 
 void Multipole::set_auto_ranges()
@@ -2039,9 +2039,7 @@ PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
 	b = bb;
 	x_center = xc_in;
 	y_center = yc_in;
@@ -2075,6 +2073,7 @@ void PointMass::set_auto_stepsizes()
 	stepsizes[0] = 0.1*b;
 	stepsizes[1] = 0.1*b;
 	stepsizes[2] = 0.1*b;
+	stepsizes[3] = 0.1;
 }
 
 void PointMass::set_auto_ranges()
@@ -2172,9 +2171,7 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 	special_parameter_command = ((parameter_mode_in==1) ? "re_param" : "");
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(9,true,parameter_mode_in); // number of parameters = 9, is_elliptical_lens = true
+	setup_base_lens(10,true,parameter_mode_in); // number of parameters = 9, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -2240,6 +2237,7 @@ void CoreCusp::assign_param_pointers()
 
 void CoreCusp::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
 	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
@@ -2311,6 +2309,7 @@ void CoreCusp::set_auto_stepsizes()
 		stepsizes[7] = 0.1; // arbitrary...maybe we should just calculate Einstein radius before determining stepsizes anyway?
 		stepsizes[8] = 0.1;
 	}
+	stepsizes[9] = 0.1;
 }
 
 void CoreCusp::set_auto_ranges()
@@ -2503,9 +2502,7 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(7,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -2547,6 +2544,7 @@ void SersicLens::assign_param_pointers()
 
 void SersicLens::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
 	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
@@ -2560,6 +2558,7 @@ void SersicLens::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[6] = 0.3;
+	stepsizes[7] = 0.1;
 }
 
 void SersicLens::set_auto_ranges()
@@ -2604,9 +2603,7 @@ MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(3,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kext = kext_in;
 	x_center = xc_in;
@@ -2642,6 +2639,7 @@ void MassSheet::set_auto_stepsizes()
 	stepsizes[0] = 0.3*kext;
 	stepsizes[1] = 0.1; // arbitrary! really, the center should never be independently varied
 	stepsizes[2] = 0.1;
+	stepsizes[3] = 0.1;
 }
 
 void MassSheet::set_auto_ranges()
@@ -2719,9 +2717,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
 	rscale = rscale0 = rscale_in;
@@ -2857,7 +2853,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	cosmo = cosmo_in;
 	lenstype = TABULATED;
 	special_parameter_command = "";
-	setup_base_lens(5,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -2955,6 +2951,7 @@ void Tabulated_Model::assign_param_pointers()
 
 void Tabulated_Model::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
 	costheta = cos(theta);
 	sintheta = sin(theta);
@@ -2969,6 +2966,7 @@ void Tabulated_Model::set_auto_stepsizes()
 	stepsizes[2] = 20;
 	stepsizes[3] = x_center;
 	stepsizes[4] = y_center;
+	stepsizes[5] = 0.1;
 }
 
 void Tabulated_Model::set_auto_ranges()
@@ -3370,9 +3368,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens(7,false); // number of parameters = 3, is_elliptical_lens = false
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
 	// I wanted to allow q or e to be a parameter, but at present only q is allowed...fix this later
@@ -3544,7 +3540,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 	cosmo = cosmo_in;
 	lenstype = QTABULATED;
 	special_parameter_command = "";
-	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens(7,false); // number of parameters = 5, is_elliptical_lens = false
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -3664,6 +3660,7 @@ void QTabulated_Model::assign_param_pointers()
 
 void QTabulated_Model::update_meta_parameters()
 {
+	update_zlens_meta_parameters();
 	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
 	costheta = cos(theta);
 	sintheta = sin(theta);
@@ -3683,6 +3680,7 @@ void QTabulated_Model::set_auto_stepsizes()
 	stepsizes[3] = 20;
 	stepsizes[4] = x_center;
 	stepsizes[5] = y_center;
+	stepsizes[6] = 0.1;
 }
 
 void QTabulated_Model::set_auto_ranges()
@@ -4065,8 +4063,6 @@ TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	//setup_base_lens(X,false); // number of parameters = X, is_elliptical_lens = false
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);

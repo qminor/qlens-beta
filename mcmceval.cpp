@@ -199,7 +199,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	totPts = 0;
 	
 	int jmin, mmin;
-	const int n_characters = 256;
+	const int n_characters = 1024;
 	char line[n_characters];
 	string dum;
 	for (j = 0; j < numOfFiles; j++)
@@ -304,8 +304,6 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 					}
 					else
 					{
-						for (k++; k < a; k++)
-							instream >> temp;
 						numOfPoints[j]--;
 						totPts--;
 						m--;
@@ -324,6 +322,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 					if (!(instream >> chi2[j][m])) column_error = true;
 				}
 				
+				if ((remove_point) or (column_error)) cout << "WTF!\n";
 				if ((remove_point) or (mults[j][m] <= 0.0))
 				{
 					numOfPoints[j]--;

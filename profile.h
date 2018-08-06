@@ -53,6 +53,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	protected:
 	LensProfileName lenstype;
 	double zlens, zsrc_ref;
+	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	double sigma_cr, kpc_to_arcsec;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
@@ -96,8 +97,10 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
 	void update_ellipticity_meta_parameters();
+	void update_zlens_meta_parameters();
 	virtual void update_meta_parameters()
 	{
+		update_zlens_meta_parameters();
 		update_ellipticity_meta_parameters();
 	}
 
@@ -198,7 +201,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void delete_center_anchor();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
-	void vary_parameters(const boolvector& vary_params_in);
+	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
@@ -643,7 +646,9 @@ class PointMass : public LensProfile
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void update_meta_parameters() {}
+	void update_meta_parameters() {
+		update_zlens_meta_parameters();
+	}
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 

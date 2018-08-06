@@ -27,7 +27,7 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 	zsrc_ref = zsrc_in;
 	sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc_ref);
 	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-	setup_base_lens(6,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
@@ -41,6 +41,9 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 
 void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in)
 {
+	zlens_current = zlens;
+	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	parameter_mode = pmode_in;
 	set_nparams_and_anchordata(np);
 	center_anchored = false;
@@ -153,14 +156,14 @@ void LensProfile::delete_special_parameter_anchor()
 	if (anchor_special_parameter) anchor_special_parameter = false;
 }
 
-void LensProfile::vary_parameters(const boolvector& vary_params_in)
+bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
 	if (vary_params_in.size() != n_params) {
 		if ((vary_params_in.size() == n_params-2) and (center_anchored)) {
 			vary_params[n_params-2] = false;
 			vary_params[n_params-1] = false;
 		}
-		else die("number of parameters to vary does not match total number of parameters");
+		else return false;
 	}
 	n_vary_params=0;
 	int i;
@@ -170,6 +173,7 @@ void LensProfile::vary_parameters(const boolvector& vary_params_in)
 			n_vary_params++;
 		}
 	}
+	return true;
 }
 
 void LensProfile::set_limits(const dvector& lower, const dvector& upper)
@@ -213,7 +217,6 @@ void LensProfile::update_parameters(const double* params)
 	set_model_specific_integration_pointers();
 }
 
-// NOT CURRENTLY USING--IMPLEMENT!
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
 {
 	double* newparams = new double[n_params];
@@ -299,6 +302,7 @@ void LensProfile::set_auto_stepsizes()
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 1.0; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein, but need zfactor
 	stepsizes[5] = 1.0;
+	stepsizes[6] = 0.1;
 }
 
 void LensProfile::set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i)
@@ -344,6 +348,7 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 	}
 	set_auto_penalty_limits[param_i++] = false;
 	set_auto_penalty_limits[param_i++] = false;
+	set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0.01; penalty_upper_limits[param_i] = zsrc_ref; param_i++;
 }
 
 void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
@@ -470,6 +475,7 @@ void LensProfile::set_geometric_paramnames(int qi)
 		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c"; qi++;
 		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c"; qi++;
 	}
+	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
 
 void LensProfile::assign_param_pointers()
@@ -500,6 +506,7 @@ void LensProfile::set_geometric_param_pointers(int qi)
 		param[qi++] = &x_center;
 		param[qi++] = &y_center;
 	}
+	param[qi++] = &zlens;
 }
 
 void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2_in, const double &xc_in, const double &yc_in)
@@ -520,7 +527,7 @@ void LensProfile::print_parameters()
 {
 	if (ellipticity_mode==3) cout << "pseudo-";
 	cout << model_name << "(z=" << zlens << "): ";
-	for (int i=0; i < n_params-2; i++) {
+	for (int i=0; i < n_params-3; i++) {
 		cout << paramnames[i] << "=";
 		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
 		else cout << *(param[i]);
@@ -594,7 +601,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 	}
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
-	for (int i=0; i < n_params-2; i++) {
+	for (int i=0; i < n_params-3; i++) {
 		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 		else {
 			if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
@@ -609,7 +616,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 		if (vary_params[i]) scriptout << "1 ";
 		else scriptout << "0 ";
 	}
-	scriptout << endl;
+	scriptout << " z=" << zlens << endl;
 	if (include_limits) {
 		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
 		else {
@@ -638,7 +645,7 @@ void LensProfile::output_lens_command_nofit(string& command)
 	}
 	if (special_parameter_command != "") command += special_parameter_command += " ";
 
-	for (int i=0; i < n_params-2; i++) {
+	for (int i=0; i < n_params-3; i++) {
 			stringstream paramstr;
 			paramstr << setprecision(16);
 			string paramstring;
@@ -661,8 +668,12 @@ void LensProfile::output_lens_command_nofit(string& command)
 	ycstr << setprecision(16);
 	ycstr << y_center;
 	ycstr >> ycstring;
-
-	command += xcstring + " " + ycstring;
+	stringstream zlstr;
+	string zlstring;
+	zlstr << setprecision(16);
+	zlstr << zlens;
+	zlstr >> zlstring;
+	command += xcstring + " " + ycstring + " z=" + zlstring;
 }
 
 bool LensProfile::output_cosmology_info(const int lens_number)
@@ -1207,6 +1218,15 @@ void LensProfile::set_angle_radians(const double &theta_in)
 		double tmp = sintheta;
 		sintheta = costheta;
 		costheta = -tmp;
+	}
+}
+
+void LensProfile::update_zlens_meta_parameters()
+{
+	if (zlens != zlens_current) {
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		zlens_current = zlens;
 	}
 }
 

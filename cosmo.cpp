@@ -542,7 +542,8 @@ double Cosmology::calculate_beta_factor(double zl1, double zl2, double zs) // fo
 	dc_l1 = comoving_distance_spline.splint(zl1);
 	dc_l2 = comoving_distance_spline.splint(zl2);
 	dc_s = comoving_distance_spline.splint(zs);
-	if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
+	//if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
+	if (dc_l1 >= dc_s) return 0.0;
 	//if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
 	da_12 = (dc_l2-dc_l1) / (1 + zl2);
 	da_l2 = dc_l2 / (1 + zl2);

@@ -386,11 +386,15 @@ void Lens::process_commands(bool read_file)
 							"and <lens2> are the numbers assigned to the corresponding lens models in the current\n"
 							"lens list (type 'lens' to see the list).\n";
 					else if (words[2]=="update")
-						cout << "lens update <lens_number> ...\n\n"
-							"Update the parameters in a current lens model. The first argument specifies the number\n"
-							"of the lens in the list produced by the 'lens' command, while the remaining arguments\n"
-							"should be the same arguments as when you add a new lens model (type 'help lens <model>\n"
-							"for a refresher on the arguments for a specific lens model).\n";
+						cout << "lens update <lens_number> ...\n"
+							"lens update <lens_number> <param1>=# <param2>=# ...\n\n"
+							"Update the parameters in a current lens model. The first argument specifies the number of the lens in the\n"
+							"list produced by the 'lens' command, while the remaining arguments should be the same arguments as when you\n"
+							"add a new lens model (type 'help lens <model> for a refresher on the arguments for a specific lens model).\n"
+							"Alternatively, you can update specific parameters with arguments '<param>=#'. For example:\n\n"
+							"lens update 0 b=5 q=0.8 theta=20\n\n"
+							"With the above command, qlens will update only the specific parameters above for lens 0, while leaving the\n"
+							"other parameters unchanged.\n";
 					else if (words[2]=="savetab")
 						cout << "lens savetab <lens_number> <filename>\n\n"
 							"Save the interpolation tables from a 'tab' lens model to the specified file '<filename>.tab'. Note\n"
@@ -601,6 +605,7 @@ void Lens::process_commands(bool read_file)
 							"fit dparams ...\n"
 							"fit priors ...\n"
 							"fit transform ...\n"
+							"fit changevary <lens_number>\n"
 							"fit vary_sourcept ...\n"
 							"fit regularization <method>\n\n"
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
@@ -859,6 +864,12 @@ void Lens::process_commands(bool read_file)
 							"mass2d_r -- The projected mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
 							"mass3d_r -- The 3d mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
 							"\n";
+					else if (words[2]=="changevary")
+						cout << "fit changevary <lens_number>\n\n"
+							"Change the parameter vary flags for a specific lens model that has already been created. After specifying\n"
+							"the lens, on the next lens vary flags are entered just as you do when creating the lens model. Note that\n"
+							"the number of vary flags must exactly match the number of parameters for the given lens (except that vary\n"
+							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
 							"fit vary_sourcept <vary_srcx> <vary_srcy>\n\n"
@@ -2000,14 +2011,16 @@ void Lens::process_commands(bool read_file)
 			bool add_shear = false;
 			int emode = -1; // if set, then specifies the ellipticity mode for the lens being created
 			boolvector vary_flags, shear_vary_flags;
-			vector<string> specfic_update_params;
-			vector<double> specfic_update_param_vals;
+			vector<string> specific_update_params;
+			vector<double> specific_update_param_vals;
 			dvector param_vals;
 			double shear_param_vals[2];
 			int nparams_to_vary, tot_nparams_to_vary;
 			int anchornum; // in case new lens is being anchored to existing lens
 			int lens_number;
+			bool update_zl = false;
 			double zl_in = lens_redshift;
+			bool vary_zl = false;
 
 			struct ParamAnchor {
 				bool anchor_param;
@@ -2074,19 +2087,6 @@ void Lens::process_commands(bool read_file)
 				} else Complain("must specify a lens number to update, followed by parameters");
 			} else {
 				// check for words that specify ellipticity mode, shear anchoring, or parameter anchoring
-				for (int i=2; i < nwords; i++) {
-					int pos;
-					if ((pos = words[i].find("z=")) != string::npos) {
-						string znumstring = words[i].substr(pos+2);
-						stringstream znumstr;
-						znumstr << znumstring;
-						if (!(znumstr >> zl_in)) Complain("incorrect format for lens redshift");
-						if (zl_in < 0) Complain("lens redshift cannot be negative");
-						remove_word(i);
-						i = nwords; // breaks out of this loop, without breaking from outer loop
-					}
-				}	
-
 				for (int i=2; i < nwords; i++) {
 					int pos;
 					if ((pos = words[i].find("emode=")) != string::npos) {
@@ -2199,7 +2199,46 @@ void Lens::process_commands(bool read_file)
 				}	
 			}
 
-			if (nwords==1) {
+			if (update_parameters) {
+				int pos, n_updates = 0;
+				double pval;
+				for (int i=2; i < nwords; i++) {
+					if ((pos = words[i].find("="))!=string::npos) {
+						n_updates++;
+						specific_update_params.push_back(words[i].substr(0,pos));
+						stringstream pvalstr;
+						pvalstr << words[i].substr(pos+1);
+						pvalstr >> pval;
+						specific_update_param_vals.push_back(pval);
+					} else if (i==2) break;
+				}
+				if (n_updates > 0) {
+					if (n_updates < nwords-2) Complain("lens parameters must all be updated at once, or else specific parameters using '<param>=...'");
+					update_specific_parameters = true;
+					for (int i=0; i < n_updates; i++)
+						if (lens_list[lens_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in lens " << lens_number);
+					update_anchored_parameters_and_redshift_data();
+					reset();
+				}
+			}
+			if (!update_specific_parameters) {
+				for (int i=3; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("z=")) != string::npos) {
+						string znumstring = words[i].substr(pos+2);
+						stringstream znumstr;
+						znumstr << znumstring;
+						if (!(znumstr >> zl_in)) Complain("incorrect format for lens redshift");
+						if (zl_in < 0) Complain("lens redshift cannot be negative");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+						update_zl = true;
+					}
+				}	
+			}
+
+			if (update_specific_parameters) ;
+			else if (nwords==1) {
 				if (mpi_id==0) print_lens_list(vary_parameters);
 			}
 			else if (words[1]=="clear")
@@ -2288,13 +2327,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model alpha");
 							}
 						}
-						param_vals.input(7);
+						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=b; param_vals[1]=alpha; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
+						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2310,7 +2352,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2318,17 +2360,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("alpha requires at least 4 parameters (b, alpha, s, q)");
@@ -2371,13 +2414,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model pjaffe");
 							}
 						}
-						param_vals.input(7);
+						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=b; param_vals[1]=a; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
+						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2393,7 +2439,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2403,10 +2449,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -2414,7 +2461,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("pjaffe requires at least 4 parameters (b, a, s, q)");
@@ -2483,13 +2530,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model " << words[1]);
 							}
 						}
-						param_vals.input(5);
+						param_vals.input(6);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=a_m; param_vals[1]=n; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
+						else param_vals[5]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 3 : 5;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2505,7 +2555,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2513,17 +2563,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("mpole requires at least 2 parameters (a_m, n)");
@@ -2582,13 +2633,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfw");
 							}
 						}
-						param_vals.input(6);
+						param_vals.input(7);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
+						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2604,7 +2658,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2612,10 +2666,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -2625,7 +2680,7 @@ void Lens::process_commands(bool read_file)
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("nfw requires at least 3 parameters (ks, rs, q)");
@@ -2658,13 +2713,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model tnfw");
 							}
 						}
-						param_vals.input(7);
+						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=rt; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
+						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2680,7 +2738,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2688,17 +2746,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, ks, rs, rt, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("tnfw requires at least 4 parameters (ks, rs, rt, q)");
@@ -2761,13 +2820,16 @@ void Lens::process_commands(bool read_file)
 							}
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
-						param_vals.input(7);
+						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
+						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2783,7 +2845,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2791,10 +2853,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -2804,7 +2867,7 @@ void Lens::process_commands(bool read_file)
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("cnfw requires at least 4 parameters (ks, rs, rc, q)");
@@ -2836,13 +2899,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model expdisk");
 							}
 						}
-						param_vals.input(6);
+						param_vals.input(7);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=k0; param_vals[1]=R_d; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
+						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2858,7 +2924,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2866,17 +2932,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("expdisk requires at least 3 parameteR_d (k0, R_d, q)");
@@ -2915,13 +2982,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
 							}
 						}
-						param_vals.input(6);
+						param_vals.input(7);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=qx; param_vals[1]=f; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
+						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -2937,7 +3007,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -2945,17 +3015,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("kspline requires at least 1 argument (filename)");
@@ -2987,13 +3058,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model hern");
 							}
 						}
-						param_vals.input(6);
+						param_vals.input(7);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
+						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3009,7 +3083,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3017,17 +3091,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("hern requires at least 3 parameters (ks, rs, q)");
@@ -3089,13 +3164,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[10] >> yc)) Complain("invalid y-center parameter for model corecusp");
 							}
 						}
-						param_vals.input(9);
+						param_vals.input(10);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=k0; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[9]=zl_in;
+						else param_vals[9]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 7 : 9;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3111,7 +3189,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3119,10 +3197,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3132,7 +3211,7 @@ void Lens::process_commands(bool read_file)
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
 							}
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("corecusp requires at least 6 parameters (k0, gamma, n, a, s, q)");
@@ -3160,13 +3239,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[4] >> yc)) Complain("invalid y-center parameter for model ptmass");
 							}
 						}
-						param_vals.input(3);
+						param_vals.input(4);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=b; param_vals[1]=xc; param_vals[2]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
+						else param_vals[3]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 1 : 3;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3182,7 +3264,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3190,17 +3272,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, b, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("ptmass requires at least 1 parameter, b (Einstein radius)");
@@ -3236,13 +3319,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 							}
 						}
-						param_vals.input(7);
+						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kappe_e; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
+						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3258,7 +3344,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3266,17 +3352,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, kappe_e, re, n, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
@@ -3304,13 +3391,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[4] >> yc)) Complain("invalid y-center parameter for model sheet");
 							}
 						}
-						param_vals.input(3);
+						param_vals.input(4);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kappa; param_vals[1]=xc; param_vals[2]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
+						else param_vals[3]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 1 : 3;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3326,7 +3416,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3334,17 +3424,18 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else Complain("sheet requires at least 1 parameter, kappa (Einstein radius)");
@@ -3380,12 +3471,15 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[5] >> yc)) Complain("invalid y-center parameter for model shear");
 							}
 						}
-						param_vals.input(4);
+						param_vals.input(5);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=shear_p1; param_vals[1]=shear_p2; param_vals[2]=xc; param_vals[3]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[4]=zl_in;
+						else param_vals[4]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 2 : 4;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != nparams_to_vary) {
 								if (anchor_lens_center) {
 									if (nwords==4) {
@@ -3394,23 +3488,24 @@ void Lens::process_commands(bool read_file)
 								}
 								else Complain("Must specify vary flags for four parameters (shear,shear_p2,xc,yc) in model shear");
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							bool invalid_params = false;
 							int i;
 							for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
 					else {
@@ -3468,13 +3563,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model tab");
 							}
 						}
-						param_vals.input(5);
+						param_vals.input(6);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
+						else param_vals[5]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 3 : 5;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3490,7 +3588,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3498,10 +3596,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3512,7 +3611,7 @@ void Lens::process_commands(bool read_file)
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (tabulate_existing_lens) remove_lens(lnum);
 						}
 					}
@@ -3569,13 +3668,16 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model qtab");
 							}
 						}
-						param_vals.input(6);
+						param_vals.input(7);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
+						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -3591,7 +3693,7 @@ void Lens::process_commands(bool read_file)
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
-							vary_flags.input(nparams_to_vary);
+							vary_flags.input(nparams_to_vary+1);
 							if (add_shear) shear_vary_flags.input(2);
 							bool invalid_params = false;
 							int i,j;
@@ -3599,10 +3701,11 @@ void Lens::process_commands(bool read_file)
 							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
 							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters();
+							update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3613,7 +3716,7 @@ void Lens::process_commands(bool read_file)
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_new_lens_vary_parameters(vary_flags);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (qtabulate_existing_lens) remove_lens(lnum);
 						}
 					}
@@ -3642,6 +3745,7 @@ void Lens::process_commands(bool read_file)
 				else Complain("unrecognized lens model");
 				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
 					int nvary=0;
+					if (vary_zl) nparams_to_vary++;
 					for (int i=0; i < nparams_to_vary; i++) if (vary_flags[i]==true) nvary++;
 					if (nvary != 0) {
 						dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
@@ -3683,7 +3787,12 @@ void Lens::process_commands(bool read_file)
 				if (add_shear) {
 					add_shear_lens(zl_in, reference_source_redshift, shear_param_vals[0], shear_param_vals[1], 0, 0);
 					lens_list[nlens-1]->anchor_center_to_lens(lens_list,nlens-2);
-					if (vary_parameters) set_new_lens_vary_parameters(shear_vary_flags);
+					boolvector shear_vary_flags_extended; // extra field for redshift, which we don't vary by default for external shear
+					shear_vary_flags_extended.input(3);
+					shear_vary_flags_extended[0] = shear_vary_flags[0];
+					shear_vary_flags_extended[1] = shear_vary_flags[1];
+					shear_vary_flags_extended[2] = false;
+					if (vary_parameters) set_lens_vary_parameters(nlens-1,shear_vary_flags_extended);
 					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
 						int nvary_shear=0;
 						for (int i=0; i < 2; i++) if (shear_vary_flags[i]==true) nvary_shear++;
@@ -3983,6 +4092,23 @@ void Lens::process_commands(bool read_file)
 						}
 						update_parameter_list();
 					} else Complain("Invalid number of arguments for source vary flags");
+				}
+				else if (words[1]=="changevary")
+				{
+					// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
+					// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
+					// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
+					if (nwords != 3) Complain("one argument required for 'fit changevary' (lens number)");
+					int lensnum;
+					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
+					if (lensnum >= nlens) Complain("specified lens number does not exist");
+					if (read_command(false)==false) return;
+					bool vary_zl = check_vary_z();
+					int nparams_to_vary = nwords;
+					boolvector vary_flags(nparams_to_vary);
+					for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+					vary_flags[nparams_to_vary] = vary_zl;
+					if (set_lens_vary_parameters(lensnum,vary_flags)==false) Complain("number of vary flags does not match number of parameters for specified lens");
 				}
 				else if (words[1]=="source_mode")
 				{
@@ -6370,7 +6496,7 @@ void Lens::process_commands(bool read_file)
 				if (lens_number == 0) Complain("perturber cannot be the primary lens (lens 0)");
 				double rmax,menc;
 				if (nlens==1) Complain("perturber lens has not been defined");
-				if (!calculate_critical_curve_deformation_radius_numerical(lens_number,true,rmax,menc)) Complain("could not calculate critical curve perturbation radius");
+				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,menc)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
 		else if (words[0]=="print_betavals")
@@ -7011,11 +7137,7 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			//cout << "redshifts:\n";
-			//for (int k=0; k < n_lens_redshifts; k++) cout << k << " " << lens_redshifts[k] << endl;
-			//cout << "\nredshift indices:\n";
-			//for (int k=0; k < nlens; k++) cout << k << " " << lens_redshift_idx[k] << endl;
-
+			if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
 			//add_derived_param(KappaR,5.0,-1);
 			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
@@ -7024,8 +7146,8 @@ void Lens::process_commands(bool read_file)
 			//plot_chisq_2d(3,4,20,-0.1,0.1,20,-0.1,0.1); // implement this as a command later; probably should make a 1d version as well
 			//make_satellite_population(0.04444,2500,0.1,0.6);
 			//plot_satellite_deflection_vs_area();
-			double rmax,menc;
-			calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
+			//double rmax,menc;
+			//calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);
 			//plot_shear_field(-3,3,50,-3,3,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
@@ -7089,6 +7211,23 @@ bool Lens::read_command(bool show_prompt)
 	ws = new stringstream[nwords];
 	for (int i=0; i < nwords; i++) ws[i] << words[i];
 	return true;
+}
+
+bool Lens::check_vary_z()
+{
+	int pos, varyz = 0;
+	for (int i=0; i < nwords; i++) {
+		if ((pos = words[i].find("varyz=")) != string::npos) {
+			string znumstring = words[i].substr(pos+6);
+			stringstream znumstr;
+			znumstr << znumstring;
+			if (!(znumstr >> varyz)) { warn("incorrect format for varying lens redshift (should be 0 or 1)"); return false; }
+			remove_word(i);
+			break;
+		}
+	}
+	if (varyz==0) return false;
+	else return true;
 }
 
 bool Lens::open_command_file(char *filename)

@@ -424,8 +424,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_satellite_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
-	void calculate_critical_curve_deformation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
-	bool calculate_critical_curve_deformation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
+	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
+	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
 	bool find_lensed_position_of_background_perturber(int lens_number, lensvector& pos);
 	void find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs);
 
@@ -657,6 +657,7 @@ public:
 	bool quit_after_reading_file;
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
+	bool check_vary_z();
 	void run_plotter(string plotcommand);
 	void run_plotter_file(string plotcommand, string filename);
 	void run_plotter_range(string plotcommand, string range);
@@ -695,8 +696,9 @@ public:
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
-	int add_new_lens_redshift(const double zl, bool& new_redshift);
-	void remove_old_lens_redshift(const int znum, const int lens_i);
+	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
+	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
+	int update_lens_redshift_data();
 	void add_new_lens_entry(const double zl);
 	void print_beta_matrices();
 	void set_source_redshift(const double zsrc);
@@ -709,9 +711,9 @@ public:
 	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 
 	void add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
-	void set_new_lens_vary_parameters(boolvector &vary_flags);
+	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	void update_parameter_list();
-	void update_anchored_parameters();
+	void update_anchored_parameters_and_redshift_data();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	void output_lens_commands(string filename);
@@ -1649,9 +1651,11 @@ inline void Lens::deflection(const double& x, const double& y, lensvector& def_t
 			}
 			for (j=0; j < zlens_group_size[i]; j++) {
 				lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+				//cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << endl;
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
 			}
+			//cout << "Lens " << i << " xi=" << (*x_i)[0] << " " << (*x_i)[1] << endl;
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
 			def_tot[0] += (*def_i)[i][0];

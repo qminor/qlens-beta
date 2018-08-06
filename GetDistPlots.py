@@ -238,7 +238,7 @@ class GetDistPlotter():
         try:
             return self.settings.lineM[plotno]
         except IndexError:
-            print 'Error adding line ' + plotno + ': Add more default line stype entries to settings.lineM'
+            print('Error adding line ' + plotno + ': Add more default line stype entries to settings.lineM')
             raise
 
     def get_line_styles(self, plotno, **kwargs):
@@ -347,7 +347,7 @@ class GetDistPlotter():
         if self.fig is None: self.make_figure()
         if isinstance(roots, basestring):roots = [roots]
         param_pair = self.get_param_array(roots[0], param_pair)
-        if self.settings.progress: print 'plotting: ', [param.name for param in param_pair]
+        if self.settings.progress: print('plotting: ', [param.name for param in param_pair])
         if shaded and not filled: self.add_2d_shading(roots[0], param_pair[0], param_pair[1])
         mins = None
         for i, root in enumerate(roots):

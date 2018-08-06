@@ -48,6 +48,7 @@ public:
 	T** ptr(void) const { return a; }
 	int rows(void) const { return nrows; }
 	int columns(void) const { return ncolumns; }
+	bool check_nan(void);
 	void print(void);
 
 	inline Matrix operator + (const Matrix&);
@@ -565,6 +566,18 @@ void Matrix<T>::lu_solve(int* indx, T* b)
 		for (j=i+1; j < nrows; j++) sum -= a[i][j]*b[j];
 		b[i] = sum / a[i][i];
 	}
+}
+
+template <class T>
+bool Matrix<T>::check_nan(void)
+{
+	int i,j;
+	for (i=0; i < nrows; i++) {
+		for (j=0; j < ncolumns; j++) {
+			if (std::isnan(a[i][j])) return false;
+		}
+	}
+	return true;
 }
 
 template <class T>
