@@ -8,8 +8,8 @@
 
 #CMULTINEST = # put multinest include directory here
 #CPOLYCHORD = # put polychord include directory here
-#MULTINEST_LIB = L/... -lmultinest_mpi # put in multinest library folder, and add it to LD_LIBRARY_PATH
-#POLYCHORD_LIB = -L/... -lchord # put in polychord library folder, and add it to LD_LIBRARY_PATH
+#MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
+#POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
