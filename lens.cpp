@@ -23,6 +23,14 @@
 #include <sys/stat.h>
 using namespace std;
 
+#ifdef USE_MULTINEST
+#include "multinest.h"
+#endif
+
+#ifdef USE_POLYCHORD
+#include "interfaces.hpp"
+#endif
+
 const int Lens::nmax_lens_planes = 100;
 const double Lens::default_autogrid_initial_step = 1.0e-3;
 const double Lens::default_autogrid_rmin = 1.0e-5;
@@ -5885,6 +5893,397 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
+void Lens::polychord()
+{
+#ifdef USE_POLYCHORD
+	if (setup_fit_parameters(true)==false) return;
+	fit_set_optimizations();
+	if ((mpi_id==0) and (fit_output_dir != ".")) {
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
+		// Do this later...
+		create_output_directory();
+	}
+
+	initialize_fitmodel(true);
+
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+	} else if (source_fit_mode==Pixellated_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
+	}
+
+	if (mpi_id==0) {
+		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		lpnamefile.close();
+		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (i=0; i < n_fit_parameters; i++)
+		{
+			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
+		prangefile.close();
+	}
+
+#ifdef USE_OPENMP
+	double wt0, wt;
+	if (show_wtime) {
+		wt0 = omp_get_wtime();
+	}
+#endif
+	display_chisq_status = false; // just in case it was turned on
+
+	running_fit = true;
+
+	 mcsampler_set_lensptr(this);
+    Settings settings(n_fit_parameters,n_derived_params);
+
+    settings.nlive         = n_mcpoints;
+    settings.num_repeats   = n_fit_parameters*5;
+    settings.do_clustering = false;
+
+    settings.precision_criterion = 1e-3;
+    settings.logzero = -1e30;
+
+    settings.base_dir      = fit_output_dir.c_str();
+    settings.file_root     = fit_output_filename.c_str();
+
+    settings.write_resume  = false;
+    settings.read_resume   = false;
+    settings.write_live    = true;
+    settings.write_dead    = true;
+    settings.write_stats   = true;
+
+    settings.equals        = false;
+    settings.posteriors    = true;
+    settings.cluster_posteriors = false;
+
+    settings.feedback      = 3;
+    settings.compression_factor  = 0.36787944117144233;
+
+    settings.boost_posterior= 1.0;
+
+    //polychord_setup_loglikelihood();
+    run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
+		bestfitparams.input(n_fit_parameters);
+
+	running_fit = false;
+
+	//if (display_chisq_status) {
+		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
+		//cout << endl;
+		//display_chisq_status = false;
+	//}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wt = omp_get_wtime() - wt0;
+		if (mpi_id==0) cout << "Time for nested sampling: " << wt << endl;
+	}
+#endif
+
+	// Now convert the PolyChord output to a form that mkdist can read
+	if (mpi_id==0) {
+		const int n_characters = 1024;
+		char line[n_characters];
+
+		string filename = fit_output_dir + "/" + fit_output_filename;
+		string polyin_filename = filename + ".txt";
+		ifstream polyin(polyin_filename.c_str());
+		ofstream polyout(filename.c_str());
+
+		double weight, chi2;
+		double minchisq = 1e30;
+		int n_tot_params = n_fit_parameters + n_derived_params;
+		double *params = new double[n_tot_params];
+		double *covs = new double[n_tot_params];
+		double *avgs = new double[n_tot_params];
+		int i;
+		double weighttot = 0;
+		for (int i=0; i < n_tot_params; i++) {
+			covs[i] = 0;
+			avgs[i] = 0;
+		}
+		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
+			istringstream instream(line);
+			instream >> weight;
+			instream >> chi2;
+			for (i=0; i < n_tot_params; i++) instream >> params[i];
+			polyout << weight << "   ";
+			for (i=0; i < n_tot_params; i++) polyout << params[i] << "   ";
+			polyout << chi2 << endl;
+			if (chi2 < minchisq) {
+				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+			}
+			for (i=0; i < n_tot_params; i++) {
+				avgs[i] += weight*params[i];
+				covs[i] += weight*params[i]*params[i];
+			}
+			weighttot += weight;
+		}
+		polyin.close();
+		for (i=0; i < n_tot_params; i++) {
+			avgs[i] /= weighttot;
+			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
+		}
+
+			cout << endl;
+			if (source_fit_mode == Point_Source) {
+				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
+				double *bestfit_flux;
+				if (include_flux_chisq) {
+					bestfit_flux = new double[n_sourcepts_fit];
+					fitmodel->output_model_source_flux(bestfit_flux);
+				};
+				if (use_analytic_bestfit_src) {
+					fitmodel->output_analytic_srcpos(bestfit_src);
+				} else {
+					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
+				}
+				for (int i=0; i < n_sourcepts_fit; i++) {
+					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
+					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+					cout << endl;
+				}
+				delete[] bestfit_src;
+				if (include_flux_chisq) delete[] bestfit_flux;
+			}
+
+			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
+			for (int i=0; i < n_fit_parameters; i++) {
+				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+			}
+			cout << endl;
+			if (auto_save_bestfit) output_bestfit_model();
+		delete[] params;
+		delete[] avgs;
+		delete[] covs;
+	}
+#ifdef USE_MPI
+		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+#endif
+
+	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
+#endif
+}
+
+void Lens::multinest()
+{
+#ifdef USE_MULTINEST
+	if (setup_fit_parameters(true)==false) return;
+	fit_set_optimizations();
+	if ((mpi_id==0) and (fit_output_dir != ".")) {
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
+		// Do this later...
+		create_output_directory();
+	}
+
+	initialize_fitmodel(true);
+
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+	} else if (source_fit_mode==Pixellated_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
+	}
+
+	if (mpi_id==0) {
+		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		lpnamefile.close();
+		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (i=0; i < n_fit_parameters; i++)
+		{
+			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
+		prangefile.close();
+	}
+
+#ifdef USE_OPENMP
+	double wt0, wt;
+	if (show_wtime) {
+		wt0 = omp_get_wtime();
+	}
+#endif
+	display_chisq_status = false; // just in case it was turned on
+	string filename = fit_output_dir + "/" + fit_output_filename;
+
+	 mcsampler_set_lensptr(this);
+
+	int IS, mmodal, ceff, nPar, nClsPar, nlive, updInt, maxModes, seed, fb, resume, outfile, initMPI, maxiter;
+	double efr, tol, Ztol, logZero;
+
+	IS = 0;					// do Nested Importance Sampling?
+	mmodal = 0;					// do mode separation?
+	ceff = 0;					// run in constant efficiency mode?
+	efr = 0.1;				// set the required efficiency
+	nlive = n_mcpoints;
+	tol = 0.5;				// tol, defines the stopping criteria
+	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters
+	nClsPar = n_fit_parameters;				// no. of parameters to do mode separation on
+	updInt = 1000;				// after how many iterations feedback is required & the output files should be updated
+							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
+	Ztol = -1e90;				// all the modes with logZ < Ztol are ignored
+	maxModes = 100;				// expected max no. of modes (used only for memory allocation)
+	seed = 11+mpi_id;					// random no. generator seed, if < 0 then take the seed from system clock
+
+	if (mpi_id==0) fb = 1;					// need feedback on standard output?
+	else fb = 0;
+
+	resume = 0;					// resume from a previous job?
+	outfile = 1;				// write output files?
+	initMPI = 0;				// initialize MPI routines?, relevant only if compiling with MPI
+							// set it to F if you want your main program to handle MPI initialization
+	logZero = -1e90;			// points with loglike < logZero will be ignored by MultiNest
+	maxiter = 0;				// max no. of iterations, a non-positive value means infinity. MultiNest will terminate if either it 
+							// has done max no. of iterations or convergence criterion (defined through tol) has been satisfied
+	void *context = 0;				// not required by MultiNest, any additional information user wants to pass
+	int pWrap[n_fit_parameters];				// which parameters to have periodic boundary conditions?
+	for (int i = 0; i < n_fit_parameters; i++) pWrap[i] = 0;
+	//MPI_Fint fortran_comm = MPI_Comm_c2f((*group_comm));
+
+	running_fit = true;
+
+	nested::run(IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
+	bestfitparams.input(n_fit_parameters);
+
+	running_fit = false;
+
+	//if (display_chisq_status) {
+		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
+		//cout << endl;
+		//display_chisq_status = false;
+	//}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wt = omp_get_wtime() - wt0;
+		if (mpi_id==0) cout << "Time for nested sampling: " << wt << endl;
+	}
+#endif
+
+	// Now convert the MultiNest output to a form that mkdist can read
+	if (mpi_id==0) {
+		const int n_characters = 1024;
+		char line[n_characters];
+
+		string polyin_filename = filename + ".txt";
+		ifstream polyin(polyin_filename.c_str());
+		ofstream polyout(filename.c_str());
+
+		double weight, chi2;
+		double minchisq = 1e30;
+		int n_tot_params = n_fit_parameters + n_derived_params;
+		double *xparams = new double[n_tot_params];
+		double *params = new double[n_tot_params];
+		double *covs = new double[n_tot_params];
+		double *avgs = new double[n_tot_params];
+		int i;
+		double weighttot = 0;
+		for (int i=0; i < n_tot_params; i++) {
+			covs[i] = 0;
+			avgs[i] = 0;
+		}
+		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
+			istringstream instream(line);
+			instream >> weight;
+			instream >> chi2;
+			for (i=0; i < n_tot_params; i++) instream >> xparams[i];
+			transform_cube(params,xparams);
+			polyout << weight << "   ";
+			for (i=0; i < n_fit_parameters; i++) polyout << params[i] << "   ";
+			for (i=0; i < n_derived_params; i++) polyout << xparams[n_fit_parameters+i] << "   ";
+			polyout << chi2 << endl;
+			if (chi2 < minchisq) {
+				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+			}
+			for (i=0; i < n_tot_params; i++) {
+				avgs[i] += weight*params[i];
+				covs[i] += weight*params[i]*params[i];
+			}
+			weighttot += weight;
+		}
+		polyin.close();
+		for (i=0; i < n_tot_params; i++) {
+			avgs[i] /= weighttot;
+			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
+		}
+
+			cout << endl;
+			if (source_fit_mode == Point_Source) {
+				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
+				double *bestfit_flux;
+				if (include_flux_chisq) {
+					bestfit_flux = new double[n_sourcepts_fit];
+					fitmodel->output_model_source_flux(bestfit_flux);
+				};
+				if (use_analytic_bestfit_src) {
+					fitmodel->output_analytic_srcpos(bestfit_src);
+				} else {
+					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
+				}
+				for (int i=0; i < n_sourcepts_fit; i++) {
+					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
+					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+					cout << endl;
+				}
+				delete[] bestfit_src;
+				if (include_flux_chisq) delete[] bestfit_flux;
+			}
+
+			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
+			for (int i=0; i < n_fit_parameters; i++) {
+				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+			}
+			cout << endl;
+			if (auto_save_bestfit) output_bestfit_model();
+		delete[] xparams;
+		delete[] params;
+		delete[] avgs;
+		delete[] covs;
+	}
+#ifdef USE_MPI
+		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+#endif
+
+	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
+#endif
+}
+
 void Lens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
@@ -7951,4 +8350,76 @@ Lens::~Lens()
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 }
+
+/***********************************************************************************************************************/
+
+// POLYCHORD FUNCTIONS
+
+Lens* lensptr;
+double mcsampler_set_lensptr(Lens* lens_in)
+{
+	lensptr = lens_in;
+}
+
+double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived)
+{
+	double logl = -lensptr->LogLikeFunc(theta);
+	lensptr->DerivedParamFunc(theta,phi);
+	return logl;
+}
+
+void polychord_prior (double cube[], double theta[], int nDims)
+{
+	lensptr->transform_cube(theta,cube);
+}
+
+void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,double* logweights,double logZ, double logZerr)
+{
+}
+
+//void polychord_setup_loglikelihood()
+//{
+    //============================================================
+    // insert likelihood setup here
+    //
+    //
+    //============================================================
+//}
+
+void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context)
+{
+
+	double *params = new double[ndim];
+	lensptr->transform_cube(params,Cube);
+	lnew = -lensptr->LogLikeFunc(params);
+	lensptr->DerivedParamFunc(params,Cube+ndim);
+	delete[] params;
+}
+
+void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context)
+{
+	// convert the 2D Fortran arrays to C++ arrays
+	
+	
+	// the posterior distribution
+	// postdist will have nPar parameters in the first nPar columns & loglike value & the posterior probability in the last two columns
+	
+	int i, j;
+	
+	double postdist[nSamples][nPar + 2];
+	for( i = 0; i < nPar + 2; i++ )
+		for( j = 0; j < nSamples; j++ )
+			postdist[j][i] = posterior[0][i * nSamples + j];
+	
+	
+	
+	// last set of live points
+	// pLivePts will have nPar parameters in the first nPar columns & loglike value in the last column
+	
+	double pLivePts[nlive][nPar + 1];
+	for( i = 0; i < nPar + 1; i++ )
+		for( j = 0; j < nlive; j++ )
+			pLivePts[j][i] = physLive[0][i * nlive + j];
+}
+
 

@@ -322,7 +322,6 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 					if (!(instream >> chi2[j][m])) column_error = true;
 				}
 				
-				if ((remove_point) or (column_error)) cout << "WTF!\n";
 				if ((remove_point) or (mults[j][m] <= 0.0))
 				{
 					numOfPoints[j]--;

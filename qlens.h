@@ -217,6 +217,14 @@ public:
 	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
 };
 
+double mcsampler_set_lensptr(Lens* lens_in);
+double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
+void polychord_prior (double cube[], double theta[], int nDims);
+void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,double* logweights,double logZ, double logZerr);
+void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
+void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
+//void polychord_setup_loglikelihood();
+
 class Lens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
@@ -384,7 +392,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	string fit_output_dir;
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
-	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK } fitmethod;
+	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK } inversion_method;
 	RayTracingMethod ray_tracing_method;
@@ -753,7 +761,8 @@ public:
 	double chi_square_fit_simplex();
 	double chi_square_fit_powell();
 	void nested_sampling();
-	void nested_sampling_source_and_image_plane();
+	void polychord();
+	void multinest();
 	//void chi_square_metropolis_hastings();
 	void chi_square_twalk();
 	void test_fitmodel_invert();
@@ -772,6 +781,8 @@ public:
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_pixellated_source(double* params);
 	double fitmodel_loglike_pixellated_source_test(double* params);
+	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
+	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
@@ -879,6 +890,11 @@ public:
 			if (sourcepts_lower_limit==NULL) sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
 			if (sourcepts_upper_limit==NULL) sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
+		}
+	}
+	void transform_cube(double* params, double* Cube) {
+		for (int i=0; i < n_fit_parameters; i++) {
+			params[i] = lower_limits[i] + Cube[i]*(upper_limits[i]-lower_limits[i]);
 		}
 	}
 	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }

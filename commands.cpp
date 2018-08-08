@@ -721,8 +721,18 @@ void Lens::process_commands(bool read_file)
 								"sampling routine. Available fit methods are:\n\n"
 								"simplex -- minimize chi-square using downhill simplex method (+ optional simulated annealing)\n"
 								"powell -- minimize chi-square using Powell's method\n"
-								"nest -- nested sampling\n"
-								"twalk -- T-Walk MCMC algorithm\n\n"
+								"nest -- basic nested sampling\n"
+								"twalk -- T-Walk MCMC algorithm\n"
+#ifdef USE_POLYCHORD
+								"polychord -- PolyChord nested sampler\n"
+#else
+								"polychord -- PolyChord nested sampler (*must be compiled with qlens to use)\n"
+#endif
+#ifdef USE_MULTINEST
+								"multinest -- MultiNest nested sampler\n\n"
+#else
+								"multinest -- MultiNest nested sampler (*must be compiled with qlens to use)\n\n"
+#endif
 								"For more information on a given fitting method and the output it produces, type\n"
 								"'help fit method <fit_method>'.\n";
 						else if (words[3]=="simplex")
@@ -1765,7 +1775,7 @@ void Lens::process_commands(bool read_file)
 					cout << "fix_srcflux: " << display_switch(fix_source_flux) << endl;
 					cout << endl;
 					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
-					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : "Unknown fitmethod\n");
+					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
 					cout << "fit source_mode: " << ((source_fit_mode==Point_Source) ? "ptsource\n" : (source_fit_mode==Pixellated_Source) ? "pixel\n" : (source_fit_mode==Parameterized_Source) ? "sbprofile\n" : "unknown\n");
 					cout << "nrepeat = " << n_repeats << endl;
 					cout << "find_errors: " << display_switch(calculate_parameter_errors) << endl;
@@ -3743,7 +3753,7 @@ void Lens::process_commands(bool read_file)
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
 				}
 				else Complain("unrecognized lens model");
-				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
+				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
 					int nvary=0;
 					if (vary_zl) nparams_to_vary++;
 					for (int i=0; i < nparams_to_vary; i++) if (vary_flags[i]==true) nvary++;
@@ -3793,7 +3803,7 @@ void Lens::process_commands(bool read_file)
 					shear_vary_flags_extended[1] = shear_vary_flags[1];
 					shear_vary_flags_extended[2] = false;
 					if (vary_parameters) set_lens_vary_parameters(nlens-1,shear_vary_flags_extended);
-					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
+					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod==POLYCHORD) or (fitmethod==MULTINEST))) {
 						int nvary_shear=0;
 						for (int i=0; i < 2; i++) if (shear_vary_flags[i]==true) nvary_shear++;
 						if (nvary_shear==0) continue;
@@ -3949,6 +3959,8 @@ void Lens::process_commands(bool read_file)
 							if (fitmethod==POWELL) cout << "Fit method: powell" << endl;
 							else if (fitmethod==SIMPLEX) cout << "Fit method: simplex" << endl;
 							else if (fitmethod==NESTED_SAMPLING) cout << "Fit method: nest" << endl;
+							else if (fitmethod==POLYCHORD) cout << "Fit method: polychord" << endl;
+							else if (fitmethod==MULTINEST) cout << "Fit method: multinest" << endl;
 							else if (fitmethod==TWALK) cout << "Fit method: twalk" << endl;
 							else {
 								cout << "Unknown fit method" << endl;
@@ -3960,6 +3972,20 @@ void Lens::process_commands(bool read_file)
 						else if (setword=="simplex") set_fitmethod(SIMPLEX);
 						else if (setword=="nest") set_fitmethod(NESTED_SAMPLING);
 						else if (setword=="twalk") set_fitmethod(TWALK);
+						else if (setword=="polychord") {
+#ifdef USE_POLYCHORD
+							set_fitmethod(POLYCHORD);
+#else
+							Complain("qlens code needs to be compiled with PolyChord to use this fit method");
+#endif
+						}
+						else if (setword=="multinest") {
+#ifdef USE_MULTINEST
+							set_fitmethod(MULTINEST);
+#else
+							Complain("qlens code needs to be compiled with MultiNest to use this fit method");
+#endif
+						}
 						else Complain("invalid argument to 'fit method' command; must specify valid fit method");
 					} else Complain("invalid number of arguments; can only specify fit method type");
 				}
@@ -4514,7 +4540,8 @@ void Lens::process_commands(bool read_file)
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
-					//else if (fitmethod==NESTED_SAMPLING) nested_sampling_source_and_image_plane(); // experimental
+					else if (fitmethod==POLYCHORD) polychord();
+					else if (fitmethod==MULTINEST) multinest();
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 				}

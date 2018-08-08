@@ -6,6 +6,11 @@
 
 #include ./qlens_umfpack_config.mk
 
+#CMULTINEST = # put multinest include directory here
+#CPOLYCHORD = # put polychord include directory here
+#MULTINEST_LIB = L/... -lmultinest_mpi # put in multinest library folder, and add it to LD_LIBRARY_PATH
+#POLYCHORD_LIB = -L/... -lchord # put in polychord library folder, and add it to LD_LIBRARY_PATH
+
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
 CCOMP = g++
@@ -15,11 +20,11 @@ CCOMP = g++
 OPTS = -Wno-write-strings -O3
 OPTS_NO_OPT = -Wno-write-strings
 #OPTS = -w -g
-#FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK
+#FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_FITS -DUSE_OPENMP
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  -lm -lreadline
-LINKLIBS = $(OTHERLIBS)
+LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
 #default: qlens mkdist cosmocalc
