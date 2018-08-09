@@ -742,6 +742,7 @@ public:
 	void print_derived_param_list();
 
 	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+	void find_automatic_grid_position_and_size(double *zfacs);
 	void clear_lenses();
 	void clear();
 	void reset();

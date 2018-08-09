@@ -1781,24 +1781,9 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	Grid::set_splitting(rsplit_initial, thetasplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
 	Grid::set_enforce_min_area(enforce_min_cell_area);
 	Grid::set_lens(this);
-
-	if (autogrid_before_grid_creation) autogrid();
-	else {
-		if (autocenter==true) {
-			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
-		}
-		if (auto_gridsize_from_einstein_radius==true) {
-			double re_major;
-			re_major = einstein_radius_of_primary_lens(zfacs[0]);
-			if (re_major != 0.0) {
-				double rmax = auto_gridsize_multiple_of_Re*re_major;
-				grid_xlength = 2*rmax;
-				grid_ylength = 2*rmax;
-				cc_rmax = rmax;
-			}
-		}
-	}
 	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
+	find_automatic_grid_position_and_size(zfacs);
+
 	//cout << "GRID: " << grid_xcenter-grid_xlength/2 << " " << grid_xcenter+grid_xlength/2 << " " << grid_ycenter-grid_ylength/2 << " " << grid_ycenter+grid_ylength/2 << endl;
 
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
@@ -1829,6 +1814,26 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	}
 
 	return true;
+}
+
+void Lens::find_automatic_grid_position_and_size(double *zfacs)
+{
+	if (autogrid_before_grid_creation) autogrid();
+	else {
+		if (autocenter==true) {
+			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+		}
+		if (auto_gridsize_from_einstein_radius==true) {
+			double re_major;
+			re_major = einstein_radius_of_primary_lens(zfacs[0]);
+			if (re_major != 0.0) {
+				double rmax = auto_gridsize_multiple_of_Re*re_major;
+				grid_xlength = 2*rmax;
+				grid_ylength = 2*rmax;
+				cc_rmax = rmax;
+			}
+		}
+	}
 }
 
 void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs)
@@ -2222,11 +2227,10 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	lens_list[lens_number]->get_center_coords(perturber_center[0],perturber_center[1]);
 	double zsrc0 = source_redshift;
 	bool subgrid_setting = subgrid_around_satellites;
-	subgrid_around_satellites = false;
-	create_grid(false,zfacs,betafacs);
-
+	find_automatic_grid_position_and_size(zfacs);
 	bool auto0 = auto_gridsize_from_einstein_radius;
 	bool auto1 = autogrid_before_grid_creation;
+	subgrid_around_satellites = false;
 	auto_gridsize_from_einstein_radius = false;
 	autogrid_before_grid_creation = false;
 	set_source_redshift(zlsub);
