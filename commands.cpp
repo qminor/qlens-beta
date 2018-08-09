@@ -2110,44 +2110,25 @@ void Lens::process_commands(bool read_file)
 					}
 				}	
 
-				if ((nwords > 1) and (words[nwords-1].find("shear=")==0)) {
-					add_shear = true;
-					string shearstr = words[nwords-1].substr(6);
-					stringstream shearstream;
-					shearstream << shearstr;
-					if (!(shearstream >> shear_param_vals[0])) {
-						if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
-						Complain("invalid shear value");
+				for (int i=2; i < nwords; i++) {
+					if (words[i].find("shear=")==0) {
+						if (i==nwords-1) Complain("adding external shear via 'shear=# #' requires two arguments (shear1,shear2)");
+						add_shear = true;
+						string shearstr = words[i].substr(6);
+						stringstream shearstream;
+						shearstream << shearstr;
+						if (!(shearstream >> shear_param_vals[0])) {
+							if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
+							Complain("invalid shear value");
+						}
+						if (!(ws[i+1] >> shear_param_vals[1])) {
+							if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
+							Complain("invalid shear angle");
+						}
+						remove_word(i+1);
+						remove_word(i);
+						break;
 					}
-					shear_param_vals[1] = 0;
-					stringstream* new_ws = new stringstream[nwords-1];
-					for (int i=0; i < nwords-1; i++)
-						new_ws[i] << words[i];
-					delete[] ws;
-					ws = new_ws;
-					words.pop_back();
-					nwords--;
-				} else if ((nwords > 2) and (words[nwords-2].find("shear=")==0)) {
-					add_shear = true;
-					string shearstr = words[nwords-2].substr(6);
-					stringstream shearstream;
-					shearstream << shearstr;
-					if (!(shearstream >> shear_param_vals[0])) {
-						if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
-						Complain("invalid shear value");
-					}
-					if (!(ws[nwords-1] >> shear_param_vals[1])) {
-						if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
-						Complain("invalid shear angle");
-					}
-					stringstream* new_ws = new stringstream[nwords-1];
-					for (int i=0; i < nwords-2; i++)
-						new_ws[i] << words[i];
-					delete[] ws;
-					ws = new_ws;
-					words.pop_back();
-					words.pop_back();
-					nwords -= 2;
 				}
 
 				for (int i=2; i < nwords; i++) {
@@ -3797,12 +3778,14 @@ void Lens::process_commands(bool read_file)
 				if (add_shear) {
 					add_shear_lens(zl_in, reference_source_redshift, shear_param_vals[0], shear_param_vals[1], 0, 0);
 					lens_list[nlens-1]->anchor_center_to_lens(lens_list,nlens-2);
-					boolvector shear_vary_flags_extended; // extra field for redshift, which we don't vary by default for external shear
-					shear_vary_flags_extended.input(3);
-					shear_vary_flags_extended[0] = shear_vary_flags[0];
-					shear_vary_flags_extended[1] = shear_vary_flags[1];
-					shear_vary_flags_extended[2] = false;
-					if (vary_parameters) set_lens_vary_parameters(nlens-1,shear_vary_flags_extended);
+					if (vary_parameters) {
+						boolvector shear_vary_flags_extended; // extra field for redshift, which we don't vary by default for external shear
+						shear_vary_flags_extended.input(3);
+						shear_vary_flags_extended[0] = shear_vary_flags[0];
+						shear_vary_flags_extended[1] = shear_vary_flags[1];
+						shear_vary_flags_extended[2] = false;
+						set_lens_vary_parameters(nlens-1,shear_vary_flags_extended);
+					}
 					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod==POLYCHORD) or (fitmethod==MULTINEST))) {
 						int nvary_shear=0;
 						for (int i=0; i < 2; i++) if (shear_vary_flags[i]==true) nvary_shear++;

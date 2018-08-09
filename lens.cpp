@@ -1784,8 +1784,6 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
 	find_automatic_grid_position_and_size(zfacs);
 
-	//cout << "GRID: " << grid_xcenter-grid_xlength/2 << " " << grid_xcenter+grid_xlength/2 << " " << grid_ycenter-grid_ylength/2 << " " << grid_ycenter+grid_ylength/2 << endl;
-
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
 		if (radial_grid)
