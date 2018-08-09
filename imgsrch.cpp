@@ -1746,13 +1746,13 @@ void Lens::find_images()
 
 void Lens::output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux, const bool show_labels)
 {
-	source[0] = x_source; source[1] = y_source;
 	if ((use_cc_spline) and (!cc_splined)) {
 		if (spline_critical_curves()==false) return;
 	}
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return;
 	}
+	source[0] = x_source; source[1] = y_source;
 
 	if (use_scientific_notation==false) {
 		cout << setprecision(6);
@@ -1853,13 +1853,14 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 
 image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 {
-	source = source_in;
 	if ((use_cc_spline) and (!cc_splined)) {
 		if (spline_critical_curves(verbal)==false) return NULL;
 	}
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return NULL;
 	}
+	source[0] = source_in[0];
+	source[1] = source_in[1];
 
 	find_images();
 	n_images = Grid::nfound;

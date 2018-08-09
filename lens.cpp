@@ -1022,7 +1022,7 @@ void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_i
 						for (j=0; j < n_lens_redshifts-1; j++) {
 							delete[] beta_factors[i][j];
 						}
-						delete[] beta_factors[i];
+						if (n_lens_redshifts > 1) delete[] beta_factors[i];
 					}
 				}
 				delete[] beta_factors;
@@ -1175,7 +1175,7 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i, const bool
 							for (j=0; j < n_lens_redshifts-1; j++) {
 								delete[] beta_factors[i][j];
 							}
-							delete[] beta_factors[i];
+							if (n_lens_redshifts > 1) delete[] beta_factors[i];
 						}
 						delete[] beta_factors;
 					}
@@ -1372,7 +1372,7 @@ void Lens::clear_lenses()
 		if (beta_factors != NULL) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
 				for (int j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
-				delete[] beta_factors[i];
+				if (n_lens_redshifts > 1) delete[] beta_factors[i];
 			}
 			delete[] beta_factors;
 			beta_factors = NULL;
@@ -1425,7 +1425,7 @@ void Lens::clear()
 		if (beta_factors != NULL) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
 				for (int j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
-				delete[] beta_factors[i];
+				if (n_lens_redshifts > 1) delete[] beta_factors[i];
 			}
 			delete[] beta_factors;
 			beta_factors = NULL;
@@ -1850,7 +1850,7 @@ void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, doubl
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			zlsub = lens_list[i]->zlens;
 			if (zlsub > zlprim) {
-				if (find_lensed_position_of_background_perturber(i,centers[i])==false) warn("cannot find lensed position of background perturber");
+				if (find_lensed_position_of_background_perturber(false,i,centers[i],zfacs,betafacs)==false) warn("cannot find lensed position of background perturber");
 			} else {
 				lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
 			}
@@ -2214,7 +2214,7 @@ void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool ve
 	rmax = rmax_analytic;
 }
 
-bool Lens::find_lensed_position_of_background_perturber(int lens_number, lensvector& pos)
+bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs)
 {
 	double zlsub;
 	zlsub = lens_list[lens_number]->zlens;
@@ -2223,18 +2223,26 @@ bool Lens::find_lensed_position_of_background_perturber(int lens_number, lensvec
 	double zsrc0 = source_redshift;
 	bool subgrid_setting = subgrid_around_satellites;
 	subgrid_around_satellites = false;
-	create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	create_grid(false,zfacs,betafacs);
+
+	bool auto0 = auto_gridsize_from_einstein_radius;
+	bool auto1 = autogrid_before_grid_creation;
 	auto_gridsize_from_einstein_radius = false;
 	autogrid_before_grid_creation = false;
 	set_source_redshift(zlsub);
-	create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	create_grid(false,zfacs,betafacs);
 	int n_images, img_i;
 	image *img = get_images(perturber_center, n_images, false);
-	if (n_images == 0) return false;
+	if (n_images == 0) {
+		reset_grid();
+		return false;
+	}
 	img_i = 0;
 	if (n_images > 1) {
-		warn("Well this is interesting. Perturber maps to more than one place in the primary lens plane! Using image furthest from primary lens center");
-		cout << "Positions of lensed perturber:\n";
+		if (verbal) {
+			warn("Well this is interesting. Perturber maps to more than one place in the primary lens plane! Using image furthest from primary lens center");
+			cout << "Positions of lensed perturber:\n";
+		}
 		double rsq, rsqmax=-1e30;
 		double xc0, yc0;
 		lens_list[autocenter_lens_number]->get_center_coords(xc0,yc0);
@@ -2244,13 +2252,15 @@ bool Lens::find_lensed_position_of_background_perturber(int lens_number, lensvec
 				rsqmax = rsq;
 				img_i = ii;
 			}
-			cout << img[ii].pos[0] << " " << img[ii].pos[1] << endl;
+			if (verbal) cout << img[ii].pos[0] << " " << img[ii].pos[1] << endl;
 		}
 	}
 	set_source_redshift(zsrc0);
+	//create_grid(false,zfacs,betafacs);
 	subgrid_around_satellites = subgrid_setting;
+	auto_gridsize_from_einstein_radius = false;
+	autogrid_before_grid_creation = false;
 	reset_grid();
-	//create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 	pos[0] = img[img_i].pos[0];
 	pos[1] = img[img_i].pos[1];
 	return true;
@@ -2270,7 +2280,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	lens_list[subhalo_lens_number]->get_center_coords(xc,yc);
 	subhalo_center[0]=xc; subhalo_center[1]=yc;
 	if (zlsub > zlprim) {
-		if (find_lensed_position_of_background_perturber(lens_number,subhalo_center)==false) return false;
+		if (find_lensed_position_of_background_perturber(true,lens_number,subhalo_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 		xc = subhalo_center[0];
 		yc = subhalo_center[1];
 		cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
@@ -3491,7 +3501,7 @@ bool Lens::load_image_data(string filename)
 		for (i=0; i < n_sourcepts_fit; i++) {
 			if (beta_factors[i] != NULL) {
 				for (j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
-				delete[] beta_factors[i];
+				if (n_lens_redshifts > 1) delete[] beta_factors[i];
 			}
 		}
 		delete[] beta_factors;
@@ -3797,7 +3807,7 @@ void Lens::remove_image_data(int image_set)
 				delete[] zfactors[i];
 				if (beta_factors[i] != NULL) {
 					for (k=0; k < n_lens_redshifts-1; k++) delete[] beta_factors[i][k];
-					delete[] beta_factors[i];
+					if (n_lens_redshifts > 1) delete[] beta_factors[i];
 				}
 			}
 		}
@@ -3996,7 +4006,7 @@ void Lens::clear_image_data()
 	if (beta_factors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=1; j < n_lens_redshifts; j++) delete[] beta_factors[i][j-1];
-			delete[] beta_factors[i];
+			if (n_lens_redshifts > 1) delete[] beta_factors[i];
 		}
 		delete[] beta_factors;
 		beta_factors = NULL;
@@ -4549,7 +4559,6 @@ double Lens::chisq_pos_source_plane()
 	delete[] beta_ji;
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	//cout << "CHISQ=" << chisq << endl;
-	//if (chisq_it > 60000) die();
 	return chisq;
 }
 
@@ -8325,7 +8334,7 @@ Lens::~Lens()
 	if (beta_factors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
-			delete[] beta_factors[i];
+			if (n_lens_redshifts > 1) delete[] beta_factors[i];
 		}
 		delete[] beta_factors;
 	}
@@ -8377,15 +8386,6 @@ void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,do
 {
 }
 
-//void polychord_setup_loglikelihood()
-//{
-    //============================================================
-    // insert likelihood setup here
-    //
-    //
-    //============================================================
-//}
-
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context)
 {
 
@@ -8400,7 +8400,6 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 {
 	// convert the 2D Fortran arrays to C++ arrays
 	
-	
 	// the posterior distribution
 	// postdist will have nPar parameters in the first nPar columns & loglike value & the posterior probability in the last two columns
 	
@@ -8411,8 +8410,6 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 		for( j = 0; j < nSamples; j++ )
 			postdist[j][i] = posterior[0][i * nSamples + j];
 	
-	
-	
 	// last set of live points
 	// pLivePts will have nPar parameters in the first nPar columns & loglike value in the last column
 	
@@ -8421,5 +8418,4 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 		for( j = 0; j < nlive; j++ )
 			pLivePts[j][i] = physLive[0][i * nlive + j];
 }
-
 

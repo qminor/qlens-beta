@@ -223,7 +223,6 @@ void polychord_prior (double cube[], double theta[], int nDims);
 void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,double* logweights,double logZ, double logZerr);
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
-//void polychord_setup_loglikelihood();
 
 class Lens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
 {
@@ -434,7 +433,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void subgrid_around_satellite_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
 	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
-	bool find_lensed_position_of_background_perturber(int lens_number, lensvector& pos);
+	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs);
 
 	double subhalo_perturbation_radius_equation(const double r);
