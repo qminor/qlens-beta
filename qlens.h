@@ -426,23 +426,29 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	Defspline *defspline;
 
 	// private functions are all contained in the file lens.cpp
-	bool subgrid_around_satellites; // if on, will always subgrid around satellites (with pjaffe profile) when new grid is created
-	bool subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
+	bool subgrid_around_perturbers; // if on, will always subgrid around perturbers (with pjaffe profile) when new grid is created
+	bool subgrid_only_near_data_images; // if on, only subgrids around perturber galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_satellite_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
+	void subgrid_around_perturber_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
 	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs);
+	bool calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
+	double galaxy_subgridding_scale_equation(const double r);
 
 	double subhalo_perturbation_radius_equation(const double r);
-	// needed for calculating the subhalo perturbation radius
+	// needed for calculating the subhalo perturbation radius and scale for perturber subgridding
 	int subhalo_lens_number;
 	double theta_shear;
 	lensvector subhalo_center;
+	int subgridding_parity_at_center;
+	bool subgridding_include_perturber;
+	double *subgridding_zfacs;
+	double **subgridding_betafacs;
 
-	static const double satellite_einstein_radius_fraction;
+	static const double perturber_einstein_radius_fraction;
 	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny);
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
 	void plot_logkappa_map(const int x_N, const int y_N, const string filename);
@@ -857,8 +863,8 @@ public:
 	void get_ccspline_mode(bool &setting) { setting = use_cc_spline; }
 	void set_auto_ccspline_mode(bool setting) { auto_ccspline = setting; }
 	void get_auto_ccspline_mode(bool &setting) { setting = auto_ccspline; }
-	void set_galsubgrid_mode(bool setting) { subgrid_around_satellites = setting; }
-	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_satellites; }
+	void set_galsubgrid_mode(bool setting) { subgrid_around_perturbers = setting; }
+	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_perturbers; }
 	void set_auto_store_cc_points(bool setting) { auto_store_cc_points = setting; }
 
 	void set_rsplit_initial(int setting) { rsplit_initial = setting; }
@@ -909,8 +915,8 @@ public:
 	double caust0_interpolate(double theta);
 	double caust1_interpolate(double theta);
 
-	//double make_satellite_population(const double number_density, const double rmax, const double a, const double b);
-	//void plot_satellite_deflection_vs_area();
+	//double make_perturber_population(const double number_density, const double rmax, const double a, const double b);
+	//void plot_perturber_deflection_vs_area();
 
 	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
 };
@@ -2163,7 +2169,7 @@ inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, c
 	angle = 0.5*radians_to_degrees(angle);
 }
 
-// the following functions find the shear, kappa and magnification at the position where a satellite is placed;
+// the following functions find the shear, kappa and magnification at the position where a perturber is placed;
 // this information is used to determine the optimal subgrid size and resolution
 
 inline void Lens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)

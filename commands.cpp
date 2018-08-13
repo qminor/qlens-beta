@@ -182,10 +182,10 @@ void Lens::process_commands(bool read_file)
 						"imgsrch_mag_threshold -- warn if images have mag > threshold (or reject if reject_himag = on)\n"
 						"reject_himag -- reject images found that have magnification higher than imgsrch_mag_threshold\n"
 						"rmin_frac -- set minimum radius of innermost cells in radial grid (fraction of max radius)\n"
-						"galsubgrid -- subgrid around satellite galaxies not co-centered with primary lens (on/off)\n"
-						"galsub_radius -- scale factor for the optimal radius of satellite subgridding\n"
-						"galsub_min_cellsize -- minimum satellite subgrid cell length (units of Einstein radius)\n"
-						"galsub_cc_splitlevels -- number of critical curve splittings around satellite galaxies\n"
+						"galsubgrid -- subgrid around perturbing lenses not co-centered with primary lens (on/off)\n"
+						"galsub_radius -- scale factor for the optimal radius of perturber subgridding\n"
+						"galsub_min_cellsize -- minimum perturber subgrid cell length (units of Einstein radius)\n"
+						"galsub_cc_splitlevels -- number of critical curve splittings around perturbing galaxies\n"
 						"ccspline -- set critical curve spline mode on/off\n"
 						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (on/off)\n"
 						"\n";
@@ -1527,24 +1527,24 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="min_cellsize")
 					cout << "min_cellsize <#>\n\n"
 						"Specifies the minimum (average) length a cell can have and still be split (e.g. around\n"
-						"critical curves or for satellite subgridding). For lens modelling, this should be\n"
+						"critical curves or for perturber subgridding). For lens modelling, this should be\n"
 						"comparable to or smaller than the resolution (in terms of area) of the image in question.\n";
 				else if (words[1]=="galsub_radius")
 					cout << "galsub_radius <#>\n\n"
-						"When subgridding around satellite galaxies, galsub_radius scales the maximum radius away from\n"
-						"the center of each satellite within which cells are split. For each satellite, its Einstein\n"
+						"When subgridding around perturbing galaxies, galsub_radius scales the maximum radius away from\n"
+						"the center of each perturber within which cells are split. For each perturber, its Einstein\n"
 						"radius along with shear, kappa, and parity information are used to determine the optimal\n"
-						"subgridding radius for each satellite; galsub_radius can be used to scale these subgridding\n"
+						"subgridding radius for each perturber; galsub_radius can be used to scale these subgridding\n"
 						"radii by the specified factor.\n";
 				else if (words[1]=="galsub_min_cellsize")
 					cout << "galsub_min_cellsize <#>\n\n"
-						"When subgridding around satellite galaxies, galsub_min_cellsize specifies the\n"
+						"When subgridding around perturbing galaxies, galsub_min_cellsize specifies the\n"
 						"minimum allowed (average) length of subgrid cells in terms of the fraction of\n"
-						"the Einstein radius of a given satellite. Note that this does *not* include\n"
+						"the Einstein radius of a given perturber. Note that this does *not* include\n"
 						"the subsequent splittings around critical curves (see galsub_cc_splitlevels).\n";
 				else if (words[1]=="galsub_cc_splitlevels")
 					cout << "galsub_cc_splitlevels <#>\n\n"
-						"For subgrid cells that are created around satellite galaxies, this sets the number\n"
+						"For subgrid cells that are created around perturbing galaxies, this sets the number\n"
 						"of times that cells containing critical curves are recursively split. Note that not\n"
 						"all splittings may occur if the minimum cell size (set by min_cellsize) is reached.\n";
 				else if (words[1]=="rmin_frac")
@@ -1553,8 +1553,8 @@ void Lens::process_commands(bool read_file)
 						"this defaults to " << default_rmin_frac << ".\n";
 				else if (words[1]=="galsubgrid")
 					cout << "galsubgrid <on/off>   (default=on)\n\n"
-						"When turned on, subgrids around satellite galaxies (defined as galaxies with Einstein\n"
-						"radii less than " << satellite_einstein_radius_fraction << " times the largest Einstein radius) when a new grid is created.\n";
+						"When turned on, subgrids around perturbing galaxies (defined as galaxies with Einstein\n"
+						"radii less than " << perturber_einstein_radius_fraction << " times the largest Einstein radius) when a new grid is created.\n";
 				else if (words[1]=="fits_format")
 					cout << "fits_format <on/off> (default=on)\n\n"
 						"It on, surface brightness maps are loaded from FITS files (using 'sbmap loadimg'). If off,\n"
@@ -1705,7 +1705,7 @@ void Lens::process_commands(bool read_file)
 					cout << "imgsrch_mag_threshold = " << newton_magnification_threshold << endl;
 					cout << "reject_himag: " << display_switch(reject_himag_images) << endl;
 					cout << "rmin_frac = " << rmin_frac << endl;
-					cout << "galsubgrid: " << display_switch(subgrid_around_satellites) << endl;
+					cout << "galsubgrid: " << display_switch(subgrid_around_perturbers) << endl;
 					cout << "galsub_radius = " << galsubgrid_radius_fraction << endl;
 					cout << "galsub_min_cellsize = " << galsubgrid_min_cellsize_fraction << " (units of Einstein radius)" << endl;
 					cout << "galsub_cc_splitlevels = " << galsubgrid_cc_splittings << endl;
@@ -6540,7 +6540,7 @@ void Lens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> galsubgrid_cc_splittings)) Complain("invalid value for galsub_cc_splitlevels");
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Number of critical curve split levels in satellite galaxies = " << galsubgrid_cc_splittings << endl;
+				if (mpi_id==0) cout << "Number of critical curve split levels in perturbing galaxies = " << galsubgrid_cc_splittings << endl;
 			} else Complain("must specify either zero or one argument for galsub_cc_splitlevels");
 		}
 		else if (words[0]=="rmin_frac")
@@ -7040,16 +7040,16 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="galsubgrid")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Subgrid around satellite galaxies: " << display_switch(subgrid_around_satellites) << endl;
+				if (mpi_id==0) cout << "Subgrid around perturbing lenses: " << display_switch(subgrid_around_perturbers) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'galsubgrid' command; must specify 'on' or 'off'");
-				set_switch(subgrid_around_satellites,setword);
+				set_switch(subgrid_around_perturbers,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="galsubgrid_near_imgs")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Subgrid around satellite galaxies only near data images: " << display_switch(subgrid_only_near_data_images) << endl;
+				if (mpi_id==0) cout << "Subgrid around perturbing lenses only near data images: " << display_switch(subgrid_only_near_data_images) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'galsubgrid_near_imgs' command; must specify 'on' or 'off'");
 				set_switch(subgrid_only_near_data_images,setword);
@@ -7154,8 +7154,8 @@ void Lens::process_commands(bool read_file)
 			// These are experimental functions that I either need to make official, or else remove
 			//plot_chisq_1d(0,30,50,450);
 			//plot_chisq_2d(3,4,20,-0.1,0.1,20,-0.1,0.1); // implement this as a command later; probably should make a 1d version as well
-			//make_satellite_population(0.04444,2500,0.1,0.6);
-			//plot_satellite_deflection_vs_area();
+			//make_perturber_population(0.04444,2500,0.1,0.6);
+			//plot_perturber_deflection_vs_area();
 			//double rmax,menc;
 			//calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);

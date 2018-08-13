@@ -37,11 +37,11 @@ const double Lens::default_autogrid_rmin = 1.0e-5;
 const double Lens::default_autogrid_rmax = 1.0e5;
 const double Lens::default_autogrid_frac = 2.1; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
 const int Lens::max_cc_search_iterations = 8;
-double Lens::galsubgrid_radius_fraction; // radius of satellite subgridding in terms of fraction of Einstein radius
-double Lens::galsubgrid_min_cellsize_fraction; // minimum cell size for satellite subgridding in terms of fraction of Einstein radius
+double Lens::galsubgrid_radius_fraction; // radius of perturber subgridding in terms of fraction of Einstein radius
+double Lens::galsubgrid_min_cellsize_fraction; // minimum cell size for perturber subgridding in terms of fraction of Einstein radius
 int Lens::galsubgrid_cc_splittings;
 bool Lens::auto_store_cc_points;
-const double Lens::satellite_einstein_radius_fraction = 0.2;
+const double Lens::perturber_einstein_radius_fraction = 0.2;
 const double Lens::default_rmin_frac = 1e-4;
 bool Lens::warnings;
 bool Lens::newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
@@ -361,10 +361,10 @@ Lens::Lens() : UCMC()
 	splitlevels = 0; // number of times grid squares are recursively split (by default)...setting to zero is best, recursion slows down grid creation & searching
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
-	subgrid_around_satellites = true;
-	subgrid_only_near_data_images = false; // if on, only subgrids around satellite galaxies (during fit) if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
-	galsubgrid_radius_fraction = 1;
-	galsubgrid_min_cellsize_fraction = 0.2;
+	subgrid_around_perturbers = true;
+	subgrid_only_near_data_images = false; // if on, only subgrids around perturber galaxies (during fit) if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
+	galsubgrid_radius_fraction = 1.3;
+	galsubgrid_min_cellsize_fraction = 0.25;
 	galsubgrid_cc_splittings = 1;
 	sorted_critical_curves = false;
 	n_singular_points = 0;
@@ -620,8 +620,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	splitlevels = lens_in->splitlevels; // number of times grid squares are recursively split (by default)...minimum of one splitting is required
 	cc_splitlevels = lens_in->cc_splitlevels; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = lens_in->cc_neighbor_splittings;
-	subgrid_around_satellites = lens_in->subgrid_around_satellites;
-	subgrid_only_near_data_images = lens_in->subgrid_only_near_data_images; // if on, only subgrids around satellite galaxies if a data image is within the determined subgridding radius
+	subgrid_around_perturbers = lens_in->subgrid_around_perturbers;
+	subgrid_only_near_data_images = lens_in->subgrid_only_near_data_images; // if on, only subgrids around perturber galaxies if a data image is within the determined subgridding radius
 	galsubgrid_radius_fraction = lens_in->galsubgrid_radius_fraction;
 	galsubgrid_min_cellsize_fraction = lens_in->galsubgrid_min_cellsize_fraction;
 	galsubgrid_cc_splittings = lens_in->galsubgrid_cc_splittings;
@@ -1756,7 +1756,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	}
 #endif
 	lensvector *centers;
-	if (subgrid_around_satellites) {
+	if (subgrid_around_perturbers) {
 		centers = new lensvector[nlens];
 		find_effective_lens_centers(centers,zfacs,betafacs);
 	}
@@ -1781,8 +1781,8 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	Grid::set_splitting(rsplit_initial, thetasplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
 	Grid::set_enforce_min_area(enforce_min_cell_area);
 	Grid::set_lens(this);
-	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
 	find_automatic_grid_position_and_size(zfacs);
+	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
 
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
@@ -1796,8 +1796,8 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 		else
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
-	if (subgrid_around_satellites) {
-		subgrid_around_satellite_galaxies(centers,zfacs,betafacs,redshift_index);
+	if (subgrid_around_perturbers) {
+		subgrid_around_perturber_galaxies(centers,zfacs,betafacs,redshift_index);
 		delete[] centers;
 	}
 	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
@@ -1823,7 +1823,7 @@ void Lens::find_automatic_grid_position_and_size(double *zfacs)
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major;
-			re_major = einstein_radius_of_primary_lens(zfacs[0]);
+			re_major = einstein_radius_of_primary_lens(zfacs[autocenter_lens_number]);
 			if (re_major != 0.0) {
 				double rmax = auto_gridsize_multiple_of_Re*re_major;
 				grid_xlength = 2*rmax;
@@ -1861,41 +1861,40 @@ void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, doubl
 	}
 }
 
-void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs, double **betafacs, const int redshift_index)
+void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *zfacs, double **betafacs, const int redshift_index)
 {
 	if (grid==NULL) {
 		if (create_grid(false,zfacs,betafacs)==false) die("Could not create recursive grid");
 	}
-	int i;
+	int i, ihost;
 	if (nlens==0) { warn(warnings,"No galaxies in lens lens_list"); return; }
 	double largest_einstein_radius = 0, xch, ych;
 	dvector einstein_radii(nlens);
 	double re_avg; // won't use this
-	double zlprim, zlsub;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,zfacs[lens_redshift_idx[i]]);
 			if (einstein_radii[i] > largest_einstein_radius) {
 				largest_einstein_radius = einstein_radii[i];
+				ihost = i;
 				xch = centers[i][0];
 				ych = centers[i][1];
-				zlprim = lens_list[i]->zlens;
 			}
 		}
 	}
-	// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered satellites.
+	// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
 
 	double xc,yc;
 	lensvector center;
-	int parity, n_satellites=0;
+	int parity, n_perturbers=0;
 	double *kappas = new double[nlens];
 	double *parities = new double[nlens];
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
+			if ((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
 				xc = centers[i][0];
 				yc = centers[i][1];
-				// lenses co-centered with the primary lens, no matter how small, are not considered satellites
+				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers
 				if ((xc != xch) or (yc != ych)) {
 					center[0]=xc;
 					center[1]=yc;
@@ -1903,16 +1902,15 @@ void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs,
 					parities[i] = sign(magnification_exclude(center,i,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
 					// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
 					if ((parities[i]==1) and (kappas[i] >= 1.0)) continue;
-					else n_satellites++;
+					else n_perturbers++;
 				}
 			}
 		}
 	}
-	lensvector *galcenter = new lensvector[n_satellites];
-	bool *subgrid = new bool[n_satellites];
-	double *einstein_radius = new double[n_satellites];
-	double *subgrid_radius = new double[n_satellites];
-	double *min_galsubgrid_cellsize = new double[n_satellites];
+	lensvector *galcenter = new lensvector[n_perturbers];
+	bool *subgrid = new bool[n_perturbers];
+	double *subgrid_radius = new double[n_perturbers];
+	double *min_galsubgrid_cellsize = new double[n_perturbers];
 
 	int j=0;
 	double reavg; // won't use this
@@ -1924,65 +1922,73 @@ void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs,
 	dr = 1e-5;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
+			if ((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
 				xc = centers[i][0];
 				yc = centers[i][1];
-				// lenses co-centered with the primary lens, no matter how small, are not considered satellites
+				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers
 				if ((xc != xch) or (yc != ych)) {
-					galcenter[j][0]=xc;
-					galcenter[j][1]=yc;
 					kappa_at_center = kappas[i];
 					parity = parities[i]; // use the parity to help determine approx. size of critical curves
 
 					// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
 					if ((parity==1) and (kappa_at_center >= 1.0)) continue;
+					galcenter[j][0]=xc;
+					galcenter[j][1]=yc;
 
-					lens_list[i]->get_einstein_radius(einstein_radius[j],reavg,zfacs[lens_redshift_idx[i]]);
-					//shear_at_center = shear_exclude(galcenter[j],i,zfac);
-					shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfacs,betafacs);
-					if (shear_at_center*0.0 != 0.0) {
-						warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
-						delete[] subgrid;
-						delete[] kappas;
-						delete[] parities;
-						delete[] galcenter;
-						delete[] einstein_radius;
-						delete[] subgrid_radius;
-						delete[] min_galsubgrid_cellsize;
-						return;
+					if (lens_list[i]->lenstype==PJAFFE) {
+						// Leaving this in at the moment for Pseudo-Jaffe subhalos, although it's only a bit faster than the more general
+						// version (below) and doesn't work well for foreground/background perturbers
+						shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfacs,betafacs);
+						if (shear_at_center*0.0 != 0.0) {
+							warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
+							delete[] subgrid;
+							delete[] kappas;
+							delete[] parities;
+							delete[] galcenter;
+							delete[] subgrid_radius;
+							delete[] min_galsubgrid_cellsize;
+							return;
+						}
+						shear_angle -= 90;
+						shear_angle *= M_PI/180;
+
+						lambda_minus = 1 - kappa_at_center - shear_at_center;
+						displaced_center[0] = xc + dr*cos(shear_angle);
+						displaced_center[1] = yc + dr*sin(shear_angle);
+						dlambda_dr = ((1 - kappa_exclude(displaced_center,i,zfacs,betafacs) - shear_exclude(displaced_center,i,zfacs,betafacs)) - lambda_minus) / dr;
+						if (dlambda_dr < 0) {
+							dlambda_dr = -dlambda_dr;
+						}
+
+						if (lambda_minus>0)
+							rmax = (-lambda_minus + sqrt(lambda_minus*lambda_minus + 4*einstein_radii[i]*dlambda_dr))/(2*dlambda_dr);
+						else
+							rmax = (lambda_minus + sqrt(lambda_minus*lambda_minus + 4*einstein_radii[i]*dlambda_dr))/(2*dlambda_dr);
+
+						// only one (radial) critical curve will form, and its radius is comparable to the Einstein radius. However it can
+						// be enlarged if it is near the radial critical curve, which we account for with the following fitting formula
+						if (kappa_at_center > 1) {
+							axis1 = 1.0/abs(1-kappa_at_center-shear_at_center);
+							axis2 = 1.0/abs(1-kappa_at_center+shear_at_center);
+							ratio = dmax(axis1,axis2)/dmin(axis1,axis2);
+							cc_major_axis_factor = 2.5 + 0.37*(ratio-3.8);
+							rmax = einstein_radii[i]*cc_major_axis_factor;
+						}
+					} else {
+						if (calculate_perturber_subgridding_scale(i,ihost,false,centers[i],rmax,zfacs,betafacs)==false) {
+							warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
+							delete[] subgrid;
+							delete[] kappas;
+							delete[] parities;
+							delete[] galcenter;
+							delete[] subgrid_radius;
+							delete[] min_galsubgrid_cellsize;
+							return;
+						}
 					}
-					shear_angle -= 90;
-					shear_angle *= M_PI/180;
-
-					lambda_minus = 1 - kappa_at_center - shear_at_center;
-					displaced_center[0] = xc + dr*cos(shear_angle);
-					displaced_center[1] = yc + dr*sin(shear_angle);
-					dlambda_dr = ((1 - kappa_exclude(displaced_center,i,zfacs,betafacs) - shear_exclude(displaced_center,i,zfacs,betafacs)) - lambda_minus) / dr;
-					if (dlambda_dr < 0) {
-						shear_angle += M_PI;
-						dlambda_dr = -dlambda_dr;
-					}
-
-					if (lambda_minus>0)
-						rmax = (-lambda_minus + sqrt(lambda_minus*lambda_minus + 4*einstein_radius[j]*dlambda_dr))/(2*dlambda_dr);
-					else
-						rmax = (lambda_minus + sqrt(lambda_minus*lambda_minus + 4*einstein_radius[j]*dlambda_dr))/(2*dlambda_dr);
-
-					// only one (radial) critical curve will form, and its radius is comparable to the Einstein radius. However it can
-					// be enlarged if it is near the radial critical curve, which we account for with the following fitting formula
-					if (kappa_at_center > 1) {
-						axis1 = 1.0/abs(1-kappa_at_center-shear_at_center);
-						axis2 = 1.0/abs(1-kappa_at_center+shear_at_center);
-						ratio = dmax(axis1,axis2)/dmin(axis1,axis2);
-						cc_major_axis_factor = 2.5 + 0.37*(ratio-3.8);
-						rmax = einstein_radius[j]*cc_major_axis_factor;
-					}
-
-					//cout << j << " " << einstein_radius[j] << " " << cc_major_axis_factor << " " << rmax << endl;
 					subgrid_radius[j] = galsubgrid_radius_fraction*rmax;
 					min_galsubgrid_cellsize[j] = SQR(galsubgrid_min_cellsize_fraction*rmax);
-					//cout << "Galaxy " << i << ": kappa: " << kappa_at_center << ", shear: " << shear_at_center << ", axis ratio: " << ratio << ", axis1=" << axis1 << ", axis2=" << axis2 << ", major axis factor: " << cc_major_axis_factor << ", subgrid_radius=" << subgrid_radius[j] << endl;
-					subgrid[j] = true;
+					if (rmax > 0) subgrid[j] = true;
 					j++;
 				}
 			}
@@ -1991,7 +1997,7 @@ void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs,
 	if ((subgrid_only_near_data_images) and (redshift_index != -1)) {
 		int k;
 		double distsqr, min_distsqr;
-		for (j=0; j < n_satellites; j++) {
+		for (j=0; j < n_perturbers; j++) {
 			min_distsqr = 1e30;
 			for (i=source_redshift_groups[redshift_index]; i < source_redshift_groups[redshift_index+1]; i++) {
 				for (k=0; k < image_data[i].n_images; k++) {
@@ -2003,14 +2009,155 @@ void Lens::subgrid_around_satellite_galaxies(lensvector *centers, double *zfacs,
 		}
 	}
 
-	grid->subgrid_around_galaxies(galcenter,n_satellites,subgrid_radius,min_galsubgrid_cellsize,galsubgrid_cc_splittings,subgrid);
+	if (n_perturbers > 0)
+		grid->subgrid_around_galaxies(galcenter,n_perturbers,subgrid_radius,min_galsubgrid_cellsize,galsubgrid_cc_splittings,subgrid);
+
 	delete[] subgrid;
 	delete[] kappas;
 	delete[] parities;
 	delete[] galcenter;
-	delete[] einstein_radius;
 	delete[] subgrid_radius;
 	delete[] min_galsubgrid_cellsize;
+}
+
+bool Lens::calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs)
+{
+	subhalo_lens_number = lens_number;
+	subgridding_zfacs = zfacs;
+	subgridding_betafacs = betafacs;
+	subhalo_center[0]=center[0]; subhalo_center[1]=center[1];
+
+	double zlsub, zlprim;
+	zlsub = lens_list[subhalo_lens_number]->zlens;
+	zlprim = lens_list[0]->zlens;
+
+	double dum, b;
+	lens_list[host_lens_number]->get_einstein_radius(dum,b,zfacs[lens_redshift_idx[host_lens_number]]);
+
+	double shear_angle, shear_tot;
+	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,zfacs,betafacs);
+	if (shear_angle*0.0 != 0.0) return false;
+	theta_shear = degrees_to_radians(shear_angle);
+	theta_shear -= M_PI/2.0;
+
+	double (Brent::*dthetac_eq)(const double);
+	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::galaxy_subgridding_scale_equation);
+	static const double rmin = 1e-6;
+	double rmax_precision = 0.3*sqrt(min_cell_area);
+	double bound = 0.4*b;
+
+	bool found_rmax1, found_rmax2;
+	double rmax1, rmax2;
+	double rmax_pos, rmax_pos_center, rmax_neg, rmax_pos_noperturb;
+
+	subgridding_include_perturber = true;
+	subgridding_parity_at_center = 1;
+	found_rmax1 = BrentsMethod(dthetac_eq, rmax1, rmin, bound, rmax_precision);
+	found_rmax2 = BrentsMethod(dthetac_eq, rmax2, -bound, rmin, rmax_precision);
+	if ((found_rmax1) and (found_rmax2)) rmax_pos = dmax(rmax1,rmax2);
+	else if (found_rmax1) rmax_pos = rmax1;
+	else if (found_rmax2) rmax_pos = rmax2;
+	else rmax_pos = 0;
+
+	// Now we compare to where the critical curve is *without* a perturber; if the difference is not great compared to the
+	// distance of the perturber from the critical curve, then we don't subgrid around this region (although we might still
+	// subgrid if there is a smaller radial critical curve produced, which would give a nonzero rmax_neg).
+	subgridding_include_perturber = false;
+	found_rmax1 = BrentsMethod(dthetac_eq, rmax1, rmin, bound, rmax_precision);
+	found_rmax2 = BrentsMethod(dthetac_eq, rmax2, -bound, -rmin, rmax_precision);
+	if ((found_rmax1) and (found_rmax2)) rmax_pos_noperturb = dmax(rmax1,rmax2);
+	else if (found_rmax1) rmax_pos_noperturb = rmax1;
+	else if (found_rmax2) rmax_pos_noperturb = rmax2;
+	else rmax_pos_noperturb = 0;
+	if (rmax_pos != 0) {
+		double rmax_ratio = abs((rmax_pos-rmax_pos_noperturb)/rmax_pos);
+		if (rmax_ratio > 0.5) rmax_pos = abs(rmax_pos);
+		else rmax_pos = 0;
+	}
+
+	subgridding_parity_at_center = -1;
+	subgridding_include_perturber = true;
+	found_rmax1 = BrentsMethod(dthetac_eq, rmax1, rmin, bound, rmax_precision);
+	found_rmax2 = BrentsMethod(dthetac_eq, rmax2, -bound, -rmin, rmax_precision);
+	rmax2 = abs(rmax2);
+	if ((found_rmax1) and (found_rmax2)) rmax_neg = dmax(rmax1,rmax2);
+	else if (found_rmax1) rmax_neg = rmax1;
+	else if (found_rmax2) rmax_neg = rmax2;
+	else rmax_neg = 0;
+	//cout << "rmax_pos=" << rmax_pos << ", rmax_neg=" << rmax_neg << endl;
+
+	rmax_numerical = dmax(rmax_neg,rmax_pos);
+	if (zlsub > zlprim) rmax_numerical *= 1.1; // in this regime, rmax is often a bit underestimated, so this helps counteract that
+	//if (rmax_numerical==0.0) warn("could not find rmax");
+	return true;
+}
+
+double Lens::galaxy_subgridding_scale_equation(const double r)
+{
+	double kappa0, shear0, lambda0, shear_angle, subhalo_avg_kappa;
+	lensvector x;
+	x[0] = subhalo_center[0] + r*cos(theta_shear);
+	x[1] = subhalo_center[1] + r*sin(theta_shear);
+	if (subgridding_parity_at_center < 0) {
+		kappa0 = kappa_exclude(subhalo_center,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+		shear_exclude(subhalo_center,shear0,shear_angle,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+		lambda0 = 1 - kappa0 + shear0;
+	} else {
+		kappa0 = kappa_exclude(x,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+		shear_exclude(x,shear0,shear_angle,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+		lambda0 = 1 - kappa0 - shear0;
+	}
+	double r_eff = r;
+
+	subhalo_avg_kappa = subgridding_zfacs[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r_eff);
+	if (!subgridding_include_perturber) subhalo_avg_kappa = 0;
+	else {
+		double zlsub, zlprim;
+		zlsub = lens_list[subhalo_lens_number]->zlens;
+		zlprim = lens_list[0]->zlens;
+
+		if (zlsub > zlprim) {
+			lensvector xp, xpc;
+			lens_list[subhalo_lens_number]->get_center_coords(xpc[0],xpc[1]);
+			double zsrc0 = source_redshift;
+			set_source_redshift(zlsub);
+			lensvector alpha;
+			deflection(x,alpha,subgridding_zfacs,subgridding_betafacs);
+			set_source_redshift(zsrc0);
+			xp[0] = x[0] - alpha[0];
+			xp[1] = x[1] - alpha[1];
+			r_eff = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
+		} else {
+			r_eff = r;
+		}
+		subhalo_avg_kappa = subgridding_zfacs[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(r_eff);
+		if (subgridding_parity_at_center > 0) {
+			if (zlsub < zlprim) {
+				int i1,i2;
+				i1 = lens_redshift_idx[0];
+				i2 = lens_redshift_idx[subhalo_lens_number];
+				double beta = subgridding_betafacs[i1-1][i2];
+				double dr = 1e-5;
+				double kappa0_p, shear0_p;
+				lensvector xp;
+				xp[0] = subhalo_center[0] + (r+dr)*cos(theta_shear);
+				xp[1] = subhalo_center[1] + (r+dr)*sin(theta_shear);
+				kappa0_p = kappa_exclude(xp,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+				shear_exclude(xp,shear0_p,shear_angle,subhalo_lens_number,subgridding_zfacs,subgridding_betafacs);
+				double k0deriv = (kappa0_p+shear0_p-kappa0-shear0)/dr;
+				double fac = 1 - beta*(kappa0 + shear0 + r*k0deriv);
+				subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
+			} else if (zlsub > zlprim) {
+				int i1,i2;
+				i1 = lens_redshift_idx[0];
+				i2 = lens_redshift_idx[subhalo_lens_number];
+				double beta = subgridding_betafacs[i2-1][i1];
+				subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0);
+			}
+		}
+	}
+
+	return (lambda0 - subhalo_avg_kappa);
 }
 
 void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny)
@@ -2224,11 +2371,11 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	lensvector perturber_center;
 	lens_list[lens_number]->get_center_coords(perturber_center[0],perturber_center[1]);
 	double zsrc0 = source_redshift;
-	bool subgrid_setting = subgrid_around_satellites;
+	bool subgrid_setting = subgrid_around_perturbers;
 	find_automatic_grid_position_and_size(zfacs);
 	bool auto0 = auto_gridsize_from_einstein_radius;
 	bool auto1 = autogrid_before_grid_creation;
-	subgrid_around_satellites = false;
+	subgrid_around_perturbers = false;
 	auto_gridsize_from_einstein_radius = false;
 	autogrid_before_grid_creation = false;
 	set_source_redshift(zlsub);
@@ -2258,8 +2405,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 		}
 	}
 	set_source_redshift(zsrc0);
-	//create_grid(false,zfacs,betafacs);
-	subgrid_around_satellites = subgrid_setting;
+	subgrid_around_perturbers = subgrid_setting;
 	auto_gridsize_from_einstein_radius = false;
 	autogrid_before_grid_creation = false;
 	reset_grid();
@@ -2496,7 +2642,7 @@ double Lens::source_plane_r(const double r)
 	x[0] = grid_xcenter + r*cos(theta_crit);
 	x[1] = grid_ycenter + r*sin(theta_crit);
 	find_sourcept(x,def,0,reference_zfactors,default_zsrc_beta_factors);
-	def[0] -= grid_xcenter; // this assumes the deflection is approximately zero at the center of the grid (roughly true if any satellite gal's are small)
+	def[0] -= grid_xcenter; // this assumes the deflection is approximately zero at the center of the grid (roughly true if any perturber gal's are small)
 	def[1] -= grid_ycenter;
 	return def.norm();
 }
@@ -3010,11 +3156,12 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	double rmin_einstein_radius = 1e-6;
 	double rmax_einstein_radius = 1e4;
 	double xc0, yc0, xc, yc;
-	lens_list[0]->get_center_coords(xc0,yc0);
+	lens_list[autocenter_lens_number]->get_center_coords(xc0,yc0);
 	centered = new bool[nlens];
-	centered[0]=true;
+	centered[autocenter_lens_number]=true;
 	bool multiple_lenses = false;
-	for (int j=1; j < nlens; j++) {
+	for (int j=0; j < nlens; j++) {
+		if (j==autocenter_lens_number) continue;
 		lens_list[j]->get_center_coords(xc,yc);
 		if ((xc==xc0) and (yc==yc0)) {
 			centered[j]=true;
@@ -3025,7 +3172,7 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	if (multiple_lenses==false) {
 		delete[] centered;
 		double re, reav;
-		lens_list[0]->get_einstein_radius(re,reav,zfac);
+		lens_list[autocenter_lens_number]->get_einstein_radius(re,reav,zfac);
 		return re;
 	}
 	zfac_re = zfac;
@@ -3106,7 +3253,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 		if (kdname != NULL) total_dkappa = 0;
 		for (int j=0; j < nlens; j++) {
 			if (centered[j]) {
-				// this ignores off-center lenses (satellites) since we are plotting the radial profile; ellipticity is also ignored
+				// this ignores off-center lenses (perturbers) since we are plotting the radial profile; ellipticity is also ignored
 				kap = lens_list[j]->kappa_rsq(rsq);
 				if (kdname != NULL) dkap = lens_list[j]->kappa_rsq_deriv(rsq);
 				total_kappa += kap;
@@ -3298,7 +3445,7 @@ double Lens::total_cross_section_integrand(const double theta)
 }
 
 /*
-double Lens::make_satellite_population(const double number_density, const double rmax, const double b, const double a)
+double Lens::make_perturber_population(const double number_density, const double rmax, const double b, const double a)
 {
 	int N = (int) (number_density*M_PI*rmax*rmax);
 	int realizations = 3000;
@@ -3328,7 +3475,7 @@ double Lens::make_satellite_population(const double number_density, const double
 	return mean_defsqr;
 }
 
-void Lens::plot_satellite_deflection_vs_area()
+void Lens::plot_perturber_deflection_vs_area()
 {
 	int i,nn = 30;
 	double r,rmin,rmax,rstep,logrstep,defsqr_avg;
@@ -3337,7 +3484,7 @@ void Lens::plot_satellite_deflection_vs_area()
 	rstep = (rmax-rmin)/nn;
 	logrstep = pow(rmax/rmin,1.0/(nn-1));
 	for (i=0, r=rmin; i < nn; i++, r *= logrstep) {
-		defsqr_avg = make_satellite_population(0.04,r,0.1,0.6);
+		defsqr_avg = make_perturber_population(0.04,r,0.1,0.6);
 		cout << r << " " << log(r) << " " << defsqr_avg << endl;
 	}
 }
@@ -7522,16 +7669,16 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				largest_einstein_radius = einstein_radii[i];
 			}
 		}
-		// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered satellites.
+		// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
 
 		double xc,yc;
 		for (i=0; i < nlens; i++) {
 			lens_list[i]->get_center_coords(xc,yc);
 			if ((xc==xch) and (yc==ych)) continue;
 			//cout << "ER: " << einstein_radii[i] << " " << largest_einstein_radius << endl;
-			// This doesn't work well, because the satellite can have miniscule Einstein radius (which comes up as zero) and still
+			// This doesn't work well, because the perturber can have miniscule Einstein radius (which comes up as zero) and still
 			// produce a sizeable perturbation if near a critical curve. Fix this!
-			//if ((einstein_radii[i] > 0) and (einstein_radii[i] < satellite_einstein_radius_fraction*largest_einstein_radius)) {
+			//if ((einstein_radii[i] > 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
 				//cout << "Lens " << i << " is a subhalo, with CENTER: " << xc << " " << yc << endl;
 				if (!image_pixel_data->test_if_in_fit_region(xc,yc)) {
 					if ((mpi_id==0) and (verbal)) cout << "Subhalo outside fit region --> chisq = 2e30, will not invert image\n";
