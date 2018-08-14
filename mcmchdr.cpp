@@ -2896,7 +2896,7 @@ class Counter
 		}
 };
 
-void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points)
+void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points)
 {
 	int i, j;
 	double **points = matrix <double> (N, ma);
@@ -2910,6 +2910,7 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 	double *loglike_attempts = new double[mpi_np];
 	int id;
 #endif
+	double lnZ_trans;
 	double area = 1.0;
 
 	ofstream out;
@@ -3335,7 +3336,9 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		}
 	}
 	
-	double lnZ = log(Z) - likeOld - double(count)/N;
+	lnZ_trans = log(Z) - likeOld - double(count)/N;
+	lnZ = lnZ_trans + log(area);
+	Z*=area;
 	if (mpi_id==0) {
 		binout.close();
 		ifstream binin((string(name)+string(".temp")).c_str(), ios::binary);
@@ -3349,13 +3352,15 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		cout << endl << endl;
 		if (NDerivedParams > 0) cout << "Calculating derived parameters: [\033[21C]\033[22D" << flush;
 
+		out << "# Sampler: QLens nested sampler, n_livepts = " << N << endl;
+		out << "# lnZ = " << lnZ << endl;
 		for (i = 0; i < tot; i++, count++)
 		{
 			binin.read((char *)(ptr1), ma*sizeof(double));
 			binin.read((char *)&likeOld, sizeof(double));
 			binin.read((char *)&temp1, sizeof(double));
-			H += -w0*exp(-likeOld-double(count)/N-lnZ)*likeOld;
-			out << w0*exp(-likeOld-double(count)/N-lnZ) << "   ";
+			H += -w0*exp(-likeOld-double(count)/N-lnZ_trans)*likeOld;
+			out << w0*exp(-likeOld-double(count)/N-lnZ_trans) << "   ";
 			for (j = 0; j < ma; j++)
 				out << ptr1[j] << "   ";
 			if (NDerivedParams > 0) {
@@ -3376,8 +3381,8 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 			binin.read((char *)(ptr1), ma*sizeof(double));
 			binin.read((char *)&likeOld, sizeof(double));
 			binin.read((char *)&temp1, sizeof(double));
-			H += -exp(-likeOld-double(count)/N-lnZ)*likeOld/N;
-			out << (weight=exp(-likeOld-double(count)/N-lnZ)/N) << "   ";
+			H += -exp(-likeOld-double(count)/N-lnZ_trans)*likeOld/N;
+			out << (weight=exp(-likeOld-double(count)/N-lnZ_trans)/N) << "   ";
 			weighttot += weight;
 			for (j = 0; j < ma; j++)
 			{
@@ -3426,8 +3431,6 @@ void UCMC::MonoSample(const char *name, const int N, double *best_fit_params, do
 		MPI_Bcast(parameter_errors,ma,MPI_DOUBLE,0,MPI_COMM_WORLD);
 #endif
 	
-	Z*=area;
-	lnZ += log(area);
 	H -= lnZ;
 	if (mpi_id==0) {
 		if (logfile)

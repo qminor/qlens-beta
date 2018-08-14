@@ -135,7 +135,7 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		void McmcAd(const char *, int);
 		void Slicing(const char *, int, const char flag = NOTRANSFORM);
 		void SlicingFull(const char *, int);
-		void MonoSample(const char *name, const int N, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points = NULL);
+		void MonoSample(const char *name, const int N, double &lnZ, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points = NULL);
 		void HMC(const char *name, double tol, const char flag);
 		void ApproxCovMatrix();
 		void FindCovMatrix();

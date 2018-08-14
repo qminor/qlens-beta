@@ -256,7 +256,7 @@ void Lens::process_commands(bool read_file)
 						"simplex_temp0 -- initial annealing temperature for downhill simplex (zero --> no annealing)\n"
 						"simplex_tfac -- \"cooling factor\" controls how quickly temp is reduced during annealing\n"
 						"simplex_show_bestfit -- show the current best-fit parameters during annealing (if on)\n"
-						"n_mcpoints -- number of live points used in nested sampling runs\n"
+						"n_livepts -- number of live points used in nested sampling runs\n"
 						"mcmc_chains -- number of chains used in MCMC routines (e.g. T-Walk)\n"
 						"mcmctol -- during MCMC, stop chains if Gelman-Rubin R-statistic falls below this threshold\n"
 						"mcmclog -- output MCMC convergence, accept ratio etc. to log file while running (if on)\n"
@@ -764,7 +764,7 @@ void Lens::process_commands(bool read_file)
 								"be marginalized by binning the points in the parameter(s) of interest, weighting them according\n"
 								"to the supplied weights. The resulting points and weights are output to the file '<label>', while\n"
 								"the parameters that maximize the space are output to the file <label>.max', where the label is set\n"
-								"by the 'fit label' command. The number of initial 'active' points is set by n_mcpoints.\n";
+								"by the 'fit label' command. The number of initial 'active' points is set by n_livepts.\n";
 						else if (words[3]=="twalk")
 							cout << "fit method twalk\n\n"
 								"T-Walk is a Markov Chain Monte Carlo (MCMC) algorithm that samples the parameter space using a\n"
@@ -1787,7 +1787,7 @@ void Lens::process_commands(bool read_file)
 					cout << "simplex_tempf = " << simplex_temp_final << endl;
 					cout << "simplex_cooling_factor = " << simplex_cooling_factor << endl;
 					cout << "simplex_show_bestfit: " << display_switch(simplex_show_bestfit) << endl;
-					cout << "n_mcpoints = " << n_mcpoints << endl;
+					cout << "n_livepts = " << n_livepts << endl;
 					cout << "mcmc_chains = " << mcmc_threads << endl;
 					cout << "mcmctol = " << mcmc_tolerance << endl;
 					cout << "mcmc_logfile: " << display_switch(mcmc_logfile) << endl;
@@ -6680,14 +6680,14 @@ void Lens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="n_mcpoints")
+		else if (words[0]=="n_livepts")
 		{
 			int n_lp;
 			if (nwords == 2) {
 				if (!(ws[1] >> n_lp)) Complain("invalid number of live points for nested sampling");
-				n_mcpoints = n_lp;
+				n_livepts = n_lp;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Number of live points for nested sampling = " << n_mcpoints << endl;
+				if (mpi_id==0) cout << "Number of live points for nested sampling = " << n_livepts << endl;
 			} else Complain("must specify either zero or one argument (number of Monte Carlo points)");
 		}
 		else if (words[0]=="simplex_nmax")

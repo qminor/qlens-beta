@@ -129,7 +129,9 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 			return;
 		}
 		string str;
-		getline(inlen, str);
+		do {
+			getline(inlen, str);
+		} while (str.find("#") != string::npos);
 		if (include_log_evidence) getline(inlen, str);
 		istringstream iss(str);
 		a = 0;

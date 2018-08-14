@@ -201,7 +201,7 @@ Lens::Lens() : UCMC()
 	simplex_minchisq = -1e30;
 	simplex_minchisq_anneal = -1e30;
 	simplex_show_bestfit = false;
-	n_mcpoints = 1000; // for nested sampling
+	n_livepts = 1000; // for nested sampling
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
 	mcmc_logfile = false;
@@ -463,7 +463,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	simplex_minchisq = lens_in->simplex_minchisq;
 	simplex_minchisq_anneal = lens_in->simplex_minchisq_anneal;
 	simplex_show_bestfit = lens_in->simplex_show_bestfit;
-	n_mcpoints = lens_in->n_mcpoints; // for nested sampling
+	n_livepts = lens_in->n_livepts; // for nested sampling
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
 	open_chisq_logfile = lens_in->open_chisq_logfile;
@@ -5995,9 +5995,10 @@ void Lens::nested_sampling()
 	string filename = fit_output_dir + "/" + fit_output_filename;
 
 	display_chisq_status = false; // just in case it was turned on
+	double lnZ;
 
 	running_fit = true;
-	MonoSample(filename.c_str(),n_mcpoints,fitparams.array(),param_errors,mcmc_logfile);
+	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile);
 	running_fit = false;
 	bestfitparams.input(fitparams);
 
@@ -6111,7 +6112,7 @@ void Lens::polychord()
 	 mcsampler_set_lensptr(this);
     Settings settings(n_fit_parameters,n_derived_params);
 
-    settings.nlive         = n_mcpoints;
+    settings.nlive         = n_livepts;
     settings.num_repeats   = n_fit_parameters*5;
     settings.do_clustering = false;
 
@@ -6161,9 +6162,25 @@ void Lens::polychord()
 		char line[n_characters];
 
 		string filename = fit_output_dir + "/" + fit_output_filename;
+		string stats_filename = filename + ".stats";
+		ifstream stats_in(stats_filename.c_str());
+		int i;
+		for (i=0; i < 8; i++) stats_in.getline(line,n_characters); // skip past beginning lines
+		string dum;
+		for (i=0; i < 2; i++) {
+			stats_in >> dum;
+		}
+		double lnZ, area=1.0;
+		stats_in >> lnZ;
+		stats_in.close();
+		for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		lnZ += log(area);
+
 		string polyin_filename = filename + ".txt";
 		ifstream polyin(polyin_filename.c_str());
 		ofstream polyout(filename.c_str());
+		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
+		polyout << "# lnZ = " << lnZ << endl;
 
 		double weight, chi2;
 		double minchisq = 1e30;
@@ -6171,7 +6188,6 @@ void Lens::polychord()
 		double *params = new double[n_tot_params];
 		double *covs = new double[n_tot_params];
 		double *avgs = new double[n_tot_params];
-		int i;
 		double weighttot = 0;
 		for (int i=0; i < n_tot_params; i++) {
 			covs[i] = 0;
@@ -6222,7 +6238,8 @@ void Lens::polychord()
 				if (include_flux_chisq) delete[] bestfit_flux;
 			}
 
-			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
+			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
+			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
 			for (int i=0; i < n_fit_parameters; i++) {
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
@@ -6307,7 +6324,7 @@ void Lens::multinest()
 	mmodal = 0;					// do mode separation?
 	ceff = 0;					// run in constant efficiency mode?
 	efr = 0.1;				// set the required efficiency
-	nlive = n_mcpoints;
+	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
 	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters
 	nClsPar = n_fit_parameters;				// no. of parameters to do mode separation on
@@ -6354,12 +6371,26 @@ void Lens::multinest()
 
 	// Now convert the MultiNest output to a form that mkdist can read
 	if (mpi_id==0) {
+		string stats_filename = filename + "stats.dat";
+		ifstream stats_in(stats_filename.c_str());
+		string dum;
+		for (int i=0; i < 5; i++) {
+			stats_in >> dum;
+		}
+		double lnZ, area=1.0;
+		stats_in >> lnZ;
+		stats_in.close();
+		for (int i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		lnZ += log(area);
+
 		const int n_characters = 1024;
 		char line[n_characters];
 
-		string polyin_filename = filename + ".txt";
-		ifstream polyin(polyin_filename.c_str());
-		ofstream polyout(filename.c_str());
+		string mnin_filename = filename + ".txt";
+		ifstream mnin(mnin_filename.c_str());
+		ofstream mnout(filename.c_str());
+		mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
+		mnout << "# lnZ = " << lnZ << endl;
 
 		double weight, chi2;
 		double minchisq = 1e30;
@@ -6374,16 +6405,16 @@ void Lens::multinest()
 			covs[i] = 0;
 			avgs[i] = 0;
 		}
-		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
+		while ((mnin.getline(line,n_characters)) and (!mnin.eof())) {
 			istringstream instream(line);
 			instream >> weight;
 			instream >> chi2;
 			for (i=0; i < n_tot_params; i++) instream >> xparams[i];
 			transform_cube(params,xparams);
-			polyout << weight << "   ";
-			for (i=0; i < n_fit_parameters; i++) polyout << params[i] << "   ";
-			for (i=0; i < n_derived_params; i++) polyout << xparams[n_fit_parameters+i] << "   ";
-			polyout << chi2 << endl;
+			mnout << weight << "   ";
+			for (i=0; i < n_fit_parameters; i++) mnout << params[i] << "   ";
+			for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
+			mnout << chi2 << endl;
 			if (chi2 < minchisq) {
 				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
 			}
@@ -6393,7 +6424,7 @@ void Lens::multinest()
 			}
 			weighttot += weight;
 		}
-		polyin.close();
+		mnin.close();
 		for (i=0; i < n_tot_params; i++) {
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
@@ -6421,7 +6452,8 @@ void Lens::multinest()
 				if (include_flux_chisq) delete[] bestfit_flux;
 			}
 
-			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
+			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
+			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
 			for (int i=0; i < n_fit_parameters; i++) {
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
