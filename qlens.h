@@ -299,6 +299,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool vary_hubble_parameter;
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
+	bool vary_syserr_pos_parameter;
+	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
 
 	int Gauss_NN;	// for Gaussian quadrature
 	double romberg_accuracy, integral_tolerance; // for Romberg integration, Gauss-Patterson quadrature

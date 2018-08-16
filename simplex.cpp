@@ -25,7 +25,7 @@ void simplex_quitproc(int sig)
 	exit(0);
 }
 
-void Simplex::initialize_simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in, const int seed_in)
+void Simplex::initialize_simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in)
 {
 	if (initialized) {
 		delete[] y;
@@ -34,7 +34,6 @@ void Simplex::initialize_simplex(double* point, const int& ndim_in, double* vert
 		delete[] p;
 		delete[] disps;
 	}
-	if (seed_in != 100000) set_random_seed(seed_in);
 	ftol = ftol_in;
 	yb = 1e30;
 	ndim = ndim_in;

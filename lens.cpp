@@ -161,6 +161,7 @@ Lens::Lens() : UCMC()
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
+	syserr_pos = 0.0;
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = true; // this automatically sets the reference source redshift (for kappa scaling) equal to the source redshift being used
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
@@ -178,6 +179,10 @@ Lens::Lens() : UCMC()
 	vary_hubble_parameter = false;
 	hubble_lower_limit = 1e30; // These must be specified by user
 	hubble_upper_limit = 1e30; // These must be specified by user
+
+	vary_syserr_pos_parameter = false;
+	syserr_pos_lower_limit = 1e30; // These must be specified by user
+	syserr_pos_upper_limit = 1e30; // These must be specified by user
 
 	chisq_it=0;
 	chisq_diagnostic = false;
@@ -426,6 +431,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 
 	omega_matter = lens_in->omega_matter;
 	hubble = lens_in->hubble;
+	syserr_pos = lens_in->syserr_pos;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
@@ -444,9 +450,14 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	lens_redshift_idx = NULL;
 	zlens_group_size = NULL;
 	zlens_group_lens_indx = NULL;
+
 	vary_hubble_parameter = lens_in->vary_hubble_parameter;
 	hubble_lower_limit = lens_in->hubble_lower_limit; // These must be specified by user
 	hubble_upper_limit = lens_in->hubble_upper_limit; // These must be specified by user
+
+	vary_syserr_pos_parameter = lens_in->vary_syserr_pos_parameter;
+	syserr_pos_lower_limit = lens_in->syserr_pos_lower_limit; // These must be specified by user
+	syserr_pos_upper_limit = lens_in->syserr_pos_upper_limit; // These must be specified by user
 
 	terminal = lens_in->terminal;
 	show_wtime = lens_in->show_wtime;
@@ -4565,6 +4576,10 @@ bool Lens::update_fitmodel(const double* params)
 		if (fitmodel->hubble < 0) status = false; // do not allow negative Hubble parameter
 		fitmodel->set_cosmology(fitmodel->omega_matter,0.04,fitmodel->hubble,2.215);
 	}
+	if (vary_syserr_pos_parameter) {
+		fitmodel->syserr_pos = params[index++];
+		if (fitmodel->syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
+	}
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
 	return status;
 }
@@ -4591,7 +4606,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,zfactors[i],beta_factors[i]);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
-					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 					amatrix[0][0] += magsqr[0][0]*siginv;
 					amatrix[1][0] += magsqr[1][0]*siginv;
 					amatrix[0][1] += magsqr[0][1]*siginv;
@@ -4600,7 +4615,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
 					find_sourcept(image_data[i].pos[j],beta_ji,0,zfactors[i],beta_factors[i]);
-					siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
 					src_norm += siginv;
@@ -4639,7 +4654,8 @@ double Lens::chisq_pos_source_plane()
 	double* mag01 = new double[n_images_hi];
 	lensvector* beta_ji = new lensvector[n_images_hi];
 
-	double siginv, src_norm;
+	double sigsq, signormfac, siginv, src_norm;
+	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	for (i=0; i < n_sourcepts_fit; i++) {
 		amatrix[0][0] = amatrix[0][1] = amatrix[1][0] = amatrix[1][1] = 0;
 		bvec[0] = bvec[1] = 0;
@@ -4656,7 +4672,7 @@ double Lens::chisq_pos_source_plane()
 
 					if (use_analytic_bestfit_src) {
 						lensmatsqr(mag,magsqr);
-						siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+						siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 						amatrix[0][0] += magsqr[0][0]*siginv;
 						amatrix[1][0] += magsqr[1][0]*siginv;
 						amatrix[0][1] += magsqr[0][1]*siginv;
@@ -4667,7 +4683,7 @@ double Lens::chisq_pos_source_plane()
 				} else {
 					find_sourcept(image_data[i].pos[j],beta_ji[j],0,zfactors[i],beta_factors[i]);
 					if (use_analytic_bestfit_src) {
-						siginv = 1.0/SQR(image_data[i].sigma_pos[j]);
+						siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
 						src_bf[1] += beta_ji[j][1]*siginv;
 						src_norm += siginv;
@@ -4692,12 +4708,17 @@ double Lens::chisq_pos_source_plane()
 			if (image_data[i].use_in_chisq[j]) {
 				delta_beta[0] = (*beta)[0] - beta_ji[j][0];
 				delta_beta[1] = (*beta)[1] - beta_ji[j][1];
+				sigsq = SQR(image_data[i].sigma_pos[j]);
+				if (syserr_pos != 0.0) {
+					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
+					 sigsq += syserr_pos*syserr_pos;
+				}
 				if (use_magnification_in_chisq) {
 					delta_theta[0] = mag00[j] * delta_beta[0] + mag01[j] * delta_beta[1];
 					delta_theta[1] = mag01[j] * delta_beta[0] + mag11[j] * delta_beta[1];
-					chisq += delta_theta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
+					chisq += delta_theta.sqrnorm() / sigsq + signormfac;
 				} else {
-					chisq += delta_beta.sqrnorm() / SQR(image_data[i].sigma_pos[j]);
+					chisq += delta_beta.sqrnorm() / sigsq + signormfac;
 				}
 			}
 		}
@@ -4740,7 +4761,8 @@ double Lens::chisq_pos_image_plane()
 	double chisq=0, chisq_part=0;
 
 	int n_images, n_tot_images=0, n_tot_images_part=0;
-	double chisq_each_srcpt, dist;
+	double sigsq, signormfac, chisq_each_srcpt, dist;
+	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
@@ -4809,14 +4831,19 @@ double Lens::chisq_pos_image_plane()
 			}
 
 			for (k=0; k < image_data[i].n_images; k++) {
-					if (closest_image_j[k] != -1) {
-						if (image_data[i].use_in_chisq[k]) {
-							chisq_each_srcpt += closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
-						}
-					} else {
-						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-						chisq_each_srcpt += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+				sigsq = SQR(image_data[i].sigma_pos[k]);
+				if (syserr_pos != 0.0) {
+					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
+					 sigsq += syserr_pos*syserr_pos;
+				}
+				if (closest_image_j[k] != -1) {
+					if (image_data[i].use_in_chisq[k]) {
+						chisq_each_srcpt += closest_distsqrs[k]/sigsq + signormfac;
 					}
+				} else {
+					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
+					chisq_each_srcpt += 4*image_data[i].max_distsqr/sigsq + signormfac;
+				}
 			}
 			chisq_part += chisq_each_srcpt;
 			delete[] ignore;
@@ -4871,7 +4898,8 @@ double Lens::chisq_pos_image_plane_verbose()
 	double chisq=0, chisq_part=0;
 
 	int n_images, n_tot_images=0, n_tot_images_part=0;
-	double chisq_each_srcpt, dist;
+	double sigsq, signormfac, chisq_each_srcpt, dist;
+	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
@@ -4943,21 +4971,27 @@ double Lens::chisq_pos_image_plane_verbose()
 
 			double chisq_this_img;
 			for (k=0; k < image_data[i].n_images; k++) {
+				sigsq = SQR(image_data[i].sigma_pos[k]);
+				if (syserr_pos != 0.0) {
+					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
+					 sigsq += syserr_pos*syserr_pos;
+				}
 				if (group_num==0) cout << "source " << i << ", image " << k << ": ";
 					if (closest_image_j[k] != -1) {
 						if (image_data[i].use_in_chisq[k]) {
-							chisq_this_img = closest_distsqrs[k]/SQR(image_data[i].sigma_pos[k]);
+							chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
 							if (group_num==0) cout << "chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 							chisq_each_srcpt += chisq_this_img;
 						}
 						else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 					} else {
 						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-						chisq_this_img += 4*image_data[i].max_distsqr/SQR(image_data[i].sigma_pos[k]);
+						chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
 						if (group_num==0) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
 					}
 			}
+
 			chisq_part += chisq_each_srcpt;
 			delete[] ignore;
 			delete[] distsqrs;
@@ -5165,6 +5199,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
+	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
 
@@ -5189,6 +5224,7 @@ void Lens::set_default_plimits()
 	if (vary_pixel_fraction) index++;
 	if (vary_magnification_threshold) index++;
 	if (vary_hubble_parameter) index++;
+	if (vary_syserr_pos_parameter) index++;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
@@ -5211,6 +5247,7 @@ void Lens::get_n_fit_parameters(int &nparams)
 	if (vary_pixel_fraction) nparams++;
 	if (vary_magnification_threshold) nparams++;
 	if (vary_hubble_parameter) nparams++;
+	if (vary_syserr_pos_parameter) nparams++;
 }
 
 bool Lens::setup_fit_parameters(bool include_limits)
@@ -5239,6 +5276,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
 	if (vary_hubble_parameter) fitparams[index++] = hubble;
+	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
 	get_parameter_names();
 	dvector stepsizes(n_fit_parameters);
 	get_automatic_initial_stepsizes(stepsizes);
@@ -5306,6 +5344,13 @@ bool Lens::setup_fit_parameters(bool include_limits)
 			lower_limits[index] = hubble_lower_limit;
 			lower_limits_initial[index] = lower_limits[index];
 			upper_limits[index] = hubble_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_syserr_pos_parameter) {
+			lower_limits[index] = syserr_pos_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = syserr_pos_upper_limit;
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
@@ -5418,6 +5463,11 @@ void Lens::get_parameter_names()
 		fit_parameter_names.push_back("h0");
 		latex_parameter_names.push_back("H");
 		latex_parameter_subscripts.push_back("0");
+	}
+	if (vary_syserr_pos_parameter) {
+		fit_parameter_names.push_back("syserr_pos");
+		latex_parameter_names.push_back("\\sigma");
+		latex_parameter_subscripts.push_back("sys");
 	}
 	if (fit_parameter_names.size() != n_fit_parameters) die("get_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
 	for (i=0; i < n_fit_parameters; i++) {
@@ -5639,7 +5689,7 @@ double Lens::chi_square_fit_simplex()
 		cout << endl << endl;
 	}
 
-	initialize_simplex(fitparams.array(),n_fit_parameters,stepsizes.array(),chisq_tolerance,-10);
+	initialize_simplex(fitparams.array(),n_fit_parameters,stepsizes.array(),chisq_tolerance);
 	simplex_set_display_bfpont(simplex_show_bestfit);
 	simplex_set_function(loglikeptr);
 	simplex_set_fmin(simplex_minchisq/2);
@@ -5764,6 +5814,7 @@ double Lens::chi_square_fit_simplex()
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
+		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
 
 		cout << endl;
 		if (calculate_parameter_errors) {
@@ -5910,6 +5961,7 @@ double Lens::chi_square_fit_powell()
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
+		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
 		cout << endl;
 		if (calculate_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
@@ -6050,213 +6102,6 @@ void Lens::nested_sampling()
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
-}
-
-void Lens::polychord()
-{
-#ifdef USE_POLYCHORD
-	if (setup_fit_parameters(true)==false) return;
-	fit_set_optimizations();
-	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
-		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
-		// Do this later...
-		create_output_directory();
-	}
-
-	initialize_fitmodel(true);
-
-	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
-	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
-	}
-
-	if (mpi_id==0) {
-		int i;
-		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
-		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
-		pnumfile.close();
-		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
-		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
-		pnamefile.close();
-		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
-		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
-		lpnamefile.close();
-		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
-		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
-		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
-		}
-		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
-		prangefile.close();
-	}
-
-#ifdef USE_OPENMP
-	double wt0, wt;
-	if (show_wtime) {
-		wt0 = omp_get_wtime();
-	}
-#endif
-	display_chisq_status = false; // just in case it was turned on
-
-	running_fit = true;
-
-	 mcsampler_set_lensptr(this);
-    Settings settings(n_fit_parameters,n_derived_params);
-
-    settings.nlive         = n_livepts;
-    settings.num_repeats   = n_fit_parameters*5;
-    settings.do_clustering = false;
-
-    settings.precision_criterion = 1e-3;
-    settings.logzero = -1e30;
-
-    settings.base_dir      = fit_output_dir.c_str();
-    settings.file_root     = fit_output_filename.c_str();
-
-    settings.write_resume  = false;
-    settings.read_resume   = false;
-    settings.write_live    = true;
-    settings.write_dead    = true;
-    settings.write_stats   = true;
-
-    settings.equals        = false;
-    settings.posteriors    = true;
-    settings.cluster_posteriors = false;
-
-    settings.feedback      = 3;
-    settings.compression_factor  = 0.36787944117144233;
-
-    settings.boost_posterior= 1.0;
-
-    //polychord_setup_loglikelihood();
-    run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
-		bestfitparams.input(n_fit_parameters);
-
-	running_fit = false;
-
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
-
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wt = omp_get_wtime() - wt0;
-		if (mpi_id==0) cout << "Time for nested sampling: " << wt << endl;
-	}
-#endif
-
-	// Now convert the PolyChord output to a form that mkdist can read
-	if (mpi_id==0) {
-		const int n_characters = 1024;
-		char line[n_characters];
-
-		string filename = fit_output_dir + "/" + fit_output_filename;
-		string stats_filename = filename + ".stats";
-		ifstream stats_in(stats_filename.c_str());
-		int i;
-		for (i=0; i < 8; i++) stats_in.getline(line,n_characters); // skip past beginning lines
-		string dum;
-		for (i=0; i < 2; i++) {
-			stats_in >> dum;
-		}
-		double lnZ, area=1.0;
-		stats_in >> lnZ;
-		stats_in.close();
-		for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
-		lnZ += log(area);
-
-		string polyin_filename = filename + ".txt";
-		ifstream polyin(polyin_filename.c_str());
-		ofstream polyout(filename.c_str());
-		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
-		polyout << "# lnZ = " << lnZ << endl;
-
-		double weight, chi2;
-		double minchisq = 1e30;
-		int n_tot_params = n_fit_parameters + n_derived_params;
-		double *params = new double[n_tot_params];
-		double *covs = new double[n_tot_params];
-		double *avgs = new double[n_tot_params];
-		double weighttot = 0;
-		for (int i=0; i < n_tot_params; i++) {
-			covs[i] = 0;
-			avgs[i] = 0;
-		}
-		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
-			istringstream instream(line);
-			instream >> weight;
-			instream >> chi2;
-			for (i=0; i < n_tot_params; i++) instream >> params[i];
-			polyout << weight << "   ";
-			for (i=0; i < n_tot_params; i++) polyout << params[i] << "   ";
-			polyout << chi2 << endl;
-			if (chi2 < minchisq) {
-				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
-			}
-			for (i=0; i < n_tot_params; i++) {
-				avgs[i] += weight*params[i];
-				covs[i] += weight*params[i]*params[i];
-			}
-			weighttot += weight;
-		}
-		polyin.close();
-		for (i=0; i < n_tot_params; i++) {
-			avgs[i] /= weighttot;
-			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
-		}
-
-			cout << endl;
-			if (source_fit_mode == Point_Source) {
-				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
-				double *bestfit_flux;
-				if (include_flux_chisq) {
-					bestfit_flux = new double[n_sourcepts_fit];
-					fitmodel->output_model_source_flux(bestfit_flux);
-				};
-				if (use_analytic_bestfit_src) {
-					fitmodel->output_analytic_srcpos(bestfit_src);
-				} else {
-					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
-				}
-				for (int i=0; i < n_sourcepts_fit; i++) {
-					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
-					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
-					cout << endl;
-				}
-				delete[] bestfit_src;
-				if (include_flux_chisq) delete[] bestfit_flux;
-			}
-
-			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
-			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
-			for (int i=0; i < n_fit_parameters; i++) {
-				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
-			}
-			cout << endl;
-			if (auto_save_bestfit) output_bestfit_model();
-		delete[] params;
-		delete[] avgs;
-		delete[] covs;
-	}
-#ifdef USE_MPI
-		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
-#endif
-
-	fit_restore_defaults();
-	delete fitmodel;
-	fitmodel = NULL;
-#endif
 }
 
 void Lens::multinest()
@@ -6474,6 +6319,213 @@ void Lens::multinest()
 #endif
 }
 
+void Lens::polychord()
+{
+#ifdef USE_POLYCHORD
+	if (setup_fit_parameters(true)==false) return;
+	fit_set_optimizations();
+	if ((mpi_id==0) and (fit_output_dir != ".")) {
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
+		// Do this later...
+		create_output_directory();
+	}
+
+	initialize_fitmodel(true);
+
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+	} else if (source_fit_mode==Pixellated_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
+	}
+
+	if (mpi_id==0) {
+		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		lpnamefile.close();
+		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (i=0; i < n_fit_parameters; i++)
+		{
+			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
+		prangefile.close();
+	}
+
+#ifdef USE_OPENMP
+	double wt0, wt;
+	if (show_wtime) {
+		wt0 = omp_get_wtime();
+	}
+#endif
+	display_chisq_status = false; // just in case it was turned on
+
+	running_fit = true;
+
+	 mcsampler_set_lensptr(this);
+    Settings settings(n_fit_parameters,n_derived_params);
+
+    settings.nlive         = n_livepts;
+    settings.num_repeats   = n_fit_parameters*5;
+    settings.do_clustering = false;
+
+    settings.precision_criterion = 1e-3;
+    settings.logzero = -1e30;
+
+    settings.base_dir      = fit_output_dir.c_str();
+    settings.file_root     = fit_output_filename.c_str();
+
+    settings.write_resume  = false;
+    settings.read_resume   = false;
+    settings.write_live    = true;
+    settings.write_dead    = true;
+    settings.write_stats   = true;
+
+    settings.equals        = false;
+    settings.posteriors    = true;
+    settings.cluster_posteriors = false;
+
+    settings.feedback      = 3;
+    settings.compression_factor  = 0.36787944117144233;
+
+    settings.boost_posterior= 1.0;
+
+    //polychord_setup_loglikelihood();
+    run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
+		bestfitparams.input(n_fit_parameters);
+
+	running_fit = false;
+
+	//if (display_chisq_status) {
+		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
+		//cout << endl;
+		//display_chisq_status = false;
+	//}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wt = omp_get_wtime() - wt0;
+		if (mpi_id==0) cout << "Time for nested sampling: " << wt << endl;
+	}
+#endif
+
+	// Now convert the PolyChord output to a form that mkdist can read
+	if (mpi_id==0) {
+		const int n_characters = 1024;
+		char line[n_characters];
+
+		string filename = fit_output_dir + "/" + fit_output_filename;
+		string stats_filename = filename + ".stats";
+		ifstream stats_in(stats_filename.c_str());
+		int i;
+		for (i=0; i < 8; i++) stats_in.getline(line,n_characters); // skip past beginning lines
+		string dum;
+		for (i=0; i < 2; i++) {
+			stats_in >> dum;
+		}
+		double lnZ, area=1.0;
+		stats_in >> lnZ;
+		stats_in.close();
+		for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		lnZ += log(area);
+
+		string polyin_filename = filename + ".txt";
+		ifstream polyin(polyin_filename.c_str());
+		ofstream polyout(filename.c_str());
+		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
+		polyout << "# lnZ = " << lnZ << endl;
+
+		double weight, chi2;
+		double minchisq = 1e30;
+		int n_tot_params = n_fit_parameters + n_derived_params;
+		double *params = new double[n_tot_params];
+		double *covs = new double[n_tot_params];
+		double *avgs = new double[n_tot_params];
+		double weighttot = 0;
+		for (int i=0; i < n_tot_params; i++) {
+			covs[i] = 0;
+			avgs[i] = 0;
+		}
+		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
+			istringstream instream(line);
+			instream >> weight;
+			instream >> chi2;
+			for (i=0; i < n_tot_params; i++) instream >> params[i];
+			polyout << weight << "   ";
+			for (i=0; i < n_tot_params; i++) polyout << params[i] << "   ";
+			polyout << chi2 << endl;
+			if (chi2 < minchisq) {
+				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+			}
+			for (i=0; i < n_tot_params; i++) {
+				avgs[i] += weight*params[i];
+				covs[i] += weight*params[i]*params[i];
+			}
+			weighttot += weight;
+		}
+		polyin.close();
+		for (i=0; i < n_tot_params; i++) {
+			avgs[i] /= weighttot;
+			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
+		}
+
+			cout << endl;
+			if (source_fit_mode == Point_Source) {
+				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
+				double *bestfit_flux;
+				if (include_flux_chisq) {
+					bestfit_flux = new double[n_sourcepts_fit];
+					fitmodel->output_model_source_flux(bestfit_flux);
+				};
+				if (use_analytic_bestfit_src) {
+					fitmodel->output_analytic_srcpos(bestfit_src);
+				} else {
+					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
+				}
+				for (int i=0; i < n_sourcepts_fit; i++) {
+					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
+					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+					cout << endl;
+				}
+				delete[] bestfit_src;
+				if (include_flux_chisq) delete[] bestfit_flux;
+			}
+
+			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
+			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
+			for (int i=0; i < n_fit_parameters; i++) {
+				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+			}
+			cout << endl;
+			if (auto_save_bestfit) output_bestfit_model();
+		delete[] params;
+		delete[] avgs;
+		delete[] covs;
+	}
+#ifdef USE_MPI
+		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+#endif
+
+	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
+#endif
+}
+
 void Lens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
@@ -6612,6 +6664,9 @@ bool Lens::use_bestfit_model()
 	if (vary_hubble_parameter) {
 		hubble = transformed_params[index++];
 		set_cosmology(omega_matter,0.04,hubble,2.215);
+	}
+	if (vary_syserr_pos_parameter) {
+		syserr_pos = transformed_params[index++];
 	}
 
 	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
@@ -6823,9 +6878,34 @@ double Lens::fitmodel_loglike_point_source(double* params)
 			cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) {
 				cout << ", chisq_pos=" << chisq;
+				if (syserr_pos != 0.0) {
+					double signormfac, chisq_sys = chisq;
+					int i,k;
+					for (i=0; i < n_sourcepts_fit; i++) {
+						for (k=0; k < image_data[i].n_images; k++) {
+							signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+							chisq_sys -= signormfac;
+						}
+					}
+					cout << ", chisq_pos_sys=" << chisq_sys;
+				}
 			}
 		} else {
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+				cout << "chisq_pos=" << chisq;
+				// redundant and ugly! make it prettier later
+				if (syserr_pos != 0.0) {
+					double signormfac, chisq_sys = chisq;
+					int i,k;
+					for (i=0; i < n_sourcepts_fit; i++) {
+						for (k=0; k < image_data[i].n_images; k++) {
+							signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+							chisq_sys -= signormfac;
+						}
+					}
+					cout << ", chisq_pos_sys=" << chisq_sys;
+				}
+			}
 		}
 	}
 	chisq_total += chisq;
@@ -7161,6 +7241,13 @@ void Lens::output_lens_commands(string filename)
 			scriptfile << hubble_lower_limit << " " << hubble_upper_limit << endl;
 		}
 	}
+	if (vary_syserr_pos_parameter) {
+		scriptfile << "syserr_pos = " << syserr_pos << endl;
+		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+			scriptfile << syserr_pos_lower_limit << " " << syserr_pos_upper_limit << endl;
+		}
+	}
+
 }
 
 void Lens::print_fit_model()
@@ -7215,6 +7302,14 @@ void Lens::print_fit_model()
 		} else {
 			if ((hubble_lower_limit==1e30) or (hubble_upper_limit==1e30)) cout << "\nHubble parameter: lower/upper limits not given (these must be set by 'h0' command before fit)\n";
 			else cout << "Hubble parameter: [" << hubble_lower_limit << ":" << hubble << ":" << hubble_upper_limit << "]\n";
+		}
+	}
+	if (vary_syserr_pos_parameter) {
+		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			cout << "Systematic error parameter: " << syserr_pos << endl;
+		} else {
+			if ((syserr_pos_lower_limit==1e30) or (syserr_pos_upper_limit==1e30)) cout << "\nsyserr_pos parameter: lower/upper limits not given (these must be set by 'syserr_pos' command before fit)\n";
+			else cout << "Systematic error parameter: [" << syserr_pos_lower_limit << ":" << syserr_pos << ":" << syserr_pos_upper_limit << "]\n";
 		}
 	}
 }

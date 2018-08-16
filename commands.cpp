@@ -125,6 +125,8 @@ void Lens::process_commands(bool read_file)
 						"zsrc -- redshift of source plane used for 'findimg', 'plotimg' and 'plotcrit'\n"
 						"zsrc_ref -- source redshift used to define lensing quantities (kappa, etc.) (default=zsrc)\n"
 						"auto_zsrc_scaling -- if on, automatically keep zsrc_ref equal to zsrc (default=on)\n"
+						"syserr_pos -- Systematic error parameter, added in quadrature to all position errors\n"
+						"vary_syserr_pos -- specify whether to vary syserr_pos during a fit (on/off)\n"
 						"vary_hubble -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
 						"\n"
 						"\033[4mLens model settings\033[0m\n"
@@ -1826,6 +1828,7 @@ void Lens::process_commands(bool read_file)
 					cout << "sim_err_pos = " << sim_err_pos << endl;
 					cout << "sim_err_flux = " << sim_err_flux << endl;
 					cout << "sim_err_td = " << sim_err_td << endl;
+					cout << "syserr_pos = " << syserr_pos << endl;
 					cout << endl;
 				}
 			}
@@ -6306,6 +6309,37 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_hubble' command; must specify 'on' or 'off'");
 				set_switch(vary_hubble_parameter,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="syserr_pos")
+		{
+			double syserrparam;
+			if (nwords == 2) {
+				if (!(ws[1] >> syserrparam)) Complain("invalid syserr_pos setting");
+				syserr_pos = syserrparam;
+				if ((vary_syserr_pos_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+					if (mpi_id==0) cout << "Limits for systematic error parameter:\n";
+					if (read_command(false)==false) return;
+					double sigmin,sigmax;
+					if (nwords != 2) Complain("Must specify two arguments for systematic error parameter limits: sigmin, sigmax");
+					if (!(ws[0] >> sigmin)) Complain("Invalid lower limit for systematic error parameter");
+					if (!(ws[1] >> sigmax)) Complain("Invalid upper limit for systematic error parameter");
+					if (sigmin > sigmax) Complain("lower limit cannot be greater than upper limit");
+					syserr_pos_lower_limit = sigmin;
+					syserr_pos_upper_limit = sigmax;
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "systematic error parameter = " << syserr_pos << endl;
+			} else Complain("must specify either zero or one argument (systematic error parameter)");
+		}
+		else if (words[0]=="vary_syserr_pos")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary systematic error parameter: " << display_switch(vary_syserr_pos_parameter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_syserr_pos' command; must specify 'on' or 'off'");
+				set_switch(vary_syserr_pos_parameter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
