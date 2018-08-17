@@ -463,8 +463,8 @@ int main(int argc, char *argv[])
 			string pycommand = "python " + pyname;
 			if (system(pycommand.c_str()) == 0) {
 				cout << "Plot for 1D posteriors saved to '" << file_label << ".pdf'\n";
-				string rmcommand = "rm " + pyname;
-				system_returnval = system(rmcommand.c_str());
+				//string rmcommand = "rm " + pyname;
+				//system_returnval = system(rmcommand.c_str());
 			}
 			else cout << "Error: Could not generate PDF file for 1D posteriors\n";
 		} else {
@@ -492,17 +492,19 @@ int main(int argc, char *argv[])
 		else pyscript2d << "shaded=False";
 		pyscript2d << ")" << endl;
 		pyscript2d << "g.export(os.path.join(outdir,'" << file_label << "_2D.pdf'))" << endl;
+		/*
 		if (run_python_script) {
 			string pycommand = "python " + pyname;
 			if (system(pycommand.c_str()) == 0) {
 				cout << "Plot for 2D posteriors saved to '" << file_label << "_2D.pdf'\n";
-				string rmcommand = "rm " + pyname;
-				system_returnval = system(rmcommand.c_str());
+				//string rmcommand = "rm " + pyname;
+				//system_returnval = system(rmcommand.c_str());
 			}
 			else cout << "Error: Could not generate PDF file for 2D posteriors\n";
 		} else {
 			cout << "Plotting script for 2D posteriors saved to '" << pyname << "'\n";
 		}
+		*/
 
 
 		if (make_1d_posts) {
@@ -528,8 +530,8 @@ int main(int argc, char *argv[])
 				string pycommand = "python " + pyname;
 				if (system(pycommand.c_str()) == 0) {
 					cout << "Triangle plot (1D+2D posteriors) saved to '" << file_label << "_tri.pdf'\n";
-					string rmcommand = "rm " + pyname;
-					system_returnval = system(rmcommand.c_str());
+					//string rmcommand = "rm " + pyname;
+					//system_returnval = system(rmcommand.c_str());
 				}
 				else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
 			} else {
