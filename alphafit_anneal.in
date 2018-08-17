@@ -52,7 +52,6 @@ simplex_temp0 = 1000000    # initial temperature should be chosen based on how m
                            #    to vary; when in doubt, start higher. If set to zero (the default), no simulated annealing is done
 simplex_tempf = 10         # final temperature; after this is reached, a final minimization with zero temperature will be performed
 simplex_nmax_anneal = 1000 # this is the number of iterations at each temperature setting (not including the final temp=0 run)
-simplex_nmax = 10000       # this is the number of iterations for the final run, where the temperature will be set to zero
 simplex_tfac = 0.97         # the temperature is multiplied by this factor after each run, continuing until final temperature is reached;
                            #    when in doubt, set closer to 1 for slower cooling
 simplex_minchisq_anneal = 20      # optional, if specified the simplex will skip to zero temperature if the chi-square falls below this specified value

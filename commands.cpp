@@ -125,9 +125,8 @@ void Lens::process_commands(bool read_file)
 						"zsrc -- redshift of source plane used for 'findimg', 'plotimg' and 'plotcrit'\n"
 						"zsrc_ref -- source redshift used to define lensing quantities (kappa, etc.) (default=zsrc)\n"
 						"auto_zsrc_scaling -- if on, automatically keep zsrc_ref equal to zsrc (default=on)\n"
-						"syserr_pos -- Systematic error parameter, added in quadrature to all position errors\n"
-						"vary_syserr_pos -- specify whether to vary syserr_pos during a fit (on/off)\n"
 						"vary_hubble -- specify whether to vary the Hubble parameter during a fit (on/off)\n"
+						"vary_omega_m -- specify whether to vary the omega_m parameter during a fit (on/off)\n"
 						"\n"
 						"\033[4mLens model settings\033[0m\n"
 						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
@@ -247,6 +246,8 @@ void Lens::process_commands(bool read_file)
 						"chisqtol -- chi-square required accuracy during fit\n"
 						"srcflux -- flux of point source (for producing or fitting image flux data)\n"
 						"fix_srcflux -- fix source flux to specified value during fit rather than find analytically\n"
+						"syserr_pos -- Systematic error parameter, added in quadrature to all position errors\n"
+						"vary_syserr_pos -- specify whether to vary syserr_pos during a fit (on/off)\n"
 						"\n"
 						"\033[4mOptimization and Monte Carlo sampler settings\033[0m\n"
 						"nrepeat -- number of repeat chi-square optimizations after original run\n"
@@ -864,17 +865,23 @@ void Lens::process_commands(bool read_file)
 							"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
-							"fit dparams add <param_type> <param_arg> [lens#]        (lens# is optional for some parameters)\n"
+							"fit dparams add <param_type> [param_arg] [lens#]     (lens# and/or param_arg are optional for some dparams)\n"
 							"fit dparams clear [param_num]\n\n"
 							"Define derived parameters whose values will be output along with the primary parameters after running\n"
 							"nested sampling or T-Walk. Type 'fit dparams' to list all the derived parameters that have been defined,\n"
 							"'fit dparams clear' to remove one or all of the derived parameters from the list, and 'fit dparams add'\n"
-							"to add a new derived parameter. All derived parameters are defined by a type and an argument.\n"
+							"to add a new derived parameter. All derived parameters are defined by a type and (usually) an argument;\n"
+							"in the list below, the parameter argument is denoted in brackets <...>, otherwise no argument is required.\n"
 							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
-							"kappa_r  -- *The kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
-							"dkappa_r -- *The derivative of kappa at radius r, averaged over all angles (argument = r in arcseconds)\n"
-							"mass2d_r -- The projected mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
-							"mass3d_r -- The 3d mass enclosed within elliptical radius r (in arcsec) for a specific lens [lens#]\n"
+							"kappa_r  -- *The kappa at radius <r>, averaged over all angles (where <r> in arcseconds)\n"
+							"dkappa_r -- *The derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
+							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
+							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
+							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
+							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
+							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
+							"                  (See Minor et al. 2017 for definition of perturbation radius for subhalos)\n"
+							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
 							"\n";
 					else if (words[2]=="changevary")
 						cout << "fit changevary <lens_number>\n\n"
@@ -1806,6 +1813,7 @@ void Lens::process_commands(bool read_file)
 					cout << "zsrc_ref = " << reference_source_redshift << endl;
 					cout << "auto_zsrc_scaling = " << auto_zsource_scaling << endl;
 					cout << "vary_hubble: " << display_switch(vary_hubble_parameter) << endl;
+					cout << "vary_omega_m: " << display_switch(vary_omega_matter_parameter) << endl;
 					cout << endl;
 					cout << "\033[4mLens model settings\033[0m\n";
 					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
@@ -1829,6 +1837,7 @@ void Lens::process_commands(bool read_file)
 					cout << "sim_err_flux = " << sim_err_flux << endl;
 					cout << "sim_err_td = " << sim_err_td << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
+					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
 					cout << endl;
 				}
 			}
@@ -4745,7 +4754,37 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(Mass3dR,dparam_arg,lensnum);
+							} else if (words[3]=="re_zsrc") {
+								if (nwords != 6) Complain("derived parameter re_zsrc requires two arguments (zsrc,lens_number)");
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(Einstein,dparam_arg,lensnum);
+							} else if (words[3]=="mass_re") {
+								if (nwords != 6) Complain("derived parameter mass_re requires two arguments (zsrc,lens_number)");
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(Einstein_Mass,dparam_arg,lensnum);
+							} else if (words[3]=="r_perturb") {
+								if (nwords != 5) Complain("derived parameter r_perturb requires only one arguments (lens_number)");
+								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
+								add_derived_param(Perturbation_Radius,0.0,lensnum);
+							} else if (words[3]=="mass_perturb") {
+								if (nwords != 5) Complain("derived parameter mass_perturb requires only one arguments (lens_number)");
+								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
+								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum);
 							} else Complain("derived parameter type not recognized");
+						} else if (nwords==3) {
+							int dpnum;
+							if (!(ws[2] >> dpnum)) Complain("invalid dparam number");
+							if ((dpnum < 0) or (dpnum >= n_derived_params)) Complain("specified derived parameter has not been defined");
+							double dparam_out = dparam_list[dpnum]->get_derived_param(this);
+							cout << dparam_out << endl;
 						}
 						else Complain("unrecognized argument to 'fit dparams'");
 					}
@@ -6312,6 +6351,38 @@ void Lens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="omega_m")
+		{
+			double om;
+			if (nwords == 2) {
+				if (!(ws[1] >> om)) Complain("invalid omega_m setting");
+				omega_matter = om;
+				set_cosmology(omega_matter,0.04,hubble,2.215);
+				if ((vary_omega_matter_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+					if (mpi_id==0) cout << "Limits for omega_m parameter:\n";
+					if (read_command(false)==false) return;
+					double omin,omax;
+					if (nwords != 2) Complain("Must specify two arguments for omega_m parameter limits: omin, omax");
+					if (!(ws[0] >> omin)) Complain("Invalid lower limit for omega_m parameter");
+					if (!(ws[1] >> omax)) Complain("Invalid upper limit for omega_m parameter");
+					if (omin > omax) Complain("lower limit cannot be greater than upper limit");
+					omega_matter_lower_limit = omin;
+					omega_matter_upper_limit = omax;
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Matter density (omega_m) = " << omega_matter << endl;
+			} else Complain("must specify either zero or one argument (omega_m value)");
+		}
+		else if (words[0]=="vary_omega_m")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary omega_m parameter: " << display_switch(vary_omega_matter_parameter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_omega_m' command; must specify 'on' or 'off'");
+				set_switch(vary_omega_matter_parameter,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="syserr_pos")
 		{
 			double syserrparam;
@@ -6342,16 +6413,6 @@ void Lens::process_commands(bool read_file)
 				set_switch(vary_syserr_pos_parameter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="omega_m")
-		{
-			double om;
-			if (nwords == 2) {
-				if (!(ws[1] >> om)) Complain("invalid omega_m setting");
-				omega_matter = om;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Matter density (omega_m) = " << omega_matter << endl;
-			} else Complain("must specify either zero or one argument (omega_m value)");
 		}
 		else if (((words[0]=="rsplit") and (radial_grid)) or ((words[0]=="xsplit") and (!radial_grid)))
 		{
@@ -6949,7 +7010,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="random_seed")
 		{
-			double random_seed;
+			long long int random_seed;
 			if (nwords == 2) {
 				if (!(ws[1] >> random_seed)) Complain("invalid value for random seed");
 				set_random_seed(random_seed);

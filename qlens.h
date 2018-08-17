@@ -50,6 +50,10 @@ enum DerivedParamType {
 	DKappaR,
 	Mass2dR,
 	Mass3dR,
+	Einstein,
+	Einstein_Mass,
+	Perturbation_Radius,
+	Robust_Perturbation_Mass,
 	UserDefined
 };
 
@@ -224,6 +228,8 @@ void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,do
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
 
+// There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the Lens
+// class; it's more transparent to do so, and more object-oriented.
 class Lens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
@@ -296,9 +302,10 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	int *zlens_group_size;
 	int **zlens_group_lens_indx;
 	int n_lens_redshifts;
-	bool vary_hubble_parameter;
+	bool vary_hubble_parameter, vary_omega_matter_parameter;
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
+	double omega_matter_lower_limit, omega_matter_upper_limit;
 	bool vary_syserr_pos_parameter;
 	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
 
@@ -771,7 +778,6 @@ public:
 	void nested_sampling();
 	void polychord();
 	void multinest();
-	//void chi_square_metropolis_hastings();
 	void chi_square_twalk();
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
@@ -820,6 +826,7 @@ public:
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	double total_kappa(const double r, const int lensnum);
 	double total_dkappa(const double r, const int lensnum);
+	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac);
 	double einstein_radius_root(const double r);
@@ -1538,7 +1545,7 @@ struct ParamSettings
 struct DerivedParam
 {
 	DerivedParamType derived_param_type;
-	double funcparam;
+	double funcparam; // if funcparam == -1, then there is no parameter required
 	int lensnum_param;
 	string name, latex_name;
 	DerivedParam(DerivedParamType type_in, double param, int lensnum) // if lensnum == -1, then it uses *all* the lenses (if possible)
@@ -1554,13 +1561,25 @@ struct DerivedParam
 			name = "mass2d"; latex_name = "M_{2D}";
 		} else if (derived_param_type == Mass3dR) {
 			name = "mass3d"; latex_name = "M_{3D}";
+		} else if (derived_param_type == Einstein) {
+			name = "re_zsrc"; latex_name = "R_{e}";
+		} else if (derived_param_type == Einstein_Mass) {
+			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == Perturbation_Radius) {
+			name = "r_perturb"; latex_name = "r_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			name = "mass_perturb"; latex_name = "M_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else die("no user defined function yet");
-		stringstream paramstr;
-		string paramstring;
-		paramstr << funcparam;
-		paramstr >> paramstring;
-		name += "(" + paramstring + ")";
-		latex_name += "(" + paramstring + ")";
+		if (funcparam != -1e30) {
+			stringstream paramstr;
+			string paramstring;
+			paramstr << funcparam;
+			paramstr >> paramstring;
+			name += "(" + paramstring + ")";
+			latex_name += "(" + paramstring + ")";
+		}
 	}
 	double get_derived_param(Lens* lens_in)
 	{
@@ -1568,20 +1587,45 @@ struct DerivedParam
 		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param);
+		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
+		else if (derived_param_type == Einstein_Mass) {
+			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
+			return lens_in->mass2d_r(re,lensnum_param);
+		} else if (derived_param_type == Perturbation_Radius) {
+			double rmax,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,menc);
+			return rmax;
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			double rmax,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,menc);
+			return menc;
+		}
 		else die("no user defined function yet");
 	}
-	void print_param_description()
+	void print_param_description(Lens* lens_in)
 	{
-		cout << name << ": ";
+		double dpar = get_derived_param(lens_in);
+		//cout << name << ": ";
 		if (derived_param_type == KappaR) {
-			cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
+			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
+			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
 		} else if (derived_param_type == DKappaR) {
-			cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
+			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
+			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
 		} else if (derived_param_type == Mass2dR) {
-			cout << "Projected (2D) mass enclosed within r = " << funcparam << " arcsec" << endl;
+			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
 		} else if (derived_param_type == Mass3dR) {
-			cout << "Deprojected (3D) mass enclosed within r = " << funcparam << " arcsec" << endl;
+			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Einstein) {
+			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Einstein_Mass) {
+			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Perturbation_Radius) {
+			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
 		} else die("no user defined function yet");
+		cout << "   " << name << " = " << dpar << endl;
 	}
 };
 

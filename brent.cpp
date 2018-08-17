@@ -151,14 +151,14 @@ bool Brent::BrentsMethod(double (Brent::*func)(const double), double &root, cons
 	return false;
 }
 
-double Brent::BrentsMethod_Inclusive(double (Brent::*func)(const double), const double x1, const double x2, const double tol)
+double Brent::BrentsMethod_Inclusive(double (Brent::*func)(const double), const double x1, const double x2, const double tol, const bool verbose)
 {
 	double a = x1, b = x2, c = x2, d, e, min1, min2;
 	double fa = (this->*func)(a), fb = (this->*func)(b);
 	double fc, p, q, r, s, tol1, xm;
 
 	if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
-		warn("root must be bracketed in Brent's Method");
+		if (verbose) warn("root must be bracketed in Brent's Method");
 		if (fabs(fa) < fabs(fb)) return a;
 		else return b;
 	}

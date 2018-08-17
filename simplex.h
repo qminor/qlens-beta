@@ -39,7 +39,7 @@ class Simplex : public Random
 	bool simplex_exit_status;
 	static bool simplex_display_bestfit_point;
 
-	Simplex() : Random(-10) {
+	Simplex() : Random(10) {
 		initialized = false;
 		t0 = t0_default;
 		tfinal = tfinal_default;

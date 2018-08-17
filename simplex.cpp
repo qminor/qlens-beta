@@ -105,7 +105,7 @@ void Simplex::downhill_simplex(int &nfunk, const int& nmax, const double& temper
 		yhi=y[ihi];
 		for (i=0; i < mpts; i++) {
 			yt = y[i];
-			if (tt != 0.0) yt += tt*log(RandomNumber2());
+			if (tt != 0.0) yt += tt*log(RandomNumber());
 			if (yt <= y[ilo]) {
 				ilo=i;
 				ylo=yt;
@@ -198,7 +198,7 @@ double Simplex::amotry(double* psum, const int &ihi, double& yhi, const double& 
 		}
 	}
 	yflu=ytry;
-	if (tt != 0.0) yflu -= tt*log(RandomNumber2());
+	if (tt != 0.0) yflu -= tt*log(RandomNumber());
 	if (yflu < yhi) {
 		y[ihi] = ytry;
 		yhi = yflu;

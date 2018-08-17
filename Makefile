@@ -44,7 +44,7 @@ CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 GCC   := g++ -Wno-write-strings -O3
 
 objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
-				profile.o models.o sbprofile.o errors.o brent.o sort.o rand.o gauss.o \
+				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
@@ -104,14 +104,11 @@ brent.o: brent.h brent.cpp
 simplex.o: simplex.h rand.h simplex.cpp
 	$(GCC) -c simplex.cpp
 
-powell.o: powell.h rand.h powell.cpp
+powell.o: powell.h powell.cpp
 	$(GCC) -c powell.cpp
 
 sort.o: sort.h sort.cpp
 	$(GCC) -c sort.cpp
-
-rand.o: rand.h rand.cpp
-	$(GCC) -c rand.cpp
 
 gauss.o: gauss.cpp gauss.h
 	$(GCC) -c gauss.cpp

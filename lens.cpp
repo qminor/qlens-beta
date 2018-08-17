@@ -156,8 +156,8 @@ Lens::Lens() : UCMC()
 	mpi_group = NULL;
 #endif
 
-	omega_matter = 0.3;
 	hubble = 0.7;
+	omega_matter = 0.3;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
@@ -179,6 +179,10 @@ Lens::Lens() : UCMC()
 	vary_hubble_parameter = false;
 	hubble_lower_limit = 1e30; // These must be specified by user
 	hubble_upper_limit = 1e30; // These must be specified by user
+
+	vary_omega_matter_parameter = false;
+	omega_matter_lower_limit = 1e30; // These must be specified by user
+	omega_matter_upper_limit = 1e30; // These must be specified by user
 
 	vary_syserr_pos_parameter = false;
 	syserr_pos_lower_limit = 1e30; // These must be specified by user
@@ -410,6 +414,7 @@ Lens::Lens() : UCMC()
 Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
 {
 	verbal_mode = lens_in->verbal_mode;
+	set_random_generator(lens_in);
 	chisq_it=0;
 	chisq_diagnostic = lens_in->chisq_diagnostic;
 	chisq_bestfit = lens_in->chisq_bestfit;
@@ -429,8 +434,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	my_group = lens_in->my_group;
 #endif
 
-	omega_matter = lens_in->omega_matter;
 	hubble = lens_in->hubble;
+	omega_matter = lens_in->omega_matter;
 	syserr_pos = lens_in->syserr_pos;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = lens_in->lens_redshift;
@@ -454,6 +459,10 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	vary_hubble_parameter = lens_in->vary_hubble_parameter;
 	hubble_lower_limit = lens_in->hubble_lower_limit; // These must be specified by user
 	hubble_upper_limit = lens_in->hubble_upper_limit; // These must be specified by user
+
+	vary_omega_matter_parameter = lens_in->vary_omega_matter_parameter;
+	omega_matter_lower_limit = lens_in->omega_matter_lower_limit; // These must be specified by user
+	omega_matter_upper_limit = lens_in->omega_matter_upper_limit; // These must be specified by user
 
 	vary_syserr_pos_parameter = lens_in->vary_syserr_pos_parameter;
 	syserr_pos_lower_limit = lens_in->syserr_pos_lower_limit; // These must be specified by user
@@ -1687,7 +1696,7 @@ void Lens::print_derived_param_list()
 		if (n_derived_params > 0) {
 			for (int i=0; i < n_derived_params; i++) {
 				cout << i << ". ";
-				dparam_list[i]->print_param_description();
+				dparam_list[i]->print_param_description(this);
 			}
 		}
 		else cout << "No derived parameters have been created" << endl;
@@ -2442,7 +2451,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		if (find_lensed_position_of_background_perturber(true,lens_number,subhalo_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 		xc = subhalo_center[0];
 		yc = subhalo_center[1];
-		cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
+		if (verbose) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
 	}
 
 	lens_list[0]->get_center_coords(host_xc,host_yc);
@@ -2472,6 +2481,8 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	shear_exclude(subhalo_center,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 	if (shear_angle*0.0 != 0.0) {
 		warn("could not calculate shear at position of perturber");
+		rmax_numerical = 0.0;
+		mass_enclosed = 0.0;
 		return false;
 	}
 	theta_shear = degrees_to_radians(shear_angle);
@@ -2479,7 +2490,12 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	double (Brent::*dthetac_eq)(const double);
 	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
 	double bound = 0.4*b;
-	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5);
+	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbose);
+	if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
+		rmax_numerical = 0.0; // subhalo too far from critical curve to cause a meaningful "local" perturbation
+		mass_enclosed = 0.0;
+		return true;
+	}
 	double rmax_perturber_lensplane;
 	if (zlsub > zlprim) {
 		lensvector x;
@@ -3277,6 +3293,14 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	*/
 }
 
+double Lens::einstein_radius_single_lens(const double src_redshift, const int lensnum)
+{
+	double re_avg,re_major,zfac;
+	zfac = kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
+	lens_list[lensnum]->get_einstein_radius(re_major,re_avg,zfac);
+	return re_avg;
+}
+
 double Lens::total_kappa(const double r, const int lensnum)
 {
 	double total_kappa;
@@ -3293,7 +3317,7 @@ double Lens::total_kappa(const double r, const int lensnum)
 	}
 	total_kappa = 0;
 	double *onezfac = new double[n_lens_redshifts];
-	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0;
+	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0; // this ensures that the reference source redshift is used, which is appropriate to each lens
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r*cos(theta);
 		y = grid_ycenter + r*sin(theta);
@@ -3393,8 +3417,8 @@ bool Lens::make_random_sources(int nsources, const char *outfilename)
 
 	while (sources_inside < nsources)
 	{
-		theta = RandomNumber2() * 2*M_PI;
-		r = sqrt(RandomNumber2()) * rmax;
+		theta = RandomNumber() * 2*M_PI;
+		r = sqrt(RandomNumber()) * rmax;
 		if (r < dmax(caust0_interpolate(theta), caust1_interpolate(theta))) {
 			sources_inside++;
 			outfile << grid_xcenter+r*cos(theta) << "\t" << grid_ycenter+r*sin(theta) << endl;
@@ -3467,8 +3491,8 @@ double Lens::make_perturber_population(const double number_density, const double
 		alpha_x=alpha_y=0;
 		defsqr2=0;
 		for (i=0; i < N; i++) {
-			r = sqrt(RandomNumber2())*rmax;
-			theta = RandomNumber2()*2*M_PI;
+			r = sqrt(RandomNumber())*rmax;
+			theta = RandomNumber()*2*M_PI;
 			defnorm = b*(1+(a-sqrt(r*r+a*a))/r);
 			alpha_x += -defnorm*cos(theta);
 			alpha_y += -defnorm*sin(theta);
@@ -4576,6 +4600,11 @@ bool Lens::update_fitmodel(const double* params)
 		if (fitmodel->hubble < 0) status = false; // do not allow negative Hubble parameter
 		fitmodel->set_cosmology(fitmodel->omega_matter,0.04,fitmodel->hubble,2.215);
 	}
+	if (vary_omega_matter_parameter) {
+		fitmodel->omega_matter = params[index++];
+		if (fitmodel->omega_matter < 0) status = false; // do not allow negative Hubble parameter
+		fitmodel->set_cosmology(fitmodel->omega_matter,0.04,fitmodel->hubble,2.215);
+	}
 	if (vary_syserr_pos_parameter) {
 		fitmodel->syserr_pos = params[index++];
 		if (fitmodel->syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
@@ -5199,6 +5228,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
+	if (vary_omega_matter_parameter) stepsizes[index++] = 0.3;
 	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
@@ -5224,6 +5254,7 @@ void Lens::set_default_plimits()
 	if (vary_pixel_fraction) index++;
 	if (vary_magnification_threshold) index++;
 	if (vary_hubble_parameter) index++;
+	if (vary_omega_matter_parameter) index++;
 	if (vary_syserr_pos_parameter) index++;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
@@ -5247,6 +5278,7 @@ void Lens::get_n_fit_parameters(int &nparams)
 	if (vary_pixel_fraction) nparams++;
 	if (vary_magnification_threshold) nparams++;
 	if (vary_hubble_parameter) nparams++;
+	if (vary_omega_matter_parameter) nparams++;
 	if (vary_syserr_pos_parameter) nparams++;
 }
 
@@ -5276,6 +5308,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
 	if (vary_hubble_parameter) fitparams[index++] = hubble;
+	if (vary_omega_matter_parameter) fitparams[index++] = omega_matter;
 	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
 	get_parameter_names();
 	dvector stepsizes(n_fit_parameters);
@@ -5344,6 +5377,13 @@ bool Lens::setup_fit_parameters(bool include_limits)
 			lower_limits[index] = hubble_lower_limit;
 			lower_limits_initial[index] = lower_limits[index];
 			upper_limits[index] = hubble_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_omega_matter_parameter) {
+			lower_limits[index] = omega_matter_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = omega_matter_upper_limit;
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
@@ -5463,6 +5503,11 @@ void Lens::get_parameter_names()
 		fit_parameter_names.push_back("h0");
 		latex_parameter_names.push_back("H");
 		latex_parameter_subscripts.push_back("0");
+	}
+	if (vary_omega_matter_parameter) {
+		fit_parameter_names.push_back("omega_m");
+		latex_parameter_names.push_back("\\Omega");
+		latex_parameter_subscripts.push_back("M");
 	}
 	if (vary_syserr_pos_parameter) {
 		fit_parameter_names.push_back("syserr_pos");
@@ -5814,6 +5859,7 @@ double Lens::chi_square_fit_simplex()
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
+		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
 
 		cout << endl;
@@ -5961,6 +6007,7 @@ double Lens::chi_square_fit_powell()
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
+		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
 		cout << endl;
 		if (calculate_parameter_errors) {
@@ -6090,7 +6137,7 @@ void Lens::nested_sampling()
 			if (include_flux_chisq) delete[] bestfit_flux;
 		}
 
-		cout << "\nBest-fit parameters and errors:\n";
+		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
 		for (int i=0; i < n_fit_parameters; i++) {
 			cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
 		}
@@ -6261,6 +6308,7 @@ void Lens::multinest()
 			for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
 			mnout << chi2 << endl;
 			if (chi2 < minchisq) {
+				minchisq = chi2;
 				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
 			}
 			for (i=0; i < n_tot_params; i++) {
@@ -6298,7 +6346,7 @@ void Lens::multinest()
 			}
 
 			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
-			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
+			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):    (chisq=" << minchisq << ")\n";
 			for (int i=0; i < n_fit_parameters; i++) {
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
@@ -6376,37 +6424,35 @@ void Lens::polychord()
 
 	running_fit = true;
 
-	 mcsampler_set_lensptr(this);
-    Settings settings(n_fit_parameters,n_derived_params);
+	mcsampler_set_lensptr(this);
+	Settings settings(n_fit_parameters,n_derived_params);
 
-    settings.nlive         = n_livepts;
-    settings.num_repeats   = n_fit_parameters*5;
-    settings.do_clustering = false;
+	settings.nlive         = n_livepts;
+	settings.num_repeats   = n_fit_parameters*5;
+	settings.do_clustering = false;
 
-    settings.precision_criterion = 1e-3;
-    settings.logzero = -1e30;
+	settings.precision_criterion = 1e-3;
+	settings.logzero = -1e30;
 
-    settings.base_dir      = fit_output_dir.c_str();
-    settings.file_root     = fit_output_filename.c_str();
+	settings.base_dir      = fit_output_dir.c_str();
+	settings.file_root     = fit_output_filename.c_str();
 
-    settings.write_resume  = false;
-    settings.read_resume   = false;
-    settings.write_live    = true;
-    settings.write_dead    = true;
-    settings.write_stats   = true;
+	settings.write_resume  = false;
+	settings.read_resume   = false;
+	settings.write_live    = true;
+	settings.write_dead    = true;
+	settings.write_stats   = true;
 
-    settings.equals        = false;
-    settings.posteriors    = true;
-    settings.cluster_posteriors = false;
+	settings.equals        = false;
+	settings.posteriors    = true;
+	settings.cluster_posteriors = false;
 
-    settings.feedback      = 3;
-    settings.compression_factor  = 0.36787944117144233;
+	settings.feedback      = 3;
+	settings.compression_factor  = 0.36787944117144233;
 
-    settings.boost_posterior= 1.0;
+	settings.boost_posterior= 1.0;
 
-    //polychord_setup_loglikelihood();
-    run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
-		bestfitparams.input(n_fit_parameters);
+	run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
 
 	running_fit = false;
 
@@ -6423,6 +6469,7 @@ void Lens::polychord()
 	}
 #endif
 
+	bestfitparams.input(n_fit_parameters);
 	// Now convert the PolyChord output to a form that mkdist can read
 	if (mpi_id==0) {
 		const int n_characters = 1024;
@@ -6469,6 +6516,7 @@ void Lens::polychord()
 			for (i=0; i < n_tot_params; i++) polyout << params[i] << "   ";
 			polyout << chi2 << endl;
 			if (chi2 < minchisq) {
+				minchisq = chi2;
 				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
 			}
 			for (i=0; i < n_tot_params; i++) {
@@ -6506,7 +6554,7 @@ void Lens::polychord()
 			}
 
 			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
-			cout << "Best-fit parameters and error estimates (from dispersions of chain output points):\n";
+			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
 			for (int i=0; i < n_fit_parameters; i++) {
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
@@ -6663,6 +6711,10 @@ bool Lens::use_bestfit_model()
 	}
 	if (vary_hubble_parameter) {
 		hubble = transformed_params[index++];
+		set_cosmology(omega_matter,0.04,hubble,2.215);
+	}
+	if (vary_omega_matter_parameter) {
+		omega_matter = transformed_params[index++];
 		set_cosmology(omega_matter,0.04,hubble,2.215);
 	}
 	if (vary_syserr_pos_parameter) {
@@ -7241,6 +7293,12 @@ void Lens::output_lens_commands(string filename)
 			scriptfile << hubble_lower_limit << " " << hubble_upper_limit << endl;
 		}
 	}
+	if (vary_omega_matter_parameter) {
+		scriptfile << "omega_m = " << omega_matter << endl;
+		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+			scriptfile << omega_matter_lower_limit << " " << omega_matter_upper_limit << endl;
+		}
+	}
 	if (vary_syserr_pos_parameter) {
 		scriptfile << "syserr_pos = " << syserr_pos << endl;
 		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
@@ -7302,6 +7360,14 @@ void Lens::print_fit_model()
 		} else {
 			if ((hubble_lower_limit==1e30) or (hubble_upper_limit==1e30)) cout << "\nHubble parameter: lower/upper limits not given (these must be set by 'h0' command before fit)\n";
 			else cout << "Hubble parameter: [" << hubble_lower_limit << ":" << hubble << ":" << hubble_upper_limit << "]\n";
+		}
+	}
+	if (vary_omega_matter_parameter) {
+		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			cout << "omega_m parameter: " << omega_matter << endl;
+		} else {
+			if ((omega_matter_lower_limit==1e30) or (omega_matter_upper_limit==1e30)) cout << "\nomega_m parameter: lower/upper limits not given (these must be set by 'h0' command before fit)\n";
+			else cout << "omega_m parameter: [" << omega_matter_lower_limit << ":" << omega_matter << ":" << omega_matter_upper_limit << "]\n";
 		}
 	}
 	if (vary_syserr_pos_parameter) {

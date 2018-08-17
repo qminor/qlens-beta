@@ -271,9 +271,14 @@ int main(int argc, char *argv[])
 	string latex_paramnames_filename = file_root + ".latex_paramnames";
 	ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
 	string dummy;
+	const int n_characters = 1024;
+	char line[n_characters];
 	for (i=0; i < nparams; i++) {
-		if (!(latex_paramnames_file >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		if (!(latex_paramnames_file >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+		if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+		istringstream instream(line);
+		if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+		if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+		while (instream >> dummy) latex_param_names[i] += " " + dummy;
 	}
 	latex_paramnames_file.close();
 
