@@ -6428,7 +6428,7 @@ void Lens::polychord()
 	Settings settings(n_fit_parameters,n_derived_params);
 
 	settings.nlive         = n_livepts;
-	settings.num_repeats   = n_fit_parameters*5;
+	settings.num_repeats   = n_fit_parameters*3;
 	settings.do_clustering = false;
 
 	settings.precision_criterion = 1e-3;
