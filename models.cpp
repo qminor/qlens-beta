@@ -373,7 +373,7 @@ bool Alpha::output_cosmology_info(const int lens_number)
 
 /********************************** PseudoJaffe **********************************/
 
-PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
+PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
 	cosmo = cosmo_in;
 	lenstype = PJAFFE;
@@ -381,16 +381,25 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	b = bb;
-	s = ss;
-	a = aa;
-	if (s < 0) s = -s;
+	if (parameter_mode==0) {
+		b = p1_in;
+		a = p2_in;
+		s = p3_in;
+	} else if (parameter_mode==1) {
+		sigma0 = p1_in;
+		a_kpc = p2_in;
+		s_kpc = p3_in;
+	} else {
+		mtot = p1_in;
+		a_kpc = p2_in;
+		s_kpc = p3_in;
+	}
 
 	update_meta_parameters_and_pointers();
 }
@@ -398,8 +407,17 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
 	b = lens_in->b;
-	s = lens_in->s;
 	a = lens_in->a;
+	s = lens_in->s;
+	if (parameter_mode==1) {
+		sigma0 = lens_in->sigma0;
+		a_kpc = lens_in->a_kpc;
+		s_kpc = lens_in->s_kpc;
+	} else if (parameter_mode==2) {
+		mtot = lens_in->mtot;
+		a_kpc = lens_in->a_kpc;
+		s_kpc = lens_in->s_kpc;
+	}
 
 	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
@@ -407,17 +425,37 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 
 void PseudoJaffe::assign_paramnames()
 {
-	paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
-	paramnames[1] = "a"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "";
-	paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
+	if (parameter_mode==0) {
+		paramnames[0] = "b"; latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+		paramnames[1] = "a"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "";
+		paramnames[2] = "s"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "";
+	} else if (parameter_mode==1) {
+		paramnames[0] = "sigma0"; latex_paramnames[0] = "\\sigma"; latex_param_subscripts[0] = "0";
+		paramnames[1] = "a_kpc"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "kpc";
+		paramnames[2] = "s_kpc"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "kpc";
+	} else {
+		paramnames[0] = "mtot"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "tot";
+		paramnames[1] = "a_kpc"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "kpc";
+		paramnames[2] = "s_kpc"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "kpc";
+	}
 	set_geometric_paramnames(3);
 }
 
 void PseudoJaffe::assign_param_pointers()
 {
-	param[0] = &b;
-	param[1] = &a;
-	param[2] = &s;
+	if (parameter_mode==0) {
+		param[0] = &b;
+		param[1] = &a;
+		param[2] = &s;
+	} else if (parameter_mode==1) {
+		param[0] = &sigma0;
+		param[1] = &a_kpc;
+		param[2] = &s_kpc;
+	} else {
+		param[0] = &mtot;
+		param[1] = &a_kpc;
+		param[2] = &s_kpc;
+	}
 	set_geometric_param_pointers(3);
 }
 
@@ -425,10 +463,12 @@ void PseudoJaffe::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
+	if (parameter_mode==1) set_abs_params_from_sigma0();
+	else if (parameter_mode==2) set_abs_params_from_mtot();
 	bprime = b*f_major_axis;
-	sprime = s*f_major_axis;
 	aprime = a*f_major_axis;
-	qsq = q*q; ssq = sprime*sprime; asq = aprime*aprime;
+	sprime = s*f_major_axis;
+	qsq = q*q; asq = aprime*aprime; ssq = sprime*sprime;
 }
 
 void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
@@ -438,6 +478,7 @@ void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
 	double rm, ravg;
 	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 	a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+	if ((parameter_mode==1) or (parameter_mode==2)) a_kpc = a/kpc_to_arcsec;
 	update_meta_parameters();
 }
 
@@ -447,6 +488,7 @@ void PseudoJaffe::update_special_anchored_params()
 		double rm, ravg;
 		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
 		a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+		if ((parameter_mode==1) or (parameter_mode==2)) a_kpc = a/kpc_to_arcsec;
 		aprime = a/f_major_axis;
 		asq = aprime*aprime;
 	}
@@ -549,20 +591,34 @@ double PseudoJaffe::potential_elliptical(const double x, const double y)
 	return ans;
 }
 
+void PseudoJaffe::set_abs_params_from_sigma0()
+{
+	b = 2.325092515e5*sigma0*sigma0/((1-s_kpc/a_kpc)*kpc_to_arcsec*sigma_cr);
+	a = a_kpc * kpc_to_arcsec;
+	s = s_kpc * kpc_to_arcsec;
+}
+
+void PseudoJaffe::set_abs_params_from_mtot()
+{
+	a = a_kpc * kpc_to_arcsec;
+	s = s_kpc * kpc_to_arcsec;
+	b = mtot/(M_PI*sigma_cr*(a-s));
+}
+
 bool PseudoJaffe::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	double kpc_to_km = 3.086e16;
-	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
-	double c = 2.998e5;
-	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
-	b_kpc = b / kpc_to_arcsec;
-	sigma = c * sqrt(b_kpc*(1-s/a)*(Rs_sun_km/kpc_to_km)*sigma_cr_kpc/2);
-	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	double sigma, r_tidal, r_core, mtot, rhalf;
+	sigma = 2.07386213e-3*sqrt(b*(1-s/a)*kpc_to_arcsec*sigma_cr); // this is = c*sqrt(b*(1-s/a)*D_s/D_ls/M_4PI), expressed in terms of kpc_to_arcsec and sigma_cr
+	if ((parameter_mode==0) or (parameter_mode==2)) {
+		cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	}
+	if ((parameter_mode==1) or (parameter_mode==2)) {
+		cout << "b = " << b << " arcsec" << endl;
+	}
 	calculate_total_scaled_mass(mtot);
 	bool rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-	mtot *= sigma_cr_kpc/(kpc_to_arcsec*kpc_to_arcsec);
+	mtot *= sigma_cr;
 	cout << "total mass = " << mtot << " M_sol" << endl;
 	if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 
@@ -610,7 +666,7 @@ NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const
 
 	if (parameter_mode==2) {
 		m200 = p1_in;
-		rs = p2_in;
+		rs_kpc = p2_in;
 	} else if (parameter_mode==1) {
 		m200 = p1_in;
 		c200 = p2_in;
@@ -629,6 +685,7 @@ NFW::NFW(const NFW* lens_in)
 	rs = lens_in->rs;
 	if (parameter_mode==2) {
 		m200 = lens_in->m200;
+		rs_kpc = lens_in->rs_kpc;
 	} else if (parameter_mode==1) {
 		m200 = lens_in->m200;
 		c200 = lens_in->c200;
@@ -642,7 +699,7 @@ void NFW::assign_paramnames()
 {
 	if (parameter_mode==2) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
-		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	} else if (parameter_mode==1) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
 		paramnames[1] = "c"; latex_paramnames[1] = "c"; latex_param_subscripts[1] = "";
@@ -657,7 +714,7 @@ void NFW::assign_param_pointers()
 {
 	if (parameter_mode==2) {
 		param[0] = &m200;
-		param[1] = &rs;
+		param[1] = &rs_kpc;
 	} else if (parameter_mode==1) {
 		param[0] = &m200;
 		param[1] = &c200;
@@ -698,7 +755,7 @@ void NFW::set_auto_stepsizes()
 {
 	if (parameter_mode==2) {
 		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs;
+		stepsizes[1] = 0.2*rs_kpc;
 	} else if (parameter_mode==1) {
 		stepsizes[0] = 0.2*m200;
 		stepsizes[1] = 0.2*c200;
@@ -727,9 +784,9 @@ void NFW::set_model_specific_integration_pointers()
 
 void NFW::set_ks_c200_from_m200_rs()
 {
-	double rvir_kpc, rs_kpc;
+	double rvir_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-	rs_kpc = rs / kpc_to_arcsec;
+	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
 }
@@ -805,8 +862,8 @@ bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	double rs_kpc, ds, r200;
-	rs_kpc = rs / kpc_to_arcsec;
+	double ds, r200;
+	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 	ds = ks * sigma_cr_kpc / rs_kpc;
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
@@ -962,7 +1019,7 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 
 	if (parameter_mode==2) {
 		m200 = p1_in;
-		rs = p2_in;
+		rs_kpc = p2_in;
 		beta = p3_in;
 	} else if (parameter_mode==1) {
 		m200 = p1_in;
@@ -986,6 +1043,7 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 	beta = lens_in->beta;
 	if (parameter_mode==2) {
 		m200 = lens_in->m200;
+		rs_kpc = lens_in->rs_kpc;
 	} else if (parameter_mode==1) {
 		m200 = lens_in->m200;
 		c200 = lens_in->c200;
@@ -999,7 +1057,7 @@ void Cored_NFW::assign_paramnames()
 {
 	if (parameter_mode==2) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
-		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "beta"; latex_paramnames[2] = "\\beta"; latex_param_subscripts[2] = "c";
 	} else if (parameter_mode==1) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
@@ -1017,7 +1075,7 @@ void Cored_NFW::assign_param_pointers()
 {
 	if (parameter_mode==2) {
 		param[0] = &m200;
-		param[1] = &rs;
+		param[1] = &rs_kpc;
 		param[2] = &beta;
 	} else if (parameter_mode==1) {
 		param[0] = &m200;
@@ -1069,7 +1127,7 @@ void Cored_NFW::set_auto_stepsizes()
 {
 	if (parameter_mode==2) {
 		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs;
+		stepsizes[1] = 0.2*rs_kpc;
 		stepsizes[2] = 0.2*beta;
 	} else if (parameter_mode==1) {
 		stepsizes[0] = 0.2*m200;
@@ -1102,7 +1160,7 @@ void Cored_NFW::set_model_specific_integration_pointers()
 
 void Cored_NFW::set_ks_rs_from_m200_c200()
 {
-	double rvir_kpc, rs_kpc;
+	double rvir_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
@@ -1116,7 +1174,7 @@ void Cored_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc, rs_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-	rs_kpc = rs / kpc_to_arcsec;
+	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	double rcterm;
 	if (beta==0.0) rcterm = 0;
@@ -1282,16 +1340,12 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	double rs_kpc, rc_kpc, ds, r200;
-	rs_kpc = rs / kpc_to_arcsec;
+	double rc_kpc, ds, r200;
+	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 	rc_kpc = beta * rs_kpc;
 	ds = ks * sigma_cr_kpc / rs_kpc;
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
-		double mcrap, rcrap;
-		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,mcrap,rcrap);
-		cout << "m: " << m200 << " " << mcrap << endl;
-		cout << "r: " << r200 << " " << rcrap << endl;
 	} else {
 		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
 		c200 = r200/rs_kpc;

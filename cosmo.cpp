@@ -509,6 +509,17 @@ double Cosmology::sigma_crit_kpc(double zl, double zs) // for lensing
 	return 1.66477e9*da_s/(da_l*da_ls); // Units are in solar masses/kpc^2
 }
 
+double Cosmology::deflection_scale_factor(double zl, double zs) // for lensing
+{
+	double dc_s, dc_l, dc_ls;    // comoving distances
+	dc_s = comoving_distance_spline.splint(zs) * 1e-3;   // The 1e3 factor converts from Mpc to Gpc 
+	dc_l = comoving_distance_spline.splint(zl) * 1e-3;
+	if (dc_l >= dc_s) die("source must be further away than the lensing object (zlens = %f, zsource = %f)", zl, zs);
+	dc_ls = dc_s - dc_l;
+
+	return dc_s/dc_ls;
+}
+
 double Cosmology::kappa_ratio(double zl, double zs, double zs0) // for lensing
 {
 	double dc_s, dc_l, dc_ls;    // comoving distances

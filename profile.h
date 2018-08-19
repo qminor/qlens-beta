@@ -364,9 +364,12 @@ class Alpha : public LensProfile
 class PseudoJaffe : public LensProfile
 {
 	private:
-	double bprime, sprime, aprime; // aprime is truncation radius
-	double b, s, a;
-	double qsq, ssq, asq; // used in lensing calculations
+	double b, s, a; // a is the truncation radius
+	double sigma0, mtot, s_kpc, a_kpc; // alternate parametrizations
+
+	// the following are meta-parameters used in lensing calculations
+	double bprime, sprime, aprime; // these are the lengths along the major axis
+	double qsq, ssq, asq;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
@@ -385,7 +388,7 @@ class PseudoJaffe : public LensProfile
 	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
 	PseudoJaffe() : LensProfile() {}
-	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in);
+	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, Lens* lens_in);
 	PseudoJaffe(const PseudoJaffe* lens_in);
 
 	void assign_paramnames();
@@ -396,6 +399,8 @@ class PseudoJaffe : public LensProfile
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
 
+	void set_abs_params_from_sigma0();
+	void set_abs_params_from_mtot();
 	bool output_cosmology_info(const int lens_number = -1);
 	double calculate_scaled_mass_3d(const double r);
 	bool calculate_total_scaled_mass(double& total_mass);
@@ -408,7 +413,7 @@ class NFW : public LensProfile
 {
 	private:
 	double ks, rs;
-	double m200, c200; // alternate parametrization
+	double m200, c200, rs_kpc; // alternate parametrizations
 	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
@@ -445,7 +450,6 @@ class Truncated_NFW : public LensProfile
 	// This profile is the same as NFW, times a factor (1+(r/rt)^2)^-2 which smoothly truncates the halo (prescription from Baltz, Marshall & Oguri (2008))
 	private:
 	double ks, rs, rt;
-	double m200, c200; // alternate parametrization
 	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
@@ -472,7 +476,7 @@ class Cored_NFW : public LensProfile
 	// This profile goes like 1/(r+rc)/(r+rs)^2
 	private:
 	double ks, rs, rc;
-	double m200, c200, beta; // alternate parametrization
+	double m200, c200, beta, rs_kpc; // alternate parametrization
 	bool use_mc_parameters;
 
 	double kappa_rsq(const double);

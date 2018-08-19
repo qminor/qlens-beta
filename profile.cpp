@@ -25,8 +25,6 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = cosmo->sigma_crit_kpc(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);

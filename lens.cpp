@@ -406,6 +406,7 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
+	default_parameter_mode = 0;
 	Shear::use_shear_component_params = false;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
@@ -659,6 +660,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	auto_gridsize_from_einstein_radius = lens_in->auto_gridsize_from_einstein_radius;
 	auto_gridsize_multiple_of_Re = lens_in->auto_gridsize_multiple_of_Re;
 	autogrid_before_grid_creation = lens_in->autogrid_before_grid_creation; // this option (if set to true) tells qlens to optimize the grid size & position automatically when grid is created
+	default_parameter_mode = lens_in->default_parameter_mode;
 	spline_frac = lens_in->spline_frac;
 	tabulate_rmin = lens_in->tabulate_rmin;
 	tabulate_qmin = lens_in->tabulate_qmin;
@@ -700,7 +702,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 		case CORED_nfw:
 			lens_list[nlens-1] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case PJAFFE:
-			lens_list[nlens-1] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+			lens_list[nlens-1] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case EXPDISK:
 			lens_list[nlens-1] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case HERNQUIST:
@@ -5433,6 +5435,7 @@ void Lens::get_parameter_names()
 					string countstring;
 					countstr << count;
 					countstr >> countstring;
+					if (isdigit(new_parameter_names[i].at(new_parameter_names[i].length()-1))) new_parameter_names[i] += "_"; // in case parameter name already ends with a number
 					new_parameter_names[i] += countstring;
 					if (latex_parameter_subscripts[i].empty()) latex_parameter_subscripts[i] = countstring;
 					else latex_parameter_subscripts[i] += "," + countstring;
@@ -5442,6 +5445,7 @@ void Lens::get_parameter_names()
 				string countstring;
 				countstr << count;
 				countstr >> countstring;
+				if (isdigit(fit_parameter_names[j].at(fit_parameter_names[j].length()-1))) fit_parameter_names[j] += "_"; // in case parameter name already ends with a number
 				fit_parameter_names[j] += countstring;
 				if (latex_parameter_subscripts[j].empty()) latex_parameter_subscripts[j] = countstring;
 				else latex_parameter_subscripts[j] += "," + countstring;

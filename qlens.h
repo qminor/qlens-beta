@@ -388,6 +388,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double autogrid_frac, spline_frac;
 	double tabulate_rmin, tabulate_qmin;
 	int tabulate_logr_N, tabulate_phi_N, tabulate_q_N;
+	bool default_parameter_mode;
 
 	bool include_time_delays;
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
