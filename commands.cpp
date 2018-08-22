@@ -4857,6 +4857,22 @@ void Lens::process_commands(bool read_file)
 						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
 					}
 					if (mpi_id==0) output_bestfit_model();
+				} else if (words[1]=="load_bestfit") {
+					if (nwords==2) {
+						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+						string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
+						// the following lines are redundant from the "read" command. Should be put in a separate function to reduce redundancies
+						if (infile->is_open()) {
+							if (n_infiles==10) Complain("cannot open more than 10 files at once");
+							infile++;
+						}
+						infile->open(scriptfile_str.c_str());
+						if (infile->is_open()) { read_from_file = true; n_infiles++; }
+						else {
+							cerr << "Error: best-fit lens model file '" << scriptfile_str << "' could not be opened" << endl;
+							if (n_infiles > 0) infile--;
+						}
+					} else Complain("no arguments allowed for 'load_bestfit'");
 				}
 				else Complain("unknown fit command");
 			}
