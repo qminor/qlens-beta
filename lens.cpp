@@ -5719,10 +5719,7 @@ double Lens::chi_square_fit_simplex()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
-	if (fit_output_dir != ".") create_output_directory();
 	initialize_fitmodel(true);
-
-	if (fit_output_dir != ".") create_output_directory();
 
 	double (Simplex::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -5898,7 +5895,6 @@ double Lens::chi_square_fit_powell()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
-	if (fit_output_dir != ".") create_output_directory();
 	initialize_fitmodel(true);
 
 	double (Powell::*loglikeptr)(double*);
@@ -6146,7 +6142,7 @@ void Lens::nested_sampling()
 			cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
 		}
 		cout << endl;
-		if (auto_save_bestfit) output_bestfit_model();
+		output_bestfit_model();
 	}
 	delete[] param_errors;
 
@@ -6355,7 +6351,7 @@ void Lens::multinest()
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
 			cout << endl;
-			if (auto_save_bestfit) output_bestfit_model();
+			output_bestfit_model();
 		delete[] xparams;
 		delete[] params;
 		delete[] avgs;
@@ -6563,7 +6559,7 @@ void Lens::polychord()
 				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
 			cout << endl;
-			if (auto_save_bestfit) output_bestfit_model();
+			output_bestfit_model();
 		delete[] params;
 		delete[] avgs;
 		delete[] covs;
@@ -6667,7 +6663,7 @@ void Lens::chi_square_twalk()
 	}
 #endif
 	if (mpi_id==0) {
-		if (auto_save_bestfit) output_bestfit_model();
+		output_bestfit_model();
 	}
 
 	fit_restore_defaults();

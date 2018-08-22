@@ -4882,6 +4882,9 @@ void Lens::process_commands(bool read_file)
 							cerr << "Error: best-fit lens model file '" << scriptfile_str << "' could not be opened" << endl;
 							if (n_infiles > 0) infile--;
 						}
+						clear_lenses();
+						param_settings->clear_params();
+						// Clear any existing lens models so the new one can be loaded in
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
 				}
 				else Complain("unknown fit command");

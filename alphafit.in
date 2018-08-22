@@ -11,7 +11,6 @@ imgdata clear           # Just in case we already had image data loaded before t
 
 fit label alphafit      # This labels the files that will be produced by the lens fitting
 fit method simplex      # This is the default fit method (downhill simplex method), which minimizes the chi-square function
-auto_save_bestfit off   # if turned on, automatically saves the best-fit model after running the fit (turned off by default)
 chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
 sci_notation off        # This is just up to your personal preference
 central_image off       # The image data does not include a central image, so this tells QLens not to search for one.
