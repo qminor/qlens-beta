@@ -44,11 +44,11 @@ Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, cons
 
 Alpha::Alpha(const Alpha* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	b = lens_in->b;
 	alpha = lens_in->alpha;
 	s = lens_in->s;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -406,6 +406,7 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	b = lens_in->b;
 	a = lens_in->a;
 	s = lens_in->s;
@@ -419,7 +420,6 @@ PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
 		s_kpc = lens_in->s_kpc;
 	}
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -680,7 +680,7 @@ NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const
 
 NFW::NFW(const NFW* lens_in)
 {
-	parameter_mode = lens_in->parameter_mode;
+	copy_base_lensdata(lens_in);
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	if (parameter_mode==2) {
@@ -691,7 +691,6 @@ NFW::NFW(const NFW* lens_in)
 		c200 = lens_in->c200;
 	}
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -910,11 +909,11 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 
 Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rt = lens_in->rt;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -1036,7 +1035,7 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 
 Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 {
-	parameter_mode = lens_in->parameter_mode;
+	copy_base_lensdata(lens_in);
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rc = lens_in->rc;
@@ -1049,7 +1048,6 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 		c200 = lens_in->c200;
 	}
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -1390,10 +1388,10 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 
 Hernquist::Hernquist(const Hernquist* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -1501,10 +1499,10 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	k0 = lens_in->k0;
 	R_d = lens_in->R_d;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -1600,10 +1598,10 @@ Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1
 
 Shear::Shear(const Shear* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	shear1 = lens_in->shear1;
 	shear2 = lens_in->shear2;
 	shear = lens_in->shear;
-	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 }
 
@@ -1772,13 +1770,13 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 
 Multipole::Multipole(const Multipole* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	n = lens_in->n;
 	m = lens_in->m;
 	A_n = lens_in->A_n;
 	kappa_multipole = lens_in->kappa_multipole;
 	sine_term = lens_in->sine_term;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters();
 	set_model_specific_integration_pointers();
 }
@@ -2101,9 +2099,9 @@ PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &
 
 PointMass::PointMass(const PointMass* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	b = lens_in->b;
 	// the base class copies q and theta, which are useless here, but it's simpler to just call it
-	copy_base_lensdata(lens_in);
 }
 
 void PointMass::assign_paramnames()
@@ -2252,15 +2250,14 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 
 CoreCusp::CoreCusp(const CoreCusp* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	k0 = lens_in->k0;
 	gamma = lens_in->gamma;
 	n = lens_in->n;
 	a = lens_in->a;
 	s = lens_in->s;
-	parameter_mode = lens_in->parameter_mode;
 	if (parameter_mode==1) einstein_radius = lens_in->einstein_radius;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -2571,12 +2568,12 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 
 SersicLens::SersicLens(const SersicLens* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	kappa_e = lens_in->kappa_e;
 	n = lens_in->n;
 	re = lens_in->re;
 	b = lens_in->b;
 
-	copy_base_lensdata(lens_in);
 	update_meta_parameters_and_pointers();
 }
 
@@ -2667,8 +2664,8 @@ MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &
 
 MassSheet::MassSheet(const MassSheet* lens_in)
 {
-	kext = lens_in->kext;
 	copy_base_lensdata(lens_in);
+	kext = lens_in->kext;
 	update_meta_parameters_and_pointers();
 }
 
@@ -2847,10 +2844,10 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 
 Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	kscale = lens_in->kscale;
 	rscale = lens_in->rscale;
 	rscale0 = lens_in->rscale0;
-	copy_base_lensdata(lens_in);
 	grid_logrlength = lens_in->grid_logrlength;
 	grid_logr_N = lens_in->grid_logr_N;
 	grid_phi_N = lens_in->grid_phi_N;
@@ -3521,11 +3518,11 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 
 QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 {
+	copy_base_lensdata(lens_in);
 	original_emode = lens_in->original_emode;
 	kscale = lens_in->kscale;
 	rscale = lens_in->rscale;
 	rscale0 = lens_in->rscale0;
-	copy_base_lensdata(lens_in);
 	if ((original_emode==0) or (original_emode==1))
 		q = lens_in->q;
 	else

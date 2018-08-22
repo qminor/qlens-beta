@@ -197,6 +197,8 @@ Lens::Lens() : UCMC()
 	show_wtime = false;
 	terminal = TEXT;
 	verbal_mode = true;
+	n_infiles = 0;
+	infile = infile_list;
 	quit_after_reading_file = false;
 	quit_after_error = false;
 	fitmethod = SIMPLEX;
@@ -1778,9 +1780,12 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	}
 #endif
 	lensvector *centers;
+	double *einstein_radii;
+	int i_primary=0;
 	if (subgrid_around_perturbers) {
 		centers = new lensvector[nlens];
-		find_effective_lens_centers(centers,zfacs,betafacs);
+		einstein_radii = new double[nlens];
+		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,zfacs,betafacs);
 	}
 	if (grid != NULL) {
 		int rsp, thetasp;
@@ -1819,8 +1824,9 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
 	if (subgrid_around_perturbers) {
-		subgrid_around_perturber_galaxies(centers,zfacs,betafacs,redshift_index);
+		subgrid_around_perturber_galaxies(centers,einstein_radii,i_primary,zfacs,betafacs,redshift_index);
 		delete[] centers;
+		delete[] einstein_radii;
 	}
 	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
@@ -1856,17 +1862,18 @@ void Lens::find_automatic_grid_position_and_size(double *zfacs)
 	}
 }
 
-void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs)
+void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs)
 {
 	double zlprim, zlsub, re_avg;
-	double einstein_rad, largest_einstein_radius = 0;
+	double largest_einstein_radius = 0;
 	int i;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			lens_list[i]->get_einstein_radius(einstein_rad,re_avg,zfacs[lens_redshift_idx[i]]);
-			if (einstein_rad > largest_einstein_radius) {
-				largest_einstein_radius = einstein_rad;
+			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,zfacs[lens_redshift_idx[i]]);
+			if (einstein_radii[i] > largest_einstein_radius) {
+				largest_einstein_radius = einstein_radii[i];
 				zlprim = lens_list[i]->zlens;
+				i_primary = i;
 			}
 		}
 	}
@@ -1883,36 +1890,26 @@ void Lens::find_effective_lens_centers(lensvector *centers, double *zfacs, doubl
 	}
 }
 
-void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *zfacs, double **betafacs, const int redshift_index)
+void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einstein_radii, const int ihost, double *zfacs, double **betafacs, const int redshift_index)
 {
 	if (grid==NULL) {
 		if (create_grid(false,zfacs,betafacs)==false) die("Could not create recursive grid");
 	}
-	int i, ihost;
 	if (nlens==0) { warn(warnings,"No galaxies in lens lens_list"); return; }
-	double largest_einstein_radius = 0, xch, ych;
-	dvector einstein_radii(nlens);
-	double re_avg; // won't use this
-	for (i=0; i < nlens; i++) {
-		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,zfacs[lens_redshift_idx[i]]);
-			if (einstein_radii[i] > largest_einstein_radius) {
-				largest_einstein_radius = einstein_radii[i];
-				ihost = i;
-				xch = centers[i][0];
-				ych = centers[i][1];
-			}
-		}
-	}
-	// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
+	double largest_einstein_radius, xch, ych;
+	xch = centers[ihost][0];
+	ych = centers[ihost][1];
+	largest_einstein_radius = einstein_radii[ihost];
 
 	double xc,yc;
 	lensvector center;
 	int parity, n_perturbers=0;
 	double *kappas = new double[nlens];
 	double *parities = new double[nlens];
+	int i;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
+			// lenses with Einstein radii < some fraction of the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
 			if ((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
 				xc = centers[i][0];
 				yc = centers[i][1];
@@ -2218,7 +2215,8 @@ void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool ve
 	// if one of these conditions isn't satisfied, just use the numerical root-finding version instead
 	if (((lens_list[lens_number]->get_lenstype()!=PJAFFE) and (lens_list[lens_number]->get_lenstype()!=ALPHA)) or (lens_list[lens_number]->zlens != lens_list[0]->zlens))
 	{
-		calculate_critical_curve_perturbation_radius_numerical(lens_number,verbose,rmax,mass_enclosed);
+		double avg_sigma_enclosed;
+		calculate_critical_curve_perturbation_radius_numerical(lens_number,verbose,rmax,avg_sigma_enclosed,mass_enclosed);
 		return;
 	}
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
@@ -2436,7 +2434,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	return true;
 }
 
-bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed)
+bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed)
 {
 	subhalo_lens_number = lens_number;
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
@@ -2518,8 +2516,9 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	double avg_kappa = reference_zfactors[lens_redshift_idx[subhalo_lens_number]]*lens_list[subhalo_lens_number]->kappa_avg_r(rmax_perturber_lensplane);
 
 	double kpc_to_arcsec_sub = 206.264806/angular_diameter_distance(zlsub);
-	double menc = avg_kappa*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub)*sigma_crit_kpc(zlsub,reference_source_redshift);
-	mass_enclosed = menc/alpha;
+	// the following quantities are scaled by 1/alpha
+	avg_sigma_enclosed = avg_kappa*sigma_crit_kpc(zlsub,reference_source_redshift) / alpha;
+	mass_enclosed = avg_sigma_enclosed*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub);
 
 	double menc_z = 0;
 	double avgkap_z = 0;
@@ -2553,7 +2552,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
 		//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
-		menc_z = menc*mass_scale_factor/alpha;
+		menc_z = mass_enclosed*mass_scale_factor;
 		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
 	} else if (zlsub > zlprim) {
 		double kappa0, shear_tot, shear_angle, subhalo_avg_kappa;
@@ -2567,7 +2566,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		i2 = lens_redshift_idx[subhalo_lens_number];
 		double beta = default_zsrc_beta_factors[i2-1][i1];
 		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
-		menc_z = menc*mass_scale_factor/alpha;
+		menc_z = mass_enclosed*mass_scale_factor;
 		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot));
 	}
 
@@ -2581,7 +2580,8 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		if (zlsub > zlprim) cout << "rmax_perturber_lensplane = " << rmax_perturber_lensplane << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
 		if (avgkap_z != 0) cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_z/alpha << endl;
-		cout << "mass_enclosed/alpha = " << menc/alpha << endl;
+		cout << "avg_sigma_enclosed/alpha = " << avg_sigma_enclosed << endl;
+		cout << "mass_enclosed/alpha = " << mass_enclosed << endl;
 		if (menc_z != 0) cout << "mass(primary_lens_plane) = " << menc_z << endl;
 	}
 	rmax_numerical = abs(rmax_numerical);
@@ -6216,10 +6216,10 @@ void Lens::multinest()
 	int IS, mmodal, ceff, nPar, nClsPar, nlive, updInt, maxModes, seed, fb, resume, outfile, initMPI, maxiter;
 	double efr, tol, Ztol, logZero;
 
-	IS = 0;					// do Nested Importance Sampling?
+	IS = 0;					// do Nested Importance Sampling (bad idea)
 	mmodal = 0;					// do mode separation?
-	ceff = 0;					// run in constant efficiency mode?
-	efr = 0.1;				// set the required efficiency
+	ceff = 0;					// run in constant efficiency mode? (VERY bad idea)
+	efr = 0.8;				// set the required efficiency
 	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
 	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters
@@ -6980,7 +6980,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		}
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
-		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "                ";
+		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "           ";
 		cout << endl;
 		if (running_fit) cout << endl;
 		//cout << "\033[1A";
@@ -7028,13 +7028,13 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	}
 
 	loglike = chisq/2.0;
-	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (running_fit) cout << "\033[2A" << flush;
-		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike=" << loglike << "              " << endl;
+		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike_no_prior=" << loglike << "              " << endl;
 		//cout << "\033[1A";
 	}
+	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
+	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 
 	return loglike;
 }
@@ -7855,36 +7855,33 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	if (image_pixel_grid == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
 
 	if (subhalo_prior) {
-		int i;
-		double largest_einstein_radius = 0, xch, ych;
-		dvector einstein_radii(nlens);
-		double re_avg; // won't use this
-		for (i=0; i < nlens; i++) {
-			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,reference_zfactors[i]);
-			if (einstein_radii[i] > largest_einstein_radius) {
-				lens_list[i]->get_center_coords(xch,ych);
-				largest_einstein_radius = einstein_radii[i];
-			}
-		}
-		// lenses with Einstein radii < 0.25 times the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
+		int i, i_primary;
+		double largest_einstein_radius, xch, ych;
+		lensvector *centers = new lensvector[nlens];
+		double *einstein_radii = new double[nlens];
+		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,reference_zfactors,default_zsrc_beta_factors);
+		xch = centers[i_primary][0];
+		xch = centers[i_primary][1];
+		largest_einstein_radius = einstein_radii[i_primary];
 
 		double xc,yc;
 		for (i=0; i < nlens; i++) {
-			lens_list[i]->get_center_coords(xc,yc);
-			if ((xc==xch) and (yc==ych)) continue;
-			//cout << "ER: " << einstein_radii[i] << " " << largest_einstein_radius << endl;
-			// This doesn't work well, because the perturber can have miniscule Einstein radius (which comes up as zero) and still
-			// produce a sizeable perturbation if near a critical curve. Fix this!
-			//if ((einstein_radii[i] > 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
-				//cout << "Lens " << i << " is a subhalo, with CENTER: " << xc << " " << yc << endl;
+			if (i==i_primary) continue;
+			if (lens_list[i]->lenstype==SHEAR) continue; // external shear cannot count as a subhalo
+			xc = centers[i][0];
+			yc = centers[i][1];
+			if ((xc==xch) and (yc==ych)) continue; // lenses co-centered with primary lens not counted as subhalos
+			if ((einstein_radii[i] > 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
 				if (!image_pixel_data->test_if_in_fit_region(xc,yc)) {
 					if ((mpi_id==0) and (verbal)) cout << "Subhalo outside fit region --> chisq = 2e30, will not invert image\n";
 					if (logfile.is_open()) 
 						logfile << "it=" << chisq_it << " chisq0=2e30" << endl;
 					return 2e30;
 				}
-			//}
+			}
 		}
+		delete[] einstein_radii;
+		delete[] centers;
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in fit window: " << image_pixel_data->n_required_pixels << endl;
@@ -7981,154 +7978,121 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	else invert_lens_mapping_CG_method(verbal);
 
 	double chisq = 0;
-	/*
-	if ((n_image_prior) and (n_images_at_sbmax < n_image_threshold) and (abs(n_images_at_sbmax-n_image_threshold) > 1e-15)) {
-		chisq = 1e30; chisq0 = 1e30;
-		if (group_id==0) {
-			if (logfile.is_open()) {
-				logfile << "it=" << chisq_it << " chisq0=" << chisq << endl;
-				if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << endl;
+
+	calculate_image_pixel_surface_brightness();
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		tot_wtime = omp_get_wtime() - tot_wtime0;
+		if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
+	}
+#endif
+	double chisq_signal=0;
+	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
+	if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
+	else covariance = SQR(data_pixel_noise);
+	int i,j;
+	double dchisq, dchisq2;
+	int img_index;
+	int count=0;
+	int n_data_pixels=0;
+	for (i=0; i < image_pixel_data->npixels_x; i++) {
+		for (j=0; j < image_pixel_data->npixels_y; j++) {
+			if (image_pixel_data->require_fit[i][j]) {
+				n_data_pixels++;
+				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+					img_index = image_pixel_grid->pixel_index[i][j];
+					chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					if (abs(image_pixel_data->surface_brightness[i][j]) > 2*data_pixel_noise)
+						chisq_signal += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					count++;
+				} else {
+					chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance;
+				}
 			}
 		}
-		if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << endl;
 	}
-	else
-	{
-	*/
-		calculate_image_pixel_surface_brightness();
+	chisq0 = chisq;
 
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
+	if (group_id==0) {
+		if (logfile.is_open()) {
+			logfile << "it=" << chisq_it << " chisq0=" << chisq << " ";
+			if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
 		}
-#endif
-		double chisq_signal=0;
-		double covariance; // right now we're using a uniform uncorrelated noise for each pixel
-		if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
-		else covariance = SQR(data_pixel_noise);
-		int i,j;
-		double dchisq, dchisq2;
-		int img_index;
-		int count=0;
-		int n_data_pixels=0;
+	}
+	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
+		if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << endl;
+		// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
+		//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
+		//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!
+
+		double Es=0;
+		for (i=0; i < source_npixels; i++) {
+			Es += Rmatrix[i]*SQR(source_surface_brightness[i]);
+			for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+				Es += 2 * source_surface_brightness[i] * Rmatrix[j] * source_surface_brightness[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+			}
+		}
+		// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
+		if (regularization_parameter != 0) {
+			chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+		}
+		chisq += Fmatrix_log_determinant;
+		if (group_id==0) {
+			if (logfile.is_open()) logfile << "reg=" << regularization_parameter << " chisq_reg=" << chisq << " ";
+			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
+		}
+	}
+	//chisq += n_data_pixels*log(2*M_PI*data_pixel_noise); // this is not very relevant because the data fit window and assumed pixel noise are not varied
+
+	if (n_image_prior) {
+		double chisq_penalty;
+		if (pixel_avg_n_image < n_image_threshold) {
+			chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_image,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+			chisq += chisq_penalty;
+			if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_image << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
+		}
+	}
+
+	bool sb_outside_window = false;
+	if (max_sb_prior_unselected_pixels) {
+		clear_lensing_matrices();
+		clear_pixel_matrices();
+		image_pixel_grid->include_all_pixels();
+		assign_pixel_mappings(verbal);
+		initialize_pixel_matrices(verbal);
+		PSF_convolution_Lmatrix(verbal);
+		source_pixel_grid->fill_surface_brightness_vector();
+		calculate_image_pixel_surface_brightness();
+		double max_external_sb = -1e30;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if (image_pixel_data->require_fit[i][j]) {
-					n_data_pixels++;
-					if (image_pixel_grid->maps_to_source_pixel[i][j]) {
-						img_index = image_pixel_grid->pixel_index[i][j];
-						chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
-						if (abs(image_pixel_data->surface_brightness[i][j]) > 2*data_pixel_noise)
-							chisq_signal += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
-						count++;
-					} else {
-						chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance;
-					}
-				}
-			}
-		}
-		chisq0 = chisq;
-
-		if (group_id==0) {
-			if (logfile.is_open()) {
-				logfile << "it=" << chisq_it << " chisq0=" << chisq << " ";
-				if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
-			}
-		}
-		//cout << "src_npixels=" << source_pixel_grid->number_of_pixels << endl;
-		//cout << "pixel fraction = " << pixel_fraction << endl;
-		//cout << "mag_threshold = " << pixel_magnification_threshold << endl;
-		//cout << "reg = " << regularization_parameter << endl;
-		//cout << "chisq0=" << chisq << endl;
-		if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
-			if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << endl;
-			// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
-			//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
-			//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!
-
-			double Es=0;
-			for (i=0; i < source_npixels; i++) {
-				Es += Rmatrix[i]*SQR(source_surface_brightness[i]);
-				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-					Es += 2 * source_surface_brightness[i] * Rmatrix[j] * source_surface_brightness[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
-				}
-			}
-			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
-			if (regularization_parameter != 0) {
-				//double t0, t1, t3, t4, tsum;
-				//t0 = regularization_parameter*Es;
-				//t1 = -source_npixels*log(regularization_parameter);
-				//t3 = -Rmatrix_log_determinant;
-				//t4 = Fmatrix_log_determinant;
-				//tsum = t0 + t1 + t3 + t4;
-
-				//cout << "chisq0=" << chisq << " chisq_signal=" << chisq_signal << " lambda*Es=" << t0 << " N_s*log(lambda)=" << t1 << " log_det(R)=" << t3 << " log_det(F)=" << t4 << " sum=" << tsum << endl;
-				//cout << "src_npixels=" << source_npixels << endl;
-				chisq -= source_npixels*log(regularization_parameter);
-				chisq -= Rmatrix_log_determinant;
-			}
-			chisq += regularization_parameter*Es;
-			chisq += Fmatrix_log_determinant;
-			if (group_id==0) {
-				if (logfile.is_open()) logfile << "reg=" << regularization_parameter << " chisq_reg=" << chisq << " ";
-				if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
-			}
-		}
-		//chisq += n_data_pixels*log(2*M_PI*data_pixel_noise); // this is not very relevant because the data fit window and assumed pixel noise are not varied
-
-		if (n_image_prior) {
-			//cout << "NIMG: " << pixel_avg_n_image << " " << n_images_at_sbmax << " " << max_sb_frac << endl;
-			double chisq_penalty;
-			if (pixel_avg_n_image < n_image_threshold) {
-				chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_image,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
-				//cout << "NIMG_PENALTY: " << n_image_threshold-pixel_avg_n_image << " " << chisq_penalty << endl;
-				chisq += chisq_penalty;
-				if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_image << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
-			}
-		}
-
-		bool sb_outside_window = false;
-		if (max_sb_prior_unselected_pixels) {
-			clear_lensing_matrices();
-			clear_pixel_matrices();
-			image_pixel_grid->include_all_pixels();
-			assign_pixel_mappings(verbal);
-			initialize_pixel_matrices(verbal);
-			PSF_convolution_Lmatrix(verbal);
-			source_pixel_grid->fill_surface_brightness_vector();
-			calculate_image_pixel_surface_brightness();
-			double max_external_sb = -1e30;
-			for (i=0; i < image_pixel_data->npixels_x; i++) {
-				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
-						img_index = image_pixel_grid->pixel_index[i][j];
-						if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_pixel_sb)) {
-							if (image_surface_brightness[img_index] > max_external_sb) {
-								 max_external_sb = image_surface_brightness[img_index];
-							}
+				if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
+					img_index = image_pixel_grid->pixel_index[i][j];
+					if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_pixel_sb)) {
+						if (image_surface_brightness[img_index] > max_external_sb) {
+							 max_external_sb = image_surface_brightness[img_index];
 						}
 					}
 				}
 			}
-			if (max_external_sb > 0) {
-				sb_outside_window = true;
-				chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),60) - 1.0;
-				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_pixel_sb << ") has been found outside the selected fit region" << endl;
-			}
-			image_pixel_grid->set_fit_window((*image_pixel_data));
 		}
+		if (max_external_sb > 0) {
+			sb_outside_window = true;
+			chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),60) - 1.0;
+			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_pixel_sb << ") has been found outside the selected fit region" << endl;
+		}
+		image_pixel_grid->set_fit_window((*image_pixel_data));
+	}
 
-		if ((group_id==0) and (logfile.is_open())) {
-			if (sb_outside_window) logfile << " chisq_no_priors=" << chisq << " (SB produced outside window)" << endl;
-			else logfile << " chisq_no_priors=" << chisq << endl;
-		}
-		if ((mpi_id==0) and (verbal)) {
-			cout << "chisq=" << chisq << " (without priors)" << endl;
-			if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;
-		}
-		if ((mpi_id==0) and (verbal)) cout << "number of pixels that map to source = " << count << endl;
-	//}
+	if ((group_id==0) and (logfile.is_open())) {
+		if (sb_outside_window) logfile << " chisq_no_priors=" << chisq << " (SB produced outside window)" << endl;
+		else logfile << " chisq_no_priors=" << chisq << endl;
+	}
+	if ((mpi_id==0) and (verbal)) {
+		cout << "chisq=" << chisq << " (without priors)" << endl;
+		if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;
+	}
+	if ((mpi_id==0) and (verbal)) cout << "number of pixels that map to source = " << count << endl;
 
 	chisq_it++;
 
@@ -8141,8 +8105,6 @@ double Lens::set_required_data_pixel_window(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	// NOTE: we should really have a separate ImagePixelGrid object for data inversion, vs. the one we use for plotting images. That way, when you plot, it won't overwrite the
-	// data image you are trying to invert. Implement this later!!!!!!!!!
 	image_pixel_grid = new ImagePixelGrid(this, ray_tracing_method, (*image_pixel_data));
 
 	int count;

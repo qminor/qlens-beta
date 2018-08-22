@@ -251,6 +251,7 @@ int main(int argc, char *argv[])
 	if (exclude_derived_params) nparams_eff = n_fitparams;
 	if ((nparams_subset > 0) and (nparams_subset < nparams)) nparams_eff = nparams_subset;
 
+	// Make it so you can turn parameters on/off in this file! This will require revising nparams_eff after the flags are read in
 	string *param_names = new string[nparams];
 	string paramnames_filename = file_root + ".paramnames";
 	ifstream paramnames_file(paramnames_filename.c_str());

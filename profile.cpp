@@ -84,6 +84,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
+	parameter_mode = lens_in->parameter_mode;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	analytic_3d_density = lens_in->analytic_3d_density;
 	paramnames = lens_in->paramnames;
@@ -589,40 +590,77 @@ void LensProfile::print_vary_parameters()
 	}
 }
 
+inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
+{
+	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
+	// It doesn't work very well, so canning it for now, not a big deal
+	//int exp;
+	//double mantissa = frexp10((*num),&exp);
+	//double mantissa;
+   //exp = ((*num) == 0) ? 0 : 1 + (int)std::floor(std::log10(abs((*num))));
+   //mantissa = (*num) * std::pow(10 , -exp);
+	scriptout << setiosflags(ios::scientific);
+	scriptout << (*num);
+	scriptout << resetiosflags(ios::scientific);
+	if (space) scriptout << " ";
+}
+
 void LensProfile::print_lens_command(ofstream& scriptout)
 {
 	scriptout << setprecision(16);
+	//scriptout << setiosflags(ios::scientific);
 	scriptout << "fit lens " << model_name << " ";
 	if (ellipticity_mode != default_ellipticity_mode) {
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
 			scriptout << "emode=" << ellipticity_mode << " ";
 	}
+	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
 	for (int i=0; i < n_params-3; i++) {
 		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 		else {
 			if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
-			else scriptout << *(param[i]);
+			else {
+				if ((abs(*(param[i])) < 1e-3) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+				else scriptout << *(param[i]);
+			}
 			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
 			scriptout << " ";
 		}
 	}
 	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-	else scriptout << x_center << " " << y_center << endl;
-	for (int i=0; i < n_params; i++) {
+	else scriptout << x_center << " " << y_center << " z=" << zlens << endl;
+	for (int i=0; i < n_params-1; i++) {
 		if (vary_params[i]) scriptout << "1 ";
 		else scriptout << "0 ";
 	}
-	scriptout << " z=" << zlens << endl;
+	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
+	else scriptout << endl;
 	if (include_limits) {
 		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
 		else {
 			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-					scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-				else
-					scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
+					if (((abs(lower_limits[i]) < 1e-3) or (abs(lower_limits[i])) > 1e3) or ((abs(upper_limits[i]) < 1e-3) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
+					}
+				} else {
+					if (((abs(lower_limits[i]) < 1e-3) or (abs(lower_limits[i])) > 1e3) or ((abs(upper_limits[i]) < 1e-3) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
+						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+					}
+
+				}
 			}
 		}
 	}

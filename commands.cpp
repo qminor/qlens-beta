@@ -263,8 +263,10 @@ void Lens::process_commands(bool read_file)
 						"\n";
 				} else if (words[1]=="misc_settings") {
 					cout << 
+						"verbal_mode -- if on, display detailed output and input script text to terminal (default=on)\n"
 						"warnings -- set warning flags on/off\n"
 						"imgsrch_warnings -- set warning flags related to image searching on/off\n"
+						"show_wtime -- show time required for executing commands (e.g. mkgrid); requires OpenMP\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
 						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
 						"sim_err_flux -- random error in image fluxes, added when producing simulated image data\n"
@@ -1795,6 +1797,8 @@ void Lens::process_commands(bool read_file)
 					cout << "chisqtol = " << chisq_tolerance << endl;
 					cout << "srcflux = " << source_flux << endl;
 					cout << "fix_srcflux: " << display_switch(fix_source_flux) << endl;
+					cout << "syserr_pos = " << syserr_pos << endl;
+					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
 					cout << endl;
 					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
 					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
@@ -1847,14 +1851,14 @@ void Lens::process_commands(bool read_file)
 				}
 				if (show_misc_settings) {
 					cout << "\033[4mMiscellaneous settings\033[0m\n";
+					cout << "verbal_mode: " << display_switch(verbal_mode) << endl;
 					cout << "warnings: " << display_switch(warnings) << endl;
 					cout << "imgsrch_warnings: " << display_switch(newton_warnings) << endl;
+					cout << "show_wtime: " << display_switch(show_wtime) << endl;
 					cout << "sci_notation: " << display_switch(use_scientific_notation) << endl;
 					cout << "sim_err_pos = " << sim_err_pos << endl;
 					cout << "sim_err_flux = " << sim_err_flux << endl;
 					cout << "sim_err_td = " << sim_err_td << endl;
-					cout << "syserr_pos = " << syserr_pos << endl;
-					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
 					cout << endl;
 				}
 			}
@@ -1862,13 +1866,16 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="read")
 		{
 			if (nwords == 2) {
-				if (infile.is_open()) {
-					infile.close();
-					if ((mpi_id==0) and (verbal_mode)) cout << "Closing current script file...\n";
+				if (infile->is_open()) {
+					if (n_infiles==10) Complain("cannot open more than 10 files at once");
+					infile++;
 				}
-				infile.open(words[1].c_str());
-				if (infile.is_open()) read_from_file = true;
-				else cerr << "Error: input file '" << words[1] << "' could not be opened" << endl;
+				infile->open(words[1].c_str());
+				if (infile->is_open()) { read_from_file = true; n_infiles++; }
+				else {
+					cerr << "Error: input file '" << words[1] << "' could not be opened" << endl;
+					if (n_infiles > 0) infile--;
+				}
 			} else if (nwords == 1) {
 				Complain("must specify filename for input file to be read");
 			} else Complain("invalid number of arguments; must specify one filename to be read");
@@ -5894,6 +5901,16 @@ void Lens::process_commands(bool read_file)
 				set_switch(show_wtime,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="verbal_mode")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Verbal mode: " << display_switch(verbal_mode) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'verbal_mode' command; must specify 'on' or 'off'");
+				else set_switch(verbal_mode,setword);
+			}
+			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="warnings")
 		{
 			if (nwords==1) {
@@ -6644,9 +6661,9 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> lens_number)) Complain("invalid lens number");
 				if (lens_number >= nlens) Complain("specified lens number for subhalo does not exist");
 				if (lens_number == 0) Complain("perturber cannot be the primary lens (lens 0)");
-				double rmax,menc;
+				double rmax,menc,avgsig;
 				if (nlens==1) Complain("perturber lens has not been defined");
-				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,menc)) Complain("could not calculate critical curve perturbation radius");
+				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
 		else if (words[0]=="print_betavals")
@@ -7283,7 +7300,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if ((words[0]=="continue") or (words[0]=="c")) {
 			if (read_from_file) Complain("script file is already being read");
-			if (!infile.is_open()) Complain("no script file is currently loaded");
+			if (!infile->is_open()) Complain("no script file is currently loaded");
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
@@ -7311,12 +7328,16 @@ void Lens::process_commands(bool read_file)
 bool Lens::read_command(bool show_prompt)
 {
 	if (read_from_file) {
-		if (infile.eof()) {
-			read_from_file = false;
-			infile.close();
-			if (quit_after_reading_file) return false;
+		if (infile->eof()) {
+			infile->close();
+			if (n_infiles > 1) infile--;
+			n_infiles--;
+			if (n_infiles == 0) {
+				read_from_file = false;
+				if (quit_after_reading_file) return false;
+			}
 		} else {
-			getline(infile,line);
+			getline((*infile),line);
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;
 		}
 	} else {
@@ -7382,8 +7403,17 @@ bool Lens::check_vary_z()
 
 bool Lens::open_command_file(char *filename)
 {
-	infile.open(filename);
-	return (infile.is_open()) ? true : false;
+	if (infile->is_open()) {
+		if (n_infiles==10) {
+			warn("cannot open more than 10 files at once");
+			return false;
+		}
+		infile++;
+	}
+	infile->open(filename);
+	if (infile->is_open()) n_infiles++;
+	else if (n_infiles > 0) infile--;
+	return (infile->is_open()) ? true : false;
 }
 
 void Lens::remove_equal_sign(void)

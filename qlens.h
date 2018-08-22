@@ -440,11 +440,11 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool subgrid_only_near_data_images; // if on, only subgrids around perturber galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_perturber_galaxies(lensvector* centers, double* zfacs, double** betafacs, const int redshift_index);
+	void subgrid_around_perturber_galaxies(lensvector* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
 	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
-	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& mass_enclosed);
+	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
-	void find_effective_lens_centers(lensvector *centers, double *zfacs, double **betafacs);
+	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs);
 	bool calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
 	double galaxy_subgridding_scale_equation(const double r);
 
@@ -669,7 +669,9 @@ public:
 	int nullflag, buffer_length;
 	string line;
 	vector<string> lines;
-	ifstream infile; // used to read commands from an input file
+	ifstream infile_list[10];
+	ifstream *infile; // used to read commands from an input file
+	int n_infiles;
 	bool verbal_mode;
 	bool quit_after_error;
 	int nwords;
@@ -1593,12 +1595,12 @@ struct DerivedParam
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param);
 		} else if (derived_param_type == Perturbation_Radius) {
-			double rmax,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,menc);
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
 			return rmax;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			double rmax,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,menc);
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
 			return menc;
 		}
 		else die("no user defined function yet");
