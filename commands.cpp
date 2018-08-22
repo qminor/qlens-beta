@@ -614,6 +614,7 @@ void Lens::process_commands(bool read_file)
 							"fit label <label>\n"
 							"fit use_bestfit\n"
 							"fit save_bestfit\n"
+							"fit load_bestfit\n"
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
 							"fit dparams ...\n"
@@ -806,6 +807,11 @@ void Lens::process_commands(bool read_file)
 							"Note that if 'auto_save_bestfit' is set to 'on', the best-fit model is saved automatically after a\n"
 							"fit is performed. If one uses T-Walk or nested Sampling, data from the chains is saved automatically\n"
 							"regardless of whether 'save_bestfit' is invoked.\n";
+					else if (words[2]=="load_bestfit")
+						cout << "fit load_bestfit [fit_label]\n\n"
+							"Read the best-fit lens model '<fit_label>_bf.in' contained in the fit output directory (which by default\n"
+							"is 'chains_<label>'). If [fit_label] is omitted, the current fit label is used (which is set by the 'fit\n"
+							"label' command).\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
 						"fit plimits <param_num> <lower_limit> <upper_limit>\n"
@@ -4858,9 +4864,13 @@ void Lens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
-					if (nwords==2) {
-						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
-						string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
+					if (nwords <= 3) {
+						string scriptfile_str;
+						if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
+						else {
+							if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
+						}
 						// the following lines are redundant from the "read" command. Should be put in a separate function to reduce redundancies
 						if (infile->is_open()) {
 							if (n_infiles==10) Complain("cannot open more than 10 files at once");
@@ -4872,7 +4882,7 @@ void Lens::process_commands(bool read_file)
 							cerr << "Error: best-fit lens model file '" << scriptfile_str << "' could not be opened" << endl;
 							if (n_infiles > 0) infile--;
 						}
-					} else Complain("no arguments allowed for 'load_bestfit'");
+					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
 				}
 				else Complain("unknown fit command");
 			}
