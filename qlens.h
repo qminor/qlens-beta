@@ -412,7 +412,10 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool auto_srcgrid_npixels;
 	bool auto_srcgrid_set_pixel_size;
 	double pixel_fraction, pixel_fraction_lower_limit, pixel_fraction_upper_limit;
-	bool vary_pixel_fraction, vary_magnification_threshold;
+	double srcgrid_xshift, srcgrid_xshift_lower_limit, srcgrid_xshift_upper_limit;
+	double srcgrid_yshift, srcgrid_yshift_lower_limit, srcgrid_yshift_upper_limit;
+	double srcgrid_size_scale, srcgrid_size_scale_lower_limit, srcgrid_size_scale_upper_limit;
+	bool vary_pixel_fraction, vary_srcgrid_xshift, vary_srcgrid_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
 	double psf_width_x, psf_width_y, data_pixel_noise, sim_pixel_noise;
 	double sb_threshold; // for creating centroid images from pixel maps
 	double noise_threshold; // for automatic source grid sizing

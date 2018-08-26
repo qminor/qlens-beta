@@ -186,7 +186,7 @@ class Cholesky
 			EnterMat(a);
 		}
 		
-		void ElMult (double *y, double *b)
+		void ElMult(double *y, double *b)
 		{
 			int i, j;
 			for(i = 0; i < num; i++)

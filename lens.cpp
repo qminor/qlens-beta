@@ -315,7 +315,7 @@ Lens::Lens() : UCMC()
 	data_pixel_noise = 0;
 	sim_pixel_noise = 0;
 	sb_threshold = 0;
-	noise_threshold = 1.3;
+	noise_threshold = 1.3; // when optimizing the source pixel grid size, image pixels whose surface brightness < noise_threshold*pixel_noise are ignored
 	n_image_pixels_x = 200;
 	n_image_pixels_y = 200;
 	srcgrid_npixels_x = 50;
@@ -326,6 +326,18 @@ Lens::Lens() : UCMC()
 	pixel_fraction_lower_limit = 1e30; // These must be specified by user
 	pixel_fraction_upper_limit = 1e30; // These must be specified by user
 	vary_pixel_fraction = false; // varying the pixel fraction doesn't work if regularization is also varied (with source pixel regularization)
+	srcgrid_xshift = 0;
+	srcgrid_xshift_lower_limit = 1e30;
+	srcgrid_xshift_upper_limit = 1e30;
+	vary_srcgrid_xshift = false;
+	srcgrid_yshift = 0;
+	srcgrid_yshift_lower_limit = 1e30;
+	srcgrid_yshift_upper_limit = 1e30;
+	vary_srcgrid_yshift = false;
+	srcgrid_size_scale = 0;
+	srcgrid_size_scale_lower_limit = 1e30;
+	srcgrid_size_scale_upper_limit = 1e30;
+	vary_srcgrid_size_scale = false;
 	Fmatrix = NULL;
 	Fmatrix_index = NULL;
 	Rmatrix = NULL;
@@ -589,6 +601,12 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 
 	pixel_fraction = lens_in->pixel_fraction;
 	vary_pixel_fraction = lens_in->vary_pixel_fraction;
+	srcgrid_xshift = lens_in->srcgrid_xshift;
+	vary_srcgrid_xshift = lens_in->vary_srcgrid_xshift;
+	srcgrid_yshift = lens_in->srcgrid_yshift;
+	vary_srcgrid_yshift = lens_in->vary_srcgrid_yshift;
+	srcgrid_size_scale = lens_in->srcgrid_size_scale;
+	vary_srcgrid_size_scale = lens_in->vary_srcgrid_size_scale;
 	Dvector = NULL;
 	Fmatrix = NULL;
 	Fmatrix_index = NULL;
@@ -4595,6 +4613,9 @@ bool Lens::update_fitmodel(const double* params)
 	} else if (source_fit_mode == Pixellated_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) fitmodel->regularization_parameter = params[index++];
 		if (vary_pixel_fraction) fitmodel->pixel_fraction = params[index++];
+		if (vary_srcgrid_xshift) fitmodel->srcgrid_xshift = params[index++];
+		if (vary_srcgrid_yshift) fitmodel->srcgrid_yshift = params[index++];
+		if (vary_srcgrid_size_scale) fitmodel->srcgrid_size_scale = params[index++];
 		if (vary_magnification_threshold) fitmodel->pixel_magnification_threshold = params[index++];
 	}
 	if (vary_hubble_parameter) {
@@ -5228,6 +5249,9 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
+	if (vary_srcgrid_xshift) stepsizes[index++] = 0.3;
+	if (vary_srcgrid_yshift) stepsizes[index++] = 0.3;
+	if (vary_srcgrid_size_scale) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
 	if (vary_omega_matter_parameter) stepsizes[index++] = 0.3;
@@ -5254,6 +5278,9 @@ void Lens::set_default_plimits()
 		index++;
 	}
 	if (vary_pixel_fraction) index++;
+	if (vary_srcgrid_xshift) index++;
+	if (vary_srcgrid_yshift) index++;
+	if (vary_srcgrid_size_scale) index++;
 	if (vary_magnification_threshold) index++;
 	if (vary_hubble_parameter) index++;
 	if (vary_omega_matter_parameter) index++;
@@ -5278,6 +5305,9 @@ void Lens::get_n_fit_parameters(int &nparams)
 	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) nparams++;
 	if (vary_pixel_fraction) nparams++;
+	if (vary_srcgrid_xshift) nparams++;
+	if (vary_srcgrid_yshift) nparams++;
+	if (vary_srcgrid_size_scale) nparams++;
 	if (vary_magnification_threshold) nparams++;
 	if (vary_hubble_parameter) nparams++;
 	if (vary_omega_matter_parameter) nparams++;
@@ -5308,6 +5338,9 @@ bool Lens::setup_fit_parameters(bool include_limits)
 		}
 	} else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
+	if (vary_srcgrid_xshift) fitparams[index++] = srcgrid_xshift;
+	if (vary_srcgrid_yshift) fitparams[index++] = srcgrid_yshift;
+	if (vary_srcgrid_size_scale) fitparams[index++] = srcgrid_size_scale;
 	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
 	if (vary_hubble_parameter) fitparams[index++] = hubble;
 	if (vary_omega_matter_parameter) fitparams[index++] = omega_matter;
@@ -5367,6 +5400,28 @@ bool Lens::setup_fit_parameters(bool include_limits)
 				upper_limits_initial[index] = upper_limits[index];
 				index++;
 			}
+			if (vary_srcgrid_xshift) {
+				lower_limits[index] = srcgrid_xshift_lower_limit;
+				lower_limits_initial[index] = lower_limits[index];
+				upper_limits[index] = srcgrid_xshift_upper_limit;
+				upper_limits_initial[index] = upper_limits[index];
+				index++;
+			}
+			if (vary_pixel_fraction) {
+				lower_limits[index] = srcgrid_yshift_lower_limit;
+				lower_limits_initial[index] = lower_limits[index];
+				upper_limits[index] = srcgrid_yshift_upper_limit;
+				upper_limits_initial[index] = upper_limits[index];
+				index++;
+			}
+			if (vary_pixel_fraction) {
+				lower_limits[index] = srcgrid_size_scale_lower_limit;
+				lower_limits_initial[index] = lower_limits[index];
+				upper_limits[index] = srcgrid_size_scale_upper_limit;
+				upper_limits_initial[index] = upper_limits[index];
+				index++;
+			}
+
 			if (vary_magnification_threshold) {
 				lower_limits[index] = pixel_magnification_threshold_lower_limit;
 				lower_limits_initial[index] = lower_limits[index];
@@ -5497,6 +5552,21 @@ void Lens::get_parameter_names()
 		fit_parameter_names.push_back("pixel_fraction");
 		latex_parameter_names.push_back("f");
 		latex_parameter_subscripts.push_back("pixel");
+	}
+	if (vary_srcgrid_xshift) {
+		fit_parameter_names.push_back("srcgrid_xshift");
+		latex_parameter_names.push_back("\\delta x");
+		latex_parameter_subscripts.push_back("sg");
+	}
+	if (vary_srcgrid_yshift) {
+		fit_parameter_names.push_back("srcgrid_yshift");
+		latex_parameter_names.push_back("\\delta y");
+		latex_parameter_subscripts.push_back("sg");
+	}
+	if (vary_srcgrid_size_scale) {
+		fit_parameter_names.push_back("srcgrid_scale");
+		latex_parameter_names.push_back("f");
+		latex_parameter_subscripts.push_back("sg");
 	}
 	if (vary_magnification_threshold) {
 		fit_parameter_names.push_back("mag_threshold");
@@ -5858,6 +5928,9 @@ double Lens::chi_square_fit_simplex()
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
+		if (vary_srcgrid_xshift) cout << "pixel fraction = " << fitmodel->srcgrid_xshift << endl;
+		if (vary_srcgrid_yshift) cout << "pixel fraction = " << fitmodel->srcgrid_yshift << endl;
+		if (vary_srcgrid_size_scale) cout << "pixel fraction = " << fitmodel->srcgrid_size_scale << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
 		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
@@ -6005,6 +6078,9 @@ double Lens::chi_square_fit_powell()
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
+		if (vary_srcgrid_xshift) cout << "source grid x-shift = " << fitmodel->srcgrid_xshift << endl;
+		if (vary_srcgrid_yshift) cout << "source grid y-shift = " << fitmodel->srcgrid_yshift << endl;
+		if (vary_srcgrid_size_scale) cout << "source grid scale = " << fitmodel->srcgrid_size_scale << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
 		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
@@ -6704,10 +6780,11 @@ bool Lens::use_bestfit_model()
 	} else if (source_fit_mode == Pixellated_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
-		if (vary_pixel_fraction)
-			pixel_fraction = transformed_params[index++];
-		if (vary_magnification_threshold)
-			pixel_magnification_threshold = transformed_params[index++];
+		if (vary_pixel_fraction) pixel_fraction = transformed_params[index++];
+		if (vary_srcgrid_xshift) srcgrid_xshift = transformed_params[index++];
+		if (vary_srcgrid_yshift) srcgrid_yshift = transformed_params[index++];
+		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
+		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
 	}
 	if (vary_hubble_parameter) {
 		hubble = transformed_params[index++];
@@ -7028,6 +7105,7 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 		if (running_fit) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike_no_prior=" << loglike << "              " << endl;
 		//cout << "\033[1A";
+		if (running_fit) cout << endl;
 	}
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
@@ -7347,10 +7425,34 @@ void Lens::print_fit_model()
 		}
 		if (vary_pixel_fraction) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "Pixel magnification threshold: " << pixel_fraction << endl;
+				cout << "Source grid pixel fraction: " << pixel_fraction << endl;
 			} else {
-				if ((pixel_fraction_lower_limit==1e30) or (pixel_fraction_upper_limit==1e30)) cout << "\nPixel magnification threshold: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
-				else cout << "Pixel magnification threshold: [" << pixel_fraction_lower_limit << ":" << pixel_fraction << ":" << pixel_fraction_upper_limit << "]\n";
+				if ((pixel_fraction_lower_limit==1e30) or (pixel_fraction_upper_limit==1e30)) cout << "\nSource grid pixel fraction: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
+				else cout << "Source grid pixel fraction: [" << pixel_fraction_lower_limit << ":" << pixel_fraction << ":" << pixel_fraction_upper_limit << "]\n";
+			}
+		}
+		if (vary_srcgrid_xshift) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Source grid x-shift: " << srcgrid_xshift << endl;
+			} else {
+				if ((srcgrid_xshift_lower_limit==1e30) or (srcgrid_xshift_upper_limit==1e30)) cout << "\nSource grid x-shift: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
+				else cout << "Source grid x-shift: [" << srcgrid_xshift_lower_limit << ":" << srcgrid_xshift << ":" << srcgrid_xshift_upper_limit << "]\n";
+			}
+		}
+		if (vary_srcgrid_yshift) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Source grid y-shift: " << srcgrid_yshift << endl;
+			} else {
+				if ((srcgrid_yshift_lower_limit==1e30) or (srcgrid_yshift_upper_limit==1e30)) cout << "\nSource grid x-shift: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
+				else cout << "Source grid y-shift: [" << srcgrid_yshift_lower_limit << ":" << srcgrid_yshift << ":" << srcgrid_yshift_upper_limit << "]\n";
+			}
+		}
+		if (vary_srcgrid_size_scale) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Source grid scale: " << srcgrid_size_scale << endl;
+			} else {
+				if ((srcgrid_size_scale_lower_limit==1e30) or (srcgrid_size_scale_upper_limit==1e30)) cout << "\nSource grid scale: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
+				else cout << "Source grid scale: [" << srcgrid_size_scale_lower_limit << ":" << srcgrid_size_scale << ":" << srcgrid_size_scale_upper_limit << "]\n";
 			}
 		}
 	}
@@ -7908,6 +8010,29 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (logfile.is_open()) 
 			logfile << "it=" << chisq_it << " chisq0=2e30" << endl;
 		return 2e30;
+	}
+	if (auto_sourcegrid) {
+		if ((srcgrid_xshift != 0) or (srcgrid_yshift != 0)) {
+			double srcpixel_xlength, srcpixel_ylength;
+			srcpixel_xlength = (sourcegrid_xmax-sourcegrid_xmin) / srcgrid_npixels_x;
+			srcpixel_ylength = (sourcegrid_ymax-sourcegrid_ymin) / srcgrid_npixels_y;
+			if (srcgrid_xshift != 0) {
+				sourcegrid_xmax += srcgrid_xshift * srcpixel_xlength;
+				sourcegrid_xmin += srcgrid_xshift * srcpixel_xlength;
+			}
+			if (srcgrid_yshift != 0) {
+				sourcegrid_ymax += srcgrid_yshift * srcpixel_ylength;
+				sourcegrid_ymin += srcgrid_yshift * srcpixel_ylength;
+			}
+		}
+		if (srcgrid_size_scale != 0) {
+			double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
+			double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
+			sourcegrid_xmin -= xwidth_adj/2;
+			sourcegrid_xmax += xwidth_adj/2;
+			sourcegrid_ymin -= ywidth_adj/2;
+			sourcegrid_ymax += ywidth_adj/2;
+		}
 	}
 
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);

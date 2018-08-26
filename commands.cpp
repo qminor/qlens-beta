@@ -1771,6 +1771,12 @@ void Lens::process_commands(bool read_file)
 					cout << "inversion_nthreads = " << inversion_nthreads << endl;
 					cout << "pixel_fraction = " << pixel_fraction << endl;
 					cout << "vary_pixel_fraction: " << display_switch(vary_pixel_fraction) << endl;
+					cout << "srcgrid_xshift = " << srcgrid_xshift << endl;
+					cout << "vary_srcgrid_xshift: " << display_switch(vary_srcgrid_xshift) << endl;
+					cout << "srcgrid_yshift = " << srcgrid_xshift << endl;
+					cout << "vary_srcgrid_yshift: " << display_switch(vary_srcgrid_yshift) << endl;
+					cout << "srcgrid_scale = " << srcgrid_size_scale << endl;
+					cout << "vary_srcgrid_scale: " << display_switch(vary_srcgrid_size_scale) << endl;
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
@@ -6834,6 +6840,60 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Source pixel fraction of srcpixels/imgpixels = " << pixel_fraction << endl;
 			} else Complain("must specify one argument (firstlevel source pixel fraction)");
 		}
+		else if (words[0]=="srcgrid_xshift")
+		{
+			double xsh, xsh_ll, xsh_ul;
+ 			if (nwords == 4) {
+ 				if (!(ws[1] >> xsh_ll)) Complain("invalid source srcgrid_xshift lower limit");
+ 				if (!(ws[2] >> xsh)) Complain("invalid source srcgrid_xshift value");
+ 				if (!(ws[3] >> xsh_ul)) Complain("invalid source srcgrid_xshift upper limit");
+ 				if ((xsh < xsh_ll) or (xsh > xsh_ul)) Complain("initial source srcgrid_xshift should lie within specified prior limits");
+ 				srcgrid_xshift = xsh;
+ 				srcgrid_xshift_lower_limit = xsh_ll;
+ 				srcgrid_xshift_upper_limit = xsh_ul;
+ 			} else if (nwords == 2) {
+				if (!(ws[1] >> xsh)) Complain("invalid firstlevel source srcgrid_xshift");
+				srcgrid_xshift = xsh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "srcgrid_xshift = " << srcgrid_xshift << endl;
+			} else Complain("must specify one argument (srcgrid_xshift)");
+		}
+		else if (words[0]=="srcgrid_yshift")
+		{
+			double ysh, ysh_ll, ysh_ul;
+ 			if (nwords == 4) {
+ 				if (!(ws[1] >> ysh_ll)) Complain("invalid source srcgrid_yshift lower limit");
+ 				if (!(ws[2] >> ysh)) Complain("invalid source srcgrid_yshift value");
+ 				if (!(ws[3] >> ysh_ul)) Complain("invalid source srcgrid_yshift upper limit");
+ 				if ((ysh < ysh_ll) or (ysh > ysh_ul)) Complain("initial source srcgrid_yshift should lie within specified prior limits");
+ 				srcgrid_yshift = ysh;
+ 				srcgrid_yshift_lower_limit = ysh_ll;
+ 				srcgrid_yshift_upper_limit = ysh_ul;
+ 			} else if (nwords == 2) {
+				if (!(ws[1] >> ysh)) Complain("invalid firstlevel source srcgrid_yshift");
+				srcgrid_yshift = ysh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "srcgrid_yshift = " << srcgrid_yshift << endl;
+			} else Complain("must specify one argument (srcgrid_yshift)");
+		}
+		else if (words[0]=="srcgrid_scale")
+		{
+			double scale, scale_ll, scale_ul;
+ 			if (nwords == 4) {
+ 				if (!(ws[1] >> scale_ll)) Complain("invalid source srcgrid_scale lower limit");
+ 				if (!(ws[2] >> scale)) Complain("invalid source srcgrid_scale value");
+ 				if (!(ws[3] >> scale_ul)) Complain("invalid source srcgrid_scale upper limit");
+ 				if ((scale < scale_ll) or (scale > scale_ul)) Complain("initial source srcgrid_scale should lie within specified prior limits");
+ 				srcgrid_size_scale = scale;
+ 				srcgrid_size_scale_lower_limit = scale_ll;
+ 				srcgrid_size_scale_upper_limit = scale_ul;
+ 			} else if (nwords == 2) {
+				if (!(ws[1] >> scale)) Complain("invalid firstlevel source srcgrid_scale");
+				srcgrid_size_scale = scale;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "srcgrid_scale = " << srcgrid_size_scale << endl;
+			} else Complain("must specify one argument (srcgrid_scale)");
+		}
 		else if (words[0]=="fits_format")
 		{
 			if (nwords==1) {
@@ -6863,6 +6923,36 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_pixel_fraction' command; must specify 'on' or 'off'");
 				set_switch(vary_pixel_fraction,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="vary_srcgrid_xshift")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary source grid x-shift: " << display_switch(vary_srcgrid_xshift) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcgrid_xshift' command; must specify 'on' or 'off'");
+				set_switch(vary_srcgrid_xshift,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="vary_srcgrid_yshift")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary source grid y-shift: " << display_switch(vary_srcgrid_yshift) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcgrid_yshift' command; must specify 'on' or 'off'");
+				set_switch(vary_srcgrid_yshift,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="vary_srcgrid_scale")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary firstlevel source pixel fraction: " << display_switch(vary_srcgrid_size_scale) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcgrid_scale' command; must specify 'on' or 'off'");
+				set_switch(vary_srcgrid_size_scale,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

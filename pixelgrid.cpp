@@ -3809,16 +3809,16 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax=-1e30;
 	int ii,jj,il,ih,jl,jh,nn;
 	double sbavg;
-	int window_size=2;
+	static const int window_size_for_sbavg = 2;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (fit_to_data[i][j]) {
 				sbavg=0;
 				nn=0;
-				il=i-window_size;
-				ih=i+window_size;
-				jl=j-window_size;
-				jh=j+window_size;
+				il=i-window_size_for_sbavg;
+				ih=i+window_size_for_sbavg;
+				jl=j-window_size_for_sbavg;
+				jh=j+window_size_for_sbavg;
 				if (il<0) il=0;
 				if (ih>x_N-1) ih=x_N-1;
 				if (jl<0) jl=0;
@@ -3851,9 +3851,9 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 			}
 		}
 	}
-	// Now let's make the box slightly wider just to be sure
-	double xwidth_adj = 0.3*(sourcegrid_xmax-sourcegrid_xmin);
-	double ywidth_adj = 0.3*(sourcegrid_ymax-sourcegrid_ymin);
+	// Now let's make the box slightly wider just to be safe
+	double xwidth_adj = 0.2*(sourcegrid_xmax-sourcegrid_xmin);
+	double ywidth_adj = 0.2*(sourcegrid_ymax-sourcegrid_ymin);
 	sourcegrid_xmin -= xwidth_adj/2;
 	sourcegrid_xmax += xwidth_adj/2;
 	sourcegrid_ymin -= ywidth_adj/2;
@@ -3917,6 +3917,7 @@ void ImagePixelGrid::find_optimal_sourcegrid_npixels(double pixel_fraction, doub
 void ImagePixelGrid::find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels)
 {
 	// this algorithm assumes an adaptive grid, so that higher magnification regions will be subgridded
+	// it really doesn't seem to work well though...
 	double lowest_magnification = 1e30;
 	double average_magnification = 0;
 	int i,j,count=0;
