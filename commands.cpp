@@ -479,7 +479,7 @@ void Lens::process_commands(bool read_file)
 					else if (words[2]=="pjaffe")
 						cout << "lens pjaffe <b> <a> <s> <q/e> [theta] [x-center] [y-center]                 (pmode=0)\n"
 								  "lens pjaffe <sigma0> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]    (pmode=1)\n"
-								  "lens pjaffe <mtot> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]      (pmode=1)\n\n"
+								  "lens pjaffe <mtot> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]      (pmode=2)\n\n"
 							"where <b> is the default mass parameter (it is the Einstein radius in the limit of large a, s=0); <a> is\n"
 							"the tidal radius, <s> is the core radius, <q/e> is the axis ratio or ellipticity (depending on the ellip-\n"
 							"ticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
@@ -1715,7 +1715,7 @@ void Lens::process_commands(bool read_file)
 					cout << "autogrid_before_mkgrid: " << display_switch(autogrid_before_grid_creation) << endl;
 					cout << "autocenter: ";
 					if (autocenter==false) cout << "off\n";
-					else cout << "centers on lens " << autocenter_lens_number << endl;
+					else cout << "centers on lens " << primary_lens_number << endl;
 					cout << "central_image: " << display_switch(include_central_image) << endl;
 					cout << "time_delays: " << display_switch(include_time_delays) << endl;
 					cout << "min_cellsize = " << sqrt(min_cell_area) << endl;
@@ -6162,7 +6162,7 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) {
 					cout << "Automatic grid center: ";
 					if (autocenter==false) cout << "off\n";
-					else cout << "centers on lens " << autocenter_lens_number << endl;
+					else cout << "centers on lens " << primary_lens_number << endl;
 				}
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'autocenter' command; must specify lens number # or 'off'");
@@ -6170,7 +6170,7 @@ void Lens::process_commands(bool read_file)
 				else {
 					stringstream nstream;
 					nstream << setword;
-					if (!(nstream >> autocenter_lens_number)) Complain("invalid argument to 'auto_ccspline' command; must specify lens number # or 'off'");
+					if (!(nstream >> primary_lens_number)) Complain("invalid argument to 'auto_ccspline' command; must specify lens number # or 'off'");
 					autocenter = true;
 				}
 			} else Complain("invalid number of arguments; can only specify lens number # or 'off'");

@@ -401,11 +401,11 @@ Lens::Lens() : UCMC()
 	newton_warnings = false;
 	use_scientific_notation = true;
 	include_time_delays = false;
-	autocenter = true; // this option tells qlens to center the grid on a particular lens (given by autocenter_lens_number)
-	auto_gridsize_from_einstein_radius = true; // this option tells qlens to set the grid size based on the Einstein radius of a particular lens (given by autocenter_lens_number)
+	autocenter = true; // this option tells qlens to center the grid on a particular lens (given by primary_lens_number)
+	auto_gridsize_from_einstein_radius = true; // this option tells qlens to set the grid size based on the Einstein radius of a particular lens (given by primary_lens_number)
 	auto_gridsize_multiple_of_Re = 1.9;
 	autogrid_before_grid_creation = false; // this option (if set to true) tells qlens to optimize the grid size & position automatically (using autogrid) when grid is created
-	autocenter_lens_number = 0;
+	primary_lens_number = 0;
 	spline_frac = 1.8;
 	tabulate_rmin = 1e-3;
 	tabulate_qmin = 0.2;
@@ -676,7 +676,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 
 	include_time_delays = lens_in->include_time_delays;
 	autocenter = lens_in->autocenter;
-	autocenter_lens_number = lens_in->autocenter_lens_number;
+	primary_lens_number = lens_in->primary_lens_number;
 	auto_gridsize_from_einstein_radius = lens_in->auto_gridsize_from_einstein_radius;
 	auto_gridsize_multiple_of_Re = lens_in->auto_gridsize_multiple_of_Re;
 	autogrid_before_grid_creation = lens_in->autogrid_before_grid_creation; // this option (if set to true) tells qlens to optimize the grid size & position automatically when grid is created
@@ -743,6 +743,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
+	set_primary_lens();
 }
 
 void Lens::add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
@@ -757,6 +758,7 @@ void Lens::add_lens(const char *splinefile, const int emode, const double zl, co
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	set_primary_lens();
 }
 
 void Lens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
@@ -791,7 +793,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 	if (autogrid_before_grid_creation) autogrid();
 	else {
 		if (autocenter==true) {
-			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major;
@@ -812,6 +814,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	set_primary_lens();
 }
 
 void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
@@ -820,7 +823,7 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 	if (autogrid_before_grid_creation) autogrid();
 	else {
 		if (autocenter==true) {
-			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major;
@@ -842,6 +845,7 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	set_primary_lens();
 }
 
 bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
@@ -884,6 +888,7 @@ bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	set_primary_lens();
 	return true;
 }
 
@@ -933,6 +938,7 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+	set_primary_lens();
 	return true;
 }
 
@@ -1322,13 +1328,12 @@ void Lens::update_parameter_list()
 	// One slight issue that should be fixed: for the "extra" parameters like regularization, hubble constant, etc., the stepsizes
 	// and plimits are not preserved if one of the extra parameters is removed and it's not the last one on the list. There should
 	// be a more specific update such that just those parameters are removed (using remove_params(...))
-	int nparams;
-	get_n_fit_parameters(nparams);
-	if (nparams > 0) {
-		dvector stepsizes(nparams);
+	get_n_fit_parameters(n_fit_parameters);
+	if (n_fit_parameters > 0) {
+		dvector stepsizes(n_fit_parameters);
 		get_parameter_names();
 		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->update_params(nparams,fit_parameter_names,stepsizes.array());
+		param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
 	} else {
 		param_settings->clear_params();
 	}
@@ -1365,6 +1370,8 @@ void Lens::remove_lens(int lensnumber)
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
+
+	update_parameter_list();
 
 	//for (i=0; i < n_lens_redshifts; i++) {
 		//for (j=0; j < zlens_group_size[i]; j++) {
@@ -1531,7 +1538,7 @@ void Lens::automatically_determine_ccspline_mode()
 	// this feature should be made obsolete. It's really not necessary to spline the critical curves anymore
 	bool kappa_present = false;
 	for (int i=0; i < nlens; i++) {
-		if ((autocenter==true) and (i==autocenter_lens_number)) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+		if ((autocenter==true) and (i==primary_lens_number)) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 		if ((lens_list[i]->get_lenstype() != SHEAR) and (lens_list[i]->get_lenstype() != MULTIPOLE)) kappa_present = true;
 	}
 	if (kappa_present==false) set_ccspline_mode(false);
@@ -1865,16 +1872,31 @@ void Lens::find_automatic_grid_position_and_size(double *zfacs)
 	if (autogrid_before_grid_creation) autogrid();
 	else {
 		if (autocenter==true) {
-			lens_list[autocenter_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
+			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major;
-			re_major = einstein_radius_of_primary_lens(zfacs[autocenter_lens_number]);
+			re_major = einstein_radius_of_primary_lens(zfacs[primary_lens_number]);
 			if (re_major != 0.0) {
 				double rmax = auto_gridsize_multiple_of_Re*re_major;
 				grid_xlength = 2*rmax;
 				grid_ylength = 2*rmax;
 				cc_rmax = rmax;
+			}
+		}
+	}
+}
+
+void Lens::set_primary_lens()
+{
+	double re, re_avg, largest_einstein_radius = 0;
+	int i;
+	for (i=0; i < nlens; i++) {
+		if (reference_zfactors[lens_redshift_idx[i]] != 0.0) {
+			lens_list[i]->get_einstein_radius(re,re_avg,reference_zfactors[lens_redshift_idx[i]]);
+			if (re > largest_einstein_radius) {
+				largest_einstein_radius = re;
+				primary_lens_number = i;
 			}
 		}
 	}
@@ -1900,7 +1922,10 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			zlsub = lens_list[i]->zlens;
 			if (zlsub > zlprim) {
-				if (find_lensed_position_of_background_perturber(false,i,centers[i],zfacs,betafacs)==false) warn("cannot find lensed position of background perturber");
+				if (find_lensed_position_of_background_perturber(false,i,centers[i],zfacs,betafacs)==false) {
+					warn("cannot find lensed position of background perturber");
+					lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
+				}
 			} else {
 				lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
 			}
@@ -2422,6 +2447,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	image *img = get_images(perturber_center, n_images, false);
 	if (n_images == 0) {
 		reset_grid();
+		set_source_redshift(zsrc0);
 		return false;
 	}
 	img_i = 0;
@@ -2432,7 +2458,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 		}
 		double rsq, rsqmax=-1e30;
 		double xc0, yc0;
-		lens_list[autocenter_lens_number]->get_center_coords(xc0,yc0);
+		lens_list[primary_lens_number]->get_center_coords(xc0,yc0);
 		for (int ii=0; ii < n_images; ii++) {
 			rsq = SQR(img[ii].pos[0]-xc0) + SQR(img[ii].pos[1]-yc0);
 			if (rsq > rsqmax) {
@@ -3046,7 +3072,7 @@ bool Lens::find_optimal_gridsize()
 {
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
-		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
 
 	double (Brent::*mag_r)(const double);
@@ -3203,12 +3229,12 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	double rmin_einstein_radius = 1e-6;
 	double rmax_einstein_radius = 1e4;
 	double xc0, yc0, xc, yc;
-	lens_list[autocenter_lens_number]->get_center_coords(xc0,yc0);
+	lens_list[primary_lens_number]->get_center_coords(xc0,yc0);
 	centered = new bool[nlens];
-	centered[autocenter_lens_number]=true;
+	centered[primary_lens_number]=true;
 	bool multiple_lenses = false;
 	for (int j=0; j < nlens; j++) {
-		if (j==autocenter_lens_number) continue;
+		if (j==primary_lens_number) continue;
 		lens_list[j]->get_center_coords(xc,yc);
 		if ((xc==xc0) and (yc==yc0)) {
 			centered[j]=true;
@@ -3219,7 +3245,7 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	if (multiple_lenses==false) {
 		delete[] centered;
 		double re, reav;
-		lens_list[autocenter_lens_number]->get_einstein_radius(re,reav,zfac);
+		lens_list[primary_lens_number]->get_einstein_radius(re,reav,zfac);
 		return re;
 	}
 	zfac_re = zfac;
@@ -3266,7 +3292,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
-		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
 	double *onezfac = new double[n_lens_redshifts];
 	for (i=0; i < n_lens_redshifts; i++) onezfac[i] = 1.0;
@@ -3333,7 +3359,7 @@ double Lens::total_kappa(const double r, const int lensnum)
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
-		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
 	total_kappa = 0;
 	double *onezfac = new double[n_lens_redshifts];
@@ -3363,7 +3389,7 @@ double Lens::total_dkappa(const double r, const int lensnum)
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
-		if (i==autocenter_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
 	total_dkappa = 0;
 	double *onezfac = new double[n_lens_redshifts];
@@ -5261,6 +5287,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 
 void Lens::set_default_plimits()
 {
+	get_n_fit_parameters(n_fit_parameters);
 	boolvector use_penalty_limits;
 	dvector lower, upper;
 	param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
@@ -5407,14 +5434,14 @@ bool Lens::setup_fit_parameters(bool include_limits)
 				upper_limits_initial[index] = upper_limits[index];
 				index++;
 			}
-			if (vary_pixel_fraction) {
+			if (vary_srcgrid_yshift) {
 				lower_limits[index] = srcgrid_yshift_lower_limit;
 				lower_limits_initial[index] = lower_limits[index];
 				upper_limits[index] = srcgrid_yshift_upper_limit;
 				upper_limits_initial[index] = upper_limits[index];
 				index++;
 			}
-			if (vary_pixel_fraction) {
+			if (vary_srcgrid_size_scale) {
 				lower_limits[index] = srcgrid_size_scale_lower_limit;
 				lower_limits_initial[index] = lower_limits[index];
 				upper_limits[index] = srcgrid_size_scale_upper_limit;

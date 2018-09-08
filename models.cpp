@@ -2213,6 +2213,11 @@ double PointMass::calculate_scaled_mass_3d(const double r)
 	return M_PI*b*b;
 }
 
+double PointMass::kappa_avg_r(const double r)
+{
+	return SQR(b/r);
+}
+
 /***************************** Core/Cusp Model *****************************/
 
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)

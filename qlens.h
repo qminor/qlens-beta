@@ -381,7 +381,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void print_image_data(bool include_errors);
 
 	bool autocenter;
-	int autocenter_lens_number;
+	int primary_lens_number;
 	bool auto_gridsize_from_einstein_radius;
 	double auto_gridsize_multiple_of_Re;
 	bool autogrid_before_grid_creation;
@@ -728,6 +728,7 @@ public:
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	int update_lens_redshift_data();
 	void add_new_lens_entry(const double zl);
+	void set_primary_lens();
 	void print_beta_matrices();
 	void set_source_redshift(const double zsrc);
 

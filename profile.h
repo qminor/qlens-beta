@@ -254,7 +254,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool calculate_half_mass_radius(double& half_mass_radius, const double mtot_in = -10);
 	double mass_rsq(const double rsq);
 
-	double kappa_avg_r(const double r);
+	virtual double kappa_avg_r(const double r);
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
 
@@ -659,6 +659,7 @@ class PointMass : public LensProfile
 
 	double potential(double, double);
 	double kappa(double, double);
+	double kappa_avg_r(const double r);
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
