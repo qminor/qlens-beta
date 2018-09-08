@@ -447,7 +447,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
-	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs);
+	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
 	bool calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
 	double galaxy_subgridding_scale_equation(const double r);
 

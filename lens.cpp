@@ -1810,7 +1810,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	if (subgrid_around_perturbers) {
 		centers = new lensvector[nlens];
 		einstein_radii = new double[nlens];
-		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,zfacs,betafacs);
+		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,zfacs,betafacs,verbal);
 	}
 	if (grid != NULL) {
 		int rsp, thetasp;
@@ -1902,7 +1902,7 @@ void Lens::set_primary_lens()
 	}
 }
 
-void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs)
+void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal)
 {
 	double zlprim, zlsub, re_avg;
 	double largest_einstein_radius = 0;
@@ -1922,8 +1922,8 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			zlsub = lens_list[i]->zlens;
 			if (zlsub > zlprim) {
-				if (find_lensed_position_of_background_perturber(false,i,centers[i],zfacs,betafacs)==false) {
-					warn("cannot find lensed position of background perturber");
+				if (find_lensed_position_of_background_perturber(verbal,i,centers[i],zfacs,betafacs)==false) {
+					if (verbal) warn("cannot find lensed position of background perturber");
 					lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
 				}
 			} else {
@@ -7984,7 +7984,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double largest_einstein_radius, xch, ych;
 		lensvector *centers = new lensvector[nlens];
 		double *einstein_radii = new double[nlens];
-		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,reference_zfactors,default_zsrc_beta_factors);
+		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,reference_zfactors,default_zsrc_beta_factors,false);
 		xch = centers[i_primary][0];
 		xch = centers[i_primary][1];
 		largest_einstein_radius = einstein_radii[i_primary];
