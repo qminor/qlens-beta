@@ -2451,8 +2451,9 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 		return false;
 	}
 	img_i = 0;
+	if (verbal==true) die("WTF?");
 	if (n_images > 1) {
-		if (verbal) {
+		if ((mpi_id==0) and (verbal)) {
 			warn("Well this is interesting. Perturber maps to more than one place in the primary lens plane! Using image furthest from primary lens center");
 			cout << "Positions of lensed perturber:\n";
 		}
@@ -2465,7 +2466,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 				rsqmax = rsq;
 				img_i = ii;
 			}
-			if (verbal) cout << img[ii].pos[0] << " " << img[ii].pos[1] << endl;
+			if ((mpi_id==0) and (verbal)) cout << img[ii].pos[0] << " " << img[ii].pos[1] << endl;
 		}
 	}
 	set_source_redshift(zsrc0);
@@ -2495,7 +2496,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		if (find_lensed_position_of_background_perturber(true,lens_number,subhalo_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 		xc = subhalo_center[0];
 		yc = subhalo_center[1];
-		if (verbose) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
+		if ((mpi_id==0) and (verbose)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
 	}
 
 	lens_list[0]->get_center_coords(host_xc,host_yc);
