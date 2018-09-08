@@ -3604,6 +3604,8 @@ void ImagePixelGrid::include_all_pixels()
 
 void ImagePixelGrid::redo_lensing_calculations()
 {
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
 	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
