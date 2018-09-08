@@ -2493,7 +2493,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	lens_list[subhalo_lens_number]->get_center_coords(xc,yc);
 	subhalo_center[0]=xc; subhalo_center[1]=yc;
 	if (zlsub > zlprim) {
-		if (find_lensed_position_of_background_perturber(true,lens_number,subhalo_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
+		if (find_lensed_position_of_background_perturber(verbose,lens_number,subhalo_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 		xc = subhalo_center[0];
 		yc = subhalo_center[1];
 		if ((mpi_id==0) and (verbose)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
