@@ -1807,7 +1807,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	lensvector *centers;
 	double *einstein_radii;
 	int i_primary=0;
-	if (subgrid_around_perturbers) {
+	if ((subgrid_around_perturbers) and (nlens > 1)) {
 		centers = new lensvector[nlens];
 		einstein_radii = new double[nlens];
 		find_effective_lens_centers_and_einstein_radii(centers,einstein_radii,i_primary,zfacs,betafacs,verbal);
@@ -1848,7 +1848,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 		else
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
-	if (subgrid_around_perturbers) {
+	if ((subgrid_around_perturbers) and (nlens > 1)) {
 		subgrid_around_perturber_galaxies(centers,einstein_radii,i_primary,zfacs,betafacs,redshift_index);
 		delete[] centers;
 		delete[] einstein_radii;
@@ -1916,6 +1916,11 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 				i_primary = i;
 			}
 		}
+	}
+	if (largest_einstein_radius==0) {
+		if ((mpi_id==0) and (verbal)) warn("could not find primary lens; Einstein radii all returned zero, setting primary to lens 0");
+		zlprim = lens_list[0]->zlens;
+		i_primary = 0;
 	}
 
 	for (i=0; i < nlens; i++) {
