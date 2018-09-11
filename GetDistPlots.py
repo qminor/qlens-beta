@@ -4,7 +4,7 @@ import sys
 matplotlib.use('Agg')
 from pylab import *
 
-"""Plotting scripts for GetDist outputs"""
+"""Plotting scripts for mkdist outputs"""
 
 class GetDistPlotSettings:
     """Default sizes, font, styles etc settings for use by plots"""
@@ -26,7 +26,7 @@ class GetDistPlotSettings:
         self.x_label_rotation = 0
         self.num_shades = 80
         self.fig_width_inch = fig_width_inch  # if you want to force specific fixed width
-        self.setWithSubplotSize(subplot_size_inch)
+        self.setSubplotSize(subplot_size_inch)
         self.progress = False
         self.tight_layout = True
         self.no_triangle_axis_labels = True
@@ -56,7 +56,7 @@ class GetDistPlotSettings:
 
         self.axis_marker_color = 'gray'
         self.axis_marker_ls = '--'
-        self.axis_marker_lw = 0.5
+        self.axis_marker_lw = 1.0 # this gets overriden is setSubplotSize(...) is called
 
     def plot_data_file(self, root):
         # find first match to roots that exist in list of plot_data paths
@@ -71,15 +71,16 @@ class GetDistPlotSettings:
                 return path
         return self.plot_data[0] + os.sep + root
 
-    def setWithSubplotSize(self, size_inch):
+    def setSubplotSize(self, size_inch, width_scale=1.0, marker_width_scale=1.0):
         self.subplot_size_inch = size_inch
         self.lab_fontsize = 7 + 8 * self.subplot_size_inch
         self.axes_fontsize = 4 + 3.5 * self.subplot_size_inch
         self.legend_fontsize = self.axes_fontsize
         self.font_size = self.lab_fontsize
-        self.lw1 = self.subplot_size_inch / 3.0
-        self.lw_contour = self.lw1 * 0.6
-        self.lw_likes = self.subplot_size_inch / 6.0
+        self.lw1 = self.subplot_size_inch * width_scale / 3.0
+        self.lw_contour = self.lw1 * width_scale * 0.6
+        self.lw_likes = self.subplot_size_inch * width_scale / 6.0
+        self.axis_marker_lw = self.subplot_size_inch * width_scale * marker_width_scale * 0.6
         self.scatter_size = 3
         self.colorbar_axes_fontsize = self.axes_fontsize
 
@@ -343,7 +344,7 @@ class GetDistPlotter():
         contour(density.x1, density.x2, density.pts, self.settings.num_shades, cmap=self.settings.colormap)
 #        contour(cs, hold='on')
 
-    def plot_2d(self, roots, param_pair, shaded=True, filled=False, add_legend_proxy=True, **ax_args):
+    def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, add_legend_proxy=True, **ax_args):
         if self.fig is None: self.make_figure()
         if isinstance(roots, basestring):roots = [roots]
         param_pair = self.get_param_array(roots[0], param_pair)
@@ -363,6 +364,8 @@ class GetDistPlotter():
             lim2 = self.checkBounds(roots[0], param_pair[1].name , mins[1], maxs[1])
             ax_args['lims'] = [lim1[0], lim1[1], lim2[0], lim2[1]]
         self.setAxes(param_pair, **ax_args)
+        if xmark is not None and ymark is not None:
+            plot(xmark,ymark,c=mark_color,marker=truemarker,markersize=truemarksize,mew=self.settings.axis_marker_lw)
 
     def add_1d_marker(self, marker, color=None, ls=None):
         self.add_x_marker(marker, color, ls)
@@ -429,6 +432,7 @@ class GetDistPlotter():
                     xmin = min(xmin, bounds[0])
                     xmax = max(xmax, bounds[1])
         if xmin is None: Exception('No roots have parameter: ' + param.name)
+        #self.add_x_marker(0.5, 'orange')
         if marker is not None: self.add_x_marker(marker, marker_color)
         if not 'lims' in ax_args:
             xmin, xmax = self.checkBounds(roots[0], param.name, xmin, xmax)
@@ -535,7 +539,7 @@ class GetDistPlotter():
         else: return legend_labels
 
     def plots_1d(self, roots, params=None, legend_labels=None, legend_ncol=None, nx=None,
-                 paramList=None, roots_per_param=False, share_y=None, markers=None, xlims=None):
+                 paramList=None, roots_per_param=False, share_y=None, markers=None, marker_color='gray', xlims=None):
         if roots_per_param:
             params = [self.check_param(roots[i][0], param) for i, param in enumerate(params)]
         else: params = self.get_param_array(roots[0], params)
@@ -552,7 +556,7 @@ class GetDistPlotter():
             if markers is not None and i < len(markers): marker = markers[i]
             else: marker = None
 #            self.plot_1d(plot_roots, param, no_ylabel=share_y and  i % self.plot_col > 0, marker=marker, prune=(None, 'both')[share_y])
-            self.plot_1d(plot_roots, param, no_ylabel=share_y and  i % self.plot_col > 0, marker=marker)
+            self.plot_1d(plot_roots, param, no_ylabel=share_y and  i % self.plot_col > 0, marker=marker, marker_color=marker_color)
             if xlims is not None: xlim(xlims[i][0], xlims[i][1])
             if share_y: self.spaceTicks(gca().xaxis, expand=True)
 
@@ -609,8 +613,11 @@ class GetDistPlotter():
             return tick
 
 
-    def triangle_plot(self, roots, in_params=None, legend_labels=None, plot_3d_with_param=None, filled_compare=False, shaded=False):
+    def triangle_plot(self, roots, in_params=None, legend_labels=None, markers=None, show_marker_2d=False, marker_2d='x', marker_color='gray', marker_color_2d=None, plot_3d_with_param=None, filled_compare=False, shaded=False):
         if isinstance(roots, basestring):roots = [roots]
+        if marker_color_2d is None: marker_color_2d = marker_color
+        old_axis_marker_lw = self.settings.axis_marker_lw
+        self.settings.axis_marker_lw = self.settings.axis_marker_lw * 1.5  # the markers need to look a bit thicker compared to just plotting 1d posteriors
         params = self.get_param_array(roots[0], in_params)
         plot_col = len(params)
         if plot_3d_with_param is not None: col_param = self.check_param(roots[0], plot_3d_with_param)
@@ -619,8 +626,12 @@ class GetDistPlotter():
         ticks = dict()
         for i, param in enumerate(params):
             subplot(plot_col, plot_col, i * plot_col + i + 1)
-            self.plot_1d(roots, param, do_xlabel=i == plot_col - 1, no_label_no_numbers=self.settings.no_triangle_axis_labels,
-                         label_right=True, no_zero=True, no_ylabel=True, no_ytick=True)
+            if markers is not None and i < len(markers):
+                self.plot_1d(roots, param, marker=markers[i], marker_color=marker_color, do_xlabel=i == plot_col - 1, no_label_no_numbers=self.settings.no_triangle_axis_labels,
+                             label_right=True, no_zero=True, no_ylabel=True, no_ytick=True)
+            else:
+                self.plot_1d(roots, param, do_xlabel=i == plot_col - 1, no_label_no_numbers=self.settings.no_triangle_axis_labels,
+                             label_right=True, no_zero=True, no_ylabel=True, no_ytick=True)
             # set no_ylabel=True for now, can't see how to not screw up spacing with right-sided y label
             if self.settings.no_triangle_axis_labels: self.spaceTicks(gca().xaxis, expand=not shaded)
             lims[i] = xlim()
@@ -634,8 +645,12 @@ class GetDistPlotter():
                     self.plot_3d(roots, [param, param2, col_param], color_bar=False, line_offset=1,
                       do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0, filled=filled_compare, no_label_no_numbers=self.settings.no_triangle_axis_labels)
                 else:
-                    self.plot_2d(roots, param_pair=[param, param2], do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0,
-                                        no_label_no_numbers=self.settings.no_triangle_axis_labels, shaded=shaded, add_legend_proxy=i == 1 and i2 == i + 1)
+                    if show_marker_2d is True and markers is not None and i < len(markers):
+                        self.plot_2d(roots, param_pair=[param, param2], xmark=markers[i], ymark=markers[i2], truemarker=marker_2d, mark_color=marker_color_2d, do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0,
+                                            no_label_no_numbers=self.settings.no_triangle_axis_labels, shaded=shaded, add_legend_proxy=i == 1 and i2 == i + 1)
+                    else:
+                        self.plot_2d(roots, param_pair=[param, param2], do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0,
+                                            no_label_no_numbers=self.settings.no_triangle_axis_labels, shaded=shaded, add_legend_proxy=i == 1 and i2 == i + 1)
                 gca().set_xticks(ticks[i])
                 gca().set_yticks(ticks[i2])
                 xlim(lims[i])
@@ -648,6 +663,7 @@ class GetDistPlotter():
 
         self.finish_plot(self.default_legend_labels(legend_labels, roots),
                          legend_loc=None, no_gap=self.settings.no_triangle_axis_labels, no_extra_legend_space=True)
+        self.settings.axis_marker_lw = old_axis_marker_lw  # restore marker line width setting in case other plots are made after this
 
     def rectangle_plot(self, xparams, yparams, yroots, filled=True, ymarkers=None, xmarkers=None, **kwargs):
             self.make_figure(nx=len(xparams), ny=len(yparams))

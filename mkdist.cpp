@@ -444,10 +444,11 @@ int main(int argc, char *argv[])
 		ofstream pyscript(pyname.c_str());
 		pyscript << "import GetDistPlots, os" << endl;
 		pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-		pyscript << "g.settings.setWithSubplotSize(3.0000)" << endl;
+		pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 		pyscript << "outdir=''" << endl;
 		pyscript << "roots=['" << file_label << "']" << endl;
-		pyscript << "g.plots_1d(roots)" << endl;
+		pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+		pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
 		pyscript << "g.export(os.path.join(outdir,'" << file_label << ".pdf'))" << endl;
 		pyscript.close();
 		if (run_python_script) {
@@ -470,7 +471,7 @@ int main(int argc, char *argv[])
 		ofstream pyscript2d(pyname.c_str());
 		pyscript2d << "import GetDistPlots, os" << endl;
 		pyscript2d << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-		pyscript2d << "g.settings.setWithSubplotSize(3.0000)" << endl;
+		pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 		pyscript2d << "outdir=''" << endl;
 		pyscript2d << "roots=['" << file_label << "']" << endl;
 		pyscript2d << "pairs=[]" << endl;
@@ -504,15 +505,16 @@ int main(int argc, char *argv[])
 			ofstream pyscript(pyname.c_str());
 			pyscript << "import GetDistPlots, os" << endl;
 			pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-			pyscript << "g.settings.setWithSubplotSize(3.0000)" << endl;
+			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript << "outdir=''" << endl;
 			pyscript << "roots=['" << file_label << "']" << endl;
+			pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
 			pyscript << "g.triangle_plot(roots, [";
 			for (i=0; i < nparams_eff; i++) {
 				pyscript << "'" << param_names[i] << "'";
 				if (i != nparams_eff-1) pyscript << ",";
 			}
-			pyscript << "],";
+			pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=False,marker_2d='x',";
 			if (include_shading) pyscript << "shaded=True";
 			else pyscript << "shaded=False";
 			pyscript << ")" << endl;
