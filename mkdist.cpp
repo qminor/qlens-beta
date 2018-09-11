@@ -266,8 +266,6 @@ int main(int argc, char *argv[])
 		else if (nparams_subset == 0) warn("specified subset number of parameters is equal to or less than zero; using all parameters");
 	}
 
-	double *markers = new double[nparams_eff];
-
 	// Make it so you can turn parameters on/off in this file! This will require revising nparams_eff after the flags are read in
 	string *param_names = new string[nparams];
 	string paramnames_filename = file_root + ".paramnames";
@@ -308,6 +306,8 @@ int main(int argc, char *argv[])
 	}
 	latex_paramnames_out.close();
 
+	double *markers = new double[nparams_eff];
+	int n_markers = nparams_eff;
 	if (show_markers) {
 		if (marker_filename=="") {
 			double *bestfit = new double[nparams];
@@ -317,7 +317,11 @@ int main(int argc, char *argv[])
 		} else {
 			ifstream marker_file(marker_filename.c_str());
 			for (i=0; i < nparams_eff; i++) {
-				if (!(marker_file >> markers[i])) die("not all parameter marker values are given in file '%s'",marker_filename.c_str());
+				if (!(marker_file >> markers[i])) {
+					if (i==0) die("marker values could not be read from file '%s'",marker_filename.c_str());
+					n_markers = i;
+					break;
+				}
 			}
 		}
 	}
@@ -353,7 +357,7 @@ int main(int argc, char *argv[])
 
 		if (make_1d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
-			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,nparams_eff);
+			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			double rap[20];
 			for (i=0; i < nparams_eff; i++) {
 				string hist_out;
@@ -409,7 +413,7 @@ int main(int argc, char *argv[])
 
 		if (make_2d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
-			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,nparams_eff);
+			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			for (i=0; i < nparams_eff; i++) {
 				for (j=i+1; j < nparams_eff; j++) {
 					string hist_out;
@@ -482,7 +486,7 @@ int main(int argc, char *argv[])
 		pyscript << "roots=['" << file_label << "']" << endl;
 		if (show_markers) {
 			pyscript << "marker_list=[";
-			for (i=0; i < nparams_eff; i++) {
+			for (i=0; i < n_markers; i++) {
 				pyscript << markers[i];
 				if (i < nparams_eff-1) pyscript << ",";
 			}
@@ -552,7 +556,7 @@ int main(int argc, char *argv[])
 			pyscript << "roots=['" << file_label << "']" << endl;
 			if (show_markers) {
 				pyscript << "marker_list=[";
-				for (i=0; i < nparams_eff; i++) {
+				for (i=0; i < n_markers; i++) {
 					pyscript << markers[i];
 					if (i < nparams_eff-1) pyscript << ",";
 				}
@@ -593,10 +597,10 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *markers, const int nparams_eff)
+void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *markers, const int n_markers)
 {
 	const double extra_length_frac = 0.05;
-	for (int i=0; i < nparams_eff; i++) {
+	for (int i=0; i < n_markers; i++) {
 		if (minvals[i] > markers[i]) {
 			minvals[i] = markers[i];
 			minvals[i] -= extra_length_frac*(maxvals[i]-minvals[i]);
