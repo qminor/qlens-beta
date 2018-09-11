@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 	bool make_2d_posts = false;
 	bool output_min_chisq_point = false;
 	bool output_mean_and_errors = false;
-	bool output_bestfit_and_cl = false;
+	bool output_cl = false;
 	bool make_derived_posterior = false;
 	bool plot_mass_profile_constraints = false;
 	bool run_python_script = false;
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 				switch (c) {
 					case 'b': output_min_chisq_point = true; break;
 					case 'e': output_mean_and_errors = true; break; // this option also outputs the parameter covariance matrix
-					case 'E': output_bestfit_and_cl = true; break;
+					case 'E': output_cl = true; break;
 					case 'P': run_python_script = true; break;
 					case 'x': exclude_derived_params = true; break;
 					case 'f':
@@ -440,21 +440,21 @@ int main(int argc, char *argv[])
 			delete[] centers;
 			delete[] sigs;
 		}
-		if (output_bestfit_and_cl) {
+		if (output_cl) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
 			// The following gives the 
-			double *bestfit = new double[nparams];
+			double *halfpct = new double[nparams];
 			double *lowcl = new double[nparams];
 			double *hicl = new double[nparams];
-			Eval.min_chisq_pt(bestfit);
 			cout << "Best-fit points and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
 			for (i=0; i < nparams_eff; i++) {
 				lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
 				hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
-				cout << param_names[i] << ": " << bestfit[i] << " -" << (bestfit[i]-lowcl[i]) << " / +" << (hicl[i] - bestfit[i]) << endl;
+				halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
+				cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
 			}
 			cout << endl;
-			delete[] bestfit;
+			delete[] halfpct;
 			delete[] lowcl;
 			delete[] hicl;
 		}
