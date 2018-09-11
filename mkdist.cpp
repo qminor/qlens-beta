@@ -24,6 +24,7 @@ void usage_error();
 void show_transform_usage();
 char *advance(char *p);
 bool file_exists(const string &filename);
+void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *markers, const int nparams_eff);
 
 int main(int argc, char *argv[])
 {
@@ -41,6 +42,8 @@ int main(int argc, char *argv[])
 	bool exclude_derived_params = false;
 	bool include_log_evidence = false;
 	char mprofile_name[100] = "mprofile.dat";
+	bool show_markers = false;
+	string marker_filename = "";
 	char param_transform_filename[100] = "";
 	bool smoothing = false;
 	int nthreads=1, n_processes=1;
@@ -124,6 +127,15 @@ int main(int argc, char *argv[])
 							argv[i] += (1 + strlen(dirchar));
 						argv[i] = advance(argv[i]);
 						output_dir.assign(dirchar);
+						break;
+					case 'm':
+						show_markers = true;
+						char marker_filename_char[100];
+						if (sscanf(argv[i], "m:%s", marker_filename_char)==1) {
+							argv[i] += (1 + strlen(marker_filename_char));
+							marker_filename.assign(marker_filename_char);
+						}
+						argv[i] = advance(argv[i]);
 						break;
 					case 'n':
 						int try_nbins;
@@ -249,7 +261,12 @@ int main(int argc, char *argv[])
 	nparams_eff = nparams;
 	if (n_fitparams==-1) n_fitparams = nparams;
 	if (exclude_derived_params) nparams_eff = n_fitparams;
-	if ((nparams_subset > 0) and (nparams_subset < nparams)) nparams_eff = nparams_subset;
+	if (nparams_subset < nparams) {
+		if (nparams_subset > 0) nparams_eff = nparams_subset;
+		else if (nparams_subset == 0) warn("specified subset number of parameters is equal to or less than zero; using all parameters");
+	}
+
+	double *markers = new double[nparams_eff];
 
 	// Make it so you can turn parameters on/off in this file! This will require revising nparams_eff after the flags are read in
 	string *param_names = new string[nparams];
@@ -291,6 +308,20 @@ int main(int argc, char *argv[])
 	}
 	latex_paramnames_out.close();
 
+	if (show_markers) {
+		if (marker_filename=="") {
+			double *bestfit = new double[nparams];
+			Eval.min_chisq_pt(bestfit);
+			for (i=0; i < nparams_eff; i++) markers[i] = bestfit[i];
+			delete[] bestfit;
+		} else {
+			ifstream marker_file(marker_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				if (!(marker_file >> markers[i])) die("not all parameter marker values are given in file '%s'",marker_filename.c_str());
+			}
+		}
+	}
+
 	if (use_fisher_matrix) {
 		if (make_1d_posts) {
 			for (i=0; i < nparams_eff; i++) {
@@ -322,6 +353,7 @@ int main(int argc, char *argv[])
 
 		if (make_1d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
+			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,nparams_eff);
 			double rap[20];
 			for (i=0; i < nparams_eff; i++) {
 				string hist_out;
@@ -377,6 +409,7 @@ int main(int argc, char *argv[])
 
 		if (make_2d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
+			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,nparams_eff);
 			for (i=0; i < nparams_eff; i++) {
 				for (j=i+1; j < nparams_eff; j++) {
 					string hist_out;
@@ -447,7 +480,16 @@ int main(int argc, char *argv[])
 		pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 		pyscript << "outdir=''" << endl;
 		pyscript << "roots=['" << file_label << "']" << endl;
-		pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+		if (show_markers) {
+			pyscript << "marker_list=[";
+			for (i=0; i < nparams_eff; i++) {
+				pyscript << markers[i];
+				if (i < nparams_eff-1) pyscript << ",";
+			}
+			pyscript << "]" << endl;
+		} else {
+			pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+		}
 		pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
 		pyscript << "g.export(os.path.join(outdir,'" << file_label << ".pdf'))" << endl;
 		pyscript.close();
@@ -508,13 +550,25 @@ int main(int argc, char *argv[])
 			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript << "outdir=''" << endl;
 			pyscript << "roots=['" << file_label << "']" << endl;
-			pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+			if (show_markers) {
+				pyscript << "marker_list=[";
+				for (i=0; i < nparams_eff; i++) {
+					pyscript << markers[i];
+					if (i < nparams_eff-1) pyscript << ",";
+				}
+				pyscript << "]" << endl;
+			} else {
+				pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+			}
 			pyscript << "g.triangle_plot(roots, [";
 			for (i=0; i < nparams_eff; i++) {
 				pyscript << "'" << param_names[i] << "'";
 				if (i != nparams_eff-1) pyscript << ",";
 			}
-			pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=False,marker_2d='x',";
+			pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
+			if (show_markers) pyscript << "True";
+			else pyscript << "False";
+			pyscript << ",marker_2d='x',";
 			if (include_shading) pyscript << "shaded=True";
 			else pyscript << "shaded=False";
 			pyscript << ")" << endl;
@@ -535,7 +589,23 @@ int main(int argc, char *argv[])
 
 	delete[] param_names;
 	delete[] latex_param_names;
+	delete[] markers;
 	return 0;
+}
+
+void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *markers, const int nparams_eff)
+{
+	const double extra_length_frac = 0.05;
+	for (int i=0; i < nparams_eff; i++) {
+		if (minvals[i] > markers[i]) {
+			minvals[i] = markers[i];
+			minvals[i] -= extra_length_frac*(maxvals[i]-minvals[i]);
+		}
+		else if (maxvals[i] < markers[i]) {
+			maxvals[i] = markers[i];
+			maxvals[i] += extra_length_frac*(maxvals[i]-minvals[i]);
+		}
+	}
 }
 
 bool file_exists(const string &filename)
