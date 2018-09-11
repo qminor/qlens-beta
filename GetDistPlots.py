@@ -645,7 +645,7 @@ class GetDistPlotter():
                     self.plot_3d(roots, [param, param2, col_param], color_bar=False, line_offset=1,
                       do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0, filled=filled_compare, no_label_no_numbers=self.settings.no_triangle_axis_labels)
                 else:
-                    if show_marker_2d is True and markers is not None and i < len(markers):
+                    if show_marker_2d is True and markers is not None and i < len(markers) and i2 < len(markers):
                         self.plot_2d(roots, param_pair=[param, param2], xmark=markers[i], ymark=markers[i2], truemarker=marker_2d, mark_color=marker_color_2d, do_xlabel=i2 == plot_col - 1, do_ylabel=i == 0,
                                             no_label_no_numbers=self.settings.no_triangle_axis_labels, shaded=shaded, add_legend_proxy=i == 1 and i2 == i + 1)
                     else:
