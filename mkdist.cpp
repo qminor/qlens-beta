@@ -442,11 +442,10 @@ int main(int argc, char *argv[])
 		}
 		if (output_cl) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
-			// The following gives the 
 			double *halfpct = new double[nparams];
 			double *lowcl = new double[nparams];
 			double *hicl = new double[nparams];
-			cout << "Best-fit points and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+			cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
 			for (i=0; i < nparams_eff; i++) {
 				lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
 				hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
