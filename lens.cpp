@@ -4600,6 +4600,11 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 			}
 		}
 	}
+	fitmodel->fitmethod = fitmethod;
+	fitmodel->n_fit_parameters = n_fit_parameters;
+	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
+	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
+
 	if (open_chisq_logfile) {
 		string logfile_str = fit_output_dir + "/" + fit_output_filename + ".log";
 		if (group_id==0) {
@@ -5388,112 +5393,116 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	transformed_latex_parameter_names.resize(n_fit_parameters);
 	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
-	if (include_limits) {
-		upper_limits.input(n_fit_parameters);
-		lower_limits.input(n_fit_parameters);
-		upper_limits_initial.input(n_fit_parameters);
-		lower_limits_initial.input(n_fit_parameters);
-		index=0;
-		for (int i=0; i < nlens; i++) {
-			if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("cannot do fit; limits have not been defined for lens %i",i); return false; }
-		}
-		if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
-		if (source_fit_mode==Point_Source) {
-			if (!use_analytic_bestfit_src) {
-				for (int i=0; i < n_sourcepts_fit; i++) {
-					if (vary_sourcepts_x[i]) {
-						lower_limits[index] = sourcepts_lower_limit[i][0];
-						lower_limits_initial[index] = lower_limits[index]; // make it possible to specify initial limits for source point!
-						upper_limits[index] = sourcepts_upper_limit[i][0];
-						upper_limits_initial[index] = upper_limits[index]; // make it possible to specify initial limits for source point!
-						index++;
-					}
-					if (vary_sourcepts_y[i]) {
-						lower_limits[index] = sourcepts_lower_limit[i][1];
-						lower_limits_initial[index] = lower_limits[index]; // make it possible to specify initial limits for source point!
-						upper_limits[index] = sourcepts_upper_limit[i][1];
-						upper_limits_initial[index] = upper_limits[index]; // make it possible to specify initial limits for source point!
-						index++;
-					}
+	if (include_limits) return setup_limits();
+	return true;
+}
+
+bool Lens::setup_limits()
+{
+	upper_limits.input(n_fit_parameters);
+	lower_limits.input(n_fit_parameters);
+	upper_limits_initial.input(n_fit_parameters);
+	lower_limits_initial.input(n_fit_parameters);
+	int index=0;
+	for (int i=0; i < nlens; i++) {
+		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("cannot do fit; limits have not been defined for lens %i",i); return false; }
+	}
+	if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
+	if (source_fit_mode==Point_Source) {
+		if (!use_analytic_bestfit_src) {
+			for (int i=0; i < n_sourcepts_fit; i++) {
+				if (vary_sourcepts_x[i]) {
+					lower_limits[index] = sourcepts_lower_limit[i][0];
+					lower_limits_initial[index] = lower_limits[index]; // make it possible to specify initial limits for source point!
+					upper_limits[index] = sourcepts_upper_limit[i][0];
+					upper_limits_initial[index] = upper_limits[index]; // make it possible to specify initial limits for source point!
+					index++;
+				}
+				if (vary_sourcepts_y[i]) {
+					lower_limits[index] = sourcepts_lower_limit[i][1];
+					lower_limits_initial[index] = lower_limits[index]; // make it possible to specify initial limits for source point!
+					upper_limits[index] = sourcepts_upper_limit[i][1];
+					upper_limits_initial[index] = upper_limits[index]; // make it possible to specify initial limits for source point!
+					index++;
 				}
 			}
-		} else if (source_fit_mode == Pixellated_Source) {
-			if ((vary_regularization_parameter) and (regularization_method != None)) {
-				if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) { warn("lower/upper limits must be set for regularization parameter (see 'regparam') before doing fit"); return false; }
-				lower_limits[index] = regularization_parameter_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = regularization_parameter_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
-			if (vary_pixel_fraction) {
-				lower_limits[index] = pixel_fraction_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = pixel_fraction_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
-			if (vary_srcgrid_xshift) {
-				lower_limits[index] = srcgrid_xshift_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = srcgrid_xshift_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
-			if (vary_srcgrid_yshift) {
-				lower_limits[index] = srcgrid_yshift_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = srcgrid_yshift_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
-			if (vary_srcgrid_size_scale) {
-				lower_limits[index] = srcgrid_size_scale_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = srcgrid_size_scale_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
+		}
+	} else if (source_fit_mode == Pixellated_Source) {
+		if ((vary_regularization_parameter) and (regularization_method != None)) {
+			if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) { warn("lower/upper limits must be set for regularization parameter (see 'regparam') before doing fit"); return false; }
+			lower_limits[index] = regularization_parameter_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = regularization_parameter_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_pixel_fraction) {
+			lower_limits[index] = pixel_fraction_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = pixel_fraction_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_srcgrid_xshift) {
+			lower_limits[index] = srcgrid_xshift_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = srcgrid_xshift_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_srcgrid_yshift) {
+			lower_limits[index] = srcgrid_yshift_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = srcgrid_yshift_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if (vary_srcgrid_size_scale) {
+			lower_limits[index] = srcgrid_size_scale_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = srcgrid_size_scale_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
 
-			if (vary_magnification_threshold) {
-				lower_limits[index] = pixel_magnification_threshold_lower_limit;
-				lower_limits_initial[index] = lower_limits[index];
-				upper_limits[index] = pixel_magnification_threshold_upper_limit;
-				upper_limits_initial[index] = upper_limits[index];
-				index++;
-			}
-		}
-		if (vary_hubble_parameter) {
-			lower_limits[index] = hubble_lower_limit;
+		if (vary_magnification_threshold) {
+			lower_limits[index] = pixel_magnification_threshold_lower_limit;
 			lower_limits_initial[index] = lower_limits[index];
-			upper_limits[index] = hubble_upper_limit;
+			upper_limits[index] = pixel_magnification_threshold_upper_limit;
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
-		if (vary_omega_matter_parameter) {
-			lower_limits[index] = omega_matter_lower_limit;
-			lower_limits_initial[index] = lower_limits[index];
-			upper_limits[index] = omega_matter_upper_limit;
-			upper_limits_initial[index] = upper_limits[index];
-			index++;
+	}
+	if (vary_hubble_parameter) {
+		lower_limits[index] = hubble_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = hubble_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if (vary_omega_matter_parameter) {
+		lower_limits[index] = omega_matter_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = omega_matter_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if (vary_syserr_pos_parameter) {
+		lower_limits[index] = syserr_pos_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = syserr_pos_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
+	param_settings->transform_limits(lower_limits.array(),upper_limits.array());
+	param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (lower_limits[i] > upper_limits[i]) {
+			double temp = upper_limits[i]; upper_limits[i] = lower_limits[i]; lower_limits[i] = temp;
 		}
-		if (vary_syserr_pos_parameter) {
-			lower_limits[index] = syserr_pos_lower_limit;
-			lower_limits_initial[index] = lower_limits[index];
-			upper_limits[index] = syserr_pos_upper_limit;
-			upper_limits_initial[index] = upper_limits[index];
-			index++;
-		}
-		if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
-		param_settings->transform_limits(lower_limits.array(),upper_limits.array());
-		param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
-		for (int i=0; i < n_fit_parameters; i++) {
-			if (lower_limits[i] > upper_limits[i]) {
-				double temp = upper_limits[i]; upper_limits[i] = lower_limits[i]; lower_limits[i] = temp;
-			}
-			if (lower_limits_initial[i] > upper_limits_initial[i]) {
-				double temp = upper_limits_initial[i]; upper_limits_initial[i] = lower_limits_initial[i]; lower_limits_initial[i] = temp;
-			}
+		if (lower_limits_initial[i] > upper_limits_initial[i]) {
+			double temp = upper_limits_initial[i]; upper_limits_initial[i] = lower_limits_initial[i]; lower_limits_initial[i] = temp;
 		}
 	}
 	return true;
@@ -6209,6 +6218,7 @@ void Lens::nested_sampling()
 	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile);
 	running_fit = false;
 	bestfitparams.input(fitparams);
+	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
 
 	//if (display_chisq_status) {
 		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
@@ -6431,36 +6441,37 @@ void Lens::multinest()
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
+		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
-			cout << endl;
-			if (source_fit_mode == Point_Source) {
-				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
-				double *bestfit_flux;
-				if (include_flux_chisq) {
-					bestfit_flux = new double[n_sourcepts_fit];
-					fitmodel->output_model_source_flux(bestfit_flux);
-				};
-				if (use_analytic_bestfit_src) {
-					fitmodel->output_analytic_srcpos(bestfit_src);
-				} else {
-					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
-				}
-				for (int i=0; i < n_sourcepts_fit; i++) {
-					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
-					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
-					cout << endl;
-				}
-				delete[] bestfit_src;
-				if (include_flux_chisq) delete[] bestfit_flux;
+		cout << endl;
+		if (source_fit_mode == Point_Source) {
+			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
+			double *bestfit_flux;
+			if (include_flux_chisq) {
+				bestfit_flux = new double[n_sourcepts_fit];
+				fitmodel->output_model_source_flux(bestfit_flux);
+			};
+			if (use_analytic_bestfit_src) {
+				fitmodel->output_analytic_srcpos(bestfit_src);
+			} else {
+				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
 			}
+			for (int i=0; i < n_sourcepts_fit; i++) {
+				cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
+				if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+				cout << endl;
+			}
+			delete[] bestfit_src;
+			if (include_flux_chisq) delete[] bestfit_flux;
+		}
 
-			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
-			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):    (chisq=" << minchisq << ")\n";
-			for (int i=0; i < n_fit_parameters; i++) {
-				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
-			}
-			cout << endl;
-			output_bestfit_model();
+		cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
+		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):    (chisq=" << minchisq << ")\n";
+		for (int i=0; i < n_fit_parameters; i++) {
+			cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+		}
+		cout << endl;
+		output_bestfit_model();
 		delete[] xparams;
 		delete[] params;
 		delete[] avgs;
@@ -6639,36 +6650,37 @@ void Lens::polychord()
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
+		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
-			cout << endl;
-			if (source_fit_mode == Point_Source) {
-				lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
-				double *bestfit_flux;
-				if (include_flux_chisq) {
-					bestfit_flux = new double[n_sourcepts_fit];
-					fitmodel->output_model_source_flux(bestfit_flux);
-				};
-				if (use_analytic_bestfit_src) {
-					fitmodel->output_analytic_srcpos(bestfit_src);
-				} else {
-					for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
-				}
-				for (int i=0; i < n_sourcepts_fit; i++) {
-					cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
-					if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
-					cout << endl;
-				}
-				delete[] bestfit_src;
-				if (include_flux_chisq) delete[] bestfit_flux;
+		cout << endl;
+		if (source_fit_mode == Point_Source) {
+			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
+			double *bestfit_flux;
+			if (include_flux_chisq) {
+				bestfit_flux = new double[n_sourcepts_fit];
+				fitmodel->output_model_source_flux(bestfit_flux);
+			};
+			if (use_analytic_bestfit_src) {
+				fitmodel->output_analytic_srcpos(bestfit_src);
+			} else {
+				for (int i=0; i < n_sourcepts_fit; i++) bestfit_src[i] = fitmodel->sourcepts_fit[i];
 			}
+			for (int i=0; i < n_sourcepts_fit; i++) {
+				cout << "src" << i << "_x=" << bestfit_src[i][0] << " src" << i << "_y=" << bestfit_src[i][1];
+				if (include_flux_chisq) cout << " src" << i << "_flux=" << bestfit_flux[i];
+				cout << endl;
+			}
+			delete[] bestfit_src;
+			if (include_flux_chisq) delete[] bestfit_flux;
+		}
 
-			cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
-			cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
-			for (int i=0; i < n_fit_parameters; i++) {
-				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
-			}
-			cout << endl;
-			output_bestfit_model();
+		cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
+		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
+		for (int i=0; i < n_fit_parameters; i++) {
+			cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+		}
+		cout << endl;
+		output_bestfit_model();
 		delete[] params;
 		delete[] avgs;
 		delete[] covs;
@@ -6759,6 +6771,7 @@ void Lens::chi_square_twalk()
 	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
 	running_fit = false;
 	bestfitparams.input(fitparams);
+	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
 	//if (display_chisq_status) {
 		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
@@ -6978,7 +6991,13 @@ void Lens::output_bestfit_model()
 		}
 		outfile << endl;
 	} else {
-		outfile << "Best-fit parameters (warning: errors are omitted here because Fisher matrix was not calculated):\n";
+		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			outfile << "Best-fit model: chi-square = " << chisq_bestfit << " (warning: errors omitted here because Fisher matrix was not calculated):\n";
+		} else {
+			outfile << "Best-fit model: chi-square = " << chisq_bestfit << endl;
+		}
+		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
+		outfile << endl;
 		for (int i=0; i < n_fit_parameters; i++) {
 			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
 		}
@@ -6994,8 +7013,21 @@ void Lens::output_bestfit_model()
 			prangefile << "-1e30 1e30" << endl;
 	}
 	prangefile.close();
+
+	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object;
+	// that way we're not forced to adopt it in the user-end lens object if the user doesn't want to
+	fitmodel->bestfitparams.input(bestfitparams);
+	fitmodel->use_bestfit_model();
+	bool include_limits;
+	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
+	else include_limits = true;
 	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
-	output_lens_commands(scriptfile_str);
+	fitmodel->output_lens_commands(scriptfile_str,true);
+	if (include_limits) {
+		// save version without limits in case user wants to load best-fit model while in Simplex or Powell mode
+		string scriptfile_str2 = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
+		fitmodel->output_lens_commands(scriptfile_str2,false);
+	}
 }
 
 double Lens::fitmodel_loglike_point_source(double* params)
@@ -7358,17 +7390,19 @@ void Lens::print_lens_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void Lens::output_lens_commands(string filename)
+void Lens::output_lens_commands(string filename, const bool print_limits)
 {
 	ofstream scriptfile(filename.c_str());
+	if (print_limits) scriptfile << "#limits included" << endl;
+	else scriptfile << "#nolimits included" << endl;
 	for (int i=0; i < nlens; i++) {
-		lens_list[i]->print_lens_command(scriptfile);
+		lens_list[i]->print_lens_command(scriptfile,print_limits);
 	}
 	if (source_fit_mode == Point_Source) {
 		if (sourcepts_fit != NULL) {
 			if (!use_analytic_bestfit_src) {
 				scriptfile << "fit sourcept\n";
-				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				if (!print_limits) {
 					for (int i=0; i < n_sourcepts_fit; i++) scriptfile << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
 				} else {
 					for (int i=0; i < n_sourcepts_fit; i++) {
@@ -7384,14 +7418,14 @@ void Lens::output_lens_commands(string filename)
 	}
 	else if (source_fit_mode == Pixellated_Source) {
 		if (vary_regularization_parameter) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			if (!print_limits) {
 				scriptfile << "regparam " << regularization_parameter << endl;
 			} else {
 				scriptfile << "regparam " << regularization_parameter_lower_limit << " " << regularization_parameter << " " << regularization_parameter_upper_limit << endl;
 			}
 		}
 		if (vary_magnification_threshold) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			if (!print_limits) {
 				scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold << endl;
 			} else {
 				scriptfile << "srcpixel_mag_threshold: " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
@@ -7400,19 +7434,19 @@ void Lens::output_lens_commands(string filename)
 	}
 	if (vary_hubble_parameter) {
 		scriptfile << "hubble = " << hubble << endl;
-		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+		if (print_limits) {
 			scriptfile << hubble_lower_limit << " " << hubble_upper_limit << endl;
 		}
 	}
 	if (vary_omega_matter_parameter) {
 		scriptfile << "omega_m = " << omega_matter << endl;
-		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+		if (print_limits) {
 			scriptfile << omega_matter_lower_limit << " " << omega_matter_upper_limit << endl;
 		}
 	}
 	if (vary_syserr_pos_parameter) {
 		scriptfile << "syserr_pos = " << syserr_pos << endl;
-		if ((fitmethod!=POWELL) or (fitmethod!=SIMPLEX)) {
+		if (print_limits) {
 			scriptfile << syserr_pos_lower_limit << " " << syserr_pos_upper_limit << endl;
 		}
 	}

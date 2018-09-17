@@ -745,7 +745,7 @@ public:
 	void update_anchored_parameters_and_redshift_data();
 	void reassign_lensparam_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
-	void output_lens_commands(string filename);
+	void output_lens_commands(string filename, const bool use_limits);
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum);
@@ -791,6 +791,7 @@ public:
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
 	void chisq_single_evaluation(bool showdiag);
 	bool setup_fit_parameters(bool include_limits);
+	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);

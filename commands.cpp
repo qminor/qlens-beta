@@ -4877,6 +4877,16 @@ void Lens::process_commands(bool read_file)
 							if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
 							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
 						}
+						ifstream testbf(scriptfile_str.c_str());
+						if (!testbf.is_open()) Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
+						string checklimits;
+						testbf >> checklimits;
+						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
+							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
+						} else if ((checklimits=="#nolimits") and ((fitmethod != SIMPLEX) and (fitmethod != POWELL))) {
+							Complain("The best-fit model did not have parameter limits defined. Switch to simplex or powell and try again");
+						}
+						testbf.close();
 						// the following lines are redundant from the "read" command. Should be put in a separate function to reduce redundancies
 						if (infile->is_open()) {
 							if (n_infiles==10) Complain("cannot open more than 10 files at once");
@@ -4885,9 +4895,10 @@ void Lens::process_commands(bool read_file)
 						infile->open(scriptfile_str.c_str());
 						if (infile->is_open()) { read_from_file = true; n_infiles++; }
 						else {
-							cerr << "Error: best-fit lens model file '" << scriptfile_str << "' could not be opened" << endl;
 							if (n_infiles > 0) infile--;
+							Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
 						}
+						getline((*infile),line); // skip the first comment line
 						clear_lenses();
 						param_settings->clear_params();
 						// Clear any existing lens models so the new one can be loaded in

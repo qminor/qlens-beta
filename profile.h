@@ -235,7 +235,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void print_parameters();
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
-	virtual void print_lens_command(ofstream& scriptout);
+	virtual void print_lens_command(ofstream& scriptout, const bool use_limits);
 	void output_lens_command_nofit(string& command);
 	virtual void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 

@@ -105,6 +105,13 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
+	include_limits = lens_in->include_limits;
+	if (include_limits) {
+		lower_limits.input(lens_in->lower_limits);
+		upper_limits.input(lens_in->upper_limits);
+		lower_limits_initial.input(lens_in->lower_limits_initial);
+		upper_limits_initial.input(lens_in->upper_limits_initial);
+	}
 }
 
 void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
@@ -593,7 +600,7 @@ void LensProfile::print_vary_parameters()
 inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
 {
 	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
-	// It doesn't work very well, so canning it for now, not a big deal
+	// It doesn't work very well (due to binary vs. base 10 storage), so canning it for now, not a big deal
 	//int exp;
 	//double mantissa = frexp10((*num),&exp);
 	//double mantissa;
@@ -605,7 +612,7 @@ inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scr
 	if (space) scriptout << " ";
 }
 
-void LensProfile::print_lens_command(ofstream& scriptout)
+void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 {
 	scriptout << setprecision(16);
 	//scriptout << setiosflags(ios::scientific);
@@ -622,7 +629,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 		else {
 			if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
 			else {
-				if ((abs(*(param[i])) < 1e-3) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+				if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
 				else scriptout << *(param[i]);
 			}
 			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
@@ -637,12 +644,12 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 	}
 	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
 	else scriptout << endl;
-	if (include_limits) {
+	if ((use_limits) and (include_limits)) {
 		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
 		else {
 			for (int i=0; i < n_vary_params; i++) {
 				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if (((abs(lower_limits[i]) < 1e-3) or (abs(lower_limits[i])) > 1e3) or ((abs(upper_limits[i]) < 1e-3) or (abs(upper_limits[i])) > 1e3)) {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
 						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
 						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
 						scriptout << endl;
@@ -650,7 +657,7 @@ void LensProfile::print_lens_command(ofstream& scriptout)
 						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
 					}
 				} else {
-					if (((abs(lower_limits[i]) < 1e-3) or (abs(lower_limits[i])) > 1e3) or ((abs(upper_limits[i]) < 1e-3) or (abs(upper_limits[i])) > 1e3)) {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
 						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
 						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
 						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);

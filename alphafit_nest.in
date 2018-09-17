@@ -75,5 +75,4 @@ fit chisq
 # You may want to minimize the chi-square afterword, starting from the best-fit point returned by nested sampling
 #fit method simplex
 #fit run
-#fit save_bestfit     # if you like the resulting fit, save the best-fit model (or do this automatically if 'auto_save_bestfit' is on)
 
