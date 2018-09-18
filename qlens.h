@@ -1562,9 +1562,9 @@ struct DerivedParam
 		funcparam = param;
 		lensnum_param = lensnum;
 		if (derived_param_type == KappaR) {
-			name = "kappa"; latex_name = "\\kappa";
+			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == DKappaR) {
-			name = "dkappa"; latex_name = "\\kappa'";
+			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == Mass2dR) {
 			name = "mass2d"; latex_name = "M_{2D}";
 		} else if (derived_param_type == Mass3dR) {

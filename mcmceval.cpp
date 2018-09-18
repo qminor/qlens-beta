@@ -3336,7 +3336,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 	return;
 }
 
-double McmcEval::cl(const double a, const int iin, const double minval, const double maxval, const char flag)
+double McmcEval::cl(const double pct, const int iin, const double minval, const double maxval, const char flag)
 {
 	double (*fx)(double);
 	int f, i;
@@ -3367,10 +3367,10 @@ double McmcEval::cl(const double a, const int iin, const double minval, const do
 	for (i = 0; i < totPts_subset; i++)
 	{
 		totsofar += wsort[i];
-		if (a <= totsofar/tot)
+		if (totsofar/tot >= pct)
 		{
-			return sort[i] + (sort[i-1] - sort[i])*(totsofar - a*tot)/wsort[i];
-			//cout << a*100.0 << "%:  " << ans << endl;
+			return sort[i] + (sort[i-1] - sort[i])*(totsofar - pct*tot)/wsort[i];
+			//cout << pct*100.0 << "%:  " << ans << endl;
 		}
 	}
 	delete[] sort;
@@ -3411,6 +3411,7 @@ double McmcEval::derived_cl(const double a, const char flag)
 	delete[] wsort;
 	return 0;
 }
+
 
 void McmcEval::Sort(double *arr, const int n)
 {
