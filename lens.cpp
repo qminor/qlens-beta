@@ -576,8 +576,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	regularization_method = lens_in->regularization_method;
 	regularization_parameter = lens_in->regularization_parameter;
-	regularization_parameter_lower_limit = 1e30;
-	regularization_parameter_upper_limit = 1e30;
+	regularization_parameter_lower_limit = lens_in->regularization_parameter_lower_limit;
+	regularization_parameter_upper_limit = lens_in->regularization_parameter_upper_limit;
 	vary_regularization_parameter = lens_in->vary_regularization_parameter;
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;

@@ -938,7 +938,7 @@ void UCMC::TWalk(const char *name, const double div, const int proj, const doubl
 	{
 #endif
 		if (logfile) logout << "Metropolis-Hastings/T-Walk Algorithm Started\n\n";
-		else cout << "Metropolis-Hastings/T-Walk Algorithm Started\n" << "\tpoints = " << "\n\taccept ratio = " << "\n\tR = "  << endl;
+		cout << "Metropolis-Hastings/T-Walk Algorithm Started\n" << "\tpoints = " << "\n\taccept ratio = " << "\n\tR = "  << endl;
 #ifdef USE_MPI
 	}
 #endif
@@ -1190,15 +1190,13 @@ void UCMC::TWalk(const char *name, const double div, const int proj, const doubl
 #endif
 					lastcnt = cnt;
 				}
-			} else {
-				if (mpi_id==0) cout << "\033[3A\tpoints = " << cnt << " (" << cnt/double(NThreads) << ")" << "\n\taccept ratio = " << blank << (double)cnt/(double)total/(double)mpi_ngroups << "\n\tR = " << Ravg/ma << " Rmax=" << Rmax;
-#ifdef USE_OPENMP
-					cout << "   avg_loglike_time = " << total_loglike_time / n_loglikes << endl << flush;
-#else
-					cout << endl << flush;
-#endif
-
 			}
+			cout << "\033[3A\tpoints = " << cnt << " (" << cnt/double(NThreads) << ")" << "\n\taccept ratio = " << blank << (double)cnt/(double)total/(double)mpi_ngroups << "\n\tR = " << Ravg/ma << " Rmax=" << Rmax;
+#ifdef USE_OPENMP
+			cout << "   avg_loglike_time = " << total_loglike_time / n_loglikes << endl << flush;
+#else
+			cout << endl << flush;
+#endif
 #ifdef USE_MPI
 		}
 		MPI_Bcast(best_fit_params,ma,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -2983,10 +2981,10 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 		else if ((i % (N/20)) == 0)
 		{
 			icount++;
-			if (mpi_id==0) cout << "\033[5AProgress:  [" << flush;
 			if (mpi_id==0) {
-			for (j=0; j < icount; j++) cout << "=" << flush;
-			cout << "\033[4B" << endl << flush;
+				cout << "\033[5AProgress:  [" << flush;
+				for (j=0; j < icount; j++) cout << "=" << flush;
+				cout << "\033[4B" << endl << flush;
 			}
 		}
 	}
@@ -3031,12 +3029,8 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	ptr1 = points[imin];
 	likeLast = likeMin;
 	if (mpi_id==0) {
-		if (!logfile) {
-			cout << "\n\033[7AStatus:  Nested Sampling Started" << endl << flush;
-			cout << "\033[K\tpoints = \033[K" << "\n\tinv slope = " << "\n\tneg loglike = " << "\n\taccept ratio = " << endl << endl << flush;
-		} else {
-			cout << endl << endl << endl;
-		}
+		cout << "\n\033[7AStatus:  Nested Sampling Started" << endl << flush;
+		cout << "\033[K\tpoints = \033[K" << "\n\tinv slope = " << "\n\tneg loglike = " << "\n\taccept ratio = " << endl << endl << flush;
 	}
 
 	bool accepted;
@@ -3145,17 +3139,16 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 					logout << endl;
 #endif
 				}
-			} else {
-				cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
-				<< "\n\tinv slope = " << blank << slope 
-				<< "\n\tneg loglike = " << blank << likeMin 
-				<< "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
-#ifdef USE_OPENMP
-				cout << " t_it = " << blank << time_per_it << endl << endl;
-#else
-				cout << endl << endl;
-#endif
 			}
+			cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
+			<< "\n\tinv slope = " << blank << slope 
+			<< "\n\tneg loglike = " << blank << likeMin 
+			<< "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
+#ifdef USE_OPENMP
+			cout << " t_it = " << blank << time_per_it << endl << endl;
+#else
+			cout << endl << endl;
+#endif
 		}
 #ifdef USE_MPI
 		MPI_Bcast(&KEEP_RUNNING,1,MPI_INT,0,MPI_COMM_WORLD);
@@ -3166,10 +3159,8 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	group = new Points(points, ma, N, exp(-double(count+1)/N)*senfac, lvl, enl, &random, 0x00);
 	
 	if (mpi_id==0) {
-		if (logfile)
-			logout << "Status:  MultNest Sampling Started" << endl;
-		else
-			cout << "\033[6AStatus:  MultNest Sampling Started\r\033[5B" << blank << endl;
+		cout << "\033[6AStatus:  MultNest Sampling Started\r\033[5B" << blank << endl;
+		if (logfile) logout << "Status:  MultNest Sampling Started" << endl;
 	}
 
 	int overflow = 0;
@@ -3241,10 +3232,8 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 			{
 				overflow++;
 				if (mpi_id==0) {
-					if (logfile)
-						logout << "Overflows: " << overflow << endl;
-					else
-						cout << "\033[6AStatus:  MultNest Sampling Started (" << overflow << " overflow(s))\r\033[5B" << endl;
+					cout << "\033[6AStatus:  MultNest Sampling Started (" << overflow << " overflow(s))\r\033[5B" << endl;
+					if (logfile) logout << "Overflows: " << overflow << endl;
 				}
 			}
 		}
@@ -3302,19 +3291,18 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 					logout << endl;
 #endif
 				}
-			} else {
-				cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
-					<< "\n\tinv slope = " << blank << slope << " (test = " << test << ")       "
-					<< "\n\tneg loglike = " << blank << likeMin  << blank << "(" << likeMax << ")"
-					<< "\n\tF = " << blank << group->F() << bblank << " (";
-				group->printbads();
-				cout << ")                                                            " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
-#ifdef USE_OPENMP
-				cout << " t_it = " << blank << time_per_it << endl;
-#else
-				cout << endl;
-#endif
 			}
+			cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
+				<< "\n\tinv slope = " << blank << slope << " (test = " << test << ")       "
+				<< "\n\tneg loglike = " << blank << likeMin  << blank << "(" << likeMax << ")"
+				<< "\n\tF = " << blank << group->F() << bblank << " (";
+			group->printbads();
+			cout << ")                                                            " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
+#ifdef USE_OPENMP
+			cout << " t_it = " << blank << time_per_it << endl;
+#else
+			cout << endl;
+#endif
 
 		}
 #ifdef USE_MPI
@@ -3438,14 +3426,13 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 			logout << "Status:  Finished\n";
 			logout << count+N << " points, Z = " << exp(lnZ) << endl;
 			logout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << endl;
-		} else {
-			if (NDerivedParams > 0)
-				cout << "\033[7A\033[KStatus:  Finished\r\033[6B" << endl;
-			else
-				cout << "\033[6A\033[KStatus:  Finished\r\033[5B" << endl;
-			cout << count+N << " points, Z = " << exp(lnZ) << "                                                   " << endl;
-			cout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << "                                                   " << endl;
 		}
+		if (NDerivedParams > 0)
+			cout << "\033[7A\033[KStatus:  Finished\r\033[6B" << endl;
+		else
+			cout << "\033[6A\033[KStatus:  Finished\r\033[5B" << endl;
+		cout << count+N << " points, Z = " << exp(lnZ) << "                                                   " << endl;
+		cout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << "                                                   " << endl;
 	}
 	
 	if (system((string("rm -f ") + string(name) + string(".temp")).c_str()) != 0) warn("could not delete temporary files for nested sampling output");

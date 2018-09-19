@@ -478,6 +478,9 @@ class GetDistPlotter():
         p = self.check_param(root, param)
         return r'$' + p.label + r'$'
 
+    def add_title(self, title_text, fontsize=38):
+        self.fig.suptitle(title_text, fontsize=fontsize) 
+    
     def add_legend(self, legend_labels, legend_loc=None, line_offset=0, legend_ncol=None, colored_text=False, figure=False):
             if legend_loc is None:
                 if figure: legend_loc = self.settings.figure_legend_loc
