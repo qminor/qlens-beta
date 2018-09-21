@@ -7014,19 +7014,22 @@ void Lens::output_bestfit_model()
 	}
 	prangefile.close();
 
-	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object;
+	Lens* model;
+	if (fitmodel != NULL) model = fitmodel;
+	else model = this;
+	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object (if available);
 	// that way we're not forced to adopt it in the user-end lens object if the user doesn't want to
-	fitmodel->bestfitparams.input(bestfitparams);
-	fitmodel->use_bestfit_model();
+	model->bestfitparams.input(bestfitparams);
+	model->use_bestfit_model();
 	bool include_limits;
 	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
 	else include_limits = true;
 	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
-	fitmodel->output_lens_commands(scriptfile_str,true);
+	model->output_lens_commands(scriptfile_str,true);
 	if (include_limits) {
 		// save version without limits in case user wants to load best-fit model while in Simplex or Powell mode
 		string scriptfile_str2 = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
-		fitmodel->output_lens_commands(scriptfile_str2,false);
+		model->output_lens_commands(scriptfile_str2,false);
 	}
 }
 

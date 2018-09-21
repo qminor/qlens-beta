@@ -64,7 +64,6 @@ n_livepts = 1000       # This affects how well the nested sampler explores the p
 # The nested sampling finishes when the value of 'test' reaches 2; it may take awhile (up to ~30 mins depending on your machine)
 # to finish in this example. To make the nested sampling run faster, compile QLens with MPI and run it with multiple processes
 
-mcmclog on
 fit run  # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
 
 # Once the nested sampling finishes, you can plot the resulting posterior probability distributions using the 'mkdist' tool,

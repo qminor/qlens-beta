@@ -436,6 +436,7 @@ void Cosmology::get_halo_parameters_from_rs_ds(const double z, const double rs, 
 	double (Brent::*croot)(const double);
 	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::concentration_root_equation);
 	croot_const = virial_ratio*critical_density(z)/(3*ds*1e9);
+	cout << "CRIT: " << critical_density(z) << endl;
 	double c;
 	c = BrentsMethod(croot, 0.01, 1000, 1e-4);
 	rvir = c * rs;
