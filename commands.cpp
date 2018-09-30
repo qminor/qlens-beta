@@ -4622,7 +4622,7 @@ void Lens::process_commands(bool read_file)
 					else if (nwords >= 4) {
 						int param_num;
 						if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
-						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit priors'");
+						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit priors')");
 						if (words[3]=="uniform") param_settings->priors[param_num]->set_uniform();
 						else if (words[3]=="log") param_settings->priors[param_num]->set_log();
 						else if (words[3]=="gaussian") {
@@ -4870,6 +4870,10 @@ void Lens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
+					// NOTE: a slightly annoying issue is that when this command is typed while a file is paused, after loading the best-fit model script
+					// it automatically unpauses when returning to the initial script. One solution to this would be to have an array of structures
+					// that contain the ofstreams (instead of an array of ofstreams directly), and the structure also contains the "read_from_file" boolean
+					// for that script. Then it will remember if that script is paused or not. Do this later!
 					if (nwords <= 3) {
 						string scriptfile_str;
 						if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";

@@ -33,6 +33,7 @@ int main(int argc, char *argv[])
 	bool output_min_chisq_point = false;
 	bool output_mean_and_errors = false;
 	bool output_cl = false;
+	bool cl_2sigma = false;
 	bool make_derived_posterior = false;
 	bool plot_mass_profile_constraints = false;
 	bool run_python_script = false;
@@ -57,6 +58,7 @@ int main(int argc, char *argv[])
 	double threshold = 3e-3;
 	double percentile = 0.5;
 	bool output_percentile = false;
+	bool show_uncertainties_as_percentiles = false;
 	if (argc < 2) {
 		cerr << "Error: must enter at least one argument (file_root)\n";
 		usage_error();
@@ -89,7 +91,11 @@ int main(int argc, char *argv[])
 				switch (c) {
 					case 'b': output_min_chisq_point = true; break;
 					case 'e': output_mean_and_errors = true; break; // this option also outputs the parameter covariance matrix
-					case 'E': output_cl = true; break;
+					case 'E':
+						output_cl = true;
+						if (*(argv[i]+1)=='2') { cl_2sigma = true; argv[i]++; }
+						break;
+					case 'u': show_uncertainties_as_percentiles = true; break;
 					case 'P': run_python_script = true; break;
 					case 'x': exclude_derived_params = true; break;
 					case 'f':
@@ -445,12 +451,21 @@ int main(int argc, char *argv[])
 			double *halfpct = new double[nparams];
 			double *lowcl = new double[nparams];
 			double *hicl = new double[nparams];
-			cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+			if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
+			else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
 			for (i=0; i < nparams_eff; i++) {
-				lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
-				hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
+				if (cl_2sigma) {
+					lowcl[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
+					hicl[i] = Eval.cl(0.975,i,minvals[i],maxvals[i]);
+				} else {
+					lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
+					hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
+				}
 				halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
-				cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+				if (show_uncertainties_as_percentiles)
+					cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
+				else
+					cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
 			}
 			cout << endl;
 			delete[] halfpct;
