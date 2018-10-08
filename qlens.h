@@ -846,8 +846,10 @@ public:
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
 	double chisq_pos_image_plane_verbose();
+
 	double chisq_flux();
 	double chisq_time_delays();
+	void output_imgplane_chisq_vals();
 	void output_model_source_flux(double *bestfit_flux);
 	void output_analytic_srcpos(lensvector *beta_i);
 

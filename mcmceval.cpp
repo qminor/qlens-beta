@@ -1832,9 +1832,9 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 double McmcEval::DerivedParam(double *point)
 {
 	double a,b;
-	b = point[8];
-	a = sqrt(point[0]*b);
-	return M_PI*b*(rad - sqrt(a*a+rad*rad) + a) / (2 - point[1]);
+	//b = point[8];
+	//a = sqrt(point[0]*b);
+	return point[4]-point[3];
 }
 
 void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, int iin, const char flag)

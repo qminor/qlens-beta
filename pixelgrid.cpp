@@ -3811,16 +3811,16 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax=-1e30;
 	int ii,jj,il,ih,jl,jh,nn;
 	double sbavg;
-	static const int window_size_for_sbavg = 2;
+	static const int window_size_for_sbavg = 0;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (fit_to_data[i][j]) {
 				sbavg=0;
 				nn=0;
-				il=i-window_size_for_sbavg;
-				ih=i+window_size_for_sbavg;
-				jl=j-window_size_for_sbavg;
-				jh=j+window_size_for_sbavg;
+				il = i - window_size_for_sbavg;
+				ih = i + window_size_for_sbavg;
+				jl = j - window_size_for_sbavg;
+				jh = j + window_size_for_sbavg;
 				if (il<0) il=0;
 				if (ih>x_N-1) ih=x_N-1;
 				if (jl<0) jl=0;

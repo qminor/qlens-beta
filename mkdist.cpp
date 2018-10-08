@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 						break;
 					case 'l': include_log_evidence = true; break;
 					case 'D': // find posterior in a derived parameter, which is defined in the function DerivedParam(...) in mcmceval.cpp
-						if (sscanf(argv[i], "D%lf", &radius)==0) usage_error();
+						//if (sscanf(argv[i], "D%lf", &radius)==0) usage_error();
 						make_derived_posterior = true;
 						argv[i] = advance(argv[i]);
 						break;
@@ -376,10 +376,10 @@ int main(int argc, char *argv[])
 		if (make_derived_posterior) {
 			double rap[20];
 			double mean, sig;
-			Eval.setRadius(radius);
+			//Eval.setRadius(radius);
 			Eval.calculate_derived_param();
-			if (smoothing) Eval.DerivedHist(0, 1e30, nbins, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST|SMOOTH, rap);
-			else Eval.DerivedHist(0, 1e30, nbins, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST, rap);
+			if (smoothing) Eval.DerivedHist(-1e30, 1e30, nbins, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST|SMOOTH, rap);
+			else Eval.DerivedHist(-1e30, 1e30, nbins, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST, rap);
 			double cl_l1,cl_l2,cl_h1,cl_h2;
 			cl_l1 = Eval.derived_cl(0.02275);
 			cl_l2 = Eval.derived_cl(0.15865);
@@ -387,9 +387,9 @@ int main(int argc, char *argv[])
 			cl_h2 = Eval.derived_cl(0.97725);
 			double center,sigma;
 			// NOTE: You need to enforce boundaries in FindDerivedSigs, otherwise outlier points will screw up the derived confidence limits
-			Eval.FindDerivedSigs(center,sigma);
+			//Eval.FindDerivedSigs(center,sigma);
 			cout << "Confidence limits: " << cl_l1 << " " << cl_l2 << " " << cl_h1 << " " << cl_h2 << endl;
-			cout << "Sig: " << center << " " << sigma << endl;
+			//cout << "Sig: " << center << " " << sigma << endl;
 		}
 
 		if (plot_mass_profile_constraints) {

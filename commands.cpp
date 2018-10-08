@@ -4178,12 +4178,16 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
 					if (lensnum >= nlens) Complain("specified lens number does not exist");
 					if (read_command(false)==false) return;
-					bool vary_zl = check_vary_z();
+					bool vary_zl = check_vary_z(); // this looks for the 'varyz=#' arg. If it finds it, removes it and sets 'vary_zl' to true; if not, sets vary_zl to 'false'
 					int nparams_to_vary = nwords;
-					boolvector vary_flags(nparams_to_vary);
+					boolvector vary_flags(nparams_to_vary+1);
 					for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
 					vary_flags[nparams_to_vary] = vary_zl;
-					if (set_lens_vary_parameters(lensnum,vary_flags)==false) Complain("number of vary flags does not match number of parameters for specified lens");
+					int nparam;
+					if (set_lens_vary_parameters(lensnum,vary_flags)==false) {
+						int npar = lens_list[lensnum]->n_params;
+						Complain("number of vary flags does not match number of parameters (" << npar << ") for specified lens");
+					}
 				}
 				else if (words[1]=="source_mode")
 				{
@@ -4886,7 +4890,8 @@ void Lens::process_commands(bool read_file)
 						string checklimits;
 						testbf >> checklimits;
 						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
-							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
+							if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf_nolimits.in";
+							else scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
 						} else if ((checklimits=="#nolimits") and ((fitmethod != SIMPLEX) and (fitmethod != POWELL))) {
 							Complain("The best-fit model did not have parameter limits defined. Switch to simplex or powell and try again");
 						}
@@ -7438,7 +7443,8 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
+			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
+			output_imgplane_chisq_vals();
 			//add_derived_param(KappaR,5.0,-1);
 			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
@@ -7472,6 +7478,7 @@ bool Lens::read_command(bool show_prompt)
 			}
 		} else {
 			getline((*infile),line);
+			lines.push_back(line);
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;
 		}
 	} else {
