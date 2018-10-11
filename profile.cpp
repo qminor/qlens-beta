@@ -242,6 +242,13 @@ void LensProfile::get_parameters(double* params)
 	}
 }
 
+void LensProfile::get_parameters_pmode(const int pmode_in, double* params)
+{
+	// overload this function for models that have different parameter modes; allows
+	// flexibility in obtaining parameters from different pmodes
+	return get_parameters(params);
+}
+
 void LensProfile::update_parameters(const double* params)
 {
 	for (int i=0; i < n_params; i++) {

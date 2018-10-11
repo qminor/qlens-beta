@@ -270,6 +270,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool max_sb_prior_unselected_pixels;
 	double max_sb_frac;
 	bool subhalo_prior;
+	bool use_custom_prior;
 	bool lens_position_gaussian_transformation;
 	ParamSettings *param_settings;
 
@@ -803,6 +804,7 @@ public:
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_pixellated_source(double* params);
 	double fitmodel_loglike_pixellated_source_test(double* params);
+	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);

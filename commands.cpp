@@ -7305,6 +7305,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(subhalo_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="custom_prior")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use custom prior: " << display_switch(use_custom_prior) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'custom_prior' command; must specify 'on' or 'off'");
+				set_switch(use_custom_prior,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="activate_unmapped_srcpixels")
 		{
 			if (nwords==1) {
@@ -7443,8 +7452,9 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
+			fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
-			output_imgplane_chisq_vals();
+			//output_imgplane_chisq_vals();
 			//add_derived_param(KappaR,5.0,-1);
 			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();

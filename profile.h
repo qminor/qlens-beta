@@ -219,6 +219,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
+	virtual void get_parameters_pmode(const int pmode_in, double* params);
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -441,6 +442,7 @@ class NFW : public LensProfile
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
+	void get_parameters_pmode(const int pmode_in, double* params);
 
 	double calculate_scaled_mass_3d(const double r);
 	bool output_cosmology_info(const int lens_number = -1);
@@ -504,6 +506,7 @@ class Cored_NFW : public LensProfile
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*);
 	void update_special_anchored_params();
+	void get_parameters_pmode(const int pmode_in, double* params);
 	double calculate_scaled_mass_3d(const double r);
 	bool output_cosmology_info(const int lens_number);
 };

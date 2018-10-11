@@ -724,6 +724,24 @@ void NFW::assign_param_pointers()
 	set_geometric_param_pointers(2);
 }
 
+void NFW::get_parameters_pmode(const int pmode, double* params)
+{
+	if (pmode==2) {
+		params[0] = m200;
+		params[1] = rs_kpc;
+	} else if (pmode==1) {
+		params[0] = m200;
+		params[1] = c200;
+	} else {
+		params[0] = ks;
+		params[1] = rs;
+	}
+	for (int i=2; i < n_params; i++) {
+		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		else params[i] = *(param[i]);
+	}
+}
+
 void NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
@@ -1085,6 +1103,27 @@ void Cored_NFW::assign_param_pointers()
 		param[2] = &rc;
 	}
 	set_geometric_param_pointers(3);
+}
+
+void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
+{
+	if (pmode==2) {
+		params[0] = m200;
+		params[1] = rs_kpc;
+		params[2] = beta;
+	} else if (pmode==1) {
+		params[0] = m200;
+		params[1] = c200;
+		params[2] = beta;
+	} else {
+		params[0] = ks;
+		params[1] = rs;
+		params[2] = rc;
+	}
+	for (int i=3; i < n_params; i++) {
+		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		else params[i] = *(param[i]);
+	}
 }
 
 void Cored_NFW::update_meta_parameters()

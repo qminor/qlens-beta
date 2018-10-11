@@ -5163,7 +5163,8 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 	cg_method.set_MPI_comm(&sub_comm);
 #endif
 	for (int i=0; i < source_npixels; i++) temp[i] = 0;
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
+	if (regularization_method != None)
 		cg_method.set_determinant_mode(true);
 	else cg_method.set_determinant_mode(false);
 #ifdef USE_OPENMP
@@ -5205,7 +5206,8 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 		}
 	}
 
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
+	if (regularization_method != None) {
 		cg_method.get_log_determinant(Fmatrix_log_determinant);
 		if ((mpi_id==0) and (verbal)) cout << "log determinant = " << Fmatrix_log_determinant << endl;
 		CG_sparse cg_det(Rmatrix,Rmatrix_index,3e-4,100000,inversion_nthreads,group_np,group_id);
@@ -5386,7 +5388,8 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 
    status = umfpack_di_solve(UMFPACK_A, Fmatrix_unsymmetric_cols, Fmatrix_unsymmetric_indices, Fmatrix_unsymmetric, temp, Dvector, Numeric, Control, Info);
 
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) calculate_determinant = true; // specifies to calculate determinant
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) calculate_determinant = true; // specifies to calculate determinant
+	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
 
 	if ((n_image_prior) or (max_sb_prior_unselected_pixels)) {
 		max_pixel_sb=-1e30;
@@ -5667,7 +5670,8 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		mumps_solver->icntl[2] = MUMPS_SILENT;
 		mumps_solver->icntl[3] = MUMPS_SILENT;
 	}
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) mumps_solver->icntl[32]=1; // specifies to calculate determinant
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) mumps_solver->icntl[32]=1; // specifies to calculate determinant
+	if (regularization_method != None) mumps_solver->icntl[32]=1; // specifies to calculate determinant
 	else mumps_solver->icntl[32] = 0;
 	if (parallel_mumps) {
 		mumps_solver->icntl[27]=2; // parallel analysis phase
@@ -5720,7 +5724,8 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		}
 	}
 
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
+	if (regularization_method != None)
 	{
 		Fmatrix_log_determinant = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
 		//cout << "Fmatrix log determinant = " << Fmatrix_log_determinant << endl;

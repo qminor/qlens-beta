@@ -225,6 +225,7 @@ Lens::Lens() : UCMC()
 	max_sb_prior_unselected_pixels = true;
 	max_sb_frac = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
+	use_custom_prior = false;
 	nlens = 0;
 	n_sb = 0;
 	n_derived_params = 0;
@@ -510,6 +511,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
 	max_sb_frac = lens_in->max_sb_frac;
 	subhalo_prior = lens_in->subhalo_prior;
+	use_custom_prior = lens_in->use_custom_prior;
 
 	plot_ptsize = lens_in->plot_ptsize;
 	plot_pttype = lens_in->plot_pttype;
@@ -7272,6 +7274,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	if (use_custom_prior) loglike += fitmodel_custom_prior();
 	fitmodel->chisq_it++;
 	return loglike;
 }
@@ -7315,6 +7318,7 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	}
 	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	if (use_custom_prior) loglike = fitmodel_custom_prior();
 
 	return loglike;
 }
@@ -7378,6 +7382,7 @@ double Lens::loglike_point_source(double* params)
 
 	param_settings->add_prior_terms_to_loglike(params,loglike);
 	param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	if (use_custom_prior) loglike = fitmodel_custom_prior();
 	chisq_it++;
 	return loglike;
 }
@@ -7415,6 +7420,23 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
+}
+
+double Lens::fitmodel_custom_prior()
+{
+	static const double rcore_threshold = 3.0;
+	double cnfw_params[8];
+	double rc, rs, rcore;
+	if (fitmodel != NULL)
+		fitmodel->lens_list[0]->get_parameters_pmode(0,cnfw_params);
+	else
+		lens_list[0]->get_parameters_pmode(0,cnfw_params); // used for the "test" command"
+	rs=cnfw_params[1];
+	rc=cnfw_params[2];
+	rcore = rc*(sqrt(1+8*rs/rc)-1)/4.0;
+	if (fitmodel==NULL) cout << "rcore: " << rcore << endl; // for testing purposes, using the "test" command
+	if (rcore < rcore_threshold) return 0.0;
+	else return 1e30+rcore; // penalty function
 }
 
 void Lens::set_Gauss_NN(const int& nn)
@@ -8348,7 +8370,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
 		}
 	}
-	if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
+	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
+	if (regularization_method != None) {
 		if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << endl;
 		// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
 		//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
