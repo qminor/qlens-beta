@@ -5846,6 +5846,8 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 	if (show_diagnostics) chisq_diagnostic = false;
 
 	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
 }
 
 void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
@@ -8386,7 +8388,9 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 		if (regularization_parameter != 0) {
-			chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+			//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
+			double effective_reg_parameter = regularization_parameter;
+			chisq += effective_reg_parameter*Es - source_npixels*log(effective_reg_parameter) - Rmatrix_log_determinant;
 		}
 		chisq += Fmatrix_log_determinant;
 		if (group_id==0) {

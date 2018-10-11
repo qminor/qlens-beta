@@ -1961,14 +1961,16 @@ void SourcePixelGrid::generate_gmatrices()
 {
 	int i,j,k,l;
 	SourcePixelGrid *cellptr1, *cellptr2;
-	double alpha, beta;
+	double alpha, beta, dxfac;
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
 			if (cell[i][j]->cell != NULL) cell[i][j]->generate_gmatrices();
 			else {
 				if (cell[i][j]->active_pixel) {
+					//dxfac = pow(2.0,(cell[i][j]->level-1));
+					dxfac = 1.0;
 					for (k=0; k < 4; k++) {
-						lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(1);
+						lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(1.0/dxfac);
 						lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cell[i][j]->active_index);
 						lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 						lens->gmatrix_nn[k]++;
@@ -1988,14 +1990,14 @@ void SourcePixelGrid::generate_gmatrices()
 								beta = 1-alpha;
 								if (cellptr1->active_pixel) {
 									if (!cellptr2->active_pixel) beta=1; // just in case the other point is no good
-									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta);
+									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta/dxfac);
 									lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr1->active_index);
 									lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 									lens->gmatrix_nn[k]++;
 								}
 								if (cellptr2->active_pixel) {
 									if (!cellptr1->active_pixel) alpha=1; // just in case the other point is no good
-									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-alpha);
+									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-alpha/dxfac);
 									lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr2->active_index);
 									lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 									lens->gmatrix_nn[k]++;
@@ -2003,7 +2005,7 @@ void SourcePixelGrid::generate_gmatrices()
 							}
 							else if (cell[i][j]->neighbor[k]->active_pixel) {
 								if (cell[i][j]->neighbor[k]->level==cell[i][j]->level) {
-									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-1);
+									lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-1.0/dxfac);
 									lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cell[i][j]->neighbor[k]->active_index);
 									lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 									lens->gmatrix_nn[k]++;
@@ -2018,7 +2020,7 @@ void SourcePixelGrid::generate_gmatrices()
 									}
 									if ((cellptr1->neighbor[l]==NULL) or ((cellptr1->neighbor[l]->cell==NULL) and (!cellptr1->neighbor[l]->active_pixel))) {
 										// There is no useful nearby neighbor to interpolate with, so just use the single neighbor pixel
-										lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-1);
+										lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-1.0/dxfac);
 										lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr1->active_index);
 										lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 										lens->gmatrix_nn[k]++;
@@ -2033,14 +2035,14 @@ void SourcePixelGrid::generate_gmatrices()
 										//cout << cell[i][j]->center_pt[0] << " " << cellptr1->center_pt[0] << " " << cellptr1->center_pt[1] << " " << cellptr2->center_pt[0] << " " << cellptr2->center_pt[1] << endl;
 										if (cellptr1->active_pixel) {
 											if (!cellptr2->active_pixel) beta=1; // just in case the other point is no good
-											lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta);
+											lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta/dxfac);
 											lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr1->active_index);
 											lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 											lens->gmatrix_nn[k]++;
 										}
 										if (cellptr2->active_pixel) {
 											if (!cellptr1->active_pixel) alpha=1; // just in case the other point is no good
-											lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-alpha);
+											lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-alpha/dxfac);
 											lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr2->active_index);
 											lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 											lens->gmatrix_nn[k]++;
@@ -4911,6 +4913,7 @@ void Lens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
 	double effective_reg_parameter = regularization_parameter;
 
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
