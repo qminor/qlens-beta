@@ -1967,7 +1967,7 @@ void SourcePixelGrid::generate_gmatrices()
 			if (cell[i][j]->cell != NULL) cell[i][j]->generate_gmatrices();
 			else {
 				if (cell[i][j]->active_pixel) {
-					//dxfac = pow(2.0,(cell[i][j]->level-1));
+					//dxfac = pow(1.3,-(cell[i][j]->level));
 					dxfac = 1.0;
 					for (k=0; k < 4; k++) {
 						lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(1.0/dxfac);

@@ -4625,7 +4625,10 @@ void Lens::process_commands(bool read_file)
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
-						if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
+						if (!(ws[2] >> param_num)) {
+							if ((param_num = param_settings->lookup_param_number(words[2])) == -1)
+							Complain("Invalid parameter number/name");
+						}
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit priors')");
 						if (words[3]=="uniform") param_settings->priors[param_num]->set_uniform();
 						else if (words[3]=="log") param_settings->priors[param_num]->set_log();
@@ -4675,7 +4678,10 @@ void Lens::process_commands(bool read_file)
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
-						if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
+						if (!(ws[2] >> param_num)) {
+							if ((param_num = param_settings->lookup_param_number(words[2])) == -1)
+							Complain("Invalid parameter number/name");
+						}
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit transform'");
 						if (words[3]=="none") param_settings->transforms[param_num]->set_none();
 						else if (words[3]=="log") param_settings->transforms[param_num]->set_log();
@@ -4728,7 +4734,10 @@ void Lens::process_commands(bool read_file)
 						} else {
 							int param_num;
 							double stepsize;
-							if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
+							if (!(ws[2] >> param_num)) {
+								if ((param_num = param_settings->lookup_param_number(words[2])) == -1)
+								Complain("Invalid parameter number/name");
+							}
 							if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit stepsizes'");
 							if (!(ws[3] >> stepsize)) Complain("Invalid stepsize");
 							param_settings->set_stepsize(param_num,stepsize);
@@ -4752,6 +4761,10 @@ void Lens::process_commands(bool read_file)
 					}
 					else if (nwords == 4) {
 						int param_num;
+						if (!(ws[2] >> param_num)) {
+							if ((param_num = param_settings->lookup_param_number(words[2])) == -1)
+							Complain("Invalid parameter number/name");
+						}
 						if (!(ws[2] >> param_num)) Complain("Invalid parameter number");
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit plimits'");
 						if (words[3]=="none") param_settings->clear_penalty_limit(param_num);

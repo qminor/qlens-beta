@@ -1273,6 +1273,13 @@ struct ParamSettings
 		nparams = new_nparams;
 		return true;
 	}
+	int lookup_param_number(const string pname)
+	{
+		for (int i=0; i < nparams; i++) {
+			if (param_names[i]==pname) return i;
+		}
+		return -1;
+	}
 	void clear_penalty_limits()
 	{
 		for (int i=0; i < nparams; i++) {

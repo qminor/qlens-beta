@@ -5718,7 +5718,7 @@ void Lens::get_parameter_names()
 		}
 	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lambda");
+		fit_parameter_names.push_back("regparam");
 		latex_parameter_names.push_back("\\lambda");
 		latex_parameter_subscripts.push_back("");
 	}
@@ -8391,6 +8391,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
 			double effective_reg_parameter = regularization_parameter;
 			chisq += effective_reg_parameter*Es - source_npixels*log(effective_reg_parameter) - Rmatrix_log_determinant;
+			cout << "src_np=" << source_npixels << " lambda=" << effective_reg_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
+			//chisq += effective_reg_parameter*Es;
 		}
 		chisq += Fmatrix_log_determinant;
 		if (group_id==0) {
