@@ -6632,6 +6632,13 @@ void Lens::polychord()
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
+		if (mpi_id==0) {
+			string cluster_dir = fit_output_dir + "/clusters";
+			struct stat sb;
+			stat(cluster_dir.c_str(),&sb);
+			if (S_ISDIR(sb.st_mode)==false)
+				mkdir(cluster_dir.c_str(),S_IRWXU | S_IRWXG);
+		}
 	}
 
 	initialize_fitmodel(true);
@@ -8266,6 +8273,15 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			sourcegrid_ymax += ywidth_adj/2;
 		}
 	}
+	// For testing purposes...see where the image pixels map to on the source plane
+	//ofstream mapfile("srcmaps.dat");
+	//for (int i=0; i < image_pixel_grid->x_N; i++) {
+		//for (int j=0; j < image_pixel_grid->y_N; j++) {
+			//if (image_pixel_data->require_fit[i][j])
+			//mapfile << image_pixel_grid->center_sourcepts[i][j][0] << " " << image_pixel_grid->center_sourcepts[i][j][1] << endl;
+		//}
+	//}
+
 
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
@@ -8391,7 +8407,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
 			double effective_reg_parameter = regularization_parameter;
 			chisq += effective_reg_parameter*Es - source_npixels*log(effective_reg_parameter) - Rmatrix_log_determinant;
-			cout << "src_np=" << source_npixels << " lambda=" << effective_reg_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
+			//cout << "src_np=" << source_npixels << " lambda=" << effective_reg_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			//chisq += effective_reg_parameter*Es;
 		}
 		chisq += Fmatrix_log_determinant;
@@ -8459,6 +8475,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	return chisq;
 }
 
+/*
 double Lens::set_required_data_pixel_window(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
@@ -8469,6 +8486,7 @@ double Lens::set_required_data_pixel_window(bool verbal)
 	image_pixel_grid->assign_required_data_pixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,count,image_pixel_data);
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in window required for fit: " << count << endl;
 }
+*/
 
 /*
 void Lens::generate_solution_chain_sdp81()

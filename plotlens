@@ -697,6 +697,6 @@ echo "$PLOTLINE" >tempplot.in
 
 #gnuplot -persist tempplot.in
 gnuplot -persist tempplot.in >/dev/null 2>&1
-rm tempplot.in
+#rm tempplot.in
 if [ -f imgdat_notitles.dat ]; then rm imgdat_notitles.dat; fi
 

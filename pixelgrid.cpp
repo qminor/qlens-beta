@@ -1967,7 +1967,7 @@ void SourcePixelGrid::generate_gmatrices()
 			if (cell[i][j]->cell != NULL) cell[i][j]->generate_gmatrices();
 			else {
 				if (cell[i][j]->active_pixel) {
-					//dxfac = pow(1.3,-(cell[i][j]->level));
+					//dxfac = pow(1.3,-(cell[i][j]->level)); // seems like there's no real sensible reason to have a scaling factor here; delete this later
 					dxfac = 1.0;
 					for (k=0; k < 4; k++) {
 						lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(1.0/dxfac);
@@ -2994,7 +2994,7 @@ void ImagePixelData::set_required_data_pixels(const double xmin, const double xm
 	}
 }
 
-void ImagePixelData::set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const bool unset)
+void ImagePixelData::set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
 {
 	// the angles MUST be between 0 and 360 here, so we enforce this in the following
 	while (theta1_deg < 0) theta1_deg += 360;
@@ -3012,8 +3012,8 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 		x = 0.5*(xvals[i] + xvals[i+1]);
 		for (j=0; j < npixels_y; j++) {
 			y = 0.5*(yvals[j] + yvals[j+1]);
-			rsq = SQR(x-xc) + SQR(y-yc);
-			theta = atan(abs((y-yc)/(x-xc)));
+			rsq = SQR((x-xc)/xstretch) + SQR((y-yc)/ystretch);
+			theta = atan(abs(((y-yc)/(x-xc))*xstretch/ystretch));
 			theta_old=theta;
 			if (x < xc) {
 				if (y < yc)
@@ -3948,6 +3948,7 @@ void ImagePixelGrid::find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_x
 	n_expected_active_pixels = count;
 }
 
+/*
 void ImagePixelGrid::assign_required_data_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData *data_in)
 {
 	int i,j;
@@ -3964,6 +3965,7 @@ void ImagePixelGrid::assign_required_data_pixels(double srcgrid_xmin, double src
 		}
 	}
 }
+*/
 
 int ImagePixelGrid::count_nonzero_source_pixel_mappings()
 {

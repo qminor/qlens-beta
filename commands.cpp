@@ -609,7 +609,7 @@ void Lens::process_commands(bool read_file)
 							"fit findimg [sourcept_num]\n"
 							"fit plotimg [src=#]\n"
 							"fit plotsrc [src=#]\n"
-							"fit data_imginfo\n"
+							"fit data_imginfo       (NEED TO WRITE HELP DOCS FOR THIS)\n"
 							"fit method <method>\n"
 							"fit label <label>\n"
 							"fit use_bestfit\n"
@@ -814,8 +814,8 @@ void Lens::process_commands(bool read_file)
 							"label' command).\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
-						"fit plimits <param_num> <lower_limit> <upper_limit>\n"
-						"fit plimits <param_num> none\n\n"
+						"fit plimits <param_num/name> <lower_limit> <upper_limit>\n"
+						"fit plimits <param_num/name> none\n\n"
 							"Define limits on the allowed parameter space by imposing a steep penalty in the chi-square if the\n"
 							"fit strays outside the limits. Type 'fit plimits' to see the current list of fit parameters.\n"
 							"For example, 'fit plimits 0 0.5 1.5' limits parameter 0 to the range [0.5:1.5]. To disable the\n"
@@ -825,7 +825,7 @@ void Lens::process_commands(bool read_file)
 							"(twalk or nest) since limits must be entered for all parameters when the fit model is defined.\n";
 					else if (words[2]=="stepsizes")
 						cout << "fit stepsizes\n"
-							"fit stepsizes <param_num> <stepsize>\n"
+							"fit stepsizes <param_num/name> <stepsize>\n"
 							"fit stepsizes scale <factor>\n\n"
 							"Define initial stepsizes for the chi-square minimization methods (simplex or powell). Values are\n"
 							"automatically chosen for the stepsizes by default, but can be customized. Type 'fit stepsizes' to\n"
@@ -835,9 +835,11 @@ void Lens::process_commands(bool read_file)
 							"type 'fit stepsize reset'.\n";
 					else if (words[2]=="priors")
 						cout << "fit priors\n"
-							"fit priors <param_num> <prior_type> [prior_params]\n\n"
+							"fit priors <param_num/name> <prior_type> [prior_params]\n\n"
 							"Define prior probability distributions in each fit parameter, which are used by the T-Walk and nested\n"
 							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors.\n"
+							"For the first argument you can put the parameter number as displayed in the list, or you can enter the\n"
+							"parameter name (the latter approach is less bug-prone since numbers may change if the model is changed).\n"
 							"The list of available priors is given below. Regardless of the prior chosen, the upper and lower bounds\n"
 							"defined when you create lens models (in twalk or nest mode) still apply. Keep in mind that the initial\n"
 							"sampling of the parameter space will not follow the prior chosen, but rather will draw uniform deviates\n"
@@ -854,7 +856,7 @@ void Lens::process_commands(bool read_file)
 							"            (e.g., 'fit priors 0 gauss2 1 0.5 0.5 0.1 0.2 0.05' is a Gaussian prior in parameters 0,1.)\n\n";
 					else if (words[2]=="transform")
 						cout << "fit transform\n"
-							"fit transform <param_num> <transform_type> [transform_params] ... [include_jac]\n\n"
+							"fit transform <param_num/name> <transform_type> [transform_params] ... [include_jac]\n\n"
 							"Define coordinate transformation of one or more fit parameters. Type 'fit transform' to see current list of\n"
 							"fit parameters and corresponding transformations/priors being used. The list of available transformations is\n"
 							"given below. If upper/lower bounds were defined on the original parameter while in twalk/nest mode, these\n"
@@ -4922,7 +4924,7 @@ void Lens::process_commands(bool read_file)
 						}
 						getline((*infile),line); // skip the first comment line
 						clear_lenses();
-						param_settings->clear_params();
+						update_parameter_list();
 						// Clear any existing lens models so the new one can be loaded in
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
 				}
@@ -5711,35 +5713,43 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="set_data_annulus")
 			{
-				double xc, yc, rmin, rmax, thetamin=0, thetamax=360;
+				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
 				if (nwords >= 6) {
 					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
 					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
 					if (!(ws[4] >> rmin)) Complain("invalid annulas rmin");
 					if (!(ws[5] >> rmax)) Complain("invalid annulas rmax");
-					if (nwords == 8) {
+					if (nwords >= 8) {
 						if (!(ws[6] >> thetamin)) Complain("invalid annulus thetamin");
 						if (!(ws[7] >> thetamax)) Complain("invalid annulus thetamax");
-					} else if (nwords != 6) Complain("must specify either 4 args (xc,yc,rmin,rmax) or 6 args (xc,yc,rmin,rmax,thetamin,thetamax)");
-				} else Complain("must specify either 4 args (xc,yc,rmin,rmax) or 6 args (xc,yc,rmin,rmax,thetamin,thetamax)");
+						if (nwords == 10) {
+							if (!(ws[8] >> xstretch)) Complain("invalid annulus xstretch");
+							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
+						} 
+					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax);
+				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch);
 			}
 			else if (words[1]=="unset_data_annulus")
 			{
-				double xc, yc, rmin, rmax, thetamin=0, thetamax=360;
+				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
 				if (nwords >= 6) {
 					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
 					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
 					if (!(ws[4] >> rmin)) Complain("invalid annulas rmin");
 					if (!(ws[5] >> rmax)) Complain("invalid annulas rmax");
-					if (nwords == 8) {
+					if (nwords >= 8) {
 						if (!(ws[6] >> thetamin)) Complain("invalid annulus thetamin");
 						if (!(ws[7] >> thetamax)) Complain("invalid annulus thetamax");
-					} else if (nwords != 6) Complain("must specify either 4 args (xc,yc,rmin,rmax) or 6 args (xc,yc,rmin,rmax,thetamin,thetamax)");
-				} else Complain("must specify either 4 args (xc,yc,rmin,rmax) or 6 args (xc,yc,rmin,rmax,thetamin,thetamax)");
+						if (nwords == 10) {
+							if (!(ws[8] >> xstretch)) Complain("invalid annulus xstretch");
+							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
+						} 
+					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,true); // the 'true' says to deactivate the pixels, instead of activating them
+				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true); // the 'true' says to deactivate the pixels, instead of activating them
 			}
 			else if (words[1]=="set_data_window")
 			{
