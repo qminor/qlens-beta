@@ -6632,13 +6632,13 @@ void Lens::polychord()
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
-		if (mpi_id==0) {
-			string cluster_dir = fit_output_dir + "/clusters";
-			struct stat sb;
-			stat(cluster_dir.c_str(),&sb);
-			if (S_ISDIR(sb.st_mode)==false)
-				mkdir(cluster_dir.c_str(),S_IRWXU | S_IRWXG);
-		}
+		//if (mpi_id==0) {
+			//string cluster_dir = fit_output_dir + "/clusters";
+			//struct stat sb;
+			//stat(cluster_dir.c_str(),&sb);
+			//if (S_ISDIR(sb.st_mode)==false)
+				//mkdir(cluster_dir.c_str(),S_IRWXU | S_IRWXG);
+		//}
 	}
 
 	initialize_fitmodel(true);
