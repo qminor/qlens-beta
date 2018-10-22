@@ -54,6 +54,7 @@ enum DerivedParamType {
 	Einstein_Mass,
 	Perturbation_Radius,
 	Robust_Perturbation_Mass,
+	Chi_Square,
 	UserDefined
 };
 
@@ -238,6 +239,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static lensmatrix *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
 	static int *indxs;
 
+	double raw_chisq;
 	int chisq_it;
 	bool chisq_diagnostic;
 	ofstream logfile;
@@ -325,6 +327,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	int splitlevels, cc_splitlevels;
 
 	Lens *fitmodel;
+	Lens *lens_parent;
 	dvector fitparams, upper_limits, lower_limits, upper_limits_initial, lower_limits_initial, bestfitparams;
 	dmatrix bestfit_fisher_inverse;
 	dmatrix fisher_inverse;
@@ -763,6 +766,7 @@ public:
 	void remove_derived_param(int dparam_number);
 	void clear_derived_params();
 	void print_derived_param_list();
+	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
 
 	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 	void find_automatic_grid_position_and_size(double *zfacs);
@@ -790,7 +794,7 @@ public:
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	void chisq_single_evaluation(bool showdiag);
+	void chisq_single_evaluation(bool showdiag, bool show_status);
 	bool setup_fit_parameters(bool include_limits);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
@@ -1590,7 +1594,11 @@ struct DerivedParam
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			name = "mass_perturb"; latex_name = "M_{\\delta c}";
 			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Chi_Square) {
+			name = "raw_chisq"; latex_name = "\\chi^2";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else die("no user defined function yet");
+
 		if (funcparam != -1e30) {
 			stringstream paramstr;
 			string paramstring;
@@ -1618,6 +1626,18 @@ struct DerivedParam
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
 			return menc;
+		} else if (derived_param_type == Chi_Square) {
+			double chisq_out;
+			if (lens_in->raw_chisq==-1e30) {
+				if (lens_in->lens_parent != NULL) {
+					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
+				} else {
+					lens_in->chisq_single_evaluation(false,false);
+				}
+			}
+			chisq_out = lens_in->raw_chisq;
+			lens_in->clear_raw_chisq();
+			return chisq_out;
 		}
 		else die("no user defined function yet");
 	}
@@ -1643,6 +1663,8 @@ struct DerivedParam
 			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Chi_Square) {
+			cout << "Raw chi-square value for given set of parameters" << endl;
 		} else die("no user defined function yet");
 		cout << "   " << name << " = " << dpar << endl;
 	}

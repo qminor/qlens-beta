@@ -1034,7 +1034,11 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
 
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		m200 = p1_in;
+		c200 = p2_in;
+		rc_kpc = p3_in;
+	} else if (parameter_mode==2) {
 		m200 = p1_in;
 		rs_kpc = p2_in;
 		beta = p3_in;
@@ -1058,7 +1062,11 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 	rs = lens_in->rs;
 	rc = lens_in->rc;
 	beta = lens_in->beta;
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		m200 = lens_in->m200;
+		c200 = lens_in->c200;
+		rc_kpc = lens_in->rc_kpc;
+	} else if (parameter_mode==2) {
 		m200 = lens_in->m200;
 		rs_kpc = lens_in->rs_kpc;
 	} else if (parameter_mode==1) {
@@ -1071,7 +1079,11 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 
 void Cored_NFW::assign_paramnames()
 {
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "c"; latex_paramnames[1] = "c"; latex_param_subscripts[1] = "";
+		paramnames[2] = "rc_kpc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
+	} else if (parameter_mode==2) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
 		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "beta"; latex_paramnames[2] = "\\beta"; latex_param_subscripts[2] = "c";
@@ -1089,7 +1101,11 @@ void Cored_NFW::assign_paramnames()
 
 void Cored_NFW::assign_param_pointers()
 {
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		param[0] = &m200;
+		param[1] = &c200;
+		param[2] = &rc_kpc;
+	} else if (parameter_mode==2) {
 		param[0] = &m200;
 		param[1] = &rs_kpc;
 		param[2] = &beta;
@@ -1107,7 +1123,11 @@ void Cored_NFW::assign_param_pointers()
 
 void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 {
-	if (pmode==2) {
+	if (pmode==3) {
+		params[0] = m200;
+		params[1] = c200;
+		params[2] = rc_kpc;
+	} else if (pmode==2) {
 		params[0] = m200;
 		params[1] = rs_kpc;
 		params[2] = beta;
@@ -1130,11 +1150,13 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		set_ks_rs_from_m200_c200_rckpc();
+	} else if (parameter_mode==2) {
 		set_ks_c200_from_m200_rs();
 		rc = beta*rs;
 	} else if (parameter_mode==1) {
-		set_ks_rs_from_m200_c200();
+		set_ks_rs_from_m200_c200_beta();
 		rc = beta*rs;
 	} else {
 		beta = rc/rs;
@@ -1162,7 +1184,11 @@ void Cored_NFW::update_special_anchored_params()
 
 void Cored_NFW::set_auto_stepsizes()
 {
-	if (parameter_mode==2) {
+	if (parameter_mode==3) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*c200;
+		stepsizes[2] = 0.05*rs_kpc;
+	} else if (parameter_mode==2) {
 		stepsizes[0] = 0.2*m200;
 		stepsizes[1] = 0.2*rs_kpc;
 		stepsizes[2] = 0.2*beta;
@@ -1173,7 +1199,7 @@ void Cored_NFW::set_auto_stepsizes()
 	} else {
 		stepsizes[0] = 0.2*ks;
 		stepsizes[1] = 0.2*rs;
-		stepsizes[2] = 0.2*rc;
+		stepsizes[2] = 0.05*rs;
 	}
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
@@ -1195,12 +1221,26 @@ void Cored_NFW::set_model_specific_integration_pointers()
 	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::potential_spherical_rsq);
 }
 
-void Cored_NFW::set_ks_rs_from_m200_c200()
+void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 {
 	double rvir_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
+	double rcterm;
+	if (beta==0.0) rcterm = 0;
+	else rcterm = beta*beta*log(1+c200/beta);
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*((1-2*beta)*log(1+c200) + rcterm - (1-beta)*c200/(1+c200))/SQR(1-beta));
+}
+
+void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
+{
+	double rvir_kpc;
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rvir_kpc / c200;
+	rs = rs_kpc * kpc_to_arcsec;
+	rc = rc_kpc * kpc_to_arcsec;
+	beta = rc/rs;
 	double rcterm;
 	if (beta==0.0) rcterm = 0;
 	else rcterm = beta*beta*log(1+c200/beta);
@@ -1377,9 +1417,9 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	double rc_kpc, ds, r200;
+	double ds, r200;
 	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
-	rc_kpc = beta * rs_kpc;
+	if (parameter_mode != 3) rc_kpc = beta * rs_kpc;
 	ds = ks * sigma_cr_kpc / rs_kpc;
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;

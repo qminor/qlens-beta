@@ -3352,6 +3352,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 			for (j = 0; j < ma; j++)
 				out << ptr1[j] << "   ";
 			if (NDerivedParams > 0) {
+				if (i==0) (this->*DerivedParamPtr)(ptr1,dparam_list); // This is a bit ugly, but it resets the raw chi-square to force its evaluation if it's being included as parameter
 				(this->*DerivedParamPtr)(ptr1,dparam_list);
 				for (int k = 0; k < NDerivedParams; k++) {
 					out << dparam_list[k] << "   ";

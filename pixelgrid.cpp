@@ -5275,6 +5275,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 	}
 
 	// Now we construct the transpose of Fmatrix so we can cast it into "unsymmetric" format for UMFPACK (by including offdiagonals on either side of diagonal elements)
+
 	double *Fmatrix_transpose = new double[Fmatrix_nonzero_elements+1];
 	int *Fmatrix_transpose_index = new int[Fmatrix_nonzero_elements+1];
 
@@ -5433,6 +5434,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 		if (status < 0) {
 			die("WTF!");
 		}
+		umfpack_di_free_numeric(&Numeric);
 		//cout << "Fmatrix mantissa=" << mantissa << ", exponent=" << exponent << endl;
 		Fmatrix_log_determinant = log(mantissa) + exponent*log(10);
 		//cout << "Fmatrix_log_determinant = " << Fmatrix_log_determinant << endl;
@@ -5574,6 +5576,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 		delete[] Rmatrix_unsymmetric_indices;
 		delete[] Rmatrix_unsymmetric;
 	}
+	umfpack_di_free_numeric(&Numeric);
 
 #ifdef USE_OPENMP
 	if (show_wtime) {

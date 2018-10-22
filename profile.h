@@ -479,7 +479,7 @@ class Cored_NFW : public LensProfile
 	// This profile goes like 1/(r+rc)/(r+rs)^2
 	private:
 	double ks, rs, rc;
-	double m200, c200, beta, rs_kpc; // alternate parametrization
+	double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
 	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
@@ -491,7 +491,8 @@ class Cored_NFW : public LensProfile
 	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
-	void set_ks_rs_from_m200_c200();
+	void set_ks_rs_from_m200_c200_beta();
+	void set_ks_rs_from_m200_c200_rckpc();
 	void set_ks_c200_from_m200_rs();
 
 	public:

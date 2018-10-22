@@ -676,6 +676,7 @@ void show_transform_usage()
 			"where the number of parameters <params> depends on the transformation type, and the 'name=...' and\n"
 			"'latex_name=...' are optional and allow you to rename the parameter. The transformation types are as follows:\n\n"
 			"log      -- transform to log(p) using the base 10 logarithm; no parameters to enter.\n"
+			"exp      -- transform to 10^p; no parameters to enter.\n"
 			"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
 			"              linear 2 5' will transform p --> 2*p + 5.\n"
 			"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"

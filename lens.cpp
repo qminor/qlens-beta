@@ -148,6 +148,7 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 
 Lens::Lens() : UCMC()
 {
+	lens_parent = NULL; // this is only set if creating from another lens
 	mpi_id = 0;
 	mpi_np = 1;
 	group_np = 1;
@@ -189,6 +190,7 @@ Lens::Lens() : UCMC()
 	syserr_pos_upper_limit = 1e30; // These must be specified by user
 
 	chisq_it=0;
+	raw_chisq = -1e30;
 	chisq_diagnostic = false;
 	chisq_bestfit = 1e30;
 	bestfit_flux = 0;
@@ -429,9 +431,11 @@ Lens::Lens() : UCMC()
 
 Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
 {
+	lens_parent = lens_in;
 	verbal_mode = lens_in->verbal_mode;
 	set_random_generator(lens_in);
 	chisq_it=0;
+	raw_chisq = -1e30;
 	chisq_diagnostic = lens_in->chisq_diagnostic;
 	chisq_bestfit = lens_in->chisq_bestfit;
 	bestfit_flux = lens_in->bestfit_flux;
@@ -5805,10 +5809,11 @@ void Lens::fit_restore_defaults()
 	auto_ccspline = temp_auto_ccspline;
 	auto_store_cc_points = temp_auto_store_cc_points;
 	include_time_delays = temp_include_time_delays;
+	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-void Lens::chisq_single_evaluation(bool show_diagnostics)
+void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -5830,8 +5835,11 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 	}
 #endif
 	if (show_diagnostics) chisq_diagnostic = true;
+	bool default_display_status = display_chisq_status;
+	if (!show_status) display_chisq_status = false;
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
-	if (mpi_id==0) {
+	if (!show_status) display_chisq_status = default_display_status;
+	if ((mpi_id==0) and (show_status)) {
 		//if (display_chisq_status) cout << endl;
 		cout << "loglike: " << chisqval/2 << endl;
 	}
@@ -5839,13 +5847,17 @@ void Lens::chisq_single_evaluation(bool show_diagnostics)
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for likelihood evaluation: " << wtime << endl;
+		if ((mpi_id==0) and (show_status)) cout << "Wall time for likelihood evaluation: " << wtime << endl;
 	}
 #endif
 	display_chisq_status = false;
 	if (show_diagnostics) chisq_diagnostic = false;
 
-	fit_restore_defaults();
+	auto_ccspline = temp_auto_ccspline;
+	auto_store_cc_points = temp_auto_store_cc_points;
+	include_time_delays = temp_include_time_delays;
+	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
+
 	delete fitmodel;
 	fitmodel = NULL;
 }
@@ -6689,7 +6701,7 @@ void Lens::polychord()
 	Settings settings(n_fit_parameters,n_derived_params);
 
 	settings.nlive         = n_livepts;
-	settings.num_repeats   = n_fit_parameters*3;
+	settings.num_repeats   = n_fit_parameters*5;
 	settings.do_clustering = false;
 
 	settings.precision_criterion = 1e-3;
@@ -7184,19 +7196,21 @@ void Lens::output_bestfit_model()
 
 double Lens::fitmodel_loglike_point_source(double* params)
 {
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-			if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
-		}
-	}
 	double transformed_params[n_fit_parameters];
-	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (update_fitmodel(transformed_params)==false) return 1e30;
-	if (group_id==0) {
-		if (fitmodel->logfile.is_open()) {
-			for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+	if (params != NULL) {
+		for (int i=0; i < n_fit_parameters; i++) {
+			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+				if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+			}
 		}
-		fitmodel->logfile << flush;
+		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+		if (update_fitmodel(transformed_params)==false) return 1e30;
+		if (group_id==0) {
+			if (fitmodel->logfile.is_open()) {
+				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+			}
+			fitmodel->logfile << flush;
+		}
 	}
 
 	double loglike, chisq_total=0, chisq;
@@ -7276,32 +7290,38 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		//cout << "\033[1A";
 	}
 
+	raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
+	fitmodel->raw_chisq = chisq_total;
 	loglike = chisq_total/2.0;
 	if (chisq*0.0 != 0.0) {
 		warn("chi-square is returning NaN (%g)",chisq);
 	}
-
-	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
-	if (use_custom_prior) loglike += fitmodel_custom_prior();
+ 
+ 	if (params != NULL) {
+		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
+		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+		if (use_custom_prior) loglike += fitmodel_custom_prior();
+	}
 	fitmodel->chisq_it++;
 	return loglike;
 }
 
 double Lens::fitmodel_loglike_pixellated_source(double* params)
 {
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-			if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
-		}
-	}
 	double transformed_params[n_fit_parameters];
-	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (update_fitmodel(transformed_params)==false) return 1e30;
-	if (group_id==0) {
-		if (fitmodel->logfile.is_open()) {
-			for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
-			fitmodel->logfile << flush;
+	if (params != NULL) {
+		for (int i=0; i < n_fit_parameters; i++) {
+			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+				if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+			}
+		}
+		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+		if (update_fitmodel(transformed_params)==false) return 1e30;
+		if (group_id==0) {
+			if (fitmodel->logfile.is_open()) {
+				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+				fitmodel->logfile << flush;
+			}
 		}
 	}
 	double loglike, chisq=0, chisq0;
@@ -7318,6 +7338,8 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 	}
 
+	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
+	fitmodel->raw_chisq = chisq0;
 	loglike = chisq/2.0;
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (running_fit) cout << "\033[2A" << flush;
@@ -7325,9 +7347,11 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 		//cout << "\033[1A";
 		if (running_fit) cout << endl;
 	}
-	fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-	fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
-	if (use_custom_prior) loglike = fitmodel_custom_prior();
+	if (params != NULL) {
+		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
+		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+		if (use_custom_prior) loglike = fitmodel_custom_prior();
+	}
 
 	return loglike;
 }
@@ -7429,6 +7453,7 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
+	//clear_raw_chisq(); // in case the chi-square is being included as a parameter
 }
 
 double Lens::fitmodel_custom_prior()

@@ -508,7 +508,8 @@ void Lens::process_commands(bool read_file)
 					else if (words[2]=="cnfw")
 						cout << "lens cnfw <ks> <rs> <rc> <q/e> [theta] [x-center] [y-center]          (pmode=0)\n"
 								  "lens cnfw <mvir> <c> <beta> <q/e> [theta] [x-center] [y-center]       (pmode=1)\n"
-								  "lens cnfw <mvir> <rs_kpc> <beta> <q/e> [theta] [x-center] [y-center]  (pmode=2)\n\n"
+								  "lens cnfw <mvir> <rs_kpc> <beta> <q/e> [theta] [x-center] [y-center]  (pmode=2)\n"
+								  "lens cnfw <mvir> <c> <rc_kpc> <q/e> [theta] [x-center] [y-center]  (pmode=3)\n\n"
 							"Cored NFW profile with 3d density given by rho = rho_s/((r+rc)*(r+rs)^2) Here, <ks/mvir> is the mass\n"
 							"parameter, <rs> is the scale radius (or <c>=concentration for pmode=1), <rc> is the core radius (or\n"
 							"<beta> = rc/rs for pmodes 1,2), <q/e> is the axis ratio or ellipticity (depending on the ellipticity\n"
@@ -889,6 +890,7 @@ void Lens::process_commands(bool read_file)
 							"to add a new derived parameter. All derived parameters are defined by a type and (usually) an argument;\n"
 							"in the list below, the parameter argument is denoted in brackets <...>, otherwise no argument is required.\n"
 							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
+							"raw_chisq -- The chi-square value (not including priors; no arguments required)\n"
 							"kappa_r  -- *The kappa at radius <r>, averaged over all angles (where <r> in arcseconds)\n"
 							"dkappa_r -- *The derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
 							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
@@ -2838,13 +2840,18 @@ void Lens::process_commands(bool read_file)
 							i = nwords; // breaks out of this loop, without breaking from outer loop
 						}
 					}	
-					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
+					if ((pmode < 0) or (pmode > 3)) Complain("parameter mode must be either 0, 1, 2 or 3");
 
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model cnfw");
 					if (nwords >= 6) {
 						double p1, p2, p3;
 						double q, theta = 0, xc = 0, yc = 0;
-						if (pmode==2) {
+						if (pmode==3) {
+							if (!(ws[2] >> p1)) Complain("invalid m200 parameter for model cnfw");
+							if (words[3]=="cmed") set_median_concentration = true;
+							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model cnfw");
+							if (!(ws[4] >> p3)) Complain("invalid rs_kpc parameter for model cnfw");
+						} else if (pmode==2) {
 							if (!(ws[2] >> p1)) Complain("invalid m200 parameter for model cnfw");
 							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model cnfw");
 							if (!(ws[4] >> p3)) Complain("invalid beta parameter for model cnfw");
@@ -4607,7 +4614,8 @@ void Lens::process_commands(bool read_file)
 						if (words[2]=="diag") showdiag = true;
 						else Complain("invalid argument to 'fit chisq'");
 					}
-					chisq_single_evaluation(showdiag);
+					chisq_single_evaluation(showdiag,true);
+					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
 				else if (words[1]=="label")
 				{
@@ -4798,10 +4806,11 @@ void Lens::process_commands(bool read_file)
 							} else Complain("only one argument allowed for 'fit dparams clear' (number of derived parameter to remove)");
 						}
 						else if (words[2]=="add") {
-							if (nwords < 5) Complain("at least two additional arguments required for 'fit dparams add' (dparam_type,input_param)");
+							if (nwords < 4) Complain("at least one additional argument required for 'fit dparams add' (dparam_type)");
 							double dparam_arg;
 							int lensnum;
 							if (words[3]=="kappa_r") {
+								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add kappa_r' (param_arg)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (nwords==6) {
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
@@ -4809,6 +4818,7 @@ void Lens::process_commands(bool read_file)
 								} else lensnum = -1;
 								add_derived_param(KappaR,dparam_arg,lensnum);
 							} else if (words[3]=="dkappa_r") {
+								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dkappa_r' (param_arg)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (nwords==6) {
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
@@ -4851,6 +4861,9 @@ void Lens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum);
+							} else if (words[3]=="raw_chisq") {
+								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
+								add_derived_param(Chi_Square,0.0,-1);
 							} else Complain("derived parameter type not recognized");
 						} else if (nwords==3) {
 							int dpnum;
