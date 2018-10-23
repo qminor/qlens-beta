@@ -1048,7 +1048,7 @@ struct ParamSettings
 {
 	int nparams;
 	ParamPrior **priors;
-	ParamTransform ** transforms;
+	ParamTransform **transforms;
 	string *param_names;
 	double *penalty_limits_lo, *penalty_limits_hi;
 	bool *use_penalty_limits;

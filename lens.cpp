@@ -7198,12 +7198,12 @@ double Lens::fitmodel_loglike_point_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
+		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
 			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-				if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
 			}
 		}
-		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		if (update_fitmodel(transformed_params)==false) return 1e30;
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
@@ -7310,12 +7310,12 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
+		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
 			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-				if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
 			}
 		}
-		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		if (update_fitmodel(transformed_params)==false) return 1e30;
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
@@ -7359,13 +7359,13 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 double Lens::loglike_point_source(double* params)
 {
 	// can use this version for testing purposes in case there is any doubt about whether the fitmodel version is faithfully reproducing the original
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (param_settings->use_penalty_limits[i]==true) {
-			if ((params[i] < param_settings->penalty_limits_lo[i]) or (params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
-		}
-	}
 	double transformed_params[n_fit_parameters];
 	param_settings->inverse_transform_parameters(params,transformed_params);
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (param_settings->use_penalty_limits[i]==true) {
+			if ((transformed_params[i] < param_settings->penalty_limits_lo[i]) or (transformed_params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
+		}
+	}
 	if (update_fitmodel(transformed_params)==false) return 1e30;
 	if (group_id==0) {
 		if (logfile.is_open()) {
@@ -7422,13 +7422,13 @@ double Lens::loglike_point_source(double* params)
 
 double Lens::fitmodel_loglike_pixellated_source_test(double* params)
 {
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-			if ((params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
-		}
-	}
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+			if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+		}
+	}
 	if (update_fitmodel(transformed_params)==false) return 1e30;
 
 	if (group_id==0) {
