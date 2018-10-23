@@ -613,6 +613,7 @@ void Lens::process_commands(bool read_file)
 							"fit data_imginfo       (NEED TO WRITE HELP DOCS FOR THIS)\n"
 							"fit method <method>\n"
 							"fit label <label>\n"
+							"fit output_dir <dirname>\n"
 							"fit use_bestfit\n"
 							"fit save_bestfit\n"
 							"fit load_bestfit\n"
@@ -791,6 +792,11 @@ void Lens::process_commands(bool read_file)
 							"Specify label for output files produced by the chosen fit method (see 'help fit method' for information\n"
 							"on the output format for the chosen fit method). By default, the output directory is automatically set\n"
 							"to 'chains_<label>' unless the output directory is specified using the 'fit output_dir' command.\n";
+					else if (words[2]=="output_dir")
+						cout << "fit output_dir <dirname>\n\n"
+							"Specify output directory for data produced by the chosen fit method. If not set explicitly, the output\n"
+							"directory defaults to 'chains_<label>' where <label> is set using the 'fit label' command (or if the\n"
+							"label is not set, defaults to the qlens directory).\n";
 					else if (words[2]=="output_dir")
 						cout << "fit output_dir <dirname>\n\n"
 							"Specify output directory for output files produced by chosen fit method (see 'help fit method' for\n"

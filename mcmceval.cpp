@@ -383,7 +383,10 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 		getline(transform_file,line);
 		words.clear();
 		if (line.empty()) continue;
-		istringstream linestream(line);
+		if (line[0]=='#') continue;
+		string linestring(line);
+		remove_comments(linestring);
+		istringstream linestream(linestring);
 		string word;
 		while (linestream >> word)
 			words.push_back(word);
@@ -393,12 +396,12 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 		for (int i=0; i < nwords; i++) ws[i] << words[i];
 
 		string new_name, new_latex_name;
-		if (words[nwords-1].find("name=")==0) {
-			string lstr = words[nwords-1].substr(5);
+		if (words[nwords-1].find("latex_name=")==0) {
+			string lstr = words[nwords-1].substr(11);
 			stringstream lstream;
 			lstream << lstr;
-			if (!(lstream >> new_name)) die("invalid parameter name");
-			transform_name = true;
+			if (!(lstream >> new_latex_name)) die("invalid parameter name");
+			transform_latex_name = true;
 			stringstream* new_ws = new stringstream[nwords-1];
 			words.erase(words.begin()+nwords-1);
 			for (int i=0; i < nwords-1; i++) {
@@ -409,12 +412,12 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 			nwords--;
 		}
 
-		if (words[nwords-1].find("latex_name=")==0) {
-			string lstr = words[nwords-1].substr(11);
+		if (words[nwords-1].find("name=")==0) {
+			string lstr = words[nwords-1].substr(5);
 			stringstream lstream;
 			lstream << lstr;
-			if (!(lstream >> new_latex_name)) die("invalid parameter name");
-			transform_latex_name = true;
+			if (!(lstream >> new_name)) die("invalid parameter name");
+			transform_name = true;
 			stringstream* new_ws = new stringstream[nwords-1];
 			words.erase(words.begin()+nwords-1);
 			for (int i=0; i < nwords-1; i++) {
@@ -468,6 +471,16 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 		//else if (param_transforms[i].transform==EVAL_GAUSS_TRANSFORM) cout << "gaussian (mean=" << param_transforms[i].gaussian_pos << ",sig=" << param_transforms[i].gaussian_sig << ")";
 		//cout << endl;
 	//}
+}
+
+void McmcEval::remove_comments(string& instring)
+{
+	string instring_copy(instring);
+	instring.clear();
+	size_t comment_pos = instring_copy.find("#");
+	if (comment_pos != string::npos) {
+		instring = instring_copy.substr(0,comment_pos);
+	} else instring = instring_copy;
 }
 
 void McmcEval::transform_parameter_names(string *paramnames, string *latex_paramnames)
