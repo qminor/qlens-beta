@@ -5841,7 +5841,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	if (!show_status) display_chisq_status = default_display_status;
 	if ((mpi_id==0) and (show_status)) {
 		//if (display_chisq_status) cout << endl;
-		cout << "loglike: " << chisqval/2 << endl;
+		cout << "2*loglike: " << chisqval << endl;
 	}
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 #ifdef USE_OPENMP
