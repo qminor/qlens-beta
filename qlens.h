@@ -259,6 +259,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool simplex_show_bestfit;
 	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq, simplex_minchisq_anneal;
 	int n_livepts; // for nested sampling
+	int polychord_nrepeats;
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings
 	bool mcmc_logfile;
@@ -686,6 +687,7 @@ public:
 	stringstream* ws;
 	stringstream datastream;
 	bool read_from_file;
+	bool paused_while_reading_file;
 	bool quit_after_reading_file;
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
@@ -917,7 +919,7 @@ public:
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(false);
 		}
-		if ((n_sourcepts_fit > 0) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK))) {
+		if ((n_sourcepts_fit > 0) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 			if (sourcepts_lower_limit==NULL) sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
 			if (sourcepts_upper_limit==NULL) sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
@@ -1666,7 +1668,13 @@ struct DerivedParam
 		} else if (derived_param_type == Chi_Square) {
 			cout << "Raw chi-square value for given set of parameters" << endl;
 		} else die("no user defined function yet");
+		cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << endl;
 		cout << "   " << name << " = " << dpar << endl;
+	}
+	void rename(const string new_name, const string new_latex_name)
+	{
+		name = new_name;
+		latex_name = new_latex_name;
 	}
 };
 

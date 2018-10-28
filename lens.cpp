@@ -215,6 +215,7 @@ Lens::Lens() : UCMC()
 	simplex_minchisq_anneal = -1e30;
 	simplex_show_bestfit = false;
 	n_livepts = 1000; // for nested sampling
+	polychord_nrepeats = 5;
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
 	mcmc_logfile = false;
@@ -504,6 +505,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	simplex_minchisq_anneal = lens_in->simplex_minchisq_anneal;
 	simplex_show_bestfit = lens_in->simplex_show_bestfit;
 	n_livepts = lens_in->n_livepts; // for nested sampling
+	polychord_nrepeats = lens_in->polychord_nrepeats;
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
 	open_chisq_logfile = lens_in->open_chisq_logfile;
@@ -6701,7 +6703,7 @@ void Lens::polychord()
 	Settings settings(n_fit_parameters,n_derived_params);
 
 	settings.nlive         = n_livepts;
-	settings.num_repeats   = n_fit_parameters*5;
+	settings.num_repeats   = n_fit_parameters*polychord_nrepeats;
 	settings.do_clustering = false;
 
 	settings.precision_criterion = 1e-3;

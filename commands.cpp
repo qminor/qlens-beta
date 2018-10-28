@@ -33,6 +33,7 @@ void Lens::process_commands(bool read_file)
 	string setword; // used for toggling boolean settings
 
 	read_from_file = read_file;
+	paused_while_reading_file = false; // used to keep track of whether qlens opened a script while it was paused
 	ws = NULL;
 	buffer = NULL;
 
@@ -230,6 +231,7 @@ void Lens::process_commands(bool read_file)
 						"simplex_tfac -- \"cooling factor\" controls how quickly temp is reduced during annealing\n"
 						"simplex_show_bestfit -- show the current best-fit parameters during annealing (if on)\n"
 						"n_livepts -- number of live points used in nested sampling runs\n"
+						"polychord_nrepeats -- num_repeats per parameter for PolyChord nested sampler\n"
 						"mcmc_chains -- number of chains used in MCMC routines (e.g. T-Walk)\n"
 						"mcmctol -- during MCMC, stop chains if Gelman-Rubin R-statistic falls below this threshold\n"
 						"mcmclog -- output MCMC convergence, accept ratio etc. to log file while running (if on)\n"
@@ -1836,6 +1838,7 @@ void Lens::process_commands(bool read_file)
 					cout << "simplex_cooling_factor = " << simplex_cooling_factor << endl;
 					cout << "simplex_show_bestfit: " << display_switch(simplex_show_bestfit) << endl;
 					cout << "n_livepts = " << n_livepts << endl;
+					cout << "polychord_nrepeats = " << polychord_nrepeats << endl;
 					cout << "mcmc_chains = " << mcmc_threads << endl;
 					cout << "mcmctol = " << mcmc_tolerance << endl;
 					cout << "mcmc_logfile: " << display_switch(mcmc_logfile) << endl;
@@ -1893,7 +1896,11 @@ void Lens::process_commands(bool read_file)
 					infile++;
 				}
 				infile->open(words[1].c_str());
-				if (infile->is_open()) { read_from_file = true; n_infiles++; }
+				if (infile->is_open()) {
+					if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
+					read_from_file = true;
+					n_infiles++;
+				}
 				else {
 					cerr << "Error: input file '" << words[1] << "' could not be opened" << endl;
 					if (n_infiles > 0) infile--;
@@ -4871,7 +4878,15 @@ void Lens::process_commands(bool read_file)
 								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
 								add_derived_param(Chi_Square,0.0,-1);
 							} else Complain("derived parameter type not recognized");
-						} else if (nwords==3) {
+						}
+						else if (words[2]=="rename") {
+							if (nwords != 6) Complain("three arguments required for 'fit dparams rename' (param_number,name,latex_name)");
+							int dparam_number;
+							if (!(ws[3] >> dparam_number)) Complain("invalid dparam number");
+							if ((dparam_number >= n_derived_params) or (n_derived_params == 0)) Complain("Specified derived parameter does not exist");
+							dparam_list[dparam_number]->rename(words[4],words[5]);
+						}
+						else if (nwords==3) {
 							int dpnum;
 							if (!(ws[2] >> dpnum)) Complain("invalid dparam number");
 							if ((dpnum < 0) or (dpnum >= n_derived_params)) Complain("specified derived parameter has not been defined");
@@ -4936,7 +4951,11 @@ void Lens::process_commands(bool read_file)
 							infile++;
 						}
 						infile->open(scriptfile_str.c_str());
-						if (infile->is_open()) { read_from_file = true; n_infiles++; }
+						if (infile->is_open()) {
+							if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
+							read_from_file = true;
+							n_infiles++;
+						}
 						else {
 							if (n_infiles > 0) infile--;
 							Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
@@ -7028,6 +7047,16 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Number of live points for nested sampling = " << n_livepts << endl;
 			} else Complain("must specify either zero or one argument (number of Monte Carlo points)");
 		}
+		else if (words[0]=="polychord_nrepeats")
+		{
+			int n_rp;
+			if (nwords == 2) {
+				if (!(ws[1] >> n_rp)) Complain("invalid num_repeats per parameter for polychord");
+				polychord_nrepeats = n_rp;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "num_repeats per parameter for polychord = " << polychord_nrepeats << endl;
+			} else Complain("must specify either zero or one argument (num_repeats per parameter for polychord)");
+		}
 		else if (words[0]=="simplex_nmax")
 		{
 			int nmax;
@@ -7527,6 +7556,9 @@ bool Lens::read_command(bool show_prompt)
 			if (n_infiles == 0) {
 				read_from_file = false;
 				if (quit_after_reading_file) return false;
+			} else if (paused_while_reading_file) {
+				read_from_file = false;
+				paused_while_reading_file = false;
 			}
 		} else {
 			getline((*infile),line);
