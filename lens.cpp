@@ -109,7 +109,7 @@ void Lens::delete_mumps()
 }
 
 #ifdef USE_MPI
-void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm)
+void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm)
 {
 	mpi_id = mpi_id_in;
 	mpi_np = mpi_np_in;
@@ -117,6 +117,9 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int&
 	group_id = group_id_in;
 	group_num = group_num_in;
 	group_np = group_np_in;
+	if (group_leader != NULL) delete[] group_leader;
+	group_leader = new int[mpi_ngroups];
+	for (int i=0; i < mpi_ngroups; i++) group_leader[i] = group_leader_in[i];
 	mpi_group = group_in;
 	group_comm = comm;
 	my_group = mygroup;
@@ -6848,6 +6851,165 @@ void Lens::polychord()
 	delete fitmodel;
 	fitmodel = NULL;
 #endif
+}
+
+bool Lens::add_dparams_to_chain()
+{
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+	} else if (source_fit_mode==Pixellated_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_pixellated_source);
+	}
+
+	int i, nparams, n_dparams_old;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams >> n_dparams_old;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	pnumfile.close();
+
+	if (setup_fit_parameters(true)==false) return false;
+	fit_set_optimizations();
+	initialize_fitmodel(true);
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	if (mpi_id==0) {
+		int i;
+		int n_dparams_tot = n_dparams_old + n_derived_params;
+		int n_totparams_old = n_fit_parameters + n_dparams_old;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".new.nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_dparams_tot << endl;
+		pnumfile.close();
+
+		string pnamefile_old_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".new.paramnames";
+		ifstream pnamefile_old(pnamefile_old_str.c_str());
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=0; i < n_totparams_old; i++) {
+			pnamefile_old.getline(dataline,n_characters);
+			pnamefile << dataline << endl;
+		}
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		pnamefile.close();
+		pnamefile_old.close();
+
+		string lpnamefile_old_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".new.latex_paramnames";
+		ifstream lpnamefile_old(lpnamefile_old_str.c_str());
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (i=0; i < n_totparams_old; i++) {
+			lpnamefile_old.getline(dataline,n_characters);
+			lpnamefile << dataline << endl;
+		}
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		lpnamefile.close();
+		lpnamefile_old.close();
+
+		string prangefile_old_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		string prangefile_str = fit_output_dir + "/" + fit_output_filename + ".new.ranges";
+		ifstream prangefile_old(prangefile_old_str.c_str());
+		ofstream prangefile(prangefile_str.c_str());
+		for (i=0; i < n_totparams_old; i++) {
+			prangefile_old.getline(dataline,n_characters);
+			prangefile << dataline << endl;
+		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
+		prangefile.close();
+		prangefile_old.close();
+	}
+
+	double *params = new double[n_fit_parameters];
+	double *dparams_old = new double[n_dparams_old];
+	double weight, chisq;
+	string chain_old_str = fit_output_dir + "/" + fit_output_filename;
+	string chain_str = fit_output_dir + "/" + fit_output_filename + ".new";
+	ifstream chain_file_old0(chain_old_str.c_str());
+
+	int j,line,nlines=0;
+	while (!chain_file_old0.eof()) {
+		chain_file_old0.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+		nlines++;
+	}
+	double **dparams_new = new double*[nlines];
+	for (i=0; i < nlines; i++) dparams_new[i] = new double[n_derived_params];
+	char **chain_lines = new char*[nlines];
+	for (i=0; i < nlines; i++) chain_lines[i] = new char[5000];
+	chain_file_old0.close();
+
+	chain_file_old0.open(chain_old_str.c_str());
+	for (line=0; line < nlines; line++) {
+		chain_file_old0.getline(chain_lines[line],n_characters);
+		if (chain_lines[line][0]=='#') { line--; continue; }
+	}
+
+	int nlines_chunk = nlines/20;
+	if (mpi_id==0) cout << "Calculating derived parameters: [\033[21C]" << endl << endl << flush;
+	int prev_icount, icount = 0;
+	for (line=group_num; line < nlines; line += mpi_ngroups) {
+		istringstream datastream(chain_lines[line]);
+		datastream >> weight;
+		for (i=0; i < n_fit_parameters; i++) {
+			datastream >> params[i];
+		}
+		fitmodel_calculate_derived_params(params, dparams_new[line]);
+		prev_icount = icount;
+		icount = line/nlines_chunk;
+		if ((mpi_id==0) and (prev_icount != icount)) {
+			cout << "\033[2ACalculating derived parameters: [" << flush;
+			for (j=0; j < icount; j++) cout << "=" << flush;
+			cout << "\033[1B" << endl << flush;
+		}
+	}
+	if (mpi_id==0) cout << endl;
+
+#ifdef USE_MPI
+	int id;
+	for (int groupnum=0; groupnum < mpi_ngroups; groupnum++) {
+		for (i=groupnum; i < nlines; i += mpi_ngroups) {
+			id = group_leader[groupnum];
+			MPI_Bcast(dparams_new[i],n_derived_params,MPI_DOUBLE,id,MPI_COMM_WORLD);
+			//if (mpi_id==0) cout << "DPARAM: " << dparams_new[i][0] << endl;
+		}
+	}
+#endif
+
+	if (mpi_id==0) {
+		ofstream chain_file(chain_str.c_str());
+		for (line=0; line < nlines; line++) {
+			istringstream datastream(chain_lines[line]);
+			datastream >> weight;
+			chain_file << weight << "   ";
+			for (i=0; i < n_fit_parameters; i++) {
+				datastream >> params[i];
+				chain_file << params[i] << "   ";
+			}
+			for (i=0; i < n_dparams_old; i++) {
+				datastream >> dparams_old[i];
+				chain_file << dparams_old[i] << "   ";
+			}
+			datastream >> chisq;
+			for (i=0; i < n_derived_params; i++) chain_file << dparams_new[line][i] << "   ";
+			chain_file << chisq << endl;
+		}
+		chain_file.close();
+	}
+
+	delete[] params;
+	delete[] dparams_old;
+	for (i=0; i < nlines; i++) {
+		delete[] chain_lines[i];
+		delete[] dparams_new[i];
+	}
+	delete[] dparams_new;
+	delete[] chain_lines;
+	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
+	return true;
 }
 
 void Lens::test_fitmodel_invert()

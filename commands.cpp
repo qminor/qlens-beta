@@ -619,6 +619,7 @@ void Lens::process_commands(bool read_file)
 							"fit use_bestfit\n"
 							"fit save_bestfit\n"
 							"fit load_bestfit\n"
+							"fit add_chain_dparams\n"
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
 							"fit dparams ...\n"
@@ -821,6 +822,12 @@ void Lens::process_commands(bool read_file)
 							"Read the best-fit lens model '<fit_label>_bf.in' contained in the fit output directory (which by default\n"
 							"is 'chains_<label>'). If [fit_label] is omitted, the current fit label is used (which is set by the 'fit\n"
 							"label' command).\n";
+					else if (words[2]=="add_chain_dparams")
+						cout << "fit add_chain_dparams\n\n"
+							"Loads a chain that has already been created, and adds any derived parameters defined using 'fit dparams'.\n"
+							"The fit label should match that of the chain, and the lens model should be the same as in the chain\n"
+							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
+							"chain will still be included.\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
 						"fit plimits <param_num/name> <lower_limit> <upper_limit>\n"
@@ -4923,10 +4930,6 @@ void Lens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
-					// NOTE: a slightly annoying issue is that when this command is typed while a file is paused, after loading the best-fit model script
-					// it automatically unpauses when returning to the initial script. One solution to this would be to have an array of structures
-					// that contain the ofstreams (instead of an array of ofstreams directly), and the structure also contains the "read_from_file" boolean
-					// for that script. Then it will remember if that script is paused or not. Do this later!
 					if (nwords <= 3) {
 						string scriptfile_str;
 						if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
@@ -4965,6 +4968,8 @@ void Lens::process_commands(bool read_file)
 						update_parameter_list();
 						// Clear any existing lens models so the new one can be loaded in
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
+				} else if (words[1]=="add_chain_dparams") {
+					if (add_dparams_to_chain()==false) Complain("could not process chain data");
 				}
 				else Complain("unknown fit command");
 			}
@@ -7523,7 +7528,8 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			fitmodel_custom_prior();
+			if (add_dparams_to_chain()==false) Complain("could not process chain data");
+			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
 			//output_imgplane_chisq_vals();
 			//add_derived_param(KappaR,5.0,-1);

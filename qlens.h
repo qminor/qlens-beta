@@ -247,6 +247,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	protected:
 	int mpi_id, mpi_np, mpi_ngroups, group_id, group_num, group_np;
+	int *group_leader;
 #ifdef USE_MPI
 	MPI_Comm *group_comm;
 	MPI_Comm *my_comm;
@@ -614,7 +615,7 @@ public:
 	static void deallocate_multithreaded_variables();
 	~Lens();
 #ifdef USE_MPI
-	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm);
+	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm);
 #endif
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in);
 	void set_nthreads(const int& nthreads_in) { nthreads=nthreads_in; }
@@ -793,6 +794,7 @@ public:
 	void polychord();
 	void multinest();
 	void chi_square_twalk();
+	bool add_dparams_to_chain();
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);

@@ -164,13 +164,13 @@ int main(int argc, char *argv[])
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
 #ifdef USE_MPI
-	lens.set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
+	int mpi_group_leaders[ngroups];
+	for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
+	lens.set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
 	if (load_cosmology_file) lens.set_cosmology(cosmology);
 	if (ngroups==mpi_np) {
 		lens.Set_MCMC_MPI(mpi_np,mpi_id);
 	} else {
-		int mpi_group_leaders[ngroups];
-		for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
 		lens.Set_MCMC_MPI(mpi_np,mpi_id,ngroups,group_number,mpi_group_leaders);
 	}
 	for (n=0; n < ngroups; n++) delete[] subgroup_rank[n];
