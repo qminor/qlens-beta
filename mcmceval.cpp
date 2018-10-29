@@ -2663,9 +2663,9 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 				}
 			}
 			k = 0;
-			for (i = 0; i <= xfNs; i++)
+			for (i=0; i <= xfNs; i++)
 			{
-				for (j = 0; j <= yfNs; j++)
+				for (j=0; j <= yfNs; j++)
 				{
 					lsort[k] = smoothfz[i][j]/facx(smoothfx[i])/facy(smoothfy[j]);
 					psort[k++] = smoothfz[i][j]*smoothfstepx*smoothfstepy;
@@ -2697,6 +2697,10 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 					sigmas[j] = sig/smoothHi;
 					cout << (per[j]*100.0) << "%:   " << sig/smoothHi << endl;
 				}
+			}
+			if (j < linesNum) {
+				cerr << "*WARNING*: Not all contours were found. This is probably because a contour is smaller than the binsize.\n";
+				cerr << "Try smaller bins or a transformation of parameters (e.g. log-transform, using the '-T:...' option).\n";
 			}
 			delete[] lsort;
 			delete[] psort;
@@ -2744,9 +2748,15 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 					cout << (per[j]*100.0) << "%:   " << sig/hi << endl;
 				}
 			}
+			if (j < linesNum) {
+				cerr << "*WARNING*: Not all contours were found. This is probably because a contour is smaller than the binsize.\n";
+				cerr << "Try smaller bins or a transformation of parameters (e.g. log-transform, using the '-T:...' option).\n";
+			}
 			delete[] lsort;
 			delete[] psort;
 		}
+
+		if (j < linesNum) die("could not find smooth contours");
 		
 		if (flag&HIST)
 		{
