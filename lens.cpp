@@ -7622,7 +7622,7 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 
 double Lens::fitmodel_custom_prior()
 {
-	static const double rcore_threshold = 3.0;
+	//static const double rcore_threshold = 3.0;
 	double cnfw_params[8];
 	double rc, rs, rcore;
 	if (fitmodel != NULL)
@@ -7631,10 +7631,12 @@ double Lens::fitmodel_custom_prior()
 		lens_list[0]->get_parameters_pmode(0,cnfw_params); // used for the "test" command"
 	rs=cnfw_params[1];
 	rc=cnfw_params[2];
-	rcore = rc*(sqrt(1+8*rs/rc)-1)/4.0;
-	if (fitmodel==NULL) cout << "rcore: " << rcore << endl; // for testing purposes, using the "test" command
-	if (rcore < rcore_threshold) return 0.0;
-	else return 1e30+rcore; // penalty function
+	//rcore = rc*(sqrt(1+8*rs/rc)-1)/4.0;
+	//if (fitmodel==NULL) cout << "rcore: " << rcore << endl; // for testing purposes, using the "test" command
+	//if (rcore < rcore_threshold) return 0.0;
+	//else return 1e30+rcore; // penalty function
+	if (rc < rs) return 0.0;
+	else return 1e30+rc;
 }
 
 void Lens::set_Gauss_NN(const int& nn)
