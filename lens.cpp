@@ -451,7 +451,11 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	group_id = lens_in->group_id;
 	group_num = lens_in->group_num;
 	group_np = lens_in->group_np;
-	group_leader = lens_in->group_leader;
+	if (lens_in->group_leader==NULL) group_leader = NULL;
+	else {
+		group_leader = new int[mpi_ngroups];
+		for (int i=0; i < mpi_ngroups; i++) group_leader[i] = lens_in->group_leader[i];
+	}
 #ifdef USE_MPI
 	group_comm = lens_in->group_comm;
 	mpi_group = lens_in->mpi_group;
