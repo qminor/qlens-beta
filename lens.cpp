@@ -117,7 +117,6 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int&
 	group_id = group_id_in;
 	group_num = group_num_in;
 	group_np = group_np_in;
-	if (group_leader != NULL) delete[] group_leader;
 	group_leader = new int[mpi_ngroups];
 	for (int i=0; i < mpi_ngroups; i++) group_leader[i] = group_leader_in[i];
 	mpi_group = group_in;
@@ -139,6 +138,7 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 	group_id = mpi_id;
 	group_num = 0;
 	group_np = mpi_np;
+	group_leader = NULL;
 
 #ifdef USE_MPI
 	MPI_Comm_group(MPI_COMM_WORLD, mpi_group);
@@ -451,6 +451,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	group_id = lens_in->group_id;
 	group_num = lens_in->group_num;
 	group_np = lens_in->group_np;
+	group_leader = lens_in->group_leader;
 #ifdef USE_MPI
 	group_comm = lens_in->group_comm;
 	mpi_group = lens_in->mpi_group;
@@ -7629,8 +7630,8 @@ double Lens::fitmodel_custom_prior()
 		fitmodel->lens_list[0]->get_parameters_pmode(0,cnfw_params);
 	else
 		lens_list[0]->get_parameters_pmode(0,cnfw_params); // used for the "test" command"
-	rs=cnfw_params[1];
-	rc=cnfw_params[2];
+	rs = cnfw_params[1];
+	rc = cnfw_params[2];
 	//rcore = rc*(sqrt(1+8*rs/rc)-1)/4.0;
 	//if (fitmodel==NULL) cout << "rcore: " << rcore << endl; // for testing purposes, using the "test" command
 	//if (rcore < rcore_threshold) return 0.0;
@@ -9233,6 +9234,7 @@ Lens::~Lens()
 	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
+	if (group_leader != NULL) delete[] group_leader;
 }
 
 /***********************************************************************************************************************/
