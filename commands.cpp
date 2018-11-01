@@ -6124,6 +6124,17 @@ void Lens::process_commands(bool read_file)
 				default_parameter_mode = pmode;
 			} else Complain("invalid number of arguments");
 		}
+		else if (words[0]=="recursive_lensing")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include recursive lensing effects from multiple lens planes: " << display_switch(include_recursive_lensing) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'recursive_lensing' command; must specify 'on' or 'off'");
+				set_switch(include_recursive_lensing,setword);
+				recalculate_beta_factors();
+				reset();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="show_cc")
 		{
 			if (nwords==1) {

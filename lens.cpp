@@ -429,6 +429,7 @@ Lens::Lens() : UCMC()
 	LensProfile::default_ellipticity_mode = 1;
 	default_parameter_mode = 0;
 	Shear::use_shear_component_params = false;
+	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
 }
@@ -451,6 +452,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	group_id = lens_in->group_id;
 	group_num = lens_in->group_num;
 	group_np = lens_in->group_np;
+	group_leader = lens_in->group_leader;
 	if (lens_in->group_leader==NULL) group_leader = NULL;
 	else {
 		group_leader = new int[mpi_ngroups];
@@ -539,7 +541,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	grid_xcenter = lens_in->grid_xcenter;
 	grid_ycenter = lens_in->grid_ycenter;
 
-	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&Lens::fitmodel_loglike_point_source); // is this line necessary?
+	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&Lens::fitmodel_loglike_point_source); // unnecessary, but just in case
 	source_fit_mode = lens_in->source_fit_mode;
 	running_fit = lens_in->running_fit;
 	chisq_tolerance = lens_in->chisq_tolerance;
@@ -707,6 +709,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	grid = NULL;
 	Gauss_NN = lens_in->Gauss_NN;
 	integral_tolerance = lens_in->integral_tolerance;
+	include_recursive_lensing = lens_in->include_recursive_lensing;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
@@ -1042,7 +1045,11 @@ void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_i
 			new_default_zsrc_beta_factors = new double*[n_lens_redshifts];
 			for (i=1; i < n_lens_redshifts+1; i++) {
 				new_default_zsrc_beta_factors[i-1] = new double[i];
-				for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+				if (include_recursive_lensing) {
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+				} else {
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
+				}
 			}
 			if (default_zsrc_beta_factors != NULL) {
 				for (i=0; i < n_lens_redshifts-1; i++) {
@@ -1072,7 +1079,11 @@ void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_i
 					new_beta_factors[i] = new double*[n_lens_redshifts];
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_beta_factors[i][j-1] = new double[j];
-						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+						if (include_recursive_lensing) {
+							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+						} else {
+							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+						}
 					}
 				} else new_beta_factors[i] = NULL;
 			}
@@ -1184,7 +1195,11 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i, const bool
 				new_default_zsrc_beta_factors = new double*[n_lens_redshifts-2];
 				for (i=1; i < n_lens_redshifts-1; i++) {
 					new_default_zsrc_beta_factors[i-1] = new double[i];
-					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+					if (include_recursive_lensing) {
+						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+					} else {
+						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
+					}
 				}
 				if (default_zsrc_beta_factors != NULL) {
 					for (i=0; i < n_lens_redshifts-1; i++) {
@@ -1231,7 +1246,11 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i, const bool
 						new_beta_factors[i] = new double*[n_lens_redshifts-2];
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_beta_factors[i][j-1] = new double[j];
-							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+							if (include_recursive_lensing) {
+								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+							} else {
+								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+							}
 						}
 					}
 					if (beta_factors != NULL) {
@@ -1530,7 +1549,24 @@ void Lens::set_source_redshift(const double zsrc)
 	}
 	if (n_lens_redshifts > 1) {
 		for (i=1; i < n_lens_redshifts; i++) {
-			for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+			if (include_recursive_lensing) {
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+			} else {
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = 0;
+			}
+		}
+	}
+}
+void Lens::recalculate_beta_factors()
+{
+	int i,j;
+	if (n_lens_redshifts > 1) {
+		for (i=1; i < n_lens_redshifts; i++) {
+			if (include_recursive_lensing) {
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+			} else {
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = 0;
+			}
 		}
 	}
 }
@@ -1942,7 +1978,7 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			zlsub = lens_list[i]->zlens;
-			if (zlsub > zlprim) {
+			if ((zlsub > zlprim) and (include_recursive_lensing)) {
 				if (find_lensed_position_of_background_perturber(verbal,i,centers[i],zfacs,betafacs)==false) {
 					if (verbal) warn("cannot find lensed position of background perturber");
 					lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
@@ -3639,7 +3675,11 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		new_beta_factors[n_sourcepts_fit] = new double*[n_lens_redshifts-1];
 		for (j=1; j < n_lens_redshifts; j++) {
 			new_beta_factors[n_sourcepts_fit][j-1] = new double[j];
-			for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshift);
+			if (include_recursive_lensing) {
+				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshift);
+			} else {
+				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = 0;
+			}
 		}
 	} else new_beta_factors[n_sourcepts_fit] = NULL;
 	if (n_sourcepts_fit > 0) {
@@ -3896,7 +3936,11 @@ bool Lens::load_image_data(string filename)
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=1; j < n_lens_redshifts; j++) {
 				beta_factors[i][j-1] = new double[j];
-				for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+				if (include_recursive_lensing) {
+					for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+				} else {
+					for (k=0; k < j; k++) beta_factors[i][j-1][k] = 0;
+				}
 			}
 		}
 	}

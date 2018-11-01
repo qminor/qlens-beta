@@ -316,6 +316,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	int Gauss_NN;	// for Gaussian quadrature
 	double romberg_accuracy, integral_tolerance; // for Romberg integration, Gauss-Patterson quadrature
+	bool include_recursive_lensing; // should only turn off if trying to understand effect of recursive lensing from multiple lens planes
 
 	Grid *grid;
 	bool radial_grid;
@@ -738,6 +739,7 @@ public:
 	void set_primary_lens();
 	void print_beta_matrices();
 	void set_source_redshift(const double zsrc);
+	void recalculate_beta_factors();
 
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
 	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
