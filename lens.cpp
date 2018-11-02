@@ -5552,7 +5552,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	}
 	if (nlens==0) { warn("cannot do fit; no lens models have been defined"); return false; }
 	get_n_fit_parameters(n_fit_parameters);
-	if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
+	//if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
 	fitparams.input(n_fit_parameters);
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
