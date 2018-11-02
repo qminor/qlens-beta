@@ -762,7 +762,6 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
-	set_primary_lens();
 }
 
 void Lens::add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)

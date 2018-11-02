@@ -2436,6 +2436,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("alpha requires at least 4 parameters (b, alpha, s, q)");
@@ -2542,6 +2543,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("pjaffe requires at least 4 parameters (b, a, s, q)");
@@ -2761,6 +2763,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("nfw requires at least 3 parameters (ks, rs, q)");
@@ -2838,6 +2841,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("tnfw requires at least 4 parameters (ks, rs, rt, q)");
@@ -2953,6 +2957,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("cnfw requires at least 4 parameters (ks, rs, rc, q)");
@@ -3029,6 +3034,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("expdisk requires at least 3 parameteR_d (k0, R_d, q)");
@@ -3112,6 +3118,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("kspline requires at least 1 argument (filename)");
@@ -3188,6 +3195,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("hern requires at least 3 parameters (ks, rs, q)");
@@ -3298,6 +3306,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("corecusp requires at least 6 parameters (k0, gamma, n, a, s, q)");
@@ -3450,6 +3459,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							set_primary_lens();
 						}
 					}
 					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
@@ -3825,6 +3835,7 @@ void Lens::process_commands(bool read_file)
 						}
 						add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
+						set_primary_lens();
 					}
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
 				}
