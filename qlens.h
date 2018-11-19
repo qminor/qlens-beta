@@ -389,6 +389,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	bool autocenter;
 	int primary_lens_number;
+	bool auto_set_primary_lens;
 	bool auto_gridsize_from_einstein_radius;
 	double auto_gridsize_multiple_of_Re;
 	bool autogrid_before_grid_creation;
@@ -1489,7 +1490,7 @@ struct ParamSettings
 	{
 		for (int i=0; i < nparams; i++) {
 			if (transforms[i]->transform==NONE) { transformed_names[i] = names[i]; transformed_latex_names[i] = latex_names[i]; }
-			else if (transforms[i]->transform==LOG_TRANSFORM) { transformed_names[i] = "log(" + names[i] + ")"; transformed_latex_names[i] = "\\ln " + latex_names[i]; }
+			else if (transforms[i]->transform==LOG_TRANSFORM) { transformed_names[i] = "log(" + names[i] + ")"; transformed_latex_names[i] = "\\log(" + latex_names[i] + ")"; }
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
 				transformed_names[i] = "u{" + names[i] + "}";
 				transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";

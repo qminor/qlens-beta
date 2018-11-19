@@ -413,6 +413,7 @@ Lens::Lens() : UCMC()
 	auto_gridsize_multiple_of_Re = 1.9;
 	autogrid_before_grid_creation = false; // this option (if set to true) tells qlens to optimize the grid size & position automatically (using autogrid) when grid is created
 	primary_lens_number = 0;
+	auto_set_primary_lens = true;
 	spline_frac = 1.8;
 	tabulate_rmin = 1e-3;
 	tabulate_qmin = 0.2;
@@ -695,6 +696,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	include_time_delays = lens_in->include_time_delays;
 	autocenter = lens_in->autocenter;
 	primary_lens_number = lens_in->primary_lens_number;
+	auto_set_primary_lens = lens_in->auto_set_primary_lens;
 	auto_gridsize_from_einstein_radius = lens_in->auto_gridsize_from_einstein_radius;
 	auto_gridsize_multiple_of_Re = lens_in->auto_gridsize_multiple_of_Re;
 	autogrid_before_grid_creation = lens_in->autogrid_before_grid_creation; // this option (if set to true) tells qlens to optimize the grid size & position automatically when grid is created
@@ -776,7 +778,6 @@ void Lens::add_lens(const char *splinefile, const int emode, const double zl, co
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	set_primary_lens();
 }
 
 void Lens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
@@ -832,7 +833,6 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	set_primary_lens();
 }
 
 void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
@@ -863,7 +863,6 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	set_primary_lens();
 }
 
 bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
@@ -906,7 +905,6 @@ bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	set_primary_lens();
 	return true;
 }
 
@@ -956,7 +954,6 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
-	set_primary_lens();
 	return true;
 }
 

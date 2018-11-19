@@ -139,7 +139,7 @@ void Lens::process_commands(bool read_file)
 						"gridtype -- set grid to radial or Cartesian\n"
 						"autogrid_from_Re -- automatically set grid size from Einstein radius of primary lens (on/off)\n"
 						"autogrid_before_mkgrid -- automatically set grid size from critical curves using 'autogrid'\n"
-						"autocenter -- automatically center grid on the specified lens number (or else 'off')\n"
+						"autocenter -- if on, automatically center grid on the primary lens, as set by 'primary_lens'\n"
 						"central_image -- include central images when fitting to data (on/off)\n"
 						"time_delays -- calculate time delays for all images (on/off)\n"
 						"min_cellsize -- minimum allowed (average) length of subgrid cells used for image searching\n"
@@ -253,6 +253,7 @@ void Lens::process_commands(bool read_file)
 					cout << 
 						"emode -- controls how ellipticity is introduced into kappa (0,1,2) or potential (3)\n"
 						"pmode -- sets the default pmode (for lens models with alternate parametrizations)\n"
+						"primary_lens -- sets which lens number is considered the 'primary' (set to 'auto' by default)\n"
 						"integral_method -- set numerical integration method (patterson/romberg/gauss)\n"
 						"integral_tolerance -- set tolerance for numerical integration (for romberg/patterson)\n"
 						"major_axis_along_y -- orient major axis of lenses along y-direction when theta = 0 (on/off)\n"
@@ -1353,11 +1354,11 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="plotkappa")
 					cout << "plotkappa <rmin> <rmax> <steps> <kappa_file> [dkappa_file] [lens=#]\n\n"
 						"Plots the radial kappa profile and its (optional) derivative to <kappa_file> and [dkappa_file]\n"
-						"respectively. If the 'lens=#' argument is not given, the profiles for each lens model is\n"
-						"plotted, together with the total kappa (and total derivative, if plotting). Any lens models\n"
-						"which are not centered on the origin are ignored. In addition to the kappa, the radius in\n"
-						"kpc and density in solar masses per kpc^2 are given in the third and fourth columns, i.e.\n"
-						"the output file has the following format:\n\n"
+						"respectively. If the 'lens=#' argument is not given, the total kappa profile (averaged over all\n"
+						"angles) is plotted, with r=0 chosen to be at the center of the primary lens (which is set by\n"
+						"'primary_lens'). Any lens models which are not centered on the origin are ignored. In addition\n"
+						"to the kappa, the radius in kpc and density in solar masses per kpc^2 are given in the third and\n"
+						"fourth columns, i.e. the output file has the following format:\n\n"
 						"r(arcsec) kappa r(kpc) Sigma(M_sol/kpc^2)\n\n"
 						"If a specific lens is chosen by the 'lens=#' argument, only the kappa profile\n"
 						"for that lens is plotted; however, in addition, the average kappa, deflection, and enclosed mass\n"
@@ -1465,13 +1466,21 @@ void Lens::process_commands(bool read_file)
 						"i.e. all lenses are centered at the origin. If elliptical symmetry is not present, the\n"
 						"critical curves are not splined.\n";
 				else if (words[1]=="autocenter")
-					cout << "autocenter <lens_number>\n"
-						"autocenter off\n\n"
-						"Automatically center the grid on the center of the specified lens number (as displayed\n"
-						"in the list of specified lenses shown by typing 'lens'). By default this is set to\n"
-						"lens 0, as this is assumed to be the primary lens. If instead set to 'off', the grid\n"
-						"does not set its center automatically and defaults to (0,0) unless changed manually\n"
-						"by the 'grid center' command.\n\n";
+					cout << "autocenter [on/off]\n\n"
+						"Automatically center the grid on the center of the 'primary' lens (if on), which is set by\n"
+						"the command 'primary_lens'.\n"
+						"in the list of specified lenses shown by typing 'lens'). By default this is set to 'on'. If\n"
+						"instead set to 'off', the grid does not set its center automatically and defaults to (0,0)\n"
+						"unless changed manually by the 'grid center' command. 'autocenter' is also automatically\n"
+						"turned off if the grid dimensions are set manually.\n\n";
+				else if (words[1]=="primary_lens")
+					cout << "primary_lens <lens_number>\n"
+						"primary_lens auto\n\n"
+						"Set the primary lens to correspond to the specified lens number (as displayed in the list of\n"
+						"specified lenses shown by typing 'lens'). If set to 'auto' (which is the default), the\n"
+						"primary lens is automatically chosen to be the lens with the largest Einstein radius. Among\n"
+						"other things, the primary lens determines the grid center if 'autocenter' is on; its center\n"
+						"is chosen as the origin when the total radial kappa profile (averaged over angles) is plotted.\n\n";
 				else if (words[1]=="autogrid_from_Re")
 					cout << "autogrid_from_Re <on/off>\n\n"
 						"Automatically set the grid size from the Einstein radius of primary lens before grid\n"
@@ -1869,6 +1878,7 @@ void Lens::process_commands(bool read_file)
 					cout << "\033[4mLens model settings\033[0m\n";
 					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
 					cout << "pmode = " << default_parameter_mode << endl;
+					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
 					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
 					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
 					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
@@ -2436,7 +2446,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("alpha requires at least 4 parameters (b, alpha, s, q)");
@@ -2543,7 +2553,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("pjaffe requires at least 4 parameters (b, a, s, q)");
@@ -2657,6 +2667,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("mpole requires at least 2 parameters (a_m, n)");
@@ -2763,7 +2774,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("nfw requires at least 3 parameters (ks, rs, q)");
@@ -2841,7 +2852,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("tnfw requires at least 4 parameters (ks, rs, rt, q)");
@@ -2957,7 +2968,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("cnfw requires at least 4 parameters (ks, rs, rc, q)");
@@ -3034,7 +3045,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("expdisk requires at least 3 parameteR_d (k0, R_d, q)");
@@ -3118,7 +3129,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("kspline requires at least 1 argument (filename)");
@@ -3195,7 +3206,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("hern requires at least 3 parameters (ks, rs, q)");
@@ -3306,7 +3317,7 @@ void Lens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("corecusp requires at least 6 parameters (k0, gamma, n, a, s, q)");
@@ -3379,6 +3390,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("ptmass requires at least 1 parameter, b (Einstein radius)");
@@ -3459,7 +3471,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							set_primary_lens();
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
@@ -3709,6 +3721,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (tabulate_existing_lens) remove_lens(lnum);
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("tab requires at least 2 parameters (kscale, rscale)");
@@ -3814,6 +3827,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (qtabulate_existing_lens) remove_lens(lnum);
+							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
 					else Complain("qtab requires at least 3 parameters (ks, rs, q)");
@@ -3835,7 +3849,7 @@ void Lens::process_commands(bool read_file)
 						}
 						add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
-						set_primary_lens();
+						if (auto_set_primary_lens) set_primary_lens();
 					}
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
 				}
@@ -6267,21 +6281,34 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="autocenter")
 		{
 			if (nwords==1) {
+				if (mpi_id==0) cout << "Automatic grid center: " << display_switch(autocenter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'autocenter' command; must specify 'on' or 'off'");
+				set_switch(autocenter,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+
+		else if (words[0]=="primary_lens")
+		{
+			if (nwords==1) {
 				if (mpi_id==0) {
-					cout << "Automatic grid center: ";
-					if (autocenter==false) cout << "off\n";
-					else cout << "centers on lens " << primary_lens_number << endl;
+					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
 				}
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'autocenter' command; must specify lens number # or 'off'");
-				if (setword=="off") autocenter = false;
-				else {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'primary_lens' command; must specify lens number # or 'auto'");
+				if (setword=="auto") {
+					auto_set_primary_lens = true;
+					set_primary_lens();
+				} else {
 					stringstream nstream;
+					int lensnum;
 					nstream << setword;
-					if (!(nstream >> primary_lens_number)) Complain("invalid argument to 'auto_ccspline' command; must specify lens number # or 'off'");
-					autocenter = true;
+					if (!(nstream >> lensnum)) Complain("invalid argument to 'primary_lens' command; must specify lens number # or 'auto'");
+					if ((lensnum < 0) or (lensnum >= nlens)) Complain("specified lens number for 'primary_lens' does not exist");
+					primary_lens_number = lensnum;
+					auto_set_primary_lens = false;
 				}
-			} else Complain("invalid number of arguments; can only specify lens number # or 'off'");
+			} else Complain("invalid number of arguments; can only specify lens number # or 'auto'");
 		}
 		else if (words[0]=="auto_save_bestfit")
 		{
