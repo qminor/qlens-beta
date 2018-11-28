@@ -1057,6 +1057,7 @@ struct ParamSettings
 	ParamPrior **priors;
 	ParamTransform **transforms;
 	string *param_names;
+	double *prior_norms;
 	double *penalty_limits_lo, *penalty_limits_hi;
 	bool *use_penalty_limits;
 	double *stepsizes;
@@ -1070,6 +1071,7 @@ struct ParamSettings
 		auto_stepsize = new bool[nparams];
 		penalty_limits_lo = new double[nparams];
 		penalty_limits_hi = new double[nparams];
+		prior_norms = new double[nparams];
 		use_penalty_limits = new bool[nparams];
 		for (int i=0; i < nparams; i++) {
 			priors[i] = new ParamPrior(param_settings_in.priors[i]);
@@ -1078,6 +1080,7 @@ struct ParamSettings
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
 			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
+			prior_norms[i] = param_settings_in.prior_norms[i];
 			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
 		}
 	}
@@ -1098,6 +1101,7 @@ struct ParamSettings
 		bool* new_auto_stepsize = new bool[nparams_in];
 		double* new_penalty_limits_lo = new double[nparams_in];
 		double* new_penalty_limits_hi = new double[nparams_in];
+		double* new_prior_norms = new double[nparams_in];
 		bool* new_use_penalty_limits = new bool[nparams_in];
 		if (param_names != NULL) delete[] param_names;
 		param_names = new string[nparams_in];
@@ -1109,6 +1113,7 @@ struct ParamSettings
 				new_auto_stepsize[i] = auto_stepsize[i];
 				new_penalty_limits_lo[i] = penalty_limits_lo[i];
 				new_penalty_limits_hi[i] = penalty_limits_hi[i];
+				new_prior_norms[i] = prior_norms[i];
 				new_use_penalty_limits[i] = use_penalty_limits[i];
 				param_names[i] = names[i];
 			}
@@ -1120,6 +1125,7 @@ struct ParamSettings
 				new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
 				new_penalty_limits_lo[i] = -1e30;
 				new_penalty_limits_hi[i] = 1e30;
+				new_prior_norms[i] = 1.0;
 				new_use_penalty_limits[i] = false;
 			}
 		} else {
@@ -1130,6 +1136,7 @@ struct ParamSettings
 				new_auto_stepsize[i] = auto_stepsize[i];
 				new_penalty_limits_lo[i] = penalty_limits_lo[i];
 				new_penalty_limits_hi[i] = penalty_limits_hi[i];
+				new_prior_norms[i] = prior_norms[i];
 				new_use_penalty_limits[i] = use_penalty_limits[i];
 				param_names[i] = names[i];
 			}
@@ -1145,6 +1152,7 @@ struct ParamSettings
 			delete[] auto_stepsize;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
+			delete[] prior_norms;
 			delete[] use_penalty_limits;
 		}
 		priors = newpriors;
@@ -1153,6 +1161,7 @@ struct ParamSettings
 		auto_stepsize = new_auto_stepsize;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
+		prior_norms = new_prior_norms;
 		use_penalty_limits = new_use_penalty_limits;
 		nparams = nparams_in;
 	}
@@ -1166,6 +1175,7 @@ struct ParamSettings
 		bool* new_auto_stepsize = new bool[new_nparams];
 		double* new_penalty_limits_lo = new double[new_nparams];
 		double* new_penalty_limits_hi = new double[new_nparams];
+		double* new_prior_norms = new double[new_nparams];
 		bool* new_use_penalty_limits = new bool[new_nparams];
 		string* new_param_names = new string[new_nparams];
 		for (i=0; i < pi; i++) {
@@ -1175,6 +1185,7 @@ struct ParamSettings
 			new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_prior_norms[i] = prior_norms[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
 			new_param_names[i] = names[i];
 		}
@@ -1185,6 +1196,7 @@ struct ParamSettings
 			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
 			new_penalty_limits_lo[i] = -1e30;
 			new_penalty_limits_hi[i] = 1e30;
+			new_prior_norms[i] = 1.0;
 			new_use_penalty_limits[i] = false;
 			new_param_names[i] = names[i];
 		}
@@ -1195,6 +1207,7 @@ struct ParamSettings
 			new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[j] = penalty_limits_lo[i];
 			new_penalty_limits_hi[j] = penalty_limits_hi[i];
+			new_prior_norms[j] = prior_norms[i];
 			new_use_penalty_limits[j] = use_penalty_limits[i];
 			new_param_names[j] = names[j];
 		}
@@ -1210,6 +1223,7 @@ struct ParamSettings
 			delete[] auto_stepsize;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
+			delete[] prior_norms;
 			delete[] use_penalty_limits;
 			delete[] param_names;
 		}
@@ -1219,6 +1233,7 @@ struct ParamSettings
 		auto_stepsize = new_auto_stepsize;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
+		prior_norms = new_prior_norms;
 		use_penalty_limits = new_use_penalty_limits;
 		param_names = new_param_names;
 		nparams = new_nparams;
@@ -1238,6 +1253,7 @@ struct ParamSettings
 		bool* new_auto_stepsize = new bool[new_nparams];
 		double* new_penalty_limits_lo = new double[new_nparams];
 		double* new_penalty_limits_hi = new double[new_nparams];
+		double* new_prior_norms = new double[new_nparams];
 		bool* new_use_penalty_limits = new bool[new_nparams];
 		string* new_param_names = new string[new_nparams];
 		for (i=0; i < pi; i++) {
@@ -1247,6 +1263,7 @@ struct ParamSettings
 			new_auto_stepsize[i] = auto_stepsize[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_prior_norms[i] = prior_norms[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
 			new_param_names[i] = param_names[i];
 		}
@@ -1257,6 +1274,7 @@ struct ParamSettings
 			new_auto_stepsize[j] = auto_stepsize[i];
 			new_penalty_limits_lo[j] = penalty_limits_lo[i];
 			new_penalty_limits_hi[j] = penalty_limits_hi[i];
+			new_prior_norms[j] = prior_norms[i];
 			new_use_penalty_limits[j] = use_penalty_limits[i];
 			new_param_names[j] = param_names[i];
 		}
@@ -1271,6 +1289,7 @@ struct ParamSettings
 		delete[] auto_stepsize;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
+		delete[] prior_norms;
 		delete[] use_penalty_limits;
 		delete[] param_names;
 		priors = newpriors;
@@ -1279,6 +1298,7 @@ struct ParamSettings
 		auto_stepsize = new_auto_stepsize;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
+		prior_norms = new_prior_norms;
 		use_penalty_limits = new_use_penalty_limits;
 		param_names = new_param_names;
 		nparams = new_nparams;
@@ -1508,17 +1528,34 @@ struct ParamSettings
 	void add_prior_terms_to_loglike(double *params, double& loglike)
 	{
 		for (int i=0; i < nparams; i++) {
-			if (priors[i]->prior==LOG_PRIOR) loglike += log(params[i]);
-			else if (priors[i]->prior==GAUSS_PRIOR) loglike += SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
-			else if (priors[i]->prior==GAUSS2_PRIOR) {
-				int j = priors[i]->gauss_paramnums[1];
-				dvector bvec, cvec;
-				bvec.input(2);
-				cvec.input(2);
-				bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
-				bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
-				cvec = priors[i]->inv_covariance_matrix * bvec;
-				loglike += (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
+			if (priors[i]->prior!=UNIFORM_PRIOR) {
+				loglike += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
+				if (priors[i]->prior==LOG_PRIOR) loglike += log(params[i]);
+				else if (priors[i]->prior==GAUSS_PRIOR) loglike += SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
+				else if (priors[i]->prior==GAUSS2_PRIOR) {
+					int j = priors[i]->gauss_paramnums[1];
+					dvector bvec, cvec;
+					bvec.input(2);
+					cvec.input(2);
+					bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
+					bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
+					cvec = priors[i]->inv_covariance_matrix * bvec;
+					loglike += (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
+				}
+			}
+		}
+	}
+	void set_prior_norms(double *lower_limit, double* upper_limit)
+	{
+		// flat priors are automatically given a norm of 1.0, since we'll be transforming to the unit hypercube when doing nested sampling;
+		// however a correction is required for other priors
+		for (int i=0; i < nparams; i++) {
+			if (priors[i]->prior!=UNIFORM_PRIOR) {
+				if (priors[i]->prior==LOG_PRIOR) prior_norms[i] = log(upper_limit[i]/lower_limit[i]);
+				else if (priors[i]->prior==GAUSS_PRIOR) {
+					prior_norms[i] = (erff((upper_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig)) - erff((lower_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig))) * M_SQRT_HALFPI * priors[i]->gaussian_sig;
+				}
+				prior_norms[i] /= (upper_limit[i] - lower_limit[i]); // correction since we are transforming to the unit hypercube
 			}
 		}
 	}

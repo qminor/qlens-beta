@@ -3325,8 +3325,9 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	}
 	
 	lnZ_trans = log(Z) - likeOld - double(count)/N;
-	lnZ = lnZ_trans + log(area);
-	Z*=area;
+	lnZ = lnZ_trans;
+	//lnZ = lnZ_trans + log(area);
+	//Z*=area;
 	if (mpi_id==0) {
 		binout.close();
 		ifstream binin((string(name)+string(".temp")).c_str(), ios::binary);

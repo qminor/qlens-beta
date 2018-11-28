@@ -5683,6 +5683,7 @@ bool Lens::setup_limits()
 	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
 	param_settings->transform_limits(lower_limits.array(),upper_limits.array());
 	param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
+	param_settings->set_prior_norms(lower_limits.array(),upper_limits.array());
 	for (int i=0; i < n_fit_parameters; i++) {
 		if (lower_limits[i] > upper_limits[i]) {
 			double temp = upper_limits[i]; upper_limits[i] = lower_limits[i]; lower_limits[i] = temp;
@@ -6008,7 +6009,7 @@ void Lens::plot_chisq_1d(const int param, const int n, const double ip, const do
 	dvector chisqvals(n);
 	ofstream chisqout(filename.c_str());
 	double pmin;
-	for (i=0, p=ip+0.5*step; i < n; i++, p += step) {
+	for (i=0, p=ip; i <= n; i++, p += step) {
 		fitparams[param] = p;
 		chisqvals[i] = 2.0 * (this->*loglikeptr)(fitparams.array());
 		if (chisqvals[i] < chisqmin) {
@@ -6584,11 +6585,12 @@ void Lens::multinest()
 		for (int i=0; i < 5; i++) {
 			stats_in >> dum;
 		}
-		double lnZ, area=1.0;
+		double lnZ;
+		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
-		for (int i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
-		lnZ += log(area);
+		//for (int i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		//lnZ += log(area);
 
 		const int n_characters = 1024;
 		char line[n_characters];
@@ -6807,11 +6809,12 @@ void Lens::polychord()
 		for (i=0; i < 2; i++) {
 			stats_in >> dum;
 		}
-		double lnZ, area=1.0;
+		double lnZ;
+		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
-		for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
-		lnZ += log(area);
+		//for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		//lnZ += log(area);
 
 		string polyin_filename = filename + ".txt";
 		ifstream polyin(polyin_filename.c_str());

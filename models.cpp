@@ -1263,7 +1263,7 @@ double Cored_NFW::kappa_rsq(const double rsq)
 {
 	double xsq, rsterm, rcterm;
 	xsq = rsq/(rs*rs);
-	if (rc==0.0) {
+	if (rc < 1e-120) {
 		if (xsq < 1e-6) return -ks*(2+log(xsq/4));
 		rcterm = 0;
 	}
@@ -1302,7 +1302,7 @@ double Cored_NFW::kappa_rsq_deriv(const double rsq)
 	double xsq, xcsq, rsterm, rcterm;
 	xsq = rsq/(rs*rs);
 	xcsq = rsq/(rc*rc);
-	if (rc==0.0) rcterm = 0;
+	if (rc < 1e-120) rcterm = 0;
 	else if ((xcsq < 1e-1) and (xsq < 1e-14)) return 0; // this could be improved on for a more seamless transition, but it's at such a small r it really doesn't matter
 	else if (abs(1-beta) < 5e-4) {
 		// formulae are unstable near beta=1, so we use a series expansion here
@@ -1370,7 +1370,7 @@ double Cored_NFW::kapavg_spherical_rsq(const double rsq)
 	double betasq, xsq, rsterm, rcterm;
 	betasq = beta*beta;
 	xsq = rsq/(rs*rs);
-	if (rc==0.0) {
+	if (rc < 1e-120) {
 		if (xsq < 1e-6) return -ks*(1+log(xsq/4));
 		rcterm = 0;
 	}
@@ -1408,7 +1408,7 @@ double Cored_NFW::rho3d_r_integrand_analytic(const double r)
 double Cored_NFW::calculate_scaled_mass_3d(const double r)
 {
 	double rcterm;
-	if (rc==0.0) rcterm = 0;
+	if (rc < 1e-120) rcterm = 0;
 	else rcterm = beta*beta*log(1+r/rc);
 	return 4*M_PI*ks*rs*rs*((1-2*beta)*log(1+r/rs) + rcterm - (1-beta)*r/(r+rs))/SQR(1-beta);
 }

@@ -9,6 +9,7 @@
 const double M_2PI = 6.28318530718;
 const double M_HALFPI = 1.57079632679;
 const double M_SQRT_PI = 1.77245385091;
+const double M_SQRT_HALFPI = 1.25331413732;
 const double M_4PI = 12.5663706144;
 
 inline double dmin(const double &a, const double &b) { return (a < b ? a : b); }
