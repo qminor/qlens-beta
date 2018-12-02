@@ -2955,6 +2955,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	
 	// divide this up among the processes
 	int icount =0 ;
+	int divisions = (N < 20) ? 1 : N/20;
 	for (i = mpi_group_num; i < N; i += mpi_ngroups)
 	{	
 		ptr1 = points[i];
@@ -2978,7 +2979,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 		{
 			i -= mpi_ngroups;
 		}
-		else if ((i % (N/20)) == 0)
+		else if ((i % divisions) == 0)
 		{
 			icount++;
 			if (mpi_id==0) {

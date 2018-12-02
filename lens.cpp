@@ -6592,7 +6592,7 @@ void Lens::multinest()
 		//for (int i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
 		//lnZ += log(area);
 
-		const int n_characters = 1024;
+		const int n_characters = 16384;
 		char line[n_characters];
 
 		string mnin_filename = filename + ".txt";
@@ -6797,7 +6797,7 @@ void Lens::polychord()
 	bestfitparams.input(n_fit_parameters);
 	// Now convert the PolyChord output to a form that mkdist can read
 	if (mpi_id==0) {
-		const int n_characters = 1024;
+		const int n_characters = 16384;
 		char line[n_characters];
 
 		string filename = fit_output_dir + "/" + fit_output_filename;

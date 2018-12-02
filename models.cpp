@@ -2328,6 +2328,7 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 		k0 = 1.0; // This will be reset when update_meta_parameters() is called
 	}
 	else k0 = mass_param_in;
+	cout << "s=" << s << " " << "a=" << a << " " << gamma << " " << k0 << endl;
 
 	update_meta_parameters_and_pointers();
 }
