@@ -1710,6 +1710,7 @@ void Shear::assign_param_pointers()
 	}
 	param[2] = &x_center;
 	param[3] = &y_center;
+	param[4] = &zlens;
 }
 
 void Shear::update_meta_parameters()
@@ -1889,6 +1890,7 @@ void Multipole::assign_param_pointers()
 	param[2] = &theta; angle_paramnum = 2;
 	param[3] = &x_center;
 	param[4] = &y_center;
+	param[5] = &zlens;
 }
 
 void Multipole::update_meta_parameters()
@@ -2195,6 +2197,7 @@ void PointMass::assign_param_pointers()
 	param[0] = &b;
 	param[1] = &x_center;
 	param[2] = &y_center;
+	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
 }

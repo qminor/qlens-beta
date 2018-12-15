@@ -4642,6 +4642,14 @@ void Lens::process_commands(bool read_file)
 						plot_chisq_1d(p,n,ip,fp,filename);
 					} else Complain("invalid number of parameters for command 'fit plot_chisq1d' (need parameter#,npoints,initial,final)");
 				}
+				else if (words[1]=="mkposts")
+				{
+					if (nwords==2) {
+						run_mkdist(false,"");
+					} else if (nwords==3) {
+						run_mkdist(true,words[2]);
+					} else Complain("either zero or one argument required for command 'fit mkposts' (posterior directory name)");
+				}
 				else if (words[1]=="run")
 				{
 					if (fitmethod==POWELL) chi_square_fit_powell();
@@ -7866,5 +7874,34 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
+}
+
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname)
+{
+	if (mpi_id==0) {
+		if (posts_dirname == fit_output_dir) {
+			cerr << "Error: directory for storing posteriors cannot be the same as the chains directory" << endl;
+		} else {
+			int nbins_1d, nbins_2d;
+			// maybe make these qlens variables later
+			nbins_1d = 50;
+			nbins_2d = 40;
+			stringstream nbins1d_str, nbins2d_str;
+			string nbins1d_string, nbins2d_string;
+			nbins1d_str << nbins_1d;
+			nbins2d_str << nbins_2d;
+			nbins1d_str >> nbins1d_string;
+			nbins2d_str >> nbins2d_string;
+			string command = "cd " + fit_output_dir + "; mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + " -P; mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename + ".chain_info; ";
+			if (copy_post_files) {
+				command += "if [ -e ../" + posts_dirname + " ]; then cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; else echo 'ERROR: could not find directory name for storing posteriors'; fi; ";
+			}
+			command += "cd ..";
+			system(command.c_str());
+		}
+	}
+#ifdef USE_MPI
+	MPI_Barrier(MPI_COMM_WORLD);
+#endif
 }
 
