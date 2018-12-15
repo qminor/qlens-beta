@@ -7892,7 +7892,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname)
 			nbins2d_str << nbins_2d;
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
-			string command = "cd " + fit_output_dir + "; mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + " -P; mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename + ".chain_info; ";
+			string command = "cd " + fit_output_dir + "; mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + "; mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename + ".chain_info; python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; ";
 			if (copy_post_files) {
 				command += "if [ -e ../" + posts_dirname + " ]; then cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; else echo 'ERROR: could not find directory name for storing posteriors'; fi; ";
 			}
