@@ -229,6 +229,28 @@ double Spline::splint(const double x)
 	return yi;
 }
 
+double Spline::splint_linear(const double x)
+{
+	int klo, khi, k;
+	double h, b, a;
+	double yi;
+
+	klo = 0;
+	khi = nn - 1;
+	while (khi-klo > 1) {
+		k = (khi+klo) >> 1;
+		if (xarray[k] > x) khi = k;
+		else klo = k;
+	}
+	h = xarray[khi] - xarray[klo];
+	if (h == 0.0) die("Bad xarray input to routine splint");
+	a = (xarray[khi] - x)/h;
+	b = (x - xarray[klo])/h;
+	yi = a*yarray[klo] + b*yarray[khi];
+
+	return yi;
+}
+
 double Spline::dsplint(const double &x)
 {
 	int klo, khi, k;

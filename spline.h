@@ -40,6 +40,7 @@ class Spline
 		void natural_spline(void);
 		void unnatural_spline(double yp1, double ypn);
 		double splint(const double x);
+		double splint_linear(const double x);
 		double extend_inner_logslope(const double& x);
 		double extend_outer_logslope(const double& x);
 		double extend_outer_line(const double& x);

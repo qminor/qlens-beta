@@ -4684,7 +4684,6 @@ void Lens::process_commands(bool read_file)
 					int nparams;
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
-					dvector stepsizes(nparams);
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4737,7 +4736,6 @@ void Lens::process_commands(bool read_file)
 					int nparams;
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
-					dvector stepsizes(nparams);
 					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
 					else if (nwords >= 4) {
 						int param_num;
@@ -4771,6 +4769,7 @@ void Lens::process_commands(bool read_file)
 						}
 						else Complain("transformation type not recognized");
 						param_settings->transforms[param_num]->set_include_jacobian(include_jac);
+						param_settings->transform_stepsizes();
 					}
 					else Complain("command 'fit transform' requires either zero or two arguments (param_number,transformation_type)");
 				}
@@ -4812,7 +4811,6 @@ void Lens::process_commands(bool read_file)
 				{
 					int nparams;
 					get_n_fit_parameters(nparams);
-					dvector stepsizes(nparams);
 					set_default_plimits();
 					if (nwords==2) { if (mpi_id==0) param_settings->print_penalty_limits(); }
 					else if (nwords == 3) {

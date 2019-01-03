@@ -1165,6 +1165,7 @@ struct ParamSettings
 		prior_norms = new_prior_norms;
 		use_penalty_limits = new_use_penalty_limits;
 		nparams = nparams_in;
+		transform_stepsizes();
 	}
 	void insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
 	{
@@ -1212,7 +1213,6 @@ struct ParamSettings
 			new_use_penalty_limits[j] = use_penalty_limits[i];
 			new_param_names[j] = names[j];
 		}
-		if (j != new_nparams) die("WTF!");
 		if (nparams > 0) {
 			for (i=0; i < nparams; i++) {
 				delete priors[i];
@@ -1238,6 +1238,7 @@ struct ParamSettings
 		use_penalty_limits = new_use_penalty_limits;
 		param_names = new_param_names;
 		nparams = new_nparams;
+		transform_stepsizes();
 	}
 	bool remove_params(const int pi, const int pf)
 	{
@@ -1279,7 +1280,6 @@ struct ParamSettings
 			new_use_penalty_limits[j] = use_penalty_limits[i];
 			new_param_names[j] = param_names[i];
 		}
-		if (j != new_nparams) die("WTF!");
 		for (i=0; i < nparams; i++) {
 			delete priors[i];
 			delete transforms[i];
@@ -1356,20 +1356,23 @@ struct ParamSettings
 	{
 		if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
 		cout << "Parameter initial stepsizes:\n";
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
 		int max_length=0;
 		for (int i=0; i < nparams; i++) {
-			if (param_names[i].length() > max_length) max_length = param_names[i].length();
+			if (transformed_names[i].length() > max_length) max_length = transformed_names[i].length();
 		}
 		int extra_length;
 		for (int i=0; i < nparams; i++) {
-			cout << i << ". " << param_names[i] << ": ";
-			extra_length = max_length - param_names[i].length();
+			cout << i << ". " << transformed_names[i] << ": ";
+			extra_length = max_length - transformed_names[i].length();
 			for (int j=0; j < extra_length; j++) cout << " ";
 			if ((nparams > 10) and (i < 10)) cout << " ";
 			cout << stepsizes[i];
 			if (auto_stepsize[i]) cout << " (auto)";
 			cout << endl;
 		}
+		delete[] transformed_names;
 	}
 	void print_penalty_limits()
 	{
@@ -1510,19 +1513,45 @@ struct ParamSettings
 	void transform_parameter_names(string *names, string *transformed_names, string *latex_names, string *transformed_latex_names)
 	{
 		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) { transformed_names[i] = names[i]; transformed_latex_names[i] = latex_names[i]; }
-			else if (transforms[i]->transform==LOG_TRANSFORM) { transformed_names[i] = "log(" + names[i] + ")"; transformed_latex_names[i] = "\\log(" + latex_names[i] + ")"; }
+			if (transforms[i]->transform==NONE) {
+				transformed_names[i] = names[i];
+				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i];
+			}
+			else if (transforms[i]->transform==LOG_TRANSFORM) {
+				transformed_names[i] = "log(" + names[i] + ")";
+				if (latex_names != NULL) transformed_latex_names[i] = "\\log(" + latex_names[i] + ")";
+			}
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
 				transformed_names[i] = "u{" + names[i] + "}";
-				transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";
+				if (latex_names != NULL) transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";
 			}
 			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_names[i] = "L{" + names[i] + "}";
-				transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
+				if (latex_names != NULL) transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
 			}
 			else if (transforms[i]->transform==RATIO) {
 				transformed_names[i] = names[i] + "_over_" + names[transforms[i]->ratio_paramnum];
-				transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
+				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
+			}
+		}
+	}
+	void transform_stepsizes()
+	{
+		// It would be better to have it pass in the current value of the parameters, then use the default
+		// (untransformed) stepsize to define the transformed stepsize. For example, the log stepsize would
+		// be log((pi+step)/pi). But passing in the parameter values is a bit of a pain...do this later
+		for (int i=0; i < nparams; i++) {
+			if (auto_stepsize[i]) {
+				if (transforms[i]->transform==LOG_TRANSFORM) {
+					stepsizes[i] = 1.0; // default for a log transform
+				}
+				else if (transforms[i]->transform==GAUSS_TRANSFORM) {
+				}
+				else if (transforms[i]->transform==LINEAR_TRANSFORM) {
+				}
+				else if (transforms[i]->transform==RATIO) {
+					stepsizes[i] = 0.5; // default for a ratio
+				}
 			}
 		}
 	}
