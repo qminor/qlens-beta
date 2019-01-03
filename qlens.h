@@ -1413,6 +1413,7 @@ struct ParamSettings
 			stepsizes[i] = stepsizes_in[i];
 			auto_stepsize[i] = true;
 		}
+		transform_stepsizes();
 	}
 	void set_stepsize(const int i, const double step)
 	{
@@ -1543,7 +1544,7 @@ struct ParamSettings
 		for (int i=0; i < nparams; i++) {
 			if (auto_stepsize[i]) {
 				if (transforms[i]->transform==LOG_TRANSFORM) {
-					stepsizes[i] = 1.0; // default for a log transform
+					stepsizes[i] = 0.5; // default for a log transform
 				}
 				else if (transforms[i]->transform==GAUSS_TRANSFORM) {
 				}
