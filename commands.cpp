@@ -28,6 +28,7 @@ void Lens::process_commands(bool read_file)
 	show_colorbar = true;
 	plot_square_axes = false;
 	plot_title = "";
+	chain_info = "";
 	fontsize = 14;
 	linewidth = 1;
 	string setword; // used for toggling boolean settings
@@ -619,8 +620,9 @@ void Lens::process_commands(bool read_file)
 							"fit output_dir <dirname>\n"
 							"fit use_bestfit\n"
 							"fit save_bestfit\n"
-							"fit load_bestfit\n"
+							"fit load_bestfit ...\n"
 							"fit add_chain_dparams\n"
+							"fit mkposts ...\n"
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
 							"fit dparams ...\n"
@@ -829,6 +831,16 @@ void Lens::process_commands(bool read_file)
 							"The fit label should match that of the chain, and the lens model should be the same as in the chain\n"
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included.\n";
+					else if (words[2]=="mkposts")
+						cout << "fit mkposts <dirname>\n\n"
+							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
+							"from QLens and generate 1d and 2d posteriors, copying the resulting PDF files from the chains directory\n"
+							"to directory <dirname> (which is created if it doesn't already exist; otherwise if <dirname> is omitted,\n"
+							"the files are not copied to another directory). In addition, the chain description given by 'chain_info',\n"
+							"the best-fit point and 95\% credible intervals are all output to the file <label>.chain_info and also\n"
+							"copied to directory <dirname>. The 'fit mkposts' command is useful if many jobs are being run, so all the\n"
+							"posteriors can be automatically generated and placed into the same directory for comparison.\n"
+							"(NOTE: histograms are made using 50 and 40x40 bins for the 1d and 2d posteriors, respectively.)\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
 						"fit plimits <param_num/name> <lower_limit> <upper_limit>\n"
@@ -1339,7 +1351,9 @@ void Lens::process_commands(bool read_file)
 					"are used. (default=on)\n";
 				else if (words[1]=="plot_title")
 					cout << "plot_title <title>\n\n"
-					"Set the title of a plot produced by the 'plotimg' or 'plotimgs' command.\n";
+					"Set the title of a plot produced by the 'plotimg' or 'plotimgs' command. You can enter the title\n"
+					"with surrounding single or double quotes if desired; these will simply be removed in the title\n"
+					"that gets printed. (For example: plot_title \"Hello here is a title\")\n";
 				else if (words[1]=="mksrctab")
 					cout << "mksrctab <xmin> <xmax> <xpoints> <ymin> <ymax> <ypoints> [source_outfile]\n\n"
 						"Creates a regular grid of sources and plots to [source_outfile] (default='sourcexy.in')\n";
@@ -6217,6 +6231,21 @@ void Lens::process_commands(bool read_file)
 				while ((pos = plot_title.find('\'')) != string::npos) plot_title.erase(pos,1);
 			}
 		}
+		else if (words[0]=="chain_info")
+		{
+			if (nwords==1) {
+				if (chain_info.empty()) Complain("chain description has not been set");
+				cout << "Chain info: '" << chain_info << "'\n";
+			} else {
+				remove_word(0);
+				chain_info = "";
+				for (int i=0; i < nwords-1; i++) chain_info += words[i] + " ";
+				chain_info += words[nwords-1];
+				int pos;
+				while ((pos = chain_info.find('"')) != string::npos) chain_info.erase(pos,1);
+				while ((pos = chain_info.find('\'')) != string::npos) chain_info.erase(pos,1);
+			}
+		}
 		else if (words[0]=="colorbar")
 		{
 			if (nwords==1) {
@@ -7890,10 +7919,15 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname)
 			nbins2d_str << nbins_2d;
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
-			string command = "cd " + fit_output_dir + "; mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + "; mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename + ".chain_info; python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; ";
+			string command = "cd " + fit_output_dir + "; ";
+			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + "; "; // make histograms
+			command += "mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename; // produce best-fit point and credible intervals
+			if (chain_info != "") command += ".chain_stats; echo 'CHAIN_INFO: " + chain_info + "\n' >" + fit_output_filename + ".chain_desc; cat " + fit_output_filename + ".chain_desc " + fit_output_filename + ".chain_stats >" + fit_output_filename; // attach chain description, if specified by user in 'chain_info'
+			command += ".chain_info; python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // make PDFs
 			if (copy_post_files) {
-				command += "if [ -e ../" + posts_dirname + " ]; then cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; else echo 'ERROR: could not find directory name for storing posteriors'; fi; ";
+				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; ";
 			}
+			if (chain_info != "") command += "rm " + fit_output_filename + ".chain_stats; rm " + fit_output_filename + ".chain_desc; "; // remove temporary files
 			command += "cd ..";
 			system(command.c_str());
 		}

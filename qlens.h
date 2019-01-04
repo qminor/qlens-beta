@@ -402,6 +402,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
 	string plot_title;
+	string chain_info; // Allows for a description of chain to be saved in chains_* directory
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar, plot_square_axes;
@@ -1165,7 +1166,6 @@ struct ParamSettings
 		prior_norms = new_prior_norms;
 		use_penalty_limits = new_use_penalty_limits;
 		nparams = nparams_in;
-		transform_stepsizes();
 	}
 	void insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
 	{
@@ -1238,7 +1238,6 @@ struct ParamSettings
 		use_penalty_limits = new_use_penalty_limits;
 		param_names = new_param_names;
 		nparams = new_nparams;
-		transform_stepsizes();
 	}
 	bool remove_params(const int pi, const int pf)
 	{
