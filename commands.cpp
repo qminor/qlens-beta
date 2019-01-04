@@ -7924,13 +7924,11 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname)
 			nbins2d_str >> nbins2d_string;
 			string command = "cd " + fit_output_dir + "; ";
 			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + "; "; // make histograms
-			command += "mkdist " + fit_output_filename + " -E2 -b >" + fit_output_filename; // produce best-fit point and credible intervals
-			if (chain_info != "") command += ".chain_stats; echo 'CHAIN_INFO: " + chain_info + "\n' >" + fit_output_filename + ".chain_desc; cat " + fit_output_filename + ".chain_desc " + fit_output_filename + ".chain_stats >" + fit_output_filename; // attach chain description, if specified by user in 'chain_info'
-			command += ".chain_info; python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // make PDFs
+			command += "mkdist " + fit_output_filename + " -i -b -E2 >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
+			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
 			if (copy_post_files) {
 				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; ";
 			}
-			if (chain_info != "") command += "rm " + fit_output_filename + ".chain_stats; rm " + fit_output_filename + ".chain_desc; "; // remove temporary files
 			command += "cd ..";
 			system(command.c_str());
 		}

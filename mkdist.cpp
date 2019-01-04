@@ -42,12 +42,13 @@ int main(int argc, char *argv[])
 	bool use_fisher_matrix = false;
 	bool exclude_derived_params = false;
 	bool include_log_evidence = false;
+	bool output_chain_info = false;
 	char mprofile_name[100] = "mprofile.dat";
 	bool show_markers = false;
 	string marker_filename = "";
 	char param_transform_filename[100] = "";
 	bool smoothing = false;
-	int nthreads=1, n_processes=1;
+	int n_threads=1, n_processes=1;
 	double radius = 0.1;
 	string file_root, file_label;
 	int nparams, nparams_eff, n_fitparams = -1;
@@ -98,6 +99,7 @@ int main(int argc, char *argv[])
 					case 'u': show_uncertainties_as_percentiles = true; break;
 					case 'P': run_python_script = true; break;
 					case 'x': exclude_derived_params = true; break;
+					case 'i': output_chain_info = true; break;
 					case 'f':
 						use_fisher_matrix = true;
 						make_1d_posts = true;
@@ -194,18 +196,19 @@ int main(int argc, char *argv[])
 
 	file_root = output_dir + "/" + file_label;
 	i=0;
-	string filename, istring;
+	j=0;
+	string filename, istring, jstring;
 	if (!use_fisher_matrix) {
 		for(;;)
 		{
-			stringstream istream;
-			istream << i;
-			istream >> istring;
-			filename = file_root + "_0." + istring;
-			if (file_exists(filename)) i++;
+			stringstream jstream;
+			jstream << j;
+			jstream >> jstring;
+			filename = file_root + "_0." + jstring;
+			if (file_exists(filename)) j++;
 			else break;
 		}
-		if (i==0) {
+		if (j==0) {
 			for(;;) {
 				stringstream istream;
 				istream << i;
@@ -223,7 +226,6 @@ int main(int argc, char *argv[])
 				else die("No data files found");
 			}
 		} else {
-			i = 0;
 			for (;;) {
 				stringstream istream;
 				istream << i;
@@ -238,6 +240,10 @@ int main(int argc, char *argv[])
 				}
 				else die("No data files found");
 			}
+		}
+		if (cut != 0) {
+			if (i > 0) n_threads = i; // set number of chains for MCMC data
+			if (j > 0) n_processes = j; // set number of MPI processes that were used to produce MCMC data
 		}
 	} else {
 		filename = file_root + ".pcov";
@@ -260,9 +266,10 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		Eval.input(file_root.c_str(),-1,nthreads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,include_log_evidence);
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,include_log_evidence);
 		Eval.get_nparams(nparams);
 	}
+	if (output_chain_info) Eval.OutputChainInfo();
 	if (nparams==0) die();
 	nparams_eff = nparams;
 	if (n_fitparams==-1) n_fitparams = nparams;

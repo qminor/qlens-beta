@@ -131,6 +131,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		string str;
 		do {
 			getline(inlen, str);
+			if (str.find("#") != string::npos) chain_info.push_back(str);
 		} while (str.find("#") != string::npos);
 		if (include_log_evidence) getline(inlen, str);
 		istringstream iss(str);
@@ -369,6 +370,14 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	FindMinChisq();
 }
 
+void McmcEval::OutputChainInfo()
+{
+	if (chain_info.size() > 0) {
+		for (int i=0; i < chain_info.size(); i++) cout << chain_info[i] << endl;
+		cout << endl;
+	}
+}
+
 void McmcEval::input_parameter_transforms(const char *transform_filename)
 {
 	int nwords;
@@ -517,7 +526,7 @@ void McmcEval::output_min_chisq_pt(void)
 	for (int k=0; k < numOfParam; k++) {
 		cout << points[min_chisq_pt_j][min_chisq_pt_m][k] << " ";
 	}
-	cout << endl;
+	cout << endl << endl;
 }
 
 void McmcEval::min_chisq_pt(double* bestfit)

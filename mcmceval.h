@@ -80,6 +80,7 @@ class McmcEval
 		int numOfFiles;
 		int min_chisq_pt_j, min_chisq_pt_m, min_chisq_pt_jj;
 		double min_chisq_val;
+		vector<string> chain_info;
 
 		double rad; // for lensing
 		
@@ -124,6 +125,7 @@ class McmcEval
 		double enclosed_mass_spherical(const double r, const double k0, const double a, const double gamma, const double s);
 		double enclosed_mass_spherical_nocore(const double rsq_prime, const double aprime, const double a, const double nprime, const double k0, const double gamma);
 		double minchisq_derived_param() { return derived_param[min_chisq_pt_jj]; }
+		void OutputChainInfo();
 };
 
 class FisherEval

@@ -6412,7 +6412,7 @@ void Lens::nested_sampling()
 	double lnZ;
 
 	running_fit = true;
-	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile);
+	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile,NULL,chain_info);
 	running_fit = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
@@ -6598,6 +6598,7 @@ void Lens::multinest()
 		string mnin_filename = filename + ".txt";
 		ifstream mnin(mnin_filename.c_str());
 		ofstream mnout(filename.c_str());
+		if (chain_info != "") mnout << "# CHAIN_INFO: " << chain_info << endl;
 		mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
 		mnout << "# lnZ = " << lnZ << endl;
 
@@ -6819,6 +6820,7 @@ void Lens::polychord()
 		string polyin_filename = filename + ".txt";
 		ifstream polyin(polyin_filename.c_str());
 		ofstream polyout(filename.c_str());
+		if (chain_info != "") polyout << "# CHAIN_INFO: " << chain_info << endl;
 		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
 		polyout << "# lnZ = " << lnZ << endl;
 
@@ -7133,7 +7135,7 @@ void Lens::chi_square_twalk()
 	display_chisq_status = false; // just in case it was turned on
 
 	running_fit = true;
-	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile);
+	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info);
 	running_fit = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
