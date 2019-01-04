@@ -231,6 +231,7 @@ void Lens::process_commands(bool read_file)
 						"simplex_temp0 -- initial annealing temperature for downhill simplex (zero --> no annealing)\n"
 						"simplex_tfac -- \"cooling factor\" controls how quickly temp is reduced during annealing\n"
 						"simplex_show_bestfit -- show the current best-fit parameters during annealing (if on)\n"
+						"chain_info -- description of chain that can be stored using 'fit mkposts' command\n"
 						"n_livepts -- number of live points used in nested sampling runs\n"
 						"polychord_nrepeats -- num_repeats per parameter for PolyChord nested sampler\n"
 						"mcmc_chains -- number of chains used in MCMC routines (e.g. T-Walk)\n"
@@ -1867,6 +1868,8 @@ void Lens::process_commands(bool read_file)
 					cout << "simplex_tempf = " << simplex_temp_final << endl;
 					cout << "simplex_cooling_factor = " << simplex_cooling_factor << endl;
 					cout << "simplex_show_bestfit: " << display_switch(simplex_show_bestfit) << endl;
+					if (chain_info.empty()) cout << "chain_info: none\n";
+					else cout << "chain_info: '" << chain_info << "'\n";
 					cout << "n_livepts = " << n_livepts << endl;
 					cout << "polychord_nrepeats = " << polychord_nrepeats << endl;
 					cout << "mcmc_chains = " << mcmc_threads << endl;
