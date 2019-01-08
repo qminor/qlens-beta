@@ -8092,7 +8092,6 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			nbins2d_str << nbins_2d;
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
-			cout << "BINS: " << nbins1d_string << " " << nbins2d_string << endl;
 			string command = "cd " + fit_output_dir + "; ";
 			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
 			if (make_subplot) command += " -s";
