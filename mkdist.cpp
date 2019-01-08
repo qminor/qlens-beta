@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
 	bool output_chain_info = false;
 	char mprofile_name[100] = "mprofile.dat";
 	bool show_markers = false;
+	bool make_subplot = false;
 	string marker_filename = "";
 	char param_transform_filename[100] = "";
 	bool smoothing = false;
@@ -180,9 +181,10 @@ int main(int argc, char *argv[])
 						argv[i] = advance(argv[i]);
 						break;
 					case 'q': silent = true; break;
+					case 's': make_subplot = true; break;
 					case 'F': include_shading = false; break;
-					case 's':
-						if (sscanf(argv[i], "s%i", &nparams_subset)==0) usage_error();
+					case 't':
+						if (sscanf(argv[i], "t%i", &nparams_subset)==0) usage_error();
 						argv[i] = advance(argv[i]);
 						break;
 					case 'S': smoothing = true; break;
@@ -319,6 +321,24 @@ int main(int argc, char *argv[])
 	}
 	latex_paramnames_out.close();
 
+	bool *subplot_active_params = new bool[nparams_eff];
+	if (make_subplot) {
+		string *subplot_param_names = new string[nparams_eff];
+		string subplot_paramnames_filename = file_root + ".subplot_params";
+		ifstream subplot_paramnames_file(subplot_paramnames_filename.c_str());
+		for (i=0; i < nparams_eff; i++) {
+			if (!(subplot_paramnames_file >> subplot_param_names[i])) die("not all subplot_parameter names are given in file '%s'",subplot_paramnames_filename.c_str());
+			if (subplot_param_names[i] != param_names[i]) die("subplot parameter names do not match names given in paramnames file");
+			int pflag;
+			if (!(subplot_paramnames_file >> pflag)) die("subplot parameter flag not given in file '%s'",subplot_paramnames_filename.c_str());
+			if (pflag == 0) subplot_active_params[i] = false;
+			else if (pflag == 1) subplot_active_params[i] = true;
+			else die("invalid subplot parameter flag in file '%s'; should either be 0 or 1",subplot_paramnames_filename.c_str());
+		}
+		subplot_paramnames_file.close();
+		delete[] subplot_param_names;
+	}
+
 	double *markers = new double[nparams_eff];
 	int n_markers = nparams_eff;
 	if (show_markers) {
@@ -331,7 +351,11 @@ int main(int argc, char *argv[])
 			ifstream marker_file(marker_filename.c_str());
 			for (i=0; i < nparams_eff; i++) {
 				if (!(marker_file >> markers[i])) {
-					if (i==0) die("marker values could not be read from file '%s'",marker_filename.c_str());
+					if (i==0) {
+						cerr << "marker values could not be read from file '" << marker_filename << "'; will not use markers when plotting" << endl;
+						show_markers = false;
+						break;
+					}
 					n_markers = i;
 					break;
 				}
@@ -568,46 +592,72 @@ int main(int argc, char *argv[])
 
 		if (make_1d_posts) {
 			// make script for triangle plot
-			pyname = file_label + "_tri.py";
-			ofstream pyscript(pyname.c_str());
-			pyscript << "import GetDistPlots, os" << endl;
-			pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
-			pyscript << "outdir=''" << endl;
-			pyscript << "roots=['" << file_label << "']" << endl;
-			if (show_markers) {
-				pyscript << "marker_list=[";
-				for (i=0; i < n_markers; i++) {
-					pyscript << markers[i];
-					if (i < nparams_eff-1) pyscript << ",";
+			int n_triplots = 1;
+			if (make_subplot) n_triplots++;
+			for (int k=0; k < n_triplots; k++) {
+				if (k==0) pyname = file_label + "_tri.py";
+				else pyname = file_label + "_subtri.py";
+				ofstream pyscript(pyname.c_str());
+				pyscript << "import GetDistPlots, os" << endl;
+				pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
+				pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+				pyscript << "outdir=''" << endl;
+				pyscript << "roots=['" << file_label << "']" << endl;
+				if (show_markers) {
+					pyscript << "marker_list=[";
+					for (i=0; i < n_markers; i++) {
+						if ((k==0) or (subplot_active_params[i])) {
+							pyscript << markers[i];
+							if ((k==0) and (i != n_markers-1)) pyscript << ",";
+							else if (k==1) {
+								bool last_param = true;
+								for (int ii=i+1; ii < n_markers; ii++) {
+									if (subplot_active_params[ii]==true) last_param = false;
+								}
+								if (!last_param) pyscript << ",";
+							}
+						}
+					}
+					pyscript << "]" << endl;
+				} else {
+					pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
 				}
-				pyscript << "]" << endl;
-			} else {
-				pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
-			}
-			pyscript << "g.triangle_plot(roots, [";
-			for (i=0; i < nparams_eff; i++) {
-				pyscript << "'" << param_names[i] << "'";
-				if (i != nparams_eff-1) pyscript << ",";
-			}
-			pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
-			if (show_markers) pyscript << "True";
-			else pyscript << "False";
-			pyscript << ",marker_2d='x',";
-			if (include_shading) pyscript << "shaded=True";
-			else pyscript << "shaded=False";
-			pyscript << ")" << endl;
-			pyscript << "g.export(os.path.join(outdir,'" << file_label << "_tri.pdf'))" << endl;
-			if (run_python_script) {
-				string pycommand = "python " + pyname;
-				if (system(pycommand.c_str()) == 0) {
-					cout << "Triangle plot (1D+2D posteriors) saved to '" << file_label << "_tri.pdf'\n";
-					//string rmcommand = "rm " + pyname;
-					//system_returnval = system(rmcommand.c_str());
+				pyscript << "g.triangle_plot(roots, [";
+				for (i=0; i < nparams_eff; i++) {
+					if ((k==0) or (subplot_active_params[i]==true)) {
+						pyscript << "'" << param_names[i] << "'";
+						if ((k==0) and (i != nparams_eff-1)) pyscript << ",";
+						else if (k==1) {
+							bool last_param = true;
+							for (int ii=i+1; ii < nparams_eff; ii++) {
+								if (subplot_active_params[ii]==true) last_param = false;
+							}
+							if (!last_param) pyscript << ",";
+						}
+					}
 				}
-				else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
-			} else {
-				cout << "Plotting script for triangle plot saved to '" << pyname << "'\n";
+				pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
+				if (show_markers) pyscript << "True";
+				else pyscript << "False";
+				pyscript << ",marker_2d='x',";
+				if (include_shading) pyscript << "shaded=True";
+				else pyscript << "shaded=False";
+				pyscript << ")" << endl;
+				pyscript << "g.export(os.path.join(outdir,'" << file_label;
+				if (k==0) pyscript << "_tri.pdf'))" << endl;
+				else pyscript << "_subtri.pdf'))" << endl;
+				if (run_python_script) {
+					string pycommand = "python " + pyname;
+					if (system(pycommand.c_str()) == 0) {
+						if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << file_label << "_tri.pdf'\n";
+						else cout << "Triangle subplot saved to '" << file_label << "_subtri.pdf'\n";
+						//string rmcommand = "rm " + pyname;
+						//system_returnval = system(rmcommand.c_str());
+					}
+					else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
+				} else {
+					cout << "Plotting script for triangle plot saved to '" << pyname << "'\n";
+				}
 			}
 		}
 	}
@@ -615,6 +665,7 @@ int main(int argc, char *argv[])
 	delete[] param_names;
 	delete[] latex_param_names;
 	delete[] markers;
+	delete[] subplot_active_params;
 	return 0;
 }
 
@@ -655,7 +706,8 @@ void usage_error()
 			"  -n#       make 1d histograms with # bins\n"
 			"  -N#       make 2d histograms with # by # bins\n"
 			"  -x        exclude the derived parameters when plotting histograms\n"
-			"  -s#       include only the first # parameters when plotting histograms\n"
+			"  -t#       truncate number of params, i.e. include only the first # parameters when plotting histograms\n"
+			"  -s        make triangle subplot using file '<file_root>.subplot_params' containing flags (0 or 1) for each parameter\n"
 			"  -P        execute Python scripts generated by mkdist to output posteriors as PDF files\n"
 			"  -S        plot smoothed histograms\n"
 			"  -F        do not include shading in 2D histograms\n"

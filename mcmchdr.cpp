@@ -816,7 +816,7 @@ void quitproc(int sig)
 	exit(0);
 }
 
-void UCMC::TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile, double** initial_points, string chain_info)
+void UCMC::TWalk(const char *name, const double div, const int proj, const double din, const double alim, const double alimt, const double tol, const int Threads, double *best_fit_params, bool logfile, double** initial_points, string chain_info, string data_info)
 {
 	int NThreads = (Threads > ma+1) ? Threads : ma + 2;
 	if (NThreads < 5+mpi_ngroups) NThreads = 5 + mpi_ngroups;
@@ -898,6 +898,7 @@ void UCMC::TWalk(const char *name, const double div, const int proj, const doubl
 #endif
 	}
 	if (chain_info != "") out[0] << "# CHAIN_INFO: " << chain_info << endl;
+	if (data_info != "") out[0] << "# DATA_INFO: " << data_info << endl;
 	out[0] << "# Sampler: T-Walk (MCMC) Algorithm, mcmc_chains = " << NThreads << endl;
 
 	for (t=0; t < NThreads; t++)
@@ -2896,7 +2897,7 @@ class Counter
 		}
 };
 
-void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points, string chain_info)
+void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_fit_params, double *parameter_errors, bool logfile, double** initial_points, string chain_info, string data_info)
 {
 	int i, j;
 	double **points = matrix <double> (N, ma);
@@ -3345,6 +3346,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 		if (NDerivedParams > 0) cout << "Calculating derived parameters: [\033[21C]\033[22D" << flush;
 
 		if (chain_info != "") out << "# CHAIN_INFO: " << chain_info << endl;
+		if (data_info != "") out << "# DATA_INFO: " << data_info << endl;
 		out << "# Sampler: QLens nested sampler, n_livepts = " << N << endl;
 		out << "# lnZ = " << lnZ << endl;
 		for (i = 0; i < tot; i++, count++)

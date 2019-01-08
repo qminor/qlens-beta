@@ -29,7 +29,7 @@ void die(char *s, ...)
 	}
 	fprintf(stderr, "\n");
 	va_end(ap);
-	getc(stdin);
+	//getc(stdin);
 	exit(1);
 }
 

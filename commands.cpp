@@ -28,7 +28,9 @@ void Lens::process_commands(bool read_file)
 	show_colorbar = true;
 	plot_square_axes = false;
 	plot_title = "";
+	data_info = "";
 	chain_info = "";
+	param_markers = "";
 	fontsize = 14;
 	linewidth = 1;
 	string setword; // used for toggling boolean settings
@@ -231,7 +233,10 @@ void Lens::process_commands(bool read_file)
 						"simplex_temp0 -- initial annealing temperature for downhill simplex (zero --> no annealing)\n"
 						"simplex_tfac -- \"cooling factor\" controls how quickly temp is reduced during annealing\n"
 						"simplex_show_bestfit -- show the current best-fit parameters during annealing (if on)\n"
+						"data_info -- description of data that is stored in FITS file header and chain file headers\n"
 						"chain_info -- description of chain that can be stored using 'fit mkposts' command\n"
+						"param_markers -- parameter values to be marked in posteriors plotted by mkdist tool\n"
+						"subplot_params -- subset of parameters to make a triangle subplot using 'fit mkposts' command\n"
 						"n_livepts -- number of live points used in nested sampling runs\n"
 						"polychord_nrepeats -- num_repeats per parameter for PolyChord nested sampler\n"
 						"mcmc_chains -- number of chains used in MCMC routines (e.g. T-Walk)\n"
@@ -833,15 +838,18 @@ void Lens::process_commands(bool read_file)
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included.\n";
 					else if (words[2]=="mkposts")
-						cout << "fit mkposts <dirname>\n\n"
+						cout << "fit mkposts <dirname> [-n#] [-N#]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
 							"from QLens and generate 1d and 2d posteriors, copying the resulting PDF files from the chains directory\n"
 							"to directory <dirname> (which is created if it doesn't already exist; otherwise if <dirname> is omitted,\n"
-							"the files are not copied to another directory). In addition, the chain description given by 'chain_info',\n"
-							"the best-fit point and 95\% credible intervals are all output to the file <label>.chain_info and also\n"
-							"copied to directory <dirname>. The 'fit mkposts' command is useful if many jobs are being run, so all the\n"
-							"posteriors can be automatically generated and placed into the same directory for comparison.\n"
-							"(NOTE: histograms are made using 50 and 40x40 bins for the 1d and 2d posteriors, respectively.)\n";
+							"the files are not copied to another directory). In addition, the chain and data descriptions given by\n"
+							"'chain_info' and 'data_info', the best-fit point and 95\% credible intervals are all output to the file\n"
+							"<label>.chain_info and also copied to directory <dirname>. The 'fit mkposts' command is useful if many\n"
+							"jobs are being run, so all the posteriors can be automatically generated and placed into the same\n"
+							"directory for comparison. In addition, a triangle subplot can be made using a subset of all the fit\n"
+							"parameters defined using the 'subplot_params' command.\n"
+							"(NOTE: by default, histograms are made using 50 and 40 bins for 1D and 2D posteriors, respectively; if\n"
+							"desired, these numbers can be changed using '-n#' and '-N#' arguments, where # is the number of bins.)\n";
 					else if (words[2]=="plimits")
 						cout << "fit plimits\n"
 						"fit plimits <param_num/name> <lower_limit> <upper_limit>\n"
@@ -1338,23 +1346,54 @@ void Lens::process_commands(bool read_file)
 						"whereas in the second example a range is specified only for the image plot.\n\n";
 				else if ((words[1]=="ptsize") or (words[1]=="ps"))
 					cout << "ptsize <size> (or, shorter form: ps <size>)\n\n"
-					"Sets point size for plotting in gnuplot.\n";
+						"Sets point size for plotting in gnuplot.\n";
 				else if ((words[1]=="pttype") or (words[1]=="pt"))
 					cout << "pttype <type> (or, shorter form: pt <size>)\n\n"
-					"Sets point marker type (given by an integer) for plotting in gnuplot.\n";
+						"Sets point marker type (given by an integer) for plotting in gnuplot.\n";
 				else if (words[1]=="show_cc")
 					cout << "show_cc <on/off>\n\n"
-					"If on, plots critical curves along with image positions; otherwise, omits critical curves.\n"
-					"(default=on)\n";
+						"If on, plots critical curves along with image positions; otherwise, omits critical curves.\n"
+						"(default=on)\n";
 				else if (words[1]=="show_srcplane")
 					cout << "show_srcplane <on/off>\n\n"
-					"If on, plots the source along with the lensed images when the 'plotimg' or 'plotimgs' commands\n"
-					"are used. (default=on)\n";
+						"If on, plots the source along with the lensed images when the 'plotimg' or 'plotimgs' commands\n"
+						"are used. (default=on)\n";
 				else if (words[1]=="plot_title")
 					cout << "plot_title <title>\n\n"
-					"Set the title of a plot produced by the 'plotimg' or 'plotimgs' command. You can enter the title\n"
-					"with surrounding single or double quotes if desired; these will simply be removed in the title\n"
-					"that gets printed. (For example: plot_title \"Hello here is a title\")\n";
+						"Set the title of a plot produced by the 'plotimg' or 'plotimgs' command. You can enter the title\n"
+						"with surrounding single or double quotes if desired; these will simply be removed in the title\n"
+						"that gets printed. (For example: plot_title \"Hello here is a title\")\n";
+				else if (words[1]=="chain_info")
+					cout << "chain_info <info>\n\n"
+						"Sets a description of the job being run that will be stored as a comment at the top of the chain\n"
+						"data file produced by nested sampling or MCMC. This description will also be stored in the file\n"
+						"<label>.chain_info in the chains directory when the command 'fit mkposts' is executed. The info can\n"
+						"be surrounded by optional quotation marks. (For example: chain_info \"Hello here is info\")\n";
+				else if (words[1]=="data_info")
+					cout << "data_info <info>\n\n"
+						"Contains a description of the data being fit to that is stored in the FITS file header for mock\n"
+						"data images that are created in qlens. When the FITS file is loaded later in qlens, the data\n"
+						"description is automatically stored into 'data_info'. The data_info is also stored as a comment in\n"
+						"the header of chain data files created by qlens. When entering data_info manually, the text can be\n"
+						"be surrounded by optional quotation marks. (For example: data_info \"Hello here is info\")\n";
+				else if (words[1]=="param_markers")
+					cout << "param_markers <markers>\n"
+						"param_markers bestfit\n\n"
+						"Define parameter values to be marked in posteriors plotted by mkdist tool (using the '-m' option in\n"
+						"mkdist). The marker values will be saved to the file '<label>.markers' in the chains directory when a\n"
+						"chain is produced, where <label> is set by the 'fit label' command. The marker values will also be\n"
+						"saved to this file and plotted automatically when executing the 'fit mkposts' command. If the\n"
+						"argument is entered as 'bestfit', the best-fit parameters from the previous run are used. Be aware\n"
+						"that qlens does not check whether the number of marker values entered matches the number of param-\n"
+						"eters; hence, if too many marker values are entered, mkdist will print an error and omit the markers.\n"
+						"The marker values can be surrounded by quotation marks, but this is optional. (For example:\n"
+						"param_markers \"1.3 0.7 40 0.3 0.5\")\n";
+				else if (words[1]=="subplot_params")
+					cout << "subplot_params <param_names> ...\n"
+						"subplot_params reset\n\n"
+						"Define a subset of parameters that will be used to make a sub-triangle plot when the 'fit mkposts'\n"
+						"command is run. Simply list the parameter names in the arguments or 'reset' to clear the list.\n"
+						"If no argument is given, the current list of subplot parameters is printed.\n";
 				else if (words[1]=="mksrctab")
 					cout << "mksrctab <xmin> <xmax> <xpoints> <ymin> <ymax> <ypoints> [source_outfile]\n\n"
 						"Creates a regular grid of sources and plots to [source_outfile] (default='sourcexy.in')\n";
@@ -1389,8 +1428,8 @@ void Lens::process_commands(bool read_file)
 						"Prints the total (unbiased) cross section. If [filename] is specified, saves to file.\n";
 				else if (words[1]=="clear")
 					cout << "clear <#>\n\n"
-					"Remove lens galaxy # from the list (the list of galaxies can be printed using the\n"
-					"'lens' command). If no arguments given, delete entire lens configuration and start over.\n";
+						"Remove lens galaxy # from the list (the list of galaxies can be printed using the\n"
+						"'lens' command). If no arguments given, delete entire lens configuration and start over.\n";
 				else if (words[1]=="cc_reset")  // obsolete--should probably remove
 					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n"; // obsolete--should probably remove
 				else if (words[1]=="integral_method")
@@ -1868,8 +1907,14 @@ void Lens::process_commands(bool read_file)
 					cout << "simplex_tempf = " << simplex_temp_final << endl;
 					cout << "simplex_cooling_factor = " << simplex_cooling_factor << endl;
 					cout << "simplex_show_bestfit: " << display_switch(simplex_show_bestfit) << endl;
+					if (data_info.empty()) cout << "data_info: none\n";
+					else cout << "data_info: '" << data_info << "'\n";
 					if (chain_info.empty()) cout << "chain_info: none\n";
 					else cout << "chain_info: '" << chain_info << "'\n";
+					if (param_markers.empty()) cout << "param_markers: none\n";
+					else cout << "param_markers: '" << param_markers << "'\n";
+					if (!param_settings->subplot_params_defined()) cout << "subplot_params: none\n";
+					else cout << "subplot_params: " << param_settings->print_subplot_params() << endl;
 					cout << "n_livepts = " << n_livepts << endl;
 					cout << "polychord_nrepeats = " << polychord_nrepeats << endl;
 					cout << "mcmc_chains = " << mcmc_threads << endl;
@@ -4661,11 +4706,37 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="mkposts")
 				{
+					int nbins1d = 50, nbins2d = 40;
+					if (nwords > 2) {
+						int pos = -1;
+						for (int i=2; i < nwords; i++) {
+							if (((pos = words[i].find("-n")) != string::npos) and (pos==0)) {
+								string nbinstring = words[i].substr(pos+2);
+								stringstream nbinstr;
+								nbinstr << nbinstring;
+								if (!(nbinstr >> nbins1d)) Complain("incorrect format for number of 1d bins for mkdist; should be entered as '-n#'");;
+								remove_word(i);
+								pos = -1;
+								break;
+							}
+						}
+						for (int i=2; i < nwords; i++) {
+							if (((pos = words[i].find("-N")) != string::npos) and (pos==0)) {
+								string nbinstring = words[i].substr(pos+2);
+								stringstream nbinstr;
+								nbinstr << nbinstring;
+								if (!(nbinstr >> nbins2d)) Complain("incorrect format for number of 2d bins for mkdist; should be entered as '-N#'");;
+								remove_word(i);
+								pos = -1;
+								break;
+							}
+						}
+					}
 					if (nwords==2) {
-						run_mkdist(false,"");
+						run_mkdist(false,"",nbins1d,nbins2d);
 					} else if (nwords==3) {
-						run_mkdist(true,words[2]);
-					} else Complain("either zero or one argument required for command 'fit mkposts' (posterior directory name)");
+						run_mkdist(true,words[2],nbins1d,nbins2d);
+					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if (words[1]=="run")
 				{
@@ -6221,6 +6292,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plot_title")
 		{
+			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
 			if (nwords==1) {
 				if (plot_title.empty()) Complain("plot title has not been set");
 				cout << "Plot title: '" << plot_title << "'\n";
@@ -6236,6 +6308,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="chain_info")
 		{
+			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
 			if (nwords==1) {
 				if (chain_info.empty()) Complain("chain description has not been set");
 				cout << "Chain info: '" << chain_info << "'\n";
@@ -6247,6 +6320,68 @@ void Lens::process_commands(bool read_file)
 				int pos;
 				while ((pos = chain_info.find('"')) != string::npos) chain_info.erase(pos,1);
 				while ((pos = chain_info.find('\'')) != string::npos) chain_info.erase(pos,1);
+			}
+		}
+		else if (words[0]=="data_info")
+		{
+			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
+			if (nwords==1) {
+				if (data_info.empty()) Complain("data description has not been set");
+				cout << "Data info: '" << data_info << "'\n";
+			} else {
+				remove_word(0);
+				data_info = "";
+				for (int i=0; i < nwords-1; i++) data_info += words[i] + " ";
+				data_info += words[nwords-1];
+				int pos;
+				while ((pos = data_info.find('"')) != string::npos) data_info.erase(pos,1);
+				while ((pos = data_info.find('\'')) != string::npos) data_info.erase(pos,1);
+			}
+		}
+		else if (words[0]=="param_markers")
+		{
+			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
+			if ((nwords==2) and (words[1] == "bestfit")) {
+				if (n_fit_parameters == 0) Complain("No best-fit point has been saved from a previous fit");
+				if (bestfitparams.size() != n_fit_parameters) Complain("Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+				param_markers = "";
+				for (int i=0; i < n_fit_parameters-1; i++) {
+					stringstream pstr;
+					string pstring;
+					pstr << bestfitparams[i];
+					pstr >> pstring;
+					param_markers += pstring + " ";
+				}
+				stringstream pstr;
+				string pstring;
+				pstr << bestfitparams[n_fit_parameters-1];
+				pstr >> pstring;
+				param_markers += pstring;
+			} else if (nwords==1) {
+				if (param_markers.empty()) Complain("parameter markers has not been set");
+				cout << "Parameter marker values: '" << param_markers << "'\n";
+			} else {
+				remove_word(0);
+				param_markers = "";
+				for (int i=0; i < nwords-1; i++) param_markers += words[i] + " ";
+				param_markers += words[nwords-1];
+				int pos;
+				while ((pos = param_markers.find('"')) != string::npos) param_markers.erase(pos,1);
+				while ((pos = param_markers.find('\'')) != string::npos) param_markers.erase(pos,1);
+			}
+		}
+		else if (words[0]=="subplot_params")
+		{
+			if (nwords==1) {
+				if (!param_settings->subplot_params_defined()) Complain("No subplot parameters have been defined");
+				else cout << "Subplot parameters: " << param_settings->print_subplot_params() << endl;
+			}
+			else if ((nwords==2) and (words[1]=="reset")) param_settings->reset_subplot_params();
+			else {
+				param_settings->reset_subplot_params();
+				for (int i=1; i < nwords; i++) {
+					if (!param_settings->set_subplot_param(words[i])) Complain("Fit parameter '" << words[i] << "' does not exist");
+				}
 			}
 		}
 		else if (words[0]=="colorbar")
@@ -6384,6 +6519,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(use_image_plane_chisq,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if (nlens > 0) get_n_fit_parameters(n_fit_parameters); // update number of fit parameters, since source parameters might not have been included for source plane chi-square
+		}
+		else if (words[0]=="bayes_factor")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Calculate Bayes factor after running two model fits: " << display_switch(calculate_bayes_factor) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'bayes_factor' command; must specify 'on' or 'off'");
+				set_switch(calculate_bayes_factor,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="analytic_bestfit_src")
 		{
@@ -7906,26 +8050,48 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname)
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d)
 {
 	if (mpi_id==0) {
 		if (posts_dirname == fit_output_dir) {
 			cerr << "Error: directory for storing posteriors cannot be the same as the chains directory" << endl;
 		} else {
-			int nbins_1d, nbins_2d;
-			// maybe make these qlens variables later
-			nbins_1d = 50;
-			nbins_2d = 40;
+			if (param_markers != "") {
+				string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+				ofstream markerfile(marker_str.c_str());
+				markerfile << param_markers << endl;
+				markerfile.close();
+			}
+
+			bool make_subplot = param_settings->subplot_params_defined();
+			if (make_subplot) {
+				string subplot_str = fit_output_dir + "/" + fit_output_filename + ".subplot_params";
+				ofstream subplotfile(subplot_str.c_str());
+				for (int i=0; i < param_settings->nparams; i++) {
+					string pname;
+					bool pflag = param_settings->subplot_param_flag(i,pname);
+					subplotfile << pname << " ";
+					if (pflag) subplotfile << "1";
+					else subplotfile << "0";
+				}
+				subplotfile.close();
+			}
+
 			stringstream nbins1d_str, nbins2d_str;
 			string nbins1d_string, nbins2d_string;
 			nbins1d_str << nbins_1d;
 			nbins2d_str << nbins_2d;
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
+			cout << "BINS: " << nbins1d_string << " " << nbins2d_string << endl;
 			string command = "cd " + fit_output_dir + "; ";
-			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string + "; "; // make histograms
+			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
+			if (make_subplot) command += " -s";
+			if (param_markers != "") command += " -m:" + fit_output_filename + ".markers; "; // add markers for plotting true values
+			else command += "; ";
 			command += "mkdist " + fit_output_filename + " -i -b -E2 >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
 			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
+			if (make_subplot) command += "python " + fit_output_filename + "_subtri.py; "; // run python scripts to make PDF for subplot
 			if (copy_post_files) {
 				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; ";
 			}

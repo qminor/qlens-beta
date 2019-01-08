@@ -2726,6 +2726,26 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
+		int nkeys;
+		fits_get_hdrspace(fptr, &nkeys, NULL, &status); // get # of keywords
+
+		int ii;
+		char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
+
+		bool reading_qlens_comment = false;
+		int pos;
+		for (ii = 1; ii <= nkeys; ii++) { // Read and print each keywords 
+			if (fits_read_record(fptr, ii, card, &status))break;
+			string cardstring(card);
+			if (reading_qlens_comment) {
+				if ((pos = cardstring.find("COMMENT")) != string::npos) {
+					lens->data_info += cardstring.substr(pos+8);
+				} else break;
+			} else if ((pos = cardstring.find("ql: ")) != string::npos) {
+				reading_qlens_comment = true;
+				lens->data_info = cardstring.substr(pos+4);
+			}
+		}
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
@@ -4142,6 +4162,10 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
 				delete[] pixels;
+			}
+			if (lens->data_info != "") {
+				string comment = "ql: " + lens->data_info;
+				fits_write_comment(outfptr, comment.c_str(), &status);
 			}
 		}
 		fits_close_file(outfptr, &status);

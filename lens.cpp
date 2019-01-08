@@ -194,6 +194,8 @@ Lens::Lens() : UCMC()
 
 	chisq_it=0;
 	raw_chisq = -1e30;
+	calculate_bayes_factor = false;
+	reference_lnZ = -1e30; // used to calculate Bayes factors when two different models are run
 	chisq_diagnostic = false;
 	chisq_bestfit = 1e30;
 	bestfit_flux = 0;
@@ -442,6 +444,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	set_random_generator(lens_in);
 	chisq_it=0;
 	raw_chisq = -1e30;
+	calculate_bayes_factor = lens_in->calculate_bayes_factor;
+	reference_lnZ = lens_in->reference_lnZ; // used to calculate Bayes factors when two different models are run
 	chisq_diagnostic = lens_in->chisq_diagnostic;
 	chisq_bestfit = lens_in->chisq_bestfit;
 	bestfit_flux = lens_in->bestfit_flux;
@@ -3744,6 +3748,7 @@ void Lens::write_image_data(string filename)
 		outfile << setprecision(6);
 		outfile << fixed;
 	}
+	if (data_info != "") outfile << "# data_info: " << data_info << endl;
 	outfile << "zlens = " << lens_redshift << endl;
 	outfile << n_sourcepts_fit << " # number of source points" << endl;
 	for (int i=0; i < n_sourcepts_fit; i++) {
@@ -4196,6 +4201,7 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
 {
 	static const int n_characters = 256;
+	int pos;
 	string word;
 	n_datawords = 0;
 	datawords.clear();
@@ -4204,10 +4210,14 @@ bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int 
 		data_infile.getline(dataline,n_characters);
 		if ((data_infile.rdstate() & ifstream::eofbit) != 0) return false;
 		string linestring(dataline);
-		remove_comments(linestring);
-		istringstream datastream0(linestring.c_str());
-		while (datastream0 >> word) datawords.push_back(word);
-		n_datawords = datawords.size();
+		if ((pos = linestring.find("data_info: ")) != string::npos) {
+			data_info = linestring.substr(pos+11);
+		} else {
+			remove_comments(linestring);
+			istringstream datastream0(linestring.c_str());
+			while (datastream0 >> word) datawords.push_back(word);
+			n_datawords = datawords.size();
+		}
 	} while (n_datawords==0); // skip lines that are blank or only have comments
 	remove_equal_sign_datafile(datawords,n_datawords);
 	return true;
@@ -6374,6 +6384,7 @@ void Lens::nested_sampling()
 	}
 
 	if (mpi_id==0) {
+		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
@@ -6397,6 +6408,12 @@ void Lens::nested_sampling()
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
+		if (param_markers != "") {
+			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+			ofstream markerfile(marker_str.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
 	}
 
 	double *param_errors = new double[n_fit_parameters];
@@ -6412,7 +6429,7 @@ void Lens::nested_sampling()
 	double lnZ;
 
 	running_fit = true;
-	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile,NULL,chain_info);
+	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile,NULL,chain_info,data_info);
 	running_fit = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
@@ -6489,6 +6506,7 @@ void Lens::multinest()
 	}
 
 	if (mpi_id==0) {
+		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
@@ -6512,6 +6530,12 @@ void Lens::multinest()
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
+		if (param_markers != "") {
+			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+			ofstream markerfile(marker_str.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
 	}
 
 #ifdef USE_OPENMP
@@ -6598,9 +6622,18 @@ void Lens::multinest()
 		string mnin_filename = filename + ".txt";
 		ifstream mnin(mnin_filename.c_str());
 		ofstream mnout(filename.c_str());
+		if (data_info != "") mnout << "# DATA_INFO: " << data_info << endl;
 		if (chain_info != "") mnout << "# CHAIN_INFO: " << chain_info << endl;
 		mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
 		mnout << "# lnZ = " << lnZ << endl;
+		if (calculate_bayes_factor) {
+			if (reference_lnZ==-1e30) reference_lnZ = lnZ; // first model being fit, so Bayes factor doesn't get calculated yet
+			else {
+				double log_bayes_factor = lnZ - reference_lnZ;
+				mnout << "# Bayes factor: ln(Z/Z_ref) = " << log_bayes_factor << " Z/Z_ref = " << exp(log_bayes_factor) << " (lnZ_ref=" << reference_lnZ << ")" << endl;
+				reference_lnZ = lnZ;
+			}
+		}
 
 		double weight, chi2;
 		double minchisq = 1e30;
@@ -6715,6 +6748,7 @@ void Lens::polychord()
 	}
 
 	if (mpi_id==0) {
+		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
@@ -6738,6 +6772,12 @@ void Lens::polychord()
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
+		if (param_markers != "") {
+			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+			ofstream markerfile(marker_str.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
 	}
 
 #ifdef USE_OPENMP
@@ -6820,9 +6860,18 @@ void Lens::polychord()
 		string polyin_filename = filename + ".txt";
 		ifstream polyin(polyin_filename.c_str());
 		ofstream polyout(filename.c_str());
+		if (data_info != "") polyout << "# DATA_INFO: " << data_info << endl;
 		if (chain_info != "") polyout << "# CHAIN_INFO: " << chain_info << endl;
 		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
 		polyout << "# lnZ = " << lnZ << endl;
+		if (calculate_bayes_factor) {
+			if (reference_lnZ==-1e30) reference_lnZ = lnZ; // first model being fit, so Bayes factor doesn't get calculated yet
+			else {
+				double log_bayes_factor = lnZ - reference_lnZ;
+				polyout << "# Bayes factor: ln(Z/Z_ref) = " << log_bayes_factor << " Z/Z_ref = " << exp(log_bayes_factor) << " (lnZ_ref=" << reference_lnZ << ")" << endl;
+				reference_lnZ = lnZ;
+			}
+		}
 
 		double weight, chi2;
 		double minchisq = 1e30;
@@ -7099,6 +7148,7 @@ void Lens::chi_square_twalk()
 	}
 
 	if (mpi_id==0) {
+		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
@@ -7122,6 +7172,12 @@ void Lens::chi_square_twalk()
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
+		if (param_markers != "") {
+			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+			ofstream markerfile(marker_str.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
 	}
 
 #ifdef USE_OPENMP
@@ -7135,7 +7191,7 @@ void Lens::chi_square_twalk()
 	display_chisq_status = false; // just in case it was turned on
 
 	running_fit = true;
-	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info);
+	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info,data_info);
 	running_fit = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());

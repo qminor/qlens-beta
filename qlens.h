@@ -369,6 +369,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool activate_unmapped_source_pixels;
 	bool exclude_source_pixels_beyond_fit_window;
 	bool regrid_if_unmapped_source_subpixels;
+	bool calculate_bayes_factor;
+	double reference_lnZ;
 	double pixel_magnification_threshold, pixel_magnification_threshold_lower_limit, pixel_magnification_threshold_upper_limit;
 	double sim_err_pos, sim_err_flux, sim_err_td;
 
@@ -402,7 +404,9 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
 	string plot_title;
+	string data_info; // Allows for a description of data to be saved in chains_* directory and in FITS file header
 	string chain_info; // Allows for a description of chain to be saved in chains_* directory
+	string param_markers; // Used to create a file with parameter marker values for mkdist; this is used  by the 'mkposts' command o plt markers
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar, plot_square_axes;
@@ -700,7 +704,7 @@ public:
 	void run_plotter_file(string plotcommand, string filename);
 	void run_plotter_range(string plotcommand, string range);
 	void run_plotter(string plotcommand, string filename, string range);
-	void run_mkdist(bool copy_post_files, string posts_dirname);
+	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);
@@ -1064,6 +1068,7 @@ struct ParamSettings
 	bool *use_penalty_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
+	bool *subplot_param;
 	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; }
 	ParamSettings(ParamSettings& param_settings_in) {
 		nparams = param_settings_in.nparams;
@@ -1071,6 +1076,7 @@ struct ParamSettings
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
 		auto_stepsize = new bool[nparams];
+		subplot_param = new bool[nparams];
 		penalty_limits_lo = new double[nparams];
 		penalty_limits_hi = new double[nparams];
 		prior_norms = new double[nparams];
@@ -1080,6 +1086,7 @@ struct ParamSettings
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
+			subplot_param[i] = param_settings_in.subplot_param[i];
 			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
 			prior_norms[i] = param_settings_in.prior_norms[i];
@@ -1101,6 +1108,7 @@ struct ParamSettings
 		ParamTransform** newtransforms = new ParamTransform*[nparams_in];
 		double* new_stepsizes = new double[nparams_in];
 		bool* new_auto_stepsize = new bool[nparams_in];
+		bool* new_subplot_param = new bool[nparams_in];
 		double* new_penalty_limits_lo = new double[nparams_in];
 		double* new_penalty_limits_hi = new double[nparams_in];
 		double* new_prior_norms = new double[nparams_in];
@@ -1113,6 +1121,7 @@ struct ParamSettings
 				newtransforms[i] = new ParamTransform(transforms[i]);
 				new_stepsizes[i] = stepsizes[i];
 				new_auto_stepsize[i] = auto_stepsize[i];
+				new_subplot_param[i] = subplot_param[i];
 				new_penalty_limits_lo[i] = penalty_limits_lo[i];
 				new_penalty_limits_hi[i] = penalty_limits_hi[i];
 				new_prior_norms[i] = prior_norms[i];
@@ -1125,6 +1134,7 @@ struct ParamSettings
 				param_names[i] = names[i];
 				new_stepsizes[i] = stepsizes_in[i];
 				new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+				new_subplot_param[i] = false; 
 				new_penalty_limits_lo[i] = -1e30;
 				new_penalty_limits_hi[i] = 1e30;
 				new_prior_norms[i] = 1.0;
@@ -1136,6 +1146,7 @@ struct ParamSettings
 				newtransforms[i] = new ParamTransform(transforms[i]);
 				new_stepsizes[i] = stepsizes[i];
 				new_auto_stepsize[i] = auto_stepsize[i];
+				new_subplot_param[i] = subplot_param[i];
 				new_penalty_limits_lo[i] = penalty_limits_lo[i];
 				new_penalty_limits_hi[i] = penalty_limits_hi[i];
 				new_prior_norms[i] = prior_norms[i];
@@ -1152,6 +1163,7 @@ struct ParamSettings
 			delete[] transforms;
 			delete[] stepsizes;
 			delete[] auto_stepsize;
+			delete[] subplot_param;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] prior_norms;
@@ -1161,6 +1173,7 @@ struct ParamSettings
 		transforms = newtransforms;
 		stepsizes = new_stepsizes;
 		auto_stepsize = new_auto_stepsize;
+		subplot_param = new_subplot_param;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
 		prior_norms = new_prior_norms;
@@ -1175,6 +1188,7 @@ struct ParamSettings
 		ParamTransform** newtransforms = new ParamTransform*[new_nparams];
 		double* new_stepsizes = new double[new_nparams];
 		bool* new_auto_stepsize = new bool[new_nparams];
+		bool* new_subplot_param = new bool[new_nparams];
 		double* new_penalty_limits_lo = new double[new_nparams];
 		double* new_penalty_limits_hi = new double[new_nparams];
 		double* new_prior_norms = new double[new_nparams];
@@ -1184,6 +1198,7 @@ struct ParamSettings
 			newpriors[i] = new ParamPrior(priors[i]);
 			newtransforms[i] = new ParamTransform(transforms[i]);
 			new_auto_stepsize[i] = auto_stepsize[i];
+			new_subplot_param[i] = subplot_param[i];
 			new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
@@ -1196,6 +1211,7 @@ struct ParamSettings
 			newtransforms[i] = new ParamTransform();
 			new_stepsizes[i] = stepsizes_in[i];
 			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+			new_subplot_param[i] = false; // stepsizes for newly added parameters are set to 'auto'
 			new_penalty_limits_lo[i] = -1e30;
 			new_penalty_limits_hi[i] = 1e30;
 			new_prior_norms[i] = 1.0;
@@ -1206,6 +1222,7 @@ struct ParamSettings
 			newpriors[j] = new ParamPrior(priors[i]);
 			newtransforms[j] = new ParamTransform(transforms[i]);
 			new_auto_stepsize[j] = auto_stepsize[i];
+			new_subplot_param[j] = subplot_param[i];
 			new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 			new_penalty_limits_lo[j] = penalty_limits_lo[i];
 			new_penalty_limits_hi[j] = penalty_limits_hi[i];
@@ -1222,6 +1239,7 @@ struct ParamSettings
 			delete[] transforms;
 			delete[] stepsizes;
 			delete[] auto_stepsize;
+			delete[] subplot_param;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] prior_norms;
@@ -1232,6 +1250,7 @@ struct ParamSettings
 		transforms = newtransforms;
 		stepsizes = new_stepsizes;
 		auto_stepsize = new_auto_stepsize;
+		subplot_param = new_subplot_param;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
 		prior_norms = new_prior_norms;
@@ -1252,6 +1271,7 @@ struct ParamSettings
 		ParamTransform** newtransforms = new ParamTransform*[new_nparams];
 		double* new_stepsizes = new double[new_nparams];
 		bool* new_auto_stepsize = new bool[new_nparams];
+		bool* new_subplot_param = new bool[new_nparams];
 		double* new_penalty_limits_lo = new double[new_nparams];
 		double* new_penalty_limits_hi = new double[new_nparams];
 		double* new_prior_norms = new double[new_nparams];
@@ -1262,6 +1282,7 @@ struct ParamSettings
 			newtransforms[i] = new ParamTransform(transforms[i]);
 			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
+			new_subplot_param[i] = subplot_param[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
 			new_prior_norms[i] = prior_norms[i];
@@ -1273,6 +1294,7 @@ struct ParamSettings
 			newtransforms[j] = new ParamTransform(transforms[i]);
 			new_stepsizes[j] = stepsizes[i];
 			new_auto_stepsize[j] = auto_stepsize[i];
+			new_subplot_param[j] = subplot_param[i];
 			new_penalty_limits_lo[j] = penalty_limits_lo[i];
 			new_penalty_limits_hi[j] = penalty_limits_hi[i];
 			new_prior_norms[j] = prior_norms[i];
@@ -1287,6 +1309,7 @@ struct ParamSettings
 		delete[] transforms;
 		delete[] stepsizes;
 		delete[] auto_stepsize;
+		delete[] subplot_param;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
 		delete[] prior_norms;
@@ -1296,6 +1319,7 @@ struct ParamSettings
 		transforms = newtransforms;
 		stepsizes = new_stepsizes;
 		auto_stepsize = new_auto_stepsize;
+		subplot_param = new_subplot_param;
 		penalty_limits_lo = new_penalty_limits_lo;
 		penalty_limits_hi = new_penalty_limits_hi;
 		prior_norms = new_prior_norms;
@@ -1310,6 +1334,46 @@ struct ParamSettings
 			if (param_names[i]==pname) return i;
 		}
 		return -1;
+	}
+	bool set_subplot_param(const string pname)
+	{
+		bool found_name = false;
+		for (int i=0; i < nparams; i++) {
+			if (param_names[i]==pname) {
+				subplot_param[i] = true;
+				found_name = true;
+				break;
+			}
+		}
+		return found_name;
+	}
+	bool subplot_params_defined()
+	{
+		bool active_param = false;
+		for (int i=0; i < nparams; i++) {
+			if (subplot_param[i]) {
+				active_param = true;
+				break;
+			}
+		}
+		return active_param;
+	}
+	bool subplot_param_flag(const int i, string &name)
+	{
+		name = param_names[i];
+		return subplot_param[i];
+	}
+	string print_subplot_params()
+	{
+		string pstring = "";
+		for (int i=0; i < nparams; i++) {
+			if (subplot_param[i]) pstring += param_names[i] + " ";
+		}
+		return pstring;
+	}
+	void reset_subplot_params()
+	{
+		for (int i=0; i < nparams; i++) subplot_param[i] = false;
 	}
 	void clear_penalty_limits()
 	{
@@ -1610,6 +1674,7 @@ struct ParamSettings
 			delete[] transforms;
 			delete[] stepsizes;
 			delete[] auto_stepsize;
+			delete[] subplot_param;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
@@ -1620,6 +1685,7 @@ struct ParamSettings
 		nparams = 0;
 		stepsizes = NULL;
 		auto_stepsize = NULL;
+		subplot_param = NULL;
 	}
 	~ParamSettings()
 	{
@@ -1632,6 +1698,7 @@ struct ParamSettings
 			delete[] transforms;
 			delete[] stepsizes;
 			delete[] auto_stepsize;
+			delete[] subplot_param;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
