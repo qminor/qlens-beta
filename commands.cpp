@@ -838,7 +838,7 @@ void Lens::process_commands(bool read_file)
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included.\n";
 					else if (words[2]=="mkposts")
-						cout << "fit mkposts <dirname> [-n#] [-N#]\n\n"
+						cout << "fit mkposts <dirname> [-n#] [-N#] [-subonly]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
 							"from QLens and generate 1d and 2d posteriors, copying the resulting PDF files from the chains directory\n"
 							"to directory <dirname> (which is created if it doesn't already exist; otherwise if <dirname> is omitted,\n"
@@ -847,7 +847,8 @@ void Lens::process_commands(bool read_file)
 							"<label>.chain_info and also copied to directory <dirname>. The 'fit mkposts' command is useful if many\n"
 							"jobs are being run, so all the posteriors can be automatically generated and placed into the same\n"
 							"directory for comparison. In addition, a triangle subplot can be made using a subset of all the fit\n"
-							"parameters defined using the 'subplot_params' command.\n"
+							"parameters defined using the 'subplot_params' command (and if '-subonly' is entered, only the subplot\n"
+							"is copied to the directory <dirname>).\n"
 							"(NOTE: by default, histograms are made using 50 and 40 bins for 1D and 2D posteriors, respectively; if\n"
 							"desired, these numbers can be changed using '-n#' and '-N#' arguments, where # is the number of bins.)\n";
 					else if (words[2]=="plimits")
@@ -4706,8 +4707,16 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="mkposts")
 				{
+					bool copy_subplot_only = false;
 					int nbins1d = 50, nbins2d = 40;
 					if (nwords > 2) {
+						for (int i=2; i < nwords; i++) {
+							if (words[i]=="-subonly") {
+								copy_subplot_only = true;
+								remove_word(i);
+								break;
+							}
+						}
 						int pos = -1;
 						for (int i=2; i < nwords; i++) {
 							if (((pos = words[i].find("-n")) != string::npos) and (pos==0)) {
@@ -4733,9 +4742,9 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					if (nwords==2) {
-						run_mkdist(false,"",nbins1d,nbins2d);
+						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only);
 					} else if (nwords==3) {
-						run_mkdist(true,words[2],nbins1d,nbins2d);
+						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if (words[1]=="run")
@@ -8050,7 +8059,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d)
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only)
 {
 	if (mpi_id==0) {
 		if (posts_dirname == fit_output_dir) {
@@ -8093,7 +8102,10 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
 			if (make_subplot) command += "python " + fit_output_filename + "_subtri.py; "; // run python scripts to make PDF for subplot
 			if (copy_post_files) {
-				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; cp *.pdf ../" + posts_dirname + "; cp *.chain_info ../" + posts_dirname + "; ";
+				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; ";
+				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + fit_output_filename + ".pdf ../" + posts_dirname + "; cp " + fit_output_filename + "_tri.pdf ../" + posts_dirname + "; ";
+				if (make_subplot) command += "cp " + fit_output_filename + "_subtri.pdf ../" + posts_dirname + "; ";
+				command += "cp *.chain_info ../" + posts_dirname + "; ";
 			}
 			command += "cd ..";
 			system(command.c_str());
