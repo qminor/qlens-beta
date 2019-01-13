@@ -1186,6 +1186,7 @@ struct ParamSettings
 	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
 	ParamSettings(ParamSettings& param_settings_in) {
 		nparams = param_settings_in.nparams;
+		n_dparams = param_settings_in.n_dparams;
 		priors = new ParamPrior*[nparams];
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
@@ -1205,6 +1206,14 @@ struct ParamSettings
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
 			prior_norms[i] = param_settings_in.prior_norms[i];
 			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
+		}
+		if (n_dparams > 0) {
+			dparam_names = new string[n_dparams];
+			subplot_dparam = new bool[n_dparams];
+			for (int i=0; i < n_dparams; i++) {
+				dparam_names[i] = param_settings_in.dparam_names[i];
+				subplot_dparam[i] = param_settings_in.subplot_dparam[i];
+			}
 		}
 	}
 	void update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
@@ -1462,27 +1471,38 @@ struct ParamSettings
 	}
 	void remove_dparam(int dparam_number)
 	{
-		string* new_dparam_names = new string[n_dparams-1];
-		bool* new_subplot_dparam = new bool[n_dparams-1];
-		int i,j;
-		for (i=0, j=0; i < n_dparams; i++) {
-			if (i != dparam_number) {
-				new_dparam_names[j] = dparam_names[i];
-				new_subplot_dparam[j] = subplot_dparam[i];
-				j++;
+		string* new_dparam_names;
+		bool* new_subplot_dparam;
+		if (n_dparams > 1) {
+			string* new_dparam_names = new string[n_dparams-1];
+			bool* new_subplot_dparam = new bool[n_dparams-1];
+			int i,j;
+			for (i=0, j=0; i < n_dparams; i++) {
+				if (i != dparam_number) {
+					new_dparam_names[j] = dparam_names[i];
+					new_subplot_dparam[j] = subplot_dparam[i];
+					j++;
+				}
 			}
 		}
 		delete[] dparam_names;
 		delete[] subplot_dparam;
 		n_dparams--;
-		dparam_names = new_dparam_names;
-		subplot_dparam = new_subplot_dparam;
+		if (n_dparams > 0) {
+			dparam_names = new_dparam_names;
+			subplot_dparam = new_subplot_dparam;
+		} else {
+			dparam_names = NULL;
+			subplot_dparam = NULL;
+		}
 	}
 	void clear_dparams()
 	{
-		delete[] dparam_names;
-		delete[] subplot_dparam;
-		n_dparams = 0;
+		if (n_dparams > 0) {
+			delete[] dparam_names;
+			delete[] subplot_dparam;
+			n_dparams = 0;
+		}
 	}
 	int lookup_param_number(const string pname)
 	{
@@ -1893,7 +1913,10 @@ struct ParamSettings
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
 		}
-		if (n_dparams > 0) delete[] dparam_names;
+		if (n_dparams > 0) {
+			delete[] dparam_names;
+			delete[] subplot_dparam;
+		}
 	}
 };
 

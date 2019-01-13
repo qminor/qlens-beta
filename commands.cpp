@@ -6304,7 +6304,7 @@ void Lens::process_commands(bool read_file)
 			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
 			if (nwords==1) {
 				if (plot_title.empty()) Complain("plot title has not been set");
-				cout << "Plot title: '" << plot_title << "'\n";
+				if (mpi_id==0) cout << "Plot title: '" << plot_title << "'\n";
 			} else {
 				remove_word(0);
 				plot_title = "";
@@ -6320,7 +6320,7 @@ void Lens::process_commands(bool read_file)
 			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
 			if (nwords==1) {
 				if (chain_info.empty()) Complain("chain description has not been set");
-				cout << "Chain info: '" << chain_info << "'\n";
+				if (mpi_id==0) cout << "Chain info: '" << chain_info << "'\n";
 			} else {
 				remove_word(0);
 				chain_info = "";
@@ -6336,7 +6336,7 @@ void Lens::process_commands(bool read_file)
 			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
 			if (nwords==1) {
 				if (data_info.empty()) Complain("data description has not been set");
-				cout << "Data info: '" << data_info << "'\n";
+				if (mpi_id==0) cout << "Data info: '" << data_info << "'\n";
 			} else {
 				remove_word(0);
 				data_info = "";
@@ -6368,7 +6368,7 @@ void Lens::process_commands(bool read_file)
 				param_markers += pstring;
 			} else if (nwords==1) {
 				if (param_markers.empty()) Complain("parameter markers has not been set");
-				cout << "Parameter marker values: '" << param_markers << "'\n";
+				if (mpi_id==0) cout << "Parameter marker values: '" << param_markers << "'\n";
 			} else {
 				remove_word(0);
 				param_markers = "";
@@ -6383,7 +6383,7 @@ void Lens::process_commands(bool read_file)
 		{
 			if (nwords==1) {
 				if (!param_settings->subplot_params_defined()) Complain("No subplot parameters have been defined");
-				else cout << "Subplot parameters: " << param_settings->print_subplot_params() << endl;
+				else if (mpi_id==0) cout << "Subplot parameters: " << param_settings->print_subplot_params() << endl;
 			}
 			else if ((nwords==2) and (words[1]=="reset")) param_settings->reset_subplot_params();
 			else {
