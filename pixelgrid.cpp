@@ -2733,17 +2733,32 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 		char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
 
 		bool reading_qlens_comment = false;
-		int pos;
+		bool reading_markers = false;
+		int pos, pos1;
 		for (ii = 1; ii <= nkeys; ii++) { // Read and print each keywords 
 			if (fits_read_record(fptr, ii, card, &status))break;
+			// When you get time: put pixel size and pixel noise as lines in the FITS file comment! Then have it load them here so you don't need to specify them as separate lines.
 			string cardstring(card);
 			if (reading_qlens_comment) {
 				if ((pos = cardstring.find("COMMENT")) != string::npos) {
-					lens->data_info += cardstring.substr(pos+8);
+					if ((pos1 = cardstring.find("mk: ")) != string::npos) {
+						reading_markers = true;
+						reading_qlens_comment = false;
+						lens->param_markers = cardstring.substr(pos1+4);
+					} else lens->data_info += cardstring.substr(pos+8);
+				} else break;
+			} else if (reading_markers) {
+				if ((pos = cardstring.find("COMMENT")) != string::npos) {
+					lens->param_markers += cardstring.substr(pos+8);
+					// A potential issue is that if there are enough markers to fill more than one line, there might be an extra space inserted,
+					// in which case the markers won't come out properly. No time to deal with this now, but something to look out for.
 				} else break;
 			} else if ((pos = cardstring.find("ql: ")) != string::npos) {
 				reading_qlens_comment = true;
 				lens->data_info = cardstring.substr(pos+4);
+			} else if ((pos = cardstring.find("mk: ")) != string::npos) {
+				reading_markers = true;
+				lens->param_markers = cardstring.substr(pos+4);
 			}
 		}
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
@@ -4165,6 +4180,10 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 			}
 			if (lens->data_info != "") {
 				string comment = "ql: " + lens->data_info;
+				fits_write_comment(outfptr, comment.c_str(), &status);
+			}
+			if (lens->param_markers != "") {
+				string comment = "mk: " + lens->param_markers;
 				fits_write_comment(outfptr, comment.c_str(), &status);
 			}
 		}

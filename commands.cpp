@@ -8076,12 +8076,14 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			if (make_subplot) {
 				string subplot_str = fit_output_dir + "/" + fit_output_filename + ".subplot_params";
 				ofstream subplotfile(subplot_str.c_str());
-				for (int i=0; i < param_settings->nparams; i++) {
+				int nparams_tot = param_settings->nparams + param_settings->n_dparams;
+				for (int i=0; i < nparams_tot; i++) {
 					string pname;
 					bool pflag = param_settings->subplot_param_flag(i,pname);
 					subplotfile << pname << " ";
 					if (pflag) subplotfile << "1";
 					else subplotfile << "0";
+					subplotfile << endl;
 				}
 				subplotfile.close();
 			}

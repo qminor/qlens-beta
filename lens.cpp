@@ -1746,6 +1746,7 @@ void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum
 	newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum);
 	n_derived_params++;
 	dparam_list = newlist;
+	param_settings->add_dparam(dparam_list[n_derived_params-1]->name);
 }
 
 void Lens::remove_derived_param(int dparam_number)
@@ -1759,6 +1760,7 @@ void Lens::remove_derived_param(int dparam_number)
 	n_derived_params--;
 
 	dparam_list = newlist;
+	param_settings->remove_dparam(dparam_number);
 }
 
 void Lens::clear_derived_params()
@@ -1769,6 +1771,7 @@ void Lens::clear_derived_params()
 		delete[] dparam_list;
 		n_derived_params = 0;
 	}
+	param_settings->clear_dparams();
 }
 
 void Lens::print_derived_param_list()

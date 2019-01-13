@@ -1057,6 +1057,117 @@ struct ParamTransform
 	void set_include_jacobian(bool &include) { include_jacobian = include; }
 };
 
+struct DerivedParam
+{
+	DerivedParamType derived_param_type;
+	double funcparam; // if funcparam == -1, then there is no parameter required
+	int lensnum_param;
+	string name, latex_name;
+	DerivedParam(DerivedParamType type_in, double param, int lensnum) // if lensnum == -1, then it uses *all* the lenses (if possible)
+	{
+		derived_param_type = type_in;
+		funcparam = param;
+		lensnum_param = lensnum;
+		if (derived_param_type == KappaR) {
+			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
+		} else if (derived_param_type == DKappaR) {
+			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
+		} else if (derived_param_type == Mass2dR) {
+			name = "mass2d"; latex_name = "M_{2D}";
+		} else if (derived_param_type == Mass3dR) {
+			name = "mass3d"; latex_name = "M_{3D}";
+		} else if (derived_param_type == Einstein) {
+			name = "re_zsrc"; latex_name = "R_{e}";
+		} else if (derived_param_type == Einstein_Mass) {
+			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == Perturbation_Radius) {
+			name = "r_perturb"; latex_name = "r_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			name = "mass_perturb"; latex_name = "M_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Chi_Square) {
+			name = "raw_chisq"; latex_name = "\\chi^2";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else die("no user defined function yet");
+
+		if (funcparam != -1e30) {
+			stringstream paramstr;
+			string paramstring;
+			paramstr << funcparam;
+			paramstr >> paramstring;
+			name += "(" + paramstring + ")";
+			latex_name += "(" + paramstring + ")";
+		}
+	}
+	double get_derived_param(Lens* lens_in)
+	{
+		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param);
+		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
+		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param);
+		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param);
+		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
+		else if (derived_param_type == Einstein_Mass) {
+			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
+			return lens_in->mass2d_r(re,lensnum_param);
+		} else if (derived_param_type == Perturbation_Radius) {
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			return rmax;
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			return menc;
+		} else if (derived_param_type == Chi_Square) {
+			double chisq_out;
+			if (lens_in->raw_chisq==-1e30) {
+				if (lens_in->lens_parent != NULL) {
+					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
+				} else {
+					lens_in->chisq_single_evaluation(false,false);
+				}
+			}
+			chisq_out = lens_in->raw_chisq;
+			lens_in->clear_raw_chisq();
+			return chisq_out;
+		}
+		else die("no user defined function yet");
+	}
+	void print_param_description(Lens* lens_in)
+	{
+		double dpar = get_derived_param(lens_in);
+		//cout << name << ": ";
+		if (derived_param_type == KappaR) {
+			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
+			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == DKappaR) {
+			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
+			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Mass2dR) {
+			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Mass3dR) {
+			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
+		} else if (derived_param_type == Einstein) {
+			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Einstein_Mass) {
+			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Perturbation_Radius) {
+			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Robust_Perturbation_Mass) {
+			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Chi_Square) {
+			cout << "Raw chi-square value for given set of parameters" << endl;
+		} else die("no user defined function yet");
+		cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << endl;
+		cout << "   " << name << " = " << dpar << endl;
+	}
+	void rename(const string new_name, const string new_latex_name)
+	{
+		name = new_name;
+		latex_name = new_latex_name;
+	}
+};
+
 struct ParamSettings
 {
 	int nparams;
@@ -1069,7 +1180,10 @@ struct ParamSettings
 	double *stepsizes;
 	bool *auto_stepsize;
 	bool *subplot_param;
-	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; }
+	bool *subplot_dparam;
+	string *dparam_names;
+	int n_dparams;
+	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
 	ParamSettings(ParamSettings& param_settings_in) {
 		nparams = param_settings_in.nparams;
 		priors = new ParamPrior*[nparams];
@@ -1328,21 +1442,76 @@ struct ParamSettings
 		nparams = new_nparams;
 		return true;
 	}
+	void add_dparam(string dparam_name)
+	{
+		string* new_dparam_names = new string[n_dparams+1];
+		bool* new_subplot_dparam = new bool[n_dparams+1];
+		if (n_dparams > 0) {
+			for (int i=0; i < n_dparams; i++) {
+				new_dparam_names[i] = dparam_names[i];
+				new_subplot_dparam[i] = subplot_dparam[i];
+			}
+			delete[] dparam_names;
+			delete[] subplot_dparam;
+		}
+		new_dparam_names[n_dparams] = dparam_name;
+		new_subplot_dparam[n_dparams] = false;
+		n_dparams++;
+		dparam_names = new_dparam_names;
+		subplot_dparam = new_subplot_dparam;
+	}
+	void remove_dparam(int dparam_number)
+	{
+		string* new_dparam_names = new string[n_dparams-1];
+		bool* new_subplot_dparam = new bool[n_dparams-1];
+		int i,j;
+		for (i=0, j=0; i < n_dparams; i++) {
+			if (i != dparam_number) {
+				new_dparam_names[j] = dparam_names[i];
+				new_subplot_dparam[j] = subplot_dparam[i];
+				j++;
+			}
+		}
+		delete[] dparam_names;
+		delete[] subplot_dparam;
+		n_dparams--;
+		dparam_names = new_dparam_names;
+		subplot_dparam = new_subplot_dparam;
+	}
+	void clear_dparams()
+	{
+		delete[] dparam_names;
+		delete[] subplot_dparam;
+		n_dparams = 0;
+	}
 	int lookup_param_number(const string pname)
 	{
 		for (int i=0; i < nparams; i++) {
 			if (param_names[i]==pname) return i;
+		}
+		for (int i=0; i < n_dparams; i++) {
+			if (dparam_names[i]==pname) return nparams+i;
 		}
 		return -1;
 	}
 	bool set_subplot_param(const string pname)
 	{
 		bool found_name = false;
-		for (int i=0; i < nparams; i++) {
+		int i;
+		for (i=0; i < nparams; i++) {
 			if (param_names[i]==pname) {
 				subplot_param[i] = true;
 				found_name = true;
 				break;
+			}
+		}
+		if (!found_name) {
+			for (i=0; i < n_dparams; i++) {
+				if (dparam_names[i]==pname) {
+					subplot_dparam[i] = true;
+					found_name = true;
+					break;
+				}
 			}
 		}
 		return found_name;
@@ -1350,30 +1519,51 @@ struct ParamSettings
 	bool subplot_params_defined()
 	{
 		bool active_param = false;
-		for (int i=0; i < nparams; i++) {
+		int i;
+		for (i=0; i < nparams; i++) {
 			if (subplot_param[i]) {
 				active_param = true;
 				break;
+			}
+		}
+		if (!active_param) {
+			for (i=0; i < n_dparams; i++) {
+				if (subplot_dparam[i]) {
+					active_param = true;
+					break;
+				}
 			}
 		}
 		return active_param;
 	}
 	bool subplot_param_flag(const int i, string &name)
 	{
-		name = param_names[i];
-		return subplot_param[i];
+		if (i < nparams) {
+			name = param_names[i];
+			return subplot_param[i];
+		} else {
+			int j = i - nparams;
+			name = dparam_names[j];
+			return subplot_dparam[j];
+		}
 	}
 	string print_subplot_params()
 	{
 		string pstring = "";
-		for (int i=0; i < nparams; i++) {
+		int i;
+		for (i=0; i < nparams; i++) {
 			if (subplot_param[i]) pstring += param_names[i] + " ";
+		}
+		for (i=0; i < n_dparams; i++) {
+			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
 		}
 		return pstring;
 	}
 	void reset_subplot_params()
 	{
-		for (int i=0; i < nparams; i++) subplot_param[i] = false;
+		int i;
+		for (i=0; i < nparams; i++) subplot_param[i] = false;
+		for (i=0; i < n_dparams; i++) subplot_dparam[i] = false;
 	}
 	void clear_penalty_limits()
 	{
@@ -1703,117 +1893,7 @@ struct ParamSettings
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
 		}
-	}
-};
-
-struct DerivedParam
-{
-	DerivedParamType derived_param_type;
-	double funcparam; // if funcparam == -1, then there is no parameter required
-	int lensnum_param;
-	string name, latex_name;
-	DerivedParam(DerivedParamType type_in, double param, int lensnum) // if lensnum == -1, then it uses *all* the lenses (if possible)
-	{
-		derived_param_type = type_in;
-		funcparam = param;
-		lensnum_param = lensnum;
-		if (derived_param_type == KappaR) {
-			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
-		} else if (derived_param_type == DKappaR) {
-			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
-		} else if (derived_param_type == Mass2dR) {
-			name = "mass2d"; latex_name = "M_{2D}";
-		} else if (derived_param_type == Mass3dR) {
-			name = "mass3d"; latex_name = "M_{3D}";
-		} else if (derived_param_type == Einstein) {
-			name = "re_zsrc"; latex_name = "R_{e}";
-		} else if (derived_param_type == Einstein_Mass) {
-			name = "mass_re"; latex_name = "M_{Re}";
-		} else if (derived_param_type == Perturbation_Radius) {
-			name = "r_perturb"; latex_name = "r_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			name = "mass_perturb"; latex_name = "M_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Chi_Square) {
-			name = "raw_chisq"; latex_name = "\\chi^2";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else die("no user defined function yet");
-
-		if (funcparam != -1e30) {
-			stringstream paramstr;
-			string paramstring;
-			paramstr << funcparam;
-			paramstr >> paramstring;
-			name += "(" + paramstring + ")";
-			latex_name += "(" + paramstring + ")";
-		}
-	}
-	double get_derived_param(Lens* lens_in)
-	{
-		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param);
-		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
-		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param);
-		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param);
-		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
-		else if (derived_param_type == Einstein_Mass) {
-			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
-			return lens_in->mass2d_r(re,lensnum_param);
-		} else if (derived_param_type == Perturbation_Radius) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
-			return rmax;
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
-			return menc;
-		} else if (derived_param_type == Chi_Square) {
-			double chisq_out;
-			if (lens_in->raw_chisq==-1e30) {
-				if (lens_in->lens_parent != NULL) {
-					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
-				} else {
-					lens_in->chisq_single_evaluation(false,false);
-				}
-			}
-			chisq_out = lens_in->raw_chisq;
-			lens_in->clear_raw_chisq();
-			return chisq_out;
-		}
-		else die("no user defined function yet");
-	}
-	void print_param_description(Lens* lens_in)
-	{
-		double dpar = get_derived_param(lens_in);
-		//cout << name << ": ";
-		if (derived_param_type == KappaR) {
-			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
-			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
-		} else if (derived_param_type == DKappaR) {
-			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
-			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
-		} else if (derived_param_type == Mass2dR) {
-			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
-		} else if (derived_param_type == Mass3dR) {
-			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
-		} else if (derived_param_type == Einstein) {
-			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
-		} else if (derived_param_type == Einstein_Mass) {
-			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
-		} else if (derived_param_type == Perturbation_Radius) {
-			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
-		} else if (derived_param_type == Chi_Square) {
-			cout << "Raw chi-square value for given set of parameters" << endl;
-		} else die("no user defined function yet");
-		cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << endl;
-		cout << "   " << name << " = " << dpar << endl;
-	}
-	void rename(const string new_name, const string new_latex_name)
-	{
-		name = new_name;
-		latex_name = new_latex_name;
+		if (n_dparams > 0) delete[] dparam_names;
 	}
 };
 
