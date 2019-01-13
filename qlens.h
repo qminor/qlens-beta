@@ -1516,10 +1516,12 @@ struct ParamSettings
 	}
 	bool set_subplot_param(const string pname)
 	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
 		bool found_name = false;
 		int i;
 		for (i=0; i < nparams; i++) {
-			if (param_names[i]==pname) {
+			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
 				subplot_param[i] = true;
 				found_name = true;
 				break;
@@ -1534,6 +1536,7 @@ struct ParamSettings
 				}
 			}
 		}
+		delete[] transformed_names;
 		return found_name;
 	}
 	bool subplot_params_defined()
@@ -1558,25 +1561,33 @@ struct ParamSettings
 	}
 	bool subplot_param_flag(const int i, string &name)
 	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		bool flag;
 		if (i < nparams) {
-			name = param_names[i];
-			return subplot_param[i];
+			name = transformed_names[i];
+			flag = subplot_param[i];
 		} else {
 			int j = i - nparams;
 			name = dparam_names[j];
-			return subplot_dparam[j];
+			flag = subplot_dparam[j];
 		}
+		delete[] transformed_names;
+		return flag;
 	}
 	string print_subplot_params()
 	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
 		string pstring = "";
 		int i;
 		for (i=0; i < nparams; i++) {
-			if (subplot_param[i]) pstring += param_names[i] + " ";
+			if (subplot_param[i]) pstring += transformed_names[i] + " ";
 		}
 		for (i=0; i < n_dparams; i++) {
 			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
 		}
+		delete[] transformed_names;
 		return pstring;
 	}
 	void reset_subplot_params()
