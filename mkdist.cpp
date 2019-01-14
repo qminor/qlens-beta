@@ -450,7 +450,7 @@ int main(int argc, char *argv[])
 
 		if (make_2d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
-			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
+			if ((!make_1d_posts) and (show_markers)) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			for (i=0; i < nparams_eff; i++) {
 				for (j=i+1; j < nparams_eff; j++) {
 					string hist_out;
@@ -674,12 +674,18 @@ void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *
 	const double extra_length_frac = 0.05;
 	for (int i=0; i < n_markers; i++) {
 		if (minvals[i] > markers[i]) {
-			minvals[i] = markers[i];
-			minvals[i] -= extra_length_frac*(maxvals[i]-minvals[i]);
+			if ((maxvals[i]-markers[i]) > 10*(maxvals[i]-minvals[i])) warn("marker %i is WAY out of range of parameter chain; will not show marker",i);
+			else {
+				minvals[i] = markers[i];
+				minvals[i] -= extra_length_frac*(maxvals[i]-minvals[i]);
+			}
 		}
 		else if (maxvals[i] < markers[i]) {
-			maxvals[i] = markers[i];
-			maxvals[i] += extra_length_frac*(maxvals[i]-minvals[i]);
+			if ((markers[i]-minvals[i]) > 10*(maxvals[i]-minvals[i])) warn("marker %i is WAY out of range of parameter chain; will not show marker",i);
+			else {
+				maxvals[i] = markers[i];
+				maxvals[i] += extra_length_frac*(maxvals[i]-minvals[i]);
+			}
 		}
 	}
 }
