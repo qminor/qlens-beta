@@ -407,6 +407,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	string data_info; // Allows for a description of data to be saved in chains_* directory and in FITS file header
 	string chain_info; // Allows for a description of chain to be saved in chains_* directory
 	string param_markers; // Used to create a file with parameter marker values for mkdist; this is used  by the 'mkposts' command o plt markers
+	int n_param_markers;
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar, plot_square_axes;

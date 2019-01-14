@@ -31,6 +31,7 @@ void Lens::process_commands(bool read_file)
 	data_info = "";
 	chain_info = "";
 	param_markers = "";
+	n_param_markers = 10000;
 	fontsize = 14;
 	linewidth = 1;
 	string setword; // used for toggling boolean settings
@@ -6382,6 +6383,24 @@ void Lens::process_commands(bool read_file)
 				}
 			}
 		}
+		else if (words[0]=="n_markers")
+		{
+			if (nwords==1) {
+				if (n_param_markers==10000) {
+					if (mpi_id==0) cout << "Number of parameter markers: all" << endl;
+				} else {
+					if (mpi_id==0) cout << "Number of parameter markers: " << n_param_markers << endl;
+				}
+			} else if (nwords==2) {
+				if (words[1]=="all") n_param_markers = 10000;
+				else {
+					int npm;
+					if (!(ws[1] >> npm)) Complain("invalid argument to 'n_markers' command");
+					if ((npm >= 0) and (npm < 10000)) n_param_markers = npm;
+					else Complain("invalid number of parameter markers; must be between 0 and 10000 (or enter 'all')");
+				}
+			} else Complain("only one argument allowed for 'n_markers'");
+		}
 		else if (words[0]=="subplot_params")
 		{
 			if (nwords==1) {
@@ -8100,8 +8119,11 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			string command = "cd " + fit_output_dir + "; ";
 			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
 			if (make_subplot) command += " -s";
-			if (param_markers != "") command += " -m:" + fit_output_filename + ".markers; "; // add markers for plotting true values
-			else command += "; ";
+			if (param_markers != "") {
+				command += " -m:" + fit_output_filename + ".markers"; // add markers for plotting true values
+				if (n_param_markers < 10000) command += " -M" + n_param_markers;
+			}
+			command += "; ";
 			command += "mkdist " + fit_output_filename + " -i -b -E2 >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
 			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
 			if (make_subplot) command += "python " + fit_output_filename + "_subtri.py; "; // run python scripts to make PDF for subplot

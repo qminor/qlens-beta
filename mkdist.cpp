@@ -47,6 +47,7 @@ int main(int argc, char *argv[])
 	bool show_markers = false;
 	bool make_subplot = false;
 	string marker_filename = "";
+	int n_markers_allowed = 10000;
 	char param_transform_filename[100] = "";
 	bool smoothing = false;
 	int n_threads=1, n_processes=1;
@@ -124,12 +125,12 @@ int main(int argc, char *argv[])
 						make_derived_posterior = true;
 						argv[i] = advance(argv[i]);
 						break;
-					case 'M': // this option is specific to lensing
-						if (sscanf(argv[i], "M:%s", mprofile_name)==1)
-							argv[i] += (1 + strlen(mprofile_name));
-						plot_mass_profile_constraints = true;
-						argv[i] = advance(argv[i]);
-						break;
+					//case 'M': // this option is specific to lensing
+						//if (sscanf(argv[i], "M:%s", mprofile_name)==1)
+							//argv[i] += (1 + strlen(mprofile_name));
+						//plot_mass_profile_constraints = true;
+						//argv[i] = advance(argv[i]);
+						//break;
 					case 'd':
 						char dirchar[100];
 						if (sscanf(argv[i], "d:%s", dirchar)==1)
@@ -145,6 +146,17 @@ int main(int argc, char *argv[])
 							marker_filename.assign(marker_filename_char);
 						}
 						argv[i] = advance(argv[i]);
+						break;
+					case 'M':
+						int try_nmark;
+						try_nmark = -10000;
+						if (sscanf(argv[i], "M%i", &try_nmark) != 0) {
+							if (try_nmark != -10000) {
+								if ((try_nmark <= 0) or (try_nmark > 30000)) { cerr << "Error: invalid number of parameter markers (usage: -M#, where # is number of markers)\n"; return 0; }
+								n_markers_allowed = try_nmark;
+								argv[i] = advance(argv[i]);
+							}
+						}
 						break;
 					case 'n':
 						int try_nbins;
@@ -340,16 +352,16 @@ int main(int argc, char *argv[])
 	}
 
 	double *markers = new double[nparams_eff];
-	int n_markers = nparams_eff;
+	int n_markers = (n_markers_allowed < nparams_eff ? n_markers_allowed : nparams_eff);
 	if (show_markers) {
 		if (marker_filename=="") {
 			double *bestfit = new double[nparams];
 			Eval.min_chisq_pt(bestfit);
-			for (i=0; i < nparams_eff; i++) markers[i] = bestfit[i];
+			for (i=0; i < n_markers; i++) markers[i] = bestfit[i];
 			delete[] bestfit;
 		} else {
 			ifstream marker_file(marker_filename.c_str());
-			for (i=0; i < nparams_eff; i++) {
+			for (i=0; i < n_markers; i++) {
 				if (!(marker_file >> markers[i])) {
 					if (i==0) {
 						cerr << "marker values could not be read from file '" << marker_filename << "'; will not use markers when plotting" << endl;
@@ -423,6 +435,7 @@ int main(int argc, char *argv[])
 			//cout << "Sig: " << center << " " << sigma << endl;
 		}
 
+		/*
 		if (plot_mass_profile_constraints) {
 			double rap[20];
 			//double mean, sig;
@@ -447,6 +460,7 @@ int main(int argc, char *argv[])
 			}
 			mpfile.close();
 		}
+		*/
 
 		if (make_2d_posts) {
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
