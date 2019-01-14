@@ -8121,7 +8121,13 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			if (make_subplot) command += " -s";
 			if (param_markers != "") {
 				command += " -m:" + fit_output_filename + ".markers"; // add markers for plotting true values
-				if (n_param_markers < 10000) command += " -M" + n_param_markers;
+				if (n_param_markers < 10000) {
+					stringstream npmstr;
+					string npmstring;
+					npmstr << n_param_markers;
+					npmstr >> npmstring;
+					command += " -M" + npmstring;
+				}
 			}
 			command += "; ";
 			command += "mkdist " + fit_output_filename + " -i -b -E2 >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
