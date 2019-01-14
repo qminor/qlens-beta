@@ -2761,6 +2761,15 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				lens->param_markers = cardstring.substr(pos+4);
 			}
 		}
+		if (reading_markers) {
+			// Commas are used in FITS file as delimeter so spaces don't get lost; now convert to spaces again
+			for (size_t i = 0; i < lens->param_markers.size(); ++i) {
+				 if (lens->param_markers[i] == ',') {
+					  lens->param_markers.replace(i, 1, " ");
+				 }
+			}
+		}
+
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
@@ -4183,7 +4192,15 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 				fits_write_comment(outfptr, comment.c_str(), &status);
 			}
 			if (lens->param_markers != "") {
-				string comment = "mk: " + lens->param_markers;
+				string param_markers_comma = lens->param_markers;
+				// Commas are used as delimeter in FITS file so spaces won't get lost when reading it in
+				for (size_t i = 0; i < param_markers_comma.size(); ++i) {
+					 if (param_markers_comma[i] == ' ') {
+						  param_markers_comma.replace(i, 1, ",");
+					 }
+				}
+
+				string comment = "mk: " + param_markers_comma;
 				fits_write_comment(outfptr, comment.c_str(), &status);
 			}
 		}

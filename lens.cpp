@@ -5836,6 +5836,53 @@ void Lens::get_parameter_names()
 	}
 }
 
+bool Lens::lookup_parameter_value(const string pname, double& pval)
+{
+	bool found_param = false;
+	setup_fit_parameters(false);
+	int i;
+	for (i=0; i < n_fit_parameters; i++) {
+		if (transformed_parameter_names[i]==pname) {
+			found_param = true;
+			pval = fitparams[i];
+		}
+	}
+	if (!found_param) {
+		for (i=0; i < n_derived_params; i++) {
+			if (dparam_list[i]->name==pname) {
+				found_param = true;
+				pval = dparam_list[i]->get_derived_param(this);
+			}
+		}
+	}
+	return found_param;
+}
+
+void Lens::create_parameter_value_string(string &pvals)
+{
+	pvals = "";
+	setup_fit_parameters(false);
+	int i;
+	for (i=0; i < n_fit_parameters; i++) {
+		stringstream pvalstr;
+		string pvalstring;
+		pvalstr << fitparams[i];
+		pvalstr >> pvalstring;
+		pvals += pvalstring;
+		if ((n_derived_params > 0) or (i < n_fit_parameters-1)) pvals += " ";
+	}
+	double pval;
+	for (i=0; i < n_derived_params; i++) {
+		pval = dparam_list[i]->get_derived_param(this);
+		stringstream pvalstr;
+		string pvalstring;
+		pvalstr << pval;
+		pvalstr >> pvalstring;
+		pvals += pvalstring;
+		if (i < n_derived_params-1) pvals += " ";
+	}
+}
+
 bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 {
 	if (lens_i >= nlens) { pf=pi=0; return false; }

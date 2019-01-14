@@ -813,6 +813,8 @@ public:
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
+	bool lookup_parameter_value(const string pname, double& pval);
+	void create_parameter_value_string(string &pvals);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();

@@ -1378,17 +1378,20 @@ void Lens::process_commands(bool read_file)
 						"the header of chain data files created by qlens. When entering data_info manually, the text can be\n"
 						"be surrounded by optional quotation marks. (For example: data_info \"Hello here is info\")\n";
 				else if (words[1]=="param_markers")
-					cout << "param_markers <markers>\n"
-						"param_markers bestfit\n\n"
+					cout << "param_markers <marker1> <marker2> ...\n"
+						"param_markers allparams\n\n"
 						"Define parameter values to be marked in posteriors plotted by mkdist tool (using the '-m' option in\n"
 						"mkdist). The marker values will be saved to the file '<label>.markers' in the chains directory when a\n"
 						"chain is produced, where <label> is set by the 'fit label' command. The marker values will also be\n"
-						"saved to this file and plotted automatically when executing the 'fit mkposts' command. If the\n"
-						"argument is entered as 'bestfit', the best-fit parameters from the previous run are used. Be aware\n"
-						"that qlens does not check whether the number of marker values entered matches the number of param-\n"
-						"eters; hence, if too many marker values are entered, mkdist will print an error and omit the markers.\n"
-						"The marker values can be surrounded by quotation marks, but this is optional. (For example:\n"
-						"param_markers \"1.3 0.7 40 0.3 0.5\")\n";
+						"saved to this file and plotted automatically when executing the 'fit mkposts' command. If a FITS file\n"
+						"is created, the parameter markers are stored in the FITS file header and will be automatically loaded\n"
+						"back into 'param_markers' if the FITS file is loaded into qlens later using 'sbmap loadimg'.\n\n"
+						"If the argument is entered as 'allparams', current values of all the fit parameters and derived\n"
+						"parameters are used. If parameter values are entered in manually, keep in mind that qlens does not\n"
+						"check whether the number of marker values entered matches the number of parameters. In addition, the\n"
+						"names of specific parameters (whether fit or derived parameters) can be entered, in which case the\n"
+						"names will be replaced by their current numeric values.\n"
+						"(For example: 'param_markers b q theta', or 'param_markers 1 0.7 30 xc yc'.)\n";
 				else if (words[1]=="subplot_params")
 					cout << "subplot_params <param_names> ...\n"
 						"subplot_params reset\n\n"
@@ -6350,33 +6353,33 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="param_markers")
 		{
 			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
-			if ((nwords==2) and (words[1] == "bestfit")) {
-				if (n_fit_parameters == 0) Complain("No best-fit point has been saved from a previous fit");
-				if (bestfitparams.size() != n_fit_parameters) Complain("Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+			if ((nwords==2) and (words[1] == "none")) {
 				param_markers = "";
-				for (int i=0; i < n_fit_parameters-1; i++) {
-					stringstream pstr;
-					string pstring;
-					pstr << bestfitparams[i];
-					pstr >> pstring;
-					param_markers += pstring + " ";
-				}
-				stringstream pstr;
-				string pstring;
-				pstr << bestfitparams[n_fit_parameters-1];
-				pstr >> pstring;
-				param_markers += pstring;
+			} else if ((nwords==2) and (words[1] == "allparams")) {
+				if (n_fit_parameters > 0) create_parameter_value_string(param_markers);
+				else Complain("no fit parameters have been defined");
 			} else if (nwords==1) {
 				if (param_markers.empty()) Complain("parameter markers has not been set");
 				if (mpi_id==0) cout << "Parameter marker values: '" << param_markers << "'\n";
 			} else {
 				remove_word(0);
 				param_markers = "";
-				for (int i=0; i < nwords-1; i++) param_markers += words[i] + " ";
-				param_markers += words[nwords-1];
-				int pos;
-				while ((pos = param_markers.find('"')) != string::npos) param_markers.erase(pos,1);
-				while ((pos = param_markers.find('\'')) != string::npos) param_markers.erase(pos,1);
+				for (int i=0; i < nwords; i++) {
+					char* p;
+					strtod(words[i].c_str(), &p);
+					if (*p) {
+						double pval;
+						if (lookup_parameter_value(words[i],pval)==false) Complain("parameter name '" << words[i] << "' is not listed among the fit parameters");
+						stringstream pvalstr;
+						string pvalstring;
+						pvalstr << pval;
+						pvalstr >> pvalstring;
+						param_markers += pvalstring;
+					} else {
+						param_markers += words[i]; // a number has been manually entered in, so just tack it on to the line
+					}
+					if (i != nwords-1) param_markers += " ";
+				}
 			}
 		}
 		else if (words[0]=="subplot_params")
