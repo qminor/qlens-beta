@@ -2741,7 +2741,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			string cardstring(card);
 			if (reading_qlens_comment) {
 				if ((pos = cardstring.find("COMMENT")) != string::npos) {
-					if ((pos1 = cardstring.find("mk: ")) != string::npos) {
+					if (((pos = cardstring.find("mk: ")) != string::npos) or ((pos = cardstring.find("MK: ")) != string::npos)) {
 						reading_markers = true;
 						reading_qlens_comment = false;
 						lens->param_markers = cardstring.substr(pos1+4);
@@ -2753,10 +2753,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 					// A potential issue is that if there are enough markers to fill more than one line, there might be an extra space inserted,
 					// in which case the markers won't come out properly. No time to deal with this now, but something to look out for.
 				} else break;
-			} else if ((pos = cardstring.find("ql: ")) != string::npos) {
+			} else if (((pos = cardstring.find("ql: ")) != string::npos) or ((pos = cardstring.find("QL: ")) != string::npos)) {
 				reading_qlens_comment = true;
 				lens->data_info = cardstring.substr(pos+4);
-			} else if ((pos = cardstring.find("mk: ")) != string::npos) {
+			} else if (((pos = cardstring.find("mk: ")) != string::npos) or ((pos = cardstring.find("MK: ")) != string::npos)) {
 				reading_markers = true;
 				lens->param_markers = cardstring.substr(pos+4);
 			}

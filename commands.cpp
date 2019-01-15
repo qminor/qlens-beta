@@ -28,6 +28,7 @@ void Lens::process_commands(bool read_file)
 	show_colorbar = true;
 	plot_square_axes = false;
 	plot_title = "";
+	post_title = ""; // Title for posterior triangle plots
 	data_info = "";
 	chain_info = "";
 	param_markers = "";
@@ -6319,6 +6320,22 @@ void Lens::process_commands(bool read_file)
 				while ((pos = plot_title.find('\'')) != string::npos) plot_title.erase(pos,1);
 			}
 		}
+		else if (words[0]=="post_title")
+		{
+			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
+			if (nwords==1) {
+				if (post_title.empty()) Complain("posterior triangle plot title has not been set");
+				if (mpi_id==0) cout << "Posterior triangle plot title: '" << post_title << "'\n";
+			} else {
+				remove_word(0);
+				post_title = "";
+				for (int i=0; i < nwords-1; i++) post_title += words[i] + " ";
+				post_title += words[nwords-1];
+				int pos;
+				while ((pos = post_title.find('"')) != string::npos) post_title.erase(pos,1);
+				while ((pos = post_title.find('\'')) != string::npos) post_title.erase(pos,1);
+			}
+		}
 		else if (words[0]=="chain_info")
 		{
 			if ((nwords > 1) and (words[1] == "=")) remove_word(1);
@@ -8093,6 +8110,12 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 				markerfile << param_markers << endl;
 				markerfile.close();
 			}
+			if (post_title != "") {
+				string title_str = fit_output_dir + "/" + fit_output_filename + ".plot_title";
+				ofstream titlefile(title_str.c_str());
+				titlefile << post_title << endl;
+				titlefile.close();
+			}
 
 			bool make_subplot = param_settings->subplot_params_defined();
 			if (make_subplot) {
@@ -8119,6 +8142,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			string command = "cd " + fit_output_dir + "; ";
 			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
 			if (make_subplot) command += " -s";
+			if (post_title != "") command += " -t";
 			if (param_markers != "") {
 				command += " -m:" + fit_output_filename + ".markers"; // add markers for plotting true values
 				if (n_param_markers < 10000) {

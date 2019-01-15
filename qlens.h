@@ -403,7 +403,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool include_time_delays;
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
-	string plot_title;
+	string plot_title, post_title;
 	string data_info; // Allows for a description of data to be saved in chains_* directory and in FITS file header
 	string chain_info; // Allows for a description of chain to be saved in chains_* directory
 	string param_markers; // Used to create a file with parameter marker values for mkdist; this is used  by the 'mkposts' command o plt markers
