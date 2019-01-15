@@ -7297,7 +7297,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="vary_srcgrid_scale")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary firstlevel source pixel fraction: " << display_switch(vary_srcgrid_size_scale) << endl;
+				if (mpi_id==0) cout << "Vary source grid size scaling: " << display_switch(vary_srcgrid_size_scale) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcgrid_scale' command; must specify 'on' or 'off'");
 				set_switch(vary_srcgrid_size_scale,setword);

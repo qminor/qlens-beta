@@ -707,7 +707,9 @@ void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *
 bool file_exists(const string &filename)
 {
 	ifstream infile(filename.c_str());
-	return infile.good();
+	bool exists = infile.good();
+	infile.close();
+	return exists;
 }
 
 char *advance(char *p)
