@@ -81,10 +81,11 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	if (file_label=="-T") show_transform_usage();
-	string output_dir = "chains_" + file_label;
-	struct stat sb;
-	stat(output_dir.c_str(),&sb);
-	if (S_ISDIR(sb.st_mode)==false) output_dir = ".";
+	string output_dir = ".";
+	//string output_dir = "chains_" + file_label;
+	//struct stat sb;
+	//stat(output_dir.c_str(),&sb);
+	//if (S_ISDIR(sb.st_mode)==false) output_dir = ".";
 
 	int i,j,c;
 	for (i=2; i < argc; i++)   // Process extra command-line arguments
