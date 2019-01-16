@@ -2741,7 +2741,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			string cardstring(card);
 			if (reading_qlens_comment) {
 				if ((pos = cardstring.find("COMMENT")) != string::npos) {
-					if (((pos = cardstring.find("mk: ")) != string::npos) or ((pos = cardstring.find("MK: ")) != string::npos)) {
+					if (((pos1 = cardstring.find("mk: ")) != string::npos) or ((pos1 = cardstring.find("MK: ")) != string::npos)) {
 						reading_markers = true;
 						reading_qlens_comment = false;
 						lens->param_markers = cardstring.substr(pos1+4);
