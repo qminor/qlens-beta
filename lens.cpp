@@ -2539,7 +2539,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	return true;
 }
 
-bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed)
+bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
 {
 	subhalo_lens_number = lens_number;
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
@@ -2594,7 +2594,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
 	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
-	double bound = 0.4*b;
+	double bound = 0.6*b;
 	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbose);
 	if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
 		rmax_numerical = 0.0; // subhalo too far from critical curve to cause a meaningful "local" perturbation
@@ -2674,6 +2674,12 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		menc_z = mass_enclosed*mass_scale_factor;
 		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot));
 	}
+	if (subtract_unperturbed) {
+		double (Brent::*dthetac_eq_nosub)(const double);
+		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&Lens::perturbation_radius_equation_nosub);
+		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbose);
+		rmax_numerical = abs(rmax_numerical-rmax_unperturbed);
+	}
 
 	if (verbose) {
 		lensvector x;
@@ -2695,12 +2701,12 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 
 double Lens::subhalo_perturbation_radius_equation(const double r)
 {
-	double kappa0, shear_tot, shear_angle, subhalo_avg_kappa;
+	double kappa0, shear0, shear_angle, subhalo_avg_kappa;
 	lensvector x;
 	x[0] = subhalo_center[0] + r*cos(theta_shear);
 	x[1] = subhalo_center[1] + r*sin(theta_shear);
 	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-	shear_exclude(x,shear_tot,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude(x,shear0,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
 
 	double zlsub, zlprim;
 	zlsub = lens_list[subhalo_lens_number]->zlens;
@@ -2728,28 +2734,39 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 		i2 = lens_redshift_idx[subhalo_lens_number];
 		double beta = default_zsrc_beta_factors[i1-1][i2];
 		double dr = 1e-5;
-		double kappa0_p, shear_tot_p;
+		double kappa0_p, shear0_p;
 		lensvector xp;
 		xp[0] = subhalo_center[0] + (r+dr)*cos(theta_shear);
 		xp[1] = subhalo_center[1] + (r+dr)*sin(theta_shear);
 		kappa0_p = kappa_exclude(xp,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xp,shear_tot_p,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-		double kappa0_m, shear_tot_m;
+		shear_exclude(xp,shear0_p,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double kappa0_m, shear0_m;
 		lensvector xm;
 		xm[0] = subhalo_center[0] + (r-dr)*cos(theta_shear);
 		xm[1] = subhalo_center[1] + (r-dr)*sin(theta_shear);
 		kappa0_m = kappa_exclude(xm,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xm,shear_tot_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
-		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear_tot + r*k0deriv);
+		shear_exclude(xm,shear0_m,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+		double k0deriv = (kappa0_p+shear0_p-kappa0_m-shear0_m)/(2*dr);
+		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
 	} else if (zlsub > zlprim) {
 		int i1,i2;
 		i1 = lens_redshift_idx[0];
 		i2 = lens_redshift_idx[subhalo_lens_number];
 		double beta = default_zsrc_beta_factors[i2-1][i1];
-		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear_tot);
+		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0);
 	}
-	return (1 - kappa0 - shear_tot - subhalo_avg_kappa);
+	return (1 - kappa0 - shear0 - subhalo_avg_kappa);
+}
+
+double Lens::perturbation_radius_equation_nosub(const double r)
+{
+	double kappa0, shear0, shear_angle;
+	lensvector x;
+	x[0] = subhalo_center[0] + r*cos(theta_shear);
+	x[1] = subhalo_center[1] + r*sin(theta_shear);
+	kappa0 = kappa_exclude(x,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude(x,shear0,shear_angle,subhalo_lens_number,reference_zfactors,default_zsrc_beta_factors);
+	return (1 - kappa0 - shear0);
 }
 
 bool Lens::get_einstein_radius(int lens_number, double& re_major_axis, double& re_average)

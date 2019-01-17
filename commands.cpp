@@ -940,6 +940,7 @@ void Lens::process_commands(bool read_file)
 							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
 							"                  (See Minor et al. 2017 for definition of perturbation radius for subhalos)\n"
 							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
+							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
 							"\n";
 					else if (words[2]=="changevary")
 						cout << "fit changevary <lens_number>\n\n"
@@ -5008,6 +5009,12 @@ void Lens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Perturbation_Radius,0.0,lensnum);
+							} else if (words[3]=="r_perturb_rel") {
+								if (nwords != 5) Complain("derived parameter r_perturb_rel requires only one arguments (lens_number)");
+								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
+								add_derived_param(Relative_Perturbation_Radius,0.0,lensnum);
 							} else if (words[3]=="mass_perturb") {
 								if (nwords != 5) Complain("derived parameter mass_perturb requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
@@ -7064,6 +7071,18 @@ void Lens::process_commands(bool read_file)
 				double rmax,menc,avgsig;
 				if (nlens==1) Complain("perturber lens has not been defined");
 				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc)) Complain("could not calculate critical curve perturbation radius");
+			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
+		}
+		else if (words[0]=="subhalo_rmax2")
+		{
+			if (nwords==2) {
+				int lens_number;
+				if (!(ws[1] >> lens_number)) Complain("invalid lens number");
+				if (lens_number >= nlens) Complain("specified lens number for subhalo does not exist");
+				if (lens_number == 0) Complain("perturber cannot be the primary lens (lens 0)");
+				double rmax,menc,avgsig;
+				if (nlens==1) Complain("perturber lens has not been defined");
+				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc,true)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
 		else if (words[0]=="print_betavals")

@@ -53,6 +53,7 @@ enum DerivedParamType {
 	Einstein,
 	Einstein_Mass,
 	Perturbation_Radius,
+	Relative_Perturbation_Radius,
 	Robust_Perturbation_Mass,
 	Chi_Square,
 	UserDefined
@@ -459,13 +460,15 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_perturber_galaxies(lensvector* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
 	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
-	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed);
+	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed = false);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
 	bool calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
 	double galaxy_subgridding_scale_equation(const double r);
 
 	double subhalo_perturbation_radius_equation(const double r);
+	double perturbation_radius_equation_nosub(const double r);
+
 	// needed for calculating the subhalo perturbation radius and scale for perturber subgridding
 	int subhalo_lens_number;
 	double theta_shear;
@@ -1083,6 +1086,9 @@ struct DerivedParam
 			name = "re_zsrc"; latex_name = "R_{e}";
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == Relative_Perturbation_Radius) {
+			name = "r_perturb_rel"; latex_name = "\\Delta r_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else if (derived_param_type == Perturbation_Radius) {
 			name = "r_perturb"; latex_name = "r_{\\delta c}";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -1113,6 +1119,10 @@ struct DerivedParam
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param);
+		} else if (derived_param_type == Relative_Perturbation_Radius) {
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,true);
+			return rmax;
 		} else if (derived_param_type == Perturbation_Radius) {
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
@@ -1156,6 +1166,8 @@ struct DerivedParam
 			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == Perturbation_Radius) {
 			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Relative_Perturbation_Radius) {
+			cout << "Relative critical curve perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Chi_Square) {
