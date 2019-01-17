@@ -8173,7 +8173,9 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 				}
 			}
 			command += "; ";
-			command += "mkdist " + fit_output_filename + " -i -b -E2 >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
+			command += "mkdist " + fit_output_filename + " -i -b -E2";
+			if (param_markers != "") command += " -m:" + fit_output_filename + ".markers -v"; // print true values to chain_info file
+			command += " >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
 			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
 			if (make_subplot) command += "python " + fit_output_filename + "_subtri.py; "; // run python scripts to make PDF for subplot
 			if (copy_post_files) {

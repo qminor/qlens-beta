@@ -45,6 +45,7 @@ int main(int argc, char *argv[])
 	bool output_chain_info = false;
 	char mprofile_name[100] = "mprofile.dat";
 	bool show_markers = false;
+	bool print_marker_values = false;
 	bool make_subplot = false;
 	bool add_title = false;
 	string marker_filename = "";
@@ -140,6 +141,7 @@ int main(int argc, char *argv[])
 						argv[i] = advance(argv[i]);
 						output_dir.assign(dirchar);
 						break;
+					case 'v': print_marker_values = true; break;
 					case 'm':
 						show_markers = true;
 						char marker_filename_char[100];
@@ -536,6 +538,16 @@ int main(int argc, char *argv[])
 				cout << param_names[i] << " = " << val << endl;
 			}
 			cout << endl;
+		}
+		if (print_marker_values) {
+			if (show_markers) {
+				cout << "True parameter values:\n";
+				for (i=0; i < n_markers; i++) {
+					// NOTE: The following errors are from standard deviation, not from CL's 
+					cout << param_names[i] << ": " << markers[i] << endl;
+				}
+				cout << endl;
+			}
 		}
 
 		delete[] minvals;
