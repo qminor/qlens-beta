@@ -1091,7 +1091,9 @@ bool Lens::plot_recursive_grid(const char filename[])
 	if ((grid==NULL) and (create_grid(true,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (mpi_id==0) {
-		Grid::xgrid.open(filename, ifstream::out);
+		string filelabel(filename);
+		string filename_string = fit_output_dir + "/" + filelabel;
+		Grid::xgrid.open(filename_string.c_str(), ifstream::out);
 		grid->plot_corner_coordinates();
 		Grid::xgrid.close();
 	}
