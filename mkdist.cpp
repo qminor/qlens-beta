@@ -575,7 +575,7 @@ int main(int argc, char *argv[])
 			pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
 		}
 		pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
-		//if (add_title) pyscript << "g.add_title('" << title << "')" << endl; // 1d title doesn't look good
+		//if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl; // 1d title doesn't look good
 		pyscript << "g.export(os.path.join(outdir,'" << file_label << ".pdf'))" << endl;
 		pyscript.close();
 		if (run_python_script) {
@@ -610,7 +610,7 @@ int main(int argc, char *argv[])
 		if (include_shading) pyscript2d << "shaded=True";
 		else pyscript2d << "shaded=False";
 		pyscript2d << ")" << endl;
-		if (add_title) pyscript2d << "g.add_title('" << title << "')" << endl;
+		if (add_title) pyscript2d << "g.add_title(r'" << title << "')" << endl;
 		pyscript2d << "g.export(os.path.join(outdir,'" << file_label << "_2D.pdf'))" << endl;
 		/*
 		if (run_python_script) {
@@ -680,7 +680,7 @@ int main(int argc, char *argv[])
 				if (include_shading) pyscript << "shaded=True";
 				else pyscript << "shaded=False";
 				pyscript << ")" << endl;
-				if (add_title) pyscript << "g.add_title('" << title << "')" << endl;
+				if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl;
 				pyscript << "g.export(os.path.join(outdir,'" << file_label;
 				if (k==0) pyscript << "_tri.pdf'))" << endl;
 				else pyscript << "_subtri.pdf'))" << endl;
