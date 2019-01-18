@@ -3101,13 +3101,14 @@ bool Lens::spline_critical_curves(bool verbal)
 	return check;
 }
 
-bool Lens::plot_splined_critical_curves(const char *critfile)
+bool Lens::plot_splined_critical_curves(string critfile)
 {
 	if (!use_cc_spline) { warn("Cannot plot critical curves from spline, spline option is disabled"); return false; }
 	if (!cc_splined) {
 		if (spline_critical_curves()==false) return false;
 	}
-	ofstream crit(critfile);
+	ofstream crit;
+	open_output_file(crit,critfile);
 	if (use_scientific_notation) crit << setiosflags(ios::scientific);
 	int nn = 500;
 	double thetastep, rcrit0, rcrit1, rcaust0, rcaust1, xp, yp;
@@ -3279,14 +3280,15 @@ void Lens::sort_critical_curves()
 	sorted_critical_curves = true;
 }
 
-bool Lens::plot_sorted_critical_curves(const char *critfile)
+bool Lens::plot_sorted_critical_curves(string critfile)
 {
 	if (grid==NULL) {
 		if (create_grid(false,reference_zfactors,default_zsrc_beta_factors)==false) { warn("Could not create recursive grid"); return false; }
 	}
 	if (!sorted_critical_curves) sort_critical_curves();
 
-	ofstream crit(critfile);
+	ofstream crit;
+	open_output_file(crit,critfile);
 	if (use_scientific_notation) crit << setiosflags(ios::scientific);
 	int n_cc = sorted_critical_curve.size();
 	if (n_cc==0) return false;
@@ -3565,7 +3567,7 @@ void Lens::make_source_rectangle(const double xmin, const double xmax, const int
 
 void Lens::make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle_degrees, const int n_subellipses, const int points_per_ellipse, string source_filename)
 {
-	ofstream source_file(source_filename.c_str());
+	ofstream source_file; open_output_file(source_file,source_filename);
 
 	double da, dtheta, angle;
 	da = major_axis/(n_subellipses-1);
@@ -9299,6 +9301,21 @@ void Lens::create_output_directory()
 		if (S_ISDIR(sb.st_mode)==false)
 			mkdir(fit_output_dir.c_str(),S_IRWXU | S_IRWXG);
 	}
+}
+
+void Lens::open_output_file(ofstream &outfile, char* filechar_in)
+{
+	string filename_in(filechar_in);
+	if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
+	string filename = fit_output_dir + "/" + filename_in;
+	outfile.open(filename.c_str());
+}
+
+void Lens::open_output_file(ofstream &outfile, string filename_in)
+{
+	if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
+	string filename = fit_output_dir + "/" + filename_in;
+	outfile.open(filename.c_str());
 }
 
 void Lens::reset()

@@ -726,8 +726,8 @@ public:
 	bool plot_recursive_grid(const char filename[]);
 	void output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false);
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false, string imgheader = "", string srcheader = "") {
-		ofstream imgfile("imgs.dat");
-		ofstream srcfile("srcs.dat");
+		ofstream imgfile; open_output_file(imgfile,"imgs.dat");
+		ofstream srcfile; open_output_file(srcfile,"srcs.dat");
 		if (!imgheader.empty()) imgfile << "\"" << imgheader << "\"" << endl;
 		if (!srcheader.empty()) srcfile << "\"" << srcheader << "\"" << endl;
 		return plot_images_single_source(x_source,y_source,verbal,imgfile,srcfile,flux,show_labels);
@@ -793,6 +793,8 @@ public:
 	void remove_lens(int lensnumber);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
 	void create_output_directory();
+	void open_output_file(ofstream &outfile, string filename_in);
+	void open_output_file(ofstream &outfile, char* filechar_in);
 
 	private:
 	bool temp_auto_ccspline, temp_auto_store_cc_points, temp_include_time_delays;
@@ -847,10 +849,10 @@ public:
 	bool spline_critical_curves(bool verbal);
 	bool spline_critical_curves() { return spline_critical_curves(true); }
 	void automatically_determine_ccspline_mode();
-	bool plot_splined_critical_curves(const char *);
-	bool plot_sorted_critical_curves(const char*);
-	bool (Lens::*plot_critical_curves)(const char*);
-	bool plotcrit(const char *filename) { return (this->*plot_critical_curves)(filename); }
+	bool plot_splined_critical_curves(string filename);
+	bool plot_sorted_critical_curves(string filename);
+	bool (Lens::*plot_critical_curves)(string filename);
+	bool plotcrit(string filename) { return (this->*plot_critical_curves)(filename); }
 	void plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename);
 
 	void make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);

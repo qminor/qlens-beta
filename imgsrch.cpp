@@ -1889,20 +1889,20 @@ bool Lens::plot_images(const char *sourcefile, const char *imagefile, bool verba
 	ofstream srcsingles;
 	ofstream srcweird;
 	if (mpi_id==0) {
-		imagedat.open(imagefile);
-		srcdat.open("src.dat"); // This is somewhat redundant, but the graphical plotter prefers to have a standard filename for the source
+		open_output_file(imagedat,imagefile);
+		open_output_file(srcdat,"src.dat"); // This is somewhat redundant, but the graphical plotter prefers to have a standard filename for the source
 
-		quads.open("images.quads");
-		doubles.open("images.doubles");
-		cusps.open("images.cusps");
-		singles.open("images.singles");
-		weird.open("images.weird");
+		open_output_file(quads,"images.quads");
+		open_output_file(doubles,"images.doubles");
+		open_output_file(cusps,"images.cusps");
+		open_output_file(singles,"images.singles");
+		open_output_file(weird,"images.weird");
 
-		srcquads.open("sources.quads");
-		srcdoubles.open("sources.doubles");
-		srccusps.open("sources.cusps");
-		srcsingles.open("sources.singles");
-		srcweird.open("sources.weird");
+		open_output_file(srcquads,"sources.quads");
+		open_output_file(srcdoubles,"sources.doubles");
+		open_output_file(srccusps,"sources.cusps");
+		open_output_file(srcsingles,"sources.singles");
+		open_output_file(srcweird,"sources.weird");
 		
 		quads << setiosflags(ios::scientific);
 		cusps << setiosflags(ios::scientific);

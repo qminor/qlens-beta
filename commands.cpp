@@ -4497,8 +4497,8 @@ void Lens::process_commands(bool read_file)
 					ofstream srcfit;
 					ofstream srcfile;
 					if (mpi_id==0) {
-						srcfit.open("srcfit.dat");
-						srcfile.open(srcname.c_str());
+						open_output_file(srcfit,"srcfit.dat");
+						open_output_file(srcfile,srcname);
 					}
 					if (!show_multiple) {
 						if (mpi_id==0) {
@@ -4628,9 +4628,9 @@ void Lens::process_commands(bool read_file)
 					ofstream imgfile;
 					ofstream srcfile;
 					if (mpi_id==0) {
-						imgout.open("imgdat.dat");
-						imgfile.open(imgname.c_str());
-						srcfile.open(srcname.c_str());
+						open_output_file(imgout,"imgdat.dat");
+						open_output_file(imgfile,imgname);
+						open_output_file(srcfile,srcname);
 					}
 					if (!show_multiple) {
 						if (mpi_id==0) {
@@ -8035,6 +8035,7 @@ void Lens::run_plotter(string plotcommand)
 		lwstr << linewidth;
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
+		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (plot_title != "") command += " title='" + plot_title + "'";
@@ -8061,6 +8062,7 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (terminal==POSTSCRIPT) command += " term=postscript";
 		else if (terminal==PDF) command += " term=pdf";
+		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
@@ -8084,6 +8086,7 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " " + range + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
+		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
@@ -8106,6 +8109,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		lwstr << linewidth;
 		lwstr >> lwstring;
 		string command = "plotlens " + plotcommand + " file=" + filename + " " + extra_command + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
+		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";

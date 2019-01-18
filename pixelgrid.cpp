@@ -451,7 +451,7 @@ void SourcePixelGrid::store_surface_brightness_grid_data(string root)
 	write_surface_brightness_to_file();
 	pixel_surface_brightness_file.close();
 
-	ofstream pixel_info(info_filename.c_str());
+	ofstream pixel_info; lens->open_output_file(pixel_info,info_filename);
 	pixel_info << u_split_initial << " " << w_split_initial << " " << levels << endl;
 	pixel_info << srcgrid_xmin << " " << srcgrid_xmax << " " << srcgrid_ymin << " " << srcgrid_ymax << endl;
 }
@@ -499,15 +499,15 @@ void SourcePixelGrid::plot_surface_brightness(string root)
 	xmin = cell[0][0]->corner_pt[0][0];
 	ymin = cell[0][0]->corner_pt[0][1];
 
-	ofstream pixel_xvals(x_filename.c_str());
+	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
 	for (i=0, x=xmin; i <= n_plot_xcells; i++, x += cell_xlength) pixel_xvals << x << endl;
 
-	ofstream pixel_yvals(y_filename.c_str());
+	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
 	for (i=0, y=ymin; i <= n_plot_ycells; i++, y += cell_ylength) pixel_yvals << y << endl;
 
-	pixel_surface_brightness_file.open(img_filename.c_str());
-	pixel_magnification_file.open(mag_filename.c_str());
-	if (lens->n_image_prior) pixel_n_image_file.open(n_image_filename.c_str());
+	lens->open_output_file(pixel_surface_brightness_file,img_filename.c_str());
+	lens->open_output_file(pixel_magnification_file,mag_filename.c_str());
+	if (lens->n_image_prior) lens->open_output_file(pixel_n_image_file,n_image_filename.c_str());
 	int line_number;
 	for (j=0; j < w_N; j++) {
 		for (line_number=0; line_number < pixels_per_cell_y; line_number++) {
@@ -531,7 +531,7 @@ void SourcePixelGrid::plot_surface_brightness(string root)
 	pixel_magnification_file.close();
 	pixel_n_image_file.close();
 
-	ofstream pixel_info(info_filename.c_str());
+	ofstream pixel_info; lens->open_output_file(pixel_info,info_filename);
 	pixel_info << u_split_initial << " " << w_split_initial << " " << levels << endl;
 	pixel_info << srcgrid_xmin << " " << srcgrid_xmax << " " << srcgrid_ymin << " " << srcgrid_ymax << endl;
 }
@@ -3260,9 +3260,9 @@ void ImagePixelData::plot_surface_brightness(string outfile_root)
 	string x_filename = outfile_root + ".x";
 	string y_filename = outfile_root + ".y";
 
-	ofstream pixel_image_file(sb_filename.c_str());
-	ofstream pixel_xvals(x_filename.c_str());
-	ofstream pixel_yvals(y_filename.c_str());
+	ofstream pixel_image_file; lens->open_output_file(pixel_image_file,sb_filename);
+	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
+	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
 	pixel_image_file << setiosflags(ios::scientific);
 	int i,j;
 	for (int i=0; i <= npixels_x; i++) {
@@ -3924,7 +3924,7 @@ void ImagePixelGrid::fill_surface_brightness_vector()
 void ImagePixelGrid::plot_grid(string filename, bool show_inactive_pixels)
 {
 	int i,j;
-	ofstream outfile(filename.c_str());
+	ofstream outfile; lens->open_output_file(outfile,filename);
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((show_inactive_pixels) or (maps_to_source_pixel[i][j])) {
@@ -4122,9 +4122,9 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 	string x_filename = outfile_root + ".x";
 	string y_filename = outfile_root + ".y";
 
-	ofstream pixel_image_file(sb_filename.c_str());
-	ofstream pixel_xvals(x_filename.c_str());
-	ofstream pixel_yvals(y_filename.c_str());
+	ofstream pixel_image_file; lens->open_output_file(pixel_image_file,sb_filename);
+	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
+	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
 	pixel_image_file << setiosflags(ios::scientific);
 	for (int i=0; i <= x_N; i++) {
 		pixel_xvals << corner_pts[i][0][0] << endl;
@@ -5988,17 +5988,17 @@ void Lens::plot_image_pixel_surface_brightness(string outfile_root)
 	string x_filename = outfile_root + ".x";
 	string y_filename = outfile_root + ".y";
 
-	ofstream xfile(x_filename.c_str());
+	ofstream xfile; open_output_file(xfile,x_filename);
 	for (int i=0; i <= image_pixel_grid->x_N; i++) {
 		xfile << image_pixel_grid->corner_pts[i][0][0] << endl;
 	}
 
-	ofstream yfile(y_filename.c_str());
+	ofstream yfile; open_output_file(yfile,y_filename);
 	for (int i=0; i <= image_pixel_grid->y_N; i++) {
 		yfile << image_pixel_grid->corner_pts[0][i][1] << endl;
 	}
 
-	ofstream surface_brightness_file(sb_filename.c_str());
+	ofstream surface_brightness_file; open_output_file(surface_brightness_file,sb_filename);
 	int index=0;
 	index=0;
 	for (int j=0; j < image_pixel_grid->y_N; j++) {
