@@ -52,6 +52,7 @@ enum DerivedParamType {
 	Mass3dR,
 	Einstein,
 	Einstein_Mass,
+	LensParam,
 	Perturbation_Radius,
 	Relative_Perturbation_Radius,
 	Robust_Perturbation_Mass,
@@ -833,6 +834,7 @@ public:
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
+	double get_lens_parameter_using_default_pmode(const int lensnum, const int paramnum);
 	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
@@ -1088,6 +1090,8 @@ struct DerivedParam
 			name = "re_zsrc"; latex_name = "R_{e}";
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == LensParam) {
+			name = "lensparam"; latex_name = "\\lambda";
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
 			name = "r_perturb_rel"; latex_name = "\\Delta r_{\\delta c}";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -1121,7 +1125,8 @@ struct DerivedParam
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param);
-		} else if (derived_param_type == Relative_Perturbation_Radius) {
+		} else if (derived_param_type == LensParam) return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
+		else if (derived_param_type == Relative_Perturbation_Radius) {
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,true);
 			return rmax;
@@ -1166,6 +1171,8 @@ struct DerivedParam
 			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == Einstein_Mass) {
 			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == LensParam) {
+			cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << endl;
 		} else if (derived_param_type == Perturbation_Radius) {
 			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Relative_Perturbation_Radius) {

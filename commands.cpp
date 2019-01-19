@@ -923,6 +923,7 @@ void Lens::process_commands(bool read_file)
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
 							"fit dparams add <param_type> [param_arg] [lens#]     (lens# and/or param_arg are optional for some dparams)\n"
+							"fit dparams rename <param_type> <text_name> <latex_name>\n"
 							"fit dparams clear [param_num]\n\n"
 							"Define derived parameters whose values will be output along with the primary parameters after running\n"
 							"nested sampling or T-Walk. Type 'fit dparams' to list all the derived parameters that have been defined,\n"
@@ -937,6 +938,7 @@ void Lens::process_commands(bool read_file)
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
+							"lensparam -- The value of parameter <paramnum> for lens [lens#] using default pmode\n"
 							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
 							"                  (See Minor et al. 2017 for definition of perturbation radius for subhalos)\n"
 							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
@@ -5003,6 +5005,13 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(Einstein_Mass,dparam_arg,lensnum);
+							} else if (words[3]=="lensparam") {
+								int paramnum;
+								if (nwords != 6) Complain("derived parameter lensparam requires two arguments (paramnum,lens_number)");
+								if (!(ws[4] >> paramnum)) Complain("invalid derived parameter argument--must be integer (parameter number)");
+								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(LensParam,paramnum,lensnum);
 							} else if (words[3]=="r_perturb") {
 								if (nwords != 5) Complain("derived parameter r_perturb requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");

@@ -7795,6 +7795,19 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 	//clear_raw_chisq(); // in case the chi-square is being included as a parameter
 }
 
+double Lens::get_lens_parameter_using_default_pmode(const int paramnum, const int lensnum)
+{
+	if (lensnum >= nlens) die("lensnum exceeds number of lenses");
+	int lens_nparams = lens_list[lensnum]->get_n_params();
+	if (paramnum >= lens_nparams) die("for lensparam, lens parameter number exceeds total number of parameters in lens");
+	double lensparam;
+	double *lensparams = new double[lens_nparams];
+	lens_list[lensnum]->get_parameters_pmode(default_parameter_mode,lensparams);
+	lensparam = lensparams[paramnum];
+	delete[] lensparams;
+	return lensparam;
+}
+
 double Lens::fitmodel_custom_prior()
 {
 	//static const double rcore_threshold = 3.0;

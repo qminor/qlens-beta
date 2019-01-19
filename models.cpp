@@ -726,6 +726,12 @@ void NFW::assign_param_pointers()
 
 void NFW::get_parameters_pmode(const int pmode, double* params)
 {
+	if (parameter_mode==0) {
+		// For parameter mode 0, you need to use a root-finder to solve for c, and then you can find m200 easily
+		// This should be done here because unless you need it here, it would waste CPU time to do this every
+		// time the parameters are varied
+	}
+
 	if (pmode==2) {
 		params[0] = m200;
 		params[1] = rs_kpc;
