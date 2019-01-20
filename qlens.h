@@ -781,6 +781,7 @@ public:
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum);
 	void remove_derived_param(int dparam_number);
+	void rename_derived_param(int dparam_number, string newname, string new_latex_name);
 	void clear_derived_params();
 	void print_derived_param_list();
 	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
@@ -1520,6 +1521,7 @@ struct ParamSettings
 			subplot_dparam = NULL;
 		}
 	}
+	void rename_dparam(int dparam_number, string newname) { dparam_names[dparam_number] = newname; }
 	void clear_dparams()
 	{
 		if (n_dparams > 0) {

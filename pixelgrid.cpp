@@ -3806,7 +3806,7 @@ void ImagePixelGrid::plot_center_pts_source_plane()
 	int i,j;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (fit_to_data[i][j]) outfile << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
+			if (fit_to_data[i][j]) outfile << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
 		}
 	}
 }
@@ -4368,7 +4368,7 @@ bool Lens::assign_pixel_mappings(bool verbal)
 		source_npixels = source_pixel_grid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
 	}
 
-	//image_pixel_grid->plot_center_pts_source_plane();
+	image_pixel_grid->plot_center_pts_source_plane();
 	image_npixels = image_pixel_grid->n_active_pixels;
 	active_image_pixel_i = new int[image_npixels];
 	active_image_pixel_j = new int[image_npixels];

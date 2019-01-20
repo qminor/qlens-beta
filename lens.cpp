@@ -1763,6 +1763,13 @@ void Lens::remove_derived_param(int dparam_number)
 	param_settings->remove_dparam(dparam_number);
 }
 
+void Lens::rename_derived_param(int dparam_number, string newname, string new_latex_name)
+{
+	if (dparam_number >= n_derived_params) die("Specified derived parameter does not exist");
+	dparam_list[dparam_number]->rename(words[4],words[5]);
+	param_settings->rename_dparam(dparam_number,newname);
+}
+
 void Lens::clear_derived_params()
 {
 	if (n_derived_params > 0) {
@@ -8705,6 +8712,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	if (assign_pixel_mappings(verbal)==false) {
 		return 2e30; // the former argument says to include umapped source pixels, latter argument tells it to redraw the source grid to exclude unmapped pixels (beyond level 1) if necessary
 	}
+	//die();
 	if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 	initialize_pixel_matrices(verbal);
 	if (regularization_method != None) create_regularization_matrix();

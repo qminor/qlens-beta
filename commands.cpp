@@ -5040,7 +5040,7 @@ void Lens::process_commands(bool read_file)
 							int dparam_number;
 							if (!(ws[3] >> dparam_number)) Complain("invalid dparam number");
 							if ((dparam_number >= n_derived_params) or (n_derived_params == 0)) Complain("Specified derived parameter does not exist");
-							dparam_list[dparam_number]->rename(words[4],words[5]);
+							rename_derived_param(dparam_number,words[4],words[5]);
 						}
 						else if (nwords==3) {
 							int dpnum;
