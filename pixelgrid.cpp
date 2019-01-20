@@ -773,12 +773,12 @@ void Lens::plot_source_pixel_grid(const char filename[])
 void SourcePixelGrid::plot_corner_coordinates()
 {
 	if (level > 0) {
-			xgrid << corner_pt[1][0] << " " << corner_pt[1][1] << endl;
-			xgrid << corner_pt[3][0] << " " << corner_pt[3][1] << endl;
-			xgrid << corner_pt[2][0] << " " << corner_pt[2][1] << endl;
-			xgrid << corner_pt[0][0] << " " << corner_pt[0][1] << endl;
-			xgrid << corner_pt[1][0] << " " << corner_pt[1][1] << endl;
-			xgrid << endl;
+		xgrid << corner_pt[1][0] << " " << corner_pt[1][1] << endl;
+		xgrid << corner_pt[3][0] << " " << corner_pt[3][1] << endl;
+		xgrid << corner_pt[2][0] << " " << corner_pt[2][1] << endl;
+		xgrid << corner_pt[0][0] << " " << corner_pt[0][1] << endl;
+		xgrid << corner_pt[1][0] << " " << corner_pt[1][1] << endl;
+		xgrid << endl;
 	}
 
 	if (cell != NULL)
@@ -3457,6 +3457,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 	fit_to_data = NULL;
 }
 
+/*
 ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data) : lens(lens_in)
 {
 	ray_tracing_method = method;
@@ -3556,6 +3557,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 	}
 #endif
 }
+*/
 
 ImagePixelGrid::ImagePixelGrid(double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data)
 {
@@ -3804,7 +3806,7 @@ void ImagePixelGrid::plot_center_pts_source_plane()
 	int i,j;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			outfile << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
+			if (fit_to_data[i][j]) outfile << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 		}
 	}
 }
