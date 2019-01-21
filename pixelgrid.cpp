@@ -4368,7 +4368,6 @@ bool Lens::assign_pixel_mappings(bool verbal)
 		source_npixels = source_pixel_grid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
 	}
 
-	image_pixel_grid->plot_center_pts_source_plane();
 	image_npixels = image_pixel_grid->n_active_pixels;
 	active_image_pixel_i = new int[image_npixels];
 	active_image_pixel_j = new int[image_npixels];

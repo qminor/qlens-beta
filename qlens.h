@@ -599,6 +599,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(bool verbal);
+	void plot_image_pixel_grid();
 
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_source_surface_brightness_grid(bool verbal);

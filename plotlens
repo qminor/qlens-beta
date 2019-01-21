@@ -77,7 +77,7 @@ if [[ $TERM != "" ]]; then
 		exit
 	else
 		if [[ $TERM == "postscript" ]]; then TERM="$TERM eps"; fi
-		SETTERM="set terminal $TERM enhanced dashed color font 'Arial,$FONTSIZE'; set output '$FILENAME'";
+		SETTERM="set terminal $TERM enhanced dashed color font 'Arial,$FONTSIZE'; set output '$PLOTDIR/$FILENAME'";
 	fi
 fi
 

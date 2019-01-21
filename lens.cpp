@@ -7689,7 +7689,7 @@ double Lens::fitmodel_loglike_pixellated_source(double* params)
 	loglike = chisq/2.0;
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (running_fit) cout << "\033[2A" << flush;
-		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << ", loglike_no_prior=" << loglike << "              " << endl;
+		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << endl;
 		//cout << "\033[1A";
 		if (running_fit) cout << endl;
 	}
@@ -8556,6 +8556,17 @@ void Lens::load_pixel_grid_from_data()
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 }
 
+void Lens::plot_image_pixel_grid()
+{
+	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
+	if (image_pixel_grid != NULL) delete image_pixel_grid;
+	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid->lens = this;
+	image_pixel_grid->redo_lensing_calculations();
+	image_pixel_grid->plot_center_pts_source_plane();
+}
+
+
 double Lens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
@@ -8791,11 +8802,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 		if (regularization_parameter != 0) {
-			//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
-			double effective_reg_parameter = regularization_parameter;
-			chisq += effective_reg_parameter*Es - source_npixels*log(effective_reg_parameter) - Rmatrix_log_determinant;
-			//cout << "src_np=" << source_npixels << " lambda=" << effective_reg_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
-			//chisq += effective_reg_parameter*Es;
+			chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+			//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 		}
 		chisq += Fmatrix_log_determinant;
 		if (group_id==0) {
@@ -8803,7 +8811,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
 		}
 	}
-	//chisq += n_data_pixels*log(2*M_PI*data_pixel_noise); // this is not very relevant because the data fit window and assumed pixel noise are not varied
+	chisq += n_data_pixels*log(M_2PI*data_pixel_noise); // not critical because the data fit window and assumed pixel noise are not varied, but still needed
+	// to normalize the evidence properly
 
 	if (n_image_prior) {
 		double chisq_penalty;

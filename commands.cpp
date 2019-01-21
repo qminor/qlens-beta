@@ -6085,6 +6085,11 @@ void Lens::process_commands(bool read_file)
 				invert_surface_brightness_map_from_data(verbal_mode);
 				//test_fitmodel_invert(); // use this to make sure the fitmodel chi-square returns the same value as doing the inversion directly (runs chi-square twice just to make sure)
 			}
+			else if (words[1]=="plot_imgpixels")
+			{
+				if (!islens()) Complain("must specify lens model first");
+				plot_image_pixel_grid();
+			}
 			else Complain("command not recognized");
 		}
 		else if (words[0]=="lensinfo")
