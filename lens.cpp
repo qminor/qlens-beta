@@ -7957,6 +7957,11 @@ double Lens::fitmodel_loglike_point_source(double* params)
 				}
 			}
 		}
+	} else {
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (running_fit) cout << "\033[2A" << flush;
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=0";
+		}
 	}
 	chisq_total += chisq;
 	if (include_flux_chisq) {

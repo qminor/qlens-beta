@@ -314,7 +314,6 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	ImageSystemType system_type;
 
 	double lens_redshift;
-	//double source_redshift, reference_source_redshift, reference_zfactor; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
 	double source_redshift, reference_source_redshift; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
 	double *reference_zfactors;
 	double **default_zsrc_beta_factors;
