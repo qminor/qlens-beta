@@ -598,7 +598,7 @@ class Shear : public LensProfile
 	}
 
 	double kappa(double, double) { return 0; }
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=-1; r2=-1; }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
 };
 
 class Multipole : public LensProfile
@@ -792,7 +792,7 @@ class MassSheet : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=-1; r2=-1; }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
 };
 
 class Tabulated_Model : public LensProfile

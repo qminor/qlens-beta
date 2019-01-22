@@ -66,6 +66,7 @@ class SourcePixelGrid;
 class ImagePixelGrid;
 class Defspline;	// ...
 struct ImageData;
+struct WeakLensingData;
 struct ImagePixelData;
 struct ParamSettings;
 struct DerivedParam;
@@ -224,6 +225,25 @@ public:
 	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
 };
 
+struct WeakLensingData
+{
+	int n_sources;
+	string *id;
+	lensvector *pos;
+	double *reduced_shear1;
+	double *reduced_shear2;
+	double *sigma_shear1, *sigma_shear2;
+	double *zsrc;
+	WeakLensingData() { n_sources = 0; }
+	void input(const int &nn);
+	void input(const WeakLensingData& wl_in);
+	void add_source(const string id_in, lensvector& pos_in, const double g1_in, const double g2_in, const double g1_err_in, const double g2_err_in, const double zsrc_in);
+	void print_list(bool use_sci);
+	void write_to_file(string filename);
+	void clear();
+	~WeakLensingData();
+};
+
 double mcsampler_set_lensptr(Lens* lens_in);
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
 void polychord_prior (double cube[], double theta[], int nDims);
@@ -315,6 +335,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double omega_matter_lower_limit, omega_matter_upper_limit;
 	bool vary_syserr_pos_parameter;
 	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
+	bool vary_wl_shear_factor_parameter;
+	double wl_shear_factor, wl_shear_factor_lower_limit, wl_shear_factor_upper_limit;
 
 	int Gauss_NN;	// for Gaussian quadrature
 	double romberg_accuracy, integral_tolerance; // for Romberg integration, Gauss-Patterson quadrature
@@ -354,6 +376,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool auto_save_bestfit;
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another Lens object (e.g. fitmodel pointing to initial lens object)
 	ImageData *image_data;
+	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
 	int n_repeats;
 	bool display_chisq_status;
@@ -375,6 +398,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double reference_lnZ;
 	double pixel_magnification_threshold, pixel_magnification_threshold_lower_limit, pixel_magnification_threshold_upper_limit;
 	double sim_err_pos, sim_err_flux, sim_err_td;
+	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 
 	bool fits_format;
 	double data_pixel_size;
@@ -384,6 +408,9 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void sort_image_data_into_redshift_groups();
 	bool plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	void remove_image_data(int image_set);
+
+	bool load_weak_lensing_data(string filename);
+	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
 
 	bool read_data_line(ifstream& infile, vector<string>& datawords, int &n_datawords);
 	bool datastring_convert(const string& instring, int& outvar);
@@ -638,11 +665,13 @@ public:
 	static void delete_mumps();
 
 	double kappa(const double& x, const double& y, double* zfacs, double** betafacs);
+	//double kappa_weak(const double& x, const double& y, double* zfacs);
 	double potential(const double&, const double&, double* zfacs, double** betafacs);
 	void deflection(const double&, const double&, lensvector&, const int &thread, double* zfacs, double** betafacs);
 	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
 	void map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs);
 	void hessian(const double&, const double&, lensmatrix&, const int &thread, double* zfacs, double** betafacs);
+	void hessian_weak(const double&, const double&, lensmatrix&, const int &thread, double* zfacs);
 	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, double* zfacs, double** betafacs);
 	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs, double** betafacs);
 	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs);
@@ -663,6 +692,7 @@ public:
 	double magnification(const lensvector &x, const int &thread, double* zfacs, double** betafacs);
 	double shear(const lensvector &x, const int &thread, double* zfacs, double** betafacs);
 	void shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs);
+	void reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs);
 
 	// non-multithreaded versions
 	//double inverse_magnification(const lensvector& x, double* zfacs) { return inverse_magnification(x,0,zfacs); }
@@ -844,7 +874,8 @@ public:
 	bool use_bestfit_model();
 
 	bool include_central_image;
-	bool include_flux_chisq, include_time_delay_chisq;
+	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;
+	bool include_weak_lensing_chisq;
 	bool use_analytic_bestfit_src;
 	bool n_images_penalty;
 	bool fix_source_flux;
@@ -880,6 +911,7 @@ public:
 
 	double chisq_flux();
 	double chisq_time_delays();
+	double chisq_weak_lensing();
 	void output_imgplane_chisq_vals();
 	void output_model_source_flux(double *bestfit_flux);
 	void output_analytic_srcpos(lensvector *beta_i);
@@ -2008,6 +2040,21 @@ inline double Lens::kappa(const double& x, const double& y, double* zfacs, doubl
 	return kappa;
 }
 
+/*
+inline double Lens::kappa_weak(const double& x, const double& y, double* zfacs)
+{
+	double kappa;
+	int j;
+	kappa=0;
+	for (j=0; j < nlens; j++) {
+		kappa += lens_list[j]->kappa(x,y);
+	}
+	kappa *= zfacs[0];
+
+	return kappa;
+}
+*/
+
 inline double Lens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
 {
 	double pot=0, pot_subtot;
@@ -2228,6 +2275,33 @@ inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot
 			hess_tot[0][1] *= zfacs[0];
 			hess_tot[1][0] *= zfacs[0];
 		}
+	}
+	else {
+		hess_tot = defspline->hessian(x,y);
+	}
+}
+
+inline void Lens::hessian_weak(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
+{
+	if (!defspline)
+	{
+		lensmatrix *hess = &hesses_i[thread];
+		int j;
+		hess_tot[0][0] = 0;
+		hess_tot[1][1] = 0;
+		hess_tot[0][1] = 0;
+		hess_tot[1][0] = 0;
+		for (j=0; j < nlens; j++) {
+			lens_list[j]->hessian(x,y,(*hess));
+			hess_tot[0][0] += (*hess)[0][0];
+			hess_tot[1][1] += (*hess)[1][1];
+			hess_tot[0][1] += (*hess)[0][1];
+			hess_tot[1][0] += (*hess)[1][0];
+		}
+		hess_tot[0][0] *= zfacs[0];
+		hess_tot[1][1] *= zfacs[0];
+		hess_tot[0][1] *= zfacs[0];
+		hess_tot[1][0] *= zfacs[0];
 	}
 	else {
 		hess_tot = defspline->hessian(x,y);
@@ -2542,6 +2616,15 @@ inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, c
 		}
 	}
 	angle = 0.5*radians_to_degrees(angle);
+}
+
+inline void Lens::reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs)
+{
+	lensmatrix *hess = &hesses[thread];
+	hessian_weak(x[0],x[1],(*hess),thread,zfacs);
+	double kap_denom = 1 - ((*hess)[0][0] + (*hess)[1][1])/2;
+	g1 = 0.5*((*hess)[0][0]-(*hess)[1][1]) / kap_denom;
+	g2 = (*hess)[0][1] / kap_denom;
 }
 
 // the following functions find the shear, kappa and magnification at the position where a perturber is placed;

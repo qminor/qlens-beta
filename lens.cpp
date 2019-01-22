@@ -166,6 +166,7 @@ Lens::Lens() : UCMC()
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
 	syserr_pos = 0.0;
+	wl_shear_factor = 1.0;
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = true; // this automatically sets the reference source redshift (for kappa scaling) equal to the source redshift being used
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
@@ -191,6 +192,10 @@ Lens::Lens() : UCMC()
 	vary_syserr_pos_parameter = false;
 	syserr_pos_lower_limit = 1e30; // These must be specified by user
 	syserr_pos_upper_limit = 1e30; // These must be specified by user
+
+	vary_wl_shear_factor_parameter = false;
+	wl_shear_factor_lower_limit = 1e30; // These must be specified by user
+	wl_shear_factor_upper_limit = 1e30; // These must be specified by user
 
 	chisq_it=0;
 	raw_chisq = -1e30;
@@ -278,7 +283,9 @@ Lens::Lens() : UCMC()
 	use_magnification_in_chisq = true;
 	use_magnification_in_chisq_during_repeats = true;
 	include_central_image = true;
+	include_imgpos_chisq = true;
 	include_flux_chisq = false;
+	include_weak_lensing_chisq = false;
 	include_parity_in_chisq = false;
 	include_time_delay_chisq = false;
 	use_analytic_bestfit_src = false;
@@ -289,6 +296,7 @@ Lens::Lens() : UCMC()
 	sim_err_pos = 0.005;
 	sim_err_flux = 0.01;
 	sim_err_td = 1;
+	sim_err_shear = 0.1;
 
 	image_pixel_data = NULL;
 	image_pixel_grid = NULL;
@@ -473,6 +481,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	hubble = lens_in->hubble;
 	omega_matter = lens_in->omega_matter;
 	syserr_pos = lens_in->syserr_pos;
+	wl_shear_factor = lens_in->wl_shear_factor;
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
@@ -503,6 +512,10 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	vary_syserr_pos_parameter = lens_in->vary_syserr_pos_parameter;
 	syserr_pos_lower_limit = lens_in->syserr_pos_lower_limit; // These must be specified by user
 	syserr_pos_upper_limit = lens_in->syserr_pos_upper_limit; // These must be specified by user
+
+	vary_wl_shear_factor_parameter = lens_in->vary_wl_shear_factor_parameter;
+	wl_shear_factor_lower_limit = lens_in->wl_shear_factor_lower_limit; // These must be specified by user
+	wl_shear_factor_upper_limit = lens_in->wl_shear_factor_upper_limit; // These must be specified by user
 
 	terminal = lens_in->terminal;
 	show_wtime = lens_in->show_wtime;
@@ -559,7 +572,9 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_magnification_in_chisq = lens_in->use_magnification_in_chisq;
 	use_magnification_in_chisq_during_repeats = lens_in->use_magnification_in_chisq_during_repeats;
 	include_central_image = lens_in->include_central_image;
+	include_imgpos_chisq = lens_in->include_imgpos_chisq;
 	include_flux_chisq = lens_in->include_flux_chisq;
+	include_weak_lensing_chisq = lens_in->include_weak_lensing_chisq;
 	include_parity_in_chisq = lens_in->include_parity_in_chisq;
 	include_time_delay_chisq = lens_in->include_time_delay_chisq;
 	use_analytic_bestfit_src = lens_in->use_analytic_bestfit_src;
@@ -570,6 +585,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	sim_err_pos = lens_in->sim_err_pos;
 	sim_err_flux = lens_in->sim_err_flux;
 	sim_err_td = lens_in->sim_err_td;
+	sim_err_shear = lens_in->sim_err_shear;
 
 	fitmodel = NULL;
 	fits_format = lens_in->fits_format;
@@ -583,6 +599,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	vary_sourcepts_y = NULL;
 	borrowed_image_data = false;
 	image_data = NULL;
+	weak_lensing_data.input(lens_in->weak_lensing_data);
 	defspline = NULL;
 
 	image_pixel_data = NULL;
@@ -821,7 +838,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major;
 			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]]);
-			if (re_major != 0.0) {
+			if (re_major > 0.0) {
 				double rmax = auto_gridsize_multiple_of_Re*re_major;
 				grid_xlength = 2*rmax;
 				grid_ylength = 2*rmax;
@@ -4227,6 +4244,103 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 	return true;
 }
 
+bool Lens::load_weak_lensing_data(string filename)
+{
+	int i,j,k;
+	ifstream data_infile(filename.c_str());
+	if (!data_infile.is_open()) { warn("Error: input file '%s' could not be opened",filename.c_str()); return false; }
+
+	int n_datawords;
+	vector<string> datawords;
+	int n_wl_sources = 0;
+	while (read_data_line(data_infile,datawords,n_datawords)) n_wl_sources++;
+	data_infile.close();
+
+	if (n_wl_sources==0) { warn("data file could not be read; unexpected end of file"); return false; }
+	data_infile.open(filename.c_str());
+
+	weak_lensing_data.input(n_wl_sources);
+	for (j=0; j < n_wl_sources; j++) {
+		if (read_data_line(data_infile,datawords,n_datawords)==false) { 
+			warn("data file could not be read; unexpected end of file"); 
+			weak_lensing_data.clear();
+			return false;
+		}
+		weak_lensing_data.id[j] = datawords[0];
+		if (datastring_convert(datawords[1],weak_lensing_data.pos[j][0])==false) {
+			warn("weak lensing source x-coordinate has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[2],weak_lensing_data.pos[j][1])==false) {
+			warn("weak lensing source y-coordinate has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[3],weak_lensing_data.reduced_shear1[j])==false) {
+			warn("weak lensing source reduced shear1 has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[4],weak_lensing_data.reduced_shear2[j])==false) {
+			warn("weak lensing source reduced shear2 has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[5],weak_lensing_data.sigma_shear1[j])==false) {
+			warn("source shear1 measurement error has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[6],weak_lensing_data.sigma_shear2[j])==false) {
+			warn("source shear2 measurement error has incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+		if (datastring_convert(datawords[7],weak_lensing_data.zsrc[j])==false) {
+			warn("source redshift thas incorrect format; could not read entry for source ID %s",weak_lensing_data.id[j].c_str());
+			weak_lensing_data.clear();
+			return false;
+		}
+	}
+
+	// For starters, let's not store zfactors, we'll just calculate them when we evaluate the chi-square. We can always put
+	// the zfactors in to save time later.
+	//if (n_lens_redshifts > 0) {
+		//for (i=0; i < n_sourcepts_fit; i++) {
+			//for (j=0; j < n_lens_redshifts; j++) {
+				//weak_lensing_data.zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
+			//}
+		//}
+	//}
+
+	// I don't think beta factors should matter for weak lensing, but you can check this later
+	//if (n_lens_redshifts > 1) {
+		//for (i=0; i < n_sourcepts_fit; i++) {
+			//for (j=1; j < n_lens_redshifts; j++) {
+				//beta_factors[i][j-1] = new double[j];
+				//if (include_recursive_lensing) {
+					//for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+				//} else {
+					//for (k=0; k < j; k++) beta_factors[i][j-1][k] = 0;
+				//}
+			//}
+		//}
+	//}
+
+	include_weak_lensing_chisq = true;
+	return true;
+}
+
+void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc)
+{
+	double shear1, shear2;
+	reduced_shear_components(sourcept,shear1,shear2,0,reference_zfactors);
+	shear1 += sim_err_shear*NormalDeviate();
+	shear2 += sim_err_shear*NormalDeviate();
+	weak_lensing_data.add_source(id,sourcept,shear1,shear2,sim_err_shear,sim_err_shear,zsrc);
+}
+
 bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
 {
 	static const int n_characters = 256;
@@ -4558,6 +4672,176 @@ ImageData::~ImageData()
 	}
 }
 
+void WeakLensingData::input(const int &nn)
+{
+	if (n_sources != 0) {
+		// delete arrays so we can re-create them
+		delete[] id;
+		delete[] pos;
+		delete[] reduced_shear1;
+		delete[] reduced_shear2;
+		delete[] sigma_shear1;
+		delete[] sigma_shear2;
+		delete[] zsrc;
+	}
+	n_sources = nn;
+	id = new string[n_sources];
+	pos = new lensvector[n_sources];
+	reduced_shear1 = new double[n_sources];
+	reduced_shear2 = new double[n_sources];
+	sigma_shear1 = new double[n_sources];
+	sigma_shear2 = new double[n_sources];
+	zsrc = new double[n_sources];
+}
+
+void WeakLensingData::input(const WeakLensingData& wl_in)
+{
+	if (n_sources != 0) {
+		// delete arrays so we can re-create them
+		delete[] id;
+		delete[] pos;
+		delete[] reduced_shear1;
+		delete[] reduced_shear2;
+		delete[] sigma_shear1;
+		delete[] sigma_shear2;
+		delete[] zsrc;
+	}
+	n_sources = wl_in.n_sources;
+	id = new string[n_sources];
+	pos = new lensvector[n_sources];
+	reduced_shear1 = new double[n_sources];
+	reduced_shear2 = new double[n_sources];
+	sigma_shear1 = new double[n_sources];
+	sigma_shear2 = new double[n_sources];
+	zsrc = new double[n_sources];
+	for (int i=0; i < n_sources; i++) {
+		id[i] = wl_in.id[i];
+		pos[i] = wl_in.pos[i];
+		reduced_shear1[i] = wl_in.reduced_shear1[i];
+		reduced_shear2[i] = wl_in.reduced_shear2[i];
+		sigma_shear1[i] = wl_in.sigma_shear1[i];
+		sigma_shear2[i] = wl_in.sigma_shear2[i];
+		zsrc[i] = wl_in.zsrc[i];
+	}
+}
+
+void WeakLensingData::add_source(const string id_in, lensvector& pos_in, const double g1_in, const double g2_in, const double g1_err_in, const double g2_err_in, const double zsrc_in)
+{
+	int n_sources_new = n_sources+1;
+	if (n_sources != 0) {
+		string *new_id = new string[n_sources_new];
+		lensvector *new_pos = new lensvector[n_sources_new];
+		double *new_reduced_shear1 = new double[n_sources_new];
+		double *new_reduced_shear2 = new double[n_sources_new];
+		double *new_sigma_shear1 = new double[n_sources_new];
+		double *new_sigma_shear2 = new double[n_sources_new];
+		double *new_zsrc = new double[n_sources_new];
+		for (int i=0; i < n_sources; i++) {
+			new_id[i] = id[i];
+			new_pos[i][0] = pos[i][0];
+			new_pos[i][1] = pos[i][1];
+			new_reduced_shear1[i] = reduced_shear1[i];
+			new_reduced_shear2[i] = reduced_shear2[i];
+			new_sigma_shear1[i] = sigma_shear1[i];
+			new_sigma_shear2[i] = sigma_shear2[i];
+			new_zsrc[i] = zsrc[i];
+		}
+		delete[] id;
+		delete[] pos;
+		delete[] reduced_shear1;
+		delete[] reduced_shear2;
+		delete[] sigma_shear1;
+		delete[] sigma_shear2;
+		delete[] zsrc;
+		id = new_id;
+		pos = new_pos;
+		reduced_shear1 = new_reduced_shear1;
+		reduced_shear2 = new_reduced_shear2;
+		sigma_shear1 = new_sigma_shear1;
+		sigma_shear2 = new_sigma_shear2;
+		zsrc = new_zsrc;
+		n_sources++;
+	} else {
+		n_sources = 1;
+		id = new string[n_sources];
+		pos = new lensvector[n_sources];
+		reduced_shear1 = new double[n_sources];
+		reduced_shear2 = new double[n_sources];
+		sigma_shear1 = new double[n_sources];
+		sigma_shear2 = new double[n_sources];
+		zsrc = new double[n_sources];
+	}
+	id[n_sources-1] = id_in;
+	pos[n_sources-1][0] = pos_in[0];
+	pos[n_sources-1][1] = pos_in[1];
+	reduced_shear1[n_sources-1] = g1_in;
+	reduced_shear2[n_sources-1] = g2_in;
+	sigma_shear1[n_sources-1] = g1_err_in;
+	sigma_shear2[n_sources-1] = g2_err_in;
+	zsrc[n_sources-1] = zsrc_in;
+}
+
+void WeakLensingData::print_list(bool use_sci)
+{
+	if (use_sci==false) {
+		cout << setprecision(6);
+		cout << fixed;
+	}
+	cout << "# id\tpos_x(arcsec)\tpos_y(arcsec)\tg1\t\tg2\t\tsig_g1\t\tsig_g2\t\tzsrc\n";
+	for (int i=0; i < n_sources; i++) {
+		cout << id[i] << "\t" << pos[i][0] << "\t" << pos[i][1];
+		cout << "\t" << reduced_shear1[i];
+		cout << "\t" << reduced_shear2[i];
+		cout << "\t" << sigma_shear1[i];
+		cout << "\t" << sigma_shear2[i];
+		cout << "\t" << zsrc[i] << endl;
+	}
+	cout << endl;
+	if (use_sci==false)
+		cout.unsetf(ios_base::floatfield);
+}
+
+void WeakLensingData::write_to_file(string filename)
+{
+	ofstream outfile(filename.c_str());
+	for (int i=0; i < n_sources; i++) {
+		outfile << id[i] << " ";
+		outfile << pos[i][0] << " " << pos[i][1];
+		outfile << " " << reduced_shear1[i];
+		outfile << " " << reduced_shear2[i];
+		outfile << " " << sigma_shear1[i];
+		outfile << " " << sigma_shear2[i];
+		outfile << " " << zsrc[i];
+		outfile << endl;
+	}
+}
+
+WeakLensingData::~WeakLensingData()
+{
+	if (n_sources != 0) {
+		delete[] id;
+		delete[] pos;
+		delete[] reduced_shear1;
+		delete[] reduced_shear2;
+		delete[] sigma_shear1;
+		delete[] sigma_shear2;
+		delete[] zsrc;
+	}
+}
+
+void WeakLensingData::clear()
+{
+	if (n_sources != 0) {
+		delete[] id;
+		delete[] pos;
+		delete[] reduced_shear1;
+		delete[] reduced_shear2;
+		delete[] sigma_shear1;
+		delete[] sigma_shear2;
+		delete[] zsrc;
+	}
+	n_sources = 0;
+}
 
 /******************************************** Functions for lens model fitting ******************************************/
 
@@ -4764,6 +5048,10 @@ bool Lens::update_fitmodel(const double* params)
 		fitmodel->syserr_pos = params[index++];
 		if (fitmodel->syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
 	}
+	if (vary_wl_shear_factor_parameter) {
+		fitmodel->wl_shear_factor = params[index++];
+	}
+
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
 	return status;
 }
@@ -4912,7 +5200,6 @@ double Lens::chisq_pos_source_plane()
 	delete[] mag01;
 	delete[] beta_ji;
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
-	//cout << "CHISQ=" << chisq << endl;
 	return chisq;
 }
 
@@ -5473,6 +5760,39 @@ double Lens::chisq_time_delays()
 	return chisq;
 }
 
+double Lens::chisq_weak_lensing()
+{
+	int i,j,nsrc = weak_lensing_data.n_sources;
+	if (nsrc==0) return 0;
+	double chisq=0;
+	double g1,g2;
+	double **zfacs = new double*[nsrc];
+	for (i=0; i < nsrc; i++) {
+		zfacs[i] = new double[n_lens_redshifts];
+	}
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+
+		#pragma omp for private(i,j,g1,g2) schedule(static) reduction(+:chisq)
+		for (i=0; i < nsrc; i++) {
+			for (j=0; j < n_lens_redshifts; j++) {
+				zfacs[i][j] = kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+			}
+			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
+			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
+		}
+	}
+	for (i=0; i < nsrc; i++) delete[] zfacs[i];
+	delete[] zfacs;
+	return chisq;
+}
+
 void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 {
 	int i, index=0;
@@ -5518,6 +5838,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_hubble_parameter) stepsizes[index++] = 0.3;
 	if (vary_omega_matter_parameter) stepsizes[index++] = 0.3;
 	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
+	if (vary_wl_shear_factor_parameter) stepsizes[index++] = 0.1;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
 
@@ -5548,6 +5869,7 @@ void Lens::set_default_plimits()
 	if (vary_hubble_parameter) index++;
 	if (vary_omega_matter_parameter) index++;
 	if (vary_syserr_pos_parameter) index++;
+	if (vary_wl_shear_factor_parameter) index++;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
@@ -5575,6 +5897,7 @@ void Lens::get_n_fit_parameters(int &nparams)
 	if (vary_hubble_parameter) nparams++;
 	if (vary_omega_matter_parameter) nparams++;
 	if (vary_syserr_pos_parameter) nparams++;
+	if (vary_wl_shear_factor_parameter) nparams++;
 }
 
 bool Lens::setup_fit_parameters(bool include_limits)
@@ -5608,6 +5931,8 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	if (vary_hubble_parameter) fitparams[index++] = hubble;
 	if (vary_omega_matter_parameter) fitparams[index++] = omega_matter;
 	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
+	if (vary_wl_shear_factor_parameter) fitparams[index++] = wl_shear_factor;
+
 	get_parameter_names();
 	dvector stepsizes(n_fit_parameters);
 	get_automatic_initial_stepsizes(stepsizes);
@@ -5716,6 +6041,13 @@ bool Lens::setup_limits()
 		lower_limits[index] = syserr_pos_lower_limit;
 		lower_limits_initial[index] = lower_limits[index];
 		upper_limits[index] = syserr_pos_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if (vary_wl_shear_factor_parameter) {
+		lower_limits[index] = wl_shear_factor_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = wl_shear_factor_upper_limit;
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
@@ -5856,6 +6188,12 @@ void Lens::get_parameter_names()
 		latex_parameter_names.push_back("\\sigma");
 		latex_parameter_subscripts.push_back("sys");
 	}
+	if (vary_wl_shear_factor_parameter) {
+		fit_parameter_names.push_back("wl_shearfac");
+		latex_parameter_names.push_back("m");
+		latex_parameter_subscripts.push_back("WL");
+	}
+
 	if (fit_parameter_names.size() != n_fit_parameters) die("get_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
 	for (i=0; i < n_fit_parameters; i++) {
 		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
@@ -6260,6 +6598,7 @@ double Lens::chi_square_fit_simplex()
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
 		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
+		if (vary_wl_shear_factor_parameter) cout << "wl_shearfac = " << fitmodel->wl_shear_factor << endl;
 
 		cout << endl;
 		if (calculate_parameter_errors) {
@@ -6410,6 +6749,7 @@ double Lens::chi_square_fit_powell()
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
 		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
+		if (vary_wl_shear_factor_parameter) cout << "wl_shearfac = " << fitmodel->wl_shear_factor << endl;
 		cout << endl;
 		if (calculate_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
@@ -7342,7 +7682,9 @@ bool Lens::use_bestfit_model()
 	if (vary_syserr_pos_parameter) {
 		syserr_pos = transformed_params[index++];
 	}
-
+	if (vary_wl_shear_factor_parameter) {
+		wl_shear_factor = transformed_params[index++];
+	}
 	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
 	return true;
 }
@@ -7560,56 +7902,58 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	}
 
 	double loglike, chisq_total=0, chisq;
-	bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
-	if (use_image_plane_chisq) {
-		used_imgplane_chisq = true;
-		if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
-		else chisq = fitmodel->chisq_pos_image_plane();
-	}
-	else {
-		used_imgplane_chisq = false;
-		chisq = fitmodel->chisq_pos_source_plane();
-		if (chisq < chisq_imgplane_substitute_threshold) {
+	if (include_imgpos_chisq) {
+		bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
+		if (use_image_plane_chisq) {
+			used_imgplane_chisq = true;
 			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
 			else chisq = fitmodel->chisq_pos_image_plane();
-			used_imgplane_chisq = true;
 		}
-	}
-	if ((display_chisq_status) and (mpi_id==0)) {
-		if (running_fit) cout << "\033[2A" << flush;
-		if (used_imgplane_chisq) {
-			if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
-			int tot_data_images = 0;
-			for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-			cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) {
-				cout << ", chisq_pos=" << chisq;
-				if (syserr_pos != 0.0) {
-					double signormfac, chisq_sys = chisq;
-					int i,k;
-					for (i=0; i < n_sourcepts_fit; i++) {
-						for (k=0; k < image_data[i].n_images; k++) {
-							signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
-							chisq_sys -= signormfac;
-						}
-					}
-					cout << ", chisq_pos_sys=" << chisq_sys;
-				}
+		else {
+			used_imgplane_chisq = false;
+			chisq = fitmodel->chisq_pos_source_plane();
+			if (chisq < chisq_imgplane_substitute_threshold) {
+				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
+				else chisq = fitmodel->chisq_pos_image_plane();
+				used_imgplane_chisq = true;
 			}
-		} else {
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) {
-				cout << "chisq_pos=" << chisq;
-				// redundant and ugly! make it prettier later
-				if (syserr_pos != 0.0) {
-					double signormfac, chisq_sys = chisq;
-					int i,k;
-					for (i=0; i < n_sourcepts_fit; i++) {
-						for (k=0; k < image_data[i].n_images; k++) {
-							signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
-							chisq_sys -= signormfac;
+		}
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (running_fit) cout << "\033[2A" << flush;
+			if (used_imgplane_chisq) {
+				if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
+				int tot_data_images = 0;
+				for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
+				cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
+				if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+					cout << ", chisq_pos=" << chisq;
+					if (syserr_pos != 0.0) {
+						double signormfac, chisq_sys = chisq;
+						int i,k;
+						for (i=0; i < n_sourcepts_fit; i++) {
+							for (k=0; k < image_data[i].n_images; k++) {
+								signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+								chisq_sys -= signormfac;
+							}
 						}
+						cout << ", chisq_pos_sys=" << chisq_sys;
 					}
-					cout << ", chisq_pos_sys=" << chisq_sys;
+				}
+			} else {
+				if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+					cout << "chisq_pos=" << chisq;
+					// redundant and ugly! make it prettier later
+					if (syserr_pos != 0.0) {
+						double signormfac, chisq_sys = chisq;
+						int i,k;
+						for (i=0; i < n_sourcepts_fit; i++) {
+							for (k=0; k < image_data[i].n_images; k++) {
+								signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+								chisq_sys -= signormfac;
+							}
+						}
+						cout << ", chisq_pos_sys=" << chisq_sys;
+					}
 				}
 			}
 		}
@@ -7627,6 +7971,13 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_td=" << chisq;
+		}
+	}
+	if (include_weak_lensing_chisq) {
+		chisq = fitmodel->chisq_weak_lensing();
+		chisq_total += chisq;
+		if ((display_chisq_status) and (mpi_id==0)) {
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_weak_lensing=" << chisq;
 		}
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
@@ -8008,7 +8359,12 @@ void Lens::output_lens_commands(string filename, const bool print_limits)
 			scriptfile << syserr_pos_lower_limit << " " << syserr_pos_upper_limit << endl;
 		}
 	}
-
+	if (vary_wl_shear_factor_parameter) {
+		scriptfile << "wl_shearfac = " << wl_shear_factor << endl;
+		if (print_limits) {
+			scriptfile << wl_shear_factor_lower_limit << " " << wl_shear_factor_upper_limit << endl;
+		}
+	}
 }
 
 void Lens::print_fit_model()
@@ -8103,6 +8459,14 @@ void Lens::print_fit_model()
 		} else {
 			if ((syserr_pos_lower_limit==1e30) or (syserr_pos_upper_limit==1e30)) cout << "\nsyserr_pos parameter: lower/upper limits not given (these must be set by 'syserr_pos' command before fit)\n";
 			else cout << "Systematic error parameter: [" << syserr_pos_lower_limit << ":" << syserr_pos << ":" << syserr_pos_upper_limit << "]\n";
+		}
+	}
+	if (vary_wl_shear_factor_parameter) {
+		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			cout << "Weak lensing shear factor parameter: " << wl_shear_factor << endl;
+		} else {
+			if ((wl_shear_factor_lower_limit==1e30) or (wl_shear_factor_upper_limit==1e30)) cout << "\nwl_shearfac parameter: lower/upper limits not given (these must be set by 'wl_shear_factor' command before fit)\n";
+			else cout << "Weak lensing shear factor parameter: [" << wl_shear_factor_lower_limit << ":" << wl_shear_factor << ":" << wl_shear_factor_upper_limit << "]\n";
 		}
 	}
 }
@@ -8565,7 +8929,6 @@ void Lens::plot_image_pixel_grid()
 	image_pixel_grid->redo_lensing_calculations();
 	image_pixel_grid->plot_center_pts_source_plane();
 }
-
 
 double Lens::invert_surface_brightness_map_from_data(bool verbal)
 {

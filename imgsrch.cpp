@@ -1871,8 +1871,8 @@ image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 
 bool Lens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
-	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
-	if ((this->*plot_critical_curves)("crit.dat")==false) return false;
+	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) warn(warnings,"could not spline critical curves");
+	if ((this->*plot_critical_curves)("crit.dat")==false) warn(warnings,"no critical curves found");
 	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	ifstream sources(sourcefile);

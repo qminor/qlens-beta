@@ -78,6 +78,7 @@ void Lens::process_commands(bool read_file)
 						"lens -- add a lens from the list of lens models (type 'help lens' for list of models)\n"
 						"fit -- commands for lens model fitting (type 'help fit' for list of subcommands)\n"
 						"imgdata -- commands for loading point image data ('help imgdata' for list of subcommands)\n"
+						"wldata -- commands for loading weak lensing data ('help wldata' for list of subcommands)\n"
 						"sbmap -- commands for surface brightness maps ('help sbmap' for list of subcommands)\n"
 						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
 						"cosmology -- display cosmological information, including physical properties of lenses\n"
@@ -224,6 +225,8 @@ void Lens::process_commands(bool read_file)
 						"fix_srcflux -- fix source flux to specified value during fit rather than find analytically\n"
 						"syserr_pos -- Systematic error parameter, added in quadrature to all position errors\n"
 						"vary_syserr_pos -- specify whether to vary syserr_pos during a fit (on/off)\n"
+						"wl_shearfac -- Weak lensing scale factor parameter, which scales the reduced shear in chi-square\n"
+						"vary_wl_shearfac -- specify whether to vary wl_shearfac during a fit (on/off)\n"
 						"\n"
 						"\033[4mOptimization and Monte Carlo sampler settings\033[0m\n"
 						"nrepeat -- number of repeat chi-square optimizations after original run\n"
@@ -1052,6 +1055,44 @@ void Lens::process_commands(bool read_file)
 						else Complain("imgdata command not recognized");
 					}
 				}
+				else if (words[1]=="wldata")
+				{
+					if (nwords==2) {
+						cout << "wldata\n"
+							"wldata read <filename>\n"
+							"wldata add <x_coord> <y_coord>\n"
+							"wldata write <filename>\n"
+							"wldata clear [dataset_number]\n\n"
+							"Commands for loading (or simulating) weak lensing data for lens model fitting. For help\n"
+							"on each command type 'help wldata <command>'. If 'wldata' is typed with no argument,\n"
+							"displays the current weak lensing data that has been loaded.\n";
+					} else {
+						if (words[2]=="read")
+							cout << "wldata read <filename>\n\n"
+								"Read weak lensing data from file '<filename>'. The variable 'chisq_weak_lensing' is automatically\n"
+								"turned on after the data is loaded in, so the data will be included in the chi-square. The data\n"
+								"file should have the following format:\n\n"
+								"#ID   x    y    g1   g2   err_g1   err_g2    zsrc\n\n"
+								"where ID is an identifier name for a given source, g1 and g2 are the reduced shear values, with\n"
+								"corresponding errors err_g1 and err_g2, and zsrc is the redshift of the lensed source.\n"
+								"Note, comments (marked with #) can be placed at the end of any line or at the start of a line.\n";
+						else if (words[2]=="write")
+							cout << "wldata write <filename>\n\n"
+								"Outputs the current weak lensing data set to file, with the same format as required by\n"
+								"'wldata read' command. (For a description of the required format, type 'help wldata read')\n";
+						else if (words[2]=="add")
+							cout << "wldata add <x-coord> <y-coord> [z=#]\n\n"
+								"Add simulated weak lensing source defined by the source point (<x-coord>,<y-coord>) lensed by the\n"
+								"current lens configuration. The redshift source can be entered via the optional argument 'z=#'; if\n"
+								"this argument is not entered, the source has a default redshift given by the value of 'zsrc'.\n"
+								"The errors in the reduced shear are given by the variable sim_err_shear, so that a corresponding\n"
+								"random Gaussian error is added to the reduced shear components g1 and g2.\n";
+						else if (words[2]=="clear")
+							cout << "wldata clear\n\n"
+								"Removes all the weak lensing data from the current configuration.\n";
+						else Complain("wldata command not recognized");
+					}
+				}
 				else if (words[1]=="sbmap")
 				{
 					if (nwords==2) {
@@ -1199,7 +1240,8 @@ void Lens::process_commands(bool read_file)
 						else Complain("command not recognized");
 					}
 				}
-				else if (words[1]=="source") {
+				else if (words[1]=="source")
+				{
 					if (nwords==2)
 						cout << "source <sourcemodel> <source_parameter##> ...\n"
 							"source clear\n\n"
@@ -1902,6 +1944,8 @@ void Lens::process_commands(bool read_file)
 					cout << "fix_srcflux: " << display_switch(fix_source_flux) << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
 					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
+					cout << "wl_shearfac = " << wl_shear_factor << endl;
+					cout << "vary_wl_shearfac: " << display_switch(vary_wl_shear_factor_parameter) << endl;
 					cout << endl;
 					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
 					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
@@ -5127,7 +5171,7 @@ void Lens::process_commands(bool read_file)
 		{
 			if (nwords == 1) {
 				if (n_sourcepts_fit==0) Complain("no image data has been loaded");
-				print_image_data(true);
+				print_image_data(true); // The boolean argument should be removed (it says to print errors...should ALWAYS print errors!)
 				// print the image data that is being used
 			} else if (nwords >= 2) {
 				if (words[1]=="add") {
@@ -5250,6 +5294,47 @@ void Lens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "Include image (" << n_imgset << "," << n_img << ") in chisq: " << display_switch(image_data[n_imgset].use_in_chisq[n_img]) << endl;
 					}
 				} else Complain("invalid argument to command 'imgdata'");
+			}
+		}
+		else if (words[0]=="wldata")
+		{
+			if (nwords == 1) {
+				if (weak_lensing_data.n_sources==0) Complain("no weak lensing data has been loaded");
+				if (mpi_id==0) weak_lensing_data.print_list(use_scientific_notation);
+			} else {
+				if (words[1]=="add") {
+					double zsrc = source_redshift;
+					for (int i=2; i < nwords; i++) {
+						int pos;
+						if ((pos = words[i].find("z=")) != string::npos) {
+							string znumstring = words[i].substr(pos+2);
+							stringstream znumstr;
+							znumstr << znumstring;
+							if (!(znumstr >> zsrc)) Complain("incorrect format for source redshift");
+							if (zsrc < 0) Complain("source redshift cannot be negative");
+							remove_word(i);
+							i = nwords; // breaks out of this loop, without breaking from outer loop
+						}
+					}	
+					if (nwords != 4) Complain("Two arguments are required for 'wldata add' (x,y coordinates of source pt., plus optional 'z=' arg)");
+					lensvector src;
+					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
+					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
+					stringstream idstr;
+					string id_string;
+					idstr << weak_lensing_data.n_sources;
+					idstr >> id_string;
+					add_simulated_weak_lensing_data(id_string,src,zsrc);
+				}
+				else if (words[1]=="read") {
+					if (nwords != 3) Complain("One argument required for 'wldata read' (filename)");
+					if (load_weak_lensing_data(words[2])==false) Complain("unable to load weak lensing data");
+				} else if (words[1]=="write") {
+					if (nwords != 3) Complain("One argument required for 'wldata write' (filename)");
+					weak_lensing_data.write_to_file(words[2]);
+				} else if (words[1]=="clear") {
+					weak_lensing_data.clear();
+				} else Complain("invalid argument to command 'wldata'");
 			}
 		}
 		else if (words[0]=="defspline")
@@ -5686,19 +5771,20 @@ void Lens::process_commands(bool read_file)
 					if (show_cc) run_plotter_range("images",range2);
 					else run_plotter_range("images_nocc",range2);
 				}
+				else Complain("could not create grid to plot images");
 			} else if ((nwords==2) and (words[1]=="sbmap")) {
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->plot_surface_brightness("img_pixel");
 				if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {	// default source file
 					if (show_cc) run_plotter_range("imgpixel_imgpts_plural",range1);
 					else run_plotter_range("imgpixel_imgpts_plural_nocc",range1);
-				}
+				} else Complain("could not create grid to plot images");
 			} else if (nwords == 2) {
 				if (plot_images(words[1].c_str(), "imgs.dat", verbal_mode)==true) {
 					if (plot_srcplane) run_plotter_range("sources",range1);
 					if (show_cc) run_plotter_range("images",range2);
 					else run_plotter_range("images_nocc",range2);
-				}
+				} else Complain("could not create grid to plot images");
 			} else if (nwords == 3) {
 				if (terminal == TEXT) {
 					plot_images(words[1].c_str(), words[2].c_str(), verbal_mode);
@@ -6107,12 +6193,14 @@ void Lens::process_commands(bool read_file)
 				shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 				beta[0] = point[0] - alpha[0];
 				beta[1] = point[1] - alpha[1];
-				cout << "kappa = " << kappa(point,reference_zfactors,default_zsrc_beta_factors) << endl;
+				double kappaval = 
+				kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
+				cout << "kappa = " << kappaval << endl;
 				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
 				cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
 				cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
 				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
-				//cout << "shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0) << " shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0) << endl;
+				cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
 				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
 
 				if (n_lens_redshifts > 1) {
@@ -6666,6 +6754,15 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "threshold for substituting image plane chi-square for source plane chi-square function = " << chisq_imgplane_substitute_threshold << endl;
 			} else Complain("must specify either zero or one argument (chi-square image plane substitution threshold)");
 		}
+		else if (words[0]=="chisqpos")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include image positions in chi-square: " << display_switch(include_imgpos_chisq) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'chisqpos' command; must specify 'on' or 'off'");
+				set_switch(include_imgpos_chisq,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="chisqflux")
 		{
 			if (nwords==1) {
@@ -6673,6 +6770,15 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'chisqflux' command; must specify 'on' or 'off'");
 				set_switch(include_flux_chisq,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="chisq_weak_lensing")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include weak lensing reduced shear in chi-square: " << display_switch(include_weak_lensing_chisq) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'chisq_weak_lensing' command; must specify 'on' or 'off'");
+				set_switch(include_weak_lensing_chisq,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="nimg_penalty")
@@ -6894,6 +7000,37 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_syserr_pos' command; must specify 'on' or 'off'");
 				set_switch(vary_syserr_pos_parameter,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="wl_shearfac")
+		{
+			double syserrparam;
+			if (nwords == 2) {
+				if (!(ws[1] >> syserrparam)) Complain("invalid wl_shearfac setting");
+				wl_shear_factor = syserrparam;
+				if ((vary_wl_shear_factor_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+					if (mpi_id==0) cout << "Limits for weak lensing scale factor parameter:\n";
+					if (read_command(false)==false) return;
+					double sigmin,sigmax;
+					if (nwords != 2) Complain("Must specify two arguments for weak lensing scale factor parameter limits: sigmin, sigmax");
+					if (!(ws[0] >> sigmin)) Complain("Invalid lower limit for weak lensing scale factor parameter");
+					if (!(ws[1] >> sigmax)) Complain("Invalid upper limit for weak lensing scale factor parameter");
+					if (sigmin > sigmax) Complain("lower limit cannot be greater than upper limit");
+					wl_shear_factor_lower_limit = sigmin;
+					wl_shear_factor_upper_limit = sigmax;
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "weak lensing scale factor parameter = " << wl_shear_factor << endl;
+			} else Complain("must specify either zero or one argument (weak lensing scale factor parameter)");
+		}
+		else if (words[0]=="vary_wl_shearfac")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary weak lensing scale factor parameter: " << display_switch(vary_wl_shear_factor_parameter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_wl_shearfac' command; must specify 'on' or 'off'");
+				set_switch(vary_wl_shear_factor_parameter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
