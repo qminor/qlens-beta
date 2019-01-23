@@ -914,6 +914,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
 #endif
 
+	lens->total_srcgrid_overlap_area = 0; // Used to find the total coverage of the sourcegrid, which helps determine optimal source pixel size
+
 	int i,j,k,nsrc;
 	double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
 	bool inside;
@@ -921,17 +923,17 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	int ntot_src = u_N*w_N;
 	double *area_matrix, *mag_matrix;
 	mag_matrix = new double[ntot_src];
-	if (lens->n_image_prior) {
+	//if (lens->n_image_prior) {
 		area_matrix = new double[ntot_src];
 		for (i=0; i < ntot_src; i++) {
 			area_matrix[i] = 0;
 			mag_matrix[i] = 0;
 		}
-	} else {
-		for (i=0; i < ntot_src; i++) {
-			mag_matrix[i] = 0;
-		}
-	}
+	//} else {
+		//for (i=0; i < ntot_src; i++) {
+			//mag_matrix[i] = 0;
+		//}
+	//}
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
 			cell[i][j]->overlap_pixel_n.clear();
@@ -956,7 +958,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	vector<double> *overlap_matrix_rows = new vector<double>[ntot];
 	vector<int> *overlap_matrix_index_rows = new vector<int>[ntot];
 	vector<double> *overlap_area_matrix_rows;
-	if (lens->n_image_prior) overlap_area_matrix_rows = new vector<double>[ntot];
+	//if (lens->n_image_prior) overlap_area_matrix_rows = new vector<double>[ntot];
+	overlap_area_matrix_rows = new vector<double>[ntot];
 
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = ntot / lens->group_np;
@@ -1039,10 +1042,11 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 							overlap_matrix_index_rows[n].push_back(nsrc);
 							overlap_matrix_row_nn[n]++;
 
-							if (lens->n_image_prior) {
+							//if (lens->n_image_prior) {
 								overlap_area = triangle1_overlap + triangle2_overlap;
+								if (!image_pixel_grid->fit_to_data[img_i][img_j]) overlap_area = 0;
 								overlap_area_matrix_rows[n].push_back(overlap_area);
-							}
+							//}
 
 						}
 					}
@@ -1062,7 +1066,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	int *overlap_matrix_index = new int[overlap_matrix_nn];
 	int *image_pixel_location_overlap = new int[ntot+1];
 	double *overlap_area_matrix;
-	if (lens->n_image_prior) overlap_area_matrix = new double[overlap_matrix_nn];
+	//if (lens->n_image_prior) overlap_area_matrix = new double[overlap_matrix_nn];
+	overlap_area_matrix = new double[overlap_matrix_nn];
 
 #ifdef USE_MPI
 	int id, chunk, start, end, length;
@@ -1086,7 +1091,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		for (j=0; j < overlap_matrix_row_nn[n]; j++) {
 			overlap_matrix[indx+j] = overlap_matrix_rows[n][j];
 			overlap_matrix_index[indx+j] = overlap_matrix_index_rows[n][j];
-			if (lens->n_image_prior) overlap_area_matrix[indx+j] = overlap_area_matrix_rows[n][j];
+			//if (lens->n_image_prior) overlap_area_matrix[indx+j] = overlap_area_matrix_rows[n][j];
+			overlap_area_matrix[indx+j] = overlap_area_matrix_rows[n][j];
 		}
 	}
 
@@ -1099,7 +1105,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		length = image_pixel_location_overlap[end] - image_pixel_location_overlap[start];
 		MPI_Bcast(overlap_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
 		MPI_Bcast(overlap_matrix_index + image_pixel_location_overlap[start],length,MPI_INT,id,sub_comm);
-		if (lens->n_image_prior)
+		//if (lens->n_image_prior)
 			MPI_Bcast(overlap_area_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
 	}
 	MPI_Comm_free(&sub_comm);
@@ -1113,7 +1119,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			j = nsrc / u_N;
 			i = nsrc % u_N;
 			mag_matrix[nsrc] += overlap_matrix[l];
-			if (lens->n_image_prior) area_matrix[nsrc] += overlap_area_matrix[l];
+			//if (lens->n_image_prior)
+				area_matrix[nsrc] += overlap_area_matrix[l];
 			cell[i][j]->overlap_pixel_n.push_back(n);
 			if ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[img_i][img_j]==true)) cell[i][j]->maps_to_image_window = true;
 		}
@@ -1145,6 +1152,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
+		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += cell[i][j]->cell_area;
+		else lens->total_srcgrid_overlap_area += area_matrix[nsrc];
 		//cout << mag_matrix[nsrc] << " " << cell[i][j]->total_magnification << endl;
 		if (cell[i][j]->total_magnification*0.0) warn("Nonsensical source cell magnification (mag=%g",cell[i][j]->total_magnification);
 	}
@@ -1156,11 +1165,11 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	delete[] overlap_matrix_index_rows;
 	delete[] overlap_matrix_row_nn;
 	delete[] mag_matrix;
-	if (lens->n_image_prior) {
+	//if (lens->n_image_prior) {
 		delete[] overlap_area_matrix;
 		delete[] overlap_area_matrix_rows;
 		delete[] area_matrix;
-	}
+	//}
 }
 
 void SourcePixelGrid::adaptive_subgrid()
@@ -3851,6 +3860,8 @@ void ImagePixelGrid::add_pixel_noise(const double& pixel_noise_sig)
 void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax)
 {
 	if (surface_brightness == NULL) die("surface brightness pixel map has not been loaded");
+	bool use_noise_threshold = true;
+	if (lens->noise_threshold <= 0) use_noise_threshold = false;
 	double threshold = lens->noise_threshold*pixel_noise;
 	int i,j;
 	sourcegrid_xmin=1e30;
@@ -3860,27 +3871,32 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	int ii,jj,il,ih,jl,jh,nn;
 	double sbavg;
 	static const int window_size_for_sbavg = 0;
+	bool resize_grid;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (fit_to_data[i][j]) {
-				sbavg=0;
-				nn=0;
-				il = i - window_size_for_sbavg;
-				ih = i + window_size_for_sbavg;
-				jl = j - window_size_for_sbavg;
-				jh = j + window_size_for_sbavg;
-				if (il<0) il=0;
-				if (ih>x_N-1) ih=x_N-1;
-				if (jl<0) jl=0;
-				if (jh>y_N-1) jh=y_N-1;
-				for (ii=il; ii <= ih; ii++) {
-					for (jj=jl; jj <= jh; jj++) {
-						sbavg += surface_brightness[ii][jj];
-						nn++;
+				resize_grid = true;
+				if (use_noise_threshold) {
+					sbavg=0;
+					nn=0;
+					il = i - window_size_for_sbavg;
+					ih = i + window_size_for_sbavg;
+					jl = j - window_size_for_sbavg;
+					jh = j + window_size_for_sbavg;
+					if (il<0) il=0;
+					if (ih>x_N-1) ih=x_N-1;
+					if (jl<0) jl=0;
+					if (jh>y_N-1) jh=y_N-1;
+					for (ii=il; ii <= ih; ii++) {
+						for (jj=jl; jj <= jh; jj++) {
+							sbavg += surface_brightness[ii][jj];
+							nn++;
+						}
 					}
+					sbavg /= nn;
+					if (sbavg <= threshold) resize_grid = false;
 				}
-				sbavg /= nn;
-				if (sbavg > threshold) {
+				if (resize_grid) {
 					if (center_sourcepts[i][j][0] < sourcegrid_xmin) {
 						if (center_sourcepts[i][j][0] > sourcegrid_limit_xmin) sourcegrid_xmin = center_sourcepts[i][j][0];
 						else if (sourcegrid_xmin > sourcegrid_limit_xmin) sourcegrid_xmin = sourcegrid_limit_xmin;
@@ -3902,8 +3918,8 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 		}
 	}
 	// Now let's make the box slightly wider just to be safe
-	double xwidth_adj = 0.2*(sourcegrid_xmax-sourcegrid_xmin);
-	double ywidth_adj = 0.2*(sourcegrid_ymax-sourcegrid_ymin);
+	double xwidth_adj = 0.1*(sourcegrid_xmax-sourcegrid_xmin);
+	double ywidth_adj = 0.1*(sourcegrid_ymax-sourcegrid_ymin);
 	sourcegrid_xmin -= xwidth_adj/2;
 	sourcegrid_xmax += xwidth_adj/2;
 	sourcegrid_ymin -= ywidth_adj/2;

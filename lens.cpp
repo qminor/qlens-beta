@@ -3812,7 +3812,7 @@ bool Lens::load_image_data(string filename)
 	int n_datawords;
 	vector<string> datawords;
 
-	if (read_data_line(data_infile,datawords,n_datawords)==false) { warn("data file could not be read; unexpected end of file"); return false; }
+	if (read_data_line(data_infile,datawords,n_datawords)==false) return false;
 	if ((n_datawords==2) and (datawords[0]=="zlens")) {
 		double zlens;
 		if (datastring_convert(datawords[1],zlens)==false) { warn("data file has incorrect format; could not read lens redshift"); return false; }
@@ -4256,13 +4256,12 @@ bool Lens::load_weak_lensing_data(string filename)
 	while (read_data_line(data_infile,datawords,n_datawords)) n_wl_sources++;
 	data_infile.close();
 
-	if (n_wl_sources==0) { warn("data file could not be read; unexpected end of file"); return false; }
+	if (n_wl_sources==0) return false;
 	data_infile.open(filename.c_str());
 
 	weak_lensing_data.input(n_wl_sources);
 	for (j=0; j < n_wl_sources; j++) {
 		if (read_data_line(data_infile,datawords,n_datawords)==false) { 
-			warn("data file could not be read; unexpected end of file"); 
 			weak_lensing_data.clear();
 			return false;
 		}
@@ -4343,7 +4342,7 @@ void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept
 
 bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
 {
-	static const int n_characters = 256;
+	static const int n_characters = 1024;
 	int pos;
 	string word;
 	n_datawords = 0;
@@ -4351,7 +4350,14 @@ bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int 
 	do {
 		char dataline[n_characters];
 		data_infile.getline(dataline,n_characters);
-		if ((data_infile.rdstate() & ifstream::eofbit) != 0) return false;
+		if (data_infile.gcount()==n_characters-1) {
+			warn("the number of characters in a single line cannot exceed %i",n_characters);
+			return false;
+		}
+		if ((data_infile.rdstate() & ifstream::eofbit) != 0) {
+			warn("unexpected end of file");
+			return false;
+		}
 		string linestring(dataline);
 		if ((pos = linestring.find("data_info: ")) != string::npos) {
 			data_info = linestring.substr(pos+11);
@@ -7989,7 +7995,6 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "           ";
 		cout << endl;
 		if (running_fit) cout << endl;
-		//cout << "\033[1A";
 	}
 
 	raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
@@ -9003,11 +9008,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
 		else
 			image_pixel_grid->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
-		if ((mpi_id==0) and (verbal)) {
-			cout << "Optimal sourcegrid number of pixels: " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
-			cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
-			cout << "Number of active image pixels expected: " << n_expected_imgpixels << endl;
-		}
 	}
 	if ((srcgrid_npixels_x < 2) or (srcgrid_npixels_y < 2)) {
 		if ((mpi_id==0) and (verbal)) cout << "Source grid has negligible size...cannot invert image\n";
@@ -9051,31 +9051,28 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 #ifdef USE_OPENMP
+	double srcgrid_wtime0, srcgrid_wtime;
 	if (show_wtime) {
-		wtime0 = omp_get_wtime();
+		srcgrid_wtime0 = omp_get_wtime();
 	}
 #endif
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << wtime << endl;
-	}
-#endif
 	image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 	source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 
-	if ((mpi_id==0) and (verbal)) {
-		cout << "# of source pixels: " << source_pixel_grid->number_of_pixels;
-		if (auto_srcgrid_npixels) {
-			double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-			cout << ", f=" << pix_frac;
-		}
-		cout << endl;
-	}
+	//if ((mpi_id==0) and (verbal)) {
+		//cout << "# of source pixels: " << source_pixel_grid->number_of_pixels;
+		//if (auto_srcgrid_npixels) {
+			//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+			//cout << ", f=" << pix_frac;
+		//}
+		//cout << endl;
+	//}
+	bool verbal_now = verbal;
+	if (auto_srcgrid_npixels) verbal_now = false; // since we're gonna redo the sourcegrid a second time, don't show the first one (it would confuse people)
 	if (adaptive_grid) {
 		source_pixel_grid->adaptive_subgrid();
-		if ((mpi_id==0) and (verbal)) {
+		if ((mpi_id==0) and (verbal_now)) {
 			cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
 			if (auto_srcgrid_npixels) {
 				double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
@@ -9087,11 +9084,108 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		source_pixel_grid->calculate_pixel_magnifications();
 	}
 
-	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
-	if (assign_pixel_mappings(verbal)==false) {
-		return 2e30; // the former argument says to include umapped source pixels, latter argument tells it to redraw the source grid to exclude unmapped pixels (beyond level 1) if necessary
+	//cout << "Initial sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
+	if ((mpi_id==0) and (verbal_now)) cout << "Assigning pixel mappings...\n";
+	if (assign_pixel_mappings(verbal_now)==false) {
+		return 2e30;
 	}
-	//die();
+	if (auto_srcgrid_npixels) {
+	/*
+		bool continue_iteration = true;
+		if (source_npixels < pixel_fraction*image_npixels) continue_iteration = false;
+		while ((source_npixels < pixel_fraction*image_npixels) or (continue_iteration)) {
+			if (source_npixels < pixel_fraction*image_npixels) {
+				srcgrid_npixels_x++;
+				srcgrid_npixels_y++;
+			} else {
+				// Now we try to make the pixels as square as possible; we want srcgrid_npixels_x / srcgrid_npixels_y ~ aspect_ratio
+				double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
+				srcgrid_npixels_x = (int) sqrt(srcgrid_npixels_x*srcgrid_npixels_y*aspect_ratio);
+				srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+				continue_iteration = false; // ensure this is the last iteration
+			}
+			delete source_pixel_grid;
+			SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
+			source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
+			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
+			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+			bool verbal_now = (continue_iteration) ? false : true;
+
+			//if ((mpi_id==0) and (verbal_now)) {
+				//cout << "# of source pixels: " << source_pixel_grid->number_of_pixels;
+				//if (auto_srcgrid_npixels) {
+					//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+					//cout << ", f=" << pix_frac;
+				//}
+				//cout << endl;
+			//}
+			if (adaptive_grid) {
+				source_pixel_grid->adaptive_subgrid();
+				if ((mpi_id==0) and (verbal)) {
+					cout << "HI # of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
+					if (auto_srcgrid_npixels) {
+						double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+						cout << ", f=" << pix_frac;
+					}
+					cout << endl;
+				}
+			} else {
+				source_pixel_grid->calculate_pixel_magnifications();
+			}
+			if (assign_pixel_mappings(verbal_now)==false) {
+				return 2e30;
+			}
+
+			//cout << "SRC_NPIXELS: " << source_npixels << " IMG_NPIXELS: " << image_npixels << endl;
+		}
+	*/
+		double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
+		//cout << "Area covered fraction: " << srcgrid_area_covered_frac << endl;
+		//cout << "Redrawing source grid with optimized # of pixels..." << endl;
+		double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
+		srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
+		srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+		//int target = (int) pixel_fraction*image_npixels/srcgrid_area_covered_frac;
+		//int actual = srcgrid_npixels_x * srcgrid_npixels_y;
+		//cout << "Target " << target << ", actual " << actual << endl;
+		//double target_pix = srcgrid_npixels_x*srcgrid_npixels_y*srcgrid_area_covered_frac;
+		//cout << "Expected # source pixels: " << target_pix << " " << pixel_fraction*image_npixels << endl;
+		delete source_pixel_grid;
+		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
+		source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
+		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
+		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+		if ((mpi_id==0) and (verbal)) {
+			cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
+			cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
+			cout << "Number of active image pixels expected: " << n_expected_imgpixels << endl;
+		}
+		if (adaptive_grid) {
+			source_pixel_grid->adaptive_subgrid();
+			if ((mpi_id==0) and (verbal)) {
+				cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
+				if (auto_srcgrid_npixels) {
+					double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+					cout << ", f=" << pix_frac;
+				}
+				cout << endl;
+			}
+		} else {
+			source_pixel_grid->calculate_pixel_magnifications();
+		}
+		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
+		if (assign_pixel_mappings(verbal)==false) {
+			return 2e30;
+		}
+	}
+
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+			if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << srcgrid_wtime << endl;
+		}
+#endif
+
 	if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 	initialize_pixel_matrices(verbal);
 	if (regularization_method != None) create_regularization_matrix();

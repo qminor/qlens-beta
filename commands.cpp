@@ -5231,7 +5231,8 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> dataset)) Complain("invalid image dataset");
 						if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
 					} else Complain("invalid number of arguments to 'imgdata plot'");
-					ofstream imgout("imgdat.dat");
+					ofstream imgout;
+					open_output_file(imgout,"imgdat.dat");
 					if (show_all) {
 						for (int i=0; i < n_sourcepts_fit; i++) {
 							imgout << "\"Dataset " << i << " (z_{s}=" << source_redshifts[i] << ")\"" << endl;
