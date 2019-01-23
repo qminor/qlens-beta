@@ -9008,6 +9008,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
 		else
 			image_pixel_grid->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
+			srcgrid_npixels_x *= 2; // aim high, since many of the source grid pixels may lie outside the mask (we'll refine the # of pixels after drawing the grid once)
+			srcgrid_npixels_y *= 2;
 	}
 	if ((srcgrid_npixels_x < 2) or (srcgrid_npixels_y < 2)) {
 		if ((mpi_id==0) and (verbal)) cout << "Source grid has negligible size...cannot invert image\n";
@@ -9178,6 +9180,10 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			return 2e30;
 		}
 	}
+	if ((mpi_id==0) and (verbal)) {
+		double pixfrac = ((double) source_npixels) / image_npixels;
+		cout << "Actual f = " << pixfrac << endl << endl << endl;
+	}
 
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -9273,7 +9279,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
 		}
 	}
-	chisq += n_data_pixels*log(M_2PI*data_pixel_noise); // not critical because the data fit window and assumed pixel noise are not varied, but still needed
+	//chisq += n_data_pixels*log(M_2PI*covariance); // not critical because the data fit window and assumed pixel noise are not varied
 	// to normalize the evidence properly
 
 	if (n_image_prior) {
@@ -9317,11 +9323,11 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 
 	if ((group_id==0) and (logfile.is_open())) {
-		if (sb_outside_window) logfile << " chisq_no_priors=" << chisq << " (SB produced outside window)" << endl;
-		else logfile << " chisq_no_priors=" << chisq << endl;
+		if (sb_outside_window) logfile << " -2*log(ev)=" << chisq << " (no priors; SB produced outside window)" << endl;
+		else logfile << " -2*log(ev)=" << chisq << " (no priors)" << endl;
 	}
 	if ((mpi_id==0) and (verbal)) {
-		cout << "chisq=" << chisq << " (without priors)" << endl;
+		cout << "-2*log(ev)=" << chisq << " (without priors)" << endl;
 		if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;
 	}
 	if ((mpi_id==0) and (verbal)) cout << "number of pixels that map to source = " << count << endl;

@@ -1147,14 +1147,24 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			//cell[i][j]->n_images = overlap_area / cell[i][j]->cell_area;
 		//}
 	//}
+	double mag, mag_threshold = 4*lens->pixel_magnification_threshold;
+	int nsubcells;
 	for (nsrc=0; nsrc < ntot_src; nsrc++) {
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
-		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += cell[i][j]->cell_area;
-		else lens->total_srcgrid_overlap_area += area_matrix[nsrc];
-		//cout << mag_matrix[nsrc] << " " << cell[i][j]->total_magnification << endl;
+
+		nsubcells = 1;
+		if (lens->adaptive_grid) {
+			// Now we estimate the "effective" pixel overlap area, based on the estimated number of splittings that will occur;
+			// This will help refine the first-level pixel size to obtain the target number of pixels (for auto_src_npixels feature)
+			mag = cell[i][j]->total_magnification;
+			if (mag > mag_threshold) nsubcells *= 4;
+			while ((mag /= 4) > mag_threshold) nsubcells *= 4;
+		}
+		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += nsubcells*cell[i][j]->cell_area;
+		else lens->total_srcgrid_overlap_area += nsubcells*area_matrix[nsrc];
 		if (cell[i][j]->total_magnification*0.0) warn("Nonsensical source cell magnification (mag=%g",cell[i][j]->total_magnification);
 	}
 
