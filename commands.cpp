@@ -2434,7 +2434,6 @@ void Lens::process_commands(bool read_file)
 			{
 				if (nwords==2) {
 					clear_lenses();
-					param_settings->clear_params();
 				} else if (nwords==3) {
 					int lensnumber, min_lensnumber, max_lensnumber, pos;
 					if ((pos = words[2].find("-")) != string::npos) {
@@ -2450,18 +2449,12 @@ void Lens::process_commands(bool read_file)
 						if ((min_lensnumber > max_lensnumber) or (min_lensnumber < 0)) Complain("specified min lens number cannot exceed max lens number");
 						int pi, pf;
 						for (int i=max_lensnumber; i >= min_lensnumber; i--) {
-							get_lens_parameter_numbers(i,pi,pf);
-							param_settings->remove_params(pi,pf);
 							remove_lens(i);
-							get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 						}
 					} else {
 						if (!(ws[2] >> lensnumber)) Complain("invalid lens number");
 						int pi, pf;
-						get_lens_parameter_numbers(lensnumber,pi,pf);
-						param_settings->remove_params(pi,pf);
 						remove_lens(lensnumber);
-						get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 					}
 				} else Complain("'lens clear' command requires either one or zero arguments");
 			}
@@ -5989,6 +5982,20 @@ void Lens::process_commands(bool read_file)
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_all_required_data_pixels();
+			}
+			else if (words[1]=="set_neighbor_pixels")
+			{
+				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_neighbor_pixels'");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->set_nearest_neighbor_pixels();
+			}
+			else if (words[1]=="unset_low_sn_pixels")
+			{
+				if (nwords != 3) Complain("one argument allowed for command 'sbmap unset_low_sn_pixels' (sb_threshold)");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				double sbthresh;
+				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
+				image_pixel_data->unset_low_signal_pixels(sbthresh);
 			}
 			else if (words[1]=="set_data_annulus")
 			{

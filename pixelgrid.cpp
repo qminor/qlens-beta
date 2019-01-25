@@ -3035,6 +3035,68 @@ void ImagePixelData::set_all_required_data_pixels()
 	n_required_pixels = npixels_x*npixels_y;
 }
 
+void ImagePixelData::unset_low_signal_pixels(const double sb_threshold)
+{
+	int i,j;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (surface_brightness[i][j] < sb_threshold) {
+				if (require_fit[i][j]) {
+					require_fit[i][j] = false;
+					n_required_pixels--;
+				}
+			}
+		}
+	}
+}
+
+void ImagePixelData::set_nearest_neighbor_pixels()
+{
+	int i,j;
+	bool **req = new bool*[npixels_x];
+	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			req[i][j] = require_fit[i][j];
+		}
+	}
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (require_fit[i][j]) {
+				if (((i < npixels_x-1) and (!require_fit[i+1][j])) and ((i > 0) and (!require_fit[i-1][j])) and ((j < npixels_y-1) and (!require_fit[i][j+1])) and ((j > 0) and (!require_fit[i][j-1]))) {
+					req[i][j] = false;
+					n_required_pixels--;
+				}
+				else {
+					if ((i < npixels_x-1) and (!require_fit[i+1][j])) {
+						req[i+1][j] = true;
+						n_required_pixels++;
+					}
+					if ((i > 0) and (!require_fit[i-1][j])) {
+						req[i-1][j] = true;
+						n_required_pixels++;
+					}
+					if ((j < npixels_y-1) and (!require_fit[i][j+1])) {
+						req[i][j+1] = true;
+						n_required_pixels++;
+					}
+					if ((j > 0) and (!require_fit[i][j-1])) {
+						req[i][j-1] = true;
+						n_required_pixels++;
+					}
+				}
+			}
+		}
+	}
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			require_fit[i][j] = req[i][j];
+		}
+	}
+	for (i=0; i < npixels_x; i++) delete[] req[i];
+	delete[] req;
+}
+
 void ImagePixelData::set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset)
 {
 	int i,j;

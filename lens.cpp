@@ -1393,6 +1393,9 @@ void Lens::update_parameter_list()
 
 void Lens::remove_lens(int lensnumber)
 {
+	int pi, pf;
+	get_lens_parameter_numbers(lensnumber,pi,pf);
+
 	if ((lensnumber >= nlens) or (nlens==0)) { warn(warnings,"Specified lens does not exist"); return; }
 	LensProfile** newlist = new LensProfile*[nlens-1];
 	int* new_lens_redshift_idx;
@@ -1423,22 +1426,28 @@ void Lens::remove_lens(int lensnumber)
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 
+	param_settings->remove_params(pi,pf);
 	update_parameter_list();
-
-	//for (i=0; i < n_lens_redshifts; i++) {
-		//for (j=0; j < zlens_group_size[i]; j++) {
-			//if (lens_redshift_idx[zlens_group_lens_indx[i][j]] != i) die("WTF!");
-		//}
-	//}
+	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 }
 
 void Lens::clear_lenses()
 {
 	if (nlens > 0) {
+		int pi, pf, pi_min=1000, pf_max=0;
+		// since all the lens parameters are blocked together in the param_settings list, we just need to find the initial and final parameters to remove
+		for (int i=0; i < nlens; i++) {
+			get_lens_parameter_numbers(i,pi,pf);
+			if (pi < pi_min) pi_min=pi;
+			if (pf > pf_max) pf_max=pf;
+		}	
 		for (int i=0; i < nlens; i++) {
 			delete lens_list[i];
 		}	
 		delete[] lens_list;
+		param_settings->remove_params(pi_min,pf_max);
+		nlens = 0;
+		update_parameter_list(); // this is necessary to keep the parameter priors, transforms preserved
 		if (lens_redshift_idx != NULL) {
 			delete[] lens_redshift_idx;
 			lens_redshift_idx = NULL;
@@ -1479,74 +1488,11 @@ void Lens::clear_lenses()
 			beta_factors = NULL;
 		}
 
-		nlens = 0;
 		n_lens_redshifts = 0;
-	}
-	reset();
-}
 
-void Lens::clear()
-{
-	int i;
-	if (nlens > 0) {
-		for (i=0; i < nlens; i++)
-			delete lens_list[i];
-		delete[] lens_list;
-		if (lens_redshift_idx != NULL) {
-			delete[] lens_redshift_idx;
-			lens_redshift_idx = NULL;
-		}
-		if (lens_redshifts != NULL) {
-			delete[] lens_redshifts;
-			lens_redshifts = NULL;
-		}
-		if (zlens_group_size != NULL) {
-			delete[] zlens_group_size;
-			zlens_group_size = NULL;
-		}
-		if (zlens_group_lens_indx != NULL) {
-			for (int i=0; i < n_lens_redshifts; i++) delete[] zlens_group_lens_indx[i];
-			delete[] zlens_group_lens_indx;
-			zlens_group_lens_indx = NULL;
-		}
-		if (reference_zfactors != NULL) {
-			delete[] reference_zfactors;
-			reference_zfactors = NULL;
-		}
-		if (zfactors != NULL) {
-			for (int i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
-			delete[] zfactors;
-			zfactors = NULL;
-		}
-		if (default_zsrc_beta_factors != NULL) {
-			for (int i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
-			delete[] default_zsrc_beta_factors;
-			default_zsrc_beta_factors = NULL;
-		}
-		if (beta_factors != NULL) {
-			for (int i=0; i < n_sourcepts_fit; i++) {
-				for (int j=0; j < n_lens_redshifts-1; j++) delete[] beta_factors[i][j];
-				if (n_lens_redshifts > 1) delete[] beta_factors[i];
-			}
-			delete[] beta_factors;
-			beta_factors = NULL;
-		}
-		nlens = 0;
-		n_lens_redshifts = 0;
+		reset();
+		get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 	}
-	if (n_sb > 0) {
-		for (i=0; i < n_sb; i++)
-			delete sb_list[i];
-		delete[] sb_list;
-		n_sb = 0;
-	}
-	if (n_derived_params > 0) {
-		for (i=0; i < n_derived_params; i++)
-			delete dparam_list[i];
-		delete[] dparam_list;
-		n_derived_params = 0;
-	}
-	reset();
 }
 
 void Lens::set_source_redshift(const double zsrc)
@@ -1564,16 +1510,9 @@ void Lens::set_source_redshift(const double zsrc)
 	} else {
 		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	}
-	if (n_lens_redshifts > 1) {
-		for (i=1; i < n_lens_redshifts; i++) {
-			if (include_recursive_lensing) {
-				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
-			} else {
-				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = 0;
-			}
-		}
-	}
+	recalculate_beta_factors();
 }
+
 void Lens::recalculate_beta_factors()
 {
 	int i,j;
@@ -4342,7 +4281,7 @@ void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept
 
 bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
 {
-	static const int n_characters = 1024;
+	static const int n_characters = 512;
 	int pos;
 	string word;
 	n_datawords = 0;
@@ -4355,7 +4294,6 @@ bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int 
 			return false;
 		}
 		if ((data_infile.rdstate() & ifstream::eofbit) != 0) {
-			warn("unexpected end of file");
 			return false;
 		}
 		string linestring(dataline);
@@ -8160,7 +8098,6 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
-	//clear_raw_chisq(); // in case the chi-square is being included as a parameter
 }
 
 double Lens::get_lens_parameter_using_default_pmode(const int paramnum, const int lensnum)
@@ -9182,7 +9119,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 	if ((mpi_id==0) and (verbal)) {
 		double pixfrac = ((double) source_npixels) / image_npixels;
-		cout << "Actual f = " << pixfrac << endl << endl << endl;
+		cout << "Actual f = " << pixfrac << endl;
 	}
 
 #ifdef USE_OPENMP

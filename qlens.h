@@ -1176,6 +1176,7 @@ struct DerivedParam
 			double chisq_out;
 			if (lens_in->raw_chisq==-1e30) {
 				if (lens_in->lens_parent != NULL) {
+					// this means we're running it from the "fitmodel" Lens object, so the likelihood needs to be run from the parent Lens object
 					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
 				} else {
 					lens_in->chisq_single_evaluation(false,false);

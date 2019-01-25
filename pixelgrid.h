@@ -256,6 +256,8 @@ struct ImagePixelData
 	bool load_mask_fits(string fits_filename);
 	void set_no_required_data_pixels();
 	void set_all_required_data_pixels();
+	void unset_low_signal_pixels(const double sb_threshold);
+	void set_nearest_neighbor_pixels();
 	void set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
 	bool test_if_in_fit_region(const double& x, const double& y);
