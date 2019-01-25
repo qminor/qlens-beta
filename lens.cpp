@@ -8731,8 +8731,11 @@ bool Lens::create_source_surface_brightness_grid(bool verbal)
 
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
+	cout << "HI" << endl;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
+	cout << "HI2" << endl;
 	if (create_image_pixelgrid) source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+	cout << "HI3" << endl;
 	if ((mpi_id==0) and (verbal)) {
 		cout << "# of source pixels: " << source_pixel_grid->number_of_pixels << endl;
 	}
@@ -9084,6 +9087,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
 		srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
 		srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+		if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
+		if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;
 		//int target = (int) pixel_fraction*image_npixels/srcgrid_area_covered_frac;
 		//int actual = srcgrid_npixels_x * srcgrid_npixels_y;
 		//cout << "Target " << target << ", actual " << actual << endl;

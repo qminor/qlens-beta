@@ -1162,6 +1162,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			mag = cell[i][j]->total_magnification;
 			if (mag > mag_threshold) nsubcells *= 4;
 			while ((mag /= 4) > mag_threshold) nsubcells *= 4;
+			while ((mag /= (4*mag_threshold)) > mag_threshold) nsubcells *= 4;
 		}
 		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += nsubcells*cell[i][j]->cell_area;
 		else lens->total_srcgrid_overlap_area += nsubcells*area_matrix[nsrc];
@@ -1240,7 +1241,8 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 		SourcePixelGrid *subcell;
 		if (level > 0) {
 			for (i=0; i < level; i++) {
-				mag_threshold *= 4;
+				//mag_threshold *= 4;
+				mag_threshold *= 4*lens->pixel_magnification_threshold;
 			}
 		}
 		bool subgrid;
@@ -1358,7 +1360,8 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 		SourcePixelGrid *subcell;
 		if (level > 0) {
 			for (i=0; i < level; i++) {
-				mag_threshold *= 4;
+				//mag_threshold *= 4;
+				mag_threshold *= 4*lens->pixel_magnification_threshold;
 			}
 		}
 		bool subgrid;
