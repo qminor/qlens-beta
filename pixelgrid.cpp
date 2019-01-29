@@ -1044,7 +1044,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 
 							//if (lens->n_image_prior) {
 								overlap_area = triangle1_overlap + triangle2_overlap;
-								if (!image_pixel_grid->fit_to_data[img_i][img_j]) overlap_area = 0;
+								if ((image_pixel_grid->fit_to_data == NULL) or (!image_pixel_grid->fit_to_data[img_i][img_j])) overlap_area = 0;
 								overlap_area_matrix_rows[n].push_back(overlap_area);
 							//}
 
