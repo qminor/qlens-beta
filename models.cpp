@@ -471,7 +471,7 @@ void PseudoJaffe::update_meta_parameters()
 	qsq = q*q; asq = aprime*aprime; ssq = sprime*sprime;
 }
 
-void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in)
+void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in, const double factor)
 {
 	anchor_special_parameter = true;
 	special_anchor_lens = host_in;
@@ -757,12 +757,12 @@ void NFW::update_meta_parameters()
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
 }
 
-void NFW::assign_special_anchored_parameters(LensProfile *host_in)
+void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor)
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	c200 = cosmo->median_concentration_bullock(m200,zlens);
+	c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 
@@ -1171,12 +1171,12 @@ void Cored_NFW::update_meta_parameters()
 	//if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for Cored NFW model");
 }
 
-void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in)
+void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor)
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	c200 = cosmo->median_concentration_bullock(m200,zlens);
+	c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 
@@ -2400,7 +2400,7 @@ void CoreCusp::update_meta_parameters()
 }
 
 
-void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in)
+void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in, const double factor)
 {
 	anchor_special_parameter = true;
 	special_anchor_lens = host_in;

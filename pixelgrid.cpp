@@ -2781,6 +2781,34 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			} else if (((pos = cardstring.find("mk: ")) != string::npos) or ((pos = cardstring.find("MK: ")) != string::npos)) {
 				reading_markers = true;
 				lens->param_markers = cardstring.substr(pos+4);
+			} else if (cardstring.find("PXSIZE ") != string::npos) {
+				string pxsize_string = cardstring.substr(11);
+				stringstream pxsize_str;
+				pxsize_str << pxsize_string;
+				pxsize_str >> pixel_size;
+				lens->data_pixel_size = pixel_size;
+				if (!use_pixel_size) use_pixel_size = true;
+			} else if (cardstring.find("PXNOISE ") != string::npos) {
+				string pxnoise_string = cardstring.substr(11);
+				stringstream pxnoise_str;
+				pxnoise_str << pxnoise_string;
+				pxnoise_str >> lens->data_pixel_noise;
+			} else if (cardstring.find("PSFSIG ") != string::npos) {
+				string psfwidth_string = cardstring.substr(11);
+				stringstream psfwidth_str;
+				psfwidth_str << psfwidth_string;
+				psfwidth_str >> lens->psf_width_x;
+				lens->psf_width_y = lens->psf_width_x;
+			} else if (cardstring.find("ZSRC ") != string::npos) {
+				string zsrc_string = cardstring.substr(11);
+				stringstream zsrc_str;
+				zsrc_str << zsrc_string;
+				zsrc_str >> lens->source_redshift;
+			} else if (cardstring.find("ZLENS ") != string::npos) {
+				string zlens_string = cardstring.substr(11);
+				stringstream zlens_str;
+				zlens_str << zlens_string;
+				zlens_str >> lens->lens_redshift;
 			}
 		}
 		if (reading_markers) {
@@ -3038,19 +3066,168 @@ void ImagePixelData::set_all_required_data_pixels()
 	n_required_pixels = npixels_x*npixels_y;
 }
 
-void ImagePixelData::unset_low_signal_pixels(const double sb_threshold)
+void ImagePixelData::assign_mask_windows(const int max_n_windows)
+{
+	vector<int> mask_window_sizes;
+	int n_mask_windows = 0;
+	int **mask_window_id = new int*[npixels_x];
+	int i,j,l;
+	for (i=0; i < npixels_x; i++) mask_window_id[i] = new int[npixels_y];
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			mask_window_id[i][j] = -1; // -1 means not belonging to a mask window
+		}
+	}
+
+	int neighbor_mask, current_mask, this_window_id;
+	bool new_mask_member;
+	do {
+		current_mask = -1;
+		do {
+			new_mask_member = false;
+			for (j=0; j < npixels_y; j++) {
+				for (l=0; l < 2*npixels_x; l++) {
+					if (l < npixels_x) i=l;
+					else i = 2*npixels_x-l-1;
+					neighbor_mask = -1;
+					if (require_fit[i][j]) {
+						if ((current_mask == -1) and (mask_window_id[i][j] == -1)) {
+							current_mask = n_mask_windows;
+							mask_window_sizes.push_back(1);
+							mask_window_id[i][j] = n_mask_windows;
+							n_mask_windows++;
+							new_mask_member = true;
+						} else {
+							if (mask_window_id[i][j] == -1) {
+								if ((i > 0) and (require_fit[i-1][j]) and (mask_window_id[i-1][j] == current_mask)) neighbor_mask = current_mask;
+								else if ((i < npixels_x-1) and (require_fit[i+1][j]) and (mask_window_id[i+1][j] == current_mask)) neighbor_mask = current_mask;
+								else if ((j > 0) and (require_fit[i][j-1]) and (mask_window_id[i][j-1] == current_mask)) neighbor_mask = current_mask;
+								else if ((j < npixels_y-1) and (require_fit[i][j+1]) and (mask_window_id[i][j+1] == current_mask)) neighbor_mask = current_mask;
+								if (neighbor_mask == current_mask) {
+									mask_window_id[i][j] = neighbor_mask;
+									mask_window_sizes[neighbor_mask]++;
+									new_mask_member = true;
+								}
+							}
+							if (mask_window_id[i][j] == current_mask) {
+								this_window_id = mask_window_id[i][j];
+								if ((i > 0) and (require_fit[i-1][j]) and (mask_window_id[i-1][j] < 0)) {
+									mask_window_id[i-1][j] = this_window_id;
+									mask_window_sizes[this_window_id]++;
+									new_mask_member = true;
+								}
+								if ((i < npixels_x-1) and (require_fit[i+1][j]) and (mask_window_id[i+1][j] < 0)) {
+									mask_window_id[i+1][j] = this_window_id;
+									mask_window_sizes[this_window_id]++;
+									new_mask_member = true;
+								}
+								if ((j > 0) and (require_fit[i][j-1]) and (mask_window_id[i][j-1] < 0)) {
+									mask_window_id[i][j-1] = this_window_id;
+									mask_window_sizes[this_window_id]++;
+									new_mask_member = true;
+								}
+								if ((j < npixels_y-1) and (require_fit[i][j+1]) and (mask_window_id[i][j+1] < 0)) {
+									mask_window_id[i][j+1] = this_window_id;
+									mask_window_sizes[this_window_id]++;
+									new_mask_member = true;
+								}
+							}
+						}
+					}
+				}
+			}
+		} while (new_mask_member);
+	} while (current_mask != -1);
+	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
+	delete[] mask_window_id;
+	int smallest_window_size, smallest_window_id;
+	int n_windows_eff = n_mask_windows;
+	while (n_windows_eff > max_n_windows) {
+		smallest_window_size = npixels_x*npixels_y;
+		smallest_window_id = -1;
+		for (l=0; l < n_mask_windows; l++) {
+			if ((mask_window_sizes[l] != 0) and (mask_window_sizes[l] < smallest_window_size)) {
+				smallest_window_size = mask_window_sizes[l];
+				smallest_window_id = l;
+			}
+		}
+		if (smallest_window_size > 0) {
+			for (i=0; i < npixels_x; i++) {
+				for (j=0; j < npixels_y; j++) {
+					if (mask_window_id[i][j]==smallest_window_id) require_fit[i][j] = false;
+				}
+			}
+			mask_window_sizes[smallest_window_id] = 0;
+			n_windows_eff--;
+		}
+	}
+	if (lens->mpi_id == 0) cout << "Trimmed " << n_mask_windows << " windows down to " << n_windows_eff << " windows" << endl;
+	j=0;
+	for (i=0; i < n_mask_windows; i++) {
+		if (mask_window_sizes[i] != 0) {
+			j++;
+			if (lens->mpi_id == 0) cout << "Window " << j << " size: " << mask_window_sizes[i] << endl;
+		}
+	}
+}
+
+
+void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit)
 {
 	int i,j;
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
-			if (surface_brightness[i][j] < sb_threshold) {
-				if (require_fit[i][j]) {
-					require_fit[i][j] = false;
-					n_required_pixels--;
+			if (use_fit) {
+				if ((lens->image_pixel_grid->maps_to_source_pixel[i][j]) and (lens->image_pixel_grid->surface_brightness[i][j] < sb_threshold)) {
+					if (require_fit[i][j]) {
+						require_fit[i][j] = false;
+						n_required_pixels--;
+					}
+				}
+			} else {
+				if (surface_brightness[i][j] < sb_threshold) {
+					if (require_fit[i][j]) {
+						require_fit[i][j] = false;
+						n_required_pixels--;
+					}
 				}
 			}
 		}
 	}
+
+	// now we will deactivate pixels that have 0 or 1 neighboring active pixels (to get rid of isolated bits)
+	bool **req = new bool*[npixels_x];
+	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			req[i][j] = require_fit[i][j];
+		}
+	}
+	int n_active_neighbors;
+	for (int k=0; k < 3; k++) {
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				if (require_fit[i][j]) {
+					n_active_neighbors = 0;
+					if ((i < npixels_x-1) and (require_fit[i+1][j])) n_active_neighbors++;
+					if ((i > 0) and (require_fit[i-1][j])) n_active_neighbors++;
+					if ((j < npixels_y-1) and (require_fit[i][j+1])) n_active_neighbors++;
+					if ((j > 0) and (require_fit[i][j-1])) n_active_neighbors++;
+					if ((n_active_neighbors < 2) and (req[i][j])) {
+						req[i][j] = false;
+						n_required_pixels--;
+					}
+				}
+			}
+		}
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				require_fit[i][j] = req[i][j];
+			}
+		}
+	}
+	for (i=0; i < npixels_x; i++) delete[] req[i];
+	delete[] req;
 }
 
 void ImagePixelData::set_nearest_neighbor_pixels()
@@ -3066,25 +3243,45 @@ void ImagePixelData::set_nearest_neighbor_pixels()
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			if (require_fit[i][j]) {
-				if (((i < npixels_x-1) and (!require_fit[i+1][j])) and ((i > 0) and (!require_fit[i-1][j])) and ((j < npixels_y-1) and (!require_fit[i][j+1])) and ((j > 0) and (!require_fit[i][j-1]))) {
-					req[i][j] = false;
-					n_required_pixels--;
-				}
-				else {
-					if ((i < npixels_x-1) and (!require_fit[i+1][j])) {
+				if ((i < npixels_x-1) and (!require_fit[i+1][j])) {
+					if (!req[i+1][j]) {
 						req[i+1][j] = true;
 						n_required_pixels++;
 					}
-					if ((i > 0) and (!require_fit[i-1][j])) {
+				}
+				if ((i > 0) and (!require_fit[i-1][j])) {
+					if (!req[i-1][j]) {
 						req[i-1][j] = true;
 						n_required_pixels++;
 					}
-					if ((j < npixels_y-1) and (!require_fit[i][j+1])) {
+				}
+				if ((j < npixels_y-1) and (!require_fit[i][j+1])) {
+					if (!req[i][j+1]) {
 						req[i][j+1] = true;
 						n_required_pixels++;
 					}
-					if ((j > 0) and (!require_fit[i][j-1])) {
+				}
+				if ((j > 0) and (!require_fit[i][j-1])) {
+					if (!req[i][j-1]) {
 						req[i][j-1] = true;
+						n_required_pixels++;
+					}
+				}
+			}
+		}
+	}
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			require_fit[i][j] = req[i][j];
+		}
+	}
+	// check for any lingering "holes" in the mask and activate them
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (!require_fit[i][j]) {
+				if (((i < npixels_x-1) and (require_fit[i+1][j])) and ((i > 0) and (require_fit[i-1][j])) and ((j < npixels_y-1) and (require_fit[i][j+1])) and ((j > 0) and (require_fit[i][j-1]))) {
+					if (!req[i][j]) {
+						req[i][j] = true;
 						n_required_pixels++;
 					}
 				}
@@ -4280,6 +4477,18 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 				}
 				delete[] pixels;
 			}
+			if (pixel_xlength==pixel_ylength)
+				fits_write_key(outfptr, TDOUBLE, "PXSIZE", &pixel_xlength, "length of square pixels (in arcsec)", &status);
+			if (lens->sim_pixel_noise != 0)
+				fits_write_key(outfptr, TDOUBLE, "PXNOISE", &lens->sim_pixel_noise, "pixel surface brightness noise", &status);
+			if ((lens->psf_width_x != 0) and (lens->psf_width_y==lens->psf_width_x) and (!lens->use_input_psf_matrix))
+				fits_write_key(outfptr, TDOUBLE, "PSFSIG", &lens->psf_width_x, "Gaussian PSF width (dispersion, not FWHM)", &status);
+			fits_write_key(outfptr, TDOUBLE, "ZSRC", &lens->source_redshift, "redshift of source galaxy", &status);
+			if (lens->nlens > 0) {
+				double zl = lens->lens_list[lens->primary_lens_number]->get_redshift();
+				fits_write_key(outfptr, TDOUBLE, "ZLENS", &zl, "redshift of primary lens", &status);
+			}
+
 			if (lens->data_info != "") {
 				string comment = "ql: " + lens->data_info;
 				fits_write_comment(outfptr, comment.c_str(), &status);

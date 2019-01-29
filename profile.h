@@ -226,8 +226,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_ellipticity_parameter(const double param);
 	void update_anchored_parameters();
 	void update_anchor_center();
-	virtual void assign_special_anchored_parameters(LensProfile*) {}
+	virtual void assign_special_anchored_parameters(LensProfile*, const double factor) {}
 	virtual void update_special_anchored_params() {}
+	void unassign_special_anchored_parameter() { anchor_special_parameter = false; }
 	void copy_special_parameter_anchor(const LensProfile *lens_in);
 	void delete_special_parameter_anchor();
 	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens);
@@ -272,6 +273,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	void get_center_coords(lensvector &center) { center[0]=x_center; center[1]=y_center; }
 	void get_q_theta(double &q_out, double& theta_out) { q_out=q; theta_out=theta; }
+	double get_redshift() { return zlens; }
 	int get_n_params() { return n_params; }
 	int get_n_vary_params() { return n_vary_params; }
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
@@ -398,7 +400,7 @@ class PseudoJaffe : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void assign_special_anchored_parameters(LensProfile*);
+	void assign_special_anchored_parameters(LensProfile*, const double factor);
 	void update_special_anchored_params();
 
 	void set_abs_params_from_sigma0();
@@ -440,7 +442,7 @@ class NFW : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void assign_special_anchored_parameters(LensProfile*);
+	void assign_special_anchored_parameters(LensProfile*, const double factor);
 	void update_special_anchored_params();
 	void get_parameters_pmode(const int pmode_in, double* params);
 
@@ -505,7 +507,7 @@ class Cored_NFW : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void assign_special_anchored_parameters(LensProfile*);
+	void assign_special_anchored_parameters(LensProfile*, const double factor);
 	void update_special_anchored_params();
 	void get_parameters_pmode(const int pmode_in, double* params);
 	double calculate_scaled_mass_3d(const double r);
@@ -721,7 +723,7 @@ class CoreCusp : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void assign_special_anchored_parameters(LensProfile*);
+	void assign_special_anchored_parameters(LensProfile*, const double factor);
 	void update_special_anchored_params();
 
 	double rho3d_r_integrand_analytic(const double r);

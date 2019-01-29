@@ -237,6 +237,7 @@ Lens::Lens() : UCMC()
 	n_image_threshold = 4; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = true;
 	max_sb_frac = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	use_inversion_to_set_mask = false; // this "cheat" allows you to quickly set a sensible mask for simulated data
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
 	nlens = 0;
@@ -332,7 +333,7 @@ Lens::Lens() : UCMC()
 	data_pixel_noise = 0;
 	sim_pixel_noise = 0;
 	sb_threshold = 0;
-	noise_threshold = 1.3; // when optimizing the source pixel grid size, image pixels whose surface brightness < noise_threshold*pixel_noise are ignored
+	noise_threshold = 0; // when optimizing the source pixel grid size, image pixels whose surface brightness < noise_threshold*pixel_noise are ignored
 	n_image_pixels_x = 200;
 	n_image_pixels_y = 200;
 	srcgrid_npixels_x = 50;
@@ -544,6 +545,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	n_image_threshold = lens_in->n_image_threshold;
 	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
 	max_sb_frac = lens_in->max_sb_frac;
+	use_inversion_to_set_mask = false; // This should not be used for the fitmodel object, ever
 	subhalo_prior = lens_in->subhalo_prior;
 	use_custom_prior = lens_in->use_custom_prior;
 
@@ -2255,12 +2257,14 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 	int compass_steps = 2;
 	double compass_step = scale / (compass_steps-1);
 	lensvector pos;
-	double shearval,shear_angle,xp,yp,t;
+	double kapval,shearval,shear_angle,xp,yp,t;
 	ofstream sout("shear.dat");
 	for (i=0, x=xmin; i < nx; i++, x += xstep) {
 		for (j=0, y=ymin; j < ny; j++, y += ystep) {
 			pos[0]=x; pos[1]=y;
 			shear(pos,shearval,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+			kapval = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
+			shearval /= (1-kapval); // reduced shear
 			shear_angle *= M_PI/180.0;
 			for (k=-compass_steps+1; k < compass_steps; k++)
 			{
@@ -2271,6 +2275,62 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 			}
 			sout << endl;
 		}
+	}
+	sout.close();
+}
+
+void Lens::plot_weak_lensing_shear_field()
+{
+	int i, j, k;
+	double x, y;
+	double shearval,shear_angle,shear1,shear2,xp,yp,t;
+	double xmin=1e30, xmax=-1e30, ymin=1e30, ymax=-1e30, min_shear=1e30, max_shear=-1e30;
+	for (i=0; i < weak_lensing_data.n_sources; i++) {
+		shear1 = weak_lensing_data.reduced_shear1[i];
+		shear2 = weak_lensing_data.reduced_shear2[i];
+		shearval = sqrt(shear1*shear1+shear2*shear2);
+		x = weak_lensing_data.pos[i][0];
+		y = weak_lensing_data.pos[i][1];
+		if (x < xmin) xmin = x;
+		if (x > xmax) xmax = x;
+		if (y < ymin) ymin = y;
+		if (y > ymax) ymax = y;
+		if (shearval < min_shear) min_shear = shearval;
+		if (shearval > max_shear) max_shear = shearval;
+	}
+	int nsteps_approx = (int) sqrt(weak_lensing_data.n_sources);
+	double xstep = (xmax-xmin)/nsteps_approx;
+	double ystep = (ymax-ymin)/nsteps_approx;
+	double scale = 0.5*dmin(xstep,ystep);
+	int compass_steps = 2;
+	double compass_step = scale / (compass_steps-1);
+
+	ofstream sout("shear.dat");
+	for (i=0; i < weak_lensing_data.n_sources; i++) {
+		x = weak_lensing_data.pos[i][0];
+		y = weak_lensing_data.pos[i][1];
+		shear1 = weak_lensing_data.reduced_shear1[i];
+		shear2 = weak_lensing_data.reduced_shear2[i];
+		shearval = sqrt(shear1*shear1+shear2*shear2);
+		shear_angle = atan(abs(shear2/shear1));
+		compass_step = scale*(shearval/max_shear) / (compass_steps-1);
+		if (shear1 < 0) {
+			if (shear2 < 0)
+				shear_angle = shear_angle - M_PI;
+			else
+				shear_angle = M_PI - shear_angle;
+		} else if (shear2 < 0) {
+			shear_angle = -shear_angle;
+		}
+		shear_angle *= 0.5;
+		for (k=-compass_steps+1; k < compass_steps; k++)
+		{
+			t = k*compass_step;
+			xp = x + t*cos(shear_angle);
+			yp = y + t*sin(shear_angle);
+			sout << xp << " " << yp << endl;
+		}
+		sout << endl;
 	}
 	sout.close();
 }
@@ -4913,7 +4973,7 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(fitmodel->lens_list, lens_list[i]->get_center_anchor_number());
 		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
 			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
-			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens);
+			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1);
 		}
 		for (j=0; j < fitmodel->lens_list[i]->get_n_params(); j++) {
 			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
@@ -5730,6 +5790,40 @@ double Lens::chisq_weak_lensing()
 			}
 			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
+
+			/*
+			// For testing purposes
+			cout << "COMPS: " << g1 << " " << weak_lensing_data.reduced_shear1[i] << " " << g2 << " " << weak_lensing_data.reduced_shear2[i] << endl;
+			double shearval, shear_angle;
+
+			shearval = sqrt(g1*g1+g2*g2);
+			shear_angle = atan(abs(g2/g1));
+			if (g1 < 0) {
+				if (g2 < 0)
+					shear_angle = shear_angle - M_PI;
+				else
+					shear_angle = M_PI - shear_angle;
+			} else if (g2 < 0) {
+				shear_angle = -shear_angle;
+			}
+			shear_angle *= 0.5;
+			shear_angle *= 180.0/M_PI;
+
+			double shearval2, shear_angle2;
+			shearval2 = sqrt(weak_lensing_data.reduced_shear1[i]*weak_lensing_data.reduced_shear1[i]+weak_lensing_data.reduced_shear2[i]*weak_lensing_data.reduced_shear2[i]);
+			shear_angle2 = atan(abs(weak_lensing_data.reduced_shear2[i]/weak_lensing_data.reduced_shear1[i]));
+			if (weak_lensing_data.reduced_shear1[i] < 0) {
+				if (weak_lensing_data.reduced_shear2[i] < 0)
+					shear_angle2 = shear_angle2 - M_PI;
+				else
+					shear_angle2 = M_PI - shear_angle2;
+			} else if (weak_lensing_data.reduced_shear2[i] < 0) {
+				shear_angle2 = -shear_angle2;
+			}
+			shear_angle2 *= 0.5;
+			shear_angle2 *= 180.0/M_PI;
+			cout << shearval << " " << shearval2 << " " << shear_angle << " " << shear_angle2 << endl;
+			*/
 		}
 	}
 	for (i=0; i < nsrc; i++) delete[] zfacs[i];
@@ -5846,12 +5940,12 @@ void Lens::get_n_fit_parameters(int &nparams)
 
 bool Lens::setup_fit_parameters(bool include_limits)
 {
-	if (source_fit_mode==Point_Source) {
-		if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
-		if (sourcepts_fit==NULL) { warn("cannot do fit; initial source parameters have not been defined"); return false; }
-	} else if (source_fit_mode==Pixellated_Source) {
-		if (image_pixel_data==NULL) { warn("cannot do fit; image pixel data has not been loaded"); return false; }
-	}
+	//if (source_fit_mode==Point_Source) {
+		//if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
+		//if (sourcepts_fit==NULL) { warn("cannot do fit; initial source parameters have not been defined"); return false; }
+	//} else if (source_fit_mode==Pixellated_Source) {
+		//if (image_pixel_data==NULL) { warn("cannot do fit; image pixel data has not been loaded"); return false; }
+	//}
 	if (nlens==0) { warn("cannot do fit; no lens models have been defined"); return false; }
 	get_n_fit_parameters(n_fit_parameters);
 	//if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
@@ -8731,11 +8825,8 @@ bool Lens::create_source_surface_brightness_grid(bool verbal)
 
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
-	cout << "HI" << endl;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
-	cout << "HI2" << endl;
 	if (create_image_pixelgrid) source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-	cout << "HI3" << endl;
 	if ((mpi_id==0) and (verbal)) {
 		cout << "# of source pixels: " << source_pixel_grid->number_of_pixels << endl;
 	}
@@ -8765,20 +8856,22 @@ void Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	image_pixel_data = new ImagePixelData();
 	image_pixel_data->set_lens(this);
 	if (fits_format == true) {
-		if (data_pixel_size < 0) { // in this case no pixel scale has been specified, so we simply use the grid that has already been chosen
+		if (data_pixel_size <= 0) { // in this case no pixel scale has been specified, so we simply use the grid that has already been chosen
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 			image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root);
 		} else {
-			if (image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root)==true) {
-				double xmin,xmax,ymin,ymax;
-				int npx, npy;
-				image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
-				grid_xlength = xmax-xmin;
-				grid_ylength = ymax-ymin;
-				set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
-			}
+			image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root);
+		}
+		// the pixel size may have been specified in the FITS file, in which case data_pixel_size was just set to something > 0
+		if (data_pixel_size > 0) {
+			double xmin,xmax,ymin,ymax;
+			int npx, npy;
+			image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
+			grid_xlength = xmax-xmin;
+			grid_ylength = ymax-ymin;
+			set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 		}
 	} else {
 		image_pixel_data->load_data(image_pixel_filename_root);
@@ -8931,7 +9024,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		delete[] centers;
 	}
 
-	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in fit window: " << image_pixel_data->n_required_pixels << endl;
+	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 	if (pixel_fraction <= 0) die("pixel fraction cannot be less than or equal to zero");
 #ifdef USE_OPENMP
 	double tot_wtime0, tot_wtime;
@@ -9032,55 +9125,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		return 2e30;
 	}
 	if (auto_srcgrid_npixels) {
-	/*
-		bool continue_iteration = true;
-		if (source_npixels < pixel_fraction*image_npixels) continue_iteration = false;
-		while ((source_npixels < pixel_fraction*image_npixels) or (continue_iteration)) {
-			if (source_npixels < pixel_fraction*image_npixels) {
-				srcgrid_npixels_x++;
-				srcgrid_npixels_y++;
-			} else {
-				// Now we try to make the pixels as square as possible; we want srcgrid_npixels_x / srcgrid_npixels_y ~ aspect_ratio
-				double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
-				srcgrid_npixels_x = (int) sqrt(srcgrid_npixels_x*srcgrid_npixels_y*aspect_ratio);
-				srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-				continue_iteration = false; // ensure this is the last iteration
-			}
-			delete source_pixel_grid;
-			SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
-			source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
-			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
-			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-			bool verbal_now = (continue_iteration) ? false : true;
-
-			//if ((mpi_id==0) and (verbal_now)) {
-				//cout << "# of source pixels: " << source_pixel_grid->number_of_pixels;
-				//if (auto_srcgrid_npixels) {
-					//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-					//cout << ", f=" << pix_frac;
-				//}
-				//cout << endl;
-			//}
-			if (adaptive_grid) {
-				source_pixel_grid->adaptive_subgrid();
-				if ((mpi_id==0) and (verbal)) {
-					cout << "HI # of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
-					if (auto_srcgrid_npixels) {
-						double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-						cout << ", f=" << pix_frac;
-					}
-					cout << endl;
-				}
-			} else {
-				source_pixel_grid->calculate_pixel_magnifications();
-			}
-			if (assign_pixel_mappings(verbal_now)==false) {
-				return 2e30;
-			}
-
-			//cout << "SRC_NPIXELS: " << source_npixels << " IMG_NPIXELS: " << image_npixels << endl;
-		}
-	*/
 		double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
 		//cout << "Area covered fraction: " << srcgrid_area_covered_frac << endl;
 		//cout << "Redrawing source grid with optimized # of pixels..." << endl;
@@ -9102,7 +9146,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
 			cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
-			cout << "Number of active image pixels expected: " << n_expected_imgpixels << endl;
 		}
 		if (adaptive_grid) {
 			source_pixel_grid->adaptive_subgrid();
@@ -9121,6 +9164,9 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (assign_pixel_mappings(verbal)==false) {
 			return 2e30;
 		}
+	}
+	if ((mpi_id==0) and (verbal)) {
+		cout << "Number of active image pixels: " << image_npixels << endl;
 	}
 	if ((mpi_id==0) and (verbal)) {
 		double pixfrac = ((double) source_npixels) / image_npixels;
@@ -9154,6 +9200,20 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
 	else invert_lens_mapping_CG_method(verbal);
 
+	int i,j;
+	if (use_inversion_to_set_mask) {
+		for (i=0; i < image_pixel_data->npixels_x; i++) {
+			for (j=0; j < image_pixel_data->npixels_y; j++) {
+				if (image_pixel_grid->maps_to_source_pixel[i][j]) image_pixel_data->require_fit[i][j] = true;
+				else {
+					image_pixel_data->require_fit[i][j] = false;
+					image_pixel_data->n_required_pixels--;
+				}
+			}
+		}
+		if (sb_threshold > 0) image_pixel_data->unset_low_signal_pixels(sb_threshold,true);
+	}
+
 	double chisq = 0;
 
 	calculate_image_pixel_surface_brightness();
@@ -9167,7 +9227,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
 	if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
-	int i,j;
 	double dchisq, dchisq2;
 	int img_index;
 	int count=0;
@@ -9192,13 +9251,13 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 	if (group_id==0) {
 		if (logfile.is_open()) {
-			logfile << "it=" << chisq_it << " chisq0=" << chisq << " ";
+			logfile << "it=" << chisq_it << " chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << " ";
 			if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
 		}
 	}
 	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
 	if (regularization_method != None) {
-		if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << endl;
+		if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
 		// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
 		//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
 		//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!

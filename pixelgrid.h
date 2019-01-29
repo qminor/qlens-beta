@@ -168,6 +168,7 @@ class ImagePixelGrid : public Sort
 	// the image pixel grid is simpler because its cells will never be split. So there is no recursion in this grid
 	friend class Lens;
 	friend class SourcePixelGrid;
+	friend class ImagePixelData;
 	Lens *lens;
 	SourcePixelGrid *source_pixel_grid;
 	lensvector **corner_pts;
@@ -256,7 +257,8 @@ struct ImagePixelData
 	bool load_mask_fits(string fits_filename);
 	void set_no_required_data_pixels();
 	void set_all_required_data_pixels();
-	void unset_low_signal_pixels(const double sb_threshold);
+	void assign_mask_windows(const int max_n_windows);
+	void unset_low_signal_pixels(const double sb_threshold, const bool use_fit);
 	void set_nearest_neighbor_pixels();
 	void set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);

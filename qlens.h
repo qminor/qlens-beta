@@ -295,6 +295,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double max_pixel_sb;
 	bool max_sb_prior_unselected_pixels;
 	double max_sb_frac;
+	bool use_inversion_to_set_mask;
 	bool subhalo_prior;
 	bool use_custom_prior;
 	bool lens_position_gaussian_transformation;
@@ -508,6 +509,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	static const double perturber_einstein_radius_fraction;
 	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny);
+	void plot_weak_lensing_shear_field();
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
 	void plot_logkappa_map(const int x_N, const int y_N, const string filename);
 	void plot_logmag_map(const int x_N, const int y_N, const string filename);

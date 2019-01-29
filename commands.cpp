@@ -2659,7 +2659,10 @@ void Lens::process_commands(bool read_file)
 							add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (set_tidal_host) lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
+							if (set_tidal_host) {
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1);
+								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
+							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -2784,6 +2787,7 @@ void Lens::process_commands(bool read_file)
 				{
 					int pmode = default_parameter_mode;
 					bool set_median_concentration = false;
+					double cmed_factor = 1.0;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
@@ -2809,7 +2813,15 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
 						} else if (pmode==1) {
 							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
-							if (words[3]=="cmed") set_median_concentration = true;
+							int pos;
+							if ((pos = words[3].find("*cmed")) != string::npos) {
+								set_median_concentration = true;
+								string facstring;
+								facstring = words[3].substr(0,pos);
+								stringstream facstream;
+								facstream << facstring;
+								if (!(facstream >> cmed_factor)) Complain("invalid factor of median concentration");
+							} else if (words[3]=="cmed") set_median_concentration = true;
 							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
 						} else {
 							if (!(ws[2] >> p1)) Complain("invalid ks parameter for model nfw");
@@ -2879,7 +2891,8 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor);
+								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3073,7 +3086,8 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1]);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1);
+								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3422,7 +3436,8 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum]);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1);
+								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -5995,7 +6010,15 @@ void Lens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				double sbthresh;
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
-				image_pixel_data->unset_low_signal_pixels(sbthresh);
+				image_pixel_data->unset_low_signal_pixels(sbthresh,false);
+			}
+			else if (words[1]=="trim_mask_windows")
+			{
+				if (nwords != 3) Complain("one argument allowed for command 'sbmap trim_mask_windows' (# of mask windows)");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				int nmask;
+				if (!(ws[2] >> nmask)) Complain("invalid number of mask windows");
+				image_pixel_data->assign_mask_windows(nmask);
 			}
 			else if (words[1]=="set_data_annulus")
 			{
@@ -6176,7 +6199,19 @@ void Lens::process_commands(bool read_file)
 			else if (words[1]=="invert")
 			{
 				if (!islens()) Complain("must specify lens model first");
+				bool setmask = false;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-setmask") setmask = true;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+				if (setmask) use_inversion_to_set_mask = true;
 				invert_surface_brightness_map_from_data(verbal_mode);
+				if (setmask) use_inversion_to_set_mask = false;
+
 				//test_fitmodel_invert(); // use this to make sure the fitmodel chi-square returns the same value as doing the inversion directly (runs chi-square twice just to make sure)
 			}
 			else if (words[1]=="plot_imgpixels")
@@ -7985,7 +8020,8 @@ void Lens::process_commands(bool read_file)
 			read_from_file = true;
 		}
 		else if (words[0]=="test") {
-			if (add_dparams_to_chain()==false) Complain("could not process chain data");
+			plot_weak_lensing_shear_field();
+			//if (add_dparams_to_chain()==false) Complain("could not process chain data");
 			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
 			//output_imgplane_chisq_vals();
@@ -8002,7 +8038,12 @@ void Lens::process_commands(bool read_file)
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);
 			//plot_shear_field(-3,3,50,-3,3,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
-
+		}
+		else if (words[0]=="test2") {
+			double xmin,xmax,ymin,ymax;
+			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+			plot_shear_field(xmin,xmax,100,ymin,ymax,100);
 		}
 		else if (mpi_id==0) Complain("command not recognized");
 	}
