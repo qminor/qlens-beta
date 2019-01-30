@@ -633,7 +633,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_source_surface_brightness_grid(bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
-	void load_image_surface_brightness_grid(string image_pixel_filename_root);
+	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool verbose = true);
 
 	void plot_Lmatrix();

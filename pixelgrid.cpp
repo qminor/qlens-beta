@@ -48,8 +48,8 @@ double SourcePixelGrid::min_cell_area;
 // NOTE!!! It would be better to make a few of these (e.g. levels) non-static and contained in the zeroth-level grid, and just give all the subcells a pointer to the zeroth-level grid.
 // That way, you can create multiple source grids and they won't interfere with each other.
 int SourcePixelGrid::levels, SourcePixelGrid::splitlevels;
-lensvector SourcePixelGrid::d1, SourcePixelGrid::d2, SourcePixelGrid::d3, SourcePixelGrid::d4;
-double SourcePixelGrid::product1, SourcePixelGrid::product2, SourcePixelGrid::product3;
+//lensvector SourcePixelGrid::d1, SourcePixelGrid::d2, SourcePixelGrid::d3, SourcePixelGrid::d4;
+//double SourcePixelGrid::product1, SourcePixelGrid::product2, SourcePixelGrid::product3;
 ImagePixelGrid* SourcePixelGrid::image_pixel_grid;
 bool SourcePixelGrid::regrid;
 int *SourcePixelGrid::maxlevs;
@@ -560,12 +560,13 @@ void SourcePixelGrid::plot_cell_surface_brightness(int line_number, int pixels_p
 
 inline void SourcePixelGrid::find_cell_area()
 {
-	d1[0] = corner_pt[2][0] - corner_pt[0][0]; d1[1] = corner_pt[2][1] - corner_pt[0][1];
-	d2[0] = corner_pt[1][0] - corner_pt[0][0]; d2[1] = corner_pt[1][1] - corner_pt[0][1];
-	d3[0] = corner_pt[2][0] - corner_pt[3][0]; d3[1] = corner_pt[2][1] - corner_pt[3][1];
-	d4[0] = corner_pt[1][0] - corner_pt[3][0]; d4[1] = corner_pt[1][1] - corner_pt[3][1];
+	//d1[0] = corner_pt[2][0] - corner_pt[0][0]; d1[1] = corner_pt[2][1] - corner_pt[0][1];
+	//d2[0] = corner_pt[1][0] - corner_pt[0][0]; d2[1] = corner_pt[1][1] - corner_pt[0][1];
+	//d3[0] = corner_pt[2][0] - corner_pt[3][0]; d3[1] = corner_pt[2][1] - corner_pt[3][1];
+	//d4[0] = corner_pt[1][0] - corner_pt[3][0]; d4[1] = corner_pt[1][1] - corner_pt[3][1];
 	// split cell into two triangles; cross product of the vectors forming the legs gives area of each triangle, so their sum gives area of cell
-	cell_area = 0.5 * (abs(d1 ^ d2) + abs(d3 ^ d4));
+	//cell_area = 0.5 * (abs(d1 ^ d2) + abs(d3 ^ d4)); // overkill since the cells are just square
+	cell_area = (corner_pt[2][0] - corner_pt[0][0])*(corner_pt[1][1]-corner_pt[0][1]);
 }
 
 void SourcePixelGrid::assign_firstlevel_neighbors()
@@ -1153,14 +1154,14 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
 		nsubcells = 1;
-		if (lens->adaptive_grid) {
+		//if (lens->adaptive_grid) {
 			// Now we estimate the "effective" pixel overlap area, based on the estimated number of splittings that will occur;
 			// This will help refine the first-level pixel size to obtain the target number of pixels (for auto_src_npixels feature)
-			mag = cell[i][j]->total_magnification;
-			if (mag > mag_threshold) nsubcells *= 4;
-			while ((mag /= 4) > mag_threshold) nsubcells *= 4;
-			while ((mag /= (4*mag_threshold)) > mag_threshold) nsubcells *= 4;
-		}
+			//mag = cell[i][j]->total_magnification;
+			//if (mag > mag_threshold) nsubcells *= 4;
+			//while ((mag /= 4) > mag_threshold) nsubcells *= 4;
+			//while ((mag /= (4*mag_threshold)) > mag_threshold) nsubcells *= 4;
+		//}
 		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += nsubcells*cell[i][j]->cell_area;
 		else lens->total_srcgrid_overlap_area += nsubcells*area_matrix[nsrc];
 		if (cell[i][j]->total_magnification*0.0) warn("Nonsensical source cell magnification (mag=%g",cell[i][j]->total_magnification);
@@ -1265,7 +1266,8 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 				j = n / u_N;
 				i = n % u_N;
 				subgrid = false;
-				if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
+				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/image_pixel_grid->pixel_area) > lens->pixel_magnification_threshold) subgrid = true;
 				if (subgrid) {
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {
@@ -1365,7 +1367,8 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
 				subgrid = false;
-				if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
+				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/image_pixel_grid->pixel_area) > lens->pixel_magnification_threshold) subgrid = true;
 				if (subgrid) {
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {
@@ -3603,6 +3606,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
+	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 
 #ifdef USE_OPENMP
@@ -3704,6 +3708,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
 
+	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 	lensvector d1,d2,d3,d4;
 
@@ -3778,6 +3783,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
 	max_sb = -1e30;
+	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 
 #ifdef USE_OPENMP
@@ -3879,6 +3885,7 @@ ImagePixelGrid::ImagePixelGrid(double* zfactor_in, double** betafactor_in, RayTr
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
 	max_sb = -1e30;
+	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 
 	double x,y;

@@ -5914,7 +5914,7 @@ void Lens::process_commands(bool read_file)
 				else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
 				} else Complain("too many arguments to 'sbmap loadimg'");
-				load_image_surface_brightness_grid(filename);
+				if (!load_image_surface_brightness_grid(filename)) Complain("could not load image data");
 			}
 			else if (words[1]=="loadmask")
 			{

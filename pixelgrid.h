@@ -63,8 +63,8 @@ class SourcePixelGrid
 	static bool exclude_source_pixels_outside_fit_window;
 
 	// Used for calculating areas and finding whether points are inside a given cell
-	static lensvector d1, d2, d3, d4;
-	static double product1, product2, product3;
+	//static lensvector d1, d2, d3, d4;
+	//static double product1, product2, product3;
 	static int *maxlevs;
 	static lensvector ***xvals_threads;
 	static lensvector ***corners_threads;
@@ -179,7 +179,7 @@ class ImagePixelGrid : public Sort
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 	bool **fit_to_data;
-	double triangle_area; // half of pixel area
+	double pixel_area, triangle_area; // half of pixel area
 	double max_sb, pixel_noise;
 	bool **maps_to_source_pixel;
 	int **pixel_index;

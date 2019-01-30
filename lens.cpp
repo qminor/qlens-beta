@@ -8850,19 +8850,20 @@ void Lens::load_source_surface_brightness_grid(string source_inputfile)
 	source_pixel_grid = new SourcePixelGrid(this,source_inputfile,1e-6);
 }
 
-void Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
+bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 {
 	if (image_pixel_data != NULL) delete image_pixel_data;
 	image_pixel_data = new ImagePixelData();
 	image_pixel_data->set_lens(this);
+	bool status = true;
 	if (fits_format == true) {
 		if (data_pixel_size <= 0) { // in this case no pixel scale has been specified, so we simply use the grid that has already been chosen
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-			image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root);
+			status = image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root);
 		} else {
-			image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root);
+			status = image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root);
 		}
 		// the pixel size may have been specified in the FITS file, in which case data_pixel_size was just set to something > 0
 		if (data_pixel_size > 0) {
@@ -8882,6 +8883,10 @@ void Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 		grid_ylength = ymax-ymin;
 		set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 	}
+	if (status==false) {
+		delete image_pixel_data; image_pixel_data = NULL;
+		return false;
+	}
 	image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
 	if (image_pixel_grid != NULL) {
 		delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
@@ -8892,6 +8897,7 @@ void Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	if (autocenter) autocenter = false;
 	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
+	return true;
 }
 
 bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool verbose)
