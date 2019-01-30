@@ -1042,12 +1042,9 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 							overlap_matrix_index_rows[n].push_back(nsrc);
 							overlap_matrix_row_nn[n]++;
 
-							//if (lens->n_image_prior) {
-								overlap_area = triangle1_overlap + triangle2_overlap;
-								if ((image_pixel_grid->fit_to_data == NULL) or (!image_pixel_grid->fit_to_data[img_i][img_j])) overlap_area = 0;
-								overlap_area_matrix_rows[n].push_back(overlap_area);
-							//}
-
+							overlap_area = triangle1_overlap + triangle2_overlap;
+							if ((image_pixel_grid->fit_to_data == NULL) or (!image_pixel_grid->fit_to_data[img_i][img_j])) overlap_area = 0;
+							overlap_area_matrix_rows[n].push_back(overlap_area);
 						}
 					}
 				}
@@ -3138,8 +3135,6 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 			}
 		} while (new_mask_member);
 	} while (current_mask != -1);
-	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
-	delete[] mask_window_id;
 	int smallest_window_size, smallest_window_id;
 	int n_windows_eff = n_mask_windows;
 	while (n_windows_eff > max_n_windows) {
@@ -3154,7 +3149,9 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 		if (smallest_window_size > 0) {
 			for (i=0; i < npixels_x; i++) {
 				for (j=0; j < npixels_y; j++) {
-					if (mask_window_id[i][j]==smallest_window_id) require_fit[i][j] = false;
+					if (mask_window_id[i][j]==smallest_window_id) {
+						require_fit[i][j] = false;
+					}
 				}
 			}
 			mask_window_sizes[smallest_window_id] = 0;
@@ -3169,6 +3166,9 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 			if (lens->mpi_id == 0) cout << "Window " << j << " size: " << mask_window_sizes[i] << endl;
 		}
 	}
+	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
+	delete[] mask_window_id;
+
 }
 
 

@@ -6123,7 +6123,7 @@ void Lens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 				bool foundcc = true;
-				if ((!show_cc) or ((foundcc = plotcrit("crit.dat"))==true)) {
+				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
 						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual)==true)) {
