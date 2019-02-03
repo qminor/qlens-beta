@@ -9144,6 +9144,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			lensvector srcpt(xsrc,ysrc);
 			double highest_mag;
 			int nimg;
+			create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 			image *img = get_images(srcpt,nimg,false);
 			if (nimg==0) {
 				warn("WARNING: No images found when trying to calculate image pixel magnifications");
