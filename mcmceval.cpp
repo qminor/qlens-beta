@@ -2293,7 +2293,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 	return;
 }
 
-void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN, const int yN, const char *name, const int iin, const int jin, const char flag)
+bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN, const int yN, const char *name, const int iin, const int jin, const char flag)
 {
 	double stepx = (xh - xl)/xN;
 	double stepy = (yh - yl)/yN;
@@ -2765,7 +2765,9 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 			delete[] psort;
 		}
 
-		if (j < linesNum) die("could not find smooth contours");
+		if (j < linesNum) {
+			return false;
+		}
 		
 		if (flag&HIST)
 		{
@@ -2850,7 +2852,7 @@ void McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		del <double> (smoothfz, xfNs);
 	}
 	
-	return;
+	return true;
 }
 
 void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN, const int yN, const char *name, const int iin, const int jin, const int kin, const char flag)

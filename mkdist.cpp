@@ -474,15 +474,27 @@ int main(int argc, char *argv[])
 		*/
 
 		if (make_2d_posts) {
+			bool derived_param_fail = false; // if contours can't be made for a derived parameter, we'll have it drop the derived parameters and try again
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
 			if ((!make_1d_posts) and (show_markers)) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
-			for (i=0; i < nparams_eff; i++) {
-				for (j=i+1; j < nparams_eff; j++) {
-					string hist_out;
-					hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
-					Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH);
+			do {
+				if (derived_param_fail) derived_param_fail = false;
+				for (i=0; i < nparams_eff; i++) {
+					for (j=i+1; j < nparams_eff; j++) {
+						string hist_out;
+						hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+						if (!Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH)) {
+							if ((i>=n_fitparams) or (j>=n_fitparams)) {
+								derived_param_fail = true;
+								warn("producing contours failed for derived parameter; we will drop the derived parameters and try again");
+								break;
+							}
+						}
+					}
+					if (derived_param_fail) break;
 				}
-			}
+				if (derived_param_fail) nparams_eff = n_fitparams;
+			} while (derived_param_fail);
 		}
 		if (output_min_chisq_point) {
 			Eval.output_min_chisq_pt();

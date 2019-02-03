@@ -109,7 +109,7 @@ class McmcEval
 		double DerivedParam(double *point);
 
 		void MkHistTest(double, double, int, const char *, int, const char flag = LINEAR);
-		void MkHist2D(double, double, double, double, int, int, const char *, int, int, const char flag = LINEAR);
+		bool MkHist2D(double, double, double, double, int, int, const char *, int, int, const char flag = LINEAR);
 		void MkHist3D(double, double, double, double, int, int, const char *, int, int, int, const char flag = LINEAR);
 		double cl(const double, const int, const double, const double, const char flag = LINEAR);
 		double derived_cl(const double a, const char flag = LINEAR);
