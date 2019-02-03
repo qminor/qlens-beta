@@ -398,6 +398,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool calculate_bayes_factor;
 	double reference_lnZ;
 	double pixel_magnification_threshold, pixel_magnification_threshold_lower_limit, pixel_magnification_threshold_upper_limit;
+	double base_srcpixel_imgpixel_ratio;
 	double sim_err_pos, sim_err_flux, sim_err_td;
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 

@@ -1181,6 +1181,45 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	//}
 }
 
+double SourcePixelGrid::get_lowest_mag_sourcept(double &xsrc, double &ysrc)
+{
+	double lowest_mag = 1e30;
+	int i, j, i_lowest_mag, j_lowest_mag;
+	for (i=0; i < u_N; i++) {
+		for (j=0; j < w_N; j++) {
+			if (cell[i][j]->maps_to_image_window) {
+				if (cell[i][j]->total_magnification < lowest_mag) {
+					lowest_mag = cell[i][j]->total_magnification;
+					i_lowest_mag = i;
+					j_lowest_mag = j;
+				}
+			}
+		}
+	}
+	xsrc = cell[i_lowest_mag][j_lowest_mag]->center_pt[0];
+	ysrc = cell[i_lowest_mag][j_lowest_mag]->center_pt[1];
+	return lowest_mag;
+}
+
+void SourcePixelGrid::get_highest_mag_sourcept(double &xsrc, double &ysrc)
+{
+	double highest_mag = -1e30;
+	int i, j, i_highest_mag, j_highest_mag;
+	for (i=0; i < u_N; i++) {
+		for (j=0; j < w_N; j++) {
+			if (cell[i][j]->maps_to_image_window) {
+				if (cell[i][j]->total_magnification > highest_mag) {
+					highest_mag = cell[i][j]->total_magnification;
+					i_highest_mag = i;
+					j_highest_mag = j;
+				}
+			}
+		}
+	}
+	xsrc = cell[i_highest_mag][j_highest_mag]->center_pt[0];
+	ysrc = cell[i_highest_mag][j_highest_mag]->center_pt[1];
+}
+
 void SourcePixelGrid::adaptive_subgrid()
 {
 	calculate_pixel_magnifications();
@@ -1267,7 +1306,7 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 				i = n % u_N;
 				subgrid = false;
 				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
-				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/image_pixel_grid->pixel_area) > lens->pixel_magnification_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > lens->pixel_magnification_threshold) subgrid = true;
 				if (subgrid) {
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {
@@ -1368,7 +1407,8 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 			for (j=0; j < w_N; j++) {
 				subgrid = false;
 				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
-				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/image_pixel_grid->pixel_area) > lens->pixel_magnification_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > lens->pixel_magnification_threshold) subgrid = true;
+
 				if (subgrid) {
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {

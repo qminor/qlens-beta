@@ -373,9 +373,10 @@ Lens::Lens() : UCMC()
 	psf_matrix = NULL;
 	inversion_nthreads = 1;
 	adaptive_grid = false;
-	pixel_magnification_threshold = 6;
+	pixel_magnification_threshold = 4;
 	pixel_magnification_threshold_lower_limit = 1e30; // These must be specified by user
 	pixel_magnification_threshold_upper_limit = 1e30; // These must be specified by user
+	base_srcpixel_imgpixel_ratio = 0.8; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	vary_magnification_threshold = false;
 	exclude_source_pixels_beyond_fit_window = true;
 	activate_unmapped_source_pixels = true;
@@ -678,6 +679,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	adaptive_grid = lens_in->adaptive_grid;
 	pixel_magnification_threshold = lens_in->pixel_magnification_threshold;
 	vary_magnification_threshold = lens_in->vary_magnification_threshold;
+	base_srcpixel_imgpixel_ratio = lens_in->base_srcpixel_imgpixel_ratio; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
@@ -9111,34 +9113,81 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	//}
 	bool verbal_now = verbal;
 	if (auto_srcgrid_npixels) verbal_now = false; // since we're gonna redo the sourcegrid a second time, don't show the first one (it would confuse people)
-	if (adaptive_grid) {
-		source_pixel_grid->adaptive_subgrid();
-		if ((mpi_id==0) and (verbal_now)) {
-			cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
-			if (auto_srcgrid_npixels) {
-				double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-				cout << ", f=" << pix_frac;
-			}
-			cout << endl;
-		}
-	} else {
-		source_pixel_grid->calculate_pixel_magnifications();
-	}
-
+	//if (adaptive_grid) {
+		//source_pixel_grid->adaptive_subgrid();
+		//if ((mpi_id==0) and (verbal_now)) {
+			//cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
+			//if (auto_srcgrid_npixels) {
+				//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+				//cout << ", f=" << pix_frac;
+			//}
+			//cout << endl;
+		//}
+	//} else {
+		if (auto_srcgrid_npixels) source_pixel_grid->calculate_pixel_magnifications();
+	//}
 	//cout << "Initial sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
 	if ((mpi_id==0) and (verbal_now)) cout << "Assigning pixel mappings...\n";
-	if (assign_pixel_mappings(verbal_now)==false) {
-		return 2e30;
-	}
 	if (auto_srcgrid_npixels) {
-		double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
 		//cout << "Area covered fraction: " << srcgrid_area_covered_frac << endl;
 		//cout << "Redrawing source grid with optimized # of pixels..." << endl;
+
+		if (assign_pixel_mappings(verbal_now)==false) {
+			return 2e30;
+		}
 		double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
-		srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
-		srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+
+		if (adaptive_grid) {
+			double xsrc, ysrc;
+			double mag = source_pixel_grid->get_lowest_mag_sourcept(xsrc,ysrc);
+			//cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
+			lensvector srcpt(xsrc,ysrc);
+			double highest_mag;
+			int nimg;
+			image *img = get_images(srcpt,nimg,false);
+			if (nimg==0) {
+				warn("WARNING: No images found when trying to calculate image pixel magnifications");
+				highest_mag = mag;
+			} else {
+				highest_mag = -1e30;
+				for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
+			}
+			//cout << "Lowest mag: " << highest_mag << endl;
+			//double eff_imgpixel_width = sqrt(psf_width_x*psf_width_y);
+			double eff_imgpixel_width = data_pixel_size;
+			double eff_imgpixel_width_srcplane = eff_imgpixel_width/sqrt(highest_mag);
+			eff_imgpixel_width_srcplane *= base_srcpixel_imgpixel_ratio;
+			if ((mpi_id==0) and (verbal)) cout << "Effective imgpixel width: " << eff_imgpixel_width << ", ref effective imgpixel width in sourceplane: " << eff_imgpixel_width_srcplane << endl;
+			double srcgrid_firstlevel_npixels = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin))/SQR(eff_imgpixel_width_srcplane);
+			srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
+			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+
+			/*
+			source_pixel_grid->get_highest_mag_sourcept(xsrc,ysrc);
+			srcpt[0] = xsrc;
+			srcpt[1] = ysrc;
+			//cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
+			img = get_images(srcpt,nimg,false);
+			if (nimg==0) die("CATASTROPHE: No images found when trying to calculate image pixel magnifications");
+			highest_mag = -1e30;
+			for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
+			*/
+			//cout << "Highest mag: " << highest_mag << endl;
+			//psf_width = sqrt(psf_width_x*psf_width_y);
+			//psf_width_srcplane = psf_width/sqrt(highest_mag);
+			//if ((mpi_id==0) and (verbal)) cout << "PSF width: " << psf_width << ", ref PSF width in sourceplane: " << psf_width_srcplane << endl;
+			//srcgrid_firstlevel_npixels = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin))/SQR(psf_width_srcplane);
+			//srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
+			//srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+		} else {
+			double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
+			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
+			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
+		}
+
 		if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
 		if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;
+
 		//int target = (int) pixel_fraction*image_npixels/srcgrid_area_covered_frac;
 		//int actual = srcgrid_npixels_x * srcgrid_npixels_y;
 		//cout << "Target " << target << ", actual " << actual << endl;
@@ -9153,24 +9202,25 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
 			cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
 		}
-		if (adaptive_grid) {
-			source_pixel_grid->adaptive_subgrid();
-			if ((mpi_id==0) and (verbal)) {
-				cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
-				if (auto_srcgrid_npixels) {
-					double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-					cout << ", f=" << pix_frac;
-				}
-				cout << endl;
-			}
-		} else {
-			source_pixel_grid->calculate_pixel_magnifications();
-		}
-		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
-		if (assign_pixel_mappings(verbal)==false) {
-			return 2e30;
-		}
 	}
+	if (adaptive_grid) {
+		source_pixel_grid->adaptive_subgrid();
+		if ((mpi_id==0) and (verbal)) {
+			cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
+			if (auto_srcgrid_npixels) {
+				double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
+				cout << ", f=" << pix_frac;
+			}
+			cout << endl;
+		}
+	} else {
+		if (n_image_prior) source_pixel_grid->calculate_pixel_magnifications();
+	}
+	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
+	if (assign_pixel_mappings(verbal)==false) {
+		return 2e30;
+	}
+
 	if ((mpi_id==0) and (verbal)) {
 		cout << "Number of active image pixels: " << image_npixels << endl;
 	}

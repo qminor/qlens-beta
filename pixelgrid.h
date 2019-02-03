@@ -115,6 +115,8 @@ class SourcePixelGrid
 	bool bisection_search_overlap(lensvector **input_corner_pts, const int& thread);
 	void calculate_pixel_magnifications();
 	void adaptive_subgrid();
+	double get_lowest_mag_sourcept(double &xsrc, double &ysrc);
+	void get_highest_mag_sourcept(double &xsrc, double &ysrc);
 
 	bool assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread);
 	void subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, bool& image_pixel_maps_to_source_grid);

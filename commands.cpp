@@ -7727,6 +7727,16 @@ void Lens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="src_imgpixel_ratio")
+		{
+			double ratio;
+			if (nwords == 2) {
+				if (!(ws[1] >> ratio)) Complain("invalid ratio");
+				base_srcpixel_imgpixel_ratio = ratio;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "src_imgpixel_ratio = " << base_srcpixel_imgpixel_ratio << endl;
+			} else Complain("must specify either zero or one argument (ratio)");
+		}
 		else if (words[0]=="regparam")
 		{
 			double regparam, regparam_ul, regparam_ll;
