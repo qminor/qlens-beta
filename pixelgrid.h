@@ -127,7 +127,7 @@ class SourcePixelGrid
 	bool bisection_search_interpolate(lensvector &input_center_pt, const int& thread);
 	bool assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, const int& image_pixel_i, const int& image_pixel_j);
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread);
-	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& thread);
+	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const int& thread);
 	double find_lensed_surface_brightness_interpolate(lensvector &input_center_pt, const int& thread);
 	void find_interpolation_cells(lensvector &input_center_pt, const int& thread);
 	SourcePixelGrid* find_nearest_neighbor_cell(lensvector &input_center_pt, const int& side);
@@ -184,6 +184,9 @@ class ImagePixelGrid : public Sort
 	double pixel_area, triangle_area; // half of pixel area
 	double max_sb, pixel_noise;
 	bool **maps_to_source_pixel;
+	int max_nsplit;
+	int **nsplits;
+	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
 	vector<SourcePixelGrid*> **mapped_source_pixels;
 	RayTracingMethod ray_tracing_method;
@@ -200,7 +203,7 @@ class ImagePixelGrid : public Sort
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data);
 	ImagePixelGrid(Lens* lens_in, ImagePixelGrid* pixel_grid);
-	ImagePixelGrid(double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
 

@@ -7919,7 +7919,25 @@ void Lens::process_commands(bool read_file)
 				set_switch(regrid_if_unmapped_source_subpixels,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-
+		else if (words[0]=="split_imgpixels")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Split image pixels when ray tracing: " << display_switch(split_imgpixels) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_imgpixels' command; must specify 'on' or 'off'");
+				set_switch(split_imgpixels,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="imgpixel_nsplit")
+		{
+			if (nwords == 2) {
+				int nt;
+				if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
+				default_imgpixel_nsplit = nt;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
+			} else Complain("must specify either zero or one argument (default number of image pixel splittings)");
+		}
 		else if (words[0]=="galsubgrid")
 		{
 			if (nwords==1) {

@@ -656,6 +656,15 @@ void Cosmology::plot_angular_power_spectrum(int nsteps, const double log10k_min,
 	}
 }
 
+double Cosmology::median_concentration_dutton(const double mass, const double z)
+{
+	double a, b, logc;
+	a = 0.52 + (0.901 - 0.520)*exp(-0.617*pow(z,1.21));
+	b = -0.101 + 0.026*z;
+	logc = a + b*log(mass*hubble*1e-12)/ln10;
+	return pow(10,logc);
+}
+
 double Cosmology::median_concentration_bullock(const double mass, const double z)
 {
 	double ans;

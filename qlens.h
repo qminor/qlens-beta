@@ -401,6 +401,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double base_srcpixel_imgpixel_ratio;
 	double sim_err_pos, sim_err_flux, sim_err_td;
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
+	bool split_imgpixels;
+	int default_imgpixel_nsplit;
 
 	bool fits_format;
 	double data_pixel_size;

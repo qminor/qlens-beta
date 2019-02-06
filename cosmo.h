@@ -132,6 +132,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 
 	double median_concentration_bullock(const double mass, const double z);
+	double median_concentration_dutton(const double mass, const double z);
 	double mstar(const double z);
 	double sigma_root(const double mass);
 	double delta_z(const double z);

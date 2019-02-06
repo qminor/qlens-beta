@@ -381,6 +381,8 @@ Lens::Lens() : UCMC()
 	exclude_source_pixels_beyond_fit_window = true;
 	activate_unmapped_source_pixels = true;
 	regrid_if_unmapped_source_subpixels = false;
+	default_imgpixel_nsplit = 2;
+	split_imgpixels = true;
 
 	use_cc_spline = false;
 	auto_ccspline = false;
@@ -683,6 +685,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
+	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
+	split_imgpixels = lens_in->split_imgpixels;
 
 	use_cc_spline = lens_in->use_cc_spline;
 	auto_ccspline = lens_in->auto_ccspline;
@@ -8825,6 +8829,30 @@ bool Lens::create_source_surface_brightness_grid(bool verbal)
 		}
 	}
 
+	if (auto_sourcegrid) {
+		if ((srcgrid_xshift != 0) or (srcgrid_yshift != 0)) {
+			double srcpixel_xlength, srcpixel_ylength;
+			srcpixel_xlength = (sourcegrid_xmax-sourcegrid_xmin) / srcgrid_npixels_x;
+			srcpixel_ylength = (sourcegrid_ymax-sourcegrid_ymin) / srcgrid_npixels_y;
+			if (srcgrid_xshift != 0) {
+				sourcegrid_xmax += srcgrid_xshift * srcpixel_xlength;
+				sourcegrid_xmin += srcgrid_xshift * srcpixel_xlength;
+			}
+			if (srcgrid_yshift != 0) {
+				sourcegrid_ymax += srcgrid_yshift * srcpixel_ylength;
+				sourcegrid_ymin += srcgrid_yshift * srcpixel_ylength;
+			}
+		}
+		if (srcgrid_size_scale != 0) {
+			double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
+			double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
+			sourcegrid_xmin -= xwidth_adj/2;
+			sourcegrid_xmax += xwidth_adj/2;
+			sourcegrid_ymin -= ywidth_adj/2;
+			sourcegrid_ymax += ywidth_adj/2;
+		}
+	}
+
 	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
@@ -8917,7 +8945,7 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 
 	image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 	source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-	if ((use_input_psf_matrix) or ((psf_width_x != 0) and (psf_width_y != 0))) {
+	//if ((use_input_psf_matrix) or ((psf_width_x != 0) and (psf_width_y != 0))) {
 		if (assign_pixel_mappings(verbose)==false) return false;
 		initialize_pixel_matrices(verbose);
 		PSF_convolution_Lmatrix(verbose);
@@ -8925,9 +8953,9 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 		calculate_image_pixel_surface_brightness();
 		store_image_pixel_surface_brightness();
 		clear_pixel_matrices();
-	} else {
-		image_pixel_grid->find_surface_brightness(); // no PSF, so direct ray tracing can be used
-	}
+	//} else {
+		//image_pixel_grid->find_surface_brightness(); // no PSF, so direct ray tracing can be used
+	//}
 	if (sim_pixel_noise != 0) {
 		if (verbose) {
 			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(sim_pixel_noise);
@@ -8966,8 +8994,7 @@ void Lens::load_pixel_grid_from_data()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
-	image_pixel_grid->lens = this;
+	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 }
 
@@ -8975,18 +9002,17 @@ void Lens::plot_image_pixel_grid()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
-	image_pixel_grid->lens = this;
+	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->redo_lensing_calculations();
-	image_pixel_grid->plot_center_pts_source_plane();
+	//image_pixel_grid->plot_center_pts_source_plane();
+	image_pixel_grid->plot_grid("map",false);
 }
 
 double Lens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
-	image_pixel_grid->lens = this;
+	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	double chisq0;
 	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
@@ -9137,6 +9163,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
 
+		/*
 		if (adaptive_grid) {
 			double xsrc, ysrc;
 			double mag = source_pixel_grid->get_lowest_mag_sourcept(xsrc,ysrc);
@@ -9163,16 +9190,14 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
 			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 
-			/*
-			source_pixel_grid->get_highest_mag_sourcept(xsrc,ysrc);
-			srcpt[0] = xsrc;
-			srcpt[1] = ysrc;
-			//cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
-			img = get_images(srcpt,nimg,false);
-			if (nimg==0) die("CATASTROPHE: No images found when trying to calculate image pixel magnifications");
-			highest_mag = -1e30;
-			for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
-			*/
+			//source_pixel_grid->get_highest_mag_sourcept(xsrc,ysrc);
+			//srcpt[0] = xsrc;
+			//srcpt[1] = ysrc;
+			////cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
+			//img = get_images(srcpt,nimg,false);
+			//if (nimg==0) die("CATASTROPHE: No images found when trying to calculate image pixel magnifications");
+			//highest_mag = -1e30;
+			//for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
 			//cout << "Highest mag: " << highest_mag << endl;
 			//psf_width = sqrt(psf_width_x*psf_width_y);
 			//psf_width_srcplane = psf_width/sqrt(highest_mag);
@@ -9181,10 +9206,11 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			//srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
 			//srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 		} else {
+			*/
 			double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
 			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
 			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-		}
+		//}
 
 		if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
 		if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;

@@ -683,6 +683,6 @@ echo "$PLOTLINE" >$PLOTDIR/tempplot.in
 
 #gnuplot -persist $PLOTDIR/tempplot.in
 gnuplot -persist $PLOTDIR/tempplot.in >/dev/null 2>&1
-rm $PLOTDIR/tempplot.in
+#rm $PLOTDIR/tempplot.in
 if [ -f $PLOTDIR/imgdat_notitles.dat ]; then rm $PLOTDIR/imgdat_notitles.dat; fi
 

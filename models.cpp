@@ -762,14 +762,16 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
+	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
+	c200 = factor*cosmo->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		c200 = cosmo->median_concentration_bullock(m200,zlens);
+		//c200 = cosmo->median_concentration_bullock(m200,zlens);
+		c200 = cosmo->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
