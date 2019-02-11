@@ -242,6 +242,8 @@ Lens::Lens() : UCMC()
 	use_custom_prior = false;
 	nlens = 0;
 	n_sb = 0;
+	sbmin = -1e30;
+	sbmax = 1e30;
 	n_derived_params = 0;
 	radial_grid = true;
 	grid_xlength = 20; // default gridsize
@@ -312,6 +314,7 @@ Lens::Lens() : UCMC()
 	sourcegrid_limit_ymax = 1e30;
 	auto_sourcegrid = true;
 	ray_tracing_method = Interpolate;
+	weight_interpolation_by_imgplane_area = true;
 #ifdef USE_MUMPS
 	inversion_method = MUMPS;
 #else
@@ -619,6 +622,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	sourcegrid_limit_ymin = lens_in->sourcegrid_limit_ymin;
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
 	auto_sourcegrid = lens_in->auto_sourcegrid;
+	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
+
 	regularization_method = lens_in->regularization_method;
 	regularization_parameter = lens_in->regularization_parameter;
 	regularization_parameter_lower_limit = lens_in->regularization_parameter_lower_limit;
@@ -8930,7 +8935,7 @@ bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool verbose)
+bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool verbose)
 {
 	if (source_pixel_grid==NULL) { warn("No source surface brightness map has been generated"); return false; }
 	if ((plot_residual==true) and (image_pixel_data==NULL)) { warn("cannot plot residual image, no pixel data image has been loaded"); return false; }
@@ -8943,8 +8948,15 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 	image_pixel_grid = new ImagePixelGrid(this,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
 	if (image_pixel_data != NULL) image_pixel_grid->set_fit_window((*image_pixel_data)); // testing
 
+	if (reduce_factor > 1) {
+		// If reduce_factor > 1, we will reduce the image to a lower resolution (with pixel size *= reduce_factor)
+		if (n_image_pixels_x % reduce_factor != 0) { warn("number of pixels is not divisible by specified reduction factor"); return false; }
+		if (n_image_pixels_y % reduce_factor != 0) { warn("number of pixels is not divisible by specified reduction factor"); return false; }
+	}
+
 	image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 	source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+	image_pixel_grid->redo_lensing_calculations();
 	//if ((use_input_psf_matrix) or ((psf_width_x != 0) and (psf_width_y != 0))) {
 		if (assign_pixel_mappings(verbose)==false) return false;
 		initialize_pixel_matrices(verbose);
@@ -8956,6 +8968,25 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 	//} else {
 		//image_pixel_grid->find_surface_brightness(); // no PSF, so direct ray tracing can be used
 	//}
+
+	if (reduce_factor > 1) {
+		// If reduce_factor > 1, we will reduce the image to a lower resolution (with pixel size *= reduce_factor)
+		double **sb_old = new double*[n_image_pixels_x];
+		for (int i=0; i < n_image_pixels_x; i++) {
+			sb_old[i] = new double[n_image_pixels_y];
+			for (int j=0; j < n_image_pixels_x; j++) {
+				sb_old[i][j] = image_pixel_grid->surface_brightness[i][j];
+			}
+		}
+		delete image_pixel_grid;
+		image_pixel_grid = new ImagePixelGrid(this,ray_tracing_method,sb_old,n_image_pixels_x,n_image_pixels_y,reduce_factor,xmin,xmax,ymin,ymax);
+		n_image_pixels_x /= reduce_factor;
+		n_image_pixels_y /= reduce_factor;
+
+		for (int i=0; i < n_image_pixels_x; i++) delete[] sb_old[i];
+		delete[] sb_old;
+	}
+
 	if (sim_pixel_noise != 0) {
 		if (verbose) {
 			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(sim_pixel_noise);
@@ -8963,11 +8994,24 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bo
 		}
 		image_pixel_grid->add_pixel_noise(sim_pixel_noise);
 	}
+
 	if (output_fits==false) {
 		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
+
+	int i,j;
+	sbmax=-1e30;
+	sbmin=1e30;
+	// store max sb just in case we want to set the color bar scale using it
+	for (i=0; i < n_image_pixels_x; i++) {
+		for (j=0; j < n_image_pixels_y; j++) {
+			if (image_pixel_grid->surface_brightness[i][j] > sbmax) sbmax = image_pixel_grid->surface_brightness[i][j];
+			if (image_pixel_grid->surface_brightness[i][j] < sbmin) sbmin = image_pixel_grid->surface_brightness[i][j];
+		}
+	}
+
 	delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
 	image_pixel_grid = NULL;
 	return true;

@@ -55,6 +55,8 @@ bool SourcePixelGrid::regrid;
 int *SourcePixelGrid::maxlevs;
 lensvector ***SourcePixelGrid::xvals_threads;
 lensvector ***SourcePixelGrid::corners_threads;
+lensvector **SourcePixelGrid::twistpts_threads;
+int **SourcePixelGrid::twist_status_threads;
 
 ifstream SourcePixelGrid::sb_infile;
 
@@ -88,6 +90,8 @@ void SourcePixelGrid::allocate_multithreaded_variables(const int& threads)
 	}
 	corners_threads = new lensvector**[nthreads];
 	for (int i=0; i < nthreads; i++) corners_threads[i] = new lensvector*[4];
+	twistpts_threads = new lensvector*[nthreads];
+	twist_status_threads = new int*[nthreads];
 }
 
 void SourcePixelGrid::deallocate_multithreaded_variables()
@@ -109,6 +113,8 @@ void SourcePixelGrid::deallocate_multithreaded_variables()
 	}
 	delete[] xvals_threads;
 	delete[] corners_threads;
+	delete[] twistpts_threads;
+	delete[] twist_status_threads;
 }
 
 SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, double y_min, double y_max) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
@@ -794,36 +800,74 @@ inline bool SourcePixelGrid::check_if_in_neighborhood(lensvector **input_corner_
 	return false;
 }
 
-inline bool SourcePixelGrid::check_overlap(lensvector **input_corner_pts, const int& thread)
+inline bool SourcePixelGrid::check_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
-	if (trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
-	if (trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+	if (twist_status==0) {
+		if (trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+		if (trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+	} else if (twist_status==1) {
+		if (trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[2],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+		if (trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+	} else {
+		if (trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+		if (trirec[thread].determine_if_overlap(*twist_pt,*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1])==true) return true;
+	}
 	return false;
 }
 
-inline double SourcePixelGrid::find_rectangle_overlap(lensvector **input_corner_pts, const int& thread)
+inline double SourcePixelGrid::find_rectangle_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread, const int& i, const int& j)
 {
-	return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]) + trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	if (twist_status==0) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]) + trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else if (twist_status==1) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[2],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]) + trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]) + trirec[thread].find_overlap_area(*twist_pt,*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	}
 }
 
-inline bool SourcePixelGrid::check_triangle1_overlap(lensvector **input_corner_pts, const int& thread)
+inline bool SourcePixelGrid::check_triangle1_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
-	return trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	if (twist_status==0) {
+		return trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	} else if (twist_status==1) {
+		return trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[2],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	} else {
+		return trirec[thread].determine_if_overlap(*input_corner_pts[0],*input_corner_pts[1],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	}
 }
 
-inline bool SourcePixelGrid::check_triangle2_overlap(lensvector **input_corner_pts, const int& thread)
+inline bool SourcePixelGrid::check_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
-	return trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	if (twist_status==0) {
+		return trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	} else if (twist_status==1) {
+		return trirec[thread].determine_if_overlap(*input_corner_pts[1],*input_corner_pts[3],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	} else {
+		return trirec[thread].determine_if_overlap(*twist_pt,*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]);
+	}
 }
 
-inline double SourcePixelGrid::find_triangle1_overlap(lensvector **input_corner_pts, const int& thread)
+inline double SourcePixelGrid::find_triangle1_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
-	return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	if (twist_status==0) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else if (twist_status==1) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[2],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[0],*input_corner_pts[1],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	}
 }
 
-inline double SourcePixelGrid::find_triangle2_overlap(lensvector **input_corner_pts, const int& thread)
+inline double SourcePixelGrid::find_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
-	return (trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	if (twist_status==0) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else if (twist_status==1) {
+		return (trirec[thread].find_overlap_area(*input_corner_pts[1],*input_corner_pts[3],*twist_pt,corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	} else {
+		return (trirec[thread].find_overlap_area(*twist_pt,*input_corner_pts[3],*input_corner_pts[2],corner_pt[0][0],corner_pt[2][0],corner_pt[0][1],corner_pt[1][1]));
+	}
 }
 
 bool SourcePixelGrid::bisection_search_overlap(lensvector **input_corner_pts, const int& thread)
@@ -994,6 +1038,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 			corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
 			corners_threads[thread][3] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j+1];
+			twistpts_threads[thread] = &image_pixel_grid->twist_pts[img_i][img_j];
+			twist_status_threads[thread] = &image_pixel_grid->twist_status[img_i][img_j];
 
 			min_i = (int) (((*corners_threads[thread][0])[0] - srcgrid_xmin) / xstep);
 			min_j = (int) (((*corners_threads[thread][0])[1] - srcgrid_ymin) / ystep);
@@ -1017,20 +1063,20 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 					nsrc = j*u_N + i;
 					if (cell[i][j]->check_if_in_neighborhood(corners_threads[thread],inside,thread)) {
 						if (inside) {
-							triangle1_overlap = cell[i][j]->find_triangle1_overlap(corners_threads[thread],thread);
-							triangle2_overlap = cell[i][j]->find_triangle2_overlap(corners_threads[thread],thread);
+							triangle1_overlap = cell[i][j]->find_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
+							triangle2_overlap = cell[i][j]->find_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 							triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 							triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
 						} else {
-							if (cell[i][j]->check_triangle1_overlap(corners_threads[thread],thread)) {
-								triangle1_overlap = cell[i][j]->find_triangle1_overlap(corners_threads[thread],thread);
+							if (cell[i][j]->check_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread)) {
+								triangle1_overlap = cell[i][j]->find_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 								triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 							} else {
 								triangle1_overlap = 0;
 								triangle1_weight = 0;
 							}
-							if (cell[i][j]->check_triangle2_overlap(corners_threads[thread],thread)) {
-								triangle2_overlap = cell[i][j]->find_triangle2_overlap(corners_threads[thread],thread);
+							if (cell[i][j]->check_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread)) {
+								triangle2_overlap = cell[i][j]->find_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 								triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
 							} else {
 								triangle2_overlap = 0;
@@ -1317,6 +1363,8 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 						corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 						corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
 						corners_threads[thread][3] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j+1];
+						twistpts_threads[thread] = &image_pixel_grid->twist_pts[img_i][img_j];
+						twist_status_threads[thread] = &image_pixel_grid->twist_status[img_i][img_j];
 
 						min_i = (int) (((*corners_threads[thread][0])[0] - cell[i][j]->corner_pt[0][0]) / xstep);
 						min_j = (int) (((*corners_threads[thread][0])[1] - cell[i][j]->corner_pt[0][1]) / ystep);
@@ -1342,8 +1390,8 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 						for (l=lmin; l <= lmax; l++) {
 							for (m=mmin; m <= mmax; m++) {
 								subcell = cell[i][j]->cell[l][m];
-								triangle1_overlap = subcell->find_triangle1_overlap(corners_threads[thread],thread);
-								triangle2_overlap = subcell->find_triangle2_overlap(corners_threads[thread],thread);
+								triangle1_overlap = subcell->find_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
+								triangle2_overlap = subcell->find_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 								triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 								triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
 								weighted_overlap = triangle1_weight + triangle2_weight;
@@ -1419,6 +1467,8 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 						corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 						corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
 						corners_threads[thread][3] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j+1];
+						twistpts_threads[thread] = &image_pixel_grid->twist_pts[img_i][img_j];
+						twist_status_threads[thread] = &image_pixel_grid->twist_status[img_i][img_j];
 
 						min_i = (int) (((*corners_threads[thread][0])[0] - cell[i][j]->corner_pt[0][0]) / xstep);
 						min_j = (int) (((*corners_threads[thread][0])[1] - cell[i][j]->corner_pt[0][1]) / ystep);
@@ -1444,8 +1494,8 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 						for (l=lmin; l <= lmax; l++) {
 							for (m=mmin; m <= mmax; m++) {
 								subcell = cell[i][j]->cell[l][m];
-								triangle1_overlap = subcell->find_triangle1_overlap(corners_threads[thread],thread);
-								triangle2_overlap = subcell->find_triangle2_overlap(corners_threads[thread],thread);
+								triangle1_overlap = subcell->find_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
+								triangle2_overlap = subcell->find_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 								triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 								triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
 								weighted_overlap = triangle1_weight + triangle2_weight;
@@ -1473,7 +1523,7 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 	}
 }
 
-bool SourcePixelGrid::assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread)
+bool SourcePixelGrid::assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread)
 {
 	imin[thread]=0; imax[thread]=u_N-1;
 	jmin[thread]=0; jmax[thread]=w_N-1;
@@ -1484,12 +1534,13 @@ bool SourcePixelGrid::assign_source_mapping_flags_overlap(lensvector **input_cor
 	int i,j;
 	for (j=jmin[thread]; j <= jmax[thread]; j++) {
 		for (i=imin[thread]; i <= imax[thread]; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->subcell_assign_source_mapping_flags_overlap(input_corner_pts,mapped_source_pixels,thread,image_pixel_maps_to_source_grid);
+			if (cell[i][j]->cell != NULL) cell[i][j]->subcell_assign_source_mapping_flags_overlap(input_corner_pts,twist_pt,twist_status,mapped_source_pixels,thread,image_pixel_maps_to_source_grid);
 			else {
 				if (!cell[i][j]->check_if_in_neighborhood(input_corner_pts,inside,thread)) continue;
-				if ((inside) or (cell[i][j]->check_overlap(input_corner_pts,thread))) {
+				if ((inside) or (cell[i][j]->check_overlap(input_corner_pts,twist_pt,twist_status,thread))) {
 					cell[i][j]->maps_to_image_pixel = true;
 					mapped_source_pixels.push_back(cell[i][j]);
+					//if ((image_pixel_i==41) and (image_pixel_j==11)) cout << "mapped cell: " << cell[i][j]->center_pt[0] << " " << cell[i][j]->center_pt[1] << endl;
 					if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
 				}
 			}
@@ -1498,16 +1549,16 @@ bool SourcePixelGrid::assign_source_mapping_flags_overlap(lensvector **input_cor
 	return image_pixel_maps_to_source_grid;
 }
 
-void SourcePixelGrid::subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, bool& image_pixel_maps_to_source_grid)
+void SourcePixelGrid::subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, bool& image_pixel_maps_to_source_grid)
 {
 	bool inside;
 	int i,j;
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->subcell_assign_source_mapping_flags_overlap(input_corner_pts,mapped_source_pixels,thread,image_pixel_maps_to_source_grid);
+			if (cell[i][j]->cell != NULL) cell[i][j]->subcell_assign_source_mapping_flags_overlap(input_corner_pts,twist_pt,twist_status,mapped_source_pixels,thread,image_pixel_maps_to_source_grid);
 			else {
 				if (!cell[i][j]->check_if_in_neighborhood(input_corner_pts,inside,thread)) continue;
-				if ((inside) or (cell[i][j]->check_overlap(input_corner_pts,thread))) {
+				if ((inside) or (cell[i][j]->check_overlap(input_corner_pts,twist_pt,twist_status,thread))) {
 					cell[i][j]->maps_to_image_pixel = true;
 					mapped_source_pixels.push_back(cell[i][j]);
 					if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
@@ -1517,17 +1568,24 @@ void SourcePixelGrid::subcell_assign_source_mapping_flags_overlap(lensvector **i
 	}
 }
 
-void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& index, lensvector **input_corner_pts, const int& thread)
+void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
 	double overlap, total_overlap=0;
 	int i,j,k;
 	int Lmatrix_index_initial = index;
 	SourcePixelGrid *subcell;
+	//if ((image_pixel_i==15) and (image_pixel_j==24)) {
+		//for (i=0; i < image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j].size(); i++) {
+			//subcell = image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i];
+			//cout << "maps to source pixel " << subcell->ii << " " << subcell->jj << endl;
+		//}
+	//}
 
 	for (i=0; i < image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j].size(); i++) {
 		subcell = image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i];
 		lens->Lmatrix_index_rows[img_index].push_back(subcell->active_index);
-		overlap = subcell->find_rectangle_overlap(input_corner_pts,thread);
+		//if ((image_pixel_i==41) and (image_pixel_j==11)) cout << "Lmatrix cell: " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i]->center_pt[0] << " " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i]->center_pt[1] << endl;
+		overlap = subcell->find_rectangle_overlap(input_corner_pts,twist_pt,twist_status,thread,image_pixel_i,image_pixel_j);
 		lens->Lmatrix_rows[img_index].push_back(overlap);
 		index++;
 		total_overlap += overlap;
@@ -1538,7 +1596,7 @@ void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int 
 		lens->Lmatrix_rows[img_index][i] /= total_overlap;
 }
 
-double SourcePixelGrid::find_lensed_surface_brightness_overlap(lensvector **input_corner_pts, const int& thread)
+double SourcePixelGrid::find_lensed_surface_brightness_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
 	imin[thread]=0; imax[thread]=u_N-1;
 	jmin[thread]=0; jmax[thread]=w_N-1;
@@ -1550,9 +1608,9 @@ double SourcePixelGrid::find_lensed_surface_brightness_overlap(lensvector **inpu
 	int i,j;
 	for (j=jmin[thread]; j <= jmax[thread]; j++) {
 		for (i=imin[thread]; i <= imax[thread]; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->find_lensed_surface_brightness_subcell_overlap(input_corner_pts,thread,overlap,total_overlap,total_weighted_surface_brightness);
+			if (cell[i][j]->cell != NULL) cell[i][j]->find_lensed_surface_brightness_subcell_overlap(input_corner_pts,twist_pt,twist_status,thread,overlap,total_overlap,total_weighted_surface_brightness);
 			else {
-				overlap = cell[i][j]->find_rectangle_overlap(input_corner_pts,thread);
+				overlap = cell[i][j]->find_rectangle_overlap(input_corner_pts,twist_pt,twist_status,thread,0,0);
 				total_overlap += overlap;
 				total_weighted_surface_brightness += overlap*cell[i][j]->surface_brightness;
 			}
@@ -1564,14 +1622,14 @@ double SourcePixelGrid::find_lensed_surface_brightness_overlap(lensvector **inpu
 	return lensed_surface_brightness;
 }
 
-void SourcePixelGrid::find_lensed_surface_brightness_subcell_overlap(lensvector **input_corner_pts, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness)
+void SourcePixelGrid::find_lensed_surface_brightness_subcell_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness)
 {
 	int i,j;
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->find_lensed_surface_brightness_subcell_overlap(input_corner_pts,thread,overlap,total_overlap,total_weighted_surface_brightness);
+			if (cell[i][j]->cell != NULL) cell[i][j]->find_lensed_surface_brightness_subcell_overlap(input_corner_pts,twist_pt,twist_status,thread,overlap,total_overlap,total_weighted_surface_brightness);
 			else {
-				overlap = cell[i][j]->find_rectangle_overlap(input_corner_pts,thread);
+				overlap = cell[i][j]->find_rectangle_overlap(input_corner_pts,twist_pt,twist_status,thread,0,0);
 				total_overlap += overlap;
 				total_weighted_surface_brightness += overlap*cell[i][j]->surface_brightness;
 			}
@@ -1649,6 +1707,7 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 				else {
 					cell[i][j]->maps_to_image_pixel = true;
 					mapped_source_pixels.push_back(cell[i][j]);
+					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped cell: " << cell[i][j]->center_pt[0] << " " << cell[i][j]->center_pt[1] << endl;
 					if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
 					if (((input_center_pt[0] > cell[i][j]->center_pt[0]) and (cell[i][j]->neighbor[0] != NULL)) or (cell[i][j]->neighbor[1] == NULL)) {
 						if (cell[i][j]->neighbor[0]->cell != NULL) {
@@ -1656,10 +1715,12 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[0]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
+							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[0]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[0]);
+					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[0]->center_pt[0] << " " << cell[i][j]->neighbor[0]->center_pt[1] << endl;
 						}
 					} else {
 						if (cell[i][j]->neighbor[1]->cell != NULL) {
@@ -1667,10 +1728,12 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[1]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
+							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[1]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[1]);
+					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[1]->center_pt[0] << " " << cell[i][j]->neighbor[1]->center_pt[1] << endl;
 						}
 					}
 					if (((input_center_pt[1] > cell[i][j]->center_pt[1]) and (cell[i][j]->neighbor[2] != NULL)) or (cell[i][j]->neighbor[3] == NULL)) {
@@ -1679,10 +1742,12 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[2]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
+							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[2]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[2]);
+					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[2]->center_pt[0] << " " << cell[i][j]->neighbor[2]->center_pt[1] << endl;
 						}
 					} else {
 						if (cell[i][j]->neighbor[3]->cell != NULL) {
@@ -1690,10 +1755,12 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[3]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
+							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[3]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[3]);
+					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[3]->center_pt[0] << " " << cell[i][j]->neighbor[3]->center_pt[1] << endl;
 						}
 					}
 				}
@@ -1772,18 +1839,23 @@ bool SourcePixelGrid::subcell_assign_source_mapping_flags_interpolate(lensvector
 	return image_pixel_maps_to_source_grid;
 }
 
-void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const int& thread)
+void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
 {
-	int nsplits = image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j].size() / 3;
+	lensvector *pos;
 	for (int i=0; i < 3; i++) {
-		lens->Lmatrix_index_rows[img_index].push_back(image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][ii+i]->active_index);
+		lens->Lmatrix_index_rows[img_index].push_back(image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii+i]->active_index);
 		interpolation_pts[i][thread] = &image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii+i]->center_pt;
 	}
 
-	double d = nsplits * ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
-	lens->Lmatrix_rows[img_index].push_back((input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
-	lens->Lmatrix_rows[img_index].push_back((input_center_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_center_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
-	lens->Lmatrix_rows[img_index].push_back((input_center_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_center_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
+	//lens->Lmatrix_rows[img_index].push_back(weight);
+	//lens->Lmatrix_rows[img_index].push_back(0);
+	//lens->Lmatrix_rows[img_index].push_back(0);
+	//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "Lmatrix mapped cells: " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii]->center_pt[0] << " " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii]->center_pt[1] << endl;
+
+	double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
+	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
+	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_center_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
+	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_center_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
 	if (d==0) warn("d is zero!!!");
 
 	index += 3;
@@ -3632,6 +3704,9 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
 	nsplits = new int*[x_N];
 	subpixel_maps_to_srcpixel = new bool**[x_N];
+	twist_pts = new lensvector*[x_N];
+	twist_status = new int*[x_N];
+
 	int i,j,k;
 	for (i=0; i <= x_N; i++) {
 		corner_pts[i] = new lensvector[y_N+1];
@@ -3648,6 +3723,8 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		nsplits[i] = new int[y_N];
+		twist_pts[i] = new lensvector[y_N];
+		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
@@ -3707,14 +3784,51 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 				d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
 				d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
 				d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
+				// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
+				// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
+				twist_status[i][j] = 0;
+				double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+				xa=corner_sourcepts[i][j][0];
+				ya=corner_sourcepts[i][j][1];
+				xb=corner_sourcepts[i][j+1][0];
+				yb=corner_sourcepts[i][j+1][1];
+				xc=corner_sourcepts[i+1][j+1][0];
+				yc=corner_sourcepts[i+1][j+1][1];
+				xd=corner_sourcepts[i+1][j][0];
+				yd=corner_sourcepts[i+1][j][1];
+				slope1 = (yb-ya)/(xb-xa);
+				slope2 = (yc-yd)/(xc-xd);
+				twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
+				twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+				if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
+					twist_status[i][j] = 1;
+					d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
+					d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
+					d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
+					d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
+				} else {
+					slope1 = (yd-ya)/(xd-xa);
+					slope2 = (yc-yb)/(xc-xb);
+					twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+					twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+					if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
+						twist_status[i][j] = 2;
+						d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
+						d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
+						d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
+						d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+					}
+				}
+
 				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
 				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
+
 				if (lens_in->split_imgpixels) {
 					mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 					// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-					if (mag > 9) {
-						if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-					}
+					//if (mag > 9) {
+						//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
+					//}
 				}
 			}
 		}
@@ -3728,21 +3842,22 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 	fit_to_data = NULL;
 }
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) : lens(lens_in)
+inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
 {
-	ray_tracing_method = input_pixel_grid->ray_tracing_method;
-	xmin = input_pixel_grid->xmin;
-	xmax = input_pixel_grid->xmax;
-	ymin = input_pixel_grid->ymin;
-	ymax = input_pixel_grid->ymax;
-	x_N = input_pixel_grid->x_N;
-	y_N = input_pixel_grid->y_N;
+	if ((b>a) and (p>a) and (p<b)) return true;
+	else if ((a>b) and (p>b) and (p<a)) return true;
+	return false;
+}
+
+ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+{
+	ray_tracing_method = method;
+
+	x_N = x_N_in / reduce_factor;
+	y_N = y_N_in / reduce_factor;
+
 	xy_N = x_N*y_N;
-	pixel_noise = input_pixel_grid->pixel_noise;
-	n_active_pixels = input_pixel_grid->n_active_pixels;
-	max_nsplit = input_pixel_grid->max_nsplit;
-	nsplits = new int*[x_N];
-	subpixel_maps_to_srcpixel = new bool**[x_N];
+	n_active_pixels = 0;
 	corner_pts = new lensvector*[x_N+1];
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
@@ -3753,6 +3868,12 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 	surface_brightness = new double*[x_N];
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
+	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
+	nsplits = new int*[x_N];
+	subpixel_maps_to_srcpixel = new bool**[x_N];
+	twist_pts = new lensvector*[x_N];
+	twist_status = new int*[x_N];
+
 	int i,j,k;
 	for (i=0; i <= x_N; i++) {
 		corner_pts[i] = new lensvector[y_N+1];
@@ -3767,38 +3888,114 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		for (j=0; j < y_N; j++)
-			maps_to_source_pixel[i][j] = input_pixel_grid->maps_to_source_pixel[i][j];
-		nsplits[i] = new int[y_N];
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+		nsplits[i] = new int[y_N];
+		twist_pts[i] = new lensvector[y_N];
+		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = input_pixel_grid->subpixel_maps_to_srcpixel[i][j][k];
+			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
 	}
+
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
-
+	pixel_xlength = (xmax-xmin)/x_N;
+	pixel_ylength = (ymax-ymin)/y_N;
 	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
-	lensvector d1,d2,d3,d4;
 
+	double x,y;
+	int ii,jj;
+	lensvector d1,d2,d3,d4;
 	for (j=0; j <= y_N; j++) {
+		y = ymin + j*pixel_ylength;
 		for (i=0; i <= x_N; i++) {
+			x = xmin + i*pixel_xlength;
 			if ((i < x_N) and (j < y_N)) {
-				center_pts[i][j][0] = input_pixel_grid->center_pts[i][j][0];
-				center_pts[i][j][1] = input_pixel_grid->center_pts[i][j][1];
-				center_sourcepts[i][j] = input_pixel_grid->center_sourcepts[i][j];
-				surface_brightness[i][j] = input_pixel_grid->surface_brightness[i][j];
-				max_sb=input_pixel_grid->max_sb;
+				center_pts[i][j][0] = x + 0.5*pixel_xlength;
+				center_pts[i][j][1] = y + 0.5*pixel_ylength;
+				lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
 			}
-			corner_pts[i][j][0] = input_pixel_grid->corner_pts[i][j][0];
-			corner_pts[i][j][1] = input_pixel_grid->corner_pts[i][j][1];
-			corner_sourcepts[i][j] = input_pixel_grid->corner_sourcepts[i][j];
+			corner_pts[i][j][0] = x;
+			corner_pts[i][j][1] = y;
+			lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
+			if ((i < x_N) and (j < y_N)) {
+				surface_brightness[i][j] = 0;
+				for (ii=0; ii < reduce_factor; ii++) {
+					for (jj=0; jj < reduce_factor; jj++) {
+						surface_brightness[i][j] += sb_in[i*reduce_factor+ii][j*reduce_factor+jj];
+					}
+				}
+				surface_brightness[i][j] /= SQR(reduce_factor);
+			}
 		}
 	}
+
+	double mag;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
+			d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
+			d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
+			d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
+			d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
+			d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
+			d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
+			d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
+
+			// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
+			// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
+			twist_status[i][j] = 0;
+			double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+			xa=corner_sourcepts[i][j][0];
+			ya=corner_sourcepts[i][j][1];
+			xb=corner_sourcepts[i][j+1][0];
+			yb=corner_sourcepts[i][j+1][1];
+			xc=corner_sourcepts[i+1][j+1][0];
+			yc=corner_sourcepts[i+1][j+1][1];
+			xd=corner_sourcepts[i+1][j][0];
+			yd=corner_sourcepts[i+1][j][1];
+			slope1 = (yb-ya)/(xb-xa);
+			slope2 = (yc-yd)/(xc-xd);
+			twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
+			twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+			if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
+				twist_status[i][j] = 1;
+				d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
+				d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
+				d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
+				d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
+			} else {
+				slope1 = (yd-ya)/(xd-xa);
+				slope2 = (yc-yb)/(xc-xb);
+				twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+				twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+				if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
+					twist_status[i][j] = 2;
+					d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
+					d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
+					d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
+					d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+				}
+			}
+
+			source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
+			source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
+
+			if (lens_in->split_imgpixels) {
+				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
+				//if (mag > 9) {
+					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
+				//}
+			}
+		}
+	}
+
+	/*
 	double mag;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
@@ -3815,12 +4012,14 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, ImagePixelGrid* input_pixel_grid) 
 			if (lens_in->split_imgpixels) {
 				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-				if (mag > 9) {
-					if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-				}
+				//if (mag > 9) {
+					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
+				//}
 			}
 		}
 	}
+	*/
+
 	fit_to_data = NULL;
 }
 
@@ -3948,6 +4147,9 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betaf
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
 	nsplits = new int*[x_N];
 	subpixel_maps_to_srcpixel = new bool**[x_N];
+	twist_pts = new lensvector*[x_N];
+	twist_status = new int*[x_N];
+
 	int i,j,k;
 	for (i=0; i <= x_N; i++) {
 		corner_pts[i] = new lensvector[y_N+1];
@@ -3965,6 +4167,8 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betaf
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		nsplits[i] = new int[y_N];
+		twist_pts[i] = new lensvector[y_N];
+		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
@@ -4166,12 +4370,17 @@ void ImagePixelGrid::redo_lensing_calculations()
 	long int ntot_corners = (x_N+1)*(y_N+1);
 	long int ntot_cells = x_N*y_N;
 	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
+	double *twistx, *twisty;
+	int *twiststat;
 	defx_corners = new double[ntot_corners];
 	defy_corners = new double[ntot_corners];
 	defx_centers = new double[ntot_cells];
 	defy_centers = new double[ntot_cells];
 	area_tri1 = new double[ntot_cells];
 	area_tri2 = new double[ntot_cells];
+	twistx = new double[ntot_cells];
+	twisty = new double[ntot_cells];
+	twiststat = new int[ntot_cells];
 
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = ntot_corners / lens->group_np;
@@ -4230,6 +4439,41 @@ void ImagePixelGrid::redo_lensing_calculations()
 			d3[1] = defy_corners[n_yp+1] - defy_corners[n_yp];
 			d4[0] = defx_corners[n+1] - defx_corners[n_yp+1];
 			d4[1] = defy_corners[n+1] - defy_corners[n_yp+1];
+
+			twiststat[n_cell] = 0;
+			double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+			xa=defx_corners[n];
+			ya=defy_corners[n];
+			xb=defx_corners[n_yp];
+			yb=defy_corners[n_yp];
+			xc=defx_corners[n_yp+1];
+			yc=defy_corners[n_yp+1];
+			xd=defx_corners[n+1];
+			yd=defy_corners[n+1];
+			slope1 = (yb-ya)/(xb-xa);
+			slope2 = (yc-yd)/(xc-xd);
+			twistx[n_cell] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
+			twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
+			if ((test_if_between(twistx[n_cell],xa,xb)) and (test_if_between(twisty[n_cell],ya,yb)) and (test_if_between(twistx[n_cell],xc,xd)) and (test_if_between(twisty[n_cell],yc,yd))) {
+				twiststat[n_cell] = 1;
+				d2[0] = twistx[n_cell] - defx_corners[n];
+				d2[1] = twisty[n_cell] - defy_corners[n];
+				d4[0] = twistx[n_cell] - defx_corners[n_yp+1];
+				d4[1] = twisty[n_cell] - defy_corners[n_yp+1];
+			} else {
+				slope1 = (yd-ya)/(xd-xa);
+				slope2 = (yc-yb)/(xc-xb);
+				twistx[n_cell] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+				twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
+				if ((test_if_between(twistx[n_cell],xa,xd)) and (test_if_between(twisty[n_cell],ya,yd)) and (test_if_between(twistx[n_cell],xb,xc)) and (test_if_between(twisty[n_cell],yb,yc))) {
+					twiststat[n_cell] = 2;
+					d1[0] = defx_corners[n] - twistx[n_cell];
+					d1[1] = defy_corners[n] - twisty[n_cell];
+					d3[0] = defx_corners[n_yp+1] - twistx[n_cell];
+					d3[1] = defy_corners[n_yp+1] - twisty[n_cell];
+				}
+			}
+
 			area_tri1[n_cell] = 0.5*abs(d1 ^ d2);
 			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
 		}
@@ -4244,6 +4488,9 @@ void ImagePixelGrid::redo_lensing_calculations()
 		MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
 		MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
 		MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
+		MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
+		MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
+		MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
 	}
 	MPI_Comm_free(&sub_comm);
 #endif
@@ -4259,12 +4506,15 @@ void ImagePixelGrid::redo_lensing_calculations()
 			source_plane_triangle2_area[i][j] = area_tri2[n_cell];
 			center_sourcepts[i][j][0] = defx_centers[n_cell];
 			center_sourcepts[i][j][1] = defy_centers[n_cell];
+			twist_pts[i][j][0] = twistx[n_cell];
+			twist_pts[i][j][1] = twisty[n_cell];
+			twist_status[i][j] = twiststat[n_cell];
 			if (lens->split_imgpixels) {
 				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-				if (mag > 9) {
-					if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-				}
+				//if (mag > 9) {
+					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
+				//}
 			}
 		}
 	}
@@ -4445,6 +4695,7 @@ void ImagePixelGrid::plot_grid(string filename, bool show_inactive_pixels)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!fit_to_data) or (fit_to_data[i][j])) {
+				//cout << "WHAZZUP " << i << " " << j << endl;
 				//if ((show_inactive_pixels) or (maps_to_source_pixel[i][j])) {
 					gridfile << corner_sourcepts[i][j][0] << " " << corner_sourcepts[i][j][1] << " " << corner_pts[i][j][0] << " " << corner_pts[i][j][1] << endl;
 					gridfile << corner_sourcepts[i+1][j][0] << " " << corner_sourcepts[i+1][j][1] << " " << corner_pts[i+1][j][0] << " " << corner_pts[i+1][j][1] << endl;
@@ -4568,7 +4819,7 @@ void ImagePixelGrid::assign_image_mapping_flags()
 						corners[1] = &corner_sourcepts[i][j+1];
 						corners[2] = &corner_sourcepts[i+1][j];
 						corners[3] = &corner_sourcepts[i+1][j+1];
-						if (source_pixel_grid->assign_source_mapping_flags_overlap(corners,mapped_source_pixels[i][j],thread)==true) {
+						if (source_pixel_grid->assign_source_mapping_flags_overlap(corners,&twist_pts[i][j],twist_status[i][j],mapped_source_pixels[i][j],thread)==true) {
 							maps_to_source_pixel[i][j] = true;
 							#pragma omp atomic
 							n_active_pixels++;
@@ -4590,8 +4841,8 @@ void ImagePixelGrid::assign_image_mapping_flags()
 			thread = 0;
 #endif
 			int ii,jj,kk,nsplit;
-			double x0, y0;
-			#pragma omp for private(i,j,ii,jj,kk,nsplit,x0,y0) schedule(dynamic)
+			double u0, w0;
+			#pragma omp for private(i,j,ii,jj,kk,nsplit,u0,w0) schedule(dynamic)
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
 					if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
@@ -4600,12 +4851,14 @@ void ImagePixelGrid::assign_image_mapping_flags()
 						nsplit = nsplits[i][j];
 						for (ii=0; ii < nsplit; ii++) {
 							for (jj=0; jj < nsplit; jj++) {
+								// The image pixel subgridding may result in multiple Lmatrix entries that map to the same source pixel, but these
+								// will be consolidated when the PSF convolution is carried out
 								subpixel_maps_to_srcpixel[i][j][kk] = false;
 								lensvector center1, center1_srcpt;
-								x0 = ((double) (1+2*ii))/(2*nsplit);
-								y0 = ((double) (1+2*jj))/(2*nsplit);
-								center1[0] = x0*corner_pts[i][j][0] + (1-x0)*corner_pts[i+1][j][0];
-								center1[1] = y0*corner_pts[i][j][1] + (1-y0)*corner_pts[i][j+1][1];
+								u0 = ((double) (1+2*ii))/(2*nsplit);
+								w0 = ((double) (1+2*jj))/(2*nsplit);
+								center1[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+								center1[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 								lens->find_sourcept(center1,center1_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
 								if (source_pixel_grid->assign_source_mapping_flags_interpolate(center1_srcpt,mapped_source_pixels[i][j],thread,i,j)==true) {
 									maps_to_something = true;
@@ -4661,13 +4914,28 @@ void Lens::assign_Lmatrix(bool verbal)
 				corners[1] = &image_pixel_grid->corner_sourcepts[i][j+1];
 				corners[2] = &image_pixel_grid->corner_sourcepts[i+1][j];
 				corners[3] = &image_pixel_grid->corner_sourcepts[i+1][j+1];
-				source_pixel_grid->calculate_Lmatrix_overlap(img_index,i,j,index,corners,thread);
+				source_pixel_grid->calculate_Lmatrix_overlap(img_index,i,j,index,corners,&image_pixel_grid->twist_pts[i][j],image_pixel_grid->twist_status[i][j],thread);
 				Lmatrix_row_nn[img_index] = index;
 			}
 		}
 	}
 	else if (image_pixel_grid->ray_tracing_method == Interpolate)
 	{
+		int max_nsplit = image_pixel_grid->max_nsplit;
+		lensvector ***corner_srcpts;
+		double ***subpixel_area;
+		if (!weight_interpolation_by_imgplane_area) {
+			corner_srcpts = new lensvector**[max_nsplit+1];
+			subpixel_area = new double**[max_nsplit+1];
+			for (i=0; i < max_nsplit+1; i++) {
+				corner_srcpts[i] = new lensvector*[max_nsplit+1];
+				subpixel_area[i] = new double*[max_nsplit+1];
+				for (j=0; j < max_nsplit+1; j++) {
+					corner_srcpts[i][j] = new lensvector[nthreads];
+					subpixel_area[i][j] = new double[nthreads];
+				}
+			}
+		}
 		#pragma omp parallel
 		{
 			int thread;
@@ -4677,8 +4945,10 @@ void Lens::assign_Lmatrix(bool verbal)
 			thread = 0;
 #endif
 			int ii,jj,kk,ll,nsplit;
-			double x0, y0;
-			#pragma omp for private(img_index,i,j,ii,jj,kk,ll,nsplit,index,x0,y0) schedule(dynamic)
+			double u0, w0, cell, atot;
+			int nmaps;
+
+			#pragma omp for private(img_index,i,j,ii,jj,kk,ll,nsplit,index,u0,w0,cell,atot,nmaps) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
 				index=0;
 				i = active_image_pixel_i[img_index];
@@ -4688,24 +4958,123 @@ void Lens::assign_Lmatrix(bool verbal)
 				kk=0;
 				ll=0;
 				nsplit = image_pixel_grid->nsplits[i][j];
+				cell = 1.0/nsplit;
+				lensvector center, center_srcpt, corner;
+
+				if (!weight_interpolation_by_imgplane_area) {
+					atot=0;
+					nmaps=0;
+					lensvector d1, d2, d3, d4;
+					ofstream wtfout;
+					//if ((i==21) and (j==18)) wtfout.open("wtf.dat");
+					for (ii=0; ii < nsplit; ii++) {
+						for (jj=0; jj < nsplit; jj++) {
+							u0 = ((double) ii)/nsplit;
+							w0 = ((double) jj)/nsplit;
+							corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
+							corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+							find_sourcept(corner,corner_srcpts[ii+1][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+
+							if (ii==0) {
+								corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+								corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+								find_sourcept(corner,corner_srcpts[ii][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+							} else {
+								corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+								corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+								lensvector check;
+								find_sourcept(corner,check,thread,reference_zfactors,default_zsrc_beta_factors);
+							}
+							if (jj==0) {
+								corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
+								corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
+								find_sourcept(corner,corner_srcpts[ii+1][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+							}
+							if ((ii==0) and (jj==0)) {
+								corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+								corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
+								find_sourcept(corner,corner_srcpts[ii][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+							}
+							d1[0] = corner_srcpts[ii][jj][thread][0] - corner_srcpts[ii+1][jj][thread][0];
+							d1[1] = corner_srcpts[ii][jj][thread][1] - corner_srcpts[ii+1][jj][thread][1];
+							d2[0] = corner_srcpts[ii][jj+1][thread][0] - corner_srcpts[ii][jj][thread][0];
+							d2[1] = corner_srcpts[ii][jj+1][thread][1] - corner_srcpts[ii][jj][thread][1];
+							d3[0] = corner_srcpts[ii+1][jj+1][thread][0] - corner_srcpts[ii][jj+1][thread][0];
+							d3[1] = corner_srcpts[ii+1][jj+1][thread][1] - corner_srcpts[ii][jj+1][thread][1];
+							d4[0] = corner_srcpts[ii+1][jj][thread][0] - corner_srcpts[ii+1][jj+1][thread][0];
+							d4[1] = corner_srcpts[ii+1][jj][thread][1] - corner_srcpts[ii+1][jj+1][thread][1];
+
+							subpixel_area[ii][jj][thread] = (0.5*(abs(d1 ^ d2) + abs (d3 ^ d4)));
+							//if (image_pixel_grid->subpixel_maps_to_srcpixel[i][j][kk]) {
+								nmaps++;
+								atot += subpixel_area[ii][jj][thread];
+							//}
+						}
+					}
+				}
+				//if ((i==9) and (j==46)) {
+					//cout << "afrac: " << afrac << " " << i << " " << j;
+					//if (image_pixel_grid->twist_status[i][j]==1) cout << " (twist)";
+					//else if (image_pixel_grid->twist_status[i][j]==2) cout << " (TWIST)";
+					//cout << endl;
+				//}
+
+				//if ((i==15) and (j==24)) {
+					//double afrac = atot / (image_pixel_grid->source_plane_triangle1_area[i][j] + image_pixel_grid->source_plane_triangle2_area[i][j]);
+					//cout << "AFRAC: " << afrac << endl;
+				//}
+
 				for (ii=0; ii < nsplit; ii++) {
 					for (jj=0; jj < nsplit; jj++) {
+						//if ((i==21) and (j==18)) {
+							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl;
+							//wtfout << corner_srcpts[ii+1][jj][thread][0] << " " << corner_srcpts[ii+1][jj][thread][1] << endl;
+							//wtfout << corner_srcpts[ii+1][jj+1][thread][0] << " " << corner_srcpts[ii+1][jj+1][thread][1] << endl;
+							//wtfout << corner_srcpts[ii][jj+1][thread][0] << " " << corner_srcpts[ii][jj+1][thread][1] << endl;
+							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl << endl;
+							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl << endl;
+						//}
+
 						if (image_pixel_grid->subpixel_maps_to_srcpixel[i][j][kk]) {
-							lensvector center1, center1_srcpt;
-							x0 = ((double) (1+2*ii))/(2*nsplit);
-							y0 = ((double) (1+2*jj))/(2*nsplit);
-							center1[0] = x0*image_pixel_grid->corner_pts[i][j][0] + (1-x0)*image_pixel_grid->corner_pts[i+1][j][0];
-							center1[1] = y0*image_pixel_grid->corner_pts[i][j][1] + (1-y0)*image_pixel_grid->corner_pts[i][j+1][1];
-							find_sourcept(center1,center1_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
-							source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,center1_srcpt,ll,thread);
+							u0 = ((double) (1+2*ii))*cell/2;
+							w0 = ((double) (1+2*jj))*cell/2;
+							center[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+							center[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+							find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+							if (weight_interpolation_by_imgplane_area) {
+								source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,center_srcpt,ll,1.0/SQR(nsplit),thread); // weights by area in image plane
+							} else {
+								source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,center_srcpt,ll,subpixel_area[ii][jj][thread]/atot,thread); // weights by area in source plane
+							}
 							ll++;
 						}
 						kk++;
 					}
 				}
-
 				Lmatrix_row_nn[img_index] = index;
+				//if ((i==15) and (j==24)) {
+					//SourcePixelGrid *subcell;
+					//cout << "N MAPPED PIXELS: " << image_pixel_grid->mapped_source_pixels[i][j].size();
+					//for (int k=0; k < image_pixel_grid->mapped_source_pixels[i][j].size(); k += 3) {
+						//subcell = image_pixel_grid->mapped_source_pixels[i][j][k];
+						//cout << "maps to source pixel " << subcell->ii << " " << subcell->jj << endl;
+					//}
+				//}
+
 			}
+
+		}
+		if (!weight_interpolation_by_imgplane_area) {
+			for (i=0; i < max_nsplit+1; i++) {
+				for (j=0; j < max_nsplit+1; j++) {
+					delete[] corner_srcpts[i][j];
+					delete[] subpixel_area[i][j];
+				}
+				delete[] corner_srcpts[i];
+				delete[] subpixel_area[i];
+			}
+			delete[] corner_srcpts;
+			delete[] subpixel_area;
 		}
 	}
 
@@ -4752,7 +5121,7 @@ void ImagePixelGrid::find_surface_brightness()
 				corners[1] = &corner_sourcepts[i][j+1];
 				corners[2] = &corner_sourcepts[i+1][j];
 				corners[3] = &corner_sourcepts[i+1][j+1];
-				surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_overlap(corners,0);
+				surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_overlap(corners,&twist_pts[i][j],twist_status[i][j],0);
 			}
 		}
 		delete[] corners;
@@ -4785,6 +5154,8 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] source_plane_triangle1_area[i];
 		delete[] source_plane_triangle2_area[i];
 		delete[] nsplits[i];
+		delete[] twist_status[i];
+		delete[] twist_pts[i];
 		for (int j=0; j < y_N; j++) delete[] subpixel_maps_to_srcpixel[i][j];
 		delete[] subpixel_maps_to_srcpixel[i];
 	}
@@ -4798,6 +5169,8 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] source_plane_triangle2_area;
 	delete[] subpixel_maps_to_srcpixel;
 	delete[] nsplits;
+	delete[] twist_status;
+	delete[] twist_pts;
 	if (fit_to_data != NULL) {
 		for (int i=0; i < x_N; i++) delete[] fit_to_data[i];
 		delete[] fit_to_data;
@@ -6433,6 +6806,7 @@ void Lens::calculate_image_pixel_surface_brightness()
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			image_surface_brightness[i] += Lmatrix[j]*source_surface_brightness[Lmatrix_index[j]];
 		}
+		//if (image_surface_brightness[i] < 0) image_surface_brightness[i] = 0;
 	}
 }
 

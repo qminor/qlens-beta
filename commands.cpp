@@ -26,6 +26,8 @@ void Lens::process_commands(bool read_file)
 	plot_key_outside = false;
 	show_plot_key = true;
 	show_colorbar = true;
+	colorbar_min = -1e30;
+	colorbar_max = 1e30;
 	plot_square_axes = false;
 	plot_title = "";
 	post_title = ""; // Title for posterior triangle plots
@@ -6104,6 +6106,7 @@ void Lens::process_commands(bool read_file)
 				bool replot = false;
 				bool plot_residual = false;
 				bool plot_fits = false;
+				int reduce_factor = 1;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -6111,6 +6114,8 @@ void Lens::process_commands(bool read_file)
 						if (args[i]=="-replot") replot = true;
 						else if (args[i]=="-residual") plot_residual = true;
 						else if (args[i]=="-fits") plot_fits = true;
+						else if (args[i]=="-reduce2") reduce_factor = 2;
+						else if (args[i]=="-reduce4") reduce_factor = 4;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -6126,7 +6131,7 @@ void Lens::process_commands(bool read_file)
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
 							if (!replot) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (plot_srcplane) run_plotter_range("srcpixel",range1);
@@ -6138,9 +6143,9 @@ void Lens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
 							if (show_cc) {
 								run_plotter("imgpixel",words[2],range1);
 							} else {
@@ -6150,11 +6155,11 @@ void Lens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual);
 								if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
 							if (!replot) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);
@@ -6592,6 +6597,32 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'colorbar' command; must specify 'on' or 'off'");
 				set_switch(show_colorbar,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="cbmin")
+		{
+			double cbmin;
+			if (nwords == 2) {
+				if (words[1]=="auto") {
+					if (sbmin != -1e30) cbmin = sbmin; // sbmin was stored from last pixel image generated
+				}
+				else if (!(ws[1] >> cbmin)) Complain("invalid cbmin setting");
+				colorbar_min = cbmin;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "colorbar min surface brightness = " << colorbar_min << endl;
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="cbmax")
+		{
+			double cbmax;
+			if (nwords == 2) {
+				if (words[1]=="auto") {
+					if (sbmax != 1e30) cbmax = sbmax; // sbmax was stored from last pixel image generated
+				}
+				else if (!(ws[1] >> cbmax)) Complain("invalid cbmax setting");
+				colorbar_max = cbmax;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "colorbar max surface brightness = " << colorbar_max << endl;
+			} else Complain("must specify either zero or one argument");
 		}
 		else if (words[0]=="plot_square_axes")
 		{
@@ -7982,6 +8013,15 @@ void Lens::process_commands(bool read_file)
 				else Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
 		}
+		else if (words[0]=="raytrace_imgplane_wgt")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Weight subpixel raytracing by image plane area: " << display_switch(weight_interpolation_by_imgplane_area) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_imgplane_wgt' command; must specify 'on' or 'off'");
+				set_switch(weight_interpolation_by_imgplane_area,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="inversion_method") {
 			if (nwords==1) {
 				if (mpi_id==0) {
@@ -8262,12 +8302,20 @@ void Lens::run_plotter(string plotcommand)
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
+		stringstream cbminstr, cbmaxstr;
+		string cbmin, cbmax;
+		cbminstr << colorbar_min;
+		cbminstr >> cbmin;
+		cbmaxstr << colorbar_max;
+		cbmaxstr >> cbmax;
 		string command = "plotlens " + plotcommand + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (show_colorbar==false) command += " nocb";
+		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
+		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
@@ -8286,6 +8334,12 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
+		stringstream cbminstr, cbmaxstr;
+		string cbmin, cbmax;
+		cbminstr << colorbar_min;
+		cbminstr >> cbmin;
+		cbmaxstr << colorbar_max;
+		cbmaxstr >> cbmax;
 		string command = "plotlens " + plotcommand + " file=" + filename + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (terminal==POSTSCRIPT) command += " term=postscript";
@@ -8294,6 +8348,8 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
+		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
+		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
@@ -8312,12 +8368,20 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
+		stringstream cbminstr, cbmaxstr;
+		string cbmin, cbmax;
+		cbminstr << colorbar_min;
+		cbminstr >> cbmin;
+		cbmaxstr << colorbar_max;
+		cbmaxstr >> cbmax;
 		string command = "plotlens " + plotcommand + " " + range + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (plot_title != "") command += " title='" + plot_title + "'";
 		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (!show_plot_key) command += " key=-1";
 		else if (plot_key_outside) command += " key=1";
 		if (show_colorbar==false) command += " nocb";
+		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
+		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}
@@ -8336,6 +8400,12 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		fsstr >> fsstring;
 		lwstr << linewidth;
 		lwstr >> lwstring;
+		stringstream cbminstr, cbmaxstr;
+		string cbmin, cbmax;
+		cbminstr << colorbar_min;
+		cbminstr >> cbmin;
+		cbmaxstr << colorbar_max;
+		cbmaxstr >> cbmax;
 		string command = "plotlens " + plotcommand + " file=" + filename + " " + extra_command + " ps=" + psstring + " pt=" + ptstring + " lw=" + lwstring + " fs=" + fsstring;
 		if (fit_output_dir != ".") command += " dir=" + fit_output_dir;
 		if (plot_title != "") command += " title='" + plot_title + "'";
@@ -8344,6 +8414,8 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		if (terminal==POSTSCRIPT) command += " term=postscript";
 		else if (terminal==PDF) command += " term=pdf";
 		if (show_colorbar==false) command += " nocb";
+		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
+		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
 		system(command.c_str());
 	}

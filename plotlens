@@ -15,6 +15,9 @@ FILENAME=""
 RANGE=""
 TERM=""
 PLOTDIR="."
+SET_CBRANGE=0
+CBMIN=-1e30
+CBMAX=1e30
 
 COMMAND=$1
 shift
@@ -38,6 +41,17 @@ for VAR in "$@"; do
 	if [[ $VAR == *'term='* ]]; then
 		TERM=${VAR#term=}
 	fi
+
+	if [[ $VAR == *'cbmin='* ]]; then
+		CBMIN=${VAR#cbmin=}
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == *'cbmax='* ]]; then
+		CBMAX=${VAR#cbmax=}
+		SET_CBRANGE=1
+	fi
+
 
 	if [[ $VAR == *'file='* ]]; then
 		FILENAME=${VAR#file=}
@@ -87,6 +101,16 @@ fi
 
 if [[ $COLORBOX == "0" ]]; then
 	SETTERM="$SETTERM; unset colorbox";
+fi
+
+if [[ $SET_CBRANGE == "1" ]]; then
+	if [[ $CBMAX == "1e30" ]]; then
+		SETTERM="$SETTERM; set cbrange [$CBMIN:]";
+	elif [[ $CBMIN == "-1e30" ]]; then
+		SETTERM="$SETTERM; set cbrange [:$CBMAX]";
+	else
+		SETTERM="$SETTERM; set cbrange [$CBMIN:$CBMAX]";
+	fi
 fi
 
 if [[ $TITLE != "" ]]; then

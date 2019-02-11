@@ -68,6 +68,8 @@ class SourcePixelGrid
 	static int *maxlevs;
 	static lensvector ***xvals_threads;
 	static lensvector ***corners_threads;
+	static lensvector **twistpts_threads;
+	static int **twist_status_threads;
 
 	static int u_split_initial, w_split_initial;
 	static const int max_levels;
@@ -102,13 +104,13 @@ class SourcePixelGrid
 	static void allocate_multithreaded_variables(const int& threads);
 	static void deallocate_multithreaded_variables();
 	void copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid);
-	inline bool check_overlap(lensvector **input_corner_pts, const int& thread);
+	inline bool check_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	inline bool check_if_in_neighborhood(lensvector **input_corner_pts, bool &inside, const int& thread);
-	inline double find_rectangle_overlap(lensvector **input_corner_pts, const int& thread);
-	inline bool check_triangle1_overlap(lensvector **input_corner_pts, const int& thread);
-	inline bool check_triangle2_overlap(lensvector **input_corner_pts, const int& thread);
-	inline double find_triangle1_overlap(lensvector **input_corner_pts, const int& thread);
-	inline double find_triangle2_overlap(lensvector **input_corner_pts, const int& thread);
+	inline double find_rectangle_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread, const int&, const int&);
+	inline bool check_triangle1_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	inline bool check_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	inline double find_triangle1_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	inline double find_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	void generate_gmatrices();
 	void generate_hmatrices();
 
@@ -118,16 +120,16 @@ class SourcePixelGrid
 	double get_lowest_mag_sourcept(double &xsrc, double &ysrc);
 	void get_highest_mag_sourcept(double &xsrc, double &ysrc);
 
-	bool assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread);
-	void subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, bool& image_pixel_maps_to_source_grid);
-	void calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& Lmatrix_index, lensvector **input_corner_pts, const int& thread);
-	double find_lensed_surface_brightness_overlap(lensvector **input_corner_pts, const int& thread);
-	void find_lensed_surface_brightness_subcell_overlap(lensvector **input_corner_pts, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness);
+	bool assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread);
+	void subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, bool& image_pixel_maps_to_source_grid);
+	void calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& Lmatrix_index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	double find_lensed_surface_brightness_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	void find_lensed_surface_brightness_subcell_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness);
 
 	bool bisection_search_interpolate(lensvector &input_center_pt, const int& thread);
 	bool assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread, const int& image_pixel_i, const int& image_pixel_j);
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_source_pixels, const int& thread);
-	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const int& thread);
+	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const double weight, const int& thread);
 	double find_lensed_surface_brightness_interpolate(lensvector &input_center_pt, const int& thread);
 	void find_interpolation_cells(lensvector &input_center_pt, const int& thread);
 	SourcePixelGrid* find_nearest_neighbor_cell(lensvector &input_center_pt, const int& side);
@@ -188,6 +190,8 @@ class ImagePixelGrid : public Sort
 	int **nsplits;
 	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
+	int **twist_status;
+	lensvector **twist_pts;
 	vector<SourcePixelGrid*> **mapped_source_pixels;
 	RayTracingMethod ray_tracing_method;
 	double xmin, xmax, ymin, ymax;
@@ -195,15 +199,17 @@ class ImagePixelGrid : public Sort
 	int n_active_pixels;
 	int xy_N; // gives x_N*y_N if the entire pixel grid is used
 	double pixel_xlength, pixel_ylength;
-	inline bool test_if_inside_cell(const lensvector& point);
+	inline bool test_if_between(const double& p, const double& a, const double& b);
 	static double* imggrid_zfactors;
 	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
 	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data);
-	ImagePixelGrid(Lens* lens_in, ImagePixelGrid* pixel_grid);
+	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
+
 	ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
+	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
 

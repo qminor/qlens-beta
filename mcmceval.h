@@ -2,6 +2,7 @@
 #define MCMEVAL_H
 #include "GregsMathHdr.h"
 #include "random.h"
+#include <vector>
 
 //inline double SQR(const double s) { return s*s; }
 

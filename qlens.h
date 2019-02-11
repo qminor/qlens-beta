@@ -291,6 +291,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool use_mumps_subcomm;
 	bool n_image_prior;
 	double n_images_at_sbmax, pixel_avg_n_image;
+	double sbmin, sbmax;
 	double n_image_threshold;
 	double max_pixel_sb;
 	bool max_sb_prior_unselected_pixels;
@@ -444,6 +445,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar, plot_square_axes;
+	double colorbar_min, colorbar_max;
 	int plot_pttype;
 	string fit_output_dir;
 	bool auto_fit_output_dir;
@@ -452,6 +454,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK } inversion_method;
 	RayTracingMethod ray_tracing_method;
+	bool weight_interpolation_by_imgplane_area;
+
 	bool parallel_mumps, show_mumps_info;
 
 	int n_image_pixels_x, n_image_pixels_y; // note that this is the TOTAL number of pixels in the image, as opposed to image_npixels which gives the # of pixels being fit to
@@ -637,7 +641,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool create_source_surface_brightness_grid(bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
-	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
