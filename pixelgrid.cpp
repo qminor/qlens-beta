@@ -1191,12 +1191,14 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			//cell[i][j]->n_images = overlap_area / cell[i][j]->cell_area;
 		//}
 	//}
-	double mag, mag_threshold = 4*lens->pixel_magnification_threshold;
+	double mag;
+	//double mag_threshold = 4*lens->pixel_magnification_threshold;
 	int nsubcells;
 	for (nsrc=0; nsrc < ntot_src; nsrc++) {
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
+		//cout << "CELL " << i << " " << j << " " << cell[i][j]->total_magnification << " " << (cell[i][j]->total_magnification*cell[i][j]->cell_area/(image_pixel_grid->pixel_area)) << endl;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
 		nsubcells = 1;
@@ -1320,14 +1322,14 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 	} else {
 		int k,l,m;
 		double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
-		double mag_threshold = 4*lens->pixel_magnification_threshold;
+		//double mag_threshold = 4*lens->pixel_magnification_threshold;
 		SourcePixelGrid *subcell;
-		if (level > 0) {
-			for (i=0; i < level; i++) {
-				//mag_threshold *= 4;
-				mag_threshold *= 4*lens->pixel_magnification_threshold;
-			}
-		}
+		//if (level > 0) {
+			//for (i=0; i < level; i++) {
+				////mag_threshold *= 4;
+				//mag_threshold *= 4*lens->pixel_magnification_threshold;
+			//}
+		//}
 		bool subgrid;
 		#pragma omp parallel
 		{
@@ -1442,14 +1444,14 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 
 		int k,l,m,nn,img_i,img_j;
 		double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
-		double mag_threshold = 4*lens->pixel_magnification_threshold;
+		//double mag_threshold = 4*lens->pixel_magnification_threshold;
 		SourcePixelGrid *subcell;
-		if (level > 0) {
-			for (i=0; i < level; i++) {
-				//mag_threshold *= 4;
-				mag_threshold *= 4*lens->pixel_magnification_threshold;
-			}
-		}
+		//if (level > 0) {
+			//for (i=0; i < level; i++) {
+				////mag_threshold *= 4;
+				//mag_threshold *= 4*lens->pixel_magnification_threshold;
+			//}
+		//}
 		bool subgrid;
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
@@ -1841,22 +1843,22 @@ bool SourcePixelGrid::subcell_assign_source_mapping_flags_interpolate(lensvector
 
 void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
 {
-	lensvector *pos;
 	for (int i=0; i < 3; i++) {
 		lens->Lmatrix_index_rows[img_index].push_back(image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii+i]->active_index);
 		interpolation_pts[i][thread] = &image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii+i]->center_pt;
 	}
 
-	//lens->Lmatrix_rows[img_index].push_back(weight);
-	//lens->Lmatrix_rows[img_index].push_back(0);
-	//lens->Lmatrix_rows[img_index].push_back(0);
-	//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "Lmatrix mapped cells: " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii]->center_pt[0] << " " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][3*ii]->center_pt[1] << endl;
-
-	double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
-	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
-	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_center_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
-	lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_center_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
-	if (d==0) warn("d is zero!!!");
+	if (lens->interpolate_sb_3pt) {
+		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
+		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
+		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_center_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
+		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_center_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
+		if (d==0) warn("d is zero!!!");
+	} else {
+		lens->Lmatrix_rows[img_index].push_back(weight);
+		lens->Lmatrix_rows[img_index].push_back(0);
+		lens->Lmatrix_rows[img_index].push_back(0);
+	}
 
 	index += 3;
 }
@@ -3726,6 +3728,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
+			surface_brightness[i][j] = 0;
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -3893,12 +3896,26 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** 
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
+			maps_to_source_pixel[i][j] = true;
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
 	}
+	//if ((lens->active_image_pixel_i != NULL) and (lens->active_image_pixel_j != NULL)) {
+		//for (i=0; i < x_N; i++) {
+			//for (j=0; j < y_N; j++) {
+				//maps_to_source_pixel[i][j] = false;
+			//}
+		//}
+		//for (k=0; k < lens->image_npixels; k++) {
+			//i = lens->active_image_pixel_i[k];
+			//j = lens->active_image_pixel_j[k];
+			//pixel_index[i][j] = k;
+			//maps_to_source_pixel[i][j] = true;
+		//}
+	//}
 
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
@@ -4170,6 +4187,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betaf
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
+			surface_brightness[i][j] = 0;
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -5291,52 +5309,14 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 #endif
 
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
-	static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
-	int nx_half, ny_half, nx, ny;
-	double x, y, xmax, ymax;
-	int i,j;
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
-		nx = psf_npixels_x;
-		ny = psf_npixels_y;
-		nx_half = nx/2;
-		ny_half = ny/2;
-	} else {
-		if ((psf_width_x==0) or (psf_width_y==0)) return;
-		double normalization = 0;
-		double xstep, ystep, nx_half_dec, ny_half_dec;
-		xstep = image_pixel_grid->pixel_xlength;
-		ystep = image_pixel_grid->pixel_ylength;
-		nx_half_dec = sigma_fraction*psf_width_x/xstep;
-		ny_half_dec = sigma_fraction*psf_width_y/ystep;
-		nx_half = ((int) nx_half_dec);
-		ny_half = ((int) ny_half_dec);
-		if ((nx_half_dec - nx_half) > 0.5) nx_half++;
-		if ((ny_half_dec - ny_half) > 0.5) ny_half++;
-		xmax = nx_half*xstep;
-		ymax = ny_half*ystep;
-		nx = 2*nx_half+1;
-		ny = 2*ny_half+1;
-		if (psf_matrix != NULL) {
-			for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
-			delete[] psf_matrix;
-		}
-		psf_matrix = new double*[nx];
-		for (i=0; i < nx; i++) psf_matrix[i] = new double[ny];
-		psf_npixels_x = nx;
-		psf_npixels_y = ny;
-		for (i=0, x=-xmax; i < nx; i++, x += xstep) {
-			for (j=0, y=-ymax; j < ny; j++, y += ystep) {
-				psf_matrix[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
-				normalization += psf_matrix[i][j];
-			}
-		}
-		for (i=0; i < nx; i++) {
-			for (j=0; j < ny; j++) {
-				psf_matrix[i][j] /= normalization;
-			}
-		}
 	}
+	else if (generate_PSF_matrix()==false) return;
+	double nx_half, ny_half;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+
 	int *Lmatrix_psf_row_nn = new int[image_npixels];
 	vector<double> *Lmatrix_psf_rows = new vector<double>[image_npixels];
 	vector<int> *Lmatrix_psf_index_rows = new vector<int>[image_npixels];
@@ -5358,7 +5338,7 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 		mpi_start = 0; mpi_end = image_npixels;
 	}
 
-	int k,l,m;
+	int i,j,k,l,m;
 	int psf_k, psf_l;
 	int img_index1, img_index2, src_index, col_index;
 	int index;
@@ -5373,28 +5353,30 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 		Lmatrix_psf_row_nn[img_index1] = 0;
 		k = active_image_pixel_i[img_index1];
 		l = active_image_pixel_j[img_index1];
-		for (psf_k=0; psf_k < ny; psf_k++) {
+		for (psf_k=0; psf_k < psf_npixels_y; psf_k++) {
 			i = k + ny_half - psf_k;
 			if ((i >= 0) and (i < image_pixel_grid->x_N)) {
-				for (psf_l=0; psf_l < nx; psf_l++) {
+				for (psf_l=0; psf_l < psf_npixels_x; psf_l++) {
 					j = l + nx_half - psf_l;
 					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
 							img_index2 = image_pixel_grid->pixel_index[i][j];
 
 							for (index=image_pixel_location_Lmatrix[img_index2]; index < image_pixel_location_Lmatrix[img_index2+1]; index++) {
-								src_index = Lmatrix_index[index];
-								new_entry = true;
-								for (m=0; m < Lmatrix_psf_row_nn[img_index1]; m++) {
-									if (Lmatrix_psf_index_rows[img_index1][m]==src_index) { col_index=m; new_entry=false; }
-								}
-								if (new_entry) {
-									Lmatrix_psf_rows[img_index1].push_back(psf_matrix[psf_l][psf_k]*Lmatrix[index]);
-									Lmatrix_psf_index_rows[img_index1].push_back(src_index);
-									Lmatrix_psf_row_nn[img_index1]++;
-									col_i++;
-								} else {
-									Lmatrix_psf_rows[img_index1][col_index] += psf_matrix[psf_l][psf_k]*Lmatrix[index];
+								if (Lmatrix[index] != 0) {
+									src_index = Lmatrix_index[index];
+									new_entry = true;
+									for (m=0; m < Lmatrix_psf_row_nn[img_index1]; m++) {
+										if (Lmatrix_psf_index_rows[img_index1][m]==src_index) { col_index=m; new_entry=false; }
+									}
+									if (new_entry) {
+										Lmatrix_psf_rows[img_index1].push_back(psf_matrix[psf_l][psf_k]*Lmatrix[index]);
+										Lmatrix_psf_index_rows[img_index1].push_back(src_index);
+										Lmatrix_psf_row_nn[img_index1]++;
+										col_i++;
+									} else {
+										Lmatrix_psf_rows[img_index1][col_index] += psf_matrix[psf_l][psf_k]*Lmatrix[index];
+									}
 								}
 							}
 						}
@@ -5481,6 +5463,93 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 		if (mpi_id==0) cout << "Wall time for calculating PSF-convolution of Lmatrix: " << wtime << endl;
 	}
 #endif
+}
+
+void Lens::PSF_convolution_image_pixel_vector(bool verbal)
+{
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+	double *new_image_surface_brightness = new double[image_npixels];
+	if (use_input_psf_matrix) {
+		if (psf_matrix == NULL) return;
+	}
+	else if (generate_PSF_matrix()==false) {
+		warn("could not generate_PSF matrix");
+		return;
+	}
+	double nx_half, ny_half;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+
+	int i,j,k,l;
+	int psf_k, psf_l;
+	int img_index1, img_index2;
+	#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l) schedule(static)
+	for (img_index1=0; img_index1 < image_npixels; img_index1++)
+	{ // this loops over columns of the PSF blurring matrix
+		new_image_surface_brightness[img_index1] = 0;
+		k = active_image_pixel_i[img_index1];
+		l = active_image_pixel_j[img_index1];
+		for (psf_k=0; psf_k < psf_npixels_y; psf_k++) {
+			i = k + ny_half - psf_k;
+			if ((i >= 0) and (i < image_pixel_grid->x_N)) {
+				for (psf_l=0; psf_l < psf_npixels_x; psf_l++) {
+					j = l + nx_half - psf_l;
+					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+							img_index2 = image_pixel_grid->pixel_index[i][j];
+							new_image_surface_brightness[img_index1] += psf_matrix[psf_l][psf_k]*image_surface_brightness[img_index2];
+						}
+					}
+				}
+			}
+		}
+	}
+
+	delete[] image_surface_brightness;
+	image_surface_brightness = new_image_surface_brightness;
+}
+
+bool Lens::generate_PSF_matrix()
+{
+	static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
+	int i,j;
+	int nx_half, ny_half, nx, ny;
+	double x, y, xmax, ymax;
+	if ((psf_width_x==0) or (psf_width_y==0)) return false;
+	double normalization = 0;
+	double xstep, ystep, nx_half_dec, ny_half_dec;
+	xstep = image_pixel_grid->pixel_xlength;
+	ystep = image_pixel_grid->pixel_ylength;
+	nx_half_dec = sigma_fraction*psf_width_x/xstep;
+	ny_half_dec = sigma_fraction*psf_width_y/ystep;
+	nx_half = ((int) nx_half_dec);
+	ny_half = ((int) ny_half_dec);
+	if ((nx_half_dec - nx_half) > 0.5) nx_half++;
+	if ((ny_half_dec - ny_half) > 0.5) ny_half++;
+	xmax = nx_half*xstep;
+	ymax = ny_half*ystep;
+	nx = 2*nx_half+1;
+	ny = 2*ny_half+1;
+	if (psf_matrix != NULL) {
+		for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
+		delete[] psf_matrix;
+	}
+	psf_matrix = new double*[nx];
+	for (i=0; i < nx; i++) psf_matrix[i] = new double[ny];
+	psf_npixels_x = nx;
+	psf_npixels_y = ny;
+	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
+		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
+			psf_matrix[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
+			normalization += psf_matrix[i][j];
+		}
+	}
+	for (i=0; i < nx; i++) {
+		for (j=0; j < ny; j++) {
+			psf_matrix[i][j] /= normalization;
+		}
+	}
+	return true;
 }
 
 void Lens::generate_Rmatrix_from_image_plane_curvature()
@@ -6821,6 +6890,33 @@ void Lens::store_image_pixel_surface_brightness()
 		i = active_image_pixel_i[img_index];
 		j = active_image_pixel_j[img_index];
 		image_pixel_grid->surface_brightness[i][j] = image_surface_brightness[img_index];
+	}
+}
+
+void Lens::vectorize_image_pixel_surface_brightness()
+{
+	int i,j,k=0;
+	if (active_image_pixel_i == NULL) {
+		delete[] active_image_pixel_i;
+		if (active_image_pixel_j == NULL) delete[] active_image_pixel_j;
+		image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
+		active_image_pixel_i = new int[image_npixels];
+		active_image_pixel_j = new int[image_npixels];
+		for (i=0; i < image_pixel_grid->x_N; i++) {
+			for (j=0; j < image_pixel_grid->y_N; j++) {
+				active_image_pixel_i[k] = i;
+				active_image_pixel_j[k] = j;
+				image_pixel_grid->pixel_index[i][j] = k++;
+			}
+		}
+	}
+	if (image_surface_brightness == NULL) delete[] image_surface_brightness;
+	image_surface_brightness = new double[image_npixels];
+
+	for (k=0; k < image_npixels; k++) {
+		i = active_image_pixel_i[k];
+		j = active_image_pixel_j[k];
+		image_surface_brightness[k] = image_pixel_grid->surface_brightness[i][j];
 	}
 }
 

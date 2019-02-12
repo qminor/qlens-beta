@@ -42,8 +42,7 @@ enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_S
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
 	Area_Overlap,
-	Interpolate,
-	Area_Interpolation
+	Interpolate
 };
 enum DerivedParamType {
 	KappaR,
@@ -455,7 +454,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool weight_interpolation_by_imgplane_area;
-
+	bool interpolate_sb_3pt;
 	bool parallel_mumps, show_mumps_info;
 
 	int n_image_pixels_x, n_image_pixels_y; // note that this is the TOTAL number of pixels in the image, as opposed to image_npixels which gives the # of pixels being fit to
@@ -614,6 +613,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void clear_lensing_matrices();
 	void assign_Lmatrix(bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
+	void PSF_convolution_image_pixel_vector(bool verbal = false);
+	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
@@ -631,6 +632,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
 	void store_image_pixel_surface_brightness();
+	void vectorize_image_pixel_surface_brightness();
 	void plot_image_pixel_surface_brightness(string outfile_root);
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
 	void load_pixel_grid_from_data();

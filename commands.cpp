@@ -1139,7 +1139,7 @@ void Lens::process_commands(bool read_file)
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
 								"savesrc').\n";
 						else if (words[2]=="plotimg")
-							cout << "sbmap plotimg [-...] (optional arguments: [-fits] [-residual] [-replot])\n"
+							cout << "sbmap plotimg [-...] (optional arguments: [-fits] [-residual] [-replot] [-nosrc] [-reduce2/4/8])\n"
 								"sbmap plotimg [-...] [image_file]\n"
 								"sbmap plotimg [-...] [source_file] [image_file]\n\n"
 								"Plot a lensed pixel image from a pixellated source surface brightness distribution under\n"
@@ -1155,6 +1155,10 @@ void Lens::process_commands(bool read_file)
 								"Optional arguments:\n"
 								"  [-fits] plots to FITS files; filename(s) must be specified with this option\n"
 								"  [-residual] plots residual image by subtracting from the data image\n"
+								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
+								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
+								"               aging 2x2 or 4x4 or 8x8 pixel groups to generate low-res pixel surface brightness\n"
+								"               values.\n"
 								"  [-replot] plots image that was previously found and plotted by the 'sbmap plotimg' command.\n"
 								"     This allows one to tweak plot parameters (range, show_cc etc.) without having to calculate\n"
 								"     the lensed pixel images again.\n\n"
@@ -1727,7 +1731,8 @@ void Lens::process_commands(bool read_file)
 						"Set the method for ray tracing image pixels to source pixels (using the 'sbmap' commands.\n"
 						"Available methods are:\n\n"
 						"interpolation -- interpolate surface brightness using linear interpolation in the three nearest\n"
-						"                 source pixels (this is the fastest method).\n"
+						"                 source pixels.\n"
+						"direct -- surface brightness of nearest source pixel is used.\n"
 						"overlap -- after ray-tracing a pixel to the source plane, find the overlap area with all source\n"
 						"           pixels it overlaps with and weight the surface brightness accordingly.\n";
 				else if (words[1]=="img_npixels")
@@ -1888,7 +1893,7 @@ void Lens::process_commands(bool read_file)
 					cout << "srcgrid: (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
 					if (auto_sourcegrid) cout << " (auto_srcgrid on)";
 					cout << endl;
-					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "area overlap\n" : (ray_tracing_method==Interpolate) ? "linear 3-point interpolation\n" : (ray_tracing_method==Area_Interpolation) ? "area overlap + interpolation\n" : "unknown\n");
+					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "area overlap\n" : ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) ? "linear 3-point interpolation\n" : ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) ? "direct (nearest source pixel used)\n" : "unknown\n");
 					cout << "sim_pixel_noise = " << sim_pixel_noise << endl;
 					cout << "psf_width: (" << psf_width_x << "," << psf_width_y << ")\n";
 					cout << "psf_threshold = " << psf_threshold << endl;
@@ -5933,7 +5938,6 @@ void Lens::process_commands(bool read_file)
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				load_psf_fits(filename,verbal_mode);
 			}
 			else if (words[1]=="unloadpsf")
@@ -6106,6 +6110,7 @@ void Lens::process_commands(bool read_file)
 				bool replot = false;
 				bool plot_residual = false;
 				bool plot_fits = false;
+				bool omit_source = false;
 				int reduce_factor = 1;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
@@ -6114,13 +6119,21 @@ void Lens::process_commands(bool read_file)
 						if (args[i]=="-replot") replot = true;
 						else if (args[i]=="-residual") plot_residual = true;
 						else if (args[i]=="-fits") plot_fits = true;
+						else if (args[i]=="-nosrc") omit_source = true;
 						else if (args[i]=="-reduce2") reduce_factor = 2;
 						else if (args[i]=="-reduce4") reduce_factor = 4;
+						else if (args[i]=="-reduce8") reduce_factor = 8;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
+				bool old_plot_srcplane = plot_srcplane;
+				if (omit_source) plot_srcplane = false;
 
+				if (reduce_factor > 1) {
+					n_image_pixels_x *= reduce_factor;
+					n_image_pixels_y *= reduce_factor;
+				}
 				if (!islens()) Complain("must specify lens model first");
 				if (source_pixel_grid == NULL) Complain("No source surface brightness map has been loaded");
 				string range1, range2;
@@ -6171,6 +6184,7 @@ void Lens::process_commands(bool read_file)
 						}
 					} else Complain("invalid number of arguments to 'sbmap plotimg'");
 				} else if (!foundcc) Complain("could not find critical curves");
+				if (omit_source) plot_srcplane = old_plot_srcplane;
 			}
 			else if (words[1]=="plotsrc")
 			{
@@ -8001,15 +8015,15 @@ void Lens::process_commands(bool read_file)
 			if (nwords==1) {
 				if (mpi_id==0) {
 					if (ray_tracing_method==Area_Overlap) cout << "Ray tracing method: area overlap" << endl;
-					else if (ray_tracing_method==Interpolate) cout << "Ray tracing method: linear 3-point interpolation" << endl;
-					else if (ray_tracing_method==Area_Interpolation) cout << "Ray tracing method (raytrace_method): area overlap + interpolation" << endl;
+					else if ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) cout << "Ray tracing method: linear 3-point interpolation" << endl;
+					else if ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) cout << "Ray tracing method: direct (nearest source pixel used)" << endl;
 					else cout << "Unknown ray tracing method" << endl;
 				}
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 				if (setword=="overlap") ray_tracing_method = Area_Overlap;
 				else if (setword=="interpolate") ray_tracing_method = Interpolate;
-				else if (setword=="area_interpolate") ray_tracing_method = Area_Interpolation;
+				else if (setword=="direct") { ray_tracing_method = Interpolate; interpolate_sb_3pt = false; }
 				else Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
 		}

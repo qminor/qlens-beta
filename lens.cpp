@@ -315,6 +315,7 @@ Lens::Lens() : UCMC()
 	auto_sourcegrid = true;
 	ray_tracing_method = Interpolate;
 	weight_interpolation_by_imgplane_area = true;
+	interpolate_sb_3pt = true; // if false, will not use 3-point interpolation even when ray tracing method is set to "interpolate"
 #ifdef USE_MUMPS
 	inversion_method = MUMPS;
 #else
@@ -623,6 +624,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
+	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
 
 	regularization_method = lens_in->regularization_method;
 	regularization_parameter = lens_in->regularization_parameter;
@@ -8960,9 +8962,10 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 	//if ((use_input_psf_matrix) or ((psf_width_x != 0) and (psf_width_y != 0))) {
 		if (assign_pixel_mappings(verbose)==false) return false;
 		initialize_pixel_matrices(verbose);
-		PSF_convolution_Lmatrix(verbose);
+		//PSF_convolution_Lmatrix(verbose);
 		source_pixel_grid->fill_surface_brightness_vector();
 		calculate_image_pixel_surface_brightness();
+		if (reduce_factor==1) PSF_convolution_image_pixel_vector(verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 		store_image_pixel_surface_brightness();
 		clear_pixel_matrices();
 	//} else {
@@ -8982,6 +8985,10 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 		image_pixel_grid = new ImagePixelGrid(this,ray_tracing_method,sb_old,n_image_pixels_x,n_image_pixels_y,reduce_factor,xmin,xmax,ymin,ymax);
 		n_image_pixels_x /= reduce_factor;
 		n_image_pixels_y /= reduce_factor;
+		vectorize_image_pixel_surface_brightness();
+		PSF_convolution_image_pixel_vector(verbose);
+		store_image_pixel_surface_brightness();
+		clear_pixel_matrices();
 
 		for (int i=0; i < n_image_pixels_x; i++) delete[] sb_old[i];
 		delete[] sb_old;
