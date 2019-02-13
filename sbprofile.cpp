@@ -163,9 +163,9 @@ void Gaussian::print_parameters()
 	cout << "gaussian: max_sb=" << max_sb << ", sig_x=" << sig_x << ", q=" << q << ", theta=" << radians_to_degrees(theta) << " degrees, center=(" << x_center << "," << y_center << ")\n";
 }
 
-double Gaussian::window_rmax()
+double Gaussian::window_rmax() // used to define the window size for pixellated surface brightness maps
 {
-	return 5*sig_x;
+	return 7*sig_x;
 }
 
 Sersic::Sersic(const double &s0_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)

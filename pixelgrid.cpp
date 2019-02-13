@@ -4549,6 +4549,9 @@ void ImagePixelGrid::redo_lensing_calculations()
 	delete[] defy_centers;
 	delete[] area_tri1;
 	delete[] area_tri2;
+	delete[] twistx;
+	delete[] twisty;
+	delete[] twiststat;
 }
 
 bool ImagePixelData::test_if_in_fit_region(const double& x, const double& y)
@@ -5227,6 +5230,8 @@ bool Lens::assign_pixel_mappings(bool verbal)
 	}
 
 	image_npixels = image_pixel_grid->n_active_pixels;
+	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
+	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
 	active_image_pixel_i = new int[image_npixels];
 	active_image_pixel_j = new int[image_npixels];
 	int i, j, image_pixel_index=0;
