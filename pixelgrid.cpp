@@ -2741,6 +2741,7 @@ SourcePixelGrid::~SourcePixelGrid()
 			for (j=0; j < w_N; j++) delete cell[i][j];
 			delete[] cell[i];
 		}
+		delete[] cell;
 		cell = NULL;
 	}
 }
@@ -4987,7 +4988,6 @@ void Lens::assign_Lmatrix(bool verbal)
 					nmaps=0;
 					lensvector d1, d2, d3, d4;
 					ofstream wtfout;
-					//if ((i==21) and (j==18)) wtfout.open("wtf.dat");
 					for (ii=0; ii < nsplit; ii++) {
 						for (jj=0; jj < nsplit; jj++) {
 							u0 = ((double) ii)/nsplit;
@@ -5026,10 +5026,8 @@ void Lens::assign_Lmatrix(bool verbal)
 							d4[1] = corner_srcpts[ii+1][jj][thread][1] - corner_srcpts[ii+1][jj+1][thread][1];
 
 							subpixel_area[ii][jj][thread] = (0.5*(abs(d1 ^ d2) + abs (d3 ^ d4)));
-							//if (image_pixel_grid->subpixel_maps_to_srcpixel[i][j][kk]) {
-								nmaps++;
-								atot += subpixel_area[ii][jj][thread];
-							//}
+							nmaps++;
+							atot += subpixel_area[ii][jj][thread];
 						}
 					}
 				}
