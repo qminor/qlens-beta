@@ -259,6 +259,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double kappa_avg_r(const double r);
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
+	bool has_kappa_profile();
 
 	virtual void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
 	virtual void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);

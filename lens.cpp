@@ -2022,7 +2022,7 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 	dr = 1e-5;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((einstein_radii[i] > 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
+			if ((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius) and (lens_list[i]->has_kappa_profile())) {
 				xc = centers[i][0];
 				yc = centers[i][1];
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers
