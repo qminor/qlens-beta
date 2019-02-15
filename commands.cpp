@@ -6140,6 +6140,15 @@ void Lens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
+				if ((plot_srcplane) and (range1 == "")) {
+					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
+					string xminstr, xmaxstr, yminstr, ymaxstr;
+					xminstream << source_pixel_grid->srcgrid_xmin; xminstream >> xminstr;
+					yminstream << source_pixel_grid->srcgrid_ymin; yminstream >> yminstr;
+					xmaxstream << source_pixel_grid->srcgrid_xmax; xmaxstream >> xmaxstr;
+					ymaxstream << source_pixel_grid->srcgrid_ymax; ymaxstream >> ymaxstr;
+					range1 = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
+				}
 				bool foundcc = true;
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
@@ -6191,7 +6200,8 @@ void Lens::process_commands(bool read_file)
 				if (source_pixel_grid == NULL) Complain("No source surface brightness map has been loaded");
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
-				if ((range1 == "") and ((!show_cc) or (!islens()))) {
+				if (range1 == "") {
+				//if ((range1 == "") and ((!show_cc) or (!islens()))) {
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
 					xminstream << source_pixel_grid->srcgrid_xmin; xminstream >> xminstr;
