@@ -6022,9 +6022,9 @@ void Lens::process_commands(bool read_file)
 			{
 				if (nwords != 3) Complain("one argument allowed for command 'sbmap trim_mask_windows' (# of mask windows)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				int nmask;
-				if (!(ws[2] >> nmask)) Complain("invalid number of mask windows");
-				image_pixel_data->assign_mask_windows(nmask);
+				double noise_threshold;
+				if (!(ws[2] >> noise_threshold)) Complain("invalid noise threshold for keeping mask windows");
+				image_pixel_data->assign_mask_windows(noise_threshold);
 			}
 			else if (words[1]=="set_data_annulus")
 			{

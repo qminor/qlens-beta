@@ -3184,9 +3184,11 @@ void ImagePixelData::set_all_required_data_pixels()
 	n_required_pixels = npixels_x*npixels_y;
 }
 
-void ImagePixelData::assign_mask_windows(const int max_n_windows)
+void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 {
 	vector<int> mask_window_sizes;
+	vector<bool> active_mask_window;
+	vector<double> mask_window_max_sb;
 	int n_mask_windows = 0;
 	int **mask_window_id = new int*[npixels_x];
 	int i,j,l;
@@ -3212,6 +3214,8 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 						if ((current_mask == -1) and (mask_window_id[i][j] == -1)) {
 							current_mask = n_mask_windows;
 							mask_window_sizes.push_back(1);
+							active_mask_window.push_back(true);
+							mask_window_max_sb.push_back(surface_brightness[i][j]);
 							mask_window_id[i][j] = n_mask_windows;
 							n_mask_windows++;
 							new_mask_member = true;
@@ -3224,6 +3228,7 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 								if (neighbor_mask == current_mask) {
 									mask_window_id[i][j] = neighbor_mask;
 									mask_window_sizes[neighbor_mask]++;
+									if (surface_brightness[i][j] > mask_window_max_sb[current_mask]) mask_window_max_sb[current_mask] = surface_brightness[i][j];
 									new_mask_member = true;
 								}
 							}
@@ -3232,21 +3237,25 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 								if ((i > 0) and (require_fit[i-1][j]) and (mask_window_id[i-1][j] < 0)) {
 									mask_window_id[i-1][j] = this_window_id;
 									mask_window_sizes[this_window_id]++;
+									if (surface_brightness[i-1][j] > mask_window_max_sb[current_mask]) mask_window_max_sb[current_mask] = surface_brightness[i-1][j];
 									new_mask_member = true;
 								}
 								if ((i < npixels_x-1) and (require_fit[i+1][j]) and (mask_window_id[i+1][j] < 0)) {
 									mask_window_id[i+1][j] = this_window_id;
 									mask_window_sizes[this_window_id]++;
+									if (surface_brightness[i+1][j] > mask_window_max_sb[current_mask]) mask_window_max_sb[current_mask] = surface_brightness[i+1][j];
 									new_mask_member = true;
 								}
 								if ((j > 0) and (require_fit[i][j-1]) and (mask_window_id[i][j-1] < 0)) {
 									mask_window_id[i][j-1] = this_window_id;
 									mask_window_sizes[this_window_id]++;
+									if (surface_brightness[i][j-1] > mask_window_max_sb[current_mask]) mask_window_max_sb[current_mask] = surface_brightness[i][j-1];
 									new_mask_member = true;
 								}
 								if ((j < npixels_y-1) and (require_fit[i][j+1]) and (mask_window_id[i][j+1] < 0)) {
 									mask_window_id[i][j+1] = this_window_id;
 									mask_window_sizes[this_window_id]++;
+									if (surface_brightness[i][j+1] > mask_window_max_sb[current_mask]) mask_window_max_sb[current_mask] = surface_brightness[i][j+1];
 									new_mask_member = true;
 								}
 							}
@@ -3258,16 +3267,24 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 	} while (current_mask != -1);
 	int smallest_window_size, smallest_window_id;
 	int n_windows_eff = n_mask_windows;
-	while (n_windows_eff > max_n_windows) {
+	int old_n_windows = n_windows_eff;
+	do {
+		old_n_windows = n_windows_eff;
 		smallest_window_size = npixels_x*npixels_y;
 		smallest_window_id = -1;
 		for (l=0; l < n_mask_windows; l++) {
-			if ((mask_window_sizes[l] != 0) and (mask_window_sizes[l] < smallest_window_size)) {
-				smallest_window_size = mask_window_sizes[l];
-				smallest_window_id = l;
+			if (active_mask_window[l]) {
+				if (mask_window_max_sb[l] > sb_noise_threshold*lens->data_pixel_noise) {
+					active_mask_window[l] = false;
+					//n_windows_eff--;
+				}
+				else if ((mask_window_sizes[l] != 0) and (mask_window_sizes[l] < smallest_window_size)) {
+					smallest_window_size = mask_window_sizes[l];
+					smallest_window_id = l;
+				}
 			}
 		}
-		if (smallest_window_size > 0) {
+		if ((smallest_window_id != -1) and (smallest_window_size > 0)) {
 			for (i=0; i < npixels_x; i++) {
 				for (j=0; j < npixels_y; j++) {
 					if (mask_window_id[i][j]==smallest_window_id) {
@@ -3275,16 +3292,19 @@ void ImagePixelData::assign_mask_windows(const int max_n_windows)
 					}
 				}
 			}
+			active_mask_window[smallest_window_id] = false;
 			mask_window_sizes[smallest_window_id] = 0;
 			n_windows_eff--;
 		}
+		//cout << "HI " << n_windows_eff << endl;
 	}
+	while (n_windows_eff < old_n_windows);
 	if (lens->mpi_id == 0) cout << "Trimmed " << n_mask_windows << " windows down to " << n_windows_eff << " windows" << endl;
 	j=0;
 	for (i=0; i < n_mask_windows; i++) {
 		if (mask_window_sizes[i] != 0) {
 			j++;
-			if (lens->mpi_id == 0) cout << "Window " << j << " size: " << mask_window_sizes[i] << endl;
+			if (lens->mpi_id == 0) cout << "Window " << j << " size: " << mask_window_sizes[i] << " max_sb: " << mask_window_max_sb[i] << endl;
 		}
 	}
 	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
