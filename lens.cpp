@@ -9419,6 +9419,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 	if (n_image_prior) {
 		double chisq_penalty;
+		if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_image << endl;
 		if (pixel_avg_n_image < n_image_threshold) {
 			chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_image,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
 			chisq += chisq_penalty;

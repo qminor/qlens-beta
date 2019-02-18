@@ -6020,7 +6020,7 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="trim_mask_windows")
 			{
-				if (nwords != 3) Complain("one argument allowed for command 'sbmap trim_mask_windows' (# of mask windows)");
+				if (nwords != 3) Complain("one argument allowed for command 'sbmap trim_mask_windows' (noise threshold)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				double noise_threshold;
 				if (!(ws[2] >> noise_threshold)) Complain("invalid noise threshold for keeping mask windows");
