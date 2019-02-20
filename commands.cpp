@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <unistd.h>
 using namespace std;
 
 #define Complain(errmsg) do { if (mpi_id==0) cerr << "Error: " << errmsg << endl; if ((read_from_file) and (quit_after_error)) die(); goto next_line; } while (false) // the while(false) is a trick to make the macro syntax behave like a function
@@ -8097,7 +8098,8 @@ void Lens::process_commands(bool read_file)
 				else Complain("invalid argument to 'terminal' command; must specify terminal type");
 			} else Complain("invalid number of arguments; can only specify terminal type");
 		}
-		else if (words[0]=="pause") {
+		else if (words[0]=="pause")
+		{
 			if (read_from_file) {
 				if (!quit_after_reading_file) {   // if 'q' option is given, skip pauses
 					if ((mpi_id==0) and (verbal_mode)) cout << "Pausing script file... (enter 'continue' or simply 'c' to continue)\n";
@@ -8106,10 +8108,19 @@ void Lens::process_commands(bool read_file)
 			}
 			else Complain("script file is not currently being read");
 		}
-		else if ((words[0]=="continue") or (words[0]=="c")) {
+		else if ((words[0]=="continue") or (words[0]=="c"))
+		{
 			if (read_from_file) Complain("script file is already being read");
 			if (!infile->is_open()) Complain("no script file is currently loaded");
 			read_from_file = true;
+		}
+		else if (words[0]=="sleep")
+		{
+			double time_sec = 1.0;
+			if (nwords==2) {
+				if (!(ws[1] >> time_sec)) Complain("invalid sleep time (should be number multiple of seconds)");
+			}
+			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
 			plot_weak_lensing_shear_field();
