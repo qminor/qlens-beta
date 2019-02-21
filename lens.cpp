@@ -236,7 +236,7 @@ Lens::Lens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 4; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = true;
-	max_sb_frac = 0.1; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	max_sb_frac = 0.2; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
 	use_inversion_to_set_mask = false; // this "cheat" allows you to quickly set a sensible mask for simulated data
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -2040,7 +2040,7 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 						// version (below) and doesn't work well for foreground/background perturbers
 						shear_exclude(galcenter[j],shear_at_center,shear_angle,i,zfacs,betafacs);
 						if (shear_at_center*0.0 != 0.0) {
-							warn("Satellite subgridding failed (NaN shear calculated); this may be because two or more subhalos are at the same position");
+							warn("Satellite subgridding failed (NaN shear calculated) for pjaffe lens %i; this may be because two or more subhalos are at the same position",i);
 							delete[] subgrid;
 							delete[] kappas;
 							delete[] parities;
@@ -9437,12 +9437,22 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		PSF_convolution_Lmatrix(verbal);
 		source_pixel_grid->fill_surface_brightness_vector();
 		calculate_image_pixel_surface_brightness();
-		double max_external_sb = -1e30;
+		double max_external_sb = -1e30, max_sb = -1e30;
+		for (i=0; i < image_pixel_data->npixels_x; i++) {
+			for (j=0; j < image_pixel_data->npixels_y; j++) {
+				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+					img_index = image_pixel_grid->pixel_index[i][j];
+					if (image_surface_brightness[img_index] > max_sb) {
+						 max_sb = image_surface_brightness[img_index];
+					}
+				}
+			}
+		}
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
 				if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_pixel_sb)) {
+					if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_sb)) {
 						if (image_surface_brightness[img_index] > max_external_sb) {
 							 max_external_sb = image_surface_brightness[img_index];
 						}
@@ -9452,8 +9462,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		if (max_external_sb > 0) {
 			sb_outside_window = true;
-			chisq += pow(1+abs((max_external_sb-max_sb_frac*max_pixel_sb)/(max_sb_frac*max_pixel_sb)),60) - 1.0;
-			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_pixel_sb << ") has been found outside the selected fit region" << endl;
+			chisq += pow(1+abs((max_external_sb-max_sb_frac*max_sb)/(max_sb_frac*max_sb)),60) - 1.0;
+			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_sb << ") has been found outside the selected fit region" << endl;
 		}
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
