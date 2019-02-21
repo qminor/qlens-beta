@@ -687,6 +687,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	inversion_nthreads = lens_in->inversion_nthreads;
 	adaptive_grid = lens_in->adaptive_grid;
 	pixel_magnification_threshold = lens_in->pixel_magnification_threshold;
+	pixel_magnification_threshold_lower_limit = lens_in->pixel_magnification_threshold_lower_limit;
+	pixel_magnification_threshold_upper_limit = lens_in->pixel_magnification_threshold_upper_limit;
 	vary_magnification_threshold = lens_in->vary_magnification_threshold;
 	base_srcpixel_imgpixel_ratio = lens_in->base_srcpixel_imgpixel_ratio; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
@@ -8391,7 +8393,7 @@ void Lens::output_lens_commands(string filename, const bool print_limits)
 			if (!print_limits) {
 				scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold << endl;
 			} else {
-				scriptfile << "srcpixel_mag_threshold: " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
+				scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
 			}
 		}
 	}
