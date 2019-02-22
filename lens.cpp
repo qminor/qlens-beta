@@ -235,8 +235,9 @@ Lens::Lens() : UCMC()
 	psf_threshold = 1e-3;
 	n_image_prior = false;
 	n_image_threshold = 4; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
+	n_image_prior_sb_frac = 0.3; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = true;
-	max_sb_frac = 0.2; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF max_sb_prior_unselected_pixels IS SET TO 'TRUE'
+	max_sb_prior_noise_frac = 4; // surface brightness threshold is given as multiple of data pixel noise
 	use_inversion_to_set_mask = false; // this "cheat" allows you to quickly set a sensible mask for simulated data
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -550,8 +551,9 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	psf_threshold = lens_in->psf_threshold;
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
+	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
 	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
-	max_sb_frac = lens_in->max_sb_frac;
+	max_sb_prior_noise_frac = lens_in->max_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	use_inversion_to_set_mask = false; // This should not be used for the fitmodel object, ever
 	subhalo_prior = lens_in->subhalo_prior;
 	use_custom_prior = lens_in->use_custom_prior;
@@ -9454,7 +9456,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
 				if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					if (abs(image_surface_brightness[img_index]) >= abs(max_sb_frac*max_sb)) {
+					if (abs(image_surface_brightness[img_index]) >= (max_sb_prior_noise_frac*data_pixel_noise)) {
 						if (image_surface_brightness[img_index] > max_external_sb) {
 							 max_external_sb = image_surface_brightness[img_index];
 						}
@@ -9463,9 +9465,12 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 		}
 		if (max_external_sb > 0) {
+			double chisq_penalty, max_sb_prior_threshold;
+			max_sb_prior_threshold = max_sb_prior_noise_frac*data_pixel_noise;
 			sb_outside_window = true;
-			chisq += pow(1+abs((max_external_sb-max_sb_frac*max_sb)/(max_sb_frac*max_sb)),60) - 1.0;
-			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_frac*max_sb << ") has been found outside the selected fit region" << endl;
+			chisq_penalty = pow(1+abs((max_external_sb-max_sb_prior_threshold)/max_sb_prior_threshold),60) - 1.0;
+			chisq += chisq_penalty;
+			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << max_sb_prior_threshold << ") has been found outside the selected fit region, resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 		}
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}

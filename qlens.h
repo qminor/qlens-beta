@@ -294,7 +294,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double n_image_threshold;
 	double max_pixel_sb;
 	bool max_sb_prior_unselected_pixels;
-	double max_sb_frac;
+	double max_sb_prior_noise_frac, n_image_prior_sb_frac;
 	bool use_inversion_to_set_mask;
 	bool subhalo_prior;
 	bool use_custom_prior;

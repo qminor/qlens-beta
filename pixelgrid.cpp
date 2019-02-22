@@ -6190,7 +6190,7 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
 					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
 					sbtot += source_surface_brightness[i];
 				}
@@ -6407,7 +6407,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
 					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
 					sbtot += source_surface_brightness[i];
 				}
@@ -6711,7 +6711,7 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*max_sb_frac) {
+				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
 					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
 					sbtot += source_surface_brightness[i];
 				}

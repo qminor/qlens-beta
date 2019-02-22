@@ -197,9 +197,10 @@ void Lens::process_commands(bool read_file)
 						"regparam -- value of regularization parameter used for inverting lensed pixel images\n"
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
-						"outside_sb_threshold -- fraction of max surface brightness allowed beyond mask by outside_sb_prior\n"
+						"outside_sb_noise_threshold -- max s.b. allowed beyond mask by outside_sb_prior (times pixel noise)\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
-						"nimg_threshold -- threshold on # of images at max surface brightness (used if nimg_prior is on)\n"
+						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
+						"nimg_sb_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
 						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
@@ -1921,9 +1922,10 @@ void Lens::process_commands(bool read_file)
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
-					cout << "outside_sb_threshold = " << max_sb_frac << endl;
+					cout << "outside_sb_noise_threshold = " << max_sb_prior_noise_frac << endl;
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
+					cout << "nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
 					cout << "activate_unmapped_srcpixels: " << display_switch(activate_unmapped_source_pixels) << endl;
 					cout << "exclude_srcpixels_outside_mask: " << display_switch(exclude_source_pixels_beyond_fit_window) << endl;
@@ -7874,15 +7876,25 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Noise threshold for automatic srcpixel grid sizing = " << noise_threshold << endl;
 			} else Complain("must specify either zero or one argument (noise threshold for automatic source grid sizing)");
 		}
-		else if (words[0]=="outside_sb_threshold")
+		else if (words[0]=="outside_sb_noise_threshold")
 		{
 			double sb_thresh;
 			if (nwords == 2) {
-				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness fraction threshold for outside_sb_threshold");
-				max_sb_frac = sb_thresh;
+				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as multiple of data noise)");
+				max_sb_prior_noise_frac = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_frac << endl;
-			} else Complain("must specify either zero or one argument for outside_sb_threshold");
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_noise_threshold = " << max_sb_prior_noise_frac << endl;
+			} else Complain("must specify either zero or one argument for outside_sb_noise_threshold");
+		}
+		else if (words[0]=="nimg_sb_threshold")
+		{
+			double sb_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as multiple of data noise)");
+				n_image_prior_sb_frac = sb_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "surface brightness fraction threshold for nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
+			} else Complain("must specify either zero or one argument for nimg_sb_threshold");
 		}
 		else if (words[0]=="adaptive_grid")
 		{
