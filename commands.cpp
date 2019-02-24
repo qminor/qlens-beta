@@ -7886,6 +7886,16 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_noise_threshold = " << max_sb_prior_noise_frac << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_noise_threshold");
 		}
+		else if (words[0]=="outside_sb_threshold")
+		{
+			double sb_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as fraction of max s.b.)");
+				max_sb_prior_threshold = sb_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_prior_threshold << endl;
+			} else Complain("must specify either zero or one argument for outside_sb_threshold");
+		}
 		else if (words[0]=="nimg_sb_threshold")
 		{
 			double sb_thresh;

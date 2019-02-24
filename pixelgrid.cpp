@@ -1198,6 +1198,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
+		cell[i][j]->avg_image_pixels_mapped = cell[i][j]->total_magnification * cell[i][j]->cell_area / image_pixel_grid->pixel_area;
 		//cout << "CELL " << i << " " << j << " " << cell[i][j]->total_magnification << " " << (cell[i][j]->total_magnification*cell[i][j]->cell_area/(image_pixel_grid->pixel_area)) << endl;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
@@ -1412,6 +1413,7 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 						for (m=0; m < cell[i][j]->w_N; m++) {
 							subcell = cell[i][j]->cell[l][m];
 							subcell->total_magnification *= image_pixel_grid->triangle_area / subcell->cell_area;
+							subcell->avg_image_pixels_mapped = subcell->total_magnification * subcell->cell_area / image_pixel_grid->pixel_area;
 							if (lens->n_image_prior) subcell->n_images /= subcell->cell_area;
 						}
 					}
@@ -1516,6 +1518,7 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 						for (m=0; m < cell[i][j]->w_N; m++) {
 							subcell = cell[i][j]->cell[l][m];
 							subcell->total_magnification *= image_pixel_grid->triangle_area / subcell->cell_area;
+							subcell->avg_image_pixels_mapped = subcell->total_magnification * subcell->cell_area / image_pixel_grid->pixel_area;
 							if (lens->n_image_prior) subcell->n_images /= subcell->cell_area;
 						}
 					}

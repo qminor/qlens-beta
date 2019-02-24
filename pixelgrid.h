@@ -53,7 +53,7 @@ class SourcePixelGrid
 	vector<double> overlaps;
 	vector<double> weighted_overlaps;
 	vector<int> overlap_pixel_n;
-	double total_magnification, n_images;
+	double total_magnification, n_images, avg_image_pixels_mapped;
 	static InterpolationCells *nearest_interpolation_cells;
 	static lensvector **interpolation_pts[3];
 	static int *n_interpolation_pts;
