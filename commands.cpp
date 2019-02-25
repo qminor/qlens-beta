@@ -7866,6 +7866,17 @@ void Lens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness threshold = " << sb_threshold << endl;
 			} else Complain("must specify either zero or one argument (surface brightness threshold for centroid finding)");
 		}
+		else if (words[0]=="high_sn_threshold")
+		{
+			double sbthresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> sbthresh)) Complain("invalid surface brightness fraction threshold for high S/N window");
+				high_sn_frac = sbthresh;
+				if (image_pixel_data != NULL) image_pixel_data->assign_high_sn_pixels();
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "high signal frac threshold = " << high_sn_frac << endl;
+			} else Complain("must specify either zero or one argument");
+		}
 		else if (words[0]=="noise_threshold")
 		{
 			double noise_thresh;

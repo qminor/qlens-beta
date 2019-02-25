@@ -960,6 +960,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 #endif
 
 	lens->total_srcgrid_overlap_area = 0; // Used to find the total coverage of the sourcegrid, which helps determine optimal source pixel size
+	lens->high_sn_srcgrid_overlap_area = 0; // Used to find the total coverage of the sourcegrid, which helps determine optimal source pixel size
 
 	int i,j,k,nsrc;
 	double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
@@ -967,11 +968,14 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	clear_subgrids();
 	int ntot_src = u_N*w_N;
 	double *area_matrix, *mag_matrix;
+	double *high_sn_area_matrix;
 	mag_matrix = new double[ntot_src];
 	//if (lens->n_image_prior) {
 		area_matrix = new double[ntot_src];
+		high_sn_area_matrix = new double[ntot_src];
 		for (i=0; i < ntot_src; i++) {
 			area_matrix[i] = 0;
+			high_sn_area_matrix[i] = 0;
 			mag_matrix[i] = 0;
 		}
 	//} else {
@@ -1110,7 +1114,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	int *overlap_matrix_index = new int[overlap_matrix_nn];
 	int *image_pixel_location_overlap = new int[ntot+1];
 	double *overlap_area_matrix;
-	//if (lens->n_image_prior) overlap_area_matrix = new double[overlap_matrix_nn];
 	overlap_area_matrix = new double[overlap_matrix_nn];
 
 #ifdef USE_MPI
@@ -1135,7 +1138,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		for (j=0; j < overlap_matrix_row_nn[n]; j++) {
 			overlap_matrix[indx+j] = overlap_matrix_rows[n][j];
 			overlap_matrix_index[indx+j] = overlap_matrix_index_rows[n][j];
-			//if (lens->n_image_prior) overlap_area_matrix[indx+j] = overlap_area_matrix_rows[n][j];
 			overlap_area_matrix[indx+j] = overlap_area_matrix_rows[n][j];
 		}
 	}
@@ -1149,8 +1151,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		length = image_pixel_location_overlap[end] - image_pixel_location_overlap[start];
 		MPI_Bcast(overlap_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
 		MPI_Bcast(overlap_matrix_index + image_pixel_location_overlap[start],length,MPI_INT,id,sub_comm);
-		//if (lens->n_image_prior)
-			MPI_Bcast(overlap_area_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
+		MPI_Bcast(overlap_area_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
 	}
 	MPI_Comm_free(&sub_comm);
 #endif
@@ -1163,8 +1164,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			j = nsrc / u_N;
 			i = nsrc % u_N;
 			mag_matrix[nsrc] += overlap_matrix[l];
-			//if (lens->n_image_prior)
-				area_matrix[nsrc] += overlap_area_matrix[l];
+			area_matrix[nsrc] += overlap_area_matrix[l];
+			if ((image_pixel_grid->fit_to_data != NULL) and (lens->image_pixel_data->high_sn_pixel[img_i][img_j])) high_sn_area_matrix[nsrc] += overlap_area_matrix[l];
 			cell[i][j]->overlap_pixel_n.push_back(n);
 			if ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[img_i][img_j]==true)) cell[i][j]->maps_to_image_window = true;
 		}
@@ -1191,28 +1192,19 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			//cell[i][j]->n_images = overlap_area / cell[i][j]->cell_area;
 		//}
 	//}
-	double mag;
-	//double mag_threshold = 4*lens->pixel_magnification_threshold;
-	int nsubcells;
 	for (nsrc=0; nsrc < ntot_src; nsrc++) {
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
 		cell[i][j]->avg_image_pixels_mapped = cell[i][j]->total_magnification * cell[i][j]->cell_area / image_pixel_grid->pixel_area;
-		//cout << "CELL " << i << " " << j << " " << cell[i][j]->total_magnification << " " << (cell[i][j]->total_magnification*cell[i][j]->cell_area/(image_pixel_grid->pixel_area)) << endl;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
-		nsubcells = 1;
-		//if (lens->adaptive_grid) {
-			// Now we estimate the "effective" pixel overlap area, based on the estimated number of splittings that will occur;
-			// This will help refine the first-level pixel size to obtain the target number of pixels (for auto_src_npixels feature)
-			//mag = cell[i][j]->total_magnification;
-			//if (mag > mag_threshold) nsubcells *= 4;
-			//while ((mag /= 4) > mag_threshold) nsubcells *= 4;
-			//while ((mag /= (4*mag_threshold)) > mag_threshold) nsubcells *= 4;
-		//}
-		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += nsubcells*cell[i][j]->cell_area;
-		else lens->total_srcgrid_overlap_area += nsubcells*area_matrix[nsrc];
+		if (area_matrix[nsrc] > cell[i][j]->cell_area) lens->total_srcgrid_overlap_area += cell[i][j]->cell_area;
+		else lens->total_srcgrid_overlap_area += area_matrix[nsrc];
+		if (image_pixel_grid->fit_to_data != NULL) {
+			if (high_sn_area_matrix[nsrc] > cell[i][j]->cell_area) lens->high_sn_srcgrid_overlap_area += cell[i][j]->cell_area;
+			else lens->high_sn_srcgrid_overlap_area += high_sn_area_matrix[nsrc];
+		}
 		if (cell[i][j]->total_magnification*0.0) warn("Nonsensical source cell magnification (mag=%g",cell[i][j]->total_magnification);
 	}
 
@@ -1223,11 +1215,10 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	delete[] overlap_matrix_index_rows;
 	delete[] overlap_matrix_row_nn;
 	delete[] mag_matrix;
-	//if (lens->n_image_prior) {
-		delete[] overlap_area_matrix;
-		delete[] overlap_area_matrix_rows;
-		delete[] area_matrix;
-	//}
+	delete[] overlap_area_matrix;
+	delete[] overlap_area_matrix_rows;
+	delete[] area_matrix;
+	delete[] high_sn_area_matrix;
 }
 
 double SourcePixelGrid::get_lowest_mag_sourcept(double &xsrc, double &ysrc)
@@ -1323,14 +1314,7 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 	} else {
 		int k,l,m;
 		double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
-		//double mag_threshold = 4*lens->pixel_magnification_threshold;
 		SourcePixelGrid *subcell;
-		//if (level > 0) {
-			//for (i=0; i < level; i++) {
-				////mag_threshold *= 4;
-				//mag_threshold *= 4*lens->pixel_magnification_threshold;
-			//}
-		//}
 		bool subgrid;
 		#pragma omp parallel
 		{
@@ -1354,7 +1338,6 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 				j = n / u_N;
 				i = n % u_N;
 				subgrid = false;
-				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
 				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > lens->pixel_magnification_threshold) subgrid = true;
 				if (subgrid) {
 					cell[i][j]->split_cells(2,2,thread);
@@ -1446,19 +1429,11 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 
 		int k,l,m,nn,img_i,img_j;
 		double overlap_area, weighted_overlap, triangle1_overlap, triangle2_overlap, triangle1_weight, triangle2_weight;
-		//double mag_threshold = 4*lens->pixel_magnification_threshold;
 		SourcePixelGrid *subcell;
-		//if (level > 0) {
-			//for (i=0; i < level; i++) {
-				////mag_threshold *= 4;
-				//mag_threshold *= 4*lens->pixel_magnification_threshold;
-			//}
-		//}
 		bool subgrid;
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
 				subgrid = false;
-				//if (cell[i][j]->total_magnification > mag_threshold) subgrid = true;
 				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > lens->pixel_magnification_threshold) subgrid = true;
 
 				if (subgrid) {
@@ -2788,7 +2763,7 @@ void SourcePixelGrid::clear_subgrids()
 	}
 }
 
-/***************************************** Functions in class ImagePixelGrid ****************************************/
+/******************************** Functions in class ImagePixelData, and FITS file functions *********************************/
 
 void ImagePixelData::load_data(string root)
 {
@@ -2803,6 +2778,10 @@ void ImagePixelData::load_data(string root)
 	if (surface_brightness != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
+	}
+	if (high_sn_pixel != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+		delete[] high_sn_pixel;
 	}
 	if (require_fit != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
@@ -2822,6 +2801,7 @@ void ImagePixelData::load_data(string root)
 	npixels_y = j-1;
 
 	n_required_pixels = npixels_x*npixels_y;
+	n_high_sn_pixels = n_required_pixels; // this will be recalculated in assign_high_sn_pixels() function
 	xvals = new double[npixels_x+1];
 	xfile.open(xfilename.c_str());
 	for (i=0; i <= npixels_x; i++) xfile >> xvals[i];
@@ -2831,15 +2811,18 @@ void ImagePixelData::load_data(string root)
 
 	ifstream sbfile(sbfilename.c_str());
 	surface_brightness = new double*[npixels_x];
+	high_sn_pixel = new bool*[npixels_x];
 	require_fit = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) {
 		surface_brightness[i] = new double[npixels_y];
+		high_sn_pixel[i] = new bool[npixels_y];
 		require_fit[i] = new bool[npixels_y];
-		for (j=0; j < npixels_y; j++) require_fit[i][j] = true;
+		for (j=0; j < npixels_y; j++) {
+			require_fit[i][j] = true;
+			high_sn_pixel[i][j] = true;
+		}
 	}
-	for (j=0; j < npixels_y; j++) {
-		for (i=0; i < npixels_x; i++) sbfile >> surface_brightness[i][j];
-	}
+	assign_high_sn_pixels();
 }
 
 bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
@@ -2854,6 +2837,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 	if (surface_brightness != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
+	}
+	if (high_sn_pixel != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+		delete[] high_sn_pixel;
 	}
 	if (require_fit != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
@@ -2952,6 +2939,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				npixels_x = naxes[0];
 				npixels_y = naxes[1];
 				n_required_pixels = npixels_x*npixels_y;
+				n_high_sn_pixels = n_required_pixels; // this will be recalculated in assign_high_sn_pixels() function
 				xvals = new double[npixels_x+1];
 				yvals = new double[npixels_y+1];
 				if (use_pixel_size) {
@@ -2967,11 +2955,16 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				for (i=0, y=ymin; i <= npixels_y; i++, y += ystep) yvals[i] = y;
 				pixels = new double[npixels_x];
 				surface_brightness = new double*[npixels_x];
+				high_sn_pixel = new bool*[npixels_x];
 				require_fit = new bool*[npixels_x];
 				for (i=0; i < npixels_x; i++) {
 					surface_brightness[i] = new double[npixels_y];
+					high_sn_pixel[i] = new bool[npixels_y];
 					require_fit[i] = new bool[npixels_y];
-					for (j=0; j < npixels_y; j++) require_fit[i][j] = true;
+					for (j=0; j < npixels_y; j++) {
+						require_fit[i][j] = true;
+						high_sn_pixel[i][j] = true;
+					}
 				}
 
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
@@ -2991,9 +2984,35 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 	} 
 
 	if (status) fits_report_error(stderr, status); // print any error message
+	assign_high_sn_pixels();
 	return image_load_status;
 #endif
 }
+
+
+void ImagePixelData::assign_high_sn_pixels()
+{
+	global_max_sb = -1e30;
+	int i,j;
+	for (j=0; j < npixels_y; j++) {
+		for (i=0; i < npixels_x; i++) {
+			if (surface_brightness[i][j] > global_max_sb) global_max_sb = surface_brightness[i][j];
+		}
+	}
+	if (lens != NULL) {
+		n_high_sn_pixels = 0;
+		for (j=0; j < npixels_y; j++) {
+			for (i=0; i < npixels_x; i++) {
+				if (surface_brightness[i][j] >= lens->high_sn_frac*global_max_sb) {
+					high_sn_pixel[i][j] = true;
+					n_high_sn_pixels++;
+				}
+				else high_sn_pixel[i][j] = false;
+			}
+		}
+	}
+}
+
 
 bool ImagePixelData::load_mask_fits(string fits_filename)
 {
@@ -3163,6 +3182,14 @@ ImagePixelData::~ImagePixelData()
 		for (int i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
 	}
+	if (high_sn_pixel != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+		delete[] high_sn_pixel;
+	}
+	if (require_fit != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] require_fit[i];
+		delete[] require_fit;
+	}
 }
 
 void ImagePixelData::set_no_required_data_pixels()
@@ -3314,7 +3341,6 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 	delete[] mask_window_id;
 
 }
-
 
 void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit)
 {
@@ -3712,6 +3738,8 @@ void ImagePixelData::plot_surface_brightness(string outfile_root)
 	}
 }
 
+/***************************************** Functions in class ImagePixelGrid ****************************************/
+
 ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
 {
 	ray_tracing_method = method;
@@ -3799,8 +3827,8 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
-		double mag;
-		#pragma omp for private(i,j,mag) schedule(dynamic)
+		//double mag;
+		#pragma omp for private(i,j) schedule(dynamic)
 		for (j=0; j < y_N; j++) {
 			for (i=0; i < x_N; i++) {
 				d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
@@ -3850,13 +3878,13 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
 				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
 
-				if (lens_in->split_imgpixels) {
-					mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				//if (lens_in->split_imgpixels) {
+					//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 					// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
 					//if (mag > 9) {
 						//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
 					//}
-				}
+				//}
 			}
 		}
 	}
@@ -3975,7 +4003,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** 
 		}
 	}
 
-	double mag;
+	//double mag;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
@@ -4026,13 +4054,13 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** 
 			source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
 			source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
 
-			if (lens_in->split_imgpixels) {
-				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+			//if (lens_in->split_imgpixels) {
+				//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
 				//if (mag > 9) {
 					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
 				//}
-			}
+			//}
 		}
 	}
 
@@ -4839,6 +4867,7 @@ void ImagePixelGrid::assign_image_mapping_flags()
 {
 	int i,j;
 	n_active_pixels = 0;
+	n_high_sn_pixels = 0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			mapped_source_pixels[i][j].clear();
@@ -4868,6 +4897,7 @@ void ImagePixelGrid::assign_image_mapping_flags()
 							maps_to_source_pixel[i][j] = true;
 							#pragma omp atomic
 							n_active_pixels++;
+							if ((fit_to_data != NULL) and (fit_to_data[i][j]) and (lens->image_pixel_data->high_sn_pixel[i][j])) n_high_sn_pixels++;
 						} else
 							maps_to_source_pixel[i][j] = false;
 					}
@@ -4918,6 +4948,7 @@ void ImagePixelGrid::assign_image_mapping_flags()
 							maps_to_source_pixel[i][j] = true;
 							#pragma omp atomic
 							n_active_pixels++;
+							if ((fit_to_data != NULL) and (fit_to_data[i][j]) and (lens->image_pixel_data->high_sn_pixel[i][j])) n_high_sn_pixels++;
 						} else maps_to_source_pixel[i][j] = false;
 					}
 				}

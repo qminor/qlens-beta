@@ -296,6 +296,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool max_sb_prior_unselected_pixels;
 	double max_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double max_sb_prior_threshold;
+	double high_sn_frac;
 	bool use_inversion_to_set_mask;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -393,7 +394,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool adaptive_grid;
 	bool use_average_magnification_for_subgridding;
 	bool activate_unmapped_source_pixels;
-	double total_srcgrid_overlap_area;
+	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
 	bool exclude_source_pixels_beyond_fit_window;
 	bool regrid_if_unmapped_source_subpixels;
 	bool calculate_bayes_factor;

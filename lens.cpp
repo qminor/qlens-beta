@@ -238,7 +238,8 @@ Lens::Lens() : UCMC()
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	max_sb_prior_unselected_pixels = true;
 	max_sb_prior_noise_frac = 4; // surface brightness threshold is given as multiple of data pixel noise
-	max_sb_prior_threshold = 0.4; // surface brightness threshold is given as fraction of max surface brightness
+	max_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
+	high_sn_frac = 0.5; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	use_inversion_to_set_mask = false; // this "cheat" allows you to quickly set a sensible mask for simulated data
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -556,6 +557,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
 	max_sb_prior_noise_frac = lens_in->max_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	max_sb_prior_threshold = lens_in->max_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
+	high_sn_frac = lens_in->high_sn_frac; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	use_inversion_to_set_mask = false; // This should not be used for the fitmodel object, ever
 	subhalo_prior = lens_in->subhalo_prior;
 	use_custom_prior = lens_in->use_custom_prior;
@@ -9264,8 +9266,16 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			//srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 		} else {
 			*/
-			double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
-			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
+			//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
+			//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
+			//if (mpi_id==0) cout << "threshold: " << high_sn_frac*image_pixel_data->global_max_sb << endl;
+			//if (mpi_id==0) cout << "# of high S/N pixels: " << image_pixel_grid->n_high_sn_pixels << endl;
+			
+			// Uncomment the following two lines if you want to use the total (mapped) source pixel grid to set source pixel size, rather than high S/N area
+			//double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
+			//srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
+			double srcgrid_area_covered_frac = high_sn_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
+			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_pixel_grid->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
 			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 		//}
 
@@ -9308,9 +9318,19 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	if ((mpi_id==0) and (verbal)) {
 		cout << "Number of active image pixels: " << image_npixels << endl;
 	}
+			//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
+			//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
+			double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
+			//cout << "Est. source pixel area = " << src_pixel_area << endl;
+			double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
+			double est_pixfrac = est_nmapped / image_npixels;
+			//cout << "Estimate of nmapped = " << est_nmapped << endl;
+			//cout << "Estimate of f = " << est_pixfrac << endl;
 	if ((mpi_id==0) and (verbal)) {
 		double pixfrac = ((double) source_npixels) / image_npixels;
+		double high_sn_pixfrac = ((double) source_npixels*high_sn_srcgrid_overlap_area/total_srcgrid_overlap_area) / image_pixel_grid->n_high_sn_pixels;
 		cout << "Actual f = " << pixfrac << endl;
+		cout << "Actual high S/N f = " << high_sn_pixfrac << endl;
 	}
 
 #ifdef USE_OPENMP

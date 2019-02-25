@@ -197,6 +197,7 @@ class ImagePixelGrid : public Sort
 	double xmin, xmax, ymin, ymax;
 	int x_N, y_N; // gives the number of cells in the x- and y- directions (so the number of corner points in each direction is x_N+1, y_N+1)
 	int n_active_pixels;
+	int n_high_sn_pixels;
 	int xy_N; // gives x_N*y_N if the entire pixel grid is used
 	double pixel_xlength, pixel_ylength;
 	inline bool test_if_between(const double& p, const double& a, const double& b);
@@ -243,16 +244,21 @@ struct ImagePixelData
 	int npixels_x, npixels_y;
 	int n_required_pixels;
 	double **surface_brightness;
+	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	bool **require_fit;
 	double *xvals, *yvals;
+	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
 	double pixel_size;
+	double global_max_sb;
 	ImagePixelData()
 	{
 		surface_brightness = NULL;
+		high_sn_pixel = NULL;
 		require_fit = NULL;
 		xvals = NULL;
 		yvals = NULL;
+		lens = NULL;
 	}
 	~ImagePixelData();
 	void load_data(string root);
@@ -267,6 +273,7 @@ struct ImagePixelData
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
 	bool load_mask_fits(string fits_filename);
 	void set_no_required_data_pixels();
+	void assign_high_sn_pixels();
 	void set_all_required_data_pixels();
 	void assign_mask_windows(const double sb_noise_threshold);
 	void unset_low_signal_pixels(const double sb_threshold, const bool use_fit);
