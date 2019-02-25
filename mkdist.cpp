@@ -18,6 +18,11 @@
 #include "mcmceval.h"
 #include "errors.h"
 #include <sys/stat.h>
+
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 using namespace std;
 
 void usage_error();
@@ -474,11 +479,23 @@ int main(int argc, char *argv[])
 		*/
 
 		if (make_2d_posts) {
+#ifdef USE_OPENMP
+			double wtime, wtime0;
+			int omp_nthreads;
+			#pragma omp parallel
+			{
+				#pragma omp master
+				omp_nthreads = omp_get_num_threads();
+			}
+			cout << "Generating 2D histograms with " << omp_nthreads << " OpenMP threads..." << endl;
+			wtime0 = omp_get_wtime();
+#endif
 			bool derived_param_fail = false; // if contours can't be made for a derived parameter, we'll have it drop the derived parameters and try again
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
 			if ((!make_1d_posts) and (show_markers)) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			do {
 				if (derived_param_fail) derived_param_fail = false;
+				#pragma omp parallel for private(i,j) schedule(dynamic)
 				for (i=0; i < nparams_eff; i++) {
 					for (j=i+1; j < nparams_eff; j++) {
 						string hist_out;
@@ -491,10 +508,14 @@ int main(int argc, char *argv[])
 							}
 						}
 					}
-					if (derived_param_fail) break;
+					if (derived_param_fail) i = nparams_eff + 1; // make sure it exits loop
 				}
 				if (derived_param_fail) nparams_eff = n_fitparams;
 			} while (derived_param_fail);
+#ifdef USE_OPENMP
+			wtime = omp_get_wtime() - wtime0;
+			cout << "Wall time for calculating 2D histograms: " << wtime << endl;
+#endif
 		}
 		if (output_min_chisq_point) {
 			Eval.output_min_chisq_pt();

@@ -2561,7 +2561,6 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 						}
 					}
 				}
-				
 			}
 		}
 
