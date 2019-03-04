@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
 	bool disptime=false;
 	bool mumps_mpi=true;
 	bool quit_if_error = true;
+	bool suppress_plots = false;
 	CosmologyParams cosmology;
 
 	bool load_cosmology_file = false;
@@ -67,6 +68,7 @@ int main(int argc, char *argv[])
 					case 'w': disptime = true; break;
 					case 'p': mumps_mpi = false; break;
 					case 'Q': quit_if_error = false; break;
+					case 'n': suppress_plots = true; break;
 					case 't':
 						if (sscanf(argv[i], "t%i", &inversion_nthreads)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
@@ -183,6 +185,7 @@ int main(int argc, char *argv[])
 	lens.set_inversion_nthreads(inversion_nthreads);
 	lens.set_mumps_mpi(mumps_mpi);
 	lens.set_quit_after_error(quit_if_error);
+	if (suppress_plots) lens.set_suppress_plots(true);
 	if (read_from_file) {
 		if (lens.open_command_file(input_filename)==false) {
 			cerr << "Error: could not open input file '" << input_filename << "'\n\n";

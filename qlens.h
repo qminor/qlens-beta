@@ -41,8 +41,8 @@ enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
-	Area_Overlap,
-	Interpolate
+	Interpolate,
+	Area_Overlap
 };
 enum DerivedParamType {
 	KappaR,
@@ -439,6 +439,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
 	string plot_title, post_title;
+	bool suppress_plots;
 	string data_info; // Allows for a description of data to be saved in chains_* directory and in FITS file header
 	string chain_info; // Allows for a description of chain to be saved in chains_* directory
 	string param_markers; // Used to create a file with parameter marker values for mkdist; this is used  by the 'mkposts' command o plt markers
@@ -642,10 +643,11 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void plot_image_pixel_grid();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_source_surface_brightness_grid(bool verbal);
+	bool create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists = false);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool verbose = true);
+	bool make_image_surface_brightness_data();
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool offload_to_data = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -873,8 +875,8 @@ public:
 	void initialize_fitmodel(const bool running_fit_in);
 	bool update_fitmodel(const double* params);
 	double fitmodel_loglike_point_source(double* params);
-	double fitmodel_loglike_pixellated_source(double* params);
-	double fitmodel_loglike_pixellated_source_test(double* params);
+	double fitmodel_loglike_extended_source(double* params);
+	double fitmodel_loglike_extended_source_test(double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
@@ -1002,6 +1004,7 @@ public:
 	bool open_command_file(char *filename);
 	void set_verbal_mode(bool echo) { verbal_mode = echo; }
 	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
+	void set_suppress_plots(bool setting) { suppress_plots = setting; }
 
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 

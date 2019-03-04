@@ -142,6 +142,8 @@ class SourcePixelGrid
 	void fill_surface_brightness_vector();
 	void fill_surface_brightness_vector_recursive(int& column_j);
 	void fill_n_image_vector();
+	void find_avg_n_images();
+
 	void fill_n_image_vector_recursive(int& column_j);
 	void plot_surface_brightness(string root);
 	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y);
@@ -194,6 +196,7 @@ class ImagePixelGrid : public Sort
 	lensvector **twist_pts;
 	vector<SourcePixelGrid*> **mapped_source_pixels;
 	RayTracingMethod ray_tracing_method;
+	SourceFitMode source_fit_mode;
 	double xmin, xmax, ymin, ymax;
 	int x_N, y_N; // gives the number of cells in the x- and y- directions (so the number of corner points in each direction is x_N+1, y_N+1)
 	int n_active_pixels;
@@ -205,14 +208,15 @@ class ImagePixelGrid : public Sort
 	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
-	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
-	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data);
-	ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
+	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
+	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
 
-	ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
+	void reset_nsplit();
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations();
@@ -234,7 +238,6 @@ class ImagePixelGrid : public Sort
 	double calculate_signal_to_noise(const double& pixel_noise_sig);
 	void assign_image_mapping_flags();
 	int count_nonzero_source_pixel_mappings();
-	void plot_center_pts_source_plane();
 };
 
 struct ImagePixelData
@@ -262,6 +265,7 @@ struct ImagePixelData
 	}
 	~ImagePixelData();
 	void load_data(string root);
+	void load_from_image_grid();
 	bool load_data_fits(const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, string fits_filename) {
 		xmin=xmin_in; xmax=xmax_in; ymin=ymin_in; ymax=ymax_in;
 		return load_data_fits(false,fits_filename);

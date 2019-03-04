@@ -444,6 +444,37 @@ void SourcePixelGrid::fill_n_image_vector_recursive(int& column_j)
 	}
 }
 
+void SourcePixelGrid::find_avg_n_images()
+{
+	// no support for adaptive grid in this function, since we're only using it when parameterized sources are being used
+
+	lens->max_pixel_sb=-1e30;
+	int max_sb_i, max_sb_j;
+	int i,j;
+	for (j=0; j < w_N; j++) {
+		for (i=0; i < u_N; i++) {
+			if (cell[i][j]->surface_brightness > lens->max_pixel_sb) {
+				lens->max_pixel_sb = cell[i][j]->surface_brightness;
+				max_sb_i = i;
+				max_sb_j = j;
+			}
+		}
+	}
+
+	lens->n_images_at_sbmax = cell[max_sb_i][max_sb_j]->n_images;
+	lens->pixel_avg_n_image = 0;
+	double sbtot = 0;
+	for (j=0; j < w_N; j++) {
+		for (i=0; i < u_N; i++) {
+			if (cell[i][j]->surface_brightness >= lens->max_pixel_sb*lens->n_image_prior_sb_frac) {
+				lens->pixel_avg_n_image += cell[i][j]->n_images*cell[i][j]->surface_brightness;
+				sbtot += cell[i][j]->surface_brightness;
+			}
+		}
+	}
+	if (sbtot != 0) lens->pixel_avg_n_image /= sbtot;
+}
+
 ofstream SourcePixelGrid::pixel_surface_brightness_file;
 ofstream SourcePixelGrid::pixel_magnification_file;
 ofstream SourcePixelGrid::pixel_n_image_file;
@@ -2820,6 +2851,51 @@ void ImagePixelData::load_data(string root)
 		for (j=0; j < npixels_y; j++) {
 			require_fit[i][j] = true;
 			high_sn_pixel[i][j] = true;
+			sbfile >> surface_brightness[i][j];
+		}
+	}
+	assign_high_sn_pixels();
+}
+
+void ImagePixelData::load_from_image_grid()
+{
+	int i,j;
+	if (xvals != NULL) delete[] xvals;
+	if (yvals != NULL) delete[] yvals;
+	if (surface_brightness != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
+		delete[] surface_brightness;
+	}
+	if (high_sn_pixel != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+		delete[] high_sn_pixel;
+	}
+	if (require_fit != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
+		delete[] require_fit;
+	}
+
+	npixels_x = lens->image_pixel_grid->x_N;
+	npixels_y = lens->image_pixel_grid->y_N;
+
+	n_required_pixels = npixels_x*npixels_y;
+	n_high_sn_pixels = n_required_pixels; // this will be recalculated in assign_high_sn_pixels() function
+	xvals = new double[npixels_x+1];
+	for (i=0; i <= npixels_x; i++) xvals[i] = lens->image_pixel_grid->corner_pts[i][0][0];
+	yvals = new double[npixels_y+1];
+	for (i=0; i <= npixels_y; i++) yvals[i] = lens->image_pixel_grid->corner_pts[0][i][1];
+
+	surface_brightness = new double*[npixels_x];
+	high_sn_pixel = new bool*[npixels_x];
+	require_fit = new bool*[npixels_x];
+	for (i=0; i < npixels_x; i++) {
+		surface_brightness[i] = new double[npixels_y];
+		high_sn_pixel[i] = new bool[npixels_y];
+		require_fit[i] = new bool[npixels_y];
+		for (j=0; j < npixels_y; j++) {
+			require_fit[i][j] = true;
+			high_sn_pixel[i][j] = true;
+			surface_brightness[i][j] = lens->image_pixel_grid->surface_brightness[i][j];
 		}
 	}
 	assign_high_sn_pixels();
@@ -3305,7 +3381,7 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 		for (l=0; l < n_mask_windows; l++) {
 			if (active_mask_window[l]) {
 				if (mask_window_max_sb[l] > sb_noise_threshold*lens->data_pixel_noise) {
-					active_mask_window[l] = false;
+					active_mask_window[l] = false; // ensures it won't get cut
 					//n_windows_eff--;
 				}
 				else if ((mask_window_sizes[l] != 0) and (mask_window_sizes[l] < smallest_window_size)) {
@@ -3740,11 +3816,13 @@ void ImagePixelData::plot_surface_brightness(string outfile_root)
 
 /***************************************** Functions in class ImagePixelGrid ****************************************/
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
+ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
 {
+	source_fit_mode = mode;
 	ray_tracing_method = method;
 	xy_N = x_N*y_N;
-	n_active_pixels = 0;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	else n_active_pixels = xy_N;
 	corner_pts = new lensvector*[x_N+1];
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
@@ -3781,6 +3859,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
+			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -3827,64 +3906,57 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double xm
 				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
-		//double mag;
-		#pragma omp for private(i,j) schedule(dynamic)
-		for (j=0; j < y_N; j++) {
-			for (i=0; i < x_N; i++) {
-				d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-				d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-				d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-				d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-				d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-				d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-				d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-				d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
-				// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
-				// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
-				twist_status[i][j] = 0;
-				double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
-				xa=corner_sourcepts[i][j][0];
-				ya=corner_sourcepts[i][j][1];
-				xb=corner_sourcepts[i][j+1][0];
-				yb=corner_sourcepts[i][j+1][1];
-				xc=corner_sourcepts[i+1][j+1][0];
-				yc=corner_sourcepts[i+1][j+1][1];
-				xd=corner_sourcepts[i+1][j][0];
-				yd=corner_sourcepts[i+1][j][1];
-				slope1 = (yb-ya)/(xb-xa);
-				slope2 = (yc-yd)/(xc-xd);
-				twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
-				twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-				if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
-					twist_status[i][j] = 1;
-					d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
-					d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
-					d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
-					d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
-				} else {
-					slope1 = (yd-ya)/(xd-xa);
-					slope2 = (yc-yb)/(xc-xb);
-					twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+		if (source_fit_mode==Pixellated_Source) {
+			#pragma omp for private(i,j) schedule(dynamic)
+			for (j=0; j < y_N; j++) {
+				for (i=0; i < x_N; i++) {
+					d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
+					d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
+					d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
+					d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
+					d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
+					d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
+					d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
+					d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
+					// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
+					// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
+					twist_status[i][j] = 0;
+					double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+					xa=corner_sourcepts[i][j][0];
+					ya=corner_sourcepts[i][j][1];
+					xb=corner_sourcepts[i][j+1][0];
+					yb=corner_sourcepts[i][j+1][1];
+					xc=corner_sourcepts[i+1][j+1][0];
+					yc=corner_sourcepts[i+1][j+1][1];
+					xd=corner_sourcepts[i+1][j][0];
+					yd=corner_sourcepts[i+1][j][1];
+					slope1 = (yb-ya)/(xb-xa);
+					slope2 = (yc-yd)/(xc-xd);
+					twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
 					twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-					if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
-						twist_status[i][j] = 2;
-						d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
-						d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
-						d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
-						d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+					if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
+						twist_status[i][j] = 1;
+						d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
+						d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
+						d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
+						d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
+					} else {
+						slope1 = (yd-ya)/(xd-xa);
+						slope2 = (yc-yb)/(xc-xb);
+						twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+						twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+						if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
+							twist_status[i][j] = 2;
+							d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
+							d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
+							d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
+							d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+						}
 					}
+
+					source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
+					source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
 				}
-
-				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
-
-				//if (lens_in->split_imgpixels) {
-					//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-					// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-					//if (mag > 9) {
-						//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-					//}
-				//}
 			}
 		}
 	}
@@ -3904,15 +3976,18 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 	return false;
 }
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
 {
+	source_fit_mode = mode;
 	ray_tracing_method = method;
 
 	x_N = x_N_in / reduce_factor;
 	y_N = y_N_in / reduce_factor;
 
 	xy_N = x_N*y_N;
-	n_active_pixels = 0;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	else n_active_pixels = xy_N;
+
 	corner_pts = new lensvector*[x_N+1];
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
@@ -4003,102 +4078,72 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, double** 
 		}
 	}
 
-	//double mag;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-			d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-			d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-			d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-			d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-			d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-			d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-			d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
+	if (source_fit_mode==Pixellated_Source) {
+		for (j=0; j < y_N; j++) {
+			for (i=0; i < x_N; i++) {
+				d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
+				d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
+				d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
+				d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
+				d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
+				d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
+				d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
+				d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
 
-			// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
-			// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
-			twist_status[i][j] = 0;
-			double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
-			xa=corner_sourcepts[i][j][0];
-			ya=corner_sourcepts[i][j][1];
-			xb=corner_sourcepts[i][j+1][0];
-			yb=corner_sourcepts[i][j+1][1];
-			xc=corner_sourcepts[i+1][j+1][0];
-			yc=corner_sourcepts[i+1][j+1][1];
-			xd=corner_sourcepts[i+1][j][0];
-			yd=corner_sourcepts[i+1][j][1];
-			slope1 = (yb-ya)/(xb-xa);
-			slope2 = (yc-yd)/(xc-xd);
-			twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
-			twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-			if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
-				twist_status[i][j] = 1;
-				d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
-				d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
-				d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
-				d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
-			} else {
-				slope1 = (yd-ya)/(xd-xa);
-				slope2 = (yc-yb)/(xc-xb);
-				twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+				// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
+				// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
+				twist_status[i][j] = 0;
+				double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+				xa=corner_sourcepts[i][j][0];
+				ya=corner_sourcepts[i][j][1];
+				xb=corner_sourcepts[i][j+1][0];
+				yb=corner_sourcepts[i][j+1][1];
+				xc=corner_sourcepts[i+1][j+1][0];
+				yc=corner_sourcepts[i+1][j+1][1];
+				xd=corner_sourcepts[i+1][j][0];
+				yd=corner_sourcepts[i+1][j][1];
+				slope1 = (yb-ya)/(xb-xa);
+				slope2 = (yc-yd)/(xc-xd);
+				twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
 				twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-				if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
-					twist_status[i][j] = 2;
-					d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
-					d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
-					d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
-					d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+				if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
+					twist_status[i][j] = 1;
+					d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
+					d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
+					d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
+					d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
+				} else {
+					slope1 = (yd-ya)/(xd-xa);
+					slope2 = (yc-yb)/(xc-xb);
+					twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+					twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+					if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
+						twist_status[i][j] = 2;
+						d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
+						d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
+						d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
+						d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+					}
 				}
-			}
 
-			source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-			source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
-
-			//if (lens_in->split_imgpixels) {
-				//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-				//if (mag > 9) {
-					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-				//}
-			//}
-		}
-	}
-
-	/*
-	double mag;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-			d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-			d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-			d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-			d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-			d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-			d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-			d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
-			source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-			source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
-			if (lens_in->split_imgpixels) {
-				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-				//if (mag > 9) {
-					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-				//}
+				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
+				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
 			}
 		}
 	}
-	*/
 
 	fit_to_data = NULL;
 }
 
 /*
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixelData& pixel_data) : lens(lens_in)
+ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data) : lens(lens_in)
 {
+	source_fit_mode = mode;
 	ray_tracing_method = method;
 	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
 	xy_N = x_N*y_N;
-	n_active_pixels = 0;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	else n_active_pixels = xy_N;
 	corner_pts = new lensvector*[x_N+1];
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
@@ -4195,13 +4240,17 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, RayTracingMethod method, ImagePixe
 }
 */
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, RayTracingMethod method, ImagePixelData& pixel_data)
+ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data)
 {
 	lens = lens_in;
+	source_fit_mode = mode;
 	ray_tracing_method = method;
 	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
+
 	xy_N = x_N*y_N;
-	n_active_pixels = 0;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	else n_active_pixels = xy_N;
+
 	corner_pts = new lensvector*[x_N+1];
 	corner_sourcepts = new lensvector*[x_N+1];
 	center_pts = new lensvector*[x_N];
@@ -4240,6 +4289,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betaf
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
+			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -4413,6 +4463,17 @@ void ImagePixelGrid::include_all_pixels()
 	}
 }
 
+void ImagePixelGrid::reset_nsplit()
+{
+	int i,j;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+			else nsplits[i][j] = 1;
+		}
+	}
+}
+
 void ImagePixelGrid::redo_lensing_calculations()
 {
 	imggrid_zfactors = lens->reference_zfactors;
@@ -4428,7 +4489,8 @@ void ImagePixelGrid::redo_lensing_calculations()
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	n_active_pixels = 0;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+
 	int i,j,n,n_cell,n_yp;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
@@ -4621,20 +4683,6 @@ bool ImagePixelData::test_if_in_fit_region(const double& x, const double& y)
 		}
 	}
 	return false;
-}
-
-void ImagePixelGrid::plot_center_pts_source_plane()
-{
-	ofstream outfile("pixel_centers.dat");
-	ofstream gridfile("pixel_grid.dat");
-	int i,j;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			if (fit_to_data[i][j]) {
-				outfile << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
-			}
-		}
-	}
 }
 
 double ImagePixelGrid::calculate_signal_to_noise(const double& pixel_noise_sig)
@@ -5185,28 +5233,128 @@ void Lens::assign_Lmatrix(bool verbal)
 
 void ImagePixelGrid::find_surface_brightness()
 {
-	if (ray_tracing_method == Area_Overlap) {
-		lensvector **corners = new lensvector*[4];
-		int i,j;
-		for (j=0; j < y_N; j++) {
-			for (i=0; i < x_N; i++) {
-				corners[0] = &corner_sourcepts[i][j];
-				corners[1] = &corner_sourcepts[i][j+1];
-				corners[2] = &corner_sourcepts[i+1][j];
-				corners[3] = &corner_sourcepts[i+1][j+1];
-				surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_overlap(corners,&twist_pts[i][j],twist_status[i][j],0);
+#ifdef USE_OPENMP
+	double wtime0, wtime;
+	if (lens->show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	if (source_fit_mode == Pixellated_Source) {
+		if (ray_tracing_method == Area_Overlap) {
+			lensvector **corners = new lensvector*[4];
+			int i,j;
+			for (j=0; j < y_N; j++) {
+				for (i=0; i < x_N; i++) {
+					corners[0] = &corner_sourcepts[i][j];
+					corners[1] = &corner_sourcepts[i][j+1];
+					corners[2] = &corner_sourcepts[i+1][j];
+					corners[3] = &corner_sourcepts[i+1][j+1];
+					surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_overlap(corners,&twist_pts[i][j],twist_status[i][j],0);
+				}
+			}
+			delete[] corners;
+		}
+		else if (ray_tracing_method == Interpolate) {
+			int i,j;
+			if (lens->split_imgpixels) {
+				#pragma omp parallel
+				{
+					int thread;
+#ifdef USE_OPENMP
+					thread = omp_get_thread_num();
+#else
+					thread = 0;
+#endif
+					int ii,jj,nsplit;
+					double u0, w0, sb;
+					#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(static)
+					for (j=0; j < y_N; j++) {
+						for (i=0; i < x_N; i++) {
+							surface_brightness[i][j] = 0;
+							if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
+								sb=0;
+								nsplit = nsplits[i][j];
+								for (ii=0; ii < nsplit; ii++) {
+									for (jj=0; jj < nsplit; jj++) {
+										lensvector center_pt, center_srcpt;
+										u0 = ((double) (1+2*ii))/(2*nsplit);
+										w0 = ((double) (1+2*jj))/(2*nsplit);
+										center_pt[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+										center_pt[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+										lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
+										sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(center_srcpt,thread);
+									}
+								}
+								surface_brightness[i][j] = sb / (nsplit*nsplit);
+							}
+						}
+					}
+				}
+			} else {
+				int i,j;
+				for (j=0; j < y_N; j++) {
+					for (i=0; i < x_N; i++) {
+						surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
+					}
+				}
 			}
 		}
-		delete[] corners;
 	}
-	else if (ray_tracing_method == Interpolate) {
+	else {
 		int i,j;
-		for (j=0; j < y_N; j++) {
-			for (i=0; i < x_N; i++) {
-				surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
+		if (lens->split_imgpixels) {
+			#pragma omp parallel
+			{
+				int thread;
+#ifdef USE_OPENMP
+				thread = omp_get_thread_num();
+#else
+				thread = 0;
+#endif
+				int ii,jj,nsplit;
+				double u0, w0, sb;
+				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(static)
+				for (j=0; j < y_N; j++) {
+					for (i=0; i < x_N; i++) {
+						surface_brightness[i][j] = 0;
+						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
+							sb=0;
+							nsplit = nsplits[i][j];
+							for (ii=0; ii < nsplit; ii++) {
+								for (jj=0; jj < nsplit; jj++) {
+									lensvector center_pt, center_srcpt;
+									u0 = ((double) (1+2*ii))/(2*nsplit);
+									w0 = ((double) (1+2*jj))/(2*nsplit);
+									center_pt[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+									center_pt[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+									lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
+									for (int k=0; k < lens->n_sb; k++) {
+										sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+									}
+								}
+							}
+							surface_brightness[i][j] = sb / (nsplit*nsplit);
+						}
+					}
+				}
+			}
+		} else {
+			for (j=0; j < y_N; j++) {
+				for (i=0; i < x_N; i++) {
+					surface_brightness[i][j] = 0;
+					for (int k=0; k < lens->n_sb; k++) {
+						surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+					}
+				}
 			}
 		}
 	}
+#ifdef USE_OPENMP
+	if (lens->show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image surface brightness values: " << wtime << endl;
+	}
+#endif
 }
 
 ImagePixelGrid::~ImagePixelGrid()
@@ -5517,7 +5665,7 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for calculating PSF-convolution of Lmatrix: " << wtime << endl;
+		if (mpi_id==0) cout << "Wall time for calculating PSF convolution of Lmatrix: " << wtime << endl;
 	}
 #endif
 }
@@ -5525,13 +5673,21 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 {
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
 	double *new_image_surface_brightness = new double[image_npixels];
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
-	else if (generate_PSF_matrix()==false) {
-		warn("could not generate_PSF matrix");
-		return;
+	else {
+		if ((psf_width_x==0) and (psf_width_y==0)) return;
+		else if (generate_PSF_matrix()==false) {
+			if (verbal) warn("could not generate_PSF matrix");
+			return;
+		}
 	}
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
@@ -5561,6 +5717,13 @@ void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 			}
 		}
 	}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating PSF convolution of image: " << wtime << endl;
+	}
+#endif
 
 	delete[] image_surface_brightness;
 	image_surface_brightness = new_image_surface_brightness;
@@ -6733,7 +6896,8 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
-			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
+			//if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
+			//if (temp[i] < -0.05) temp[i] = -0.05; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
 			source_surface_brightness[i] = temp[i];
 			if (source_surface_brightness[i] > max_pixel_sb) {
 				max_pixel_sb = source_surface_brightness[i];

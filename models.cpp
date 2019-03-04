@@ -2184,6 +2184,7 @@ PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &
 	b = bb;
 	x_center = xc_in;
 	y_center = yc_in;
+	set_model_specific_integration_pointers();
 }
 
 PointMass::PointMass(const PointMass* lens_in)

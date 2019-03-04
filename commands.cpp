@@ -6115,6 +6115,7 @@ void Lens::process_commands(bool read_file)
 				bool plot_fits = false;
 				bool omit_source = false;
 				int reduce_factor = 1;
+				bool offload_to_data = false;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -6126,6 +6127,7 @@ void Lens::process_commands(bool read_file)
 						else if (args[i]=="-reduce2") reduce_factor = 2;
 						else if (args[i]=="-reduce4") reduce_factor = 4;
 						else if (args[i]=="-reduce8") reduce_factor = 8;
+						else if (args[i]=="-mkdata") offload_to_data = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -6138,7 +6140,7 @@ void Lens::process_commands(bool read_file)
 					n_image_pixels_y *= reduce_factor;
 				}
 				if (!islens()) Complain("must specify lens model first");
-				if (source_pixel_grid == NULL) Complain("No source surface brightness map has been loaded");
+				if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid == NULL)) Complain("No source surface brightness map has been loaded");
 				string range1, range2;
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -6156,21 +6158,23 @@ void Lens::process_commands(bool read_file)
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
-							if (!replot) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
-							if (show_cc) {
-								if (plot_srcplane) run_plotter_range("srcpixel",range1);
-								run_plotter_range("imgpixel",range2);
-							} else {
-								if (plot_srcplane) run_plotter_range("srcpixel_nocc",range1);
-								run_plotter_range("imgpixel_nocc",range2);
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
+							if (!offload_to_data) {
+								if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
+								if (show_cc) {
+									if ((plot_srcplane) and (source_pixel_grid != NULL)) run_plotter_range("srcpixel",range1);
+									run_plotter_range("imgpixel",range2);
+								} else {
+									if ((plot_srcplane) and (source_pixel_grid != NULL)) run_plotter_range("srcpixel_nocc",range1);
+									run_plotter_range("imgpixel_nocc",range2);
+								}
 							}
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,offload_to_data);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
 							if (show_cc) {
 								run_plotter("imgpixel",words[2],range1);
 							} else {
@@ -6180,11 +6184,11 @@ void Lens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,offload_to_data);
 								if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
 							if (!replot) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);
@@ -8359,6 +8363,7 @@ bool Lens::extract_word_starts_with(const char initial_character, int starting_w
 
 void Lens::run_plotter(string plotcommand)
 {
+	if (suppress_plots) return;
 	if (mpi_id==0) {
 		stringstream psstr, ptstr, fsstr, lwstr;
 		string psstring, ptstring, fsstring, lwstring;
@@ -8391,6 +8396,7 @@ void Lens::run_plotter(string plotcommand)
 
 void Lens::run_plotter_file(string plotcommand, string filename)
 {
+	if (suppress_plots) return;
 	if (mpi_id==0) {
 		stringstream psstr, ptstr, fsstr, lwstr;
 		string psstring, ptstring, fsstring, lwstring;
@@ -8425,6 +8431,7 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 
 void Lens::run_plotter_range(string plotcommand, string range)
 {
+	if (suppress_plots) return;
 	if (mpi_id==0) {
 		stringstream psstr, ptstr, fsstr, lwstr;
 		string psstring, ptstring, fsstring, lwstring;
@@ -8457,6 +8464,7 @@ void Lens::run_plotter_range(string plotcommand, string range)
 
 void Lens::run_plotter(string plotcommand, string filename, string extra_command)
 {
+	if (suppress_plots) return;
 	if (mpi_id==0) {
 		stringstream psstr, ptstr, fsstr, lwstr;
 		string psstring, ptstring, fsstring, lwstring;

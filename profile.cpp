@@ -1461,7 +1461,7 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-bool LensProfile::has_kappa_profile()
+bool LensProfile::has_kapavg_profile()
 {
 	if (this->kapavgptr_rsq_spherical==NULL) return false;
 	else return true;
