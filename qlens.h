@@ -364,7 +364,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool running_fit;
-	int lensmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	vector<string> fit_parameter_names, transformed_parameter_names;
 	vector<string> latex_parameter_names, transformed_latex_parameter_names;
 	lensvector *sourcepts_fit;
@@ -808,6 +808,7 @@ public:
 
 	void add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
+	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
 	void reassign_lensparam_pointers_and_names();
@@ -822,7 +823,7 @@ public:
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
 	void remove_source_object(int sb_number);
-	void print_source_list();
+	void print_source_list(bool show_vary_params);
 	void clear_source_objects();
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum);
@@ -867,6 +868,7 @@ public:
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
+	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 

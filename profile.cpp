@@ -185,7 +185,7 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 			old_upper_limits[i] = 1e30;
 		}
 	}
-	if (k != n_vary_params) die("WETO:RJAEWKLJAESWFJ");
+	if (k != n_vary_params) die("k != n_vary_params");
 
 	n_vary_params=0;
 	for (i=0; i < vary_params_in.size(); i++) {
@@ -205,7 +205,7 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 			k++;
 		}
 	}
-	if (k != n_vary_params) die("FUCK WETO:RJAEWKLJAESWFJ");
+	if (k != n_vary_params) die("k != n_vary_params");
 	lower_limits_initial.input(lower_limits);
 	upper_limits_initial.input(upper_limits);
 

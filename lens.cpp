@@ -1399,6 +1399,22 @@ bool Lens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags
 	return true;
 }
 
+bool Lens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
+{
+	int pi, pf, nparams;
+	get_sb_parameter_numbers(sbnumber,pi,pf);
+	if (sb_list[sbnumber]->vary_parameters(vary_flags)==false) return false;
+	if (pf > pi) param_settings->remove_params(pi,pf);
+	get_n_fit_parameters(nparams);
+	dvector stepsizes(nparams);
+	get_parameter_names();
+	if (get_sb_parameter_numbers(sbnumber,pi,pf) == true) {
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
 void Lens::update_parameter_list()
 {
 	// One slight issue that should be fixed: for the "extra" parameters like regularization, hubble constant, etc., the stepsizes
@@ -1700,19 +1716,20 @@ void Lens::clear_source_objects()
 	}
 }
 
-void Lens::print_source_list()
+void Lens::print_source_list(bool show_vary_params)
 {
-	if (mpi_id==0) {
-		cout << resetiosflags(ios::scientific);
-		if (n_sb > 0) {
-			for (int i=0; i < n_sb; i++) {
-				cout << i << ". ";
-				sb_list[i]->print_parameters();
-			}
+	cout << resetiosflags(ios::scientific);
+	if (nlens > 0) {
+		for (int i=0; i < n_sb; i++) {
+			cout << i << ". ";
+			sb_list[i]->print_parameters();
+			if (show_vary_params)
+				sb_list[i]->print_vary_parameters();
 		}
-		else cout << "No source objects have been specified" << endl;
-		if (use_scientific_notation) cout << setiosflags(ios::scientific);
 	}
+	else cout << "No source models have been specified" << endl;
+	cout << endl;
+	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
 void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum)
@@ -4999,7 +5016,7 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(fitmodel->lens_list, lens_list[i]->get_center_anchor_number());
 		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
 			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
-			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1);
+			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1,false);
 		}
 		for (j=0; j < fitmodel->lens_list[i]->get_n_params(); j++) {
 			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
@@ -5030,6 +5047,7 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->fitmethod = fitmethod;
 	fitmodel->n_fit_parameters = n_fit_parameters;
 	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
+	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
 	if (open_chisq_logfile) {
@@ -5073,6 +5091,10 @@ bool Lens::update_fitmodel(const double* params)
 				if (fitmodel->vary_sourcepts_x[i]) fitmodel->sourcepts_fit[i][0] = params[index++];
 				if (fitmodel->vary_sourcepts_y[i]) fitmodel->sourcepts_fit[i][1] = params[index++];
 			}
+		}
+	} else if (source_fit_mode == Parameterized_Source) {
+		for (i=0; i < n_sb; i++) {
+			fitmodel->sb_list[i]->update_fit_parameters(params,index,status);
 		}
 	} else if (source_fit_mode == Pixellated_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) fitmodel->regularization_parameter = params[index++];
@@ -5909,6 +5931,9 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 			}
 		}
 	}
+	else if (source_fit_mode==Parameterized_Source) {
+		for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
+	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
@@ -5940,6 +5965,9 @@ void Lens::set_default_plimits()
 			}
 		}
 	}
+	else if (source_fit_mode==Parameterized_Source) {
+		for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) {
 		index++;
 	}
@@ -5958,9 +5986,9 @@ void Lens::set_default_plimits()
 
 void Lens::get_n_fit_parameters(int &nparams)
 {
-	lensmodel_fit_parameters=0;
-	for (int i=0; i < nlens; i++)
-		lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
+	lensmodel_fit_parameters = 0;
+	srcmodel_fit_parameters = 0;
+	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
@@ -5969,6 +5997,11 @@ void Lens::get_n_fit_parameters(int &nparams)
 				if (vary_sourcepts_y[i]) nparams++;
 			}
 		}
+	}
+	else if (source_fit_mode==Parameterized_Source) {
+		for (int i=0; i < n_sb; i++)
+			srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
+		nparams += srcmodel_fit_parameters;
 	}
 	else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) nparams++;
 	if (vary_pixel_fraction) nparams++;
@@ -6004,6 +6037,11 @@ bool Lens::setup_fit_parameters(bool include_limits)
 				if (vary_sourcepts_y[i]) fitparams[index++] = sourcepts_fit[i][1];
 			}
 		}
+	} else if (source_fit_mode==Parameterized_Source) {
+		int src_index = 0;
+		for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,src_index);
+		if (src_index != srcmodel_fit_parameters) die("Index didn't go through all the source model fit parameters (%i vs %i)",src_index,srcmodel_fit_parameters);
+		index += src_index;
 	} else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_srcgrid_xshift) fitparams[index++] = srcgrid_xshift;
@@ -6059,6 +6097,12 @@ bool Lens::setup_limits()
 				}
 			}
 		}
+	} else if (source_fit_mode==Parameterized_Source) {
+		for (int i=0; i < n_sb; i++) {
+			if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("cannot do fit; limits have not been defined for source %i",i); return false; }
+		}
+		int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+		if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
 	} else if (source_fit_mode == Pixellated_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) {
 			if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) { warn("lower/upper limits must be set for regularization parameter (see 'regparam') before doing fit"); return false; }
@@ -6158,9 +6202,22 @@ void Lens::get_parameter_names()
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
+	if (source_fit_mode==Parameterized_Source) {
+		for (i=0; i < n_sb; i++) {
+			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+		}
+	}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
 	n_names = fit_parameter_names.size();
+
+	//if (source_fit_mode==Parameterized_Source) {
+		//for (i=0; i < n_names; i++) {
+			//cout << "PARAM " << i << ": " << fit_parameter_names[i] << endl;
+		//}
+		//die();
+	//}
+
 	string *new_parameter_names = new string[n_names];
 	for (i=0; i < n_names; i++) {
 		count=1;
@@ -6334,14 +6391,31 @@ bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 	if (lens_i >= nlens) { pf=pi=0; return false; }
 	get_n_fit_parameters(n_fit_parameters);
 	vector<string> dummy, dummy2, dummy3;
-	int i,j;
-	for (i=0; i < lens_i; i++) {
+	for (int i=0; i < lens_i; i++) {
 		lens_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	}
 	pi = dummy.size();
 	if (pi == n_fit_parameters) { pf=pi=0; return false; }
 	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	pf = dummy.size();
+	if (pf==pi) return false;
+	return true;
+}
+
+bool Lens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
+{
+	if (sb_i >= n_sb) { pf=pi=0; return false; }
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < sb_i; i++) {
+		sb_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fit_parameters) { pf=pi=0; return false; }
+	sb_list[sb_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters; // since lens fit parameters come before the source params
+	pf += lensmodel_fit_parameters; // since lens fit parameters come before the source params
 	if (pf==pi) return false;
 	return true;
 }
@@ -7747,9 +7821,6 @@ bool Lens::use_bestfit_model()
 		if (mpi_id==0) warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
 		return false;
 	}
-	//int np;
-	//get_n_fit_parameters(np);
-	//if (np != n_fit_parameters) die("WTF!");
 	int i, index=0;
 	double transformed_params[n_fit_parameters];
 	param_settings->inverse_transform_parameters(bestfitparams.array(),transformed_params);
@@ -7768,6 +7839,11 @@ bool Lens::use_bestfit_model()
 				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = transformed_params[index++];
 				if (vary_sourcepts_y[i]) sourcepts_fit[i][1] = transformed_params[index++];
 			}
+		}
+	} else if (source_fit_mode == Parameterized_Source) {
+		for (i=0; i < n_sb; i++) {
+			sb_list[i]->update_fit_parameters(transformed_params,index,status);
+			sb_list[i]->reset_angle_modulo_2pi();
 		}
 	} else if (source_fit_mode == Pixellated_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None))
@@ -8491,6 +8567,10 @@ void Lens::print_fit_model()
 				}
 			}
 		} else if (n_sourcepts_fit > 0) cout << "Initial source point parameters not chosen\n";
+	}
+	else if (source_fit_mode == Parameterized_Source) {
+		cout << "Source profile list:" << endl;
+		print_source_list(true);
 	}
 	else if (source_fit_mode == Pixellated_Source) {
 		if (vary_regularization_parameter) {
@@ -9733,7 +9813,7 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
 				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
+				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 				pjaffe_vary_flags[0] = true;
@@ -9845,7 +9925,7 @@ void Lens::generate_solution_chain_sdp81()
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
 				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
+				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 				pjaffe_vary_flags[0] = true;
@@ -9985,7 +10065,7 @@ void Lens::generate_solution_chain_sdp81()
 //			lens_list[1]->vary_parameters(shear_vary_flags);
 //			if (include_subhalo) {
 //				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
-//				lens_list[2]->assign_special_anchored_parameters(lens_list[0]); // calculates tidal radius
+//				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 //				boolvector pjaffe_vary_flags(7);
 //				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
 //				pjaffe_vary_flags[0] = true;

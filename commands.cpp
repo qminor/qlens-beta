@@ -2670,7 +2670,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -2901,7 +2901,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3096,7 +3096,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3446,7 +3446,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
-								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1);
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -4081,10 +4081,81 @@ void Lens::process_commands(bool read_file)
 				}
 			}
 		}
-		else if (words[0]=="source")
+		else if ((words[0]=="source") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="source")))
 		{
-			if (nwords==1) {
-				print_source_list();
+			bool update_parameters = false;
+			bool update_specific_parameters = false; // option for user to update one (or more) specific parameters rather than update all of them at once
+			bool vary_parameters = false;
+			boolvector vary_flags;
+			vector<string> specific_update_params;
+			vector<double> specific_update_param_vals;
+			dvector param_vals;
+			int nparams_to_vary;
+			int src_number;
+
+			if (words[0]=="fit") {
+				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
+				vary_parameters = true;
+				// now remove the "fit" word from the line so we can add sources the same way,
+				// but with vary_parameters==true so we'll prompt for an extra line to vary parameters
+				stringstream* new_ws = new stringstream[nwords-1];
+				for (int i=0; i < nwords-1; i++) {
+					words[i] = words[i+1];
+					new_ws[i] << words[i];
+				}
+				words.pop_back();
+				nwords--;
+				delete[] ws;
+				ws = new_ws;
+			}
+			SB_ProfileName profile_name;
+			if ((nwords > 1) and (words[1]=="update")) {
+				if (nwords > 2) {
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
+					update_parameters = true;
+					profile_name = sb_list[src_number]->get_sbtype();
+					// Now we'll remove the "update" word and replace the source number with the source name
+					// so it follows the format of the usual "source" command, but with update_parameters==true
+					stringstream* new_ws = new stringstream[nwords-1];
+					words[1] = (profile_name==SB_SPLINE) ? "sbspline" :
+									(profile_name==GAUSSIAN) ? "gaussian" :
+									(profile_name==SERSIC) ? "sersic" : "tophat";
+					for (int i=2; i < nwords-1; i++)
+						words[i] = words[i+1];
+					for (int i=0; i < nwords-1; i++)
+						new_ws[i] << words[i];
+					words.pop_back();
+					nwords--;
+					delete[] ws;
+					ws = new_ws;
+				} else Complain("must specify a source number to update, followed by parameters");
+			}
+
+			if (update_parameters) {
+				int pos, n_updates = 0;
+				double pval;
+				for (int i=2; i < nwords; i++) {
+					if ((pos = words[i].find("="))!=string::npos) {
+						n_updates++;
+						specific_update_params.push_back(words[i].substr(0,pos));
+						stringstream pvalstr;
+						pvalstr << words[i].substr(pos+1);
+						pvalstr >> pval;
+						specific_update_param_vals.push_back(pval);
+					} else if (i==2) break;
+				}
+				if (n_updates > 0) {
+					if (n_updates < nwords-2) Complain("source parameters must all be updated at once, or else specific parameters using '<param>=...'");
+					update_specific_parameters = true;
+					for (int i=0; i < n_updates; i++)
+						if (sb_list[src_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in source " << src_number);
+				}
+			}
+
+			if (update_specific_parameters) ;
+			else if (nwords==1) {
+				print_source_list(false);
 			}
 			else if (words[1]=="clear")
 			{
@@ -4112,7 +4183,25 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model gaussian");
 						}
 					}
-					add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
+					nparams_to_vary = 6;
+					param_vals.input(nparams_to_vary);
+					param_vals[0]=sbnorm; param_vals[1]=sig; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+					} else {
+						add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
+						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+					}
 				}
 				else Complain("gaussian requires at least 3 parameters (max_sb, sig, q)");
 			}
@@ -4133,7 +4222,26 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 						}
 					}
-					add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
+
+					nparams_to_vary = 7;
+					param_vals.input(nparams_to_vary);
+					param_vals[0]=s0; param_vals[1]=reff; param_vals[2] = n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (s0,Reff,q,theta,xc,yc) in model sersic");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+					} else {
+						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
+						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
 			}
@@ -4153,7 +4261,26 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model tophat");
 						}
 					}
-					add_source_object(TOPHAT, sb, rad, 0, q, theta, xc, yc);
+
+					nparams_to_vary = 6;
+					param_vals.input(nparams_to_vary);
+					param_vals[0]=sb; param_vals[1]=rad; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sb,radius,q,theta,xc,yc) in model tophat");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+					} else {
+						add_source_object(TOPHAT, sb, rad, 0, q, theta, xc, yc);
+						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+					}
 				}
 				else Complain("tophat requires at least 3 parameters (sb, radius, q)");
 			}
@@ -4182,6 +4309,46 @@ void Lens::process_commands(bool read_file)
 				else Complain("spline requires at least 2 parameters (filename, q)");
 			}
 			else Complain("source model not recognized");
+			if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+				int nvary=0;
+				for (int i=0; i < nparams_to_vary; i++) if (vary_flags[i]==true) nvary++;
+				if (nvary != 0) {
+					dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
+					vector<string> paramnames;
+					sb_list[n_sb-1]->get_fit_parameter_names(paramnames);
+					int i,j;
+					for (i=0, j=0; j < nparams_to_vary; j++) {
+						if (vary_flags[j]) {
+							if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
+							if (read_command(false)==false) { remove_source_object(n_sb-1); Complain("parameter limits could not be read"); }
+							if (nwords >= 2) {
+								if (!(ws[0] >> lower[i])) { remove_source_object(n_sb-1); Complain("invalid lower limit"); }
+								if (!(ws[1] >> upper[i])) { remove_source_object(n_sb-1); Complain("invalid upper limit"); }
+								if (nwords == 2) {
+									lower_initial[i] = lower[i];
+									upper_initial[i] = upper[i];
+								} else if (nwords == 3) {
+									double width;
+									if (!(ws[2] >> width)) { remove_source_object(n_sb-1); Complain("invalid initial parameter width"); }
+									lower_initial[i] = param_vals[j] - width;
+									upper_initial[i] = param_vals[j] + width;
+								} else if (nwords == 4) {
+									if (!(ws[2] >> lower_initial[i])) { remove_source_object(n_sb-1); Complain("invalid initial lower limit"); }
+									if (!(ws[3] >> upper_initial[i])) { remove_source_object(n_sb-1); Complain("invalid initial upper limit"); }
+								} else {
+									remove_source_object(n_sb-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+								}
+							} else {
+								remove_source_object(n_sb-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+							}
+							if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
+							if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
+							i++;
+						}
+					}
+					sb_list[n_sb-1]->set_limits(lower,upper,lower_initial,upper_initial);
+				}
+			}
 		}
 		else if (words[0]=="fit")
 		{
