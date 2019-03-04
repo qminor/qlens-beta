@@ -6038,10 +6038,9 @@ bool Lens::setup_fit_parameters(bool include_limits)
 			}
 		}
 	} else if (source_fit_mode==Parameterized_Source) {
-		int src_index = 0;
-		for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,src_index);
-		if (src_index != srcmodel_fit_parameters) die("Index didn't go through all the source model fit parameters (%i vs %i)",src_index,srcmodel_fit_parameters);
-		index += src_index;
+		for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
+		int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+		if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
 	} else if ((vary_regularization_parameter) and (source_fit_mode==Pixellated_Source) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_srcgrid_xshift) fitparams[index++] = srcgrid_xshift;
@@ -8212,8 +8211,7 @@ double Lens::fitmodel_loglike_extended_source(double* params)
 	}
 	double loglike, chisq=0, chisq0;
 	if (chisq != 2e30) {
-		if (fitmodel->regularization_parameter < 0) chisq = 2e30;
-		else if (fitmodel->pixel_fraction <= 0) chisq = 2e30;
+		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
 		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 	}
 
