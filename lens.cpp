@@ -9262,7 +9262,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		tot_wtime0 = omp_get_wtime();
 	}
 #endif
-	image_pixel_grid->redo_lensing_calculations();
+	if (source_fit_mode==Pixellated_Source) image_pixel_grid->redo_lensing_calculations();
 
 	int i,j;
 	double chisq = 0;

@@ -5300,7 +5300,8 @@ void ImagePixelGrid::find_surface_brightness()
 			}
 		}
 	}
-	else {
+	else
+	{
 		int i,j;
 		if (lens->split_imgpixels) {
 			#pragma omp parallel
@@ -5339,11 +5340,22 @@ void ImagePixelGrid::find_surface_brightness()
 				}
 			}
 		} else {
-			for (j=0; j < y_N; j++) {
-				for (i=0; i < x_N; i++) {
-					surface_brightness[i][j] = 0;
-					for (int k=0; k < lens->n_sb; k++) {
-						surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+			#pragma omp parallel
+			{
+				int thread;
+#ifdef USE_OPENMP
+				thread = omp_get_thread_num();
+#else
+				thread = 0;
+#endif
+				#pragma omp for private(i,j) schedule(static)
+				for (j=0; j < y_N; j++) {
+					for (i=0; i < x_N; i++) {
+						surface_brightness[i][j] = 0;
+						for (int k=0; k < lens->n_sb; k++) {
+							lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
+							surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+						}
 					}
 				}
 			}
