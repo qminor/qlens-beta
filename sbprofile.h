@@ -98,6 +98,8 @@ class SB_Profile
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void print_parameters();
 	void print_vary_parameters();
+	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
+	virtual void print_source_command(ofstream& scriptout, const bool use_limits);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models

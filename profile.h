@@ -103,6 +103,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		update_zlens_meta_parameters();
 		update_ellipticity_meta_parameters();
 	}
+	void calculate_ellipticity_components();
+
 
 	double potential_numerical(const double, const double);
 	double potential_spherical_default(const double x, const double y);

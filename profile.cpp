@@ -1310,6 +1310,15 @@ void LensProfile::update_zlens_meta_parameters()
 	}
 }
 
+void LensProfile::calculate_ellipticity_components()
+{
+	if ((ellipticity_mode != -1) and (use_ellipticity_components)) {
+		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+		epsilon = (1-q)*cos(2*theta_eff);
+		epsilon2 = (1-q)*sin(2*theta_eff);
+	}
+}
+
 void LensProfile::update_ellipticity_meta_parameters()
 {
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)

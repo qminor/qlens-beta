@@ -5147,15 +5147,6 @@ void Lens::assign_Lmatrix(bool verbal)
 
 				for (ii=0; ii < nsplit; ii++) {
 					for (jj=0; jj < nsplit; jj++) {
-						//if ((i==21) and (j==18)) {
-							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl;
-							//wtfout << corner_srcpts[ii+1][jj][thread][0] << " " << corner_srcpts[ii+1][jj][thread][1] << endl;
-							//wtfout << corner_srcpts[ii+1][jj+1][thread][0] << " " << corner_srcpts[ii+1][jj+1][thread][1] << endl;
-							//wtfout << corner_srcpts[ii][jj+1][thread][0] << " " << corner_srcpts[ii][jj+1][thread][1] << endl;
-							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl << endl;
-							//wtfout << corner_srcpts[ii][jj][thread][0] << " " << corner_srcpts[ii][jj][thread][1] << endl << endl;
-						//}
-
 						if (image_pixel_grid->subpixel_maps_to_srcpixel[i][j][kk]) {
 							u0 = ((double) (1+2*ii))*cell/2;
 							w0 = ((double) (1+2*jj))*cell/2;
@@ -5173,15 +5164,6 @@ void Lens::assign_Lmatrix(bool verbal)
 					}
 				}
 				Lmatrix_row_nn[img_index] = index;
-				//if ((i==15) and (j==24)) {
-					//SourcePixelGrid *subcell;
-					//cout << "N MAPPED PIXELS: " << image_pixel_grid->mapped_source_pixels[i][j].size();
-					//for (int k=0; k < image_pixel_grid->mapped_source_pixels[i][j].size(); k += 3) {
-						//subcell = image_pixel_grid->mapped_source_pixels[i][j][k];
-						//cout << "maps to source pixel " << subcell->ii << " " << subcell->jj << endl;
-					//}
-				//}
-
 			}
 
 		}
@@ -5267,7 +5249,7 @@ void ImagePixelGrid::find_surface_brightness()
 #endif
 					int ii,jj,nsplit;
 					double u0, w0, sb;
-					#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(static)
+					#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(dynamic)
 					for (j=0; j < y_N; j++) {
 						for (i=0; i < x_N; i++) {
 							surface_brightness[i][j] = 0;
@@ -5314,7 +5296,7 @@ void ImagePixelGrid::find_surface_brightness()
 #endif
 				int ii,jj,nsplit;
 				double u0, w0, sb;
-				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(static)
+				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(dynamic)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;
@@ -5348,7 +5330,7 @@ void ImagePixelGrid::find_surface_brightness()
 #else
 				thread = 0;
 #endif
-				#pragma omp for private(i,j) schedule(static)
+				#pragma omp for private(i,j) schedule(dynamic)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;

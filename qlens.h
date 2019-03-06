@@ -823,8 +823,8 @@ public:
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
 	void remove_source_object(int sb_number);
-	void print_source_list(bool show_vary_params);
 	void clear_source_objects();
+	void print_source_list(bool show_vary_params);
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum);
 	void remove_derived_param(int dparam_number);

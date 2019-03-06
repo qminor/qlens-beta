@@ -558,6 +558,65 @@ double SB_Profile::window_rmax()
 	return qx_parameter*sb_spline.xmax();
 }
 
+void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits)
+{
+	scriptout << setprecision(16);
+	//scriptout << setiosflags(ios::scientific);
+	scriptout << "fit source " << model_name << " ";
+
+	for (int i=0; i < n_params; i++) {
+		if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+		else {
+			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+			else scriptout << *(param[i]);
+		}
+		scriptout << " ";
+	}
+	scriptout << endl;
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) scriptout << "1 ";
+		else scriptout << "0 ";
+	}
+	scriptout << endl;
+	if ((use_limits) and (include_limits)) {
+		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
+		else {
+			for (int i=0; i < n_vary_params; i++) {
+				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
+					}
+				} else {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
+						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+					}
+
+				}
+			}
+		}
+	}
+}
+
+inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
+{
+	scriptout << setiosflags(ios::scientific);
+	scriptout << (*num);
+	scriptout << resetiosflags(ios::scientific);
+	if (space) scriptout << " ";
+}
+
+/********************************* Specific SB_Profile models (derived classes) *********************************/
+
 Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	model_name = "gaussian";

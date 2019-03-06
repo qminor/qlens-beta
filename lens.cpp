@@ -1692,6 +1692,7 @@ void Lens::add_source_object(const char *splinefile, double q, double theta, dou
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
+/*
 void Lens::remove_source_object(int sb_number)
 {
 	if ((sb_number >= n_sb) or (n_sb == 0)) { warn(warnings,"Specified source object does not exist"); return; }
@@ -1705,14 +1706,52 @@ void Lens::remove_source_object(int sb_number)
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
+*/
+
+void Lens::remove_source_object(int sb_number)
+{
+	int pi, pf;
+	get_sb_parameter_numbers(sb_number,pi,pf);
+
+	if ((sb_number >= n_sb) or (n_sb==0)) { warn(warnings,"Specified source object does not exist"); return; }
+	SB_Profile** newlist = new SB_Profile*[n_sb-1];
+	int i,j;
+	for (i=0, j=0; i < n_sb; i++) {
+		if (i != sb_number) {
+			newlist[j] = sb_list[i];
+			j++;
+		}
+	}
+	delete sb_list[sb_number];
+	delete[] sb_list;
+	n_sb--;
+
+	sb_list = newlist;
+	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+
+	param_settings->remove_params(pi,pf);
+	update_parameter_list();
+	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+}
 
 void Lens::clear_source_objects()
 {
 	if (n_sb > 0) {
-		for (int i=0; i < n_sb; i++)
+		int pi, pf, pi_min=1000, pf_max=0;
+		// since all the source parameters are blocked together in the param_settings list, we just need to find the initial and final parameters to remove
+		for (int i=0; i < n_sb; i++) {
+			get_sb_parameter_numbers(i,pi,pf);
+			if (pi < pi_min) pi_min=pi;
+			if (pf > pf_max) pf_max=pf;
+		}	
+		for (int i=0; i < n_sb; i++) {
 			delete sb_list[i];
+		}	
 		delete[] sb_list;
+		param_settings->remove_params(pi_min,pf_max);
 		n_sb = 0;
+		update_parameter_list(); // this is necessary to keep the parameter priors, transforms preserved
+		get_parameter_names(); // parameter names must be updated whenever source models are removed/added
 	}
 }
 
@@ -6202,9 +6241,11 @@ void Lens::get_parameter_names()
 		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
 	if (source_fit_mode==Parameterized_Source) {
+		int srcparams_start = fit_parameter_names.size();
 		for (i=0; i < n_sb; i++) {
 			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 		}
+		for (i=srcparams_start; i < fit_parameter_names.size(); i++) fit_parameter_names[i] += "_src";
 	}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
@@ -8389,6 +8430,7 @@ void Lens::reassign_lensparam_pointers_and_names()
 	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
+			lens_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
 			lens_list[i]->assign_param_pointers();
 			lens_list[i]->assign_paramnames();
 		}
@@ -8519,7 +8561,14 @@ void Lens::output_lens_commands(string filename, const bool print_limits)
 				scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
 			}
 		}
+	} else if (source_fit_mode == Parameterized_Source) {
+		if (print_limits) scriptfile << "#limits included" << endl;
+		else scriptfile << "#nolimits included" << endl;
+		for (int i=0; i < n_sb; i++) {
+			sb_list[i]->print_source_command(scriptfile,print_limits);
+		}
 	}
+
 	if (vary_hubble_parameter) {
 		scriptfile << "hubble = " << hubble << endl;
 		if (print_limits) {
@@ -8567,8 +8616,10 @@ void Lens::print_fit_model()
 		} else if (n_sourcepts_fit > 0) cout << "Initial source point parameters not chosen\n";
 	}
 	else if (source_fit_mode == Parameterized_Source) {
-		cout << "Source profile list:" << endl;
-		print_source_list(true);
+		if (n_sb > 0) {
+			cout << "Source profile list:" << endl;
+			print_source_list(true);
+		}
 	}
 	else if (source_fit_mode == Pixellated_Source) {
 		if (vary_regularization_parameter) {

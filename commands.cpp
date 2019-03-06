@@ -2444,6 +2444,7 @@ void Lens::process_commands(bool read_file)
 			{
 				if (nwords==2) {
 					clear_lenses();
+					clear_source_objects();
 				} else if (nwords==3) {
 					int lensnumber, min_lensnumber, max_lensnumber, pos;
 					if ((pos = words[2].find("-")) != string::npos) {
@@ -5343,6 +5344,7 @@ void Lens::process_commands(bool read_file)
 						}
 						getline((*infile),line); // skip the first comment line
 						clear_lenses();
+						clear_source_objects();
 						update_parameter_list();
 						// Clear any existing lens models so the new one can be loaded in
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
