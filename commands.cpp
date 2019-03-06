@@ -6354,17 +6354,17 @@ void Lens::process_commands(bool read_file)
 						if (terminal==TEXT) {
 							if (!replot) {
 								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,offload_to_data);
-								if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
+								if ((source_pixel_grid != NULL) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
 						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
-							if (!replot) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
+							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);
-								if (plot_srcplane) run_plotter("srcpixel",words[2],range1);
+								if ((plot_srcplane) and (source_pixel_grid != NULL)) run_plotter("srcpixel",words[2],range1);
 							} else {
 								run_plotter("imgpixel_nocc",words[3],range2);
-								if (plot_srcplane) run_plotter("srcpixel_nocc",words[2],range1);
+								if ((plot_srcplane) and (source_pixel_grid != NULL)) run_plotter("srcpixel_nocc",words[2],range1);
 							}
 						}
 					} else Complain("invalid number of arguments to 'sbmap plotimg'");

@@ -646,7 +646,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	psf_width_x = lens_in->psf_width_x;
 	psf_width_y = lens_in->psf_width_y;
 	data_pixel_noise = lens_in->data_pixel_noise;
-	sim_pixel_noise = lens_in->sim_pixel_noise;
+	sim_pixel_noise = 0; // the fit model should never add random noise when generating lensed images
 	sb_threshold = lens_in->sb_threshold;
 	noise_threshold = lens_in->noise_threshold;
 	n_image_pixels_x = lens_in->n_image_pixels_x;
@@ -4927,12 +4927,12 @@ void WeakLensingData::clear()
 
 /******************************************** Functions for lens model fitting ******************************************/
 
-void Lens::initialize_fitmodel(const bool running_fit_in)
+bool Lens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
-		if ((sourcepts_fit==NULL) or (image_data==NULL)) { warn("cannot do fit; image data points have not been defined"); return; }
+		if ((sourcepts_fit==NULL) or (image_data==NULL)) { warn("cannot do fit; image data points have not been defined"); return false; }
 	} else if ((source_fit_mode == Pixellated_Source) or (source_fit_mode==Parameterized_Source)) {
-		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return; }
+		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return false; }
 	}
 	if (fitmodel != NULL) delete fitmodel;
 	fitmodel = new Lens(this);
@@ -5104,6 +5104,7 @@ void Lens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->logfile << setprecision(10);
 		}
 	}
+	return true;
 }
 
 void Lens::update_anchored_parameters_and_redshift_data()
@@ -6489,7 +6490,11 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel(false);
+	if (!initialize_fitmodel(false)) {
+		raw_chisq = 1e30;
+		if ((mpi_id==0) and (show_status)) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
 
 	double (Lens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -6540,7 +6545,10 @@ void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel(false);
+	if (!initialize_fitmodel(false)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
 
 	if (param1 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param1,n_fit_parameters); return; }
 	if (param2 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param2,n_fit_parameters); return; }
@@ -6614,7 +6622,10 @@ void Lens::plot_chisq_1d(const int param, const int n, const double ip, const do
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
-	initialize_fitmodel(false);
+	if (!initialize_fitmodel(false)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
 
 	if (param >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param,n_fit_parameters); return; }
 
@@ -6654,7 +6665,10 @@ double Lens::chi_square_fit_simplex()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return 1e30;
+	}
 
 	double (Simplex::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -6838,7 +6852,10 @@ double Lens::chi_square_fit_powell()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return 1e30;
+	}
 
 	double (Powell::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -7000,7 +7017,11 @@ void Lens::nested_sampling()
 		create_output_directory();
 	}
 
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
+
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
 	SetNDerivedParams(n_derived_params);
 
@@ -7126,7 +7147,10 @@ void Lens::multinest()
 		create_output_directory();
 	}
 
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
 
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
@@ -7370,7 +7394,10 @@ void Lens::polychord()
 		//}
 	}
 
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
 
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
@@ -7605,7 +7632,10 @@ bool Lens::add_dparams_to_chain()
 
 	if (setup_fit_parameters(true)==false) return false;
 	fit_set_optimizations();
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return false;
+	}
 
 	static const int n_characters = 5000;
 	char dataline[n_characters];
@@ -7772,7 +7802,11 @@ void Lens::chi_square_twalk()
 		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		create_output_directory();
 	}
-	initialize_fitmodel(true);
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
+
 	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
 	SetNDerivedParams(n_derived_params);
 
@@ -9214,6 +9248,8 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 		if (autocenter) autocenter = false;
 		if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 		if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
+		// The sim_pixel_noise should now become data_pixel_noise, and to be safe, set sim_pixel_noise = 0 since we will be fitting now
+		data_pixel_noise = sim_pixel_noise;
 	}
 
 	delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
