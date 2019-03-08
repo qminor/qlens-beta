@@ -1261,7 +1261,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 
 void Cored_NFW::set_ks_c200_from_m200_rs()
 {
-	double rvir_kpc, rs_kpc;
+	double rvir_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;

@@ -1001,9 +1001,8 @@ void LensProfile::set_ellipticity_parameter(const double &q_in)
 	} else if ((ellipticity_mode==2) or (ellipticity_mode==3)) {
 		epsilon = q_in; // axis ratio q = b/a
 	}
-	if (q < 0) q = -q; // don't allow negative axis ratios
 	if (q > 1) q = 1.0; // don't allow q>1
-	if (q==0) q = 0.001; // just to avoid catastrophe
+	if (q<=0) q = 0.001; // just to avoid catastrophe
 }
 
 void LensProfile::set_angle_from_components(const double &comp1, const double &comp2)
