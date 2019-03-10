@@ -1921,8 +1921,8 @@ void Lens::process_commands(bool read_file)
 					cout << "vary_srcgrid_scale: " << display_switch(vary_srcgrid_size_scale) << endl;
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
-					cout << "outside_sb_prior: " << display_switch(max_sb_prior_unselected_pixels) << endl;
-					cout << "outside_sb_noise_threshold = " << max_sb_prior_noise_frac << endl;
+					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
+					cout << "outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
 					cout << "nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
@@ -6404,18 +6404,7 @@ void Lens::process_commands(bool read_file)
 			else if (words[1]=="invert")
 			{
 				if (!islens()) Complain("must specify lens model first");
-				bool setmask = false;
-				vector<string> args;
-				if (extract_word_starts_with('-',2,nwords-1,args)==true)
-				{
-					for (int i=0; i < args.size(); i++) {
-						if (args[i]=="-setmask") setmask = true;
-						else Complain("argument '" << args[i] << "' not recognized");
-					}
-				}
-				if (setmask) use_inversion_to_set_mask = true;
 				invert_surface_brightness_map_from_data(verbal_mode);
-				if (setmask) use_inversion_to_set_mask = false;
 
 				//test_fitmodel_invert(); // use this to make sure the fitmodel chi-square returns the same value as doing the inversion directly (runs chi-square twice just to make sure)
 			}
@@ -8065,9 +8054,9 @@ void Lens::process_commands(bool read_file)
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as multiple of data noise)");
-				max_sb_prior_noise_frac = sb_thresh;
+				outside_sb_prior_noise_frac = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_noise_threshold = " << max_sb_prior_noise_frac << endl;
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_noise_threshold");
 		}
 		else if (words[0]=="outside_sb_threshold")
@@ -8075,10 +8064,24 @@ void Lens::process_commands(bool read_file)
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as fraction of max s.b.)");
-				max_sb_prior_threshold = sb_thresh;
+				outside_sb_prior_threshold = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << max_sb_prior_threshold << endl;
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << outside_sb_prior_threshold << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
+		}
+		else if (words[0]=="outside_sb_n_neighbors")
+		{
+			double sb_n;
+			if (nwords == 2) {
+				if (words[1]=="all") sb_n = -1;
+				else if (!(ws[1] >> sb_n)) Complain("invalid number of neighbor pixels to search for outside_sb_prior");
+				outside_sb_prior_n_neighbors = sb_n;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					if (outside_sb_prior_n_neighbors==-1) cout << "number of neighbor pixels to search: outside_sb_n_neighbors = all" << endl;
+					else cout << "number of neighbor pixels to search: outside_sb_n_neighbors = " << outside_sb_prior_n_neighbors << endl;
+				}
+			} else Complain("must specify either zero or one argument for outside_sb_n_neighbors");
 		}
 		else if (words[0]=="nimg_sb_threshold")
 		{
@@ -8130,10 +8133,10 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="outside_sb_prior")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Set prior on maximum surface brightness allowed beyond pixel mask: " << display_switch(max_sb_prior_unselected_pixels) << endl;
+				if (mpi_id==0) cout << "Set prior on maximum surface brightness allowed beyond pixel mask: " << display_switch(outside_sb_prior) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'outside_sb_prior' command; must specify 'on' or 'off'");
-				set_switch(max_sb_prior_unselected_pixels,setword);
+				set_switch(outside_sb_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="subhalo_prior")

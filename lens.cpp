@@ -237,11 +237,11 @@ Lens::Lens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	max_sb_prior_unselected_pixels = true;
-	max_sb_prior_noise_frac = 4; // surface brightness threshold is given as multiple of data pixel noise
-	max_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
+	outside_sb_prior = true;
+	outside_sb_prior_noise_frac = 4; // surface brightness threshold is given as multiple of data pixel noise
+	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
+	outside_sb_prior_n_neighbors = -1;
 	high_sn_frac = 0.5; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
-	use_inversion_to_set_mask = false; // this "cheat" allows you to quickly set a sensible mask for simulated data
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
 	nlens = 0;
@@ -555,11 +555,12 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
-	max_sb_prior_unselected_pixels = lens_in->max_sb_prior_unselected_pixels;
-	max_sb_prior_noise_frac = lens_in->max_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
-	max_sb_prior_threshold = lens_in->max_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
+	outside_sb_prior = lens_in->outside_sb_prior;
+	outside_sb_prior_noise_frac = lens_in->outside_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
+	outside_sb_prior_threshold = lens_in->outside_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
+	outside_sb_prior_n_neighbors = lens_in->outside_sb_prior_n_neighbors;
+
 	high_sn_frac = lens_in->high_sn_frac; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
-	use_inversion_to_set_mask = false; // This should not be used for the fitmodel object, ever
 	subhalo_prior = lens_in->subhalo_prior;
 	use_custom_prior = lens_in->use_custom_prior;
 
@@ -9168,6 +9169,7 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
 	if (image_pixel_data != NULL) image_pixel_grid->set_fit_window((*image_pixel_data)); 
+	//if (image_pixel_data != NULL) image_pixel_grid->set_neighbor_pixels(5); 
 	if (active_image_pixel_i != NULL) {
 		delete[] active_image_pixel_i;
 		delete[] active_image_pixel_j;
@@ -9393,16 +9395,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				sourcegrid_ymax += ywidth_adj/2;
 			}
 		}
-		// For testing purposes...see where the image pixels map to on the source plane
-		//ofstream mapfile("srcmaps.dat");
-		//for (int i=0; i < image_pixel_grid->x_N; i++) {
-			//for (int j=0; j < image_pixel_grid->y_N; j++) {
-				//if (image_pixel_data->require_fit[i][j])
-				//mapfile << image_pixel_grid->center_sourcepts[i][j][0] << " " << image_pixel_grid->center_sourcepts[i][j][1] << endl;
-			//}
-		//}
-
-
 		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 		if (source_pixel_grid != NULL) delete source_pixel_grid;
 #ifdef USE_OPENMP
@@ -9415,30 +9407,9 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 
-		//if ((mpi_id==0) and (verbal)) {
-			//cout << "# of source pixels: " << source_pixel_grid->number_of_pixels;
-			//if (auto_srcgrid_npixels) {
-				//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-				//cout << ", f=" << pix_frac;
-			//}
-			//cout << endl;
-		//}
 		bool verbal_now = verbal;
 		if (auto_srcgrid_npixels) verbal_now = false; // since we're gonna redo the sourcegrid a second time, don't show the first one (it would confuse people)
-		//if (adaptive_grid) {
-			//source_pixel_grid->adaptive_subgrid();
-			//if ((mpi_id==0) and (verbal_now)) {
-				//cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels;
-				//if (auto_srcgrid_npixels) {
-					//double pix_frac = ((double) source_pixel_grid->number_of_pixels) / n_expected_imgpixels;
-					//cout << ", f=" << pix_frac;
-				//}
-				//cout << endl;
-			//}
-		//} else {
-			if ((auto_srcgrid_npixels) or (n_image_prior)) source_pixel_grid->calculate_pixel_magnifications();
-		//}
-		//cout << "Initial sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
+		if ((auto_srcgrid_npixels) or (n_image_prior)) source_pixel_grid->calculate_pixel_magnifications();
 		if (auto_srcgrid_npixels) {
 			if ((mpi_id==0) and (verbal_now)) cout << "Assigning pixel mappings...\n";
 			if (assign_pixel_mappings(verbal_now)==false) {
@@ -9446,71 +9417,13 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
 
-			/*
-			if (adaptive_grid) {
-				double xsrc, ysrc;
-				double mag = source_pixel_grid->get_lowest_mag_sourcept(xsrc,ysrc);
-				//cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
-				lensvector srcpt(xsrc,ysrc);
-				double highest_mag;
-				int nimg;
-				create_grid(false,reference_zfactors,default_zsrc_beta_factors);
-				image *img = get_images(srcpt,nimg,false);
-				if (nimg==0) {
-					warn("WARNING: No images found when trying to calculate image pixel magnifications");
-					highest_mag = mag;
-				} else {
-					highest_mag = -1e30;
-					for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
-				}
-				//cout << "Lowest mag: " << highest_mag << endl;
-				//double eff_imgpixel_width = sqrt(psf_width_x*psf_width_y);
-				double eff_imgpixel_width = data_pixel_size;
-				double eff_imgpixel_width_srcplane = eff_imgpixel_width/sqrt(highest_mag);
-				eff_imgpixel_width_srcplane *= base_srcpixel_imgpixel_ratio;
-				if ((mpi_id==0) and (verbal)) cout << "Effective imgpixel width: " << eff_imgpixel_width << ", ref effective imgpixel width in sourceplane: " << eff_imgpixel_width_srcplane << endl;
-				double srcgrid_firstlevel_npixels = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin))/SQR(eff_imgpixel_width_srcplane);
-				srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
-				srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-
-				//source_pixel_grid->get_highest_mag_sourcept(xsrc,ysrc);
-				//srcpt[0] = xsrc;
-				//srcpt[1] = ysrc;
-				////cout << "Lowest mag sourcept: " << xsrc << " " << ysrc << endl;
-				//img = get_images(srcpt,nimg,false);
-				//if (nimg==0) die("CATASTROPHE: No images found when trying to calculate image pixel magnifications");
-				//highest_mag = -1e30;
-				//for (int k=0; k < nimg; k++) if (img[k].mag > highest_mag) highest_mag = img[k].mag;
-				//cout << "Highest mag: " << highest_mag << endl;
-				//psf_width = sqrt(psf_width_x*psf_width_y);
-				//psf_width_srcplane = psf_width/sqrt(highest_mag);
-				//if ((mpi_id==0) and (verbal)) cout << "PSF width: " << psf_width << ", ref PSF width in sourceplane: " << psf_width_srcplane << endl;
-				//srcgrid_firstlevel_npixels = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin))/SQR(psf_width_srcplane);
-				//srcgrid_npixels_x = (int) sqrt(pixel_fraction*srcgrid_firstlevel_npixels*aspect_ratio);
-				//srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-			} else {
-				*/
-				//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
-				//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
-				//if (mpi_id==0) cout << "threshold: " << high_sn_frac*image_pixel_data->global_max_sb << endl;
-				//if (mpi_id==0) cout << "# of high S/N pixels: " << image_pixel_grid->n_high_sn_pixels << endl;
-				
-				// Uncomment the following two lines if you want to use the total (mapped) source pixel grid to set source pixel size, rather than high S/N area
-				//double srcgrid_area_covered_frac = total_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
-				//srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_npixels/srcgrid_area_covered_frac*aspect_ratio);
-				double srcgrid_area_covered_frac = high_sn_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
-				srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_pixel_grid->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
-				srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-			//}
+			double srcgrid_area_covered_frac = high_sn_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
+			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_pixel_grid->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
+			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 
 			if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
 			if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;
 
-			//int target = (int) pixel_fraction*image_npixels/srcgrid_area_covered_frac;
-			//int actual = srcgrid_npixels_x * srcgrid_npixels_y;
-			//cout << "Target " << target << ", actual " << actual << endl;
-			//double target_pix = srcgrid_npixels_x*srcgrid_npixels_y*srcgrid_area_covered_frac;
-			//cout << "Expected # source pixels: " << target_pix << " " << pixel_fraction*image_npixels << endl;
 			delete source_pixel_grid;
 			SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 			source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
@@ -9542,14 +9455,11 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Number of active image pixels: " << image_npixels << endl;
 		}
-				//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
-				//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
-				double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
-				//cout << "Est. source pixel area = " << src_pixel_area << endl;
-				double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
-				double est_pixfrac = est_nmapped / image_npixels;
-				//cout << "Estimate of nmapped = " << est_nmapped << endl;
-				//cout << "Estimate of f = " << est_pixfrac << endl;
+		//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
+		//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
+		double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
+		double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
+		double est_pixfrac = est_nmapped / image_npixels;
 		if ((mpi_id==0) and (verbal)) {
 			double pixfrac = ((double) source_npixels) / image_npixels;
 			cout << "Actual f = " << pixfrac << endl;
@@ -9560,10 +9470,10 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 
 #ifdef USE_OPENMP
-			if (show_wtime) {
-				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-				if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << srcgrid_wtime << endl;
-			}
+		if (show_wtime) {
+			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+			if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << srcgrid_wtime << endl;
+		}
 #endif
 
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
@@ -9585,19 +9495,6 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
 		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
 		else invert_lens_mapping_CG_method(verbal);
-
-		if (use_inversion_to_set_mask) {
-			for (i=0; i < image_pixel_data->npixels_x; i++) {
-				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if (image_pixel_grid->maps_to_source_pixel[i][j]) image_pixel_data->require_fit[i][j] = true;
-					else {
-						image_pixel_data->require_fit[i][j] = false;
-						image_pixel_data->n_required_pixels--;
-					}
-				}
-			}
-			if (sb_threshold > 0) image_pixel_data->unset_low_signal_pixels(sb_threshold,true);
-		}
 
 		calculate_image_pixel_surface_brightness();
 #ifdef USE_OPENMP
@@ -9691,11 +9588,12 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 
 	bool sb_outside_window = false;
-	if (max_sb_prior_unselected_pixels) {
+	if (outside_sb_prior) {
 		if (source_fit_mode==Pixellated_Source) {
 			clear_lensing_matrices();
 			clear_pixel_matrices();
-			image_pixel_grid->include_all_pixels();
+			if (outside_sb_prior_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+			else image_pixel_grid->set_neighbor_pixels(outside_sb_prior_n_neighbors); 
 			assign_pixel_mappings(verbal);
 			initialize_pixel_matrices(verbal);
 			PSF_convolution_Lmatrix(verbal);
@@ -9703,11 +9601,12 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			calculate_image_pixel_surface_brightness();
 		} else {
 			int old_imgpixel_nsplit = default_imgpixel_nsplit;
-			if (default_imgpixel_nsplit > 3) {
-				default_imgpixel_nsplit = 3; // it's waaaay too slow if many splittings
+			if (default_imgpixel_nsplit > 2) {
+				default_imgpixel_nsplit = 2; // it's waaaay too slow if many splittings
 				image_pixel_grid->reset_nsplit();
 			}
-			image_pixel_grid->include_all_pixels();
+			if (outside_sb_prior_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+			else image_pixel_grid->set_neighbor_pixels(outside_sb_prior_n_neighbors); 
 			image_pixel_grid->find_surface_brightness();
 			vectorize_image_pixel_surface_brightness();
 			PSF_convolution_image_pixel_vector(verbal);
@@ -9728,7 +9627,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				}
 			}
 		}
-		double outside_sb_threshold = dmax(max_sb_prior_noise_frac*data_pixel_noise,max_sb_prior_threshold*max_sb);
+		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*data_pixel_noise,outside_sb_prior_threshold*max_sb);
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
 				if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
@@ -9907,7 +9806,7 @@ void Lens::generate_solution_chain_sdp81()
 				lens_list[2]->vary_parameters(pjaffe_vary_flags);
 			}
 			//print_lens_list(true);
-			max_sb_prior_unselected_pixels = true;
+			outside_sb_prior = true;
 			chisq = chi_square_fit_simplex();
 			use_bestfit_model();
 
@@ -10018,7 +9917,7 @@ void Lens::generate_solution_chain_sdp81()
 				pjaffe_vary_flags[6] = true;
 				lens_list[2]->vary_parameters(pjaffe_vary_flags);
 			}
-			max_sb_prior_unselected_pixels = true;
+			outside_sb_prior = true;
 			chisq = chi_square_fit_simplex();
 			use_bestfit_model();
 
@@ -10158,7 +10057,7 @@ void Lens::generate_solution_chain_sdp81()
 //				pjaffe_vary_flags[6] = true;
 //				lens_list[2]->vary_parameters(pjaffe_vary_flags);
 //			}
-//			max_sb_prior_unselected_pixels = true;
+//			outside_sb_prior = true;
 //			chisq = chi_square_fit_simplex();
 //			use_bestfit_model();
 //

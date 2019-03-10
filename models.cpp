@@ -3513,7 +3513,6 @@ Tabulated_Model::~Tabulated_Model() {
 /***************************** Tabulated Model that interpolates in q *****************************/
 QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N, Lens* cosmo_in)
 {
-	//cout << "HI " << x_N << " " << y_N << " " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
 	cosmo = cosmo_in;
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";

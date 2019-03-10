@@ -216,6 +216,7 @@ class ImagePixelGrid : public Sort
 	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
+	void set_neighbor_pixels(const int n_neighbors);
 	void reset_nsplit();
 
 	~ImagePixelGrid();

@@ -4463,6 +4463,77 @@ void ImagePixelGrid::include_all_pixels()
 	}
 }
 
+void ImagePixelGrid::set_neighbor_pixels(const int n_neighbors)
+{
+	int i,j,k;
+	bool **req = new bool*[x_N];
+	for (i=0; i < x_N; i++) req[i] = new bool[y_N];
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			req[i][j] = fit_to_data[i][j];
+		}
+	}
+	for (k=0; k < n_neighbors; k++) {
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (fit_to_data[i][j]) {
+					if ((i < x_N-1) and (!fit_to_data[i+1][j])) {
+						if (!req[i+1][j]) {
+							req[i+1][j] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((i > 0) and (!fit_to_data[i-1][j])) {
+						if (!req[i-1][j]) {
+							req[i-1][j] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((j < y_N-1) and (!fit_to_data[i][j+1])) {
+						if (!req[i][j+1]) {
+							req[i][j+1] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((j > 0) and (!fit_to_data[i][j-1])) {
+						if (!req[i][j-1]) {
+							req[i][j-1] = true;
+							//n_required_pixels++;
+						}
+					}
+				}
+			}
+		}
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				fit_to_data[i][j] = req[i][j];
+			}
+		}
+		/*
+		// check for any lingering "holes" in the mask and activate them
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (!fit_to_data[i][j]) {
+					if (((i < x_N-1) and (fit_to_data[i+1][j])) and ((i > 0) and (fit_to_data[i-1][j])) and ((j < y_N-1) and (fit_to_data[i][j+1])) and ((j > 0) and (fit_to_data[i][j-1]))) {
+						if (!req[i][j]) {
+							req[i][j] = true;
+							//n_required_pixels++;
+						}
+					}
+				}
+			}
+		}
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				fit_to_data[i][j] = req[i][j];
+			}
+		}
+		*/
+	}
+	for (i=0; i < x_N; i++) delete[] req[i];
+	delete[] req;
+}
+
 void ImagePixelGrid::reset_nsplit()
 {
 	int i,j;
@@ -6365,7 +6436,7 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 #endif
 	cg_method.solve(Dvector,temp);
 
-	if ((n_image_prior) or (max_sb_prior_unselected_pixels)) {
+	if ((n_image_prior) or (outside_sb_prior)) {
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
@@ -6581,7 +6652,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) calculate_determinant = true; // specifies to calculate determinant
 	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
 
-	if ((n_image_prior) or (max_sb_prior_unselected_pixels)) {
+	if ((n_image_prior) or (outside_sb_prior)) {
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
@@ -6886,7 +6957,7 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		else warn("Error occurred during matrix inversion; MUMPS error code %i (source_npixels=%i)",mumps_solver->info[0],source_npixels);
 	}
 
-	if ((n_image_prior) or (max_sb_prior_unselected_pixels)) {
+	if ((n_image_prior) or (outside_sb_prior)) {
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
