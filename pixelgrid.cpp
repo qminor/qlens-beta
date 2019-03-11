@@ -4465,6 +4465,7 @@ void ImagePixelGrid::include_all_pixels()
 
 void ImagePixelGrid::set_neighbor_pixels(const int n_neighbors)
 {
+	// This is very similar to the set_neighbor_pixels() function in ImagePixelData; used here for the outside_sb_prior feature
 	int i,j,k;
 	bool **req = new bool*[x_N];
 	for (i=0; i < x_N; i++) req[i] = new bool[y_N];

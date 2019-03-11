@@ -9600,6 +9600,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			source_pixel_grid->fill_surface_brightness_vector();
 			calculate_image_pixel_surface_brightness();
 		} else {
+			clear_pixel_matrices();
 			int old_imgpixel_nsplit = default_imgpixel_nsplit;
 			if (default_imgpixel_nsplit > 2) {
 				default_imgpixel_nsplit = 2; // it's waaaay too slow if many splittings
@@ -9665,7 +9666,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 	chisq_it++;
 
-	clear_lensing_matrices();
+	if (source_fit_mode==Pixellated_Source) clear_lensing_matrices();
 	clear_pixel_matrices();
 	return chisq;
 }
