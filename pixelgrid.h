@@ -290,16 +290,7 @@ struct ImagePixelData
 
 	void estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb);
 	void add_point_image_from_centroid(ImageData* point_image_data, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double sb_threshold, const double pixel_error);
-	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
-	{
-		if (xvals==NULL) die("cannot get image pixel data parameters; no data has been loaded");
-		xmin_in = xvals[0];
-		xmax_in = xvals[npixels_x];
-		ymin_in = yvals[0];
-		ymax_in = yvals[npixels_y];
-		npx = npixels_x;
-		npy = npixels_y;
-	}
+	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy);
 	void get_npixels(int& npx, int& npy)
 	{
 		npx = npixels_x;

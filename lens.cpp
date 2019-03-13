@@ -9108,21 +9108,24 @@ void Lens::load_source_surface_brightness_grid(string source_inputfile)
 
 bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 {
-	if (image_pixel_data != NULL) delete image_pixel_data;
-	image_pixel_data = new ImagePixelData();
-	image_pixel_data->set_lens(this);
+	bool first_data_img = false;
+	if (image_pixel_data==NULL) {
+		image_pixel_data = new ImagePixelData();
+		image_pixel_data->set_lens(this);
+		first_data_img = true;
+	}
 	bool status = true;
 	if (fits_format == true) {
 		if (data_pixel_size <= 0) { // in this case no pixel scale has been specified, so we simply use the grid that has already been chosen
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-			status = image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root);
+			status = image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root); // these functions are defined in the header pixelgrid.h
 		} else {
-			status = image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root);
+			status = image_pixel_data->load_data_fits(data_pixel_size,image_pixel_filename_root); // these functions are defined in the header pixelgrid.h
 		}
 		// the pixel size may have been specified in the FITS file, in which case data_pixel_size was just set to something > 0
-		if (data_pixel_size > 0) {
+		if ((status==true) and (data_pixel_size > 0)) {
 			double xmin,xmax,ymin,ymax;
 			int npx, npy;
 			image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
@@ -9140,7 +9143,10 @@ bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 		set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 	}
 	if (status==false) {
-		delete image_pixel_data; image_pixel_data = NULL;
+		if (first_data_img) {
+			delete image_pixel_data;
+			image_pixel_data = NULL;
+		}
 		return false;
 	}
 	image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);

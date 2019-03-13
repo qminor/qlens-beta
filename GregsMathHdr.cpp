@@ -360,7 +360,7 @@ double IncGamma(const double a, const double x)
 {
 	double gamser,gammcf,gln;
 
-	if (x < 0.0 || a <= 0.0) die("Invalid arguments in routine gammp");
+	if ((x < 0.0) or (a <= 0.0)) die("Invalid arguments in routine gammp");
 	if (x < (a+1.0)) {
 		gser(gamser,a,x,gln);
 		return gamser;
@@ -372,13 +372,18 @@ double IncGamma(const double a, const double x)
 
 double IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam)
 {
-	double gamser,gammcf,gln;
+	double gln;
 
-	if (x < 0.0 || a <= 0.0) die("Invalid arguments in routine gammp");
+	if ((x < 0.0) or (a <= 0.0)) {
+		if (x < 0.0) die("x < 0 in routine gammp (x=%g, a=%g)",x,a);
+		if (a <= 0.0) die("a <= 0 in routine gammp (x=%g, a=%g)",x,a);
+	}
 	if (x < (a+1.0)) {
+		double gamser;
 		gser(gamser,a,x,gln);
 		GammaP = gamser;
 	} else {
+		double gammcf;
 		gcf(gammcf,a,x,gln);
 		GammaP = 1.0-gammcf;
 	}
@@ -387,13 +392,15 @@ double IncGammaP_and_Gamma(const double a, const double x, double& GammaP, doubl
 
 double IncGammaUp(const double a, const double x)
 {
-	double gamser,gammcf,gln;
+	double gln;
 
-	if (x < 0.0 || a <= 0.0) die("Invalid arguments in routine gammq");
+	if ((x < 0.0) or (a <= 0.0)) die("Invalid arguments in routine gammq");
 	if (x < (a+1.0)) {
+		double gamser;
 		gser(gamser,a,x,gln);
 		return 1.0-gamser;
 	} else {
+		double gammcf;
 		gcf(gammcf,a,x,gln);
 		return gammcf;
 	}

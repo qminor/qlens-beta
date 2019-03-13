@@ -2238,6 +2238,7 @@ void Lens::process_commands(bool read_file)
 			bool update_zl = false;
 			double zl_in = lens_redshift;
 			bool vary_zl = false;
+			int pmode = default_parameter_mode;
 
 			struct ParamAnchor {
 				bool anchor_param;
@@ -2316,6 +2317,18 @@ void Lens::process_commands(bool read_file)
 						i = nwords; // breaks out of this loop, without breaking from outer loop
 					}
 				}	
+
+				for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("pmode=")) != string::npos) {
+						string pnumstring = words[i].substr(pos+6);
+						stringstream pnumstr;
+						pnumstr << pnumstring;
+						if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}
 
 				for (int i=2; i < nwords; i++) {
 					if (words[i].find("shear=")==0) {
@@ -2574,18 +2587,6 @@ void Lens::process_commands(bool read_file)
 				{
 					bool set_tidal_host = false;
 					int hostnum;
-					int pmode = default_parameter_mode;
-					for (int i=2; i < nwords; i++) {
-						int pos;
-						if ((pos = words[i].find("pmode=")) != string::npos) {
-							string pnumstring = words[i].substr(pos+6);
-							stringstream pnumstr;
-							pnumstr << pnumstring;
-							if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
-							remove_word(i);
-							i = nwords; // breaks out of this loop, without breaking from outer loop
-						}
-					}	
 					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model pjaffe");
 					if (nwords >= 6) {
@@ -2796,23 +2797,12 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="nfw")
 				{
-					int pmode = default_parameter_mode;
 					bool set_median_concentration = false;
 					double cmed_factor = 1.0;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
-					} else for (int i=2; i < nwords; i++) {
-						int pos;
-						if ((pos = words[i].find("pmode=")) != string::npos) {
-							string pnumstring = words[i].substr(pos+6);
-							stringstream pnumstr;
-							pnumstr << pnumstring;
-							if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
-							remove_word(i);
-							i = nwords; // breaks out of this loop, without breaking from outer loop
-						}
-					}	
+					}
 					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
 
 					if (nwords > 8) Complain("more than 6 parameters not allowed for model nfw");
@@ -2991,22 +2981,11 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="cnfw")
 				{
-					int pmode = default_parameter_mode;
 					bool set_median_concentration = false;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
-					} else for (int i=2; i < nwords; i++) {
-						int pos;
-						if ((pos = words[i].find("pmode=")) != string::npos) {
-							string pnumstring = words[i].substr(pos+6);
-							stringstream pnumstr;
-							pnumstr << pnumstring;
-							if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
-							remove_word(i);
-							i = nwords; // breaks out of this loop, without breaking from outer loop
-						}
-					}	
+					}
 					if ((pmode < 0) or (pmode > 3)) Complain("parameter mode must be either 0, 1, 2 or 3");
 
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model cnfw");

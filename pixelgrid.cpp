@@ -2908,21 +2908,6 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 #else
 	bool image_load_status = false;
 	int i,j,kk;
-	if (xvals != NULL) delete[] xvals;
-	if (yvals != NULL) delete[] yvals;
-	if (surface_brightness != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
-		delete[] surface_brightness;
-	}
-	if (high_sn_pixel != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
-		delete[] high_sn_pixel;
-	}
-	if (require_fit != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
-		delete[] require_fit;
-	}
-
 	fitsfile *fptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
 	int bitpix, naxis;
@@ -2932,6 +2917,21 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
+		if (xvals != NULL) delete[] xvals;
+		if (yvals != NULL) delete[] yvals;
+		if (surface_brightness != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
+			delete[] surface_brightness;
+		}
+		if (high_sn_pixel != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+			delete[] high_sn_pixel;
+		}
+		if (require_fit != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] require_fit[i];
+			delete[] require_fit;
+		}
+
 		int nkeys;
 		fits_get_hdrspace(fptr, &nkeys, NULL, &status); // get # of keywords
 
@@ -3057,14 +3057,24 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			}
 		}
 		fits_close_file(fptr, &status);
-	} 
+	}
 
 	if (status) fits_report_error(stderr, status); // print any error message
-	assign_high_sn_pixels();
+	if (image_load_status) assign_high_sn_pixels();
 	return image_load_status;
 #endif
 }
 
+void ImagePixelData::get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
+{
+	if (xvals==NULL) die("cannot get image pixel data parameters; no data has been loaded");
+	xmin_in = xvals[0];
+	xmax_in = xvals[npixels_x];
+	ymin_in = yvals[0];
+	ymax_in = yvals[npixels_y];
+	npx = npixels_x;
+	npy = npixels_y;
+}
 
 void ImagePixelData::assign_high_sn_pixels()
 {
