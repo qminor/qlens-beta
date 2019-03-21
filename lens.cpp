@@ -6520,10 +6520,10 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	if (!show_status) display_chisq_status = false;
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (!show_status) display_chisq_status = default_display_status;
-	if ((mpi_id==0) and (show_status)) {
+	//if ((mpi_id==0) and (show_status)) {
 		//if (display_chisq_status) cout << endl;
-		cout << "2*loglike: " << chisqval << endl;
-	}
+		//cout << "2*loglike: " << chisqval << endl;
+	//}
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -6778,7 +6778,7 @@ double Lens::chi_square_fit_simplex()
 			cout << resetiosflags(ios::scientific);
 			cout.unsetf(ios_base::floatfield);
 		}
-		cout << "Best-fit model: chi-square = " << chisq_bestfit << endl;
+		cout << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
 		//cout << "Number of iterations: " << iterations << endl;
 		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		fitmodel->print_lens_list(false);
@@ -6943,7 +6943,7 @@ double Lens::chi_square_fit_powell()
 			cout.unsetf(ios_base::floatfield);
 		}
 
-		cout << "\nBest-fit model: chi-square = " << chisq_bestfit << endl;
+		cout << "\nBest-fit model: 2*loglike = " << chisq_bestfit << endl;
 		update_fitmodel(fitparams.array());
 		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		fitmodel->print_lens_list(false);
@@ -8096,7 +8096,7 @@ void Lens::output_bestfit_model()
 			fisher_inv_out << endl;
 		}
 
-		outfile << "Best-fit model: chi-square = " << chisq_bestfit << endl;
+		outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
 		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
 		outfile << endl;
 		outfile << "Marginalized 1-sigma errors from Fisher matrix:\n";
@@ -8106,9 +8106,9 @@ void Lens::output_bestfit_model()
 		outfile << endl;
 	} else {
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			outfile << "Best-fit model: chi-square = " << chisq_bestfit << " (warning: errors omitted here because Fisher matrix was not calculated):\n";
+			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << " (warning: errors omitted here because Fisher matrix was not calculated):\n";
 		} else {
-			outfile << "Best-fit model: chi-square = " << chisq_bestfit << endl;
+			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
 		}
 		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
 		outfile << endl;
@@ -8258,12 +8258,6 @@ double Lens::fitmodel_loglike_point_source(double* params)
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_weak_lensing=" << chisq;
 		}
 	}
-	if ((display_chisq_status) and (mpi_id==0)) {
-		if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_tot=" << chisq_total << "           ";
-		cout << endl;
-		if (running_fit) cout << endl;
-	}
-
 	raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
 	fitmodel->raw_chisq = chisq_total;
 	loglike = chisq_total/2.0;
@@ -8276,6 +8270,17 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
+	if ((display_chisq_status) and (mpi_id==0)) {
+		if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+			if (chisq_total != (2*loglike)) cout << ", chisq_tot=" << chisq_total;
+			cout << ", 2*loglike=" << 2*loglike;
+			cout << "                ";
+		}
+		cout << endl;
+		if (running_fit) cout << endl;
+	}
+
+
 	fitmodel->chisq_it++;
 	return loglike;
 }
@@ -8307,17 +8312,22 @@ double Lens::fitmodel_loglike_extended_source(double* params)
 	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
 	fitmodel->raw_chisq = chisq0;
 	loglike = chisq/2.0;
-	if ((display_chisq_status) and (mpi_id==0)) {
-		if (running_fit) cout << "\033[2A" << flush;
-		cout << "chisq0=" << chisq0 << ", chisq=" << 2*loglike << endl;
-		//cout << "\033[1A";
-		if (running_fit) cout << endl;
-	}
 	if (params != NULL) {
 		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike = fitmodel_custom_prior();
 	}
+	if ((display_chisq_status) and (mpi_id==0)) {
+		if (running_fit) cout << "\033[2A" << flush;
+		cout << "chisq0=" << chisq0;
+		if (chisq != (2*loglike)) cout << ", chisq=" << chisq;
+		cout << ", 2*loglike=" << 2*loglike;
+		cout << "                " << endl;
+
+		//cout << "\033[1A";
+		if (running_fit) cout << endl;
+	}
+
 
 	return loglike;
 }
