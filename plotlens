@@ -9,6 +9,7 @@ FONTSIZE=10 # default font size for postscript plots
 COLORBOX=1 # show color bar for pixel map plots
 KEY=0 # plot key within figure (1 = outside, -1 = no key)
 SQUARE_AXES=0
+SHOW_GRID=0
 TITLE=""
 SETTERM=""
 FILENAME=""
@@ -25,6 +26,10 @@ shift
 for VAR in "$@"; do
 	if [[ $VAR == "square" ]]; then
 		SQUARE_AXES=1
+	fi
+
+	if [[ $VAR == "grid" ]]; then
+		SHOW_GRID=1
 	fi
 
 	if [[ $VAR == "nocb" ]]; then
@@ -195,7 +200,11 @@ then
 elif [[ $COMMAND == "imgfit" ]]
 then
 	grep -v \" $PLOTDIR/imgdat.dat >$PLOTDIR/imgdat_notitles.dat
-	PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'; plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $SHOW_GRID == 1 ]]; then
+		PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'; plot $RANGE '$PLOTDIR/xgrid.dat' w lines lc 1, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	else
+		PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'; plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	fi
 	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then

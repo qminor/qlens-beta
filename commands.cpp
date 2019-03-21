@@ -30,6 +30,7 @@ void Lens::process_commands(bool read_file)
 	colorbar_min = -1e30;
 	colorbar_max = 1e30;
 	plot_square_axes = false;
+	show_imgsrch_grid = false;
 	plot_title = "";
 	post_title = ""; // Title for posterior triangle plots
 	data_info = "";
@@ -949,6 +950,7 @@ void Lens::process_commands(bool read_file)
 							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
 							"                  (See Minor et al. 2017 for definition of perturbation radius for subhalos)\n"
 							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
+							"sigma_perturb -- The average projected density within r_perturb (see above) of perturbing lens [lens#]\n"
 							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
 							"\n";
 					else if (words[2]=="changevary")
@@ -4764,7 +4766,12 @@ void Lens::process_commands(bool read_file)
 					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
 					int dataset;
 					bool show_multiple = false;
+					bool show_grid = false;
 					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
+					if ((nwords > 2) and (words[nwords-1]=="grid")) {
+						show_grid = true;
+						remove_word(nwords-1);
+					}
 					if (nwords==2) show_multiple = true;
 					else {
 						int pos0, pos;
@@ -4805,7 +4812,10 @@ void Lens::process_commands(bool read_file)
 					if ((show_multiple) and (show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if (!show_multiple) {
 						reset();
-						create_grid(false,zfactors[dataset],beta_factors[dataset]);
+						int zgroup = -1;
+						for (int k=0; k < source_redshift_groups.size()-1; k++) { if ((dataset >= source_redshift_groups[k]) and (dataset < source_redshift_groups[k+1])) zgroup = k; }
+						create_grid(false,zfactors[dataset],beta_factors[dataset],zgroup);
+						if (show_grid) plot_recursive_grid("xgrid.dat");
 						// Plot critical curves corresponding to the particular source redshift being plotted
 						if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
@@ -4879,6 +4889,7 @@ void Lens::process_commands(bool read_file)
 							}
 						}
 					}
+					if (show_grid) show_imgsrch_grid = true; // show the grid along with the images
 					if (nwords==4) {
 						if (terminal != TEXT) {
 							if (show_cc) {
@@ -4902,6 +4913,7 @@ void Lens::process_commands(bool read_file)
 							else run_plotter("srcfit");
 						}
 					}
+					show_imgsrch_grid = false;
 					reset();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
@@ -5239,6 +5251,12 @@ void Lens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum);
+							} else if (words[3]=="sigma_perturb") {
+								if (nwords != 5) Complain("derived parameter sigma_perturb requires only one arguments (lens_number)");
+								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
+								add_derived_param(Robust_Perturbation_Density,0.0,lensnum);
 							} else if (words[3]=="raw_chisq") {
 								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
 								add_derived_param(Chi_Square,0.0,-1);
@@ -6577,9 +6595,9 @@ void Lens::process_commands(bool read_file)
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Default parameter mode: " << default_parameter_mode << endl;
 			} else if (nwords==2) {
-				int pmode;
-				if (!(ws[1] >> pmode)) Complain("invalid argument to 'pmode' command");
-				default_parameter_mode = pmode;
+				int pm;
+				if (!(ws[1] >> pm)) Complain("invalid argument to 'pmode' command");
+				default_parameter_mode = pm;
 			} else Complain("invalid number of arguments");
 		}
 		else if (words[0]=="recursive_lensing")
@@ -8541,6 +8559,7 @@ void Lens::run_plotter(string plotcommand)
 		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
 		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
+		if (show_imgsrch_grid==true) command += " grid";
 		system(command.c_str());
 	}
 }
@@ -8576,6 +8595,7 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
 		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
+		if (show_imgsrch_grid==true) command += " grid";
 		system(command.c_str());
 	}
 }
@@ -8609,6 +8629,7 @@ void Lens::run_plotter_range(string plotcommand, string range)
 		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
 		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
+		if (show_imgsrch_grid==true) command += " grid";
 		system(command.c_str());
 	}
 }
@@ -8644,6 +8665,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 		if (colorbar_min != -1e30) command += " cbmin=" + cbmin;
 		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
+		if (show_imgsrch_grid==true) command += " grid";
 		system(command.c_str());
 	}
 }

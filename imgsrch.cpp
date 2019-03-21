@@ -334,16 +334,16 @@ void Grid::redraw_grid(double r_min, double r_max, double xcenter_in, double yce
 	clear_subcells(splitlevels);
 	levels = splitlevels+1;
 
-	#pragma omp parallel
+	//#pragma omp parallel
 	{
 		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+		//thread = omp_get_thread_num();
+//#else
 		thread = 0;
-#endif
+//#endif
 
-		#pragma omp for private(i,j) schedule(static)
+		//#pragma omp for private(i,j) schedule(static)
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
 				cell[i][j]->reassign_coordinates(xvals,i,j,1,this);
@@ -404,16 +404,16 @@ void Grid::redraw_grid(double xcenter_in, double ycenter_in, double xlength, dou
 	clear_subcells(splitlevels);
 	levels = splitlevels+1;
 
-	#pragma omp parallel
+	//#pragma omp parallel
 	{
 		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+		//thread = omp_get_thread_num();
+//#else
 		thread = 0;
-#endif
+//#endif
 
-		#pragma omp for private(i,j) schedule(static)
+		//#pragma omp for private(i,j) schedule(static)
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
 				cell[i][j]->reassign_coordinates(xvals,i,j,1,this);
@@ -679,19 +679,19 @@ bool Grid::split_cells(const int& thread)
 void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitting)
 {
 	int i,j;
-	#pragma omp parallel
+	//#pragma omp parallel
 	{
 		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+		//thread = omp_get_thread_num();
+//#else
 		thread = 0;
-#endif
+//#endif
 		maxlevs[thread] = levels;
 
 		if (cc_splitlevel > level) {
 			int i,j;
-			#pragma omp for private(i,j) schedule(dynamic)
+			//#pragma omp for private(i,j) schedule(dynamic)
 			for (i=0; i < u_N; i++) {
 				for (j=0; j < w_N; j++) {
 					if (cell[i][j]->cell != NULL) cell[i][j]->split_subcells(cc_splitlevel,cc_neighbor_splitting,thread);
@@ -705,7 +705,7 @@ void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitti
 					// check for critical curves in each grid cell, and subgrid each cell that contains a critical curve
 					// (provided the subgridded cells won't be smaller than the specified min_cell_area limit)
 					bool recurse = false;
-					#pragma omp for private(i,j) schedule(dynamic)
+					//#pragma omp for private(i,j) schedule(dynamic)
 					for (i=0; i < u_N; i++) {
 						for (j=0; j < w_N; j++) {
 							if ((!enforce_min_area) or (cell[i][j]->cell_area > min_cell_area)) {
@@ -736,7 +736,7 @@ void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitti
 					if (level == maxlevs[thread]-1) {
 						maxlevs[thread]++; // our subcells are at the max level, so splitting them increases the number of levels by 1
 					}
-				#pragma omp for private(i,j) schedule(dynamic)
+				//#pragma omp for private(i,j) schedule(dynamic)
 				for (i=0; i < u_N; i++) {
 					for (j=0; j < w_N; j++) {
 						cell[i][j]->split_cells(thread);
@@ -1630,7 +1630,7 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 		int i,j,k;
 		for (k=0; k < ngal; k++) {
 			galaxy_nearby = false;
-			if ((subgrid[k]) and (cell_area > min_galsubgrid_cellsize[k]) or ((n_cc_splittings > 0) and (cc_inside))) {
+			if ((subgrid[k]) and ((cell_area > min_galsubgrid_cellsize[k]) or ((n_cc_splittings > 0) and (cc_inside)))) {
 				if (test_if_inside_cell(galaxy_centers[k],0)==true) galaxy_nearby = true;
 				else galaxy_nearby = test_if_galaxy_nearby(galaxy_centers[k],SQR(subgrid_radius[k]));
 				if (galaxy_nearby==true) {
@@ -2090,7 +2090,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	}
 	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,grid_zfactors,grid_betafactors) > 1)) return false; // discard central image if not desired
 	bool status = true;
-	#pragma omp critical
+	//#pragma omp critical
 	{
 		double sep;
 		if (redundancy(xroot,sep)) {

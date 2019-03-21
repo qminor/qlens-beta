@@ -55,6 +55,7 @@ enum DerivedParamType {
 	Perturbation_Radius,
 	Relative_Perturbation_Radius,
 	Robust_Perturbation_Mass,
+	Robust_Perturbation_Density,
 	Chi_Square,
 	UserDefined
 };
@@ -433,7 +434,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double autogrid_frac, spline_frac;
 	double tabulate_rmin, tabulate_qmin;
 	int tabulate_logr_N, tabulate_phi_N, tabulate_q_N;
-	bool default_parameter_mode;
+	int default_parameter_mode;
 
 	bool include_time_delays;
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
@@ -447,6 +448,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool show_plot_key, plot_key_outside;
 	double plot_ptsize, fontsize, linewidth;
 	bool show_colorbar, plot_square_axes;
+	bool show_imgsrch_grid;
 	double colorbar_min, colorbar_max;
 	int plot_pttype;
 	string fit_output_dir;
@@ -1153,6 +1155,9 @@ struct DerivedParam
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			name = "mass_perturb"; latex_name = "M_{\\delta c}";
 			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Robust_Perturbation_Density) {
+			name = "sigma_perturb"; latex_name = "\\Sigma_{\\delta c}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else if (derived_param_type == Chi_Square) {
 			name = "raw_chisq"; latex_name = "\\chi^2";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -1190,6 +1195,10 @@ struct DerivedParam
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
 			return menc;
+		} else if (derived_param_type == Robust_Perturbation_Density) {
+			double rmax,avgsig,menc;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			return avgsig;
 		} else if (derived_param_type == Chi_Square) {
 			double chisq_out;
 			if (lens_in->raw_chisq==-1e30) {
@@ -1232,6 +1241,8 @@ struct DerivedParam
 			cout << "Relative critical curve perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
+		} else if (derived_param_type == Robust_Perturbation_Density) {
+			cout << "Average projected density within perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Chi_Square) {
 			cout << "Raw chi-square value for given set of parameters" << endl;
 		} else die("no user defined function yet");
@@ -2406,10 +2417,6 @@ inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector&
 			}
 			kap_tot = ((*jac)[0][0] + (*jac)[1][1])/2;
 		} else {
-			lensvector *def = &defs_i[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			int j;
-			double kap;
 			(*jac)[0][0] = 0;
 			(*jac)[1][1] = 0;
 			(*jac)[0][1] = 0;
@@ -2417,15 +2424,41 @@ inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector&
 			(*def_tot)[0] = 0;
 			(*def_tot)[1] = 0;
 			kap_tot = 0;
-			for (j=0; j < nlens; j++) {
-				lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-				(*jac)[0][0] += (*hess)[0][0];
-				(*jac)[1][1] += (*hess)[1][1];
-				(*jac)[0][1] += (*hess)[0][1];
-				(*jac)[1][0] += (*hess)[1][0];
-				(*def_tot)[0] += (*def)[0];
-				(*def_tot)[1] += (*def)[1];
-				kap_tot += kap;
+
+			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
+			#pragma omp parallel
+			{
+				int thread2;
+#ifdef USE_OPENMP
+				thread2 = omp_get_thread_num();
+#else
+				thread2 = 0;
+#endif
+				lensvector *def = &defs_i[thread2];
+				lensmatrix *hess = &hesses_i[thread2];
+				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+				int j;
+				double kap;
+				#pragma omp for schedule(dynamic)
+				for (j=0; j < nlens; j++) {
+					lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
+					hess00 += (*hess)[0][0];
+					hess11 += (*hess)[1][1];
+					hess01 += (*hess)[0][1];
+					def0 += (*def)[0];
+					def1 += (*def)[1];
+					kapi += kap;
+				}
+				#pragma omp critical
+				{
+					(*jac)[0][0] += hess00;
+					(*jac)[1][1] += hess11;
+					(*jac)[0][1] += hess01;
+					(*jac)[1][0] += hess01;
+					(*def_tot)[0] += def0;
+					(*def_tot)[1] += def1;
+					kap_tot += kapi;
+				}
 			}
 			(*jac)[0][0] *= zfacs[0];
 			(*jac)[1][1] *= zfacs[0];
@@ -2527,8 +2560,48 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 				jac_tot[0][1] += (*hess_i)[i][0][1];
 			}
 		} else {
-			lensvector *def = &defs_i[thread];
-			lensmatrix *hess = &hesses_i[thread];
+			jac_tot[0][0] = 0;
+			jac_tot[1][1] = 0;
+			jac_tot[0][1] = 0;
+			jac_tot[1][0] = 0;
+			(*def_tot)[0] = 0;
+			(*def_tot)[1] = 0;
+
+			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
+			#pragma omp parallel
+			{
+				int thread2;
+#ifdef USE_OPENMP
+				thread2 = omp_get_thread_num();
+#else
+				thread2 = 0;
+#endif
+				lensvector *def = &defs_i[thread2];
+				lensmatrix *hess = &hesses_i[thread2];
+				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+				int j;
+				double kap;
+				#pragma omp for schedule(dynamic)
+				for (j=0; j < nlens; j++) {
+					lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
+					hess00 += (*hess)[0][0];
+					hess11 += (*hess)[1][1];
+					hess01 += (*hess)[0][1];
+					def0 += (*def)[0];
+					def1 += (*def)[1];
+				}
+				#pragma omp critical
+				{
+					jac_tot[0][0] += hess00;
+					jac_tot[1][1] += hess11;
+					jac_tot[0][1] += hess01;
+					jac_tot[1][0] += hess01;
+					(*def_tot)[0] += def0;
+					(*def_tot)[1] += def1;
+				}
+			}
+
+			/*
 			int j;
 			jac_tot[0][0] = 0;
 			jac_tot[1][1] = 0;
@@ -2545,6 +2618,7 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 				(*def_tot)[0] += (*def)[0];
 				(*def_tot)[1] += (*def)[1];
 			}
+			*/
 			jac_tot[0][0] *= zfacs[0];
 			jac_tot[1][1] *= zfacs[0];
 			jac_tot[0][1] *= zfacs[0];

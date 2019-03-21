@@ -2160,12 +2160,14 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 			}
 		}
 	}
-	if ((subgrid_only_near_data_images) and (redshift_index != -1)) {
+	if ((subgrid_only_near_data_images) and (source_redshift_groups.size() > 0)) {
+		int zindx = redshift_index;
+		if (zindx==-1) zindx = 0;
 		int k;
 		double distsqr, min_distsqr;
 		for (j=0; j < n_perturbers; j++) {
 			min_distsqr = 1e30;
-			for (i=source_redshift_groups[redshift_index]; i < source_redshift_groups[redshift_index+1]; i++) {
+			for (i=source_redshift_groups[zindx]; i < source_redshift_groups[zindx+1]; i++) {
 				for (k=0; k < image_data[i].n_images; k++) {
 					distsqr = SQR(image_data[i].pos[k][0] - galcenter[j][0]) + SQR(image_data[i].pos[k][1] - galcenter[j][1]);
 					if (distsqr < min_distsqr) min_distsqr = distsqr;
@@ -7714,6 +7716,7 @@ bool Lens::add_dparams_to_chain()
 	int nlines_chunk = nlines/20;
 	if (mpi_id==0) cout << "Calculating derived parameters: [\033[21C]" << endl << endl << flush;
 	int prev_icount, icount = 0;
+	//double dparamval;
 	for (line=group_num; line < nlines; line += mpi_ngroups) {
 		istringstream datastream(chain_lines[line]);
 		datastream >> weight;
@@ -7721,6 +7724,16 @@ bool Lens::add_dparams_to_chain()
 			datastream >> params[i];
 		}
 		fitmodel_calculate_derived_params(params, dparams_new[line]);
+
+		//for (i=0; i < n_fit_parameters; i++) {
+			//cout << params[i] << " ";
+		//}
+		//for (i=0; i < 3; i++) {
+			//datastream >> dparamval;
+			//cout << dparamval << " ";
+		//}
+		//cout << dparams_new[line][0] << " " << dparams_new[line][1] << endl;
+
 		prev_icount = icount;
 		icount = line/nlines_chunk;
 		if ((mpi_id==0) and (prev_icount != icount)) {
