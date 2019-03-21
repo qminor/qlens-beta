@@ -496,9 +496,19 @@ void PseudoJaffe::update_special_anchored_params()
 
 void PseudoJaffe::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*b;
-	stepsizes[1] = 0.2*b;
-	stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+	if (parameter_mode==0) {
+		stepsizes[0] = 0.2*b;
+		stepsizes[1] = 0.2*b;
+		stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+	} else if (parameter_mode==1) {
+		stepsizes[0] = 0.2*sigma0;
+		stepsizes[1] = 0.2*b/kpc_to_arcsec;
+		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+	} else {
+		stepsizes[0] = 0.2*mtot;
+		stepsizes[1] = 0.2*b/kpc_to_arcsec;
+		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+	}
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.2*b;
 	stepsizes[6] = 0.2*b;
