@@ -24,9 +24,9 @@
 #include <fstream>
 #define USE_COMM_WORLD -987654
 
-#ifdef USE_OPENMP
-#include <omp.h>
-#endif
+//#ifdef USE_OPENMP
+//#include <omp.h>
+//#endif
 
 #ifdef USE_MPI
 #include "mpi.h"
@@ -2338,6 +2338,7 @@ inline void Lens::hessian_weak(const double& x, const double& y, lensmatrix& hes
 	}
 }
 
+/*
 inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
 	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
@@ -2425,39 +2426,63 @@ inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector&
 			(*def_tot)[1] = 0;
 			kap_tot = 0;
 
-			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			#pragma omp parallel
-			{
-				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
-				thread2 = 0;
-#endif
-				lensvector *def = &defs_i[thread2];
-				lensmatrix *hess = &hesses_i[thread2];
-				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+			if (nthreads==1) {
 				int j;
 				double kap;
-				#pragma omp for schedule(dynamic)
+				(*jac)[0][0] = 0;
+				(*jac)[1][1] = 0;
+				(*jac)[0][1] = 0;
+				(*jac)[1][0] = 0;
+				(*def_tot)[0] = 0;
+				(*def_tot)[1] = 0;
+				kap_tot = 0;
+				lensvector *def = &defs_i[0];
+				lensmatrix *hess = &hesses_i[0];
 				for (j=0; j < nlens; j++) {
 					lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-					hess00 += (*hess)[0][0];
-					hess11 += (*hess)[1][1];
-					hess01 += (*hess)[0][1];
-					def0 += (*def)[0];
-					def1 += (*def)[1];
-					kapi += kap;
+					(*jac)[0][0] += (*hess)[0][0];
+					(*jac)[1][1] += (*hess)[1][1];
+					(*jac)[0][1] += (*hess)[0][1];
+					(*jac)[1][0] += (*hess)[1][0];
+					(*def_tot)[0] += (*def)[0];
+					(*def_tot)[1] += (*def)[1];
+					kap_tot += kap;
 				}
-				#pragma omp critical
+			} else {
+				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
+				#pragma omp parallel
 				{
-					(*jac)[0][0] += hess00;
-					(*jac)[1][1] += hess11;
-					(*jac)[0][1] += hess01;
-					(*jac)[1][0] += hess01;
-					(*def_tot)[0] += def0;
-					(*def_tot)[1] += def1;
-					kap_tot += kapi;
+					int thread2;
+#ifdef USE_OPENMP
+					thread2 = omp_get_thread_num();
+#else
+					thread2 = 0;
+#endif
+					lensvector *def = &defs_i[thread2];
+					lensmatrix *hess = &hesses_i[thread2];
+					double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+					int j;
+					double kap;
+					#pragma omp for schedule(dynamic)
+					for (j=0; j < nlens; j++) {
+						lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
+						hess00 += (*hess)[0][0];
+						hess11 += (*hess)[1][1];
+						hess01 += (*hess)[0][1];
+						def0 += (*def)[0];
+						def1 += (*def)[1];
+						kapi += kap;
+					}
+					#pragma omp critical
+					{
+						(*jac)[0][0] += hess00;
+						(*jac)[1][1] += hess11;
+						(*jac)[0][1] += hess01;
+						(*jac)[1][0] += hess01;
+						(*def_tot)[0] += def0;
+						(*def_tot)[1] += def1;
+						kap_tot += kapi;
+					}
 				}
 			}
 			(*jac)[0][0] *= zfacs[0];
@@ -2567,58 +2592,60 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 			(*def_tot)[0] = 0;
 			(*def_tot)[1] = 0;
 
-			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			#pragma omp parallel
-			{
-				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
-				thread2 = 0;
-#endif
-				lensvector *def = &defs_i[thread2];
-				lensmatrix *hess = &hesses_i[thread2];
-				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+			if (nthreads==1) {
+				lensvector *def = &defs_i[0];
+				lensmatrix *hess = &hesses_i[0];
 				int j;
-				double kap;
-				#pragma omp for schedule(dynamic)
+				jac_tot[0][0] = 0;
+				jac_tot[1][1] = 0;
+				jac_tot[0][1] = 0;
+				jac_tot[1][0] = 0;
+				(*def_tot)[0] = 0;
+				(*def_tot)[1] = 0;
 				for (j=0; j < nlens; j++) {
 					lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-					hess00 += (*hess)[0][0];
-					hess11 += (*hess)[1][1];
-					hess01 += (*hess)[0][1];
-					def0 += (*def)[0];
-					def1 += (*def)[1];
+					jac_tot[0][0] += (*hess)[0][0];
+					jac_tot[1][1] += (*hess)[1][1];
+					jac_tot[0][1] += (*hess)[0][1];
+					jac_tot[1][0] += (*hess)[1][0];
+					(*def_tot)[0] += (*def)[0];
+					(*def_tot)[1] += (*def)[1];
 				}
-				#pragma omp critical
+			} else {
+				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
+				#pragma omp parallel
 				{
-					jac_tot[0][0] += hess00;
-					jac_tot[1][1] += hess11;
-					jac_tot[0][1] += hess01;
-					jac_tot[1][0] += hess01;
-					(*def_tot)[0] += def0;
-					(*def_tot)[1] += def1;
+					int thread2;
+#ifdef USE_OPENMP
+					thread2 = omp_get_thread_num();
+#else
+					thread2 = 0;
+#endif
+					lensvector *def = &defs_i[thread2];
+					lensmatrix *hess = &hesses_i[thread2];
+					double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+					int j;
+					double kap;
+					#pragma omp for schedule(dynamic)
+					for (j=0; j < nlens; j++) {
+						lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
+						hess00 += (*hess)[0][0];
+						hess11 += (*hess)[1][1];
+						hess01 += (*hess)[0][1];
+						def0 += (*def)[0];
+						def1 += (*def)[1];
+					}
+					#pragma omp critical
+					{
+						jac_tot[0][0] += hess00;
+						jac_tot[1][1] += hess11;
+						jac_tot[0][1] += hess01;
+						jac_tot[1][0] += hess01;
+						(*def_tot)[0] += def0;
+						(*def_tot)[1] += def1;
+					}
 				}
 			}
-
-			/*
-			int j;
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (j=0; j < nlens; j++) {
-				lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-				jac_tot[0][0] += (*hess)[0][0];
-				jac_tot[1][1] += (*hess)[1][1];
-				jac_tot[0][1] += (*hess)[0][1];
-				jac_tot[1][0] += (*hess)[1][0];
-				(*def_tot)[0] += (*def)[0];
-				(*def_tot)[1] += (*def)[1];
-			}
-			*/
 			jac_tot[0][0] *= zfacs[0];
 			jac_tot[1][1] *= zfacs[0];
 			jac_tot[0][1] *= zfacs[0];
@@ -2639,6 +2666,7 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 	jac_tot[0][1] = -jac_tot[0][1];
 	jac_tot[1][0] = -jac_tot[1][0];
 }
+*/
 
 inline void Lens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, double* zfacs, double** betafacs)
 {
