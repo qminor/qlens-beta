@@ -24,9 +24,9 @@
 #include <fstream>
 #define USE_COMM_WORLD -987654
 
-//#ifdef USE_OPENMP
-//#include <omp.h>
-//#endif
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
 
 #ifdef USE_MPI
 #include "mpi.h"
