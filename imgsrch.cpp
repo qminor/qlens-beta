@@ -680,7 +680,7 @@ void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitti
 {
 	int i,j;
 	//#pragma omp parallel
-	{
+	//{
 		int thread;
 //#ifdef USE_OPENMP
 		//thread = omp_get_thread_num();
@@ -744,7 +744,7 @@ void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitti
 				}
 			}
 		}
-	}
+	//}
 	assign_neighbors_lensing_subcells(cc_splitlevel,0);
 	for (i=0; i < nthreads; i++) if (maxlevs[i] > levels) levels = maxlevs[i];
 }
@@ -2091,7 +2091,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	if ((lens->include_central_image==false) and (mag > 0) and (lens->kappa(xroot,grid_zfactors,grid_betafactors) > 1)) return false; // discard central image if not desired
 	bool status = true;
 	//#pragma omp critical
-	{
+	//{
 		double sep;
 		if (redundancy(xroot,sep)) {
 			// generally, this only occurs very close to critical curves and is best solved by further cell splittings
@@ -2150,7 +2150,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 
 			nfound++;
 		}
-	}
+	//}
 	return status;
 }
 

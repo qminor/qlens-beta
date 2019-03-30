@@ -24,27 +24,27 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 #endif
 
-	int nthreads;
+	int nthread;
 
 #ifdef USE_OPENMP
 	#pragma omp parallel
 	{
 		#pragma omp master
-		nthreads = omp_get_num_threads();
+		nthread = omp_get_num_threads();
 	}
 #else
-	nthreads = 1;
+	nthread = 1;
 #endif
-	Grid::allocate_multithreaded_variables(nthreads);
-	SourcePixelGrid::allocate_multithreaded_variables(nthreads);
-	Lens::allocate_multithreaded_variables(nthreads);
+	Grid::allocate_multithreaded_variables(1);
+	SourcePixelGrid::allocate_multithreaded_variables(nthread);
+	Lens::allocate_multithreaded_variables(nthread);
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
 	bool quit_after_reading_file = false;
 	char input_filename[40];
 	bool find_total_time = false;
-	int inversion_nthreads = nthreads;
+	int inversion_nthread = nthread;
 	int ngroups = mpi_np;
 	bool disptime=false;
 	bool mumps_mpi=true;
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 					case 'Q': quit_if_error = false; break;
 					case 'n': suppress_plots = true; break;
 					case 't':
-						if (sscanf(argv[i], "t%i", &inversion_nthreads)==0) usage_error(mpi_id);
+						if (sscanf(argv[i], "t%i", &inversion_nthread)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
 						break;
 					case 'f':
@@ -162,6 +162,7 @@ int main(int argc, char *argv[])
 #endif
 
 	Lens lens;
+	//lens.set_nthreads(nthread);
 #ifdef USE_OPENMP
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
@@ -180,9 +181,8 @@ int main(int argc, char *argv[])
 	lens.set_mpi_params(0,1); // no MPI, so we have one process and id=0
 #endif
 
-	lens.set_nthreads(nthreads);
 	lens.set_verbal_mode(verbal_mode);
-	lens.set_inversion_nthreads(inversion_nthreads);
+	lens.set_inversion_nthreads(inversion_nthread);
 	lens.set_mumps_mpi(mumps_mpi);
 	lens.set_quit_after_error(quit_if_error);
 	if (suppress_plots) lens.set_suppress_plots(true);

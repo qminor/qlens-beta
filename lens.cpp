@@ -872,13 +872,15 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 				}
 			} else {
 				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				double hess00[nthreads];
-				double hess11[nthreads];
-				double hess01[nthreads];
-				double def0[nthreads];
-				double def1[nthreads];
-				double kapi[nthreads];
+				double *hess00 = new double[nthreads];
+				double *hess11 = new double[nthreads];
+				double *hess01 = new double[nthreads];
+				double *def0 = new double[nthreads];
+				double *def1 = new double[nthreads];
+				double *kapi = new double[nthreads];
+
 				//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+				//cout << "Starting new deflection calculation..." << endl << flush;
 				#pragma omp parallel
 				{
 					int thread2;
@@ -911,6 +913,10 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 					}
 					//#pragma omp critical
 					//{
+						//cout << "Thread " << thread2 << " finished" << endl << flush;
+					//}
+					//#pragma omp critical
+					//{
 						//(*jac)[0][0] += hess00;
 						//(*jac)[1][1] += hess11;
 						//(*jac)[0][1] += hess01;
@@ -920,6 +926,7 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 						//kap_tot += kapi;
 					//}
 				}
+				//cout << "Finished parallel part" << endl << flush;
 				for (int j=0; j < nthreads; j++) {
 					(*jac)[0][0] += hess00[j];
 					(*jac)[1][1] += hess11[j];
@@ -929,7 +936,17 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 					(*def_tot)[1] += def1[j];
 					kap_tot += kapi[j];
 				}
+				delete[] hess00;
+				delete[] hess11;
+				delete[] hess01;
+				delete[] def0;
+				delete[] def1;
+				delete[] kapi;
 			}
+			//double defx = (*def_tot)[0];
+			//double defy = (*def_tot)[1];
+			//double jac00 = (*jac)[0][0];
+
 			(*jac)[0][0] *= zfacs[0];
 			(*jac)[1][1] *= zfacs[0];
 			(*jac)[0][1] *= zfacs[0];
@@ -937,6 +954,7 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 			(*def_tot)[0] *= zfacs[0];
 			(*def_tot)[1] *= zfacs[0];
 			kap_tot *= zfacs[0];
+			//cout << "Finished def calc" << endl << flush;
 		}
 	}
 	else {
@@ -952,6 +970,7 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 	(*jac)[0][1] = -(*jac)[0][1];
 	(*jac)[1][0] = -(*jac)[1][0];
 	invmag = determinant((*jac));
+	//cout << "Finished def calc for real; invmag = " << invmag << ", srcpt0=" << srcpt[0] << " srcpt1=" << srcpt[1] << " kap=" << kap_tot << " " << endl << flush;
 }
 
 void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
@@ -1058,12 +1077,11 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 				}
 			} else {
 				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				double hess00[nthreads];
-				double hess11[nthreads];
-				double hess01[nthreads];
-				double def0[nthreads];
-				double def1[nthreads];
-				double kapi[nthreads];
+				double *hess00 = new double[nthreads];
+				double *hess11 = new double[nthreads];
+				double *hess01 = new double[nthreads];
+				double *def0 = new double[nthreads];
+				double *def1 = new double[nthreads];
 
 				#pragma omp parallel
 				{
@@ -1083,13 +1101,12 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 						hess01[thread2] = 0;
 						def0[thread2] = 0;
 						def1[thread2] = 0;
-						kapi[thread2] = 0;
 
 					#pragma omp for schedule(dynamic)
 					for (j=0; j < nlens; j++) {
 						lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
 						hess00[thread2] += (*hess)[0][0];
-						hess11[thread2]+= (*hess)[1][1];
+						hess11[thread2] += (*hess)[1][1];
 						hess01[thread2] += (*hess)[0][1];
 						def0[thread2] += (*def)[0];
 						def1[thread2] += (*def)[1];
@@ -1112,6 +1129,11 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 					(*def_tot)[0] += def0[j];
 					(*def_tot)[1] += def1[j];
 				}
+				delete[] hess00;
+				delete[] hess11;
+				delete[] hess01;
+				delete[] def0;
+				delete[] def1;
 			}
 			jac_tot[0][0] *= zfacs[0];
 			jac_tot[1][1] *= zfacs[0];
@@ -1133,308 +1155,6 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 	jac_tot[0][1] = -jac_tot[0][1];
 	jac_tot[1][0] = -jac_tot[1][0];
 }
-
-/*
-void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
-{
-	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
-	double x = xvec[0], y = xvec[1];
-	lensmatrix *jac = &jacs[thread];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				(*jac)[0][0] += (*hess_i)[i][0][0];
-				(*jac)[1][1] += (*hess_i)[i][1][1];
-				(*jac)[1][0] += (*hess_i)[i][1][0];
-				(*jac)[0][1] += (*hess_i)[i][0][1];
-			}
-			kap_tot = ((*jac)[0][0] + (*jac)[1][1])/2;
-		} else {
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			kap_tot = 0;
-
-			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			#pragma omp parallel
-			{
-				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
-				thread2 = 0;
-#endif
-				lensvector *def = &defs_i[thread2];
-				lensmatrix *hess = &hesses_i[thread2];
-				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-				int j;
-				double kap;
-				#pragma omp for schedule(dynamic)
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-					hess00 += (*hess)[0][0];
-					hess11 += (*hess)[1][1];
-					hess01 += (*hess)[0][1];
-					def0 += (*def)[0];
-					def1 += (*def)[1];
-					kapi += kap;
-				}
-				#pragma omp critical
-				{
-					(*jac)[0][0] += hess00;
-					(*jac)[1][1] += hess11;
-					(*jac)[0][1] += hess01;
-					(*jac)[1][0] += hess01;
-					(*def_tot)[0] += def0;
-					(*def_tot)[1] += def1;
-					kap_tot += kapi;
-				}
-			}
-			(*jac)[0][0] *= zfacs[0];
-			(*jac)[1][1] *= zfacs[0];
-			(*jac)[0][1] *= zfacs[0];
-			(*jac)[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-			kap_tot *= zfacs[0];
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		(*jac) = defspline->hessian(x,y);
-		kap_tot = kappa(x,y,zfacs,betafacs);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	invmag = determinant((*jac));
-}
-
-void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
-{
-	double x = xvec[0], y = xvec[1];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				jac_tot[0][0] += (*hess_i)[i][0][0];
-				jac_tot[1][1] += (*hess_i)[i][1][1];
-				jac_tot[1][0] += (*hess_i)[i][1][0];
-				jac_tot[0][1] += (*hess_i)[i][0][1];
-			}
-		} else {
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-
-			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			#pragma omp parallel
-			{
-				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
-				thread2 = 0;
-#endif
-				lensvector *def = &defs_i[thread2];
-				lensmatrix *hess = &hesses_i[thread2];
-				double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-				int j;
-				double kap;
-				#pragma omp for schedule(dynamic)
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-					hess00 += (*hess)[0][0];
-					hess11 += (*hess)[1][1];
-					hess01 += (*hess)[0][1];
-					def0 += (*def)[0];
-					def1 += (*def)[1];
-				}
-				#pragma omp critical
-				{
-					jac_tot[0][0] += hess00;
-					jac_tot[1][1] += hess11;
-					jac_tot[0][1] += hess01;
-					jac_tot[1][0] += hess01;
-					(*def_tot)[0] += def0;
-					(*def_tot)[1] += def1;
-				}
-			}
-
-			//int j;
-			//jac_tot[0][0] = 0;
-			//jac_tot[1][1] = 0;
-			//jac_tot[0][1] = 0;
-			//jac_tot[1][0] = 0;
-			//(*def_tot)[0] = 0;
-			//(*def_tot)[1] = 0;
-			//for (j=0; j < nlens; j++) {
-				//lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-				//jac_tot[0][0] += (*hess)[0][0];
-				//jac_tot[1][1] += (*hess)[1][1];
-				//jac_tot[0][1] += (*hess)[0][1];
-				//jac_tot[1][0] += (*hess)[1][0];
-				//(*def_tot)[0] += (*def)[0];
-				//(*def_tot)[1] += (*def)[1];
-			//}
-			jac_tot[0][0] *= zfacs[0];
-			jac_tot[1][1] *= zfacs[0];
-			jac_tot[0][1] *= zfacs[0];
-			jac_tot[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		jac_tot = defspline->hessian(x,y);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	jac_tot[0][0] = 1 - jac_tot[0][0];
-	jac_tot[1][1] = 1 - jac_tot[1][1];
-	jac_tot[0][1] = -jac_tot[0][1];
-	jac_tot[1][0] = -jac_tot[1][0];
-}
-*/
 
 void Lens::add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
