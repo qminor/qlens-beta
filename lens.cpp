@@ -59,6 +59,7 @@ int *Lens::indxs;
 void Lens::allocate_multithreaded_variables(const int& threads)
 {
 	nthreads = threads;
+	// Note: the grid construction is not being parallelized any more...if you decide to ditch it for good, then get rid of these multithreaded variables and replace by single-thread version
 	xvals_i = new lensvector[nthreads];
 	defs = new lensvector[nthreads];
 	defs_subtot = new lensvector*[nthreads];
@@ -879,7 +880,6 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 				double *def1 = new double[nthreads];
 				double *kapi = new double[nthreads];
 
-				//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
 				//cout << "Starting new deflection calculation..." << endl << flush;
 				#pragma omp parallel
 				{

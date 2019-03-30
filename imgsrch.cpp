@@ -679,6 +679,7 @@ bool Grid::split_cells(const int& thread)
 void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitting)
 {
 	int i,j;
+	for (i=0; i < nthreads; i++) maxlevs[i] = levels;
 	//#pragma omp parallel
 	//{
 		int thread;
@@ -687,7 +688,6 @@ void Grid::split_subcells_firstlevel(int cc_splitlevel, bool cc_neighbor_splitti
 //#else
 		thread = 0;
 //#endif
-		maxlevs[thread] = levels;
 
 		if (cc_splitlevel > level) {
 			int i,j;

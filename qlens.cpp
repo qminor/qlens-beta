@@ -24,27 +24,27 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 #endif
 
-	int nthread;
+	int n_omp_threads;
 
 #ifdef USE_OPENMP
 	#pragma omp parallel
 	{
 		#pragma omp master
-		nthread = omp_get_num_threads();
+		n_omp_threads = omp_get_num_threads();
 	}
 #else
-	nthread = 1;
+	n_omp_threads = 1;
 #endif
-	Grid::allocate_multithreaded_variables(1);
-	SourcePixelGrid::allocate_multithreaded_variables(nthread);
-	Lens::allocate_multithreaded_variables(nthread);
+	Grid::allocate_multithreaded_variables(n_omp_threads);
+	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+	Lens::allocate_multithreaded_variables(n_omp_threads);
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
 	bool quit_after_reading_file = false;
 	char input_filename[40];
 	bool find_total_time = false;
-	int inversion_nthread = nthread;
+	int inversion_nthread = n_omp_threads;
 	int ngroups = mpi_np;
 	bool disptime=false;
 	bool mumps_mpi=true;
@@ -162,7 +162,6 @@ int main(int argc, char *argv[])
 #endif
 
 	Lens lens;
-	//lens.set_nthreads(nthread);
 #ifdef USE_OPENMP
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
