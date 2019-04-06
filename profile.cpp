@@ -52,6 +52,7 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, c
 		ellipticity_mode = -1; // indicates not an elliptical lens
 	}
 	analytic_3d_density = false; // this will be changed to 'true' for certain models (e.g. NFW)
+	perturber = false; // default
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
@@ -86,6 +87,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	n_params = lens_in->n_params;
 	parameter_mode = lens_in->parameter_mode;
 	ellipticity_mode = lens_in->ellipticity_mode;
+	perturber = lens_in->perturber;
 	analytic_3d_density = lens_in->analytic_3d_density;
 	paramnames = lens_in->paramnames;
 	latex_paramnames = lens_in->latex_paramnames;
@@ -1418,6 +1420,15 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess)
 {
 	if ((defptr == &LensProfile::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
+		if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
+			def[0]=0;
+			def[1]=0;
+			hess[0][0]=0;
+			hess[1][1]=0;
+			hess[0][1]=0;
+			hess[1][0]=0;
+			return;
+		}
 		deflection_and_hessian_numerical(x,y,def,hess); // saves time to calculate deflection & hessian together, because they have two integrals in common
 	} else {
 		(this->*defptr)(x,y,def);
@@ -1627,6 +1638,11 @@ double LensProfile::potential_spherical_integral(const double rsq)
 
 void LensProfile::deflection_numerical(const double x, const double y, lensvector& def)
 {
+	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
+		def[0]=0;
+		def[1]=0;
+		return;
+	}
 	bool converged;
 	def[0] = q*x*j_integral(x,y,0,converged);
 	warn_if_not_converged(converged,x,y);
@@ -1636,6 +1652,13 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 
 void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& hess)
 {
+	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
+		hess[0][0]=0;
+		hess[1][1]=0;
+		hess[0][1]=0;
+		hess[1][0]=0;
+		return;
+	}
 	bool converged, converged2;
 	hess[0][0] = 2*q*x*x*k_integral(x,y,0,converged) + q*j_integral(x,y,0,converged2);
 	warn_if_not_converged(converged,x,y);

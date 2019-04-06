@@ -123,27 +123,54 @@ int main(int argc, char *argv[])
 
 	int n,i,j,group_number;
 	MPI_Group world_group;
-	MPI_Comm world_comm;
 
 	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
 
-	for (n=0; n < ngroups; n++) {
-		subgroup_size[n] = 0;
-		for (i=n; i < mpi_np; i += ngroups) subgroup_size[n]++;
-		subgroup_rank[n] = new int[subgroup_size[n]];
-		for (j=0, i=n; i < mpi_np; j++, i += ngroups) {
-			subgroup_rank[n][j] = i;
-			//if (mpi_id==0) cout << "subgroup " << n << " process " << j << ": rank " << subgroup_rank[n][j] << endl;
+	/*
+	if (mpi_np==3) {
+		subgroup_size[0] = 1;
+		subgroup_size[1] = 2;
+		subgroup_rank[0] = new int[1];
+		subgroup_rank[1] = new int[2];
+		subgroup_rank[0][0] = 0;
+		subgroup_rank[1][0] = 1;
+		subgroup_rank[1][1] = 2;
+		for (n=0; n < ngroups; n++) {
+			MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
+			MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
 		}
-
-		MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
-		MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
-
-		if (mpi_id % ngroups == n) {
-			MPI_Comm_rank(subgroup_comm[n],&subgroup_id);
-			group_number = n;
+		if (mpi_id==0) {
+			MPI_Comm_rank(subgroup_comm[0],&subgroup_id);
+			group_number = 0;
 		}
-	}
+		if (mpi_id==1) {
+			MPI_Comm_rank(subgroup_comm[1],&subgroup_id);
+			group_number = 1;
+		}
+		if (mpi_id==2) {
+			MPI_Comm_rank(subgroup_comm[1],&subgroup_id);
+			group_number = 1;
+		}
+	} else {
+		*/
+		for (n=0; n < ngroups; n++) {
+			subgroup_size[n] = 0;
+			for (i=n; i < mpi_np; i += ngroups) subgroup_size[n]++;
+			subgroup_rank[n] = new int[subgroup_size[n]];
+			for (j=0, i=n; i < mpi_np; j++, i += ngroups) {
+				subgroup_rank[n][j] = i;
+				//if (mpi_id==0) cout << "subgroup " << n << " process " << j << ": rank " << subgroup_rank[n][j] << endl;
+			}
+
+			MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
+			MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
+
+			if (mpi_id % ngroups == n) {
+				MPI_Comm_rank(subgroup_comm[n],&subgroup_id);
+				group_number = n;
+			}
+		}
+	//}
 
 	MPI_Comm onegroup_comm[mpi_np];
 	MPI_Group onegroup[mpi_np];

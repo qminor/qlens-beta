@@ -2241,6 +2241,7 @@ void Lens::process_commands(bool read_file)
 			double zl_in = lens_redshift;
 			bool vary_zl = false;
 			int pmode = default_parameter_mode;
+			bool is_perturber = false;
 
 			struct ParamAnchor {
 				bool anchor_param;
@@ -2307,6 +2308,13 @@ void Lens::process_commands(bool read_file)
 				} else Complain("must specify a lens number to update, followed by parameters");
 			} else {
 				// check for words that specify ellipticity mode, shear anchoring, or parameter anchoring
+				for (int i=1; i < nwords; i++) {
+					if (words[i]=="perturber") {
+						is_perturber = true;
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}
 				for (int i=2; i < nwords; i++) {
 					int pos;
 					if ((pos = words[i].find("emode=")) != string::npos) {
@@ -2580,6 +2588,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -2678,6 +2687,7 @@ void Lens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -2898,6 +2908,7 @@ void Lens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -2976,6 +2987,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3082,6 +3094,7 @@ void Lens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3159,6 +3172,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3243,6 +3257,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3320,6 +3335,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3432,6 +3448,7 @@ void Lens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3586,6 +3603,7 @@ void Lens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3964,6 +3982,7 @@ void Lens::process_commands(bool read_file)
 						}
 						add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
+						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 						if (auto_set_primary_lens) set_primary_lens();
 					}
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
@@ -5840,7 +5859,7 @@ void Lens::process_commands(bool read_file)
 			if (!islens()) Complain("must specify lens model first");
 			if (nwords==1) {
 				double re, re_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
-				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]]);
+				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]]);
 				arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
 				re_kpc = re*arcsec_to_kpc;
 				sigma_cr_kpc = sigma_crit_kpc(lens_redshift, source_redshift);
@@ -6877,7 +6896,6 @@ void Lens::process_commands(bool read_file)
 				set_switch(autocenter,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-
 		else if (words[0]=="primary_lens")
 		{
 			if (nwords==1) {
@@ -6897,6 +6915,30 @@ void Lens::process_commands(bool read_file)
 					if ((lensnum < 0) or (lensnum >= nlens)) Complain("specified lens number for 'primary_lens' does not exist");
 					primary_lens_number = lensnum;
 					auto_set_primary_lens = false;
+				}
+			} else Complain("invalid number of arguments; can only specify lens number # or 'auto'");
+		}
+		else if (words[0]=="secondary_lens")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "secondary_lens = ";
+					if (include_secondary_lens==true) cout << secondary_lens_number;
+					else cout << "none";
+					cout << endl;
+				}
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'secondary_lens' command; must specify lens number # or 'auto'");
+				if (setword=="none") {
+					include_secondary_lens = false;
+				} else {
+					stringstream nstream;
+					int lensnum;
+					nstream << setword;
+					if (!(nstream >> lensnum)) Complain("invalid argument to 'secondary_lens' command; must specify lens number # or 'auto'");
+					if ((lensnum < 0) or (lensnum >= nlens)) Complain("specified lens number for 'secondary_lens' does not exist");
+					secondary_lens_number = lensnum;
+					include_secondary_lens = true;
 				}
 			} else Complain("invalid number of arguments; can only specify lens number # or 'auto'");
 		}
@@ -8218,6 +8260,15 @@ void Lens::process_commands(bool read_file)
 				set_switch(subgrid_only_near_data_images,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="use_perturber_flags")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Identify perturbers by flagging them: " << display_switch(use_perturber_flags) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_perturber_flags' command; must specify 'on' or 'off'");
+				set_switch(use_perturber_flags,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="inversion_nthreads")
 		{
 			if (nwords == 2) {
@@ -8286,6 +8337,16 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_src_npixels' command; must specify 'on' or 'off'");
 				set_switch(auto_srcgrid_npixels,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="autogrid_frac")
+		{
+			double frac;
+			if (nwords == 2) {
+				if (!(ws[1] >> frac)) Complain("invalid autogrid_frac");
+				autogrid_frac = frac;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "autogrid_frac = " << autogrid_frac << endl;
+			} else Complain("must specify either zero or one argument (autogrid_frac)");
 		}
 		else if ((words[0]=="terminal") or (words[0]=="term"))
 		{

@@ -428,8 +428,9 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool autocenter;
 	int primary_lens_number;
 	bool auto_set_primary_lens;
+	bool include_secondary_lens;
+	int secondary_lens_number;
 	bool auto_gridsize_from_einstein_radius;
-	double auto_gridsize_multiple_of_Re;
 	bool autogrid_before_grid_creation;
 	double autogrid_frac, spline_frac;
 	double tabulate_rmin, tabulate_qmin;
@@ -510,9 +511,10 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double perturbation_radius_equation_nosub(const double r);
 
 	// needed for calculating the subhalo perturbation radius and scale for perturber subgridding
-	int subhalo_lens_number;
+	bool use_perturber_flags;
+	int perturber_lens_number;
 	double theta_shear;
-	lensvector subhalo_center;
+	lensvector perturber_center;
 	int subgridding_parity_at_center;
 	bool subgridding_include_perturber;
 	double *subgridding_zfacs;
@@ -2773,98 +2775,95 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 	hess_tot[1][1] = 0;
 	hess_tot[0][1] = 0;
 	hess_tot[1][0] = 0;
-	for (i=0; i < n_lens_redshifts; i++) {
-		if ((!skip_lens_plane) or (skip_i != i)) {
-			(*hess_i)[i][0][0] = 0;
-			(*hess_i)[i][1][1] = 0;
-			(*hess_i)[i][0][1] = 0;
-			(*hess_i)[i][1][0] = 0;
-			(*A_i)[0][0] = 1;
-			(*A_i)[1][1] = 1;
-			(*A_i)[0][1] = 0;
-			(*A_i)[1][0] = 0;
-			(*def_i)[i][0] = 0;
-			(*def_i)[i][1] = 0;
-			(*x_i)[0] = x;
-			(*x_i)[1] = y;
-			for (j=0; j < i; j++) {
-				//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
-				if ((!skip_lens_plane) or (skip_i != j)) {
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
-				}
-			}
-			for (j=0; j < zlens_group_size[i]; j++) {
-				// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
-				// end when we add up hessian, because we want the nonlinear effects taken into account here
-				if (zlens_group_lens_indx[i][j] == exclude_i) ;
-				else {
-					lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
-					//cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << endl;
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					if (i < n_lens_redshifts-1) {
-						lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-						(*def_i)[i][0] += (*def)[0];
-						(*def_i)[i][1] += (*def)[1];
+	if (n_lens_redshifts > 1) {
+		for (i=0; i < n_lens_redshifts; i++) {
+			if ((!skip_lens_plane) or (skip_i != i)) {
+				(*hess_i)[i][0][0] = 0;
+				(*hess_i)[i][1][1] = 0;
+				(*hess_i)[i][0][1] = 0;
+				(*hess_i)[i][1][0] = 0;
+				(*A_i)[0][0] = 1;
+				(*A_i)[1][1] = 1;
+				(*A_i)[0][1] = 0;
+				(*A_i)[1][0] = 0;
+				(*def_i)[i][0] = 0;
+				(*def_i)[i][1] = 0;
+				(*x_i)[0] = x;
+				(*x_i)[1] = y;
+				for (j=0; j < i; j++) {
+					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
+					if ((!skip_lens_plane) or (skip_i != j)) {
+						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+						(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
 					}
 				}
-			}
-			if (i < n_lens_redshifts-1) {
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-			}
-			(*hess_i)[i][0][0] *= zfacs[i];
-			(*hess_i)[i][1][1] *= zfacs[i];
-			(*hess_i)[i][0][1] *= zfacs[i];
-			(*hess_i)[i][1][0] *= zfacs[i];
+				for (j=0; j < zlens_group_size[i]; j++) {
+					// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
+					// end when we add up hessian, because we want the nonlinear effects taken into account here
+					if (zlens_group_lens_indx[i][j] == exclude_i) ;
+					else {
+						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
+						//cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << endl;
+						(*hess_i)[i][0][0] += (*hess)[0][0];
+						(*hess_i)[i][1][1] += (*hess)[1][1];
+						(*hess_i)[i][0][1] += (*hess)[0][1];
+						(*hess_i)[i][1][0] += (*hess)[1][0];
+						if (i < n_lens_redshifts-1) {
+							lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+							(*def_i)[i][0] += (*def)[0];
+							(*def_i)[i][1] += (*def)[1];
+						}
+					}
+				}
+				if (i < n_lens_redshifts-1) {
+					(*def_i)[i][0] *= zfacs[i];
+					(*def_i)[i][1] *= zfacs[i];
+				}
+				(*hess_i)[i][0][0] *= zfacs[i];
+				(*hess_i)[i][1][1] *= zfacs[i];
+				(*hess_i)[i][0][1] *= zfacs[i];
+				(*hess_i)[i][1][0] *= zfacs[i];
 
-			//cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
-			(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-			(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-			(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-			(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-			(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-			(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-			//cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				//cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
+				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
+				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
+				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
+				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
+				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
+				//cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
 
-			hess_tot += (*hess_i)[i];
+				hess_tot += (*hess_i)[i];
+			}
 		}
-	}
-
-/*
-
-		lensmatrix *hess_i = &hesses[thread];
-		lensmatrix **hess_subtot = &hesses_subtot[thread];
-
-		int i,j;
-		hess_tot[0][0] = 0;
-		hess_tot[1][1] = 0;
-		hess_tot[0][1] = 0;
-		hess_tot[1][0] = 0;
-		for (i=0; i < n_lens_redshifts; i++) {
-			(*hess_subtot)[i][0][0] = 0;
-			(*hess_subtot)[i][1][1] = 0;
-			(*hess_subtot)[i][0][1] = 0;
-			(*hess_subtot)[i][1][0] = 0;
-			for (j=0; j < zlens_group_size[i]; j++) {
-				if (zlens_group_lens_indx[i][j] != exclude_i) {
-					lens_list[zlens_group_lens_indx[i][j]]->hessian(x,y,(*hess_i));
-					(*hess_subtot)[i][0][0] += (*hess_i)[0][0];
-					(*hess_subtot)[i][1][1] += (*hess_i)[1][1];
-					(*hess_subtot)[i][0][1] += (*hess_i)[0][1];
-					(*hess_subtot)[i][1][0] += (*hess_i)[1][0];
+	} else {
+		if (use_perturber_flags) {
+			for (i=0; i < nlens; i++) {
+				if ((i != exclude_i) and (lens_list[i]->perturber==true)) {
+					lens_list[i]->hessian(x,y,(*hess));
+					hess_tot[0][0] += (*hess)[0][0];
+					hess_tot[1][1] += (*hess)[1][1];
+					hess_tot[0][1] += (*hess)[0][1];
+					hess_tot[1][0] += (*hess)[1][0];
 				}
 			}
-			hess_tot[0][0] += zfacs[i]*(*hess_subtot)[i][0][0];
-			hess_tot[1][1] += zfacs[i]*(*hess_subtot)[i][1][1];
-			hess_tot[0][1] += zfacs[i]*(*hess_subtot)[i][0][1];
-			hess_tot[1][0] += zfacs[i]*(*hess_subtot)[i][1][0];
+		} else {
+			for (i=0; i < nlens; i++) {
+				if (i != exclude_i) {
+					lens_list[i]->hessian(x,y,(*hess));
+					hess_tot[0][0] += (*hess)[0][0];
+					hess_tot[1][1] += (*hess)[1][1];
+					hess_tot[0][1] += (*hess)[0][1];
+					hess_tot[1][0] += (*hess)[1][0];
+				}
+			}
 		}
-		*/
+		hess_tot[0][0] *= zfacs[0];
+		hess_tot[1][1] *= zfacs[0];
+		hess_tot[0][1] *= zfacs[0];
+		hess_tot[1][0] *= zfacs[0];
+	}
 }
 
 inline double Lens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
@@ -2930,9 +2929,16 @@ inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, dou
 		double kappa_subtot;
 		int j;
 		kappa=0;
-		for (j=0; j < nlens; j++) {
-			if (j != exclude_i)
-				kappa += lens_list[j]->kappa(x[0],x[1]);
+		if (use_perturber_flags) {
+			for (j=0; j < nlens; j++) {
+				if ((j != exclude_i) and (lens_list[j]->perturber==true))
+					kappa += lens_list[j]->kappa(x[0],x[1]);
+			}
+		} else {
+			for (j=0; j < nlens; j++) {
+				if (j != exclude_i)
+					kappa += lens_list[j]->kappa(x[0],x[1]);
+			}
 		}
 		kappa *= zfacs[0];
 	} else {
