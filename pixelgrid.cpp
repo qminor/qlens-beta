@@ -1102,6 +1102,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 							triangle2_overlap = cell[i][j]->find_triangle2_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
 							triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 							triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
+							//cout << triangle1_overlap << " " << triangle2_overlap << " " << image_pixel_grid->source_plane_triangle1_area[img_i][img_j] << endl;
 						} else {
 							if (cell[i][j]->check_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread)) {
 								triangle1_overlap = cell[i][j]->find_triangle1_overlap(corners_threads[thread],twistpts_threads[thread],*twist_status_threads[thread],thread);
@@ -1194,6 +1195,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			nsrc = overlap_matrix_index[l];
 			j = nsrc / u_N;
 			i = nsrc % u_N;
+			//cout << overlap_matrix[l] << endl;
 			mag_matrix[nsrc] += overlap_matrix[l];
 			area_matrix[nsrc] += overlap_area_matrix[l];
 			if ((image_pixel_grid->fit_to_data != NULL) and (lens->image_pixel_data->high_sn_pixel[img_i][img_j])) high_sn_area_matrix[nsrc] += overlap_area_matrix[l];
@@ -1227,6 +1229,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
+		//cout << mag_matrix[nsrc] << " " << image_pixel_grid->triangle_area << endl;
 		cell[i][j]->avg_image_pixels_mapped = cell[i][j]->total_magnification * cell[i][j]->cell_area / image_pixel_grid->pixel_area;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
@@ -3916,7 +3919,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMeth
 				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
-		if (source_fit_mode==Pixellated_Source) {
+		//if (source_fit_mode==Pixellated_Source) {
 			#pragma omp for private(i,j) schedule(dynamic)
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
@@ -3966,9 +3969,10 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMeth
 
 					source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
 					source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
+					//cout << source_plane_triangle1_area[i][j] << endl;
 				}
 			}
-		}
+		//}
 	}
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
@@ -4708,7 +4712,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	}
 	MPI_Comm_free(&sub_comm);
 #endif
-	double mag;
+	//double mag;
 	for (n=0; n < ntot_corners; n++) {
 		j = n / (x_N+1);
 		i = n % (x_N+1);
@@ -4723,13 +4727,13 @@ void ImagePixelGrid::redo_lensing_calculations()
 			twist_pts[i][j][0] = twistx[n_cell];
 			twist_pts[i][j][1] = twisty[n_cell];
 			twist_status[i][j] = twiststat[n_cell];
-			if (lens->split_imgpixels) {
-				mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+			//if (lens->split_imgpixels) {
+				//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
 				//if (mag > 9) {
 					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
 				//}
-			}
+			//}
 		}
 	}
 

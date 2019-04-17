@@ -353,7 +353,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool enforce_min_cell_area;
 	bool cc_neighbor_splittings;
 	double min_cell_area; // area of the smallest allowed cell area
-	int rsplit_initial, thetasplit_initial;
+	int usplit_initial, wsplit_initial;
 	int splitlevels, cc_splitlevels;
 
 	Lens *fitmodel;
@@ -970,10 +970,10 @@ public:
 	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_perturbers; }
 	void set_auto_store_cc_points(bool setting) { auto_store_cc_points = setting; }
 
-	void set_rsplit_initial(int setting) { rsplit_initial = setting; }
-	void get_rsplit_initial(int &setting) { setting = rsplit_initial; }
-	void set_thetasplit_initial(int setting) { thetasplit_initial = setting; }
-	void get_thetasplit_initial(int &setting) { setting = thetasplit_initial; }
+	void set_usplit_initial(int setting) { usplit_initial = setting; }
+	void get_usplit_initial(int &setting) { setting = usplit_initial; }
+	void set_wsplit_initial(int setting) { wsplit_initial = setting; }
+	void get_wsplit_initial(int &setting) { setting = wsplit_initial; }
 	void set_splitlevels(int setting) { splitlevels = setting; }
 	void get_splitlevels(int &setting) { setting = splitlevels; }
 	void set_cc_splitlevels(int setting) { cc_splitlevels = setting; }

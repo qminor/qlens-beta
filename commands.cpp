@@ -1865,11 +1865,11 @@ void Lens::process_commands(bool read_file)
 					cout << "min_cellsize = " << sqrt(min_cell_area) << endl;
 					cout << resetiosflags(ios::scientific);
 					if (radial_grid) {
-						cout << "rsplit = " << rsplit_initial << endl;
-						cout << "thetasplit = " << thetasplit_initial << endl;
+						cout << "rsplit = " << usplit_initial << endl;
+						cout << "thetasplit = " << wsplit_initial << endl;
 					} else {
-						cout << "xsplit = " << rsplit_initial << endl;
-						cout << "ysplit = " << thetasplit_initial << endl;
+						cout << "xsplit = " << usplit_initial << endl;
+						cout << "ysplit = " << wsplit_initial << endl;
 					}
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 					cout << "cc_splitlevels = " << cc_splitlevels << endl;
@@ -2106,7 +2106,18 @@ void Lens::process_commands(bool read_file)
 				string gridtype_name;
 				if (!(ws[1] >> gridtype_name)) Complain("invalid grid type");
 				if (gridtype_name=="radial") radial_grid = true;
-				else if ((gridtype_name=="cartesian") or (gridtype_name=="Cartesian")) radial_grid = false;
+				else if ((gridtype_name=="cartesian") or (gridtype_name=="Cartesian")) {
+					if (radial_grid) {
+						int rsp, thetasp, xysp;
+						double xysp_approx;
+						rsp = usplit_initial;
+						thetasp = wsplit_initial;
+						xysp_approx = sqrt(usplit_initial*wsplit_initial);
+						xysp = (int) xysp_approx;
+						usplit_initial = wsplit_initial = xysp;
+						radial_grid = false;
+					}
+				}
 				else Complain("unknown grid type");
 			} else {
 				if (mpi_id==0) {
@@ -7341,9 +7352,9 @@ void Lens::process_commands(bool read_file)
 			int split;
 			if (nwords == 2) {
 				if (!(ws[1] >> split)) Complain("invalid number of splittings");
-				set_rsplit_initial(split);
+				set_usplit_initial(split);
 			} else if (nwords==1) {
-				get_rsplit_initial(split);
+				get_usplit_initial(split);
 				if (mpi_id==0) {
 					if (radial_grid) cout << "radial splittings = " << split << endl;
 					else cout << "x-splittings = " << split << endl;
@@ -7355,9 +7366,9 @@ void Lens::process_commands(bool read_file)
 			int split;
 			if (nwords == 2) {
 				if (!(ws[1] >> split)) Complain("invalid number of splittings");
-				set_thetasplit_initial(split);
+				set_wsplit_initial(split);
 			} else if (nwords==1) {
-				get_thetasplit_initial(split);
+				get_wsplit_initial(split);
 				if (mpi_id==0) {
 					if (radial_grid) cout << "angular splittings = " << split << endl;
 					else cout << "y-splittings = " << split << endl;

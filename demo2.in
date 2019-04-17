@@ -22,7 +22,8 @@ mksrcgal -1.4 -0.7 1 0.7 0 15 200
 plotimgs
 # Now let's show the same thing but for a surface brightness map:
 img_npixels 300 300
+src_npixels 50 50
 source gaussian 1 1 0.7 0 -1.4 -0.7
-#adaptive_grid on
+adaptive_grid on
 sbmap makesrc
 sbmap plotimg

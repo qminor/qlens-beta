@@ -880,7 +880,7 @@ void Grid::galsubgrid()
 		if (level == levels-1) {
 			levels++; // our subcells are at the max level, so splitting them increases the number of levels by 1
 		}
-		for (i=0; i < u_N+1; i++)
+		for (i=0; i <= u_N; i++)
 			delete[] xvals[i];
 		delete[] xvals;
 	}

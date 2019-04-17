@@ -382,7 +382,7 @@ Lens::Lens() : UCMC()
 	psf_matrix = NULL;
 	inversion_nthreads = 1;
 	adaptive_grid = false;
-	pixel_magnification_threshold = 4;
+	pixel_magnification_threshold = 7;
 	pixel_magnification_threshold_lower_limit = 1e30; // These must be specified by user
 	pixel_magnification_threshold_upper_limit = 1e30; // These must be specified by user
 	base_srcpixel_imgpixel_ratio = 0.8; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
@@ -409,8 +409,8 @@ Lens::Lens() : UCMC()
 	// parameters for the recursive grid
 	enforce_min_cell_area = true; // this is option is obsolete, and should be removed (we should always enforce a min cell area!!!!)
 	min_cell_area = 1e-4;
-	rsplit_initial = 16; // initial number of cell divisions in the r-direction
-	thetasplit_initial = 24; // initial number of cell divisions in the theta-direction
+	usplit_initial = 16; // initial number of cell divisions in the r-direction
+	wsplit_initial = 24; // initial number of cell divisions in the theta-direction
 	splitlevels = 0; // number of times grid squares are recursively split (by default)...setting to zero is best, recursion slows down grid creation & searching
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
@@ -724,8 +724,8 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	// parameters for the recursive grid
 	enforce_min_cell_area = lens_in->enforce_min_cell_area;
 	min_cell_area = lens_in->min_cell_area;
-	rsplit_initial = lens_in->rsplit_initial; // initial number of cell divisions in the r-direction
-	thetasplit_initial = lens_in->thetasplit_initial; // initial number of cell divisions in the theta-direction
+	usplit_initial = lens_in->usplit_initial; // initial number of cell divisions in the r-direction
+	wsplit_initial = lens_in->wsplit_initial; // initial number of cell divisions in the theta-direction
 	splitlevels = lens_in->splitlevels; // number of times grid squares are recursively split (by default)...minimum of one splitting is required
 	cc_splitlevels = lens_in->cc_splitlevels; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = lens_in->cc_neighbor_splittings;
@@ -2313,7 +2313,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 		int rsp, thetasp;
 		grid->get_usplit_initial(rsp);
 		grid->get_wsplit_initial(thetasp);
-		if ((rsp != rsplit_initial) or (thetasp != thetasplit_initial)) {
+		if ((rsp != usplit_initial) or (thetasp != wsplit_initial)) {
 			delete grid;
 			grid = NULL;
 		}
@@ -2327,7 +2327,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	}
 	record_singular_points(zfacs); // grid cells will split around singular points (e.g. center of point mass, etc.)
 
-	Grid::set_splitting(rsplit_initial, thetasplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
+	Grid::set_splitting(usplit_initial, wsplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
 	Grid::set_enforce_min_area(enforce_min_cell_area);
 	Grid::set_lens(this);
 	find_automatic_grid_position_and_size(zfacs);
@@ -2488,13 +2488,23 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 	double shear_angle;
 	double dr, theta, rmax, lambda_minus, dlambda_dr;
 	double shear_at_center, kappa_at_center, cc_major_axis_factor;
+	double grid_xmin, grid_xmax, grid_ymin, grid_ymax;
+	grid_xmin = grid_xcenter - grid_xlength/2;
+	grid_xmax = grid_xcenter + grid_xlength/2;
+	grid_ymin = grid_ycenter - grid_ylength/2;
+	grid_ymax = grid_ycenter + grid_ylength/2;
+	bool within_grid;
 	lensvector displaced_center;
 	dr = 1e-5;
 	for (i=0; i < nlens; i++) {
+		subgrid[i] = false;
+		within_grid = false;
+		xc = centers[i][0];
+		yc = centers[i][1];
+		if ((xc >= grid_xmin) and (xc <= grid_xmax) and (yc >= grid_ymin) and (yc <= grid_ymax)) within_grid = true;
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) and (lens_list[i]->has_kapavg_profile())) {
-				xc = centers[i][0];
-				yc = centers[i][1];
+			if ((((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
+				//cout << "Perturber (lens " << i << ") at " << xc << " " << yc << endl;
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers unless flagged specifically
 				if ((xc != xch) or (yc != ych) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) {
 					kappa_at_center = kappas[i];
