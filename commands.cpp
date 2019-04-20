@@ -4968,6 +4968,7 @@ void Lens::process_commands(bool read_file)
 				{
 					bool copy_subplot_only = false;
 					bool resampled_posts = false;
+					bool no2dposts = false;
 					int nbins1d = 50, nbins2d = 40;
 					if (nwords > 2) {
 						for (int i=2; i < nwords; i++) {
@@ -4977,14 +4978,20 @@ void Lens::process_commands(bool read_file)
 								break;
 							}
 						}
-						int pos = -1;
 						for (int i=2; i < nwords; i++) {
-							if (((pos = words[i].find("-new")) != string::npos) and (pos==0)) {
-								resampled_posts = true;
+							if (words[i]=="-no2d") {
+								no2dposts = true;
 								remove_word(i);
-								pos = -1;
+								break;
 							}
 						}
+						for (int i=2; i < nwords; i++) {
+							if (words[i]=="-new") {
+								resampled_posts = true;
+								remove_word(i);
+							}
+						}
+						int pos = -1;
 						for (int i=2; i < nwords; i++) {
 							if (((pos = words[i].find("-n")) != string::npos) and (pos==0)) {
 								string nbinstring = words[i].substr(pos+2);
@@ -5009,9 +5016,9 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					if (nwords==2) {
-						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts);
+						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts);
 					} else if (nwords==3) {
-						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts);
+						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if (words[1]=="run")
@@ -8755,7 +8762,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts)
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts)
 {
 	if (mpi_id==0) {
 		string filename = fit_output_filename;
@@ -8799,8 +8806,9 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
 			string command = "cd " + fit_output_dir + "; ";
-			command += "mkdist " + filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
-			if (make_subplot) command += " -s";
+			command += "mkdist " + filename + " -n" + nbins1d_string;
+			if (!no2dposts) command += " -N" + nbins2d_string; // plot histograms
+			if ((make_subplot) and (!no2dposts)) command += " -s";
 			if (post_title != "") command += " -t";
 			if (param_markers != "") {
 				command += " -m:" + filename + ".markers"; // add markers for plotting true values
@@ -8816,12 +8824,14 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			command += "mkdist " + filename + " -i -b -E2";
 			if (param_markers != "") command += " -m:" + filename + ".markers -v"; // print true values to chain_info file
 			command += " >" + filename + ".chain_info; "; // produce best-fit point and credible intervals
-			command += "python " + filename + ".py; python " + filename + "_tri.py; "; // run python scripts to make PDFs
-			if (make_subplot) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot
+			command += "python " + filename + ".py; ";
+			if (!no2dposts) command += "python " + filename + "_tri.py; "; // run python scripts to make PDFs
+			if ((!no2dposts) and (make_subplot)) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot
 			if (copy_post_files) {
 				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; ";
-				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + filename + ".pdf ../" + posts_dirname + "; cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
-				if (make_subplot) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
+				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + filename + ".pdf ../" + posts_dirname + "; ";
+				if (!no2dposts) command += "cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
+				if ((!no2dposts) and (make_subplot)) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
 				command += "cp *.chain_info ../" + posts_dirname + "; ";
 			}
 			command += "cd ..";
