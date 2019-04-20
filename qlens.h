@@ -759,7 +759,7 @@ public:
 	void run_plotter_file(string plotcommand, string filename);
 	void run_plotter_range(string plotcommand, string range);
 	void run_plotter(string plotcommand, string filename, string range);
-	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only);
+	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);

@@ -4967,6 +4967,7 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="mkposts")
 				{
 					bool copy_subplot_only = false;
+					bool resampled_posts = false;
 					int nbins1d = 50, nbins2d = 40;
 					if (nwords > 2) {
 						for (int i=2; i < nwords; i++) {
@@ -4977,6 +4978,13 @@ void Lens::process_commands(bool read_file)
 							}
 						}
 						int pos = -1;
+						for (int i=2; i < nwords; i++) {
+							if (((pos = words[i].find("-new")) != string::npos) and (pos==0)) {
+								resampled_posts = true;
+								remove_word(i);
+								pos = -1;
+							}
+						}
 						for (int i=2; i < nwords; i++) {
 							if (((pos = words[i].find("-n")) != string::npos) and (pos==0)) {
 								string nbinstring = words[i].substr(pos+2);
@@ -5001,9 +5009,9 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					if (nwords==2) {
-						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only);
+						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts);
 					} else if (nwords==3) {
-						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only);
+						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if (words[1]=="run")
@@ -7347,8 +7355,10 @@ void Lens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (((words[0]=="rsplit") and (radial_grid)) or ((words[0]=="xsplit") and (!radial_grid)))
+		else if ((words[0]=="rsplit") or (words[0]=="xsplit"))
 		{
+			if ((words[0]=="rsplit") and (!radial_grid)) Complain("gridtype is set to 'cartesian'; must use 'xsplit' and 'ysplit' for initial splittings");
+			if ((words[0]=="xsplit") and (radial_grid)) Complain("gridtype is set to 'radial'; must use 'rsplit' and 'thetasplit' for initial splittings");
 			int split;
 			if (nwords == 2) {
 				if (!(ws[1] >> split)) Complain("invalid number of splittings");
@@ -7361,8 +7371,11 @@ void Lens::process_commands(bool read_file)
 				}
 			} else Complain("must specify one argument (number of splittings)");
 		}
-		else if (((words[0]=="thetasplit") and (radial_grid)) or ((words[0]=="ysplit") and (!radial_grid)))
+		else if ((words[0]=="thetasplit") or (words[0]=="ysplit"))
 		{
+			if ((words[0]=="thetasplit") and (!radial_grid)) Complain("gridtype is set to 'cartesian'; must use 'xsplit' and 'ysplit' for initial splittings");
+			if ((words[0]=="ysplit") and (radial_grid)) Complain("gridtype is set to 'radial'; must use 'rsplit' and 'thetasplit' for initial splittings");
+
 			int split;
 			if (nwords == 2) {
 				if (!(ws[1] >> split)) Complain("invalid number of splittings");
@@ -8742,20 +8755,22 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only)
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts)
 {
 	if (mpi_id==0) {
+		string filename = fit_output_filename;
+		if (resampled_posts) filename += ".new";
 		if (posts_dirname == fit_output_dir) {
 			cerr << "Error: directory for storing posteriors cannot be the same as the chains directory" << endl;
 		} else {
 			if (param_markers != "") {
-				string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+				string marker_str = fit_output_dir + "/" + filename + ".markers";
 				ofstream markerfile(marker_str.c_str());
 				markerfile << param_markers << endl;
 				markerfile.close();
 			}
 			if (post_title != "") {
-				string title_str = fit_output_dir + "/" + fit_output_filename + ".plot_title";
+				string title_str = fit_output_dir + "/" + filename + ".plot_title";
 				ofstream titlefile(title_str.c_str());
 				titlefile << post_title << endl;
 				titlefile.close();
@@ -8763,7 +8778,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 
 			bool make_subplot = param_settings->subplot_params_defined();
 			if (make_subplot) {
-				string subplot_str = fit_output_dir + "/" + fit_output_filename + ".subplot_params";
+				string subplot_str = fit_output_dir + "/" + filename + ".subplot_params";
 				ofstream subplotfile(subplot_str.c_str());
 				int nparams_tot = param_settings->nparams + param_settings->n_dparams;
 				for (int i=0; i < nparams_tot; i++) {
@@ -8784,11 +8799,11 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
 			string command = "cd " + fit_output_dir + "; ";
-			command += "mkdist " + fit_output_filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
+			command += "mkdist " + filename + " -n" + nbins1d_string + " -N" + nbins2d_string; // plot histograms
 			if (make_subplot) command += " -s";
 			if (post_title != "") command += " -t";
 			if (param_markers != "") {
-				command += " -m:" + fit_output_filename + ".markers"; // add markers for plotting true values
+				command += " -m:" + filename + ".markers"; // add markers for plotting true values
 				if (n_param_markers < 10000) {
 					stringstream npmstr;
 					string npmstring;
@@ -8798,15 +8813,15 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 				}
 			}
 			command += "; ";
-			command += "mkdist " + fit_output_filename + " -i -b -E2";
-			if (param_markers != "") command += " -m:" + fit_output_filename + ".markers -v"; // print true values to chain_info file
-			command += " >" + fit_output_filename + ".chain_info; "; // produce best-fit point and credible intervals
-			command += "python " + fit_output_filename + ".py; python " + fit_output_filename + "_tri.py; "; // run python scripts to make PDFs
-			if (make_subplot) command += "python " + fit_output_filename + "_subtri.py; "; // run python scripts to make PDF for subplot
+			command += "mkdist " + filename + " -i -b -E2";
+			if (param_markers != "") command += " -m:" + filename + ".markers -v"; // print true values to chain_info file
+			command += " >" + filename + ".chain_info; "; // produce best-fit point and credible intervals
+			command += "python " + filename + ".py; python " + filename + "_tri.py; "; // run python scripts to make PDFs
+			if (make_subplot) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot
 			if (copy_post_files) {
 				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; ";
-				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + fit_output_filename + ".pdf ../" + posts_dirname + "; cp " + fit_output_filename + "_tri.pdf ../" + posts_dirname + "; ";
-				if (make_subplot) command += "cp " + fit_output_filename + "_subtri.pdf ../" + posts_dirname + "; ";
+				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + filename + ".pdf ../" + posts_dirname + "; cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
+				if (make_subplot) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
 				command += "cp *.chain_info ../" + posts_dirname + "; ";
 			}
 			command += "cd ..";
