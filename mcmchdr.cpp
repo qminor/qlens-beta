@@ -3033,8 +3033,10 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	ptr1 = points[imin];
 	likeLast = likeMin;
 	if (mpi_id==0) {
-		cout << "\n\033[7AStatus:  Nested Sampling Started" << endl << flush;
-		cout << "\033[K\tpoints = \033[K" << "\n\tinv slope = " << "\n\tneg loglike = " << "\n\taccept ratio = " << endl << endl << flush;
+		if (!logfile) {
+			cout << "\n\033[7AStatus:  Nested Sampling Started" << endl << flush;
+			cout << "\033[K\tpoints = \033[K" << "\n\tinv slope = " << "\n\tneg loglike = " << "\n\taccept ratio = " << endl << endl << flush;
+		}
 	}
 
 	bool accepted;
@@ -3135,7 +3137,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 #endif
 		if (mpi_id==0) {
 			if (logfile) {
-				if (count % 20 == 0) {
+				if (count % 100 == 0) {
 					logout << "points=" << count << " (" << cRec.Ratio() << ")" << " inv-slope=" << slope << " neg loglike=" << likeMin << " accept ratio=" << ratio << " mpi_r=" << ratio_all_procs << " it=" << iterations;
 #ifdef USE_OPENMP
 					logout << " t_it=" << time_per_it << endl;
@@ -3143,16 +3145,17 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 					logout << endl;
 #endif
 				}
-			}
-			cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
-			<< "\n\tinv slope = " << blank << slope 
-			<< "\n\tneg loglike = " << blank << likeMin 
-			<< "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
+			} else {
+				cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
+				<< "\n\tinv slope = " << blank << slope 
+				<< "\n\tneg loglike = " << blank << likeMin 
+				<< "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
 #ifdef USE_OPENMP
-			cout << " t_it = " << blank << time_per_it << endl << endl;
+				cout << " t_it = " << blank << time_per_it << endl << endl;
 #else
-			cout << endl << endl;
+				cout << endl << endl;
 #endif
+			}
 		}
 #ifdef USE_MPI
 		MPI_Bcast(&KEEP_RUNNING,1,MPI_INT,0,MPI_COMM_WORLD);
@@ -3163,8 +3166,8 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 	group = new Points(points, ma, N, exp(-double(count+1)/N)*senfac, lvl, enl, &random, 0x00);
 	
 	if (mpi_id==0) {
-		cout << "\033[6AStatus:  MultNest Sampling Started\r\033[5B" << blank << endl;
 		if (logfile) logout << "Status:  MultNest Sampling Started" << endl;
+		else cout << "\033[6AStatus:  MultNest Sampling Started\r\033[5B" << blank << endl;
 	}
 
 	int overflow = 0;
@@ -3236,8 +3239,8 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 			{
 				overflow++;
 				if (mpi_id==0) {
-					cout << "\033[6AStatus:  MultNest Sampling Started (" << overflow << " overflow(s))\r\033[5B" << endl;
 					if (logfile) logout << "Overflows: " << overflow << endl;
+					else cout << "\033[6AStatus:  MultNest Sampling Started (" << overflow << " overflow(s))\r\033[5B" << endl;
 				}
 			}
 		}
@@ -3287,7 +3290,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 #endif
 		if (mpi_id==0) {
 			if (logfile) {
-				if (count % 20 == 0) {
+				if (count % 100 == 0) {
 					logout << "points=" << count << " (" << cRec.Ratio() << ")" << " inv-slope=" << slope << " (test=" << test << ")" << " neg-loglike=" << likeMin << "(" << likeMax << ")" << " F=" << group->F() << ") accept ratio=" << ratio << " mpi_r=" << ratio_all_procs << " it=" << iterations;
 #ifdef USE_OPENMP
 					logout << " t_it=" << time_per_it << endl;
@@ -3295,18 +3298,19 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 					logout << endl;
 #endif
 				}
-			}
-			cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
-				<< "\n\tinv slope = " << blank << slope << " (test = " << test << ")       "
-				<< "\n\tneg loglike = " << blank << likeMin  << blank << "(" << likeMax << ")"
-				<< "\n\tF = " << blank << group->F() << bblank << " (";
-			group->printbads();
-			cout << ")                                                            " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
+			} else {
+				cout << "\033[5A\tpoints = " << count << " (" << cRec.Ratio() << ")"
+					<< "\n\tinv slope = " << blank << slope << " (test = " << test << ")       "
+					<< "\n\tneg loglike = " << blank << likeMin  << blank << "(" << likeMax << ")"
+					<< "\n\tF = " << blank << group->F() << bblank << " (";
+				group->printbads();
+				cout << ")                                                            " << "\n\taccept ratio = " << blank << ratio << " mpi_r = " << blank << ratio_all_procs << " it = " << blank << iterations;
 #ifdef USE_OPENMP
-			cout << " t_it = " << blank << time_per_it << endl;
+				cout << " t_it = " << blank << time_per_it << endl;
 #else
-			cout << endl;
+				cout << endl;
 #endif
+			}
 
 		}
 #ifdef USE_MPI
@@ -3434,13 +3438,14 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 			logout << "Status:  Finished\n";
 			logout << count+N << " points, Z = " << exp(lnZ) << endl;
 			logout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << endl;
+		} else {
+			if (NDerivedParams > 0)
+				cout << "\033[7A\033[KStatus:  Finished\r\033[6B" << endl;
+			else
+				cout << "\033[6A\033[KStatus:  Finished\r\033[5B" << endl;
+			cout << count+N << " points, Z = " << exp(lnZ) << "                                                   " << endl;
+			cout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << "                                                   " << endl;
 		}
-		if (NDerivedParams > 0)
-			cout << "\033[7A\033[KStatus:  Finished\r\033[6B" << endl;
-		else
-			cout << "\033[6A\033[KStatus:  Finished\r\033[5B" << endl;
-		cout << count+N << " points, Z = " << exp(lnZ) << "                                                   " << endl;
-		cout << "lnZ = " << lnZ << " +/- " << sqrt(abs(H/N)) << "                                                   " << endl;
 	}
 	
 	if (system((string("rm -f ") + string(name) + string(".temp")).c_str()) != 0) warn("could not delete temporary files for nested sampling output");
