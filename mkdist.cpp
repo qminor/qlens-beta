@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
 	bool plot_mass_profile_constraints = false;
 	bool run_python_script = false;
 	bool transform_parameters = false;
+	bool importance_sampling = false;
 	bool output_transform_usage = false;
 	bool use_fisher_matrix = false;
 	bool exclude_derived_params = false;
@@ -56,6 +57,8 @@ int main(int argc, char *argv[])
 	string marker_filename = "";
 	int n_markers_allowed = 10000;
 	char param_transform_filename[100] = "";
+	char prior_weight_filename[100] = "";
+	char label_addendum[100] = "";
 	bool smoothing = false;
 	int n_threads=1, n_processes=1;
 	double radius = 0.1;
@@ -94,6 +97,7 @@ int main(int argc, char *argv[])
 	//stat(output_dir.c_str(),&sb);
 	//if (S_ISDIR(sb.st_mode)==false) output_dir = ".";
 
+	string output_file_label = file_label;
 	int i,j,c;
 	for (i=2; i < argc; i++)   // Process extra command-line arguments
 	{
@@ -126,6 +130,13 @@ int main(int argc, char *argv[])
 							argv[i] = advance(argv[i]);
 						}
 						else output_transform_usage = true;
+						break;
+					case 'I':
+						if (sscanf(argv[i], "I:%s", prior_weight_filename)==1) {
+							argv[i] += (1 + strlen(prior_weight_filename));
+							importance_sampling = true;
+							argv[i] = advance(argv[i]);
+						}
 						break;
 					case 'l': include_log_evidence = true; break;
 					case 'D': // find posterior in a derived parameter, which is defined in the function DerivedParam(...) in mcmceval.cpp
@@ -200,6 +211,14 @@ int main(int argc, char *argv[])
 						if ((percentile <= 0) or (percentile >= 1.0)) die("percentile must be between 0 and 1");
 						output_percentile = true;
 						argv[i] = advance(argv[i]);
+						break;
+					case 'L':
+						if (sscanf(argv[i], "L:%s", label_addendum)==1) {
+							argv[i] += (1 + strlen(label_addendum));
+							string addstring(label_addendum);
+							output_file_label += "." + addstring;
+							argv[i] = advance(argv[i]);
+						}
 						break;
 					case 'q': silent = true; break;
 					case 's': make_subplot = true; break;
@@ -290,7 +309,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,include_log_evidence);
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename,include_log_evidence);
 		Eval.get_nparams(nparams);
 	}
 	if (output_chain_info) Eval.OutputChainInfo();
@@ -590,7 +609,7 @@ int main(int argc, char *argv[])
 	int system_returnval;
 	if (make_1d_posts)
 	{
-		string pyname = file_label + ".py";
+		string pyname = output_file_label + ".py";
 		ofstream pyscript(pyname.c_str());
 		pyscript << "import GetDistPlots, os" << endl;
 		pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
@@ -609,12 +628,12 @@ int main(int argc, char *argv[])
 		}
 		pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
 		//if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl; // 1d title doesn't look good
-		pyscript << "g.export(os.path.join(outdir,'" << file_label << ".pdf'))" << endl;
+		pyscript << "g.export(os.path.join(outdir,'" << output_file_label << ".pdf'))" << endl;
 		pyscript.close();
 		if (run_python_script) {
 			string pycommand = "python " + pyname;
 			if (system(pycommand.c_str()) == 0) {
-				cout << "Plot for 1D posteriors saved to '" << file_label << ".pdf'\n";
+				cout << "Plot for 1D posteriors saved to '" << output_file_label << ".pdf'\n";
 				//string rmcommand = "rm " + pyname;
 				//system_returnval = system(rmcommand.c_str());
 			}
@@ -627,7 +646,7 @@ int main(int argc, char *argv[])
 
 	if (make_2d_posts)
 	{
-		string pyname = file_label + "_2D.py";
+		string pyname = output_file_label + "_2D.py";
 		ofstream pyscript2d(pyname.c_str());
 		pyscript2d << "import GetDistPlots, os" << endl;
 		pyscript2d << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
@@ -644,7 +663,7 @@ int main(int argc, char *argv[])
 		else pyscript2d << "shaded=False";
 		pyscript2d << ")" << endl;
 		if (add_title) pyscript2d << "g.add_title(r'" << title << "')" << endl;
-		pyscript2d << "g.export(os.path.join(outdir,'" << file_label << "_2D.pdf'))" << endl;
+		pyscript2d << "g.export(os.path.join(outdir,'" << output_file_label << "_2D.pdf'))" << endl;
 		/*
 		if (run_python_script) {
 			string pycommand = "python " + pyname;
@@ -665,8 +684,8 @@ int main(int argc, char *argv[])
 			int n_triplots = 1;
 			if (make_subplot) n_triplots++;
 			for (int k=0; k < n_triplots; k++) {
-				if (k==0) pyname = file_label + "_tri.py";
-				else pyname = file_label + "_subtri.py";
+				if (k==0) pyname = output_file_label + "_tri.py";
+				else pyname = output_file_label + "_subtri.py";
 				ofstream pyscript(pyname.c_str());
 				pyscript << "import GetDistPlots, os" << endl;
 				pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
@@ -714,14 +733,14 @@ int main(int argc, char *argv[])
 				else pyscript << "shaded=False";
 				pyscript << ")" << endl;
 				if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl;
-				pyscript << "g.export(os.path.join(outdir,'" << file_label;
+				pyscript << "g.export(os.path.join(outdir,'" << output_file_label;
 				if (k==0) pyscript << "_tri.pdf'))" << endl;
 				else pyscript << "_subtri.pdf'))" << endl;
 				if (run_python_script) {
 					string pycommand = "python " + pyname;
 					if (system(pycommand.c_str()) == 0) {
-						if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << file_label << "_tri.pdf'\n";
-						else cout << "Triangle subplot saved to '" << file_label << "_subtri.pdf'\n";
+						if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << output_file_label << "_tri.pdf'\n";
+						else cout << "Triangle subplot saved to '" << output_file_label << "_subtri.pdf'\n";
 						//string rmcommand = "rm " + pyname;
 						//system_returnval = system(rmcommand.c_str());
 					}
@@ -802,6 +821,8 @@ void usage_error()
 			"  -f        use Fisher matrix to generate 1d,2d posteriors (MCMC data not required)\n"
 			"  -T:<file> transform parameters using an input script. For usage info, enter 'T' with\n"
 			"               no argument.\n"
+			"  -I:<file> define parameter priors for importance sampling using an input script.\n"
+			"  -L:<suffix> Add <suffix> onto the filenames of output python scripts and PDF files.\n"
 			"  -q        quiet mode (non-verbose)\n" << endl;
 	exit(1);
 }
@@ -818,9 +839,8 @@ void show_transform_usage()
 			"exp      -- transform to 10^p; no parameters to enter.\n"
 			"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
 			"              linear 2 5' will transform p --> 2*p + 5.\n"
-			"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"
-			"              the original parameter. There are two arguments, mean value <mean> and dispersion <sig>\n"
-			"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n"
+			"gaussian -- transformation whose Jacobian is Gaussian. There are two arguments, <mean> and dispersion <sig>\n"
+			"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5).\n"
 			"inverse_gaussian -- inverse of the Gaussian transformation, with the same parameters <mean> and <sig>\n\n"
 			"For example, to apply a linear transformation p --> 2*p - 1 to parameter 2, enter:\n"
 			"2 linear 2 -1 name=newparam\n\n"

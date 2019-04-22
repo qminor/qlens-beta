@@ -107,7 +107,7 @@ class Fit : private Minimize, private LevenMarq
 		}
 };
 
-void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool include_log_evidence)
+void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool importance_sampling, const char *prior_weight_filename, const bool include_log_evidence)
 {
 	if (a < 0)
 	{
@@ -184,6 +184,9 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		}
 		paramranges_file.close();
 	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+
+	prior_weights = new ParamPriorWeight[a];
+	if (importance_sampling) input_prior_weights(prior_weight_filename,lowcut,highcut);
 
 	numOfFiles = filesin;
 	numOfPoints = new int[numOfFiles];
@@ -304,6 +307,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 					if (((lowLimit == NULL)||(temp > lowLimit[k]))&&((hiLimit == NULL)||(temp < hiLimit[k])))
 					{
 						points[j][m][k] = temp;
+						if (importance_sampling) mults[j][m] *= prior_weights[k].prior_weight(temp);
 					}
 					else
 					{
@@ -478,6 +482,67 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 		//else if (param_transforms[i].transform==EVAL_LOG_TRANSFORM) cout << "log";
 		//else if (param_transforms[i].transform==EVAL_EXP_TRANSFORM) cout << "exp";
 		//else if (param_transforms[i].transform==EVAL_GAUSS_TRANSFORM) cout << "gaussian (mean=" << param_transforms[i].gaussian_pos << ",sig=" << param_transforms[i].gaussian_sig << ")";
+		//cout << endl;
+	//}
+}
+
+void McmcEval::input_prior_weights(const char *prior_weight_filename, double *minvals, double* maxvals)
+{
+	int nwords;
+	string line;
+	vector<string> words;
+	stringstream* ws = NULL;
+	ifstream prior_weight_file(prior_weight_filename);
+
+	while (!prior_weight_file.eof()) {
+		bool prior_weight_name = false;
+		bool prior_weight_latex_name = false;
+		getline(prior_weight_file,line);
+		words.clear();
+		if (line.empty()) continue;
+		if (line[0]=='#') continue;
+		string linestring(line);
+		remove_comments(linestring);
+		istringstream linestream(linestring);
+		string word;
+		while (linestream >> word)
+			words.push_back(word);
+		nwords = words.size();
+		if (ws != NULL) delete[] ws;
+		ws = new stringstream[nwords];
+		for (int i=0; i < nwords; i++) ws[i] << words[i];
+
+		if (nwords >= 2) {
+			int param_num;
+			if (!(ws[0] >> param_num)) die("Invalid parameter number");
+			if (param_num >= numOfParam) die("Parameter number does not exist");
+			if (words[1]=="none") prior_weights[param_num].set_none();
+			else if (words[1]=="log") prior_weights[param_num].set_log(minvals[param_num],maxvals[param_num]);
+			//else if (words[1]=="gaussian") {
+				//if (nwords != 4) die("gaussian requires two additional arguments (mean,sigma)");
+				//double sig, pos;
+				//if (!(ws[2] >> pos)) die("Invalid mean value for Gaussian prior weights");
+				//if (!(ws[3] >> sig)) die("Invalid dispersion value for Gaussian prior weights");
+				//prior_weights[param_num].set_gaussian(pos,sig);
+			//}
+			//else if (words[1]=="inverse_gaussian") {
+				//if (nwords != 4) die("inverse_gaussian requires two additional arguments (mean,sigma)");
+				//double sig, pos;
+				//if (!(ws[2] >> pos)) die("Invalid mean value for inverse Gaussian prior weights");
+				//if (!(ws[3] >> sig)) die("Invalid dispersion value for inverse Gaussian prior weights");
+				//prior_weights[param_num].set_inverse_gaussian(pos,sig);
+			//}
+			else die("importance sampling prior type not recognized");
+		}
+		else die("the importance sampling prior file requires at least two arguments (param_number,prior_type)");
+	}
+	if (ws != NULL) delete[] ws;
+	//for (int i=0; i < numOfParam; i++) {
+		//cout << "Parameter " << i << ": ";
+		//if (prior_weights[i].prior_weight==EVAL_NONE) cout << "none";
+		//else if (prior_weights[i].prior_weight==EVAL_LOG_TRANSFORM) cout << "log";
+		//else if (prior_weights[i].prior_weight==EVAL_EXP_TRANSFORM) cout << "exp";
+		//else if (prior_weights[i].prior_weight==EVAL_GAUSS_TRANSFORM) cout << "gaussian (mean=" << prior_weights[i].gaussian_pos << ",sig=" << prior_weights[i].gaussian_sig << ")";
 		//cout << endl;
 	//}
 }
@@ -3600,6 +3665,7 @@ McmcEval::~McmcEval()
  	if (numOfPoints != NULL) delete[] numOfPoints;
  	if (cut != NULL) delete[] cut;
 	if (param_transforms != NULL) delete[] param_transforms;
+	if (prior_weights != NULL) delete[] prior_weights;
 	if (minvals != NULL) delete[] minvals;
 	if (maxvals != NULL) delete[] maxvals;
 	if (derived_param != NULL) delete[] derived_param;
