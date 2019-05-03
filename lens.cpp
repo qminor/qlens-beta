@@ -2512,7 +2512,7 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 		yc = centers[i][1];
 		if ((xc >= grid_xmin) and (xc <= grid_xmax) and (yc >= grid_ymin) and (yc <= grid_ymax)) within_grid = true;
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
+			if (((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) or ((use_perturber_flags) and (lens_list[i]->perturber==true)) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
 
 				//cout << "Perturber (lens " << i << ") at " << xc << " " << yc << endl;
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers unless flagged specifically
