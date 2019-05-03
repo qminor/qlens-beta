@@ -4634,6 +4634,15 @@ void Lens::process_commands(bool read_file)
 							//create_grid(false);
 						}
 					}
+					double rms_err;
+					int nmatched;
+					// This gets rms error info, but at the cost of having to find all the images again. It would be much better for
+					// the chisq_diagnostic function to just return all the image info and run it above, instead of finding all the images separately.
+					// You would have to handle the output from here, and do away with the output_images_single_source(...) function which is a bad
+					// way to do it anyway.
+					// MAKE THIS UPGRADE LATER!!!!!!!!!!!
+					chisq_pos_image_plane_diagnostic(false,rms_err,nmatched);
+					if (mpi_id==0) cout << "# matched image pairs = " << nmatched << ", rms_imgpos_error = " << rms_err << endl << endl;
 					delete[] srcflux;
 					delete[] srcpts;
 				}
@@ -4787,7 +4796,6 @@ void Lens::process_commands(bool read_file)
 					delete[] srcflux;
 					delete[] srcpts;
 				}
-
 				else if (words[1]=="plotimg")
 				{
 					// this needs to be redone a bit, along with "fit findimg"--it should just call get_images(...) directly, so that it can

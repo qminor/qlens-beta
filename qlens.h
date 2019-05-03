@@ -928,7 +928,7 @@ public:
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
-	double chisq_pos_image_plane_verbose();
+	double chisq_pos_image_plane_diagnostic(const bool verbose, double& rms_imgpos_err, int& n_matched_images);
 
 	double chisq_flux();
 	double chisq_time_delays();

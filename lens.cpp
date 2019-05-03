@@ -5901,7 +5901,7 @@ double Lens::chisq_pos_image_plane()
 	return chisq;
 }
 
-double Lens::chisq_pos_image_plane_verbose()
+double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -5927,17 +5927,21 @@ double Lens::chisq_pos_image_plane_verbose()
 		delete[] srcpts;
 	}
 
-	double chisq=0, chisq_part=0;
+	double chisq=0, chisq_part=0, rms_part=0;
+	int n_images, n_tot_images=0, n_tot_images_part=0, n_matched_images_part=0;
+	double sigsq, signormfac, chisq_each_srcpt, n_matched_images_each_srcpt, rms_err_each_srcpt, dist;
+	rms_imgpos_err = 0;
+	n_matched_images = 0;
 
-	int n_images, n_tot_images=0, n_tot_images_part=0;
-	double sigsq, signormfac, chisq_each_srcpt, dist;
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
-		if (group_num==0) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		if ((group_num==0) and (verbose)) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
+			n_matched_images_each_srcpt = 0;
+			rms_err_each_srcpt = 0;
 			image *img = get_images(sourcepts_fit[i], n_images, false);
 			n_visible_images = n_images;
 			bool *ignore = new bool[n_images];
@@ -5964,7 +5968,7 @@ double Lens::chisq_pos_image_plane_verbose()
 			n_tot_images_part += n_visible_images;
 			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
 				chisq_part += 1e30;
-				if (group_num==0) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
+				if ((group_num==0) and (verbose)) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
 			}
 
 			int n_dists = n_visible_images*image_data[i].n_images;
@@ -6007,29 +6011,35 @@ double Lens::chisq_pos_image_plane_verbose()
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
-				if (group_num==0) cout << "source " << i << ", image " << k << ": ";
+				if ((group_num==0) and (verbose)) cout << "source " << i << ", image " << k << ": ";
 				if (closest_image_j[k] != -1) {
 					if (image_data[i].use_in_chisq[k]) {
+						rms_err_each_srcpt += closest_distsqrs[k];
+						n_matched_images_each_srcpt++;
 						chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
 						chi_x = (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq);
 						chi_y = (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq);
 
-						if (group_num==0) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+						if ((group_num==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
 					}
-					else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+					else if ((group_num==0) and (verbose)) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
 					chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
-					if (group_num==0) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
+					if ((group_num==0) and (verbose)) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
 					chisq_each_srcpt += chisq_this_img;
 				}
 			}
-			for (k=0; k < n_images; k++) {
-				if (closest_image_k[k] == -1) cout << "EXTRA IMAGE: source " << i << ", model image " << k << " (" << img[k].pos[0] << "," << img[k].pos[1] << "), magnification = " << img[k].mag << endl << flush;
+			if ((group_num==0) and (verbose)) {
+				for (k=0; k < n_images; k++) {
+					if (closest_image_k[k] == -1) cout << "EXTRA IMAGE: source " << i << ", model image " << k << " (" << img[k].pos[0] << "," << img[k].pos[1] << "), magnification = " << img[k].mag << endl << flush;
+				}
 			}
 
 			chisq_part += chisq_each_srcpt;
+			rms_part += rms_err_each_srcpt;
+			n_matched_images_part += n_matched_images_each_srcpt;
 			delete[] ignore;
 			delete[] distsqrs;
 			delete[] data_k;
@@ -6039,18 +6049,24 @@ double Lens::chisq_pos_image_plane_verbose()
 			delete[] closest_distsqrs;
 		}
 	}
-	if (group_num==0) cout << endl;
+	if ((group_num==0) and (verbose)) cout << endl;
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
+	MPI_Allreduce(&rms_part, &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
+	MPI_Allreduce(&n_matched_images_part, &n_matched_images, 1, MPI_INT, MPI_SUM, sub_comm);
 	MPI_Comm_free(&sub_comm);
 #else
 	chisq = chisq_part;
 	n_tot_images = n_tot_images_part;
+	n_matched_images = n_matched_images_part;
+	rms_imgpos_err = rms_part;
 #endif
+	rms_imgpos_err = sqrt(rms_imgpos_err/n_matched_images);
 
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	n_visible_images = n_tot_images; // save the total number of visible images produced
+	if ((group_num==0) and (verbose)) cout << "Number of matched image pairs = " << n_matched_images <<", rms_imgpos_error = " << rms_imgpos_err << endl << endl;
 	return chisq;
 }
 
@@ -8648,16 +8664,18 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	double loglike, chisq_total=0, chisq;
 	if (include_imgpos_chisq) {
 		bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
+		double rms_err;
+		int n_matched_imgs;
 		if (use_image_plane_chisq) {
 			used_imgplane_chisq = true;
-			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
+			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,rms_err,n_matched_imgs);
 			else chisq = fitmodel->chisq_pos_image_plane();
 		}
 		else {
 			used_imgplane_chisq = false;
 			chisq = fitmodel->chisq_pos_source_plane();
 			if (chisq < chisq_imgplane_substitute_threshold) {
-				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_verbose();
+				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane();
 				used_imgplane_chisq = true;
 			}
