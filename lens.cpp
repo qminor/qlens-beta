@@ -2452,18 +2452,30 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 	double *kappas = new double[nlens];
 	double *parities = new double[nlens];
 	int i;
+	bool within_grid;
+	double grid_xmin, grid_xmax, grid_ymin, grid_ymax;
+	grid_xmin = grid_xcenter - grid_xlength/2;
+	grid_xmax = grid_xcenter + grid_xlength/2;
+	grid_ymin = grid_ycenter - grid_ylength/2;
+	grid_ymax = grid_ycenter + grid_ylength/2;
 	for (i=0; i < nlens; i++) {
+		within_grid = false;
+		xc = centers[i][0];
+		yc = centers[i][1];
+		if ((xc >= grid_xmin) and (xc <= grid_xmax) and (yc >= grid_ymin) and (yc <= grid_ymax)) within_grid = true;
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			// lenses with Einstein radii < some fraction of the largest Einstein radius, and not co-centered with the largest lens, are considered perturbers.
-			if ((use_perturber_flags) and (lens_list[i]->perturber==true)) {
-				kappas[i] = kappa_exclude(center,i,zfacs,betafacs);
-				parities[i] = sign(magnification_exclude(center,i,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
-				// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
-				if ((parities[i]==1) and (kappas[i] >= 1.0)) continue;
-				else n_perturbers++;
-			} else if ((einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) {
-				xc = centers[i][0];
-				yc = centers[i][1];
+			if ((use_perturber_flags) and (lens_list[i]->perturber==true) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
+				if ((xc != xch) or (yc != ych)) {
+					center[0]=xc;
+					center[1]=yc;
+					kappas[i] = kappa_exclude(center,i,zfacs,betafacs);
+					parities[i] = sign(magnification_exclude(center,i,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
+					// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
+					if ((parities[i]==1) and (kappas[i] >= 1.0)) continue;
+					else n_perturbers++;
+				}
+			} else if ((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers
 				if ((xc != xch) or (yc != ych)) {
 					center[0]=xc;
@@ -2481,32 +2493,30 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 	bool *subgrid = new bool[n_perturbers];
 	double *subgrid_radius = new double[n_perturbers];
 	double *min_galsubgrid_cellsize = new double[n_perturbers];
+	
+	// The following code needs to be reorganized slightly to be more readable and less bug-prone when changes are made. (e.g. the way it reuses all the 'and' statements from above is rather bug-prone.) DO LATER
 
-	int j=0;
+	int j;
+	for (j=0; j < n_perturbers; j++) subgrid[j] = false;
 	double reavg; // won't use this
 	double axis1, axis2, ratio;
 	double shear_angle;
 	double dr, theta, rmax, lambda_minus, dlambda_dr;
 	double shear_at_center, kappa_at_center, cc_major_axis_factor;
-	double grid_xmin, grid_xmax, grid_ymin, grid_ymax;
-	grid_xmin = grid_xcenter - grid_xlength/2;
-	grid_xmax = grid_xcenter + grid_xlength/2;
-	grid_ymin = grid_ycenter - grid_ylength/2;
-	grid_ymax = grid_ycenter + grid_ylength/2;
-	bool within_grid;
 	lensvector displaced_center;
 	dr = 1e-5;
+	j=0;
 	for (i=0; i < nlens; i++) {
-		subgrid[i] = false;
 		within_grid = false;
 		xc = centers[i][0];
 		yc = centers[i][1];
 		if ((xc >= grid_xmin) and (xc <= grid_xmax) and (yc >= grid_ymin) and (yc <= grid_ymax)) within_grid = true;
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
-			if ((((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
+			if ((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
+
 				//cout << "Perturber (lens " << i << ") at " << xc << " " << yc << endl;
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers unless flagged specifically
-				if ((xc != xch) or (yc != ych) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) {
+				if ((xc != xch) or (yc != ych)) {
 					kappa_at_center = kappas[i];
 					parity = parities[i]; // use the parity to help determine approx. size of critical curves
 
@@ -2569,11 +2579,14 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 					subgrid_radius[j] = galsubgrid_radius_fraction*rmax;
 					min_galsubgrid_cellsize[j] = SQR(galsubgrid_min_cellsize_fraction*rmax);
 					if (rmax > 0) subgrid[j] = true;
+					//cout << "Nj=" << j << " i=" << i << endl;
 					j++;
 				}
 			}
 		}
 	}
+					//cout << "blergh" << endl;
+	//if (j != n_perturbers) die("FUCK; %i %i",j,n_perturbers);
 	if ((subgrid_only_near_data_images) and (source_redshift_groups.size() > 0)) {
 		int zindx = redshift_index;
 		if (zindx==-1) zindx = 0;
@@ -5952,7 +5965,6 @@ double Lens::chisq_pos_image_plane_verbose()
 			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
 				chisq_part += 1e30;
 				if (group_num==0) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
-				continue;
 			}
 
 			int n_dists = n_visible_images*image_data[i].n_images;
@@ -5996,22 +6008,25 @@ double Lens::chisq_pos_image_plane_verbose()
 					 sigsq += syserr_pos*syserr_pos;
 				}
 				if (group_num==0) cout << "source " << i << ", image " << k << ": ";
-					if (closest_image_j[k] != -1) {
-						if (image_data[i].use_in_chisq[k]) {
-							chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
-							chi_x = (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq);
-							chi_y = (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq);
+				if (closest_image_j[k] != -1) {
+					if (image_data[i].use_in_chisq[k]) {
+						chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
+						chi_x = (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq);
+						chi_y = (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq);
 
-							if (group_num==0) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
-							chisq_each_srcpt += chisq_this_img;
-						}
-						else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
-					} else {
-						// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-						chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
-						if (group_num==0) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
+						if (group_num==0) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
 					}
+					else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+				} else {
+					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
+					chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
+					if (group_num==0) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
+					chisq_each_srcpt += chisq_this_img;
+				}
+			}
+			for (k=0; k < n_images; k++) {
+				if (closest_image_k[k] == -1) cout << "EXTRA IMAGE: source " << i << ", model image " << k << " (" << img[k].pos[0] << "," << img[k].pos[1] << "), magnification = " << img[k].mag << endl << flush;
 			}
 
 			chisq_part += chisq_each_srcpt;

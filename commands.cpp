@@ -749,7 +749,9 @@ void Lens::process_commands(bool read_file)
 							"Output the chi-square value for the current model and data. If using more than one chi-square\n"
 							"component (e.g. fluxes and time delays), each chi-square will be printed separately in addition\n"
 							"to the total chi-square value. If argument 'diag' is added, diagnostic information is printed\n"
-							"for image plane chi-square.\n";
+							"for image plane chi-square; for image plane chi-square, the diagnostics include the chi-square\n"
+							"contribution from each data image, the model image it matches to, as well as extra model images\n"
+							"that aren't matched to any data image.\n";
 					else if (words[2]=="method") {
 						if (nwords==3)
 							cout << "fit method <fit_method>\n\n"

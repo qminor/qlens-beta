@@ -2840,7 +2840,7 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 	} else {
 		if (use_perturber_flags) {
 			for (i=0; i < nlens; i++) {
-				if ((i != exclude_i) and (lens_list[i]->perturber==true)) {
+				if ((i != exclude_i) and (lens_list[i]->perturber==false)) {
 					lens_list[i]->hessian(x,y,(*hess));
 					hess_tot[0][0] += (*hess)[0][0];
 					hess_tot[1][1] += (*hess)[1][1];
@@ -2931,7 +2931,7 @@ inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, dou
 		kappa=0;
 		if (use_perturber_flags) {
 			for (j=0; j < nlens; j++) {
-				if ((j != exclude_i) and (lens_list[j]->perturber==true))
+				if ((j != exclude_i) and (lens_list[j]->perturber==false))
 					kappa += lens_list[j]->kappa(x[0],x[1]);
 			}
 		} else {
