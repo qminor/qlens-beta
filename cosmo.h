@@ -148,6 +148,10 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double comoving_distance(const double z) { return (comoving_distance_spline.splint(z)); }
 	double angular_diameter_distance(const double z) { return (angular_radius(comoving_distance_spline.splint(z)) / (1+z)); }
 	double luminosity_distance(const double z) { return (angular_radius(comoving_distance_spline.splint(z)) * (1+z)); }
+	double comoving_distance_exact(const double z);
+	double angular_diameter_distance_exact(const double z) { return (angular_radius(comoving_distance_exact(z)) / (1+z)); }
+	double luminosity_distance_exact(const double z) { return (angular_radius(comoving_distance_exact(z)) * (1+z)); }
+
 	double critical_density(const double z);
 	double matter_density(const double z) { return omega_m*dcrit0*CUBE(1+z); }
 	void get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir);

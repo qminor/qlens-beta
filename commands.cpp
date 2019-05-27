@@ -1122,6 +1122,9 @@ void Lens::process_commands(bool read_file)
 							"sbmap set_data_window [...]\n\n"
 							"sbmap unset_data_annulus [...]\n"
 							"sbmap unset_data_window [...]\n"
+							"sbmap unset_low_sn_pixels [...]\n"
+							"sbmap trim_mask_windows [...]\n"
+							"sbmap set_neighbor_pixels\n"
 							"sbmap find_noise [...]\n\n"
 							"Commands for loading, simulating, plotting and inverting surface brightness pixel maps. For\n"
 							"help on individual subcommands, type 'help sbmap <command>'. If 'sbmap' is typed with no\n"
@@ -1244,6 +1247,20 @@ void Lens::process_commands(bool read_file)
 							cout << "sbmap unset_data_window <xmin> <xmax> <ymin> <ymax>\n\n"
 								"This command is identical to 'set_data_window' except that it deactivates the pixels, rather than\n"
 								"activating them. See 'help sbmap set_data_window' for usage information.\n\n";
+						else if (words[2]=="unset_low_sn_pixels")
+							cout << "sbmap unset_low_sn_pixels <sb_threshold>\n\n"
+								"Deactivates all pixels with surface brightness values lower than the stated threshold <sb_threshold>.\n"
+								"This can be used in conjunction with the 'trim_mask_windows' command, if one uses a conservatively\n"
+								"threshold but only wants to keep mask regions that contain high surface brightness.\n\n";
+						else if (words[2]=="trim_mask_windows")
+							cout << "sbmap trim_mask_windows <threshold>\n\n"
+								"Removes pixel 'windows' (regions with continguous pixels) that do not have any pixels with surface\n"
+								"brightness greater than <threshold>*pixel_noise. Typically, thresholds of 4 or 5 are sufficient\n"
+								"assuming Gaussian noise.\n\n";
+						else if (words[2]=="set_neighbor_pixels")
+							cout << "sbmap set_neighbor_pixels\n\n"
+								"Activate all pixels that neighbor a pixel already included within the mask. This effectively enlarges\n"
+								"the pixel mask outward by one pixel length.\n\n";
 						else if (words[2]=="find_noise")
 							cout << "sbmap find_noise <xmin> <xmax> <ymin> <ymax>\n\n"
 								"Calculates the mean and dispersion of the surface brightness values for pixels within the specified\n"

@@ -409,6 +409,14 @@ void Cosmology::spline_comoving_distance(void)
 	comoving_distance_spline.input(z_table, d_table);
 }
 
+double Cosmology::comoving_distance_exact(const double z)
+{
+	double (Romberg::*comoving_dist_ptr)(const double);
+	comoving_dist_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::comoving_distance_derivative);
+	double dist = romberg(comoving_dist_ptr, 0, z, 1e-6, 5);
+	return dist;
+}
+
 double Cosmology::angular_radius(double chi)
 {
 	double omega_curv = 1-omega_m-omega_lambda;

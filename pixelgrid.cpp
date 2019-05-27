@@ -3428,7 +3428,6 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 	}
 	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
 	delete[] mask_window_id;
-
 }
 
 void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit)

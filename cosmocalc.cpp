@@ -75,9 +75,9 @@ int main(int argc, char *argv[])
 	if (mode==Display_Distances) {
 		double comoving_distance, angular_diameter_distance, luminosity_distance;
 		const double Mpc_to_Gpc = 1e-3;
-		comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance(redshift);
-		angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance(redshift);
-		luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance(redshift);
+		comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance_exact(redshift);
+		angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance_exact(redshift);
+		luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance_exact(redshift);
 		cout << "z = " << redshift << " (assuming flat Universe)" << endl;
 		cout << "Comoving distance: " << comoving_distance << " Gpc" << endl;
 		cout << "Angular diameter distance: " << angular_diameter_distance << " Gpc" << endl;
@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
 		cout << "z_lens = " << redshift << ", z_source = " << redshift_source << endl;
 		if (redshift==0) cout << "Cannot find sigma_crit if z_lens = 0\n";
 		else {
+			if (redshift_source > 10) warn("lensing quantities become inaccurate beyond z=10 due to comoving distance spline");
 			if (display_sigma_crit_in_kpc) {
 				double sigcr = cosmo.sigma_crit_kpc(redshift,redshift_source);
 				cout << "sigma_crit = " << sigcr << " solar masses/kpc^2\n";

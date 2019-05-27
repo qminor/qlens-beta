@@ -2404,6 +2404,7 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 	double zlprim, zlsub, re_avg;
 	double largest_einstein_radius = 0;
 	int i;
+	i_primary = 0;
 	for (i=0; i < nlens; i++) {
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			lens_list[i]->get_einstein_radius(einstein_radii[i],re_avg,zfacs[lens_redshift_idx[i]]);
@@ -2513,7 +2514,6 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 		if ((xc >= grid_xmin) and (xc <= grid_xmax) and (yc >= grid_ymin) and (yc <= grid_ymax)) within_grid = true;
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			if ((((!use_perturber_flags) and (einstein_radii[i] >= 0) and (einstein_radii[i] < perturber_einstein_radius_fraction*largest_einstein_radius)) or ((use_perturber_flags) and (lens_list[i]->perturber==true))) and (lens_list[i]->has_kapavg_profile()) and (within_grid) and (i != primary_lens_number)) {
-
 				//cout << "Perturber (lens " << i << ") at " << xc << " " << yc << endl;
 				// lenses co-centered with the primary lens, no matter how small, are not considered perturbers unless flagged specifically
 				if ((xc != xch) or (yc != ych)) {
