@@ -742,8 +742,8 @@ void Lens::process_commands(bool read_file)
 						cout << "fit run [-resume]\n\n"
 							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's method)\n"
 							"or a Monte Carlo sampler (e.g. MCMC or nested sampling method) depending on the fit method that\n"
-							"has been selected. If using MultiNest, you can add the argument '-resume' to continue a prev-\n"
-							"ious run that had been interrupted. For more information about the output produced by these\n"
+							"has been selected. If using MultiNest or PolyChord, you can add the argument '-resume' to continue\n"
+							"a previous run that had been interrupted. For more information about the output produced by these\n"
 							"methods, type 'help fit method <method>' for whichever fit method is selected.\n";
 					else if (words[2]=="chisq")
 						cout << "fit chisq [diag]\n\n"
@@ -5059,7 +5059,7 @@ void Lens::process_commands(bool read_file)
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
-					else if (fitmethod==POLYCHORD) polychord();
+					else if (fitmethod==POLYCHORD) polychord(resume);
 					else if (fitmethod==MULTINEST) multinest(resume);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
