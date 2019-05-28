@@ -860,7 +860,7 @@ public:
 	double chi_square_fit_powell();
 	void nested_sampling();
 	void polychord();
-	void multinest();
+	void multinest(const bool resume_previous);
 	void chi_square_twalk();
 	bool add_dparams_to_chain();
 	void test_fitmodel_invert();

@@ -739,11 +739,12 @@ void Lens::process_commands(bool read_file)
 							"source point being plotted. So in the above example, critical curves are plotted for the source\n"
 							"redshift corresponding to image set 3.\n";
 					else if (words[2]=="run")
-						cout << "fit run\n\n"
-							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's\n"
-							"method) or a Monte Carlo sampler (e.g. MCMC or nested sampling method) depending on the\n"
-							"fit method that has been selected. For more information about the output produced,\n"
-							"type 'help fit method <method>' for whichever fit method is selected.\n";
+						cout << "fit run [-resume]\n\n"
+							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's method)\n"
+							"or a Monte Carlo sampler (e.g. MCMC or nested sampling method) depending on the fit method that\n"
+							"has been selected. If using MultiNest, you can add the argument '-resume' to continue a prev-\n"
+							"ious run that had been interrupted. For more information about the output produced by these\n"
+							"methods, type 'help fit method <method>' for whichever fit method is selected.\n";
 					else if (words[2]=="chisq")
 						cout << "fit chisq [diag]\n\n"
 							"Output the chi-square value for the current model and data. If using more than one chi-square\n"
@@ -1119,7 +1120,7 @@ void Lens::process_commands(bool read_file)
 							"sbmap set_all_pixels\n"
 							"sbmap unset_all_pixels\n"
 							"sbmap set_data_annulus [...]\n"
-							"sbmap set_data_window [...]\n\n"
+							"sbmap set_data_window [...]\n"
 							"sbmap unset_data_annulus [...]\n"
 							"sbmap unset_data_window [...]\n"
 							"sbmap unset_low_sn_pixels [...]\n"
@@ -5050,11 +5051,16 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="run")
 				{
+					bool resume = false;
+					if (nwords > 2) {
+						if ((nwords==3) and (words[2]=="-resume")) resume = true;
+						else Complain("invalid arguments after 'fit run'");
+					}
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
 					else if (fitmethod==POLYCHORD) polychord();
-					else if (fitmethod==MULTINEST) multinest();
+					else if (fitmethod==MULTINEST) multinest(resume);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 				}

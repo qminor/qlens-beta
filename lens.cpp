@@ -7603,12 +7603,12 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
-void Lens::multinest()
+void Lens::multinest(const bool resume_sampling)
 {
 #ifdef USE_MULTINEST
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
-	if ((mpi_id==0) and (fit_output_dir != ".")) {
+	if ((mpi_id==0) and (!resume_sampling) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
 		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
@@ -7693,7 +7693,9 @@ void Lens::multinest()
 	if (mpi_id==0) fb = 1;					// need feedback on standard output?
 	else fb = 0;
 
-	resume = 0;					// resume from a previous job?
+	if (resume_sampling) resume = 1;					// resume from a previous job?
+	else resume = 0;
+
 	outfile = 1;				// write output files?
 	initMPI = 0;				// initialize MPI routines?, relevant only if compiling with MPI
 							// set it to F if you want your main program to handle MPI initialization
