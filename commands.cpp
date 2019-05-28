@@ -797,20 +797,27 @@ void Lens::process_commands(bool read_file)
 								"and returns the best-fit parameter values. If 'find_errors' is on, the Fisher matrix is then\n"
 								"calculated numerically and marginalized error estimates are displayed for each parameter. The\n"
 								"convergence criterion is set by 'chisqtol'.\n\n";
-						else if (words[3]=="nest")
-							cout << "fit method nest\n\n"
-								"The nested sampling algorithm outputs points that sample the parameter space, which can then\n"
-								"be marginalized by binning the points in the parameter(s) of interest, weighting them according\n"
-								"to the supplied weights. The resulting points and weights are output to the file '<label>', while\n"
-								"the parameters that maximize the space are output to the file <label>.max', where the label is set\n"
-								"by the 'fit label' command. The number of initial 'active' points is set by n_livepts.\n";
+						else if ((words[3]=="nest") or (words[3]=="multinest") or (words[3]=="polychord"))
+							cout << "fit method nest\n"
+								"fit method multinest\n"
+								"fit method polychord\n\n"
+								"The nested sampling algorithms output the Bayesian evidence, as well as points that sample the\n"
+								"parameter space, which can then be marginalized by binning the points in the parameter(s) of\n"
+								"interest, weighting them according to the supplied weights. The resulting points and weights are\n"
+								"output to the file '<label>', while the parameters that maximize the space are output to the file\n"
+								"<label>.max', where the label is set by the 'fit label' command. The number of initial 'active'\n"
+								"points is set by n_livepts. After a run finishes, posterior histograms can be generated using the\n"
+								"'mkdist' tool included with qlens; alternatively, they can be generated from within qlens using\n"
+								"the 'fit mkposts' command (which runs the mkdist tool).\n";
 						else if (words[3]=="twalk")
 							cout << "fit method twalk\n\n"
 								"T-Walk is a Markov Chain Monte Carlo (MCMC) algorithm that samples the parameter space using a\n"
 								"Metropolis-Hastings step and outputs the resulting chain(s) of points, which can then be marginalized\n"
 								"by binning in the parameter(s) of interest. Data points are output to the file '<label>', where the\n"
 								"label is set by the 'fit label' command. The algorithm uses the Gelman-Rubin R-statistic to determine\n"
-								"convergence and terminates after R reaches the value set by mcmctol.\n";
+								"convergence and terminates after R reaches the value set by mcmctol. After a run finishes, posterior\n"
+								"histograms can be generated using the 'mkdist' tool included with qlens; alternatively, they can be\n"
+								"generated from within qlens using the 'fit mkposts' command (which runs the mkdist tool).\n";
 						else Complain("unknown fit method");
 					} else if (words[2]=="label")
 						cout << "fit label <label>\n\n"
@@ -851,7 +858,7 @@ void Lens::process_commands(bool read_file)
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included.\n";
 					else if (words[2]=="mkposts")
-						cout << "fit mkposts <dirname> [-n#] [-N#] [-subonly]\n\n"
+						cout << "fit mkposts <dirname> [-n#] [-N#] [-no2d] [-subonly]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
 							"from QLens and generate 1d and 2d posteriors, copying the resulting PDF files from the chains directory\n"
 							"to directory <dirname> (which is created if it doesn't already exist; otherwise if <dirname> is omitted,\n"
