@@ -462,6 +462,8 @@ class Truncated_NFW : public LensProfile
 	// This profile is the same as NFW, times a factor (1+(r/rt)^2)^-2 which smoothly truncates the halo (prescription from Baltz, Marshall & Oguri (2008))
 	private:
 	double ks, rs, rt;
+	double m200, c200, rs_kpc, rt_kpc; // alternate parametrizations
+	double median_c_factor; // used if concentration is set to factor*median value
 	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
@@ -470,10 +472,12 @@ class Truncated_NFW : public LensProfile
 	double rho3d_r_integrand_analytic(const double r);
 
 	void set_model_specific_integration_pointers();
+	void set_ks_rs_from_m200_c200();
+	void set_ks_c200_from_m200_rs();
 
 	public:
 	Truncated_NFW() : LensProfile() {}
-	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in);
+	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* lens_in);
 	Truncated_NFW(const Truncated_NFW* lens_in);
 
 	void assign_paramnames();
@@ -481,6 +485,11 @@ class Truncated_NFW : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
+	void update_special_anchored_params();
+	void get_parameters_pmode(const int pmode_in, double* params);
+
+	bool output_cosmology_info(const int lens_number = -1);
 };
 
 class Cored_NFW : public LensProfile

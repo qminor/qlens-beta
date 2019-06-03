@@ -925,7 +925,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 
 /********************************** Truncated_NFW **********************************/
 
-Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
+Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
 	cosmo = cosmo_in;
 	lenstype = TRUNCATED_nfw;
@@ -933,14 +933,24 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
 
-	ks = ks_in;
-	rs = rs_in;
-	rt = rt_in;
+	if (parameter_mode==2) {
+		m200 = p1_in;
+		rs_kpc = p2_in;
+		rt_kpc = p3_in;
+	} else if (parameter_mode==1) {
+		m200 = p1_in;
+		c200 = p2_in;
+		rt_kpc = p3_in;
+	} else {
+		ks = p1_in;
+		rs = p2_in;
+		rt = p3_in;
+	}
 
 	update_meta_parameters_and_pointers();
 }
@@ -951,38 +961,128 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rt = lens_in->rt;
+	if (parameter_mode==2) {
+		m200 = lens_in->m200;
+		rs_kpc = lens_in->rs_kpc;
+		rt_kpc = lens_in->rt_kpc;
+	} else if (parameter_mode==1) {
+		m200 = lens_in->m200;
+		c200 = lens_in->c200;
+		rt_kpc = lens_in->rt_kpc;
+	}
 
+	median_c_factor = lens_in->median_c_factor;
 	update_meta_parameters_and_pointers();
 }
 
 void Truncated_NFW::assign_paramnames()
 {
-	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
-	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
-	paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
+	if (parameter_mode==2) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[2] = "rt_kpc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
+	} else if (parameter_mode==1) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "c"; latex_paramnames[1] = "c"; latex_param_subscripts[1] = "";
+		paramnames[2] = "rt_kpc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
+	} else {
+		paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
+		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
+	}
 	set_geometric_paramnames(3);
 }
 
 void Truncated_NFW::assign_param_pointers()
 {
-	param[0] = &ks;
-	param[1] = &rs;
-	param[2] = &rt;
+	if (parameter_mode==2) {
+		param[0] = &m200;
+		param[1] = &rs_kpc;
+		param[2] = &rt_kpc;
+	} else if (parameter_mode==1) {
+		param[0] = &m200;
+		param[1] = &c200;
+		param[2] = &rt_kpc;
+	} else {
+		param[0] = &ks;
+		param[1] = &rs;
+		param[2] = &rt;
+	}
 	set_geometric_param_pointers(3);
+}
+
+void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
+{
+	if (parameter_mode==0) {
+		// For parameter mode 0, you need to use a root-finder to solve for c, and then you can find m200 easily
+		// This should be done here because unless you need it here, it would waste CPU time to do this every
+		// time the parameters are varied
+	}
+
+	if (pmode==2) {
+		params[0] = m200;
+		params[1] = rs_kpc;
+		params[2] = rt_kpc;
+	} else if (pmode==1) {
+		params[0] = m200;
+		params[1] = c200;
+		params[2] = rt_kpc;
+	} else {
+		params[0] = ks;
+		params[1] = rs;
+		params[2] = rt;
+	}
+	for (int i=2; i < n_params; i++) {
+		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		else params[i] = *(param[i]);
+	}
 }
 
 void Truncated_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
+	if (parameter_mode==2) set_ks_c200_from_m200_rs();
+	else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 	rmin_einstein_radius = 1e-6*rs;
+}
+
+void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+{
+	// the following special anchoring is to enforce a mass-concentration relation
+	anchor_special_parameter = true;
+	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
+	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
+	if (just_created) median_c_factor = factor;
+	c200 = median_c_factor*cosmo->median_concentration_dutton(m200,zlens);
+	update_meta_parameters();
+}
+
+void Truncated_NFW::update_special_anchored_params()
+{
+	if (anchor_special_parameter) {
+		//c200 = cosmo->median_concentration_bullock(m200,zlens);
+		c200 = median_c_factor * cosmo->median_concentration_dutton(m200,zlens);
+		update_meta_parameters();
+	}
 }
 
 void Truncated_NFW::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*ks;
-	stepsizes[1] = 0.2*rs;
-	stepsizes[2] = 0.2*rt;
+	if (parameter_mode==2) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*rs_kpc;
+		stepsizes[2] = 0.2*rt_kpc;
+	} else if (parameter_mode==1) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*c200;
+		stepsizes[2] = 0.2*rt_kpc;
+	} else {
+		stepsizes[0] = 0.2*ks;
+		stepsizes[1] = 0.2*rs;
+		stepsizes[2] = 0.2*rt;
+	}
+
 	set_auto_eparam_stepsizes(3,4);
 	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
 	stepsizes[6] = 0.5;
@@ -1000,6 +1100,28 @@ void Truncated_NFW::set_auto_ranges()
 void Truncated_NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq);
+}
+
+void Truncated_NFW::set_ks_c200_from_m200_rs()
+{
+	double rvir_kpc;
+	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs = rs_kpc * kpc_to_arcsec;
+	rt = rt_kpc * kpc_to_arcsec;
+	c200 = rvir_kpc / rs_kpc;
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
+}
+
+void Truncated_NFW::set_ks_rs_from_m200_c200()
+{
+	double rvir_kpc, rs_kpc;
+	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
+	rs_kpc = rvir_kpc / c200;
+	rs = rs_kpc * kpc_to_arcsec;
+	rt = rt_kpc * kpc_to_arcsec;
+	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
 }
 
 double Truncated_NFW::kappa_rsq(const double rsq)
@@ -1037,6 +1159,38 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 {
 	return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));
 }
+
+bool Truncated_NFW::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	double ds, r200;
+	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
+	if (parameter_mode == 0) rt_kpc = rt / kpc_to_arcsec;
+	ds = ks * sigma_cr_kpc / rs_kpc;
+	if (parameter_mode > 0) {
+		r200 = c200 * rs_kpc;
+	} else {
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		c200 = r200/rs_kpc;
+	}
+
+	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "r_t = " << rt_kpc << " kpc  (truncation radius)" << endl;
+	cout << "c = " << c200 << endl;
+	if (parameter_mode > 0) {
+		cout << "ks = " << ks << endl;
+		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
+	} else {
+		cout << "M_200 = " << m200 << " M_sol (ignores truncation)\n";
+		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
+	}
+	cout << endl;
+	return true;
+}
+
+
 
 /********************************** Cored_NFW **********************************/
 

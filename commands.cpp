@@ -2861,7 +2861,7 @@ void Lens::process_commands(bool read_file)
 						double q, theta = 0, xc = 0, yc = 0;
 						if (pmode==2) {
 							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
-							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
+							if (!(ws[3] >> p2)) Complain("invalid rs_kpc parameter for model nfw");
 						} else if (pmode==1) {
 							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
 							int pos;
@@ -2954,12 +2954,37 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="tnfw")
 				{
+					bool set_median_concentration = false;
+					double cmed_factor = 1.0;
+					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
+						set_median_concentration = true;
+						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
+					}
+					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
+
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model tnfw");
 					if (nwords >= 6) {
-						double ks, rs, rt;
+						double p1, p2, rt;
 						double q, theta = 0, xc = 0, yc = 0;
-						if (!(ws[2] >> ks)) Complain("invalid ks parameter for model tnfw");
-						if (!(ws[3] >> rs)) Complain("invalid rs parameter for model tnfw");
+						if (pmode==2) {
+							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
+							if (!(ws[3] >> p2)) Complain("invalid rs_kpc parameter for model nfw");
+						} else if (pmode==1) {
+							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
+							int pos;
+							if ((pos = words[3].find("*cmed")) != string::npos) {
+								set_median_concentration = true;
+								string facstring;
+								facstring = words[3].substr(0,pos);
+								stringstream facstream;
+								facstream << facstring;
+								if (!(facstream >> cmed_factor)) Complain("invalid factor of median concentration");
+							} else if (words[3]=="cmed") set_median_concentration = true;
+							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
+						} else {
+							if (!(ws[2] >> p1)) Complain("invalid ks parameter for model nfw");
+							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
+						}
 						if (!(ws[4] >> rt)) Complain("invalid rt parameter for model tnfw");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model tnfw");
 						if (nwords >= 7) {
@@ -2982,7 +3007,7 @@ void Lens::process_commands(bool read_file)
 						}
 						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-						param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=rt; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=rt; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
@@ -2996,9 +3021,9 @@ void Lens::process_commands(bool read_file)
 									if (nwords==tot_nparams_to_vary+2) {
 										if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-									} else complain_str = "Must specify vary flags for five parameters (ks,rs,rt,q,theta) in model tnfw";
+									} else complain_str = "Must specify vary flags for five parameters (p1,p2,rt,q,theta) in model tnfw";
 								}
-								else complain_str = "Must specify vary flags for seven parameters (ks,rs,rt,q,theta,xc,yc) in model tnfw";
+								else complain_str = "Must specify vary flags for seven parameters (p1,p2,rt,q,theta,xc,yc) in model tnfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
 									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -3021,9 +3046,13 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, ks, rs, rt, q, theta, xc, yc);
+							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, rt, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (set_median_concentration) {
+								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
+								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
+							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -5742,7 +5771,7 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plotkappa")
 		{
-			if (terminal != TEXT) Complain("only text plotting supported for plotkappa");
+			if (terminal != TEXT) Complain("only text plotting supported for plotkappa (switch to 'term text')");
 			if (!islens()) Complain("must specify lens model first");
 			int lens_number = -1;
 			if (words[nwords-1].find("lens=")==0) {
