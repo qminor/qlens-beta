@@ -5901,7 +5901,8 @@ double Lens::chisq_pos_image_plane()
 	return chisq;
 }
 
-double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
+double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
+//double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -5932,6 +5933,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_im
 	double sigsq, signormfac, chisq_each_srcpt, n_matched_images_each_srcpt, rms_err_each_srcpt, dist;
 	rms_imgpos_err = 0;
 	n_matched_images = 0;
+	vector<double> closest_chivals, closest_xvals_model, closest_yvals_model, closest_xvals_data, closest_yvals_data;
 
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
@@ -6005,6 +6007,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_im
 			}
 
 			double chisq_this_img, chi_x, chi_y;
+			int this_src_nimgs = image_data[i].n_images;
 			for (k=0; k < image_data[i].n_images; k++) {
 				sigsq = SQR(image_data[i].sigma_pos[k]);
 				if (syserr_pos != 0.0) {
@@ -6019,6 +6022,16 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_im
 						chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
 						chi_x = (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq);
 						chi_y = (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq);
+						closest_chivals.push_back(abs(chi_x));
+						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
+						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
+						closest_xvals_data.push_back(image_data[i].pos[k][0]);
+						closest_yvals_data.push_back(image_data[i].pos[k][1]);
+						closest_chivals.push_back(abs(chi_y));
+						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
+						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
+						closest_xvals_data.push_back(image_data[i].pos[k][0]);
+						closest_yvals_data.push_back(image_data[i].pos[k][1]);
 
 						if ((group_num==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
@@ -6049,13 +6062,14 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_im
 			delete[] closest_distsqrs;
 		}
 	}
+	if (closest_chivals.size() != 2*n_matched_images_part) die("WTFWEFAEFL:KASEL:FKAWEL:KFWEL:FK!");
+	//cout << "HI THERE " << closest_chivals.size() << " " << n_matched_images_part << endl;
 	if ((group_num==0) and (verbose)) cout << endl;
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&rms_part, &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_matched_images_part, &n_matched_images, 1, MPI_INT, MPI_SUM, sub_comm);
-	MPI_Comm_free(&sub_comm);
 #else
 	chisq = chisq_part;
 	n_tot_images = n_tot_images_part;
@@ -6063,10 +6077,73 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_im
 	rms_imgpos_err = rms_part;
 #endif
 	rms_imgpos_err = sqrt(rms_imgpos_err/n_matched_images);
+	double *chi_all_images = new double[2*n_matched_images];
+	double *model_xvals_all_images = new double[2*n_matched_images];
+	double *model_yvals_all_images = new double[2*n_matched_images];
+	double *data_xvals_all_images = new double[2*n_matched_images];
+	double *data_yvals_all_images = new double[2*n_matched_images];
+	int *nmatched_parts = new int[group_np];
+
+#ifdef USE_MPI
+	int id=0;
+	nmatched_parts[group_id] = 2*n_matched_images_part;
+	for (id=0; id < group_np; id++) {
+		MPI_Bcast(nmatched_parts+id, 1, MPI_INT, id, sub_comm);
+	}
+	int indx=0;
+	for (id=0; id < group_np; id++) {
+		if (group_id==id) {
+			for (i=0; i < nmatched_parts[id]; i++) {
+				chi_all_images[indx+i] = closest_chivals[i];
+				model_xvals_all_images[indx+i] = closest_xvals_model[i];
+				model_yvals_all_images[indx+i] = closest_yvals_model[i];
+				data_xvals_all_images[indx+i] = closest_xvals_data[i];
+				data_yvals_all_images[indx+i] = closest_yvals_data[i];
+			}
+		}
+
+		indx += nmatched_parts[id];
+	}
+	indx=0;
+	for (id=0; id < group_np; id++) {
+		MPI_Bcast(chi_all_images+indx, nmatched_parts[id], MPI_DOUBLE, id, sub_comm);
+		MPI_Bcast(model_xvals_all_images+indx, nmatched_parts[id], MPI_DOUBLE, id, sub_comm);
+		MPI_Bcast(model_yvals_all_images+indx, nmatched_parts[id], MPI_DOUBLE, id, sub_comm);
+		MPI_Bcast(data_xvals_all_images+indx, nmatched_parts[id], MPI_DOUBLE, id, sub_comm);
+		MPI_Bcast(data_yvals_all_images+indx, nmatched_parts[id], MPI_DOUBLE, id, sub_comm);
+		indx += nmatched_parts[id];
+	}
+	MPI_Comm_free(&sub_comm);
+#else
+	for (i=0; i < 2*n_matched_images; i++) {
+		chi_all_images[i] = closest_chivals[i];
+		model_xvals_all_images[i] = closest_xvals_model[i];
+		model_yvals_all_images[i] = closest_yvals_model[i];
+		data_xvals_all_images[i] = closest_xvals_data[i];
+		data_yvals_all_images[i] = closest_yvals_data[i];
+	}
+#endif
+	if ((group_id==0) and (output_residuals_to_file)) {
+		sort(2*n_matched_images,chi_all_images,model_xvals_all_images,model_yvals_all_images,data_xvals_all_images,data_yvals_all_images);
+		double frac;
+		ofstream outfile(output_filename.c_str());
+		outfile << "#chi fraction(>chi) model_x model_y data_x data_y" << endl;
+		for (i=0; i < 2*n_matched_images; i++) {
+			j = 2*n_matched_images-i-1;
+			frac = ((double) j)/(2.0*n_matched_images);
+			outfile << chi_all_images[i] << " " << frac << " " << model_xvals_all_images[i] << " " << model_yvals_all_images[i] << " " << data_xvals_all_images[i] << " " << data_yvals_all_images[i] << endl;
+		}
+	}
 
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	n_visible_images = n_tot_images; // save the total number of visible images produced
-	if ((group_num==0) and (verbose)) cout << "Number of matched image pairs = " << n_matched_images <<", rms_imgpos_error = " << rms_imgpos_err << endl << endl;
+	if ((group_id==0) and (verbose)) cout << "Number of matched image pairs = " << n_matched_images <<", rms_imgpos_error = " << rms_imgpos_err << endl << endl;
+	delete[] nmatched_parts;
+	delete[] chi_all_images;
+	delete[] model_xvals_all_images;
+	delete[] model_yvals_all_images;
+	delete[] data_xvals_all_images;
+	delete[] data_yvals_all_images;
 	return chisq;
 }
 
@@ -8670,14 +8747,14 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		int n_matched_imgs;
 		if (use_image_plane_chisq) {
 			used_imgplane_chisq = true;
-			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,rms_err,n_matched_imgs);
+			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 			else chisq = fitmodel->chisq_pos_image_plane();
 		}
 		else {
 			used_imgplane_chisq = false;
 			chisq = fitmodel->chisq_pos_source_plane();
 			if (chisq < chisq_imgplane_substitute_threshold) {
-				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,rms_err,n_matched_imgs);
+				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane();
 				used_imgplane_chisq = true;
 			}

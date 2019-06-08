@@ -68,6 +68,117 @@ void Sort::sort(const int n, double arr[])
 	}
 }
 
+void Sort::sort(const int n, double arr[], double brr[], double crr[], double drr[], double err[]) // This is why you should use templates. Ugh
+{
+	const int M = 7;
+	const int nstack = 50;
+
+	int i, j, k;
+	int ir = n - 1, l = 0;
+	int jstack = -1;
+	double a, b, c, d, e, temp;
+
+	int *istack = new int[nstack];
+	for (;;) {
+		if (ir-l < M) {
+			for (j=l+1; j <= ir; j++) {
+				a = arr[j];
+				b = brr[j];
+				c = crr[j];
+				d = drr[j];
+				e = err[j];
+				for (i = j-1; i >= l; i--) {
+					if (arr[i] <= a) break;
+					arr[i+1] = arr[i];
+					brr[i+1] = brr[i];
+					crr[i+1] = crr[i];
+					drr[i+1] = drr[i];
+					err[i+1] = err[i];
+				}
+				arr[i+1] = a;
+				brr[i+1] = b;
+				crr[i+1] = c;
+				drr[i+1] = d;
+				err[i+1] = e;
+			}
+			if (jstack < 0) {
+				delete[] istack;
+				return;
+			}
+			ir = istack[jstack--];
+			l = istack[jstack--];
+		} else {
+			k = (l+ir) >> 1;
+			SWAP(arr[k],arr[l+1])
+			SWAP(brr[k],brr[l+1])
+			SWAP(crr[k],crr[l+1])
+			SWAP(drr[k],drr[l+1])
+			SWAP(err[k],err[l+1])
+			if (arr[l] > arr[ir]) {
+				SWAP(arr[l],arr[ir])
+				SWAP(brr[l],brr[ir])
+				SWAP(crr[l],crr[ir])
+				SWAP(drr[l],drr[ir])
+				SWAP(err[l],err[ir])
+			}
+			if (arr[l+1] > arr[ir]) {
+				SWAP(arr[l+1],arr[ir])
+				SWAP(brr[l+1],brr[ir])
+				SWAP(crr[l+1],crr[ir])
+				SWAP(drr[l+1],drr[ir])
+				SWAP(err[l+1],err[ir])
+			}
+			if (arr[l] > arr[l+1]) {
+				SWAP(arr[l],arr[l+1])
+				SWAP(brr[l],brr[l+1])
+				SWAP(crr[l],crr[l+1])
+				SWAP(drr[l],drr[l+1])
+				SWAP(err[l],err[l+1])
+			}
+			i = l + 1;
+			j = ir;
+			a = arr[l+1];
+			b = brr[l+1];
+			c = crr[l+1];
+			d = drr[l+1];
+			e = err[l+1];
+			for (;;) {
+				do i++; while (arr[i] < a);
+				do j--; while (arr[j] > a);
+				if (j < i) break;
+				SWAP(arr[i],arr[j])
+				SWAP(brr[i],brr[j])
+				SWAP(crr[i],crr[j])
+				SWAP(drr[i],drr[j])
+				SWAP(err[i],err[j])
+			}
+			arr[l+1] = arr[j];
+			arr[j] = a;
+			brr[l+1] = brr[j];
+			brr[j] = b;
+			crr[l+1] = crr[j];
+			crr[j] = c;
+			drr[l+1] = drr[j];
+			drr[j] = d;
+			err[l+1] = err[j];
+			err[j] = e;
+			jstack += 2;
+			if (jstack >= nstack) die("nstack too small in routine sort2");
+			if (ir-i+1 >= j-l) {
+				istack[jstack] = ir;
+				istack[jstack-1] = i;
+				ir = j - 1;
+			} else {
+				istack[jstack] = j - 1;
+				istack[jstack-1] = l;
+				l = i;
+			}
+		}
+	}
+}
+
+
+
 void Sort::sort(const int n, double arr[], double brr[])
 {
 	const int M = 7;

@@ -4695,7 +4695,7 @@ void Lens::process_commands(bool read_file)
 					// You would have to handle the output from here, and do away with the output_images_single_source(...) function which is a bad
 					// way to do it anyway.
 					// MAKE THIS UPGRADE LATER!!!!!!!!!!!
-					chisq_pos_image_plane_diagnostic(false,rms_err,nmatched);
+					chisq_pos_image_plane_diagnostic(false,false,rms_err,nmatched);
 					if (mpi_id==0) cout << "# matched image pairs = " << nmatched << ", rms_imgpos_error = " << rms_err << endl << endl;
 					delete[] srcflux;
 					delete[] srcpts;
@@ -5109,6 +5109,18 @@ void Lens::process_commands(bool read_file)
 					}
 					chisq_single_evaluation(showdiag,true);
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
+				}
+				else if (words[1]=="output_chivals") {
+					string filename = "fit_chivals.dat";
+					if (nwords > 3) Complain("only one argument to 'fit output_imgpos_chivals' allowed (output filename)");
+					if (nwords == 3) {
+						filename.assign(words[2]);
+					}
+					if (group_num==0) {
+						double rms_err;
+						int nmatched;
+						chisq_pos_image_plane_diagnostic(false,true,rms_err,nmatched,filename);
+					}
 				}
 				else if (words[1]=="label")
 				{

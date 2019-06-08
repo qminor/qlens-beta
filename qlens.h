@@ -928,7 +928,8 @@ public:
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
-	double chisq_pos_image_plane_diagnostic(const bool verbose, double& rms_imgpos_err, int& n_matched_images);
+	//double chisq_pos_image_plane_diagnostic(const bool verbose, double& rms_imgpos_err, int& n_matched_images);
+	double chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double& rms_imgpos_err, int& n_matched_images, const string output_filename = "fit_chivals.dat");
 
 	double chisq_flux();
 	double chisq_time_delays();
