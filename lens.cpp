@@ -6167,6 +6167,11 @@ void Lens::output_imgplane_chisq_vals()
 		lensvector *srcpts = new lensvector[n_sourcepts_fit];
 		output_analytic_srcpos(srcpts);
 		for (int i=0; i < n_sourcepts_fit; i++) {
+			cout << "src" << i << "_x=" << srcpts[i][0] << " src" << i << "_y=" << srcpts[i][1];
+			cout << endl;
+		}
+
+		for (int i=0; i < n_sourcepts_fit; i++) {
 			sourcepts_fit[i][0] = srcpts[i][0];
 			sourcepts_fit[i][1] = srcpts[i][1];
 		}
@@ -7824,9 +7829,12 @@ void Lens::multinest(const bool resume_sampling)
 #endif
 
 	// Now convert the MultiNest output to a form that mkdist can read
-	if (group_num==0) {
-		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
-	}
+	double lnZ;
+	double *xparams;
+	double *params;
+	double *covs;
+	double *avgs;
+	double minchisq = 1e30;
 	if (mpi_id==0) {
 		string stats_filename = filename + "stats.dat";
 		ifstream stats_in(stats_filename.c_str());
@@ -7834,7 +7842,6 @@ void Lens::multinest(const bool resume_sampling)
 		for (int i=0; i < 5; i++) {
 			stats_in >> dum;
 		}
-		double lnZ;
 		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
@@ -7861,12 +7868,11 @@ void Lens::multinest(const bool resume_sampling)
 		}
 
 		double weight, chi2;
-		double minchisq = 1e30;
 		int n_tot_params = n_fit_parameters + n_derived_params;
-		double *xparams = new double[n_tot_params];
-		double *params = new double[n_tot_params];
-		double *covs = new double[n_tot_params];
-		double *avgs = new double[n_tot_params];
+		xparams = new double[n_tot_params];
+		params = new double[n_tot_params];
+		covs = new double[n_tot_params];
+		avgs = new double[n_tot_params];
 		int i;
 		double weighttot = 0;
 		for (int i=0; i < n_tot_params; i++) {
@@ -7898,7 +7904,16 @@ void Lens::multinest(const bool resume_sampling)
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
+	}
 
+#ifdef USE_MPI
+		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+#endif
+	if (group_num==0) {
+		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
+	}
+
+	if (mpi_id==0) {
 		cout << endl;
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
@@ -7933,10 +7948,6 @@ void Lens::multinest(const bool resume_sampling)
 		delete[] avgs;
 		delete[] covs;
 	}
-#ifdef USE_MPI
-		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
-#endif
-
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
@@ -8066,6 +8077,8 @@ void Lens::polychord(const bool resume_previous)
 
 	bestfitparams.input(n_fit_parameters);
 	// Now convert the PolyChord output to a form that mkdist can read
+	double *params, *covs, *avgs;
+	double lnZ;
 	if (mpi_id==0) {
 		const int n_characters = 16384;
 		char line[n_characters];
@@ -8079,7 +8092,6 @@ void Lens::polychord(const bool resume_previous)
 		for (i=0; i < 2; i++) {
 			stats_in >> dum;
 		}
-		double lnZ;
 		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
@@ -8105,9 +8117,9 @@ void Lens::polychord(const bool resume_previous)
 		double weight, chi2;
 		double minchisq = 1e30;
 		int n_tot_params = n_fit_parameters + n_derived_params;
-		double *params = new double[n_tot_params];
-		double *covs = new double[n_tot_params];
-		double *avgs = new double[n_tot_params];
+		params = new double[n_tot_params];
+		covs = new double[n_tot_params];
+		avgs = new double[n_tot_params];
 		double weighttot = 0;
 		for (int i=0; i < n_tot_params; i++) {
 			covs[i] = 0;
@@ -8136,8 +8148,17 @@ void Lens::polychord(const bool resume_previous)
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
-		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
+	}
 
+
+#ifdef USE_MPI
+	MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+#endif
+	if (group_num==0) {
+		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
+	}
+
+	if (mpi_id==0) {
 		cout << endl;
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
@@ -8171,9 +8192,6 @@ void Lens::polychord(const bool resume_previous)
 		delete[] avgs;
 		delete[] covs;
 	}
-#ifdef USE_MPI
-		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
-#endif
 
 	fit_restore_defaults();
 	delete fitmodel;

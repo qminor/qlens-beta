@@ -8502,11 +8502,11 @@ void Lens::process_commands(bool read_file)
 			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
-			plot_weak_lensing_shear_field();
+			//plot_weak_lensing_shear_field();
 			//if (add_dparams_to_chain()==false) Complain("could not process chain data");
 			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
-			//output_imgplane_chisq_vals();
+			output_imgplane_chisq_vals();
 			//add_derived_param(KappaR,5.0,-1);
 			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
