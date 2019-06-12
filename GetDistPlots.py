@@ -71,9 +71,10 @@ class GetDistPlotSettings:
                 return path
         return self.plot_data[0] + os.sep + root
 
-    def setSubplotSize(self, size_inch, width_scale=1.0, marker_width_scale=1.0):
+    def setSubplotSize(self, size_inch, width_scale=1.0, marker_width_scale=1.0, fontsize=0):
         self.subplot_size_inch = size_inch
-        self.lab_fontsize = 7 + 8 * self.subplot_size_inch
+        if fontsize==0: self.lab_fontsize = 7 + 8 * self.subplot_size_inch
+        else: self.lab_fontsize = fontsize
         self.axes_fontsize = 4 + 2.5 * self.subplot_size_inch
         self.legend_fontsize = self.axes_fontsize
         self.font_size = self.lab_fontsize
@@ -344,6 +345,9 @@ class GetDistPlotter():
         contour(density.x1, density.x2, density.pts, self.settings.num_shades, cmap=self.settings.colormap)
 #        contour(cs, hold='on')
 
+    def addpoint(self, x, y, point_type='x', marker_size=12, color='black', width=2):
+        plot(x,y,marker=point_type,markersize=marker_size,markerfacecolor=color,markeredgecolor=color,markeredgewidth=width)
+
     def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, add_legend_proxy=True, **ax_args):
         if self.fig is None: self.make_figure()
         if isinstance(roots, basestring):roots = [roots]
@@ -366,6 +370,7 @@ class GetDistPlotter():
         self.setAxes(param_pair, **ax_args)
         if xmark is not None and ymark is not None:
             plot(xmark,ymark,c=mark_color,marker=truemarker,markersize=truemarksize,mew=self.settings.axis_marker_lw)
+        #plot(10,15,marker='x',markersize=12)
 
     def add_1d_marker(self, marker, color=None, ls=None):
         self.add_x_marker(marker, color, ls)
@@ -614,7 +619,6 @@ class GetDistPlotter():
                 if lims[1] - tick[-1] < gap_wanted:tick = tick[:-1]
             axis.set_ticks(tick)
             return tick
-
 
     def triangle_plot(self, roots, in_params=None, legend_labels=None, markers=None, show_marker_2d=False, marker_2d='x', marker_color='gray', marker_color_2d=None, plot_3d_with_param=None, filled_compare=False, shaded=False):
         if isinstance(roots, basestring):roots = [roots]

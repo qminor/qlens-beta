@@ -5939,7 +5939,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
-		if ((group_num==0) and (verbose)) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		if ((mpi_id==0) and (verbose)) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			n_matched_images_each_srcpt = 0;
@@ -5970,7 +5970,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 			n_tot_images_part += n_visible_images;
 			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
 				chisq_part += 1e30;
-				if ((group_num==0) and (verbose)) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
+				if ((mpi_id==0) and (verbose)) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
 			}
 
 			int n_dists = n_visible_images*image_data[i].n_images;
@@ -6014,7 +6014,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
-				if ((group_num==0) and (verbose)) cout << "source " << i << ", image " << k << ": ";
+				if ((mpi_id==0) and (verbose)) cout << "source " << i << ", image " << k << ": ";
 				if (closest_image_j[k] != -1) {
 					if (image_data[i].use_in_chisq[k]) {
 						rms_err_each_srcpt += closest_distsqrs[k];
@@ -6033,18 +6033,18 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 						closest_xvals_data.push_back(image_data[i].pos[k][0]);
 						closest_yvals_data.push_back(image_data[i].pos[k][1]);
 
-						if ((group_num==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+						if ((mpi_id==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
 					}
-					else if ((group_num==0) and (verbose)) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+					else if ((mpi_id==0) and (verbose)) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
 					chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
-					if ((group_num==0) and (verbose)) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
+					if ((mpi_id==0) and (verbose)) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
 					chisq_each_srcpt += chisq_this_img;
 				}
 			}
-			if ((group_num==0) and (verbose)) {
+			if ((mpi_id==0) and (verbose)) {
 				for (k=0; k < n_images; k++) {
 					if (closest_image_k[k] == -1) cout << "EXTRA IMAGE: source " << i << ", model image " << k << " (" << img[k].pos[0] << "," << img[k].pos[1] << "), magnification = " << img[k].mag << endl << flush;
 				}
@@ -6064,7 +6064,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 	}
 	if (closest_chivals.size() != 2*n_matched_images_part) die("WTFWEFAEFL:KASEL:FKAWEL:KFWEL:FK!");
 	//cout << "HI THERE " << closest_chivals.size() << " " << n_matched_images_part << endl;
-	if ((group_num==0) and (verbose)) cout << endl;
+	if ((mpi_id==0) and (verbose)) cout << endl;
 #ifdef USE_MPI
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&rms_part, &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
@@ -6135,9 +6135,9 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 		}
 	}
 
-	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
+	if ((mpi_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	n_visible_images = n_tot_images; // save the total number of visible images produced
-	if ((group_id==0) and (verbose)) cout << "Number of matched image pairs = " << n_matched_images <<", rms_imgpos_error = " << rms_imgpos_err << endl << endl;
+	if ((mpi_id==0) and (verbose)) cout << "Number of matched image pairs = " << n_matched_images <<", rms_imgpos_error = " << rms_imgpos_err << endl << endl;
 	delete[] nmatched_parts;
 	delete[] chi_all_images;
 	delete[] model_xvals_all_images;
@@ -6183,7 +6183,7 @@ void Lens::output_imgplane_chisq_vals()
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		create_grid(false,zfactors[source_redshift_groups[m]],beta_factors[source_redshift_groups[m]],m);
-		//if (group_num==0) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		//if (mpi_id==0) cout << endl << "zsrc=" << source_redshifts[source_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=source_redshift_groups[m]; i < source_redshift_groups[m+1]; i++) {
 			image *img = get_images(sourcepts_fit[i], n_images, false);
 			n_visible_images = n_images;
@@ -6250,14 +6250,14 @@ void Lens::output_imgplane_chisq_vals()
 				}
 					if (closest_image_j[k] != -1) {
 						if (image_data[i].use_in_chisq[k]) {
-							//if (group_num==0) cout << "chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+							//if (mpi_id==0) cout << "chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 							//cout << (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq) << " " << (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq) << endl << flush;
 							cout << abs((img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq)) << " " << image_data[i].pos[k][0] << " " << image_data[i].pos[k][1] << " " << img[closest_image_j[k]].pos[0] << " " << img[closest_image_j[k]].pos[1] << endl;
 							cout << abs((img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq)) << " " << image_data[i].pos[k][0] << " " << image_data[i].pos[k][1] << " " << img[closest_image_j[k]].pos[0] << " " << img[closest_image_j[k]].pos[1] << endl;
 							//cout << img[closest_image_j[k]].pos[0] << " " << img[closest_image_j[k]].pos[1] << endl;
 							//cout << image_data[i].pos[k][0] << " " << image_data[i].pos[k][1] << endl << endl;
 						}
-						//else if (group_num==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
+						//else if (mpi_id==0) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 					}
 			}
 
@@ -6270,7 +6270,7 @@ void Lens::output_imgplane_chisq_vals()
 			delete[] closest_distsqrs;
 		}
 	}
-	if (group_num==0) cout << endl;
+	if (mpi_id==0) cout << endl;
 #ifdef USE_MPI
 	MPI_Comm_free(&sub_comm);
 #endif
