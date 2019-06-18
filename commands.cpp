@@ -517,22 +517,26 @@ void Lens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
-						cout << "lens tnfw <ks> <rs> <rt> <q/e> [theta] [x-center] [y-center]\n\n"
+						cout << "lens tnfw <ks> <rs> <rt> <q/e> [theta] [x-center] [y-center]            (pmode=0)\n"
+								  "lens tnfw <mvir> <c> <rt_kpc> <q/e> [theta] [x-center] [y-center]       (pmode=1)\n"
+								  "lens tnfw <mvir> <c> <tau> <q/e> [theta] [x-center] [y-center]          (pmode=2)\n"
+								  "lens tnfw <mvir> <rs_kpc> <rt_kpc> <q/e> [theta] [x-center] [y-center]  (pmode=3)\n\n"
 							"Truncated NFW profile from Baltz et al. (2008), which is produced by multiplying the NFW density\n"
-							"profile by a factor (1+(r/rt)^2)^-2, where rt acts as the truncation/tidal radius.\n\n"
-							"Here, <ks> is the mass parameter, <rs> is the scale radius, <rt> is the tidal radius, <q/e> is the\n"
-							"axis ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
-							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
+							"profile by a factor (1+(r/rt)^2)^-2, where rt acts as the truncation/tidal radius. Here,\n"
+							"<ks/mvir> is the mass parameter, <rs> is the scale radius (or <c>=concentration for pmode=1,2),\n"
+							"<rt> is the tidal radius (or <tau>=rt/r200 in pmode=2), <q/e> is the axis ratio or ellipticity\n"
+							"(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in\n"
+							"degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="cnfw")
 						cout << "lens cnfw <ks> <rs> <rc> <q/e> [theta] [x-center] [y-center]          (pmode=0)\n"
 								  "lens cnfw <mvir> <c> <beta> <q/e> [theta] [x-center] [y-center]       (pmode=1)\n"
 								  "lens cnfw <mvir> <rs_kpc> <beta> <q/e> [theta] [x-center] [y-center]  (pmode=2)\n"
-								  "lens cnfw <mvir> <c> <rc_kpc> <q/e> [theta] [x-center] [y-center]  (pmode=3)\n\n"
+								  "lens cnfw <mvir> <c> <rc_kpc> <q/e> [theta] [x-center] [y-center]     (pmode=3)\n\n"
 							"Cored NFW profile with 3d density given by rho = rho_s/((r+rc)*(r+rs)^2) Here, <ks/mvir> is the mass\n"
 							"parameter, <rs> is the scale radius (or <c>=concentration for pmode=1), <rc> is the core radius (or\n"
-							"<beta> = rc/rs for pmodes 1,2), <q/e> is the axis ratio or ellipticity (depending on the ellipticity\n"
+							"<beta> = rc/rs for pmodes 1,2), <q/e> is the axis ratio or ellipticity (depending on ellipticity\n"
 							"mode), and [theta] is the angle of rotation (counterclockwise, in degrees) about the center.\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";

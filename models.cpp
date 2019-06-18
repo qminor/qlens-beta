@@ -1174,6 +1174,7 @@ double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 	xsq = rsq/(rs*rs);
 	tau = rt/rs;
 	tsq = tau*tau;
+	if ((xsq < 1e-6) and (xsq/tsq < 1e-6)) return -ks*(1+log(xsq/4)); // fixes numerical instability in limit of small r
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
 	tmp = 2*(tsq+1+4*(xsq-1))*lens_function_xsq(xsq) + (M_PI*(3*tsq-1) + 2*tau*(tsq-3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq+xsq)-tsq-1) + (-tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx)/CUBE(tau)/sqrttx;
