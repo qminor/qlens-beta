@@ -34,6 +34,9 @@ TriRectangleOverlap *SourcePixelGrid::trirec;
 InterpolationCells *SourcePixelGrid::nearest_interpolation_cells;
 lensvector **SourcePixelGrid::interpolation_pts[3];
 int *SourcePixelGrid::n_interpolation_pts;
+
+// The following should probably just be private, local variables in the relevant functions, that have to keep getting set from the lens pointers.
+// Otherwise it will be bug prone whenever changes are made, since the zfactors/betafactors pointers may be deleted and reassigned
 double *SourcePixelGrid::srcgrid_zfactors;
 double *ImagePixelGrid::imggrid_zfactors;
 double **SourcePixelGrid::srcgrid_betafactors;
@@ -5300,6 +5303,8 @@ void Lens::assign_Lmatrix(bool verbal)
 
 void ImagePixelGrid::find_surface_brightness()
 {
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
 #ifdef USE_OPENMP
 	double wtime0, wtime;
 	if (lens->show_wtime) {
