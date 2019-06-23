@@ -1024,6 +1024,9 @@ public:
 	//void plot_perturber_deflection_vs_area();
 
 	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
+	double rmax_true_mc, menc_true_mc;
+	void plot_mc_curve(const string filename);
+	double croot_eq(const double c);
 };
 
 struct ImageData

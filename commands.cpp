@@ -8532,10 +8532,14 @@ void Lens::process_commands(bool read_file)
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
 		}
 		else if (words[0]=="test2") {
-			double xmin,xmax,ymin,ymax;
-			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
-			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-			plot_shear_field(xmin,xmax,100,ymin,ymax,100);
+			string filename;
+			if (nwords > 1) filename = words[1];
+			else filename = "mcplot.dat";
+			plot_mc_curve(filename);
+			//double xmin,xmax,ymin,ymax;
+			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+			//plot_shear_field(xmin,xmax,100,ymin,ymax,100);
 		}
 		else if (mpi_id==0) Complain("command not recognized");
 	}

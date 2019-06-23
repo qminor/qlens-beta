@@ -5421,6 +5421,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->image_data = image_data;
 		fitmodel->n_sourcepts_fit = n_sourcepts_fit;
 		fitmodel->sourcepts_fit = new lensvector[n_sourcepts_fit];
+		fitmodel->sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
+		fitmodel->sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 		fitmodel->vary_sourcepts_x = new bool[n_sourcepts_fit];
 		fitmodel->vary_sourcepts_y = new bool[n_sourcepts_fit];
 		fitmodel->source_redshifts = new double[n_sourcepts_fit];
@@ -5432,6 +5434,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->vary_sourcepts_y[i] = vary_sourcepts_y[i];
 			fitmodel->sourcepts_fit[i][0] = sourcepts_fit[i][0];
 			fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
+			fitmodel->sourcepts_lower_limit[i][0] = sourcepts_lower_limit[i][0];
+			fitmodel->sourcepts_upper_limit[i][0] = sourcepts_upper_limit[i][0];
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			fitmodel->zfactors[i] = new double[n_lens_redshifts];
 			fitmodel->beta_factors[i] = new double*[n_lens_redshifts-1];
@@ -10284,6 +10288,54 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	if (source_fit_mode==Pixellated_Source) clear_lensing_matrices();
 	clear_pixel_matrices();
 	return chisq;
+}
+
+void Lens::plot_mc_curve(const string filename)
+{
+	// Uncomment below if you don't want to load lens configuration from a script first
+	/*
+	clear_lenses();
+	LensProfile::use_ellipticity_components = true;
+	Shear::use_shear_component_params = true;
+
+	add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
+	lens_list[1]->anchor_center_to_lens(lens_list,0);
+	add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
+	*/
+	double rmax,rmax_true,avgsig,menc,menc_true;
+	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
+	menc_true = mass2d_r(rmax_true,2);
+
+	// overriding the above
+	//rmax_true = 0.07;
+	//menc_true = mass2d_r(rmax_true,2);
+
+	rmax_true_mc = rmax_true; // for root finder
+	menc_true_mc = menc_true; // for root finder
+
+	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
+
+	double (Brent::*mc_eq)(const double);
+	mc_eq = static_cast<double (Brent::*)(const double)> (&Lens::croot_eq);
+
+	double mvir, c, logm, logm_min=8, logm_max=10, logm_step;
+	int i,n_logm = 100;
+	logm_step = (logm_max-logm_min)/(n_logm-1);
+	//ofstream mcout("mc_m2_c1_fit.dat");
+	ofstream mcout(filename.c_str());
+	for (i=0, logm=logm_min; i < n_logm; i++, logm += logm_step) {
+		mvir = pow(10,logm);
+		if (lens_list[2]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+		c = BrentsMethod(mc_eq, 1, 500, 1e-5);
+		mcout << logm << " " << c << endl;
+	}
+}
+
+double Lens::croot_eq(const double c)
+{
+	if (lens_list[2]->update_specific_parameter("c",c)==false) die("could not find parameter");
+	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
 }
 
 /*

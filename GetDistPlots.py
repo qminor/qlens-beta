@@ -348,6 +348,9 @@ class GetDistPlotter():
     def addpoint(self, x, y, point_type='x', marker_size=12, color='black', width=2):
         plot(x,y,marker=point_type,markersize=marker_size,markerfacecolor=color,markeredgecolor=color,markeredgewidth=width)
 
+    def addcurve(self, x, y, label='Loaded from file',color='black'):
+        plt.plot(x,y, label=label,color=color)
+
     def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, add_legend_proxy=True, **ax_args):
         if self.fig is None: self.make_figure()
         if isinstance(roots, basestring):roots = [roots]
