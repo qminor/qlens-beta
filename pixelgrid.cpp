@@ -5586,6 +5586,10 @@ void Lens::clear_pixel_matrices()
 			image_pixel_grid->mapped_source_pixels[i][j].clear();
 		}
 	}
+	if (n_image_prior) {
+		if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
+		source_pixel_n_images = NULL;
+	}
 }
 
 void Lens::PSF_convolution_Lmatrix(bool verbal)
@@ -5731,8 +5735,6 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 	}
 #endif
 
-	delete[] Lmatrix_psf_row_nn;
-
 	if ((mpi_id==0) and (verbal)) cout << "Lmatrix after PSF convolution: Lmatrix now has " << indx << " nonzero elements\n";
 
 	delete[] Lmatrix;
@@ -5743,6 +5745,7 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 	image_pixel_location_Lmatrix = image_pixel_location_Lmatrix_psf;
 	Lmatrix_n_elements = Lmatrix_psf_nn;
 
+	delete[] Lmatrix_psf_row_nn;
 	delete[] Lmatrix_psf_rows;
 	delete[] Lmatrix_psf_index_rows;
 

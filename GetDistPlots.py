@@ -501,6 +501,7 @@ class GetDistPlotter():
                     lines.append(Line2D([0, 1], [0, 1], **args))
             else: lines = self.contours_added
             args = {'ncol':legend_ncol}
+            #self.settings.legend_fontsize = 22
             if self.settings.legend_fontsize is not None: args['prop'] = {'size':self.settings.legend_fontsize}
             if colored_text:
                 args['handlelength'] = 0
