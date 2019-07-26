@@ -248,24 +248,6 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, cons
 	delete[] firstlevel_xvals;
 }
 
-void SourcePixelGrid::read_surface_brightness_data()
-{
-	double sb;
-	int i,j;
-	for (j=0; j < w_N; j++) {
-		for (i=0; i < u_N; i++) {
-			sb_infile >> sb;
-			if (sb==-1e30) // I can't think of a better dividing value to use right now, so -1e30 is what I am using at the moment
-			{
-				cell[i][j]->split_cells(2,2,0);
-				cell[i][j]->read_surface_brightness_data();
-			} else {
-				cell[i][j]->surface_brightness = sb;
-			}
-		}
-	}
-}
-
 // ***NOTE: the following constructor should NOT be used because there are static variables (e.g. levels), so more than one source grid
 // is a bad idea. To make this work, you need to make those variables non-static and contained in the zeroth-level grid (and give subcells
 // a pointer to the zeroth-level grid).
@@ -334,6 +316,24 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, SourcePixelGrid* input_pixel_gri
 	for (int i=0; i < u_N+1; i++)
 		delete[] firstlevel_xvals[i];
 	delete[] firstlevel_xvals;
+}
+
+void SourcePixelGrid::read_surface_brightness_data()
+{
+	double sb;
+	int i,j;
+	for (j=0; j < w_N; j++) {
+		for (i=0; i < u_N; i++) {
+			sb_infile >> sb;
+			if (sb==-1e30) // I can't think of a better dividing value to use right now, so -1e30 is what I am using at the moment
+			{
+				cell[i][j]->split_cells(2,2,0);
+				cell[i][j]->read_surface_brightness_data();
+			} else {
+				cell[i][j]->surface_brightness = sb;
+			}
+		}
+	}
 }
 
 void SourcePixelGrid::copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid)
@@ -1004,19 +1004,13 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	double *area_matrix, *mag_matrix;
 	double *high_sn_area_matrix;
 	mag_matrix = new double[ntot_src];
-	//if (lens->n_image_prior) {
-		area_matrix = new double[ntot_src];
-		high_sn_area_matrix = new double[ntot_src];
-		for (i=0; i < ntot_src; i++) {
-			area_matrix[i] = 0;
-			high_sn_area_matrix[i] = 0;
-			mag_matrix[i] = 0;
-		}
-	//} else {
-		//for (i=0; i < ntot_src; i++) {
-			//mag_matrix[i] = 0;
-		//}
-	//}
+	area_matrix = new double[ntot_src];
+	high_sn_area_matrix = new double[ntot_src];
+	for (i=0; i < ntot_src; i++) {
+		area_matrix[i] = 0;
+		high_sn_area_matrix[i] = 0;
+		mag_matrix[i] = 0;
+	}
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
 			cell[i][j]->overlap_pixel_n.clear();
@@ -1041,7 +1035,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	vector<double> *overlap_matrix_rows = new vector<double>[ntot];
 	vector<int> *overlap_matrix_index_rows = new vector<int>[ntot];
 	vector<double> *overlap_area_matrix_rows;
-	//if (lens->n_image_prior) overlap_area_matrix_rows = new vector<double>[ntot];
 	overlap_area_matrix_rows = new vector<double>[ntot];
 
 	int mpi_chunk, mpi_start, mpi_end;
@@ -1198,7 +1191,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			nsrc = overlap_matrix_index[l];
 			j = nsrc / u_N;
 			i = nsrc % u_N;
-			//cout << overlap_matrix[l] << endl;
 			mag_matrix[nsrc] += overlap_matrix[l];
 			area_matrix[nsrc] += overlap_area_matrix[l];
 			if ((image_pixel_grid->fit_to_data != NULL) and (lens->image_pixel_data->high_sn_pixel[img_i][img_j])) high_sn_area_matrix[nsrc] += overlap_area_matrix[l];
@@ -1214,25 +1206,10 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	}
 #endif
 
-	//for (j=0; j < w_N; j++) {
-		//for (i=0; i < u_N; i++) {
-			//overlap_area=0;
-			//weighted_overlap=0;
-			//for (k=0; k < cell[i][j]->overlaps.size(); k++) {
-				//overlap_area += cell[i][j]->overlaps[k];
-				//weighted_overlap += cell[i][j]->weighted_overlaps[k];
-			//}
-			//cell[i][j]->total_magnification = weighted_overlap * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
-			//cell[i][j]->total_magnification *= image_pixel_grid->triangle_area / cell[i][j]->cell_area;
-			//if (cell[i][j]->total_magnification*0.0) warn("Nonsensical source cell magnification (mag=%g",cell[i][j]->total_magnification);
-			//cell[i][j]->n_images = overlap_area / cell[i][j]->cell_area;
-		//}
-	//}
 	for (nsrc=0; nsrc < ntot_src; nsrc++) {
 		j = nsrc / u_N;
 		i = nsrc % u_N;
 		cell[i][j]->total_magnification = mag_matrix[nsrc] * image_pixel_grid->triangle_area / cell[i][j]->cell_area;
-		//cout << mag_matrix[nsrc] << " " << image_pixel_grid->triangle_area << endl;
 		cell[i][j]->avg_image_pixels_mapped = cell[i][j]->total_magnification * cell[i][j]->cell_area / image_pixel_grid->pixel_area;
 		if (lens->n_image_prior) cell[i][j]->n_images = area_matrix[nsrc] / cell[i][j]->cell_area;
 
@@ -1591,17 +1568,10 @@ void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int 
 	int i,j,k;
 	int Lmatrix_index_initial = index;
 	SourcePixelGrid *subcell;
-	//if ((image_pixel_i==15) and (image_pixel_j==24)) {
-		//for (i=0; i < image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j].size(); i++) {
-			//subcell = image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i];
-			//cout << "maps to source pixel " << subcell->ii << " " << subcell->jj << endl;
-		//}
-	//}
 
 	for (i=0; i < image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j].size(); i++) {
 		subcell = image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i];
 		lens->Lmatrix_index_rows[img_index].push_back(subcell->active_index);
-		//if ((image_pixel_i==41) and (image_pixel_j==11)) cout << "Lmatrix cell: " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i]->center_pt[0] << " " << image_pixel_grid->mapped_source_pixels[image_pixel_i][image_pixel_j][i]->center_pt[1] << endl;
 		overlap = subcell->find_rectangle_overlap(input_corner_pts,twist_pt,twist_status,thread,image_pixel_i,image_pixel_j);
 		lens->Lmatrix_rows[img_index].push_back(overlap);
 		index++;
@@ -1724,7 +1694,6 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 				else {
 					cell[i][j]->maps_to_image_pixel = true;
 					mapped_source_pixels.push_back(cell[i][j]);
-					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped cell: " << cell[i][j]->center_pt[0] << " " << cell[i][j]->center_pt[1] << endl;
 					if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
 					if (((input_center_pt[0] > cell[i][j]->center_pt[0]) and (cell[i][j]->neighbor[0] != NULL)) or (cell[i][j]->neighbor[1] == NULL)) {
 						if (cell[i][j]->neighbor[0]->cell != NULL) {
@@ -1732,12 +1701,10 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[0]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
-							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[0]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[0]);
-					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[0]->center_pt[0] << " " << cell[i][j]->neighbor[0]->center_pt[1] << endl;
 						}
 					} else {
 						if (cell[i][j]->neighbor[1]->cell != NULL) {
@@ -1745,12 +1712,10 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[1]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
-							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[1]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[1]);
-					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[1]->center_pt[0] << " " << cell[i][j]->neighbor[1]->center_pt[1] << endl;
 						}
 					}
 					if (((input_center_pt[1] > cell[i][j]->center_pt[1]) and (cell[i][j]->neighbor[2] != NULL)) or (cell[i][j]->neighbor[3] == NULL)) {
@@ -1759,12 +1724,10 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[2]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
-							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[2]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[2]);
-					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[2]->center_pt[0] << " " << cell[i][j]->neighbor[2]->center_pt[1] << endl;
 						}
 					} else {
 						if (cell[i][j]->neighbor[3]->cell != NULL) {
@@ -1772,12 +1735,10 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 							cellptr = cell[i][j]->neighbor[3]->find_nearest_neighbor_cell(input_center_pt,side);
 							cellptr->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cellptr);
-							//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cellptr->center_pt[0] << " " << cellptr->center_pt[1] << endl;
 						}
 						else {
 							cell[i][j]->neighbor[3]->maps_to_image_pixel = true;
 							mapped_source_pixels.push_back(cell[i][j]->neighbor[3]);
-					//if ((image_pixel_i==13) and (image_pixel_j==26)) cout << "mapped neighbor: " << cell[i][j]->neighbor[3]->center_pt[0] << " " << cell[i][j]->neighbor[3]->center_pt[1] << endl;
 						}
 					}
 				}
@@ -2059,10 +2020,8 @@ SourcePixelGrid* SourcePixelGrid::find_nearest_neighbor_cell(lensvector &input_c
 		for (i=0; i < ncells; i++) {
 			sqr_distance = SQR(cells[i]->center_pt[0] - input_center_pt[0]) + SQR(cells[i]->center_pt[1] - input_center_pt[1]);
 			if ((sqr_distance < min_sqr_distance) or ((sqr_distance==min_sqr_distance) and (i==tiebreaker_side))) {
-				//if (cells[i]->active_pixel) {
-					min_sqr_distance = sqr_distance;
-					closest_cell = cells[i];
-				//}
+				min_sqr_distance = sqr_distance;
+				closest_cell = cells[i];
 			}
 		}
 		if (closest_cell==NULL) {
@@ -2355,7 +2314,6 @@ void Lens::generate_Rmatrix_from_hmatrices()
 	bool new_entry;
 	int src_index1, src_index2, col_index, col_i;
 	double tmp, element;
-	int tmp_i;
 
 	for (k=0; k < 2; k++) {
 		hmatrix_rows[k] = new vector<double>[source_npixels];
@@ -2519,7 +2477,6 @@ void Lens::generate_Rmatrix_from_gmatrices()
 	bool new_entry;
 	int src_index1, src_index2, col_index, col_i;
 	double tmp, element;
-	int tmp_i;
 
 	for (k=0; k < 4; k++) {
 		gmatrix_rows[k] = new vector<double>[source_npixels];
@@ -4151,111 +4108,6 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMeth
 	fit_to_data = NULL;
 }
 
-/*
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data) : lens(lens_in)
-{
-	source_fit_mode = mode;
-	ray_tracing_method = method;
-	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
-	xy_N = x_N*y_N;
-	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-	else n_active_pixels = xy_N;
-	corner_pts = new lensvector*[x_N+1];
-	corner_sourcepts = new lensvector*[x_N+1];
-	center_pts = new lensvector*[x_N];
-	center_sourcepts = new lensvector*[x_N];
-	maps_to_source_pixel = new bool*[x_N];
-	fit_to_data = new bool*[x_N];
-	pixel_index = new int*[x_N];
-	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
-	surface_brightness = new double*[x_N];
-	source_plane_triangle1_area = new double*[x_N];
-	source_plane_triangle2_area = new double*[x_N];
-	int i,j;
-	for (i=0; i <= x_N; i++) {
-		corner_pts[i] = new lensvector[y_N+1];
-		corner_sourcepts[i] = new lensvector[y_N+1];
-	}
-	for (i=0; i < x_N; i++) {
-		center_pts[i] = new lensvector[y_N];
-		center_sourcepts[i] = new lensvector[y_N];
-		maps_to_source_pixel[i] = new bool[y_N];
-		fit_to_data[i] = new bool[y_N];
-		pixel_index[i] = new int[y_N];
-		surface_brightness[i] = new double[y_N];
-		source_plane_triangle1_area[i] = new double[y_N];
-		source_plane_triangle2_area[i] = new double[y_N];
-		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-	}
-	imggrid_zfactors = lens->reference_zfactors;
-	imggrid_betafactors = lens->default_zsrc_beta_factors;
-
-	pixel_xlength = (xmax-xmin)/x_N;
-	pixel_ylength = (ymax-ymin)/y_N;
-	max_sb = -1e30;
-	pixel_area = pixel_xlength*pixel_ylength;
-	triangle_area = 0.5*pixel_xlength*pixel_ylength;
-
-#ifdef USE_OPENMP
-	double wtime0, wtime;
-	if (lens->show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
-	#pragma omp parallel
-	{
-		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
-		thread = 0;
-#endif
-		double x,y;
-		lensvector d1,d2,d3,d4;
-		#pragma omp for private(i,j) schedule(dynamic)
-		for (j=0; j <= y_N; j++) {
-			y = pixel_data.yvals[j];
-			for (i=0; i <= x_N; i++) {
-				x = pixel_data.xvals[i];
-				if ((i < x_N) and (j < y_N)) {
-					center_pts[i][j][0] = x + 0.5*pixel_xlength;
-					center_pts[i][j][1] = y + 0.5*pixel_ylength;
-					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-					surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
-					fit_to_data[i][j] = pixel_data.require_fit[i][j];
-					if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
-				}
-				corner_pts[i][j][0] = x;
-				corner_pts[i][j][1] = y;
-				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-			}
-		}
-		#pragma omp for private(i,j) schedule(dynamic)
-		for (j=0; j < y_N; j++) {
-			for (i=0; i < x_N; i++) {
-				d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-				d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-				d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-				d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-				d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-				d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-				d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-				d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
-				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
-			}
-		}
-	}
-#ifdef USE_OPENMP
-	if (lens->show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
-	}
-#endif
-}
-*/
-
 ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data)
 {
 	lens = lens_in;
@@ -4714,7 +4566,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 	}
 	MPI_Comm_free(&sub_comm);
 #endif
-	//double mag;
 	for (n=0; n < ntot_corners; n++) {
 		j = n / (x_N+1);
 		i = n % (x_N+1);
@@ -4729,13 +4580,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 			twist_pts[i][j][0] = twistx[n_cell];
 			twist_pts[i][j][1] = twisty[n_cell];
 			twist_status[i][j] = twiststat[n_cell];
-			//if (lens->split_imgpixels) {
-				//mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				// These numbers are a bit arbitrary--you should come up with a better, more general way to do it
-				//if (mag > 9) {
-					//if (nsplits[i][j]*3 < max_nsplit) nsplits[i][j] *= 3;
-				//}
-			//}
 		}
 	}
 
@@ -5943,61 +5787,6 @@ void Lens::generate_Rmatrix_from_image_plane_curvature()
 			curvature_index[indx+j] = curvature_matrix_index_rows[m][j];
 		}
 	}
-
-	/*
-	double curvsum=0;
-	dvector ivec(image_npixels);
-	dvector jvec(image_npixels);
-	int index;
-	for (j=0; j < image_pixel_grid->y_N; j++) {
-		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if (image_pixel_grid->maps_to_source_pixel[i][j]) {
-				index = image_pixel_grid->pixel_index[i][j];
-				ivec[index] = -2*image_pixel_grid->surface_brightness[i][j];
-				jvec[index] = -2*image_pixel_grid->surface_brightness[i][j];
-				if ((i>0) and (image_pixel_grid->maps_to_source_pixel[i-1][j])) ivec[index] += image_pixel_grid->surface_brightness[i-1][j];
-				if ((i<image_pixel_grid->x_N-1) and (image_pixel_grid->maps_to_source_pixel[i+1][j])) ivec[index] += image_pixel_grid->surface_brightness[i+1][j];
-				if ((j>0) and (image_pixel_grid->maps_to_source_pixel[i][j-1])) ivec[index] += image_pixel_grid->surface_brightness[i][j-1];
-				if ((j<image_pixel_grid->y_N-1) and (image_pixel_grid->maps_to_source_pixel[i][j+1])) ivec[index] += image_pixel_grid->surface_brightness[i][j+1];
-			}
-		}
-	}
-	for (i=0; i < image_npixels; i++) {
-		curvsum_x += ivec[i]*ivec[i];
-		curvsum_y += jvec[i]*jvec[i];
-	}
-
-	dvector ivec2(image_npixels);
-	for (i=0; i < image_npixels; i++) {
-		ivec2[i] = 0;
-		for (j=curvature_row_index[0][i]; j < curvature_row_index[0][i+1]; j++) {
-			ivec2[i] += curvature_matrix[0][j]*source_surface_brightness[curvature_index[0][j]];
-		}
-		jvec2[i] = 0;
-		for (j=curvature_row_index[1][i]; j < curvature_row_index[1][i+1]; j++) {
-			jvec2[i] += curvature_matrix[1][j]*source_surface_brightness[curvature_index[1][j]];
-		}
-
-	}
-	double curvsum2_x=0;
-	double curvsum2_y=0;
-	//for (i=0; i < image_npixels; i++) cout << ivec[i] << " " << ivec2[i] << endl;
-	for (i=0; i < image_npixels; i++) curvsum2_x += ivec2[i]*ivec2[i];
-	for (i=0; i < image_npixels; i++) curvsum2_y += jvec2[i]*jvec2[i];
-	//cout << curvsum << " " << curvsum2 << endl;
-	die();
-	*/
-
-	/*
-	ofstream curv_out("xcurv.dat");
-	for (m=mpi_id; m < image_npixels; m += mpi_np) {
-		for (j=0; j < xcurvature_matrix_row_nn[m]; j++) {
-			curv_out << xcurvature_matrix_index_rows[m][j] << " " << m << ": xcurv= " << xcurvature_matrix_rows[m][j] << endl;
-		}
-	}
-	curv_out.close();
-	*/
-
 	delete[] curvature_matrix_row_nn;
 
 	vector<int> *jvals = new vector<int>[source_npixels];
@@ -6016,7 +5805,6 @@ void Lens::generate_Rmatrix_from_image_plane_curvature()
 
 	int src_index1, src_index2, col_i;
 	double tmp, element;
-	int tmp_i;
 
 	for (i=0; i < image_npixels; i++) {
 		for (j=curvature_row_index[i]; j < curvature_row_index[i+1]; j++) {
@@ -6220,7 +6008,6 @@ void Lens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	bool new_entry;
 	int src_index1, src_index2, col_index, col_i;
 	double tmp, element;
-	int tmp_i;
 	Dvector = new double[source_npixels];
 	for (i=0; i < source_npixels; i++) Dvector[i] = 0;
 
@@ -6445,7 +6232,6 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 	cg_method.set_MPI_comm(&sub_comm);
 #endif
 	for (int i=0; i < source_npixels; i++) temp[i] = 0;
-	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
 	if (regularization_method != None)
 		cg_method.set_determinant_mode(true);
 	else cg_method.set_determinant_mode(false);
@@ -6488,7 +6274,6 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 		}
 	}
 
-	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) {
 	if (regularization_method != None) {
 		cg_method.get_log_determinant(Fmatrix_log_determinant);
 		if ((mpi_id==0) and (verbal)) cout << "log determinant = " << Fmatrix_log_determinant << endl;
@@ -6671,20 +6456,17 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 
    status = umfpack_di_solve(UMFPACK_A, Fmatrix_unsymmetric_cols, Fmatrix_unsymmetric_indices, Fmatrix_unsymmetric, temp, Dvector, Numeric, Control, Info);
 
-	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) calculate_determinant = true; // specifies to calculate determinant
 	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
 
 	if ((n_image_prior) or (outside_sb_prior)) {
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
-			//if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
 			source_surface_brightness[i] = temp[i];
 			if (source_surface_brightness[i] > max_pixel_sb) {
 				max_pixel_sb = source_surface_brightness[i];
 				max_sb_i = i;
 			}
-				//cout << source_surface_brightness[i] << " ";
 		}
 		if (n_image_prior) {
 			n_images_at_sbmax = source_pixel_n_images[max_sb_i];
@@ -6700,9 +6482,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 		}
 	} else {
 		for (int i=0; i < source_npixels; i++) {
-			//if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
 			source_surface_brightness[i] = temp[i];
-			//cout << source_surface_brightness[i] << " ";
 		}
 	}
 	if (calculate_determinant) {
@@ -6712,14 +6492,11 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 			die("WTF!");
 		}
 		umfpack_di_free_numeric(&Numeric);
-		//cout << "Fmatrix mantissa=" << mantissa << ", exponent=" << exponent << endl;
 		Fmatrix_log_determinant = log(mantissa) + exponent*log(10);
-		//cout << "Fmatrix_log_determinant = " << Fmatrix_log_determinant << endl;
 
 		int Rmatrix_nonzero_elements = Rmatrix_index[source_npixels]-1;
 		int Rmatrix_offdiags = Rmatrix_index[source_npixels]-1-source_npixels;
 		int Rmatrix_unsymmetric_nonzero_elements = source_npixels + 2*Rmatrix_offdiags;
-		//int Rmatrix_nonzero_elements = source_npixels + 2*Rmatrix_offdiags;
 		if (Rmatrix_nonzero_elements==0) {
 			cout << "nsource_pixels=" << source_npixels << endl;
 			die("Rmatrix has zero size");
@@ -6728,9 +6505,6 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 		// Now we construct the transpose of Rmatrix so we can cast it into "unsymmetric" format for UMFPACK (by including offdiagonals on either side of diagonal elements)
 		double *Rmatrix_transpose = new double[Rmatrix_nonzero_elements+1];
 		int *Rmatrix_transpose_index = new int[Rmatrix_nonzero_elements+1];
-
-		//int k,jl,jm,jp,ju,m,n2,noff,inc,iv;
-		//double v;
 
 		n2=Rmatrix_index[0];
 		for (j=0; j < n2-1; j++) Rmatrix_transpose[j] = Rmatrix[j];
@@ -6883,7 +6657,6 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 #ifdef USE_MPI
 	MPI_Comm this_comm;
 	MPI_Comm_create(*my_comm, *my_group, &this_comm);
-	//cout << "NP: " << mpi_np << " " << mpi_ngroups << " " << group_np << " " << mpi_id << " " << group_id << " " << endl << flush;
 #endif
 
 #ifndef USE_MUMPS
@@ -6955,7 +6728,6 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		mumps_solver->icntl[2] = MUMPS_SILENT;
 		mumps_solver->icntl[3] = MUMPS_SILENT;
 	}
-	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction))) mumps_solver->icntl[32]=1; // specifies to calculate determinant
 	if (regularization_method != None) mumps_solver->icntl[32]=1; // specifies to calculate determinant
 	else mumps_solver->icntl[32] = 0;
 	if (parallel_mumps) {
@@ -7010,7 +6782,6 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 		}
 	}
 
-	//if ((regularization_method != None) and ((vary_regularization_parameter) or (vary_pixel_fraction)))
 	if (regularization_method != None)
 	{
 		Fmatrix_log_determinant = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);

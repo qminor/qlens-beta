@@ -1765,7 +1765,7 @@ void Lens::process_commands(bool read_file)
 					cout << "raytrace_method <method>\n\n"
 						"Set the method for ray tracing image pixels to source pixels (using the 'sbmap' commands.\n"
 						"Available methods are:\n\n"
-						"interpolation -- interpolate surface brightness using linear interpolation in the three nearest\n"
+						"interpolate -- interpolate surface brightness using linear interpolation in the three nearest\n"
 						"                 source pixels.\n"
 						"direct -- surface brightness of nearest source pixel is used.\n"
 						"overlap -- after ray-tracing a pixel to the source plane, find the overlap area with all source\n"
@@ -1928,7 +1928,7 @@ void Lens::process_commands(bool read_file)
 					cout << "srcgrid: (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
 					if (auto_sourcegrid) cout << " (auto_srcgrid on)";
 					cout << endl;
-					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "area overlap\n" : ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) ? "linear 3-point interpolation\n" : ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) ? "direct (nearest source pixel used)\n" : "unknown\n");
+					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "overlap (pixel overlap area)\n" : ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) ? "inerpolate (linear 3-point interpolation)\n" : ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) ? "direct (nearest source pixel used)\n" : "unknown\n");
 					cout << "sim_pixel_noise = " << sim_pixel_noise << endl;
 					cout << "psf_width: (" << psf_width_x << "," << psf_width_y << ")\n";
 					cout << "psf_threshold = " << psf_threshold << endl;
@@ -8404,15 +8404,15 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="raytrace_method") {
 			if (nwords==1) {
 				if (mpi_id==0) {
-					if (ray_tracing_method==Area_Overlap) cout << "Ray tracing method: area overlap" << endl;
-					else if ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) cout << "Ray tracing method: linear 3-point interpolation" << endl;
+					if (ray_tracing_method==Area_Overlap) cout << "Ray tracing method: overlap (pixel overlap area)" << endl;
+					else if ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) cout << "Ray tracing method: interpolate (linear 3-point interpolation)" << endl;
 					else if ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) cout << "Ray tracing method: direct (nearest source pixel used)" << endl;
 					else cout << "Unknown ray tracing method" << endl;
 				}
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 				if (setword=="overlap") ray_tracing_method = Area_Overlap;
-				else if (setword=="interpolate") ray_tracing_method = Interpolate;
+				else if (setword=="interpolate") { ray_tracing_method = Interpolate; interpolate_sb_3pt = true; }
 				else if (setword=="direct") { ray_tracing_method = Interpolate; interpolate_sb_3pt = false; }
 				else Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
@@ -8536,6 +8536,16 @@ void Lens::process_commands(bool read_file)
 			if (nwords > 1) filename = words[1];
 			else filename = "mcplot.dat";
 			plot_mc_curve(filename);
+			//double xmin,xmax,ymin,ymax;
+			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+			//plot_shear_field(xmin,xmax,100,ymin,ymax,100);
+		}
+		else if (words[0]=="nfw_newc") {
+			double newc;
+			if (nwords > 1) { ws[1] >> newc; }
+			else die("you fucked up");
+			find_equiv_mvir(newc);
 			//double xmin,xmax,ymin,ymax;
 			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;

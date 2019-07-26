@@ -685,6 +685,8 @@ Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, c
 	s0 = s0_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
+	assign_param_pointers();
+	assign_paramnames();
 }
 
 Sersic::Sersic(const Sersic* sb_in)
@@ -706,7 +708,7 @@ void Sersic::update_meta_parameters()
 
 void Sersic::assign_paramnames()
 {
-	paramnames[0] = "s0";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "0";
+	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
 	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	set_geometric_paramnames(3);

@@ -56,6 +56,288 @@ lensvector *Lens::defs, **Lens::defs_subtot, *Lens::defs_i, *Lens::xvals_i;
 lensmatrix *Lens::jacs, *Lens::hesses, **Lens::hesses_subtot, *Lens::hesses_i, *Lens::Amats_i;
 int *Lens::indxs;
 
+// The ParamSettings stuff should go in a separate cpp file!! Doesn't belong in lens.cpp
+void ParamSettings::update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
+{
+	int i;
+	if (nparams==nparams_in) {
+		// update parameter names just in case
+		for (i=0; i < nparams_in; i++) {
+			param_names[i] = names[i];
+		}
+		return;
+	}
+	int newparams = nparams_in - nparams;
+	ParamPrior** newpriors = new ParamPrior*[nparams_in];
+	ParamTransform** newtransforms = new ParamTransform*[nparams_in];
+	double* new_stepsizes = new double[nparams_in];
+	bool* new_auto_stepsize = new bool[nparams_in];
+	bool* new_subplot_param = new bool[nparams_in];
+	double* new_penalty_limits_lo = new double[nparams_in];
+	double* new_penalty_limits_hi = new double[nparams_in];
+	double* new_prior_norms = new double[nparams_in];
+	bool* new_use_penalty_limits = new bool[nparams_in];
+	if (param_names != NULL) delete[] param_names;
+	param_names = new string[nparams_in];
+	if (nparams_in > nparams) {
+		for (i=0; i < nparams; i++) {
+			newpriors[i] = new ParamPrior(priors[i]);
+			newtransforms[i] = new ParamTransform(transforms[i]);
+			new_stepsizes[i] = stepsizes[i];
+			new_auto_stepsize[i] = auto_stepsize[i];
+			new_subplot_param[i] = subplot_param[i];
+			new_penalty_limits_lo[i] = penalty_limits_lo[i];
+			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_prior_norms[i] = prior_norms[i];
+			new_use_penalty_limits[i] = use_penalty_limits[i];
+			param_names[i] = names[i];
+		}
+		for (i=nparams; i < nparams_in; i++) {
+			newpriors[i] = new ParamPrior();
+			newtransforms[i] = new ParamTransform();
+			param_names[i] = names[i];
+			new_stepsizes[i] = stepsizes_in[i];
+			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+			new_subplot_param[i] = false; 
+			new_penalty_limits_lo[i] = -1e30;
+			new_penalty_limits_hi[i] = 1e30;
+			new_prior_norms[i] = 1.0;
+			new_use_penalty_limits[i] = false;
+		}
+	} else {
+		for (i=0; i < nparams_in; i++) {
+			newpriors[i] = new ParamPrior(priors[i]);
+			newtransforms[i] = new ParamTransform(transforms[i]);
+			new_stepsizes[i] = stepsizes[i];
+			new_auto_stepsize[i] = auto_stepsize[i];
+			new_subplot_param[i] = subplot_param[i];
+			new_penalty_limits_lo[i] = penalty_limits_lo[i];
+			new_penalty_limits_hi[i] = penalty_limits_hi[i];
+			new_prior_norms[i] = prior_norms[i];
+			new_use_penalty_limits[i] = use_penalty_limits[i];
+			param_names[i] = names[i];
+		}
+	}
+	if (nparams > 0) {
+		for (i=0; i < nparams; i++) {
+			delete priors[i];
+			delete transforms[i];
+		}
+		delete[] priors;
+		delete[] transforms;
+		delete[] stepsizes;
+		delete[] auto_stepsize;
+		delete[] subplot_param;
+		delete[] penalty_limits_lo;
+		delete[] penalty_limits_hi;
+		delete[] prior_norms;
+		delete[] use_penalty_limits;
+	}
+	priors = newpriors;
+	transforms = newtransforms;
+	stepsizes = new_stepsizes;
+	auto_stepsize = new_auto_stepsize;
+	subplot_param = new_subplot_param;
+	penalty_limits_lo = new_penalty_limits_lo;
+	penalty_limits_hi = new_penalty_limits_hi;
+	prior_norms = new_prior_norms;
+	use_penalty_limits = new_use_penalty_limits;
+	nparams = nparams_in;
+}
+void ParamSettings::insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
+{
+	int i, j, np = pf-pi;
+	int new_nparams = nparams + np;
+	ParamPrior** newpriors = new ParamPrior*[new_nparams];
+	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
+	double* new_stepsizes = new double[new_nparams];
+	bool* new_auto_stepsize = new bool[new_nparams];
+	bool* new_subplot_param = new bool[new_nparams];
+	double* new_penalty_limits_lo = new double[new_nparams];
+	double* new_penalty_limits_hi = new double[new_nparams];
+	double* new_prior_norms = new double[new_nparams];
+	bool* new_use_penalty_limits = new bool[new_nparams];
+	string* new_param_names = new string[new_nparams];
+	for (i=0; i < pi; i++) {
+		newpriors[i] = new ParamPrior(priors[i]);
+		newtransforms[i] = new ParamTransform(transforms[i]);
+		new_auto_stepsize[i] = auto_stepsize[i];
+		new_subplot_param[i] = subplot_param[i];
+		new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
+		new_penalty_limits_lo[i] = penalty_limits_lo[i];
+		new_penalty_limits_hi[i] = penalty_limits_hi[i];
+		new_prior_norms[i] = prior_norms[i];
+		new_use_penalty_limits[i] = use_penalty_limits[i];
+		new_param_names[i] = names[i];
+	}
+	for (i=pi; i < pf; i++) {
+		newpriors[i] = new ParamPrior();
+		newtransforms[i] = new ParamTransform();
+		new_stepsizes[i] = stepsizes_in[i];
+		new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+		new_subplot_param[i] = false; // stepsizes for newly added parameters are set to 'auto'
+		new_penalty_limits_lo[i] = -1e30;
+		new_penalty_limits_hi[i] = 1e30;
+		new_prior_norms[i] = 1.0;
+		new_use_penalty_limits[i] = false;
+		new_param_names[i] = names[i];
+	}
+	for (j=pf,i=pi; i < nparams; i++, j++) {
+		newpriors[j] = new ParamPrior(priors[i]);
+		newtransforms[j] = new ParamTransform(transforms[i]);
+		new_auto_stepsize[j] = auto_stepsize[i];
+		new_subplot_param[j] = subplot_param[i];
+		new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
+		new_penalty_limits_lo[j] = penalty_limits_lo[i];
+		new_penalty_limits_hi[j] = penalty_limits_hi[i];
+		new_prior_norms[j] = prior_norms[i];
+		new_use_penalty_limits[j] = use_penalty_limits[i];
+		new_param_names[j] = names[i];
+	}
+	if (nparams > 0) {
+		for (i=0; i < nparams; i++) {
+			delete priors[i];
+			delete transforms[i];
+		}
+		delete[] priors;
+		delete[] transforms;
+		delete[] stepsizes;
+		delete[] auto_stepsize;
+		delete[] subplot_param;
+		delete[] penalty_limits_lo;
+		delete[] penalty_limits_hi;
+		delete[] prior_norms;
+		delete[] use_penalty_limits;
+		delete[] param_names;
+	}
+	priors = newpriors;
+	transforms = newtransforms;
+	stepsizes = new_stepsizes;
+	auto_stepsize = new_auto_stepsize;
+	subplot_param = new_subplot_param;
+	penalty_limits_lo = new_penalty_limits_lo;
+	penalty_limits_hi = new_penalty_limits_hi;
+	prior_norms = new_prior_norms;
+	use_penalty_limits = new_use_penalty_limits;
+	param_names = new_param_names;
+	nparams = new_nparams;
+}
+bool ParamSettings::remove_params(const int pi, const int pf)
+{
+	if (pf > nparams) return false;
+	int i, j, np = pf-pi;
+	if (np==nparams) {
+		clear_params();
+		return true;
+	}
+	int new_nparams = nparams - np;
+	ParamPrior** newpriors = new ParamPrior*[new_nparams];
+	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
+	double* new_stepsizes = new double[new_nparams];
+	bool* new_auto_stepsize = new bool[new_nparams];
+	bool* new_subplot_param = new bool[new_nparams];
+	double* new_penalty_limits_lo = new double[new_nparams];
+	double* new_penalty_limits_hi = new double[new_nparams];
+	double* new_prior_norms = new double[new_nparams];
+	bool* new_use_penalty_limits = new bool[new_nparams];
+	string* new_param_names = new string[new_nparams];
+	for (i=0; i < pi; i++) {
+		newpriors[i] = new ParamPrior(priors[i]);
+		newtransforms[i] = new ParamTransform(transforms[i]);
+		new_stepsizes[i] = stepsizes[i];
+		new_auto_stepsize[i] = auto_stepsize[i];
+		new_subplot_param[i] = subplot_param[i];
+		new_penalty_limits_lo[i] = penalty_limits_lo[i];
+		new_penalty_limits_hi[i] = penalty_limits_hi[i];
+		new_prior_norms[i] = prior_norms[i];
+		new_use_penalty_limits[i] = use_penalty_limits[i];
+		new_param_names[i] = param_names[i];
+	}
+	for (i=pf,j=pi; i < nparams; i++, j++) {
+		newpriors[j] = new ParamPrior(priors[i]);
+		newtransforms[j] = new ParamTransform(transforms[i]);
+		new_stepsizes[j] = stepsizes[i];
+		new_auto_stepsize[j] = auto_stepsize[i];
+		new_subplot_param[j] = subplot_param[i];
+		new_penalty_limits_lo[j] = penalty_limits_lo[i];
+		new_penalty_limits_hi[j] = penalty_limits_hi[i];
+		new_prior_norms[j] = prior_norms[i];
+		new_use_penalty_limits[j] = use_penalty_limits[i];
+		new_param_names[j] = param_names[i];
+	}
+	for (i=0; i < nparams; i++) {
+		delete priors[i];
+		delete transforms[i];
+	}
+	delete[] priors;
+	delete[] transforms;
+	delete[] stepsizes;
+	delete[] auto_stepsize;
+	delete[] subplot_param;
+	delete[] penalty_limits_lo;
+	delete[] penalty_limits_hi;
+	delete[] prior_norms;
+	delete[] use_penalty_limits;
+	delete[] param_names;
+	priors = newpriors;
+	transforms = newtransforms;
+	stepsizes = new_stepsizes;
+	auto_stepsize = new_auto_stepsize;
+	subplot_param = new_subplot_param;
+	penalty_limits_lo = new_penalty_limits_lo;
+	penalty_limits_hi = new_penalty_limits_hi;
+	prior_norms = new_prior_norms;
+	use_penalty_limits = new_use_penalty_limits;
+	param_names = new_param_names;
+	nparams = new_nparams;
+	return true;
+}
+void ParamSettings::add_dparam(string dparam_name)
+{
+	string* new_dparam_names = new string[n_dparams+1];
+	bool* new_subplot_dparam = new bool[n_dparams+1];
+	if (n_dparams > 0) {
+		for (int i=0; i < n_dparams; i++) {
+			new_dparam_names[i] = dparam_names[i];
+			new_subplot_dparam[i] = subplot_dparam[i];
+		}
+		delete[] dparam_names;
+		delete[] subplot_dparam;
+	}
+	new_dparam_names[n_dparams] = dparam_name;
+	new_subplot_dparam[n_dparams] = false;
+	n_dparams++;
+	dparam_names = new_dparam_names;
+	subplot_dparam = new_subplot_dparam;
+}
+void ParamSettings::remove_dparam(int dparam_number)
+{
+	string* new_dparam_names;
+	bool* new_subplot_dparam;
+	if (n_dparams > 1) {
+		string* new_dparam_names = new string[n_dparams-1];
+		bool* new_subplot_dparam = new bool[n_dparams-1];
+		int i,j;
+		for (i=0, j=0; i < n_dparams; i++) {
+			if (i != dparam_number) {
+				new_dparam_names[j] = dparam_names[i];
+				new_subplot_dparam[j] = subplot_dparam[i];
+				j++;
+			}
+		}
+	}
+	delete[] dparam_names;
+	delete[] subplot_dparam;
+	n_dparams--;
+	if (n_dparams > 0) {
+		dparam_names = new_dparam_names;
+		subplot_dparam = new_subplot_dparam;
+	} else {
+		dparam_names = NULL;
+		subplot_dparam = NULL;
+	}
+}
+
 void Lens::allocate_multithreaded_variables(const int& threads)
 {
 	nthreads = threads;
@@ -5421,8 +5703,10 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->image_data = image_data;
 		fitmodel->n_sourcepts_fit = n_sourcepts_fit;
 		fitmodel->sourcepts_fit = new lensvector[n_sourcepts_fit];
-		fitmodel->sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
-		fitmodel->sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+		if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
+			fitmodel->sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
+			fitmodel->sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+		}
 		fitmodel->vary_sourcepts_x = new bool[n_sourcepts_fit];
 		fitmodel->vary_sourcepts_y = new bool[n_sourcepts_fit];
 		fitmodel->source_redshifts = new double[n_sourcepts_fit];
@@ -5434,8 +5718,10 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->vary_sourcepts_y[i] = vary_sourcepts_y[i];
 			fitmodel->sourcepts_fit[i][0] = sourcepts_fit[i][0];
 			fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
-			fitmodel->sourcepts_lower_limit[i][0] = sourcepts_lower_limit[i][0];
-			fitmodel->sourcepts_upper_limit[i][0] = sourcepts_upper_limit[i][0];
+			if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
+				fitmodel->sourcepts_lower_limit[i][0] = sourcepts_lower_limit[i][0];
+				fitmodel->sourcepts_upper_limit[i][0] = sourcepts_upper_limit[i][0];
+			}
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			fitmodel->zfactors[i] = new double[n_lens_redshifts];
 			fitmodel->beta_factors[i] = new double*[n_lens_redshifts-1];
@@ -10337,6 +10623,51 @@ double Lens::croot_eq(const double c)
 	if (lens_list[2]->update_specific_parameter("c",c)==false) die("could not find parameter");
 	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
 }
+
+void Lens::find_equiv_mvir(const double newc)
+{
+	// Uncomment below if you don't want to load lens configuration from a script first
+	/*
+	clear_lenses();
+	LensProfile::use_ellipticity_components = true;
+	Shear::use_shear_component_params = true;
+
+	add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
+	lens_list[1]->anchor_center_to_lens(lens_list,0);
+	add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
+	*/
+	double rmax,rmax_true,avgsig,menc,menc_true;
+	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
+	menc_true = mass2d_r(rmax_true,2);
+
+	// overriding the above
+	//rmax_true = 0.07;
+	//menc_true = mass2d_r(rmax_true,2);
+
+	rmax_true_mc = rmax_true; // for root finder
+	menc_true_mc = menc_true; // for root finder
+
+	double (Brent::*mc_eq)(const double);
+	mc_eq = static_cast<double (Brent::*)(const double)> (&Lens::mroot_eq);
+
+	if (lens_list[2]->update_specific_parameter("c",newc)==false) die("could not find parameter");
+	double lognewm = BrentsMethod(mc_eq, 6, 12, 1e-5);
+	double newm = pow(10,lognewm);
+	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << " mvir=" << newm << endl;
+
+	if (lens_list[2]->update_specific_parameter("mvir",newm)==false) die("could not find parameter");
+	reset();
+}
+
+double Lens::mroot_eq(const double logm)
+{
+	double m = pow(10,logm);
+	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
+	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
+}
+
+
 
 /*
 double Lens::set_required_data_pixel_window(bool verbal)
