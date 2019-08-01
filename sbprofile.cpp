@@ -60,12 +60,15 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
 		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
 	}
+	include_boxiness_parameter = sb_in->include_boxiness_parameter;
+	if (include_boxiness_parameter) c0 = sb_in->c0;
 	assign_param_pointers();
 }
 
 void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
+	include_boxiness_parameter = false;
 	n_fourier_modes = 0;
 	n_vary_params = 0;
 	vary_params.input(n_params);
@@ -83,7 +86,36 @@ void SB_Profile::set_nparams(const int &n_params_in)
 	}
 }
 
-void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double phi_in)
+void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
+{
+	if (include_boxiness_parameter) return;
+	include_boxiness_parameter = true;
+	c0 = c0_in;
+	n_params++;
+
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	if (vary_c0) n_vary_params++;
+
+	vary_params[n_params-1] = vary_c0;
+	paramnames[n_params-1] = "c0";
+	latex_paramnames[n_params-1] = "c";
+	latex_param_subscripts[n_params-1] = "0";
+	stepsizes[n_params-1] = 0.1; // arbitrary
+	set_auto_penalty_limits[n_params-1] = false;
+
+	delete[] param;
+	param = new double*[n_params];
+	assign_param_pointers();
+}
+
+void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2)
 {
 	n_fourier_modes++;
 	fourier_mode_mvals.resize(n_fourier_modes);
@@ -101,11 +133,11 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	set_auto_penalty_limits.resize(n_params);
 	penalty_lower_limits.resize(n_params);
 	penalty_upper_limits.resize(n_params);
-	//if (vary_amp) n_vary_params++;
-	//if (vary_phi) n_vary_params++;
+	if (vary1) n_vary_params++;
+	if (vary2) n_vary_params++;
 
-	vary_params[n_params-2] = false;
-	vary_params[n_params-1] = false;
+	vary_params[n_params-2] = vary1;
+	vary_params[n_params-1] = vary2;
 	stringstream mstream;
 	string mstring;
 	mstream << m_in;
@@ -122,6 +154,30 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	set_auto_penalty_limits[n_params-1] = false;
 	//for (int i=0; i < n_params; i++) cout << stepsizes[i] << " ";
 	//cout << endl;
+
+	delete[] param;
+	param = new double*[n_params];
+	assign_param_pointers();
+}
+
+void SB_Profile::remove_fourier_modes()
+{
+	fourier_mode_sinamp.resize(n_fourier_modes);
+	n_params -= n_fourier_modes*2;
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	n_vary_params = 0;
+	for (int i=0; i < n_params; i++) if (vary_params[i]) n_vary_params++;
+
+	n_fourier_modes = 0;
+	fourier_mode_mvals.resize(n_fourier_modes);
+	fourier_mode_cosamp.resize(n_fourier_modes);
 
 	delete[] param;
 	param = new double*[n_params];
@@ -151,6 +207,7 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	}
 	param[qi++] = &x_center;
 	param[qi++] = &y_center;
+	if (include_boxiness_parameter) param[qi++] = &c0;
 	if (n_fourier_modes > 0) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			param[qi++] = &fourier_mode_cosamp[i];
@@ -358,6 +415,7 @@ void SB_Profile::get_fit_parameter_names(vector<string>& paramnames_vary, vector
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
 			paramnames_vary.push_back(paramnames[i]);
+			//cout << "NAME: " << paramnames_vary[i] << endl;
 			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
 			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
 		}
@@ -550,7 +608,12 @@ double SB_Profile::surface_brightness(double x, double y)
 	}
 
 	if (theta != 0) rotate(x,y);
-	double rsq = x*x + y*y/(q*q);
+	double rsq;
+	if ((include_boxiness_parameter) and (c0 != 0.0)) {
+		rsq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
+	} else {
+		rsq = x*x + y*y/(q*q);
+	}
 	if (n_fourier_modes > 0) {
 		double fourier_factor = 1.0;
 		for (int i=0; i < n_fourier_modes; i++) {
@@ -560,8 +623,6 @@ double SB_Profile::surface_brightness(double x, double y)
 		rsq *= fourier_factor*fourier_factor;
 	}
 	return sb_rsq(rsq);
-	//const double c0 = 0;
-	//return sb_rsq(pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0)));
 }
 
 double SB_Profile::surface_brightness_r(const double r)

@@ -1,5 +1,6 @@
 #include "qlens.h"
 #include "profile.h"
+#include "sbprofile.h"
 #include "errors.h"
 #include "mathexpr.h"
 #include "pixelgrid.h"
@@ -348,8 +349,9 @@ void Lens::process_commands(bool read_file)
 							"Type 'lens' with no arguments to see a numbered list of the current lens models that have been\n"
 							"created, along with their parameter values. To remove a lens or delete the entire configuration,\n"
 							"type 'lens clear'. To update parameters of an existing lens, use 'lens update' (see 'help lens\n" 
-							"update' for usage info). Finally, it is possible to anchor the parameters of one lens to another\n"
-							"lens; type 'help lens anchoring' for info on how to do this.\n\n"
+							"update' for usage info). To change the vary flags for an existing lens, use 'lens changevary\n"
+							"<lens_number>' (see 'help lens changevary' for usage info). Finally, it is possible to anchor the\n"
+							"parameters of one lens to another lens; type 'help lens anchoring' for info on how to do this.\n\n"
 							"Available lens models:   (type 'help lens <lensmodel>' for usage information)\n\n"
 							"\033[4mElliptical mass models:\033[0m\n"  // ASCII codes are for underlining
 							"alpha -- softened power-law profile\n"
@@ -425,6 +427,12 @@ void Lens::process_commands(bool read_file)
 							"lens update 0 b=5 q=0.8 theta=20\n\n"
 							"With the above command, qlens will update only the specific parameters above for lens 0, while leaving the\n"
 							"other parameters unchanged.\n";
+					else if (words[2]=="changevary")
+						cout << "lens changevary <lens_number>\n\n"
+							"Change the parameter vary flags for a specific lens model that has already been created. After specifying\n"
+							"the lens, on the next lens vary flags are entered just as you do when creating the lens model. Note that\n"
+							"the number of vary flags must exactly match the number of parameters for the given lens (except that vary\n"
+							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n";
 					else if (words[2]=="savetab")
 						cout << "lens savetab <lens_number> <filename>\n\n"
 							"Save the interpolation tables from a 'tab' lens model to the specified file '<filename>.tab'. Note\n"
@@ -648,7 +656,6 @@ void Lens::process_commands(bool read_file)
 							"fit dparams ...\n"
 							"fit priors ...\n"
 							"fit transform ...\n"
-							"fit changevary <lens_number>\n"
 							"fit vary_sourcept ...\n"
 							"fit regularization <method>\n\n"
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
@@ -967,12 +974,6 @@ void Lens::process_commands(bool read_file)
 							"sigma_perturb -- The average projected density within r_perturb (see above) of perturbing lens [lens#]\n"
 							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
 							"\n";
-					else if (words[2]=="changevary")
-						cout << "fit changevary <lens_number>\n\n"
-							"Change the parameter vary flags for a specific lens model that has already been created. After specifying\n"
-							"the lens, on the next lens vary flags are entered just as you do when creating the lens model. Note that\n"
-							"the number of vary flags must exactly match the number of parameters for the given lens (except that vary\n"
-							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
 							"fit vary_sourcept <vary_srcx> <vary_srcy>\n\n"
@@ -2498,6 +2499,28 @@ void Lens::process_commands(bool read_file)
 					update_anchored_parameters_and_redshift_data();
 					reset();
 				}
+			}
+			else if (words[1]=="changevary")
+			{
+				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
+				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
+				// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
+				if (nwords != 3) Complain("one argument required for 'lens changevary' (lens number)");
+				int lensnum;
+				if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
+				if (lensnum >= nlens) Complain("specified lens number does not exist");
+				if (read_command(false)==false) return;
+				bool vary_zl = check_vary_z(); // this looks for the 'varyz=#' arg. If it finds it, removes it and sets 'vary_zl' to true; if not, sets vary_zl to 'false'
+				int nparams_to_vary = nwords;
+				boolvector vary_flags(nparams_to_vary+1);
+				for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+				vary_flags[nparams_to_vary] = vary_zl;
+				int nparam;
+				if (set_lens_vary_parameters(lensnum,vary_flags)==false) {
+					int npar = lens_list[lensnum]->n_params;
+					Complain("number of vary flags does not match number of parameters (" << npar << ") for specified lens");
+				}
+				update_specific_parameters = true;
 			}
 			if (!update_specific_parameters) {
 				for (int i=3; i < nwords; i++) {
@@ -4188,6 +4211,8 @@ void Lens::process_commands(bool read_file)
 			vector<double> fourier_Amvals;
 			vector<double> fourier_Bmvals;
 			int fourier_nmodes=0;
+			bool include_boxiness_parameter = false;
+			double c0val = 0;
 
 			if (words[0]=="fit") {
 				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
@@ -4254,7 +4279,51 @@ void Lens::process_commands(bool read_file)
 					fourier_nmodes++;
 				}
 			}
+			for (int i=2; i < nwords; i++) {
+				if ((words[i][0]=='c') and (words[i][1]=='0') and (words[i][2]=='=') and (!update_parameters)) {
+					string c0string;
+					c0string = words[i].substr(3);
+					stringstream c0str;
+					c0str << c0string;
+					if (!(c0str >> c0val)) Complain("invalid c0 value");
+					remove_word(i);
+					include_boxiness_parameter = true;
+				}
+			}
 
+			if ((nwords > 1) and (words[1]=="add_fmodes")) {
+				if (nwords == 3) {
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
+					if (fourier_nmodes==0) Complain("no Fourier modes have been specified (e.g. 'f1=0.01 0.02 f2=0.0 -0.01', etc.)");
+					update_specific_parameters = true;
+					nparams_to_vary = fourier_nmodes*2;
+					vary_flags.input(nparams_to_vary);
+					for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional fourier modes");
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+					int j = 0;
+					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
+					// Should probably just get the vary flags for that source object, tack on the new Fourier vary flags and then use set_sb_vary_parameters instead.
+					for (int i=fourier_nmodes-1; i >= 0; i--) {
+						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j++],vary_flags[j++]);
+					}
+				} else Complain("must specify a source number to add Fourier modes to, followed by modes");
+			}
+			if ((nwords > 1) and (words[1]=="remove_fmodes")) {
+				if (nwords == 3) {
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
+					if (fourier_nmodes!=0) Complain("cannot remove specific Fourier modes (all modes are removed)");
+					update_specific_parameters = true;
+					sb_list[src_number]->remove_fourier_modes();
+				} else Complain("must specify a source number to remove Fourier modes from");
+			}
 			if (update_parameters) {
 				int pos, n_updates = 0;
 				double pval;
@@ -4274,6 +4343,27 @@ void Lens::process_commands(bool read_file)
 					for (int i=0; i < n_updates; i++)
 						if (sb_list[src_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in source " << src_number);
 				}
+			}
+
+			else if (words[1]=="changevary")
+			{
+				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
+				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
+				// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
+				if (nwords != 3) Complain("one argument required for 'src changevary' (src number)");
+				int srcnum;
+				if (!(ws[2] >> srcnum)) Complain("Invalid src number to change vary parameters");
+				if (srcnum >= n_sb) Complain("specified src number does not exist");
+				if (read_command(false)==false) return;
+				int nparams_to_vary = nwords;
+				boolvector vary_flags(nparams_to_vary);
+				for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+				int nparam;
+				if (set_sb_vary_parameters(srcnum,vary_flags)==false) {
+					int npar = sb_list[srcnum]->n_params;
+					Complain("number of vary flags does not match number of parameters (" << npar << ") for specified src");
+				}
+				update_specific_parameters = true;
 			}
 
 			if (update_specific_parameters) ;
@@ -4311,9 +4401,10 @@ void Lens::process_commands(bool read_file)
 					param_vals[0]=sbnorm; param_vals[1]=sig; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 
 					if (vary_parameters) {
+						if (include_boxiness_parameter) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0 parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -4324,8 +4415,9 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
@@ -4369,7 +4461,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
@@ -4481,7 +4573,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(TOPHAT, sb, rad, 0, q, theta, xc, yc);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
@@ -4510,7 +4602,7 @@ void Lens::process_commands(bool read_file)
 					}
 					add_source_object(words[2].c_str(), q, theta, qx, f, xc, yc);
 					for (int i=fourier_nmodes-1; i >= 0; i--) {
-						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 					}
 				}
 				else Complain("spline requires at least 2 parameters (filename, q)");
@@ -4728,27 +4820,6 @@ void Lens::process_commands(bool read_file)
 						}
 						update_parameter_list();
 					} else Complain("Invalid number of arguments for source vary flags");
-				}
-				else if (words[1]=="changevary")
-				{
-					// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
-					// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
-					// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
-					if (nwords != 3) Complain("one argument required for 'fit changevary' (lens number)");
-					int lensnum;
-					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
-					if (lensnum >= nlens) Complain("specified lens number does not exist");
-					if (read_command(false)==false) return;
-					bool vary_zl = check_vary_z(); // this looks for the 'varyz=#' arg. If it finds it, removes it and sets 'vary_zl' to true; if not, sets vary_zl to 'false'
-					int nparams_to_vary = nwords;
-					boolvector vary_flags(nparams_to_vary+1);
-					for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-					vary_flags[nparams_to_vary] = vary_zl;
-					int nparam;
-					if (set_lens_vary_parameters(lensnum,vary_flags)==false) {
-						int npar = lens_list[lensnum]->n_params;
-						Complain("number of vary flags does not match number of parameters (" << npar << ") for specified lens");
-					}
 				}
 				else if (words[1]=="source_mode")
 				{

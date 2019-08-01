@@ -12,6 +12,7 @@ enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile
 {
+	friend class Lens;
 	private:
 	Spline sb_spline;
 	double sb_splint(double);
@@ -21,6 +22,7 @@ class SB_Profile
 	SB_ProfileName sbtype;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived surface brightness models
 	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
+	double c0; // "boxiness" parameter
 	double costheta, sintheta;
 
 	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
@@ -28,6 +30,7 @@ class SB_Profile
 	int n_params, n_vary_params;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
 	int ellipticity_paramnum; // used to keep track of ellipticity parameter so it can be easily converted to degrees and displayed
+	bool include_boxiness_parameter;
 	boolvector vary_params;
 	string model_name;
 	vector<string> paramnames;
@@ -79,7 +82,10 @@ class SB_Profile
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool vary_parameters(const boolvector& vary_params_in);
-	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in);
+	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
+	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
+
+	void remove_fourier_modes();
 
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);

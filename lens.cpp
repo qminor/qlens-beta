@@ -7104,7 +7104,10 @@ void Lens::get_parameter_names()
 		for (i=0; i < n_sb; i++) {
 			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 		}
-		for (i=srcparams_start; i < fit_parameter_names.size(); i++) fit_parameter_names[i] += "_src";
+		for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
+			fit_parameter_names[i] += "_src";
+			//cout << "WTF " << fit_parameter_names[i] << endl;
+		}
 	}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
