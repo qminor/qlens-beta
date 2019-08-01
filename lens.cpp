@@ -192,7 +192,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		new_penalty_limits_hi[j] = penalty_limits_hi[i];
 		new_prior_norms[j] = prior_norms[i];
 		new_use_penalty_limits[j] = use_penalty_limits[i];
-		new_param_names[j] = names[i];
+		new_param_names[j] = param_names[i];
 	}
 	if (nparams > 0) {
 		for (i=0; i < nparams; i++) {
@@ -2356,6 +2356,21 @@ void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, 
 		default:
 			die("Surface brightness profile type not recognized");
 	}
+	n_sb++;
+	sb_list = newlist;
+	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+}
+
+void Lens::add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
+{
+	SB_Profile** newlist = new SB_Profile*[n_sb+1];
+	if (n_sb > 0) {
+		for (int i=0; i < n_sb; i++)
+			newlist[i] = sb_list[i];
+		delete[] sb_list;
+	}
+
+	newlist[n_sb] = new SB_Multipole(a_m, n, m, theta, xc, yc, sine_term);
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
@@ -5814,6 +5829,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 					fitmodel->sb_list[i] = new Gaussian((Gaussian*) sb_list[i]); break;
 				case SERSIC:
 					fitmodel->sb_list[i] = new Sersic((Sersic*) sb_list[i]); break;
+				case SB_MULTIPOLE:
+					fitmodel->sb_list[i] = new SB_Multipole((SB_Multipole*) sb_list[i]); break;
 				case TOPHAT:
 					fitmodel->sb_list[i] = new TopHat((TopHat*) sb_list[i]); break;
 				default:

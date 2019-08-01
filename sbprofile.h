@@ -8,7 +8,7 @@
 #include <vector>
 using namespace std;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, TOPHAT };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile
 {
@@ -38,6 +38,9 @@ class SB_Profile
 	bool include_limits;
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
+	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical isophotes (zero by default)
+	ivector fourier_mode_mvals;
+	dvector fourier_mode_cosamp, fourier_mode_sinamp;
 
 	void set_nparams(const int &n_params_in);
 	void copy_base_source_data(const SB_Profile* sb_in);
@@ -76,6 +79,8 @@ class SB_Profile
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool vary_parameters(const boolvector& vary_params_in);
+	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in);
+
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
@@ -152,6 +157,30 @@ class Sersic : public SB_Profile
 	~Sersic() {}
 
 	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	void print_parameters();
+	double window_rmax();
+};
+
+class SB_Multipole : public SB_Profile
+{
+	private:
+	int m;
+	double A_n, r0, theta_eff;
+	bool sine_term; // specifies whether it is a sine or cosine multipole term
+
+	public:
+	SB_Multipole() : SB_Profile() {}
+	SB_Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine);
+	SB_Multipole(const SB_Multipole* sb_in);
+	~SB_Multipole() {}
+
+	double surface_brightness(double x, double y);
+
 	void assign_paramnames();
 	void assign_param_pointers();
 	void set_auto_stepsizes();

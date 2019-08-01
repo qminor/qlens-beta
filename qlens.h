@@ -826,6 +826,8 @@ public:
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
+	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
+
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);

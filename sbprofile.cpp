@@ -44,7 +44,6 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	paramnames = sb_in->paramnames;
 	latex_paramnames = sb_in->latex_paramnames;
 	latex_param_subscripts = sb_in->latex_param_subscripts;
-	assign_param_pointers();
 	n_vary_params = sb_in->n_vary_params;
 	vary_params.input(sb_in->vary_params);
 
@@ -55,10 +54,19 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		lower_limits_initial.input(sb_in->lower_limits_initial);
 		upper_limits_initial.input(sb_in->upper_limits_initial);
 	}
+	n_fourier_modes = sb_in->n_fourier_modes;
+	if (n_fourier_modes > 0) {
+		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
+		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
+		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
+	}
+	assign_param_pointers();
 }
+
 void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
+	n_fourier_modes = 0;
 	n_vary_params = 0;
 	vary_params.input(n_params);
 	paramnames.resize(n_params);
@@ -73,6 +81,51 @@ void SB_Profile::set_nparams(const int &n_params_in)
 	for (int i=0; i < n_params; i++) {
 		vary_params[i] = false;
 	}
+}
+
+void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double phi_in)
+{
+	n_fourier_modes++;
+	fourier_mode_mvals.resize(n_fourier_modes);
+	fourier_mode_cosamp.resize(n_fourier_modes);
+	fourier_mode_sinamp.resize(n_fourier_modes);
+	fourier_mode_mvals[n_fourier_modes-1] = m_in;
+	fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
+	fourier_mode_sinamp[n_fourier_modes-1] = phi_in;
+	n_params += 2;
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	//if (vary_amp) n_vary_params++;
+	//if (vary_phi) n_vary_params++;
+
+	vary_params[n_params-2] = false;
+	vary_params[n_params-1] = false;
+	stringstream mstream;
+	string mstring;
+	mstream << m_in;
+	mstream >> mstring;
+	paramnames[n_params-2] = "A_" + mstring;
+	paramnames[n_params-1] = "B_" + mstring;
+	latex_paramnames[n_params-2] = "A";
+	latex_param_subscripts[n_params-2] = mstring;
+	latex_paramnames[n_params-1] = "B";
+	latex_param_subscripts[n_params-1] = mstring;
+	stepsizes[n_params-2] = 0.005; // arbitrary
+	stepsizes[n_params-1] = 0.005; // arbitrary
+	set_auto_penalty_limits[n_params-2] = false;
+	set_auto_penalty_limits[n_params-1] = false;
+	//for (int i=0; i < n_params; i++) cout << stepsizes[i] << " ";
+	//cout << endl;
+
+	delete[] param;
+	param = new double*[n_params];
+	assign_param_pointers();
 }
 
 void SB_Profile::assign_param_pointers()
@@ -98,6 +151,12 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	}
 	param[qi++] = &x_center;
 	param[qi++] = &y_center;
+	if (n_fourier_modes > 0) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			param[qi++] = &fourier_mode_cosamp[i];
+			param[qi++] = &fourier_mode_sinamp[i];
+		}
+	}
 }
 
 bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
@@ -212,6 +271,7 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 					update_angle_meta_params();
 				}
 				else *(param[i]) = fitparams[index++];
+				//cout << "P" << i << ": " << *(param[i]) << " " << fitparams[index-1] << endl;
 			}
 		}
 		update_meta_parameters();
@@ -476,8 +536,32 @@ double SB_Profile::surface_brightness(double x, double y)
 	// switch to coordinate system centered on surface brightness profile
 	x -= x_center;
 	y -= y_center;
+	double phi; // used for Fourier modes
+	if (n_fourier_modes > 0) {
+		phi = atan(abs(y/x));
+		if (x < 0) {
+			if (y < 0)
+				phi = phi - M_PI;
+			else
+				phi = M_PI - phi;
+		} else if (y < 0) {
+			phi = -phi;
+		}
+	}
+
 	if (theta != 0) rotate(x,y);
-	return sb_rsq(x*x + y*y/(q*q));
+	double rsq = x*x + y*y/(q*q);
+	if (n_fourier_modes > 0) {
+		double fourier_factor = 1.0;
+		for (int i=0; i < n_fourier_modes; i++) {
+			//fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*(phi + fourier_mode_phivals[i]));
+			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi);
+		}
+		rsq *= fourier_factor*fourier_factor;
+	}
+	return sb_rsq(rsq);
+	//const double c0 = 0;
+	//return sb_rsq(pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0)));
 }
 
 double SB_Profile::surface_brightness_r(const double r)
@@ -488,13 +572,12 @@ double SB_Profile::surface_brightness_r(const double r)
 void SB_Profile::print_parameters()
 {
 	cout << model_name << ": ";
-	for (int i=0; i < n_params-2; i++) {
+	for (int i=0; i < n_params; i++) {
 		cout << paramnames[i] << "=";
 		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
 		else cout << *(param[i]);
-		cout << ", ";
+		if (i != n_params-1) cout << ", ";
 	}
-	cout << "center=(" << x_center << "," << y_center << ")";
 	cout << endl;
 }
 
@@ -651,8 +734,8 @@ void Gaussian::assign_param_pointers()
 
 void Gaussian::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1; // arbitrary
-	stepsizes[1] = 0.1; // arbitrary
+	stepsizes[0] = (max_sb != 0) ? 0.1*max_sb : 0.1;
+	stepsizes[1] = (sig_x != 0) ? 0.1*sig_x : 0.1; // arbitrary
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.1;
 	stepsizes[5] = 0.1;
@@ -748,6 +831,105 @@ double Sersic::sb_rsq(const double rsq)
 double Sersic::window_rmax()
 {
 	return pow(3.0/k,n);
+}
+
+SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine)
+{
+	model_name = "sbmpole";
+	sbtype = SB_MULTIPOLE;
+	//stringstream mstr;
+	//string mstring;
+	//mstr << m_in;
+	//mstr >> mstring;
+	//special_parameter_command = "m=" + mstring;
+	sine_term = sine;
+	set_nparams(5);
+
+	r0 = r0_in;
+	m = m_in;
+	A_n = A_m_in;
+	set_angle(theta_degrees);
+	x_center = xc_in;
+	y_center = yc_in;
+
+	assign_param_pointers();
+	assign_paramnames();
+}
+
+SB_Multipole::SB_Multipole(const SB_Multipole* sb_in)
+{
+	r0 = sb_in->r0;
+	m = sb_in->m;
+	A_n = sb_in->A_n;
+	sine_term = sb_in->sine_term;
+	copy_base_source_data(sb_in);
+}
+
+void SB_Multipole::assign_paramnames()
+{
+	string mstring;
+	stringstream mstr;
+	mstr << m;
+	mstr >> mstring;
+	if (sine_term) {
+		paramnames[0] = "B_" + mstring;  latex_paramnames[0] = "B"; latex_param_subscripts[0] = mstring;
+	} else {
+		paramnames[0] =  "A_" + mstring; latex_paramnames[0] = "A"; latex_param_subscripts[0] = mstring;
+	}
+	paramnames[1] = "beta"; latex_paramnames[1] = "\\beta"; latex_param_subscripts[1] = "";
+	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
+	paramnames[3] = "xc";    latex_paramnames[3] = "x";       latex_param_subscripts[3] = "c";
+	paramnames[4] = "yc";    latex_paramnames[4] = "y";       latex_param_subscripts[4] = "c";
+}
+
+void SB_Multipole::assign_param_pointers()
+{
+	ellipticity_paramnum = -1; // no ellipticity parameter here
+	param[0] = &A_n; // here, A_n is actually the shear magnitude
+	param[1] = &r0;
+	param[2] = &theta; angle_paramnum = 2;
+	param[3] = &x_center;
+	param[4] = &y_center;
+}
+
+void SB_Multipole::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.05;
+	stepsizes[1] = 0.1;
+	stepsizes[2] = 20;
+	stepsizes[3] = 0.1; // very arbitrary, but a multipole term is usually center_anchored anyway
+	stepsizes[4] = 0.1;
+}
+
+void SB_Multipole::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = false;
+	set_auto_penalty_limits[4] = false;
+}
+
+double SB_Multipole::surface_brightness(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	double phi = atan(abs(y/x));
+	if (x < 0) {
+		if (y < 0)
+			phi = phi - M_PI;
+		else
+			phi = M_PI - phi;
+	} else if (y < 0) {
+		phi = -phi;
+	}
+	double theta_eff = (sine_term) ? theta+M_HALFPI/m : theta;
+	return A_n*exp(-sqrt(x*x+y*y)/r0) * cos(m*(phi-theta_eff));
+}
+
+double SB_Multipole::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 7*r0;
 }
 
 TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)

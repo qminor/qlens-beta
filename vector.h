@@ -65,10 +65,15 @@ void Vector<T>::input(const int &n)
 template <class T>
 void Vector<T>::resize(const int &n)
 {
-	if (v != NULL)
+	// if resizing to something larger, keeps all previous entries; it resizing to something
+	// smaller, keeps entries up to desired index
+	T *new_v = new T[n];
+	if (v != NULL) {
+		for (int i=0; i < ((n < nn) ? n : nn); i++) { new_v[i] = v[i]; }
 		delete[] v;
+	}
 	nn = n;
-	v = new T[nn];
+	v = new_v;
 	return;
 }
 

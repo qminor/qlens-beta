@@ -1293,6 +1293,7 @@ void Lens::process_commands(bool read_file)
 							"Available source models:    (type 'help source '<sourcemodel>' for usage information)\n\n"
 							"gaussian -- Gaussian with dispersion <sig> and q*<sig> along major/minor axes respectively\n"
 							"sersic -- Sersic profile S = S0*exp(k*r^(1/n))\n"
+							"sbmpole -- multipole term\n"
 							"tophat -- ellipsoidal 'top hat' profile\n"
 							"spline -- splined surface brightness profile (generated from an input file)\n\n";
 					else if (words[2]=="clear")
@@ -1315,6 +1316,19 @@ void Lens::process_commands(bool read_file)
 							"models. Here, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+					else if (words[2]=="sbmpole")
+						cout << "source sbmpole [sin/cos] [m=#] <A_m> <r0> [theta] [x-center] [y-center]\n\n"
+							"Adds a multipole-like term to the source surface brightness, where the optional argument [sin/cos]\n"
+							"specifies whether it is a sine or cosine multipole term (default is cosine), [m=#] specifies the order\n"
+							"of the multipole term (which must be an integer; default=0), <A_m> is the coefficient of the monopole\n"
+							"term, <r0> is the exponential scale length and [theta] is the angle of rotation (counterclockwise, in\n"
+							"degrees) about the center (defaults=0). The radial function is an exponential with scale length r0.\n"
+							"For example,\n\n"
+							"source sbmpole sin m=3 0.05 2 45 0 0\n\n"
+							"specifies a sine multipole term of order 3. (For sine terms, the coefficient is labeled as B_m\n"
+							"instead of A_m, so in this example B_m=0.05.)\n"
+							"Keep in mind that the order of the multiple (m) cannot be varied as a parameter, so only the\n"
+							"remaining five parameters can be varied during a fit or using the 'source update' command.\n";
 					else if (words[2]=="tophat")
 						cout << "source tophat <sb> <R> <q> [theta] [x-center] [y-center]\n\n"
 							"The tophat profile is defined by a constant surface brightness <sb> within an ellipsoidal region with\n"
@@ -4170,6 +4184,10 @@ void Lens::process_commands(bool read_file)
 			dvector param_vals;
 			int nparams_to_vary;
 			int src_number;
+			vector<int> fourier_mvals;
+			vector<double> fourier_Amvals;
+			vector<double> fourier_Bmvals;
+			int fourier_nmodes=0;
 
 			if (words[0]=="fit") {
 				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
@@ -4208,6 +4226,33 @@ void Lens::process_commands(bool read_file)
 					delete[] ws;
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
+			}
+			for (int i=nwords-1; i > 2; i--) {
+				int pos0;
+				if ((words[i][0]=='f') and (pos0 = words[i].find("=")) != string::npos) {
+					if (i==nwords-1) Complain("must specify both fourier amplitudes A_m and B_m (e.g. 'f1=0.01 0.02')");
+					string mvalstring, amstring, bmstring;
+					mvalstring = words[i].substr(1,pos0-1);
+					amstring = words[i].substr(pos0+1);
+					bmstring = words[i+1];
+					int mval;
+					double Am, Bm;
+					stringstream mstr, astr, bstr;
+					mstr << mvalstring;
+					astr << amstring;
+					bstr << bmstring;
+					if (!(mstr >> mval)) Complain("invalid fourier m-value");
+					if (!(astr >> Am)) Complain("invalid fourier A_m amplitude");
+					if (!(bstr >> Bm)) Complain("invalid fourier B_m amplitude");
+					fourier_mvals.push_back(mval);
+					fourier_Amvals.push_back(Am);
+					fourier_Bmvals.push_back(Bm);
+					remove_word(i+1);
+					remove_word(i);
+					//astr = words[i].substr(pos0+8);
+					//int pos, lnum, pnum;
+					fourier_nmodes++;
+				}
 			}
 
 			if (update_parameters) {
@@ -4266,8 +4311,9 @@ void Lens::process_commands(bool read_file)
 					param_vals[0]=sbnorm; param_vals[1]=sig; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 
 					if (vary_parameters) {
+						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -4278,6 +4324,9 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
+						for (int i=fourier_nmodes-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
 				}
@@ -4306,8 +4355,9 @@ void Lens::process_commands(bool read_file)
 					param_vals[0]=s0; param_vals[1]=reff; param_vals[2] = n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 
 					if (vary_parameters) {
+						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (s0,Reff,q,theta,xc,yc) in model sersic");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,q,theta,xc,yc) in model sersic");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -4318,10 +4368,82 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
+						for (int i=fourier_nmodes-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
+			}
+			else if (words[1]=="sbmpole")
+			{
+				bool sine_term = false;
+				if (nwords > 9) Complain("more than 8 arguments not allowed for model " << words[1]);
+				if (nwords >= 4) {
+					double a_m, r0;
+					int m=0;
+					if ((words[2].find("sin")==0) or (words[2].find("cos")==0)) {
+						if (update_parameters) Complain("sine/cosine argument cannot be specified when updating " << words[1]);
+						if (words[2].find("sin")==0) sine_term = true;
+						stringstream* new_ws = new stringstream[nwords-1];
+						words.erase(words.begin()+2);
+						for (int i=0; i < nwords-1; i++) {
+							new_ws[i] << words[i];
+						}
+						delete[] ws;
+						ws = new_ws;
+						nwords--;
+					}
+					if (words[2].find("m=")==0) {
+						if (update_parameters) Complain("m=# argument cannot be specified when updating " << words[1]);
+						string mstr = words[2].substr(2);
+						stringstream mstream;
+						mstream << mstr;
+						if (!(mstream >> m)) Complain("invalid m value");
+						stringstream* new_ws = new stringstream[nwords-1];
+						words.erase(words.begin()+2);
+						for (int i=0; i < nwords-1; i++) {
+							new_ws[i] << words[i];
+						}
+						delete[] ws;
+						ws = new_ws;
+						nwords--;
+					}
+					double theta = 0, xc = 0, yc = 0;
+					if (!(ws[2] >> a_m)) Complain("invalid a_m parameter for model " << words[1]);
+					if (!(ws[3] >> r0)) {
+						Complain("invalid r0 parameter for model " << words[1]);
+					}
+					if (r0 == 2-m) Complain("for sbmpole, r0 cannot be equal to 2-m"); // check if this is sensible?
+					if (nwords >= 5) {
+						if (!(ws[4] >> theta)) Complain("invalid theta parameter for model " << words[1]);
+						else if (nwords == 7) {
+							if (!(ws[5] >> xc)) Complain("invalid x-center parameter for model " << words[1]);
+							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model " << words[1]);
+						}
+					}
+					nparams_to_vary = 5;
+					param_vals.input(nparams_to_vary);
+					param_vals[0]=a_m; param_vals[1]=r0; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
+
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for five parameters (A_m,r0,theta,xc,yc) in model sbmpole");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+					} else {
+						add_multipole_source(m, a_m, r0, theta, xc, yc, sine_term);
+						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+					}
+				}
+				else Complain("sbmpole requires at least 2 parameters (a_m, r0)");
 			}
 			else if (words[1]=="tophat")
 			{
@@ -4345,6 +4467,7 @@ void Lens::process_commands(bool read_file)
 					param_vals[0]=sb; param_vals[1]=rad; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 
 					if (vary_parameters) {
+						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sb,radius,q,theta,xc,yc) in model tophat");
 						vary_flags.input(nparams_to_vary);
@@ -4357,6 +4480,9 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(TOPHAT, sb, rad, 0, q, theta, xc, yc);
+						for (int i=fourier_nmodes-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 					}
 				}
@@ -4383,6 +4509,9 @@ void Lens::process_commands(bool read_file)
 						} else if (nwords == 6) Complain("must specify qx and f parameters together");
 					}
 					add_source_object(words[2].c_str(), q, theta, qx, f, xc, yc);
+					for (int i=fourier_nmodes-1; i >= 0; i--) {
+						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i]);
+					}
 				}
 				else Complain("spline requires at least 2 parameters (filename, q)");
 			}
