@@ -594,20 +594,20 @@ double SB_Profile::surface_brightness(double x, double y)
 	// switch to coordinate system centered on surface brightness profile
 	x -= x_center;
 	y -= y_center;
-	double phi; // used for Fourier modes
+	if (theta != 0) rotate(x,y);
+	double phi_q; // used for Fourier modes
 	if (n_fourier_modes > 0) {
-		phi = atan(abs(y/x));
+		phi_q = atan(abs(y/(q*x)));
 		if (x < 0) {
 			if (y < 0)
-				phi = phi - M_PI;
+				phi_q = phi_q - M_PI;
 			else
-				phi = M_PI - phi;
+				phi_q = M_PI - phi_q;
 		} else if (y < 0) {
-			phi = -phi;
+			phi_q = -phi_q;
 		}
 	}
 
-	if (theta != 0) rotate(x,y);
 	double rsq;
 	if ((include_boxiness_parameter) and (c0 != 0.0)) {
 		rsq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
@@ -617,8 +617,8 @@ double SB_Profile::surface_brightness(double x, double y)
 	if (n_fourier_modes > 0) {
 		double fourier_factor = 1.0;
 		for (int i=0; i < n_fourier_modes; i++) {
-			//fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*(phi + fourier_mode_phivals[i]));
-			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi);
+			//fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*(phi_q + fourier_mode_phivals[i]));
+			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
 		}
 		rsq *= fourier_factor*fourier_factor;
 	}
