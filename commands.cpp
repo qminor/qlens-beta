@@ -4447,6 +4447,7 @@ void Lens::process_commands(bool read_file)
 					param_vals[0]=s0; param_vals[1]=reff; param_vals[2] = n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 
 					if (vary_parameters) {
+						if (include_boxiness_parameter) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,q,theta,xc,yc) in model sersic");
@@ -4460,6 +4461,7 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
