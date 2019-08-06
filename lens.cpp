@@ -73,6 +73,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 	double* new_stepsizes = new double[nparams_in];
 	bool* new_auto_stepsize = new bool[nparams_in];
 	bool* new_subplot_param = new bool[nparams_in];
+	bool* new_hist2d_param = new bool[nparams_in];
 	double* new_penalty_limits_lo = new double[nparams_in];
 	double* new_penalty_limits_hi = new double[nparams_in];
 	double* new_prior_norms = new double[nparams_in];
@@ -86,6 +87,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
 			new_subplot_param[i] = subplot_param[i];
+			new_hist2d_param[i] = hist2d_param[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
 			new_prior_norms[i] = prior_norms[i];
@@ -99,6 +101,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 			new_stepsizes[i] = stepsizes_in[i];
 			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
 			new_subplot_param[i] = false; 
+			new_hist2d_param[i] = true; 
 			new_penalty_limits_lo[i] = -1e30;
 			new_penalty_limits_hi[i] = 1e30;
 			new_prior_norms[i] = 1.0;
@@ -111,6 +114,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
 			new_subplot_param[i] = subplot_param[i];
+			new_hist2d_param[i] = hist2d_param[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
 			new_prior_norms[i] = prior_norms[i];
@@ -128,6 +132,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 		delete[] stepsizes;
 		delete[] auto_stepsize;
 		delete[] subplot_param;
+		delete[] hist2d_param;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
 		delete[] prior_norms;
@@ -138,6 +143,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 	stepsizes = new_stepsizes;
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
+	hist2d_param = new_hist2d_param;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
 	prior_norms = new_prior_norms;
@@ -153,6 +159,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 	double* new_stepsizes = new double[new_nparams];
 	bool* new_auto_stepsize = new bool[new_nparams];
 	bool* new_subplot_param = new bool[new_nparams];
+	bool* new_hist2d_param = new bool[new_nparams];
 	double* new_penalty_limits_lo = new double[new_nparams];
 	double* new_penalty_limits_hi = new double[new_nparams];
 	double* new_prior_norms = new double[new_nparams];
@@ -162,6 +169,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		newpriors[i] = new ParamPrior(priors[i]);
 		newtransforms[i] = new ParamTransform(transforms[i]);
 		new_auto_stepsize[i] = auto_stepsize[i];
+		new_hist2d_param[i] = hist2d_param[i];
 		new_subplot_param[i] = subplot_param[i];
 		new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 		new_penalty_limits_lo[i] = penalty_limits_lo[i];
@@ -175,6 +183,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		newtransforms[i] = new ParamTransform();
 		new_stepsizes[i] = stepsizes_in[i];
 		new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
+		new_hist2d_param[i] = true; // stepsizes for newly added parameters are set to 'auto'
 		new_subplot_param[i] = false; // stepsizes for newly added parameters are set to 'auto'
 		new_penalty_limits_lo[i] = -1e30;
 		new_penalty_limits_hi[i] = 1e30;
@@ -186,6 +195,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		newpriors[j] = new ParamPrior(priors[i]);
 		newtransforms[j] = new ParamTransform(transforms[i]);
 		new_auto_stepsize[j] = auto_stepsize[i];
+		new_hist2d_param[j] = hist2d_param[i];
 		new_subplot_param[j] = subplot_param[i];
 		new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
 		new_penalty_limits_lo[j] = penalty_limits_lo[i];
@@ -204,6 +214,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		delete[] stepsizes;
 		delete[] auto_stepsize;
 		delete[] subplot_param;
+		delete[] hist2d_param;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
 		delete[] prior_norms;
@@ -215,6 +226,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 	stepsizes = new_stepsizes;
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
+	hist2d_param = new_hist2d_param;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
 	prior_norms = new_prior_norms;
@@ -236,6 +248,7 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 	double* new_stepsizes = new double[new_nparams];
 	bool* new_auto_stepsize = new bool[new_nparams];
 	bool* new_subplot_param = new bool[new_nparams];
+	bool* new_hist2d_param = new bool[new_nparams];
 	double* new_penalty_limits_lo = new double[new_nparams];
 	double* new_penalty_limits_hi = new double[new_nparams];
 	double* new_prior_norms = new double[new_nparams];
@@ -247,6 +260,7 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 		new_stepsizes[i] = stepsizes[i];
 		new_auto_stepsize[i] = auto_stepsize[i];
 		new_subplot_param[i] = subplot_param[i];
+		new_hist2d_param[i] = hist2d_param[i];
 		new_penalty_limits_lo[i] = penalty_limits_lo[i];
 		new_penalty_limits_hi[i] = penalty_limits_hi[i];
 		new_prior_norms[i] = prior_norms[i];
@@ -259,6 +273,7 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 		new_stepsizes[j] = stepsizes[i];
 		new_auto_stepsize[j] = auto_stepsize[i];
 		new_subplot_param[j] = subplot_param[i];
+		new_hist2d_param[j] = hist2d_param[i];
 		new_penalty_limits_lo[j] = penalty_limits_lo[i];
 		new_penalty_limits_hi[j] = penalty_limits_hi[i];
 		new_prior_norms[j] = prior_norms[i];
@@ -274,6 +289,7 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 	delete[] stepsizes;
 	delete[] auto_stepsize;
 	delete[] subplot_param;
+	delete[] hist2d_param;
 	delete[] penalty_limits_lo;
 	delete[] penalty_limits_hi;
 	delete[] prior_norms;
@@ -284,6 +300,7 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 	stepsizes = new_stepsizes;
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
+	hist2d_param = new_hist2d_param;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
 	prior_norms = new_prior_norms;
@@ -296,45 +313,56 @@ void ParamSettings::add_dparam(string dparam_name)
 {
 	string* new_dparam_names = new string[n_dparams+1];
 	bool* new_subplot_dparam = new bool[n_dparams+1];
+	bool* new_hist2d_dparam = new bool[n_dparams+1];
 	if (n_dparams > 0) {
 		for (int i=0; i < n_dparams; i++) {
 			new_dparam_names[i] = dparam_names[i];
 			new_subplot_dparam[i] = subplot_dparam[i];
+			new_hist2d_dparam[i] = hist2d_dparam[i];
 		}
 		delete[] dparam_names;
 		delete[] subplot_dparam;
+		delete[] hist2d_dparam;
 	}
 	new_dparam_names[n_dparams] = dparam_name;
 	new_subplot_dparam[n_dparams] = false;
+	new_hist2d_dparam[n_dparams] = true;
 	n_dparams++;
 	dparam_names = new_dparam_names;
 	subplot_dparam = new_subplot_dparam;
+	hist2d_dparam = new_hist2d_dparam;
 }
 void ParamSettings::remove_dparam(int dparam_number)
 {
 	string* new_dparam_names;
 	bool* new_subplot_dparam;
+	bool* new_hist2d_dparam;
 	if (n_dparams > 1) {
 		string* new_dparam_names = new string[n_dparams-1];
 		bool* new_subplot_dparam = new bool[n_dparams-1];
+		bool* new_hist2d_dparam = new bool[n_dparams-1];
 		int i,j;
 		for (i=0, j=0; i < n_dparams; i++) {
 			if (i != dparam_number) {
 				new_dparam_names[j] = dparam_names[i];
 				new_subplot_dparam[j] = subplot_dparam[i];
+				new_hist2d_dparam[j] = hist2d_dparam[i];
 				j++;
 			}
 		}
 	}
 	delete[] dparam_names;
 	delete[] subplot_dparam;
+	delete[] hist2d_dparam;
 	n_dparams--;
 	if (n_dparams > 0) {
 		dparam_names = new_dparam_names;
 		subplot_dparam = new_subplot_dparam;
+		hist2d_dparam = new_hist2d_dparam;
 	} else {
 		dparam_names = NULL;
 		subplot_dparam = NULL;
+		hist2d_dparam = NULL;
 	}
 }
 
@@ -7106,7 +7134,6 @@ void Lens::get_parameter_names()
 		}
 		for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
 			fit_parameter_names[i] += "_src";
-			//cout << "WTF " << fit_parameter_names[i] << endl;
 		}
 	}
 	// find any parameters with matching names and number them so they can be distinguished

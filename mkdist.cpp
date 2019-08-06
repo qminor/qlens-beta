@@ -362,6 +362,36 @@ int main(int argc, char *argv[])
 	}
 	latex_paramnames_out.close();
 
+	bool *hist2d_active_params = new bool[nparams_eff];
+	for (i=0; i < nparams_eff; i++) {
+		hist2d_active_params[i] = true;
+	}
+	if (make_2d_posts) {
+		string hist2d_paramnames_filename = file_root + ".hist2d_params";
+		if (file_exists(hist2d_paramnames_filename)) {
+			string *hist2d_param_names = new string[nparams_eff];
+			ifstream hist2d_paramnames_file(hist2d_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				if (!(hist2d_paramnames_file >> hist2d_param_names[i])) die("not all hist2d_parameter names are given in file '%s'",hist2d_paramnames_filename.c_str());
+				if (hist2d_param_names[i] != param_names[i]) die("hist2d parameter names do not match names given in paramnames file");
+				int pflag;
+				if (!(hist2d_paramnames_file >> pflag)) die("hist2d parameter flag not given in file '%s'",hist2d_paramnames_filename.c_str());
+				if (pflag == 0) hist2d_active_params[i] = false;
+				else if (pflag == 1) hist2d_active_params[i] = true;
+				else die("invalid hist2d parameter flag in file '%s'; should either be 0 or 1",hist2d_paramnames_filename.c_str());
+			}
+			hist2d_paramnames_file.close();
+			delete[] hist2d_param_names;
+		}
+	}
+	int nparams_eff_2d = 0;
+	for (i=nparams_eff-1; i >= 0; i--) {
+		if (hist2d_active_params[i]) {
+			nparams_eff_2d = i+1;
+			break;
+		}
+	}
+
 	bool *subplot_active_params = new bool[nparams_eff];
 	if (make_subplot) {
 		string *subplot_param_names = new string[nparams_eff];
@@ -375,6 +405,7 @@ int main(int argc, char *argv[])
 			if (pflag == 0) subplot_active_params[i] = false;
 			else if (pflag == 1) subplot_active_params[i] = true;
 			else die("invalid subplot parameter flag in file '%s'; should either be 0 or 1",subplot_paramnames_filename.c_str());
+			if ((subplot_active_params[i]) and (!hist2d_active_params[i])) die("subplot parameter '%s' must also have the hist2d flag set to 'true' in <label>.hist2d_params",subplot_param_names[i].c_str());
 		}
 		subplot_paramnames_file.close();
 		delete[] subplot_param_names;
@@ -419,11 +450,15 @@ int main(int argc, char *argv[])
 			}
 		}
 		if (make_2d_posts) {
-			for (i=0; i < nparams_eff; i++) {
-				for (j=i+1; j < nparams_eff; j++) {
-					string dist_out;
-					dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
-					FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
+			for (i=0; i < nparams_eff_2d; i++) {
+				if (hist2d_active_params[i]) {
+					for (j=i+1; j < nparams_eff_2d; j++) {
+						if (hist2d_active_params[j]) {
+							string dist_out;
+							dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+							FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
+						}
+					}
 				}
 			}
 		}
@@ -515,21 +550,25 @@ int main(int argc, char *argv[])
 			do {
 				if (derived_param_fail) derived_param_fail = false;
 				#pragma omp parallel for private(i,j) schedule(dynamic)
-				for (i=0; i < nparams_eff; i++) {
-					for (j=i+1; j < nparams_eff; j++) {
-						string hist_out;
-						hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
-						if (!Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH)) {
-							if ((i>=n_fitparams) or (j>=n_fitparams)) {
-								derived_param_fail = true;
-								warn("producing contours failed for derived parameter; we will drop the derived parameters and try again");
-								break;
+				for (i=0; i < nparams_eff_2d; i++) {
+					if (hist2d_active_params[i]) {
+						for (j=i+1; j < nparams_eff_2d; j++) {
+							if (hist2d_active_params[j]) {
+								string hist_out;
+								hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+								if (!Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH)) {
+									if ((i>=n_fitparams) or (j>=n_fitparams)) {
+										derived_param_fail = true;
+										warn("producing contours failed for derived parameter; we will drop the derived parameters and try again");
+										break;
+									}
+								}
 							}
 						}
+						if (derived_param_fail) i = nparams_eff_2d + 1; // make sure it exits loop
 					}
-					if (derived_param_fail) i = nparams_eff + 1; // make sure it exits loop
 				}
-				if (derived_param_fail) nparams_eff = n_fitparams;
+				if (derived_param_fail) nparams_eff_2d = n_fitparams;
 			} while (derived_param_fail);
 #ifdef USE_OPENMP
 			wtime = omp_get_wtime() - wtime0;
@@ -654,9 +693,12 @@ int main(int argc, char *argv[])
 		pyscript2d << "outdir=''" << endl;
 		pyscript2d << "roots=['" << file_label << "']" << endl;
 		pyscript2d << "pairs=[]" << endl;
-		for (i=0; i < nparams_eff; i++) {
-			for (j=i+1; j < nparams_eff; j++)
-				pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
+		for (i=0; i < nparams_eff_2d; i++) {
+			for (j=i+1; j < nparams_eff_2d; j++) {
+				if ((hist2d_active_params[i]) and (hist2d_active_params[j])) {
+					pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
+				}
+			}
 		}
 		pyscript2d << "g.plots_2d(roots,param_pairs=pairs,";
 		if (include_shading) pyscript2d << "shaded=True";
@@ -695,7 +737,7 @@ int main(int argc, char *argv[])
 				if (show_markers) {
 					pyscript << "marker_list=[";
 					for (i=0; i < n_markers; i++) {
-						if ((k==0) or (subplot_active_params[i])) {
+						if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
 							pyscript << markers[i];
 							if ((k==0) and (i != n_markers-1)) pyscript << ",";
 							else if (k==1) {
@@ -712,13 +754,13 @@ int main(int argc, char *argv[])
 					pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
 				}
 				pyscript << "g.triangle_plot(roots, [";
-				for (i=0; i < nparams_eff; i++) {
-					if ((k==0) or (subplot_active_params[i]==true)) {
+				for (i=0; i < nparams_eff_2d; i++) {
+					if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
 						pyscript << "'" << param_names[i] << "'";
-						if ((k==0) and (i != nparams_eff-1)) pyscript << ",";
+						if ((k==0) and (i != nparams_eff_2d-1)) pyscript << ",";
 						else if (k==1) {
 							bool last_param = true;
-							for (int ii=i+1; ii < nparams_eff; ii++) {
+							for (int ii=i+1; ii < nparams_eff_2d; ii++) {
 								if (subplot_active_params[ii]==true) last_param = false;
 							}
 							if (!last_param) pyscript << ",";
@@ -756,6 +798,7 @@ int main(int argc, char *argv[])
 	delete[] latex_param_names;
 	delete[] markers;
 	delete[] subplot_active_params;
+	delete[] hist2d_active_params;
 	return 0;
 }
 

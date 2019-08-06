@@ -7113,6 +7113,20 @@ void Lens::process_commands(bool read_file)
 				}
 			}
 		}
+		else if (words[0]=="exclude_hist2d_params")
+		{
+			if (nwords==1) {
+				if (!param_settings->hist2d_params_defined()) Complain("No excluded hist2d parameters have been defined");
+				else if (mpi_id==0) cout << "Excluded parameters from 2d plots: " << param_settings->print_excluded_hist2d_params() << endl;
+			}
+			else if ((nwords==2) and (words[1]=="reset")) param_settings->reset_hist2d_params();
+			else {
+				param_settings->reset_hist2d_params();
+				for (int i=1; i < nwords; i++) {
+					if (!param_settings->exclude_hist2d_param(words[i])) Complain("Fit parameter '" << words[i] << "' does not exist");
+				}
+			}
+		}
 		else if (words[0]=="colorbar")
 		{
 			if (nwords==1) {
@@ -9088,6 +9102,21 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 				ofstream titlefile(title_str.c_str());
 				titlefile << post_title << endl;
 				titlefile.close();
+			}
+
+			if (!no2dposts) {
+				string hist2d_str = fit_output_dir + "/" + filename + ".hist2d_params";
+				ofstream hist2dfile(hist2d_str.c_str());
+				int nparams_tot = param_settings->nparams + param_settings->n_dparams;
+				for (int i=0; i < nparams_tot; i++) {
+					string pname;
+					bool pflag = param_settings->hist2d_param_flag(i,pname);
+					hist2dfile << pname << " ";
+					if (pflag) hist2dfile << "1";
+					else hist2dfile << "0";
+					hist2dfile << endl;
+				}
+				hist2dfile.close();
 			}
 
 			bool make_subplot = param_settings->subplot_params_defined();

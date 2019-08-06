@@ -1278,11 +1278,13 @@ struct ParamSettings
 	bool *use_penalty_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
+	bool *hist2d_param;
+	bool *hist2d_dparam;
 	bool *subplot_param;
 	bool *subplot_dparam;
 	string *dparam_names;
 	int n_dparams;
-	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
+	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; hist2d_param = NULL; hist2d_dparam = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
 	ParamSettings(ParamSettings& param_settings_in) {
 		nparams = param_settings_in.nparams;
 		n_dparams = param_settings_in.n_dparams;
@@ -1290,6 +1292,7 @@ struct ParamSettings
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
 		auto_stepsize = new bool[nparams];
+		hist2d_param = new bool[nparams];
 		subplot_param = new bool[nparams];
 		penalty_limits_lo = new double[nparams];
 		penalty_limits_hi = new double[nparams];
@@ -1300,6 +1303,7 @@ struct ParamSettings
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
+			hist2d_param[i] = param_settings_in.hist2d_param[i];
 			subplot_param[i] = param_settings_in.subplot_param[i];
 			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
@@ -1308,9 +1312,11 @@ struct ParamSettings
 		}
 		if (n_dparams > 0) {
 			dparam_names = new string[n_dparams];
+			hist2d_dparam = new bool[n_dparams];
 			subplot_dparam = new bool[n_dparams];
 			for (int i=0; i < n_dparams; i++) {
 				dparam_names[i] = param_settings_in.dparam_names[i];
+				hist2d_dparam[i] = param_settings_in.hist2d_dparam[i];
 				subplot_dparam[i] = param_settings_in.subplot_dparam[i];
 			}
 		}
@@ -1325,6 +1331,7 @@ struct ParamSettings
 	{
 		if (n_dparams > 0) {
 			delete[] dparam_names;
+			delete[] hist2d_dparam;
 			delete[] subplot_dparam;
 			n_dparams = 0;
 		}
@@ -1338,6 +1345,89 @@ struct ParamSettings
 			if (dparam_names[i]==pname) return nparams+i;
 		}
 		return -1;
+	}
+
+	bool exclude_hist2d_param(const string pname)
+	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		bool found_name = false;
+		int i;
+		for (i=0; i < nparams; i++) {
+			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
+				hist2d_param[i] = false;
+				found_name = true;
+				break;
+			}
+		}
+		if (!found_name) {
+			for (i=0; i < n_dparams; i++) {
+				if (dparam_names[i]==pname) {
+					hist2d_dparam[i] = false;
+					found_name = true;
+					break;
+				}
+			}
+		}
+		delete[] transformed_names;
+		return found_name;
+	}
+	bool hist2d_params_defined()
+	{
+		bool active_param = false;
+		int i;
+		for (i=0; i < nparams; i++) {
+			if (!hist2d_param[i]) {
+				active_param = true;
+				break;
+			}
+		}
+		if (!active_param) {
+			for (i=0; i < n_dparams; i++) {
+				if (!hist2d_dparam[i]) {
+					active_param = true;
+					break;
+				}
+			}
+		}
+		return active_param;
+	}
+	bool hist2d_param_flag(const int i, string &name)
+	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		bool flag;
+		if (i < nparams) {
+			name = transformed_names[i];
+			flag = hist2d_param[i];
+		} else {
+			int j = i - nparams;
+			name = dparam_names[j];
+			flag = hist2d_dparam[j];
+		}
+		delete[] transformed_names;
+		return flag;
+	}
+	string print_excluded_hist2d_params()
+	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		string pstring = "";
+		int i;
+		for (i=0; i < nparams; i++) {
+			if (!hist2d_param[i]) pstring += transformed_names[i] + " ";
+		}
+		for (i=0; i < n_dparams; i++) {
+			if (!hist2d_dparam[i]) pstring += dparam_names[i] + " ";
+		}
+		delete[] transformed_names;
+		return pstring;
+	}
+	void reset_hist2d_params()
+	{
+		int i;
+		for (i=0; i < nparams; i++) hist2d_param[i] = true;
+		for (i=0; i < n_dparams; i++) hist2d_dparam[i] = true;
 	}
 	bool set_subplot_param(const string pname)
 	{
