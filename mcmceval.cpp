@@ -585,13 +585,27 @@ void McmcEval::calculate_derived_param()
 	}
 }
 
-void McmcEval::output_min_chisq_pt(void)
+void McmcEval::output_min_chisq_pt(string* paramnames)
 {
 	cout << "Minimum loglike point: (2*loglike = " << min_chisq_val << ")\n";
 	for (int k=0; k < numOfParam; k++) {
-		cout << points[min_chisq_pt_j][min_chisq_pt_m][k] << " ";
+		cout << paramnames[k] << "=" << points[min_chisq_pt_j][min_chisq_pt_m][k] << " ";
 	}
 	cout << endl << endl;
+}
+
+void McmcEval::output_min_chisq_pt2(string* paramnames)
+{
+	cout << "Minimum loglike point: (2*loglike = " << min_chisq_val << ")\n";
+	for (int k=0; k < numOfParam; k++) {
+		cout << paramnames[k] << "=" << points[min_chisq_pt_j][min_chisq_pt_m][k] << endl;
+	}
+	cout << endl << endl;
+}
+
+double McmcEval::output_min_chisq_value(const int p)
+{
+	return points[min_chisq_pt_j][min_chisq_pt_m][p];
 }
 
 void McmcEval::min_chisq_pt(double* bestfit)

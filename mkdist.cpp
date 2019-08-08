@@ -36,6 +36,7 @@ int main(int argc, char *argv[])
 	bool make_1d_posts = false;
 	bool make_2d_posts = false;
 	bool output_min_chisq_point = false;
+	bool output_min_chisq_point_format2 = false;
 	bool output_mean_and_errors = false;
 	bool output_cl = false;
 	bool cl_2sigma = false;
@@ -105,6 +106,7 @@ int main(int argc, char *argv[])
 			while (c = *++argv[i]) {
 				switch (c) {
 					case 'b': output_min_chisq_point = true; break;
+					case 'O': output_min_chisq_point_format2 = true; break;
 					case 'e': output_mean_and_errors = true; break; // this option also outputs the parameter covariance matrix
 					case 'E':
 						output_cl = true;
@@ -576,7 +578,10 @@ int main(int argc, char *argv[])
 #endif
 		}
 		if (output_min_chisq_point) {
-			Eval.output_min_chisq_pt();
+			Eval.output_min_chisq_pt(param_names);
+		}
+		if (output_min_chisq_point_format2) {
+			Eval.output_min_chisq_pt2(param_names);
 		}
 
 		if (output_mean_and_errors) {
@@ -632,10 +637,10 @@ int main(int argc, char *argv[])
 		}
 		if (print_marker_values) {
 			if (show_markers) {
-				cout << "True parameter values:\n";
+				cout << "True parameter values (and bestfit values):\n";
 				for (i=0; i < n_markers; i++) {
 					// NOTE: The following errors are from standard deviation, not from CL's 
-					cout << param_names[i] << ": " << markers[i] << endl;
+					cout << param_names[i] << ": " << markers[i] << " (" << Eval.output_min_chisq_value(i) << ")" << endl;
 				}
 				cout << endl;
 			}

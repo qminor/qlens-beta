@@ -115,7 +115,10 @@ class McmcEval
 		void remove_comments(string& instring);
 		void transform_parameter_names(string *paramnames, string *latex_paramnames);
 		void calculate_derived_param();
-		void output_min_chisq_pt(void);
+		void output_min_chisq_pt(string* paramnames);
+		void output_min_chisq_pt2(string* paramnames);
+		double output_min_chisq_value(const int p);
+
 		void min_chisq_pt(double*);
 		void get_final_points(const int nlist, double **params, double *chisq);
 		void FindCoVar(const char *, double *avgs = NULL, double *sigs = NULL, double *minvals = NULL, double *maxvals = NULL);
