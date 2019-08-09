@@ -382,8 +382,9 @@ void SourcePixelGrid::assign_surface_brightness()
 			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness();
 			else {
 				cell[i][j]->surface_brightness = 0;
-				for (int k=0; k < lens->n_sb; k++)
-					cell[i][j]->surface_brightness += lens->sb_list[k]->surface_brightness(cell[i][j]->center_pt[0],cell[i][j]->center_pt[1]);
+				for (int k=0; k < lens->n_sb; k++) {
+					if (lens->sb_list[k]->is_lensed) cell[i][j]->surface_brightness += lens->sb_list[k]->surface_brightness(cell[i][j]->center_pt[0],cell[i][j]->center_pt[1]);
+				}
 			}
 		}
 	}
@@ -5246,7 +5247,8 @@ void ImagePixelGrid::find_surface_brightness()
 									center_pt[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 									lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
 									for (int k=0; k < lens->n_sb; k++) {
-										sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+										if (lens->sb_list[k]->is_lensed) sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+										else sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
 									}
 								}
 							}
@@ -5268,9 +5270,10 @@ void ImagePixelGrid::find_surface_brightness()
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;
+						lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 						for (int k=0; k < lens->n_sb; k++) {
-							lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-							surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+							if (lens->sb_list[k]->is_lensed) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+							else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
 						}
 					}
 				}
@@ -5662,7 +5665,8 @@ void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 
 bool Lens::generate_PSF_matrix()
 {
-	static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
+	//static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
+	double sigma_fraction = sqrt(-2*log(psf_threshold));
 	int i,j;
 	int nx_half, ny_half, nx, ny;
 	double x, y, xmax, ymax;

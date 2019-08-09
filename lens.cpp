@@ -544,7 +544,7 @@ Lens::Lens() : UCMC()
 	open_chisq_logfile = false;
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
-	psf_threshold = 1e-3;
+	psf_threshold = 1e-1;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -2484,7 +2484,7 @@ void Lens::clear_source_objects()
 void Lens::print_source_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
-	if (nlens > 0) {
+	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++) {
 			cout << i << ". ";
 			sb_list[i]->print_parameters();

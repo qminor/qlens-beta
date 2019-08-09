@@ -71,6 +71,7 @@ class SB_Profile
 
 	public:
 	int sb_number;
+	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
 
 	SB_Profile() : qx_parameter(1), param(0) {}
 	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in);
@@ -84,6 +85,7 @@ class SB_Profile
 	bool vary_parameters(const boolvector& vary_params_in);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
+	void set_lensed(const bool isl) { is_lensed = isl; }
 
 	void remove_fourier_modes();
 

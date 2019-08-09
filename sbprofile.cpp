@@ -38,6 +38,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	model_name = sb_in->model_name;
 	sbtype = sb_in->sbtype;
 	sb_number = sb_in->sb_number;
+	is_lensed = sb_in->is_lensed;
 	set_nparams(sb_in->n_params);
 	set_geometric_parameters_radians(sb_in->q,sb_in->theta,sb_in->x_center,sb_in->y_center);
 
@@ -69,6 +70,7 @@ void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
 	include_boxiness_parameter = false;
+	is_lensed = true; // default
 	n_fourier_modes = 0;
 	n_vary_params = 0;
 	vary_params.input(n_params);
@@ -632,7 +634,9 @@ double SB_Profile::surface_brightness_r(const double r)
 
 void SB_Profile::print_parameters()
 {
-	cout << model_name << ": ";
+	cout << model_name;
+	if (!is_lensed) cout << "(unlensed)";
+	cout << ": ";
 	for (int i=0; i < n_params; i++) {
 		cout << paramnames[i] << "=";
 		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";

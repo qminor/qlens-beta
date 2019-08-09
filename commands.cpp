@@ -182,7 +182,7 @@ void Lens::process_commands(bool read_file)
 						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
 						"sim_pixel_noise -- simulated pixel noise added to images produced by 'sbmap plotimg'\n"
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
-						"psf_threshold -- when loading PSF from FITS file, approximate PSF as zero if below threshold\n"
+						"psf_threshold -- threshold below which PSF is approximated as zero (sets pixel width of PSF)\n"
 						"psf_mpi -- parallelize PSF convolution using MPI (on/off)\n"
 						"\n"
 						"\033[4mSource pixel reconstruction settings\033[0m\n"
@@ -3688,9 +3688,9 @@ void Lens::process_commands(bool read_file)
 									if (nwords==tot_nparams_to_vary+2) {
 										if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-									} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model sersic";
+									} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model sersic (plus optional Fourier modes)";
 								}
-								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model sersic";
+								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model sersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
 									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -4212,6 +4212,7 @@ void Lens::process_commands(bool read_file)
 			vector<double> fourier_Bmvals;
 			int fourier_nmodes=0;
 			bool include_boxiness_parameter = false;
+			bool unlensed = false;
 			double c0val = 0;
 
 			if (words[0]=="fit") {
@@ -4252,6 +4253,13 @@ void Lens::process_commands(bool read_file)
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
 			}
+			for (int i=1; i < nwords; i++) {
+				if (words[i]=="-unlensed") {
+					unlensed = true;
+					remove_word(i);
+				}
+			}
+
 			for (int i=nwords-1; i > 2; i--) {
 				int pos0;
 				if ((words[i][0]=='f') and (pos0 = words[i].find("=")) != string::npos) {
@@ -4420,6 +4428,7 @@ void Lens::process_commands(bool read_file)
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 					}
 				}
 				else Complain("gaussian requires at least 3 parameters (max_sb, sig, q)");
@@ -4466,6 +4475,7 @@ void Lens::process_commands(bool read_file)
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
@@ -4535,6 +4545,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_multipole_source(m, a_m, r0, theta, xc, yc, sine_term);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 					}
 				}
 				else Complain("sbmpole requires at least 2 parameters (a_m, r0)");
@@ -4578,6 +4589,7 @@ void Lens::process_commands(bool read_file)
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 					}
 				}
 				else Complain("tophat requires at least 3 parameters (sb, radius, q)");
@@ -4606,6 +4618,7 @@ void Lens::process_commands(bool read_file)
 					for (int i=fourier_nmodes-1; i >= 0; i--) {
 						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 					}
+					if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 				}
 				else Complain("spline requires at least 2 parameters (filename, q)");
 			}
@@ -6454,6 +6467,11 @@ void Lens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!use_input_psf_matrix) Complain("no psf has been loaded from FITS file");
 				use_input_psf_matrix = false;
+				if (psf_matrix != NULL) {
+					cout << "Deleting PSF matrix now" << endl;
+					for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
+					delete[] psf_matrix;
+				}
 			}
 			else if (words[1]=="makesrc")
 			{
@@ -7991,7 +8009,8 @@ void Lens::process_commands(bool read_file)
 		{
 			double threshold;
 			if (nwords == 2) {
-				if (!(ws[1] >> threshold)) Complain("invalid PSF width");
+				if (!(ws[1] >> threshold)) Complain("invalid PSF threshold");
+				if (psf_threshold >= 1) Complain("psf threshold must be less than 1");
 				psf_threshold = threshold;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Point spread function (PSF) input threshold = " << psf_threshold << endl;
