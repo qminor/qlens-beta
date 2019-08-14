@@ -866,6 +866,8 @@ public:
 	void multinest(const bool resume_previous);
 	void chi_square_twalk();
 	bool add_dparams_to_chain();
+	bool adopt_point_from_chain(const unsigned long point_num);
+
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
@@ -895,7 +897,7 @@ public:
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
-	bool use_bestfit_model();
+	bool adopt_model(dvector &fitparams);
 
 	bool include_central_image;
 	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;

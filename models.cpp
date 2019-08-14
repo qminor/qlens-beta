@@ -938,7 +938,11 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
 
-	if (parameter_mode==3) {
+	if (parameter_mode==4) {
+		m200 = p1_in;
+		rs_kpc = p2_in;
+		tau_s = p3_in;
+	} else if (parameter_mode==3) {
 		m200 = p1_in;
 		rs_kpc = p2_in;
 		rt_kpc = p3_in;
@@ -965,7 +969,11 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 	ks = lens_in->ks;
 	rs = lens_in->rs;
 	rt = lens_in->rt;
-	if (parameter_mode==3) {
+	if (parameter_mode==4) {
+		m200 = lens_in->m200;
+		rs_kpc = lens_in->rs_kpc;
+		tau_s = lens_in->tau_s;
+	} else if (parameter_mode==3) {
 		m200 = lens_in->m200;
 		rs_kpc = lens_in->rs_kpc;
 		rt_kpc = lens_in->rt_kpc;
@@ -985,7 +993,11 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 
 void Truncated_NFW::assign_paramnames()
 {
-	if (parameter_mode==3) {
+	if (parameter_mode==4) {
+		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
+		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+		paramnames[2] = "tau_s"; latex_paramnames[2] = "\\tau"; latex_param_subscripts[2] = "s";
+	} else if (parameter_mode==3) {
 		paramnames[0] = "mvir"; latex_paramnames[0] = "m"; latex_param_subscripts[0] = "vir";
 		paramnames[1] = "rs_kpc"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "rt_kpc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
@@ -1007,7 +1019,11 @@ void Truncated_NFW::assign_paramnames()
 
 void Truncated_NFW::assign_param_pointers()
 {
-	if (parameter_mode==3) {
+	if (parameter_mode==4) {
+		param[0] = &m200;
+		param[1] = &rs_kpc;
+		param[2] = &tau_s;
+	} else if (parameter_mode==3) {
 		param[0] = &m200;
 		param[1] = &rs_kpc;
 		param[2] = &rt_kpc;
@@ -1035,7 +1051,11 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		// time the parameters are varied
 	}
 
-	if (pmode==3) {
+	if (pmode==4) {
+		params[0] = m200;
+		params[1] = rs_kpc;
+		params[2] = tau_s;
+	} else if (pmode==3) {
 		params[0] = m200;
 		params[1] = rs_kpc;
 		params[2] = rt_kpc;
@@ -1062,7 +1082,7 @@ void Truncated_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (parameter_mode==3) set_ks_c200_from_m200_rs();
+	if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
 	else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200();
 	rmin_einstein_radius = 1e-6*rs;
 }
@@ -1089,7 +1109,11 @@ void Truncated_NFW::update_special_anchored_params()
 
 void Truncated_NFW::set_auto_stepsizes()
 {
-	if (parameter_mode==3) {
+	if (parameter_mode==4) {
+		stepsizes[0] = 0.2*m200;
+		stepsizes[1] = 0.2*rs_kpc;
+		stepsizes[2] = 0.2*tau_s;
+	} else if (parameter_mode==3) {
 		stepsizes[0] = 0.2*m200;
 		stepsizes[1] = 0.2*rs_kpc;
 		stepsizes[2] = 0.2*rt_kpc;
@@ -1132,6 +1156,7 @@ void Truncated_NFW::set_ks_c200_from_m200_rs()
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
+	if (parameter_mode==4) rt_kpc = tau_s * rs_kpc;
 	rt = rt_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -1191,12 +1216,13 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
 	double ds, r200;
-	if (parameter_mode != 3) rs_kpc = rs / kpc_to_arcsec;
+	if ((parameter_mode != 3) and (parameter_mode != 4)) rs_kpc = rs / kpc_to_arcsec;
 	if (parameter_mode == 0) rt_kpc = rt / kpc_to_arcsec;
 	ds = ks * sigma_cr_kpc / rs_kpc;
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 		if (parameter_mode == 2) rt_kpc = tau200 * r200;
+		if (parameter_mode == 4) rt_kpc = tau_s * rs_kpc;
 	} else {
 		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;

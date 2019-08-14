@@ -8637,7 +8637,6 @@ bool Lens::add_dparams_to_chain()
 	int nlines_chunk = nlines/20;
 	if (mpi_id==0) cout << "Calculating derived parameters: [\033[21C]" << endl << endl << flush;
 	int prev_icount, icount = 0;
-	//double dparamval;
 	for (line=group_num; line < nlines; line += mpi_ngroups) {
 		istringstream datastream(chain_lines[line]);
 		datastream >> weight;
@@ -8645,15 +8644,6 @@ bool Lens::add_dparams_to_chain()
 			datastream >> params[i];
 		}
 		fitmodel_calculate_derived_params(params, dparams_new[line]);
-
-		//for (i=0; i < n_fit_parameters; i++) {
-			//cout << params[i] << " ";
-		//}
-		//for (i=0; i < 3; i++) {
-			//datastream >> dparamval;
-			//cout << dparamval << " ";
-		//}
-		//cout << dparams_new[line][0] << " " << dparams_new[line][1] << endl;
 
 		prev_icount = icount;
 		icount = line/nlines_chunk;
@@ -8671,7 +8661,6 @@ bool Lens::add_dparams_to_chain()
 		for (i=groupnum; i < nlines; i += mpi_ngroups) {
 			id = group_leader[groupnum];
 			MPI_Bcast(dparams_new[i],n_derived_params,MPI_DOUBLE,id,MPI_COMM_WORLD);
-			//if (mpi_id==0) cout << "DPARAM: " << dparams_new[i][0] << endl;
 		}
 	}
 #endif
@@ -8708,6 +8697,53 @@ bool Lens::add_dparams_to_chain()
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
+	return true;
+}
+
+bool Lens::adopt_point_from_chain(const unsigned long line_num)
+{
+
+	int i, nparams, n_dparams_old;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams >> n_dparams_old;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	pnumfile.close();
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[n_fit_parameters];
+
+	string chain_str = fit_output_dir + "/" + fit_output_filename;
+	ifstream chain_file(chain_str.c_str());
+
+	unsigned long nlines=0;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		//if (dataline[0]=='#') cout << string(dataline) << endl;
+		nlines++;
+	}
+	if (nlines < line_num) {
+		warn("number of points in chain (%i) is less than the point number requested (%i)",nlines,line_num); return false;
+	}
+
+	chain_file.close();
+	chain_file.open(chain_str.c_str());
+	for (i=1; i <= line_num; i++) {
+		chain_file.getline(dataline,n_characters);
+	}
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	istringstream datastream(dataline);
+	double weight;
+	datastream >> weight;
+	for (i=0; i < n_fit_parameters; i++) {
+		datastream >> params[i];
+	}
+	dvector chain_params(params,n_fit_parameters);
+	adopt_model(chain_params);
+
+	delete[] params;
 	return true;
 }
 
@@ -8822,17 +8858,17 @@ void Lens::chi_square_twalk()
 	fitmodel = NULL;
 }
 
-bool Lens::use_bestfit_model()
+bool Lens::adopt_model(dvector &fitparams)
 {
 	if (nlens == 0) { if (mpi_id==0) warn(warnings,"No fit model has been specified"); return false; }
 	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
-	if (bestfitparams.size() != n_fit_parameters) {
+	if (fitparams.size() != n_fit_parameters) {
 		if (mpi_id==0) warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
 		return false;
 	}
 	int i, index=0;
 	double transformed_params[n_fit_parameters];
-	param_settings->inverse_transform_parameters(bestfitparams.array(),transformed_params);
+	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
 	bool status;
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(transformed_params,index,status);
@@ -9062,7 +9098,7 @@ void Lens::output_bestfit_model()
 	// that way we're not forced to adopt it in the user-end lens object if the user doesn't want to
 	if (model == fitmodel) {
 		model->bestfitparams.input(bestfitparams);
-		model->use_bestfit_model();
+		model->adopt_model(bestfitparams);
 	}
 	bool include_limits;
 	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
@@ -10854,7 +10890,7 @@ void Lens::generate_solution_chain_sdp81()
 			//print_lens_list(true);
 			outside_sb_prior = true;
 			chisq = chi_square_fit_simplex();
-			use_bestfit_model();
+			adopt_model(bestfitparams);
 
 			if (include_subhalo) {
 				calculate_critical_curve_perturbation_radius_numerical(2,false,rmax,menc);
@@ -10965,7 +11001,7 @@ void Lens::generate_solution_chain_sdp81()
 			}
 			outside_sb_prior = true;
 			chisq = chi_square_fit_simplex();
-			use_bestfit_model();
+			adopt_model(bestfitparams);
 
 			if (include_subhalo) {
 				calculate_critical_curve_perturbation_radius_numerical(2,false,rmax,menc);
@@ -11105,7 +11141,7 @@ void Lens::generate_solution_chain_sdp81()
 //			}
 //			outside_sb_prior = true;
 //			chisq = chi_square_fit_simplex();
-//			use_bestfit_model();
+//			adopt_model(bestfitparams);
 //
 //			if (include_subhalo) {
 //				calculate_critical_curve_perturbation_radius_numerical(2,false,rmax,menc);

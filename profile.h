@@ -462,7 +462,7 @@ class Truncated_NFW : public LensProfile
 	// This profile is the same as NFW, times a factor (1+(r/rt)^2)^-2 which smoothly truncates the halo (prescription from Baltz, Marshall & Oguri (2008))
 	private:
 	double ks, rs, rt;
-	double m200, c200, rs_kpc, rt_kpc, tau200; // alternate parametrizations
+	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
 	double median_c_factor; // used if concentration is set to factor*median value
 	bool use_mc_parameters;
 

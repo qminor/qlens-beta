@@ -528,13 +528,14 @@ void Lens::process_commands(bool read_file)
 						cout << "lens tnfw <ks> <rs> <rt> <q/e> [theta] [x-center] [y-center]            (pmode=0)\n"
 								  "lens tnfw <mvir> <c> <rt_kpc> <q/e> [theta] [x-center] [y-center]       (pmode=1)\n"
 								  "lens tnfw <mvir> <c> <tau> <q/e> [theta] [x-center] [y-center]          (pmode=2)\n"
-								  "lens tnfw <mvir> <rs_kpc> <rt_kpc> <q/e> [theta] [x-center] [y-center]  (pmode=3)\n\n"
+								  "lens tnfw <mvir> <rs_kpc> <rt_kpc> <q/e> [theta] [x-center] [y-center]  (pmode=3)\n"
+								  "lens tnfw <mvir> <rs_kpc> <tau_s> <q/e> [theta] [x-center] [y-center]   (pmode=4)\n\n"
 							"Truncated NFW profile from Baltz et al. (2008), which is produced by multiplying the NFW density\n"
 							"profile by a factor (1+(r/rt)^2)^-2, where rt acts as the truncation/tidal radius. Here,\n"
 							"<ks/mvir> is the mass parameter, <rs> is the scale radius (or <c>=concentration for pmode=1,2),\n"
-							"<rt> is the tidal radius (or <tau>=rt/r200 in pmode=2), <q/e> is the axis ratio or ellipticity\n"
-							"(depending on the ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in\n"
-							"degrees) about the center (all defaults = 0).\n"
+							"<rt> is the tidal radius (or <tau>=rt/r200 in pmode=2, or <tau_s>=rt/rs in pmode=4), <q/e> is the\n"
+							"axis ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle of rotation\n"
+							"(counterclockwise, in degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="cnfw")
@@ -3001,13 +3002,17 @@ void Lens::process_commands(bool read_file)
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
 					}
-					if ((pmode < 0) or (pmode > 3)) Complain("parameter mode must be either 0, 1, 2, or 3");
+					if ((pmode < 0) or (pmode > 4)) Complain("parameter mode must be either 0, 1, 2, 3, or 4");
 
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model tnfw");
 					if (nwords >= 6) {
 						double p1, p2, p3;
 						double q, theta = 0, xc = 0, yc = 0;
-						if (pmode==3) {
+						if (pmode==4) {
+							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
+							if (!(ws[3] >> p2)) Complain("invalid rs_kpc parameter for model nfw");
+							if (!(ws[4] >> p3)) Complain("invalid tau_s parameter for model tnfw");
+						} else if (pmode==3) {
 							if (!(ws[2] >> p1)) Complain("invalid mvir parameter for model nfw");
 							if (!(ws[3] >> p2)) Complain("invalid rs_kpc parameter for model nfw");
 							if (!(ws[4] >> p3)) Complain("invalid rt_kpc parameter for model tnfw");
@@ -5648,7 +5653,7 @@ void Lens::process_commands(bool read_file)
 					}
 				} else if (words[1]=="use_bestfit") {
 					if (nwords > 2) Complain("no arguments allowed for 'use_bestfit' command");
-					if (use_bestfit_model()==false) Complain("could not adopt best-fit model");
+					if (adopt_model(bestfitparams)==false) Complain("could not adopt best-fit model");
 				} else if (words[1]=="save_bestfit") {
 					if (nwords > 3) Complain("no more than one argument allowed for 'save_bestfit' command (filename)");
 					if (nwords==3) {
@@ -5698,8 +5703,12 @@ void Lens::process_commands(bool read_file)
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
 				} else if (words[1]=="add_chain_dparams") {
 					if (add_dparams_to_chain()==false) Complain("could not process chain data");
-				}
-				else Complain("unknown fit command");
+				} else if (words[1]=="adopt_chain_point") {
+					unsigned long pnum;
+					if (nwords != 3) Complain("one argument required for command 'fit adopt_chain_point' (line_number)");
+					if (!(ws[2] >> pnum)) Complain("incorrect format for argument to 'fit adopt_chain_point' (line number should be integer)");
+					if (adopt_point_from_chain(pnum)==false) Complain("could not load point from chain");
+				} else Complain("unknown fit command");
 			}
 		}
 		else if (words[0]=="imgdata")
