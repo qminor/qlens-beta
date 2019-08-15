@@ -404,6 +404,7 @@ class PseudoJaffe : public LensProfile
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
+	void get_parameters_pmode(const int pmode, double* params);
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);

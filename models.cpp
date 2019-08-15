@@ -477,8 +477,14 @@ void PseudoJaffe::assign_special_anchored_parameters(LensProfile *host_in, const
 	special_anchor_lens = host_in;
 	double rm, ravg;
 	special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-	a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-	if ((parameter_mode==1) or (parameter_mode==2)) a_kpc = a/kpc_to_arcsec;
+	if (parameter_mode==2) {
+		a = pow(ravg*mtot/(M_PI*sigma_cr),0.3333333333333333);
+		a_kpc = a/kpc_to_arcsec;
+		b = mtot/(M_PI*sigma_cr*(a-s));
+		set_abs_params_from_mtot();
+	}
+	else a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+	if (parameter_mode==1) a_kpc = a/kpc_to_arcsec;
 	update_meta_parameters();
 }
 
@@ -487,10 +493,38 @@ void PseudoJaffe::update_special_anchored_params()
 	if (anchor_special_parameter) {
 		double rm, ravg;
 		special_anchor_lens->get_einstein_radius(rm,ravg,1.0);
-		a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
-		if ((parameter_mode==1) or (parameter_mode==2)) a_kpc = a/kpc_to_arcsec;
+		if (parameter_mode==2) {
+			a = pow(ravg*mtot/(M_PI*sigma_cr),0.3333333333333333);
+			a_kpc = a/kpc_to_arcsec;
+			b = mtot/(M_PI*sigma_cr*(a-s));
+			set_abs_params_from_mtot();
+		}
+		else a = sqrt(ravg*b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
+
+		if (parameter_mode==1) a_kpc = a/kpc_to_arcsec;
 		aprime = a/f_major_axis;
 		asq = aprime*aprime;
+	}
+}
+
+void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
+{
+	if (pmode==2) {
+		params[0] = mtot;
+		params[1] = a_kpc;
+		params[2] = s_kpc;
+	} else if (pmode==1) {
+		params[0] = sigma0;
+		params[1] = a_kpc;
+		params[2] = s_kpc;
+	} else {
+		params[0] = b;
+		params[1] = a;
+		params[2] = s;
+	}
+	for (int i=3; i < n_params; i++) {
+		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		else params[i] = *(param[i]);
 	}
 }
 
