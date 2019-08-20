@@ -4217,8 +4217,10 @@ void Lens::process_commands(bool read_file)
 			vector<double> fourier_Bmvals;
 			int fourier_nmodes=0;
 			bool include_boxiness_parameter = false;
+			bool include_fmode_rscale = false;
 			bool unlensed = false;
 			double c0val = 0;
+			double rfsc_val = 0;
 
 			if (words[0]=="fit") {
 				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
@@ -4301,6 +4303,17 @@ void Lens::process_commands(bool read_file)
 					if (!(c0str >> c0val)) Complain("invalid c0 value");
 					remove_word(i);
 					include_boxiness_parameter = true;
+				}
+			}
+			for (int i=2; i < nwords; i++) {
+				if ((words[i][0]=='r') and (words[i][1]=='f') and (words[i][2]=='s') and (words[i][3]=='c') and (words[i][4]=='=') and (!update_parameters)) {
+					string rfscstring;
+					rfscstring = words[i].substr(5);
+					stringstream rfscstr;
+					rfscstr << rfscstring;
+					if (!(rfscstr >> rfsc_val)) Complain("invalid rfsc value");
+					remove_word(i);
+					include_fmode_rscale = true;
 				}
 			}
 
@@ -4415,9 +4428,10 @@ void Lens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_fmode_rscale) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0 parameter or fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -4429,6 +4443,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -4462,6 +4477,7 @@ void Lens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_fmode_rscale) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,q,theta,xc,yc) in model sersic");
@@ -4476,6 +4492,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}

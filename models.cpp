@@ -580,7 +580,6 @@ double PseudoJaffe::kappa_rsq_deriv(const double rsq)
 
 double PseudoJaffe::kapavg_spherical_rsq(const double rsq)
 {
-	double ans= b*((sqrt(s*s+rsq)-s) - (sqrt(a*a+rsq)-a))/rsq;
 	return b*((sqrt(s*s+rsq)-s) - (sqrt(a*a+rsq)-a))/rsq;
 }
 

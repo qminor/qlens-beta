@@ -62,7 +62,9 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
 	}
 	include_boxiness_parameter = sb_in->include_boxiness_parameter;
+	include_fmode_rscale = sb_in->include_fmode_rscale;
 	if (include_boxiness_parameter) c0 = sb_in->c0;
+	if (include_fmode_rscale) fmode_rscale = sb_in->fmode_rscale;
 	assign_param_pointers();
 }
 
@@ -70,6 +72,7 @@ void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
 	include_boxiness_parameter = false;
+	include_fmode_rscale = false;
 	is_lensed = true; // default
 	n_fourier_modes = 0;
 	n_vary_params = 0;
@@ -110,6 +113,35 @@ void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 	latex_paramnames[n_params-1] = "c";
 	latex_param_subscripts[n_params-1] = "0";
 	stepsizes[n_params-1] = 0.1; // arbitrary
+	set_auto_penalty_limits[n_params-1] = false;
+
+	delete[] param;
+	param = new double*[n_params];
+	assign_param_pointers();
+}
+
+void SB_Profile::add_fmode_rscale(const double rscale_in, const bool vary_rscale)
+{
+	if (include_fmode_rscale) return;
+	include_fmode_rscale = true;
+	fmode_rscale = rscale_in;
+	n_params++;
+
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	if (vary_rscale) n_vary_params++;
+
+	vary_params[n_params-1] = vary_rscale;
+	paramnames[n_params-1] = "rfsc";
+	latex_paramnames[n_params-1] = "r";
+	latex_param_subscripts[n_params-1] = "fsc";
+	stepsizes[n_params-1] = 0.01; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
 
 	delete[] param;
@@ -210,6 +242,7 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	param[qi++] = &x_center;
 	param[qi++] = &y_center;
 	if (include_boxiness_parameter) param[qi++] = &c0;
+	if (include_fmode_rscale) param[qi++] = &fmode_rscale;
 	if (n_fourier_modes > 0) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			param[qi++] = &fourier_mode_cosamp[i];
@@ -610,17 +643,25 @@ double SB_Profile::surface_brightness(double x, double y)
 		}
 	}
 
-	double rsq;
-	if ((include_boxiness_parameter) and (c0 != 0.0)) {
-		rsq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
+	double rsq = x*x + y*y/(q*q);
+	double rscale_fac, cc0;
+	if (include_fmode_rscale) {
+		if (fmode_rscale==0) rscale_fac = 1.0;
+		else rscale_fac = (erf((sqrt(rsq)*6.0/fmode_rscale-3.0))+1.0)/2;
 	} else {
-		rsq = x*x + y*y/(q*q);
+		rscale_fac = 1.0;
+	}
+	cc0 = c0*rscale_fac;
+	if ((include_boxiness_parameter) and (c0 != 0.0)) {
+		rsq = pow(pow(abs(x),cc0+2.0) + pow(abs(y/q),cc0+2.0),2.0/(cc0+2.0));
+	//} else {
+		//rsq = x*x + y*y/(q*q);
 	}
 	if (n_fourier_modes > 0) {
 		double fourier_factor = 1.0;
 		for (int i=0; i < n_fourier_modes; i++) {
 			//fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*(phi_q + fourier_mode_phivals[i]));
-			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+			fourier_factor += rscale_fac*(fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q));
 		}
 		rsq *= fourier_factor*fourier_factor;
 	}
@@ -708,6 +749,7 @@ double SB_Profile::window_rmax()
 
 void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits)
 {
+	// You need to fix the Fourier mode part--there needs to be 'f1=', 'f2=' etc. in front of them. Likewise for c0. FIX THIS!!!!!!!!!!!!!!!
 	scriptout << setprecision(16);
 	scriptout << "fit source " << model_name << " ";
 	if (!is_lensed) scriptout << "-unlensed ";
