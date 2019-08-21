@@ -793,7 +793,7 @@ public:
 	// the remaining functions in this class are all contained in lens.cpp
 	void add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
-	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for ptmass model
+	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);

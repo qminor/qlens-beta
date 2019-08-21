@@ -661,6 +661,7 @@ class PointMass : public LensProfile
 {
 	private:
 	double b; // Einstein radius of point mass
+	double mtot; // alternative parameterization
 
 	double kappa_rsq(const double rsq) { return 0; }
 	double kappa_rsq_deriv(const double rsq) { return 0; }
@@ -670,14 +671,12 @@ class PointMass : public LensProfile
 
 	public:
 	PointMass() : LensProfile() {}
-	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, Lens*);
+	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, const int parameter_mode_in, Lens*);
 	PointMass(const PointMass* lens_in);
 
 	void assign_paramnames();
 	void assign_param_pointers();
-	void update_meta_parameters() {
-		update_zlens_meta_parameters();
-	}
+	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 

@@ -2424,7 +2424,7 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 
 /***************************** Point mass *****************************/
 
-PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, Lens* cosmo_in)
+PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &p_in, const double &xc_in, const double &yc_in, const int parameter_mode_in, Lens* cosmo_in)
 {
 	cosmo = cosmo_in;
 	lenstype = PTMASS;
@@ -2432,10 +2432,15 @@ PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
-	b = bb;
+	setup_base_lens(4,false,parameter_mode_in); // number of parameters = 3, is_elliptical_lens = false
+	if (parameter_mode==1) {
+		mtot = p_in;
+	} else {
+		b = p_in;
+	}
 	x_center = xc_in;
 	y_center = yc_in;
+	update_meta_parameters();
 	set_model_specific_integration_pointers();
 }
 
@@ -2443,19 +2448,29 @@ PointMass::PointMass(const PointMass* lens_in)
 {
 	copy_base_lensdata(lens_in);
 	b = lens_in->b;
+	if (parameter_mode==1) mtot = lens_in->mtot;
 	// the base class copies q and theta, which are useless here, but it's simpler to just call it
 }
 
 void PointMass::assign_paramnames()
 {
-	paramnames[0] = "b";  latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	if (parameter_mode==1) {
+		paramnames[0] = "mtot";  latex_paramnames[0] = "M"; latex_param_subscripts[0] = "";
+	} else {
+		paramnames[0] = "b";  latex_paramnames[0] = "b"; latex_param_subscripts[0] = "";
+	}
 	paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
 	paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
+	paramnames[3] = "z"; latex_paramnames[3] = "z"; latex_param_subscripts[3] = "l";
 }
 
 void PointMass::assign_param_pointers()
 {
-	param[0] = &b;
+	if (parameter_mode==1) {
+		param[0] = &mtot;
+	} else {
+		param[0] = &b;
+	}
 	param[1] = &x_center;
 	param[2] = &y_center;
 	param[3] = &zlens;
@@ -2465,7 +2480,11 @@ void PointMass::assign_param_pointers()
 
 void PointMass::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1*b;
+	if (parameter_mode==1) {
+		stepsizes[0] = 0.1*mtot;
+	} else {
+		stepsizes[0] = 0.1*b;
+	}
 	stepsizes[1] = 0.1*b;
 	stepsizes[2] = 0.1*b;
 	stepsizes[3] = 0.1;
@@ -2476,6 +2495,12 @@ void PointMass::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = false;
 	set_auto_penalty_limits[2] = false;
+}
+
+void PointMass::update_meta_parameters()
+{
+	update_zlens_meta_parameters();
+	if (parameter_mode==1) b = sqrt(mtot/(M_PI*sigma_cr));
 }
 
 void PointMass::set_model_specific_integration_pointers()
@@ -2545,9 +2570,9 @@ void PointMass::get_einstein_radius(double& r1, double& r2, const double zfactor
 	r2 = r1;
 }
 
-bool PointMass::calculate_total_scaled_mass(double& total_mass)
+bool PointMass::calculate_total_scaled_mass(double& total_scaled_mass)
 {
-	total_mass = M_PI*b*b;
+	total_scaled_mass = M_PI*b*b;
 	return true;
 }
 
@@ -2592,7 +2617,7 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 		k0 = 1.0; // This will be reset when update_meta_parameters() is called
 	}
 	else k0 = mass_param_in;
-	cout << "s=" << s << " " << "a=" << a << " " << gamma << " " << k0 << endl;
+	//cout << "s=" << s << " " << "a=" << a << " " << gamma << " " << k0 << endl;
 
 	update_meta_parameters_and_pointers();
 }

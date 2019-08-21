@@ -442,14 +442,15 @@ void Lens::process_commands(bool read_file)
 						cout << "lens alpha <b> <alpha> <s> <q/e> [theta] [x-center] [y-center]\n\n"
 							"where <b> is the mass parameter, <alpha> is the exponent of the radial power law (alpha=1 for\n"
 							"isothermal), <s> is the core radius, <q/e> is the axis ratio or ellipticity (depending on the\n"
-							"ellipticity mode) , and [theta] is the angle of rotation (counterclockwise, in degrees) about the\n"
+							"ellipticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees) about the\n"
 							"center (defaults=0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="ptmass")
-						cout << "lens ptmass <b> [x-center] [y-center]\n\n"
-							"where <b> is the Einstein radius of the point mass. If center coordinates are not\n"
-							"specified, the lens is centered at the origin by default.\n";
+						cout << "lens ptmass <b> [x-center] [y-center]        (pmode=0)\n"
+								  "lens ptmass <mtot> [x-center] [y-center]     (pmode=1)\n\n"
+							"where <b> is the Einstein radius of the point mass (if pmode=1, the mass <mtot> is used instead). If center\n"
+							"coordinates are not specified, the lens is centered at the origin by default.\n";
 					else if (words[2]=="sheet")
 						cout << "lens sheet <kappa> [x-center] [y-center]\n\n"
 							"where <kappa> is the external convergence of the mass sheet. Although center coordinates might appear\n"
@@ -3577,8 +3578,12 @@ void Lens::process_commands(bool read_file)
 				{
 					if (nwords > 5) Complain("more than 3 parameters not allowed for model ptmass");
 					if (nwords >= 3) {
-						double b, xc = 0, yc = 0;
-						if (!(ws[2] >> b)) Complain("invalid b parameter for model ptmass");
+						double p1, xc = 0, yc = 0;
+						if (pmode==1) {
+							if (!(ws[2] >> p1)) Complain("invalid mtot parameter for model ptmass");
+						} else {
+							if (!(ws[2] >> p1)) Complain("invalid b parameter for model ptmass");
+						}
 						if (nwords >= 4) {
 							if (nwords == 4) {
 								if (words[3].find("anchor_center=")==0) {
@@ -3598,7 +3603,7 @@ void Lens::process_commands(bool read_file)
 						}
 						param_vals.input(4);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-						param_vals[0]=b; param_vals[1]=xc; param_vals[2]=yc;
+						param_vals[0]=p1; param_vals[1]=xc; param_vals[2]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
 						else param_vals[3]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
@@ -3637,7 +3642,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_ptmass_lens(zl_in, reference_source_redshift, b, xc, yc);
+							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);

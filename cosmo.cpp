@@ -111,7 +111,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	omega_b = omega_baryon;
 	omega_lambda = omega_lamb;
 	hubble = hub;
-	hubble_length = 2.998e3/hubble; // in Mpc
+	hubble_length = 2.99792458e3/hubble; // in Mpc
 	dcrit0 = 2.775e11*hubble*hubble;  // units are solar masses per Mpc^3
 	A_s = A_s_in;
 	k_pivot = default_k_pivot;
@@ -393,7 +393,7 @@ void Cosmology::rms_tophat_spline()
 
 void Cosmology::spline_comoving_distance(void)
 {
-	const int zsteps = 50;
+	const int zsteps = 200;
 	dvector z_table(zsteps), d_table(zsteps);
 	int i;
 	double z, zmin, zmax, zstep;

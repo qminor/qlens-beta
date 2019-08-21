@@ -75,9 +75,9 @@ int main(int argc, char *argv[])
 	if (mode==Display_Distances) {
 		double comoving_distance, angular_diameter_distance, luminosity_distance;
 		const double Mpc_to_Gpc = 1e-3;
-		comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance_exact(redshift);
-		angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance_exact(redshift);
-		luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance_exact(redshift);
+		comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance(redshift);
+		angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance(redshift);
+		luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance(redshift);
 		cout << "z = " << redshift << " (assuming flat Universe)" << endl;
 		cout << "Comoving distance: " << comoving_distance << " Gpc" << endl;
 		cout << "Angular diameter distance: " << angular_diameter_distance << " Gpc" << endl;
@@ -101,13 +101,13 @@ int main(int argc, char *argv[])
 		}
 	} else if (mode==Convert_Length_To_Arcsec) {
 		cout << "z = " << redshift << " (assuming flat Universe)" << endl;
-		double kpc_to_arcsec = 1e-3*(180/M_PI)*3600/cosmo.angular_diameter_distance(redshift);
+		double kpc_to_arcsec = 1e-3*(180/M_PI)*3600/cosmo.angular_diameter_distance_exact(redshift);
 		double angular_size = object_size * kpc_to_arcsec;
 		cout << "object size: " << object_size << " kpc\n";
 		cout << "angular size: " << angular_size << " arcsec\n";
 	} else if (mode==Convert_Arcsec_To_Length) {
 		cout << "z = " << redshift << " (assuming flat Universe)" << endl;
-		double kpc_to_arcsec = 1e-3*(180/M_PI)*3600/cosmo.angular_diameter_distance(redshift);
+		double kpc_to_arcsec = 1e-3*(180/M_PI)*3600/cosmo.angular_diameter_distance_exact(redshift);
 		double object_size_kpc = object_size / kpc_to_arcsec;
 		cout << "angular size: " << object_size << " arcsec\n";
 		cout << "object size: " << object_size_kpc << " kpc\n";

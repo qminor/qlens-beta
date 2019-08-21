@@ -1484,7 +1484,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 
 	switch (name) {
 		case PTMASS:
-			lens_list[nlens-1] = new PointMass(zl, zs, mass_parameter, xc, yc, this); break;
+			lens_list[nlens-1] = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
 		case SHEET:
 			lens_list[nlens-1] = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
 		case ALPHA:
@@ -1541,9 +1541,9 @@ void Lens::add_shear_lens(const double zl, const double zs, const double shear_p
 	add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
-void Lens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
+void Lens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode)
 {
-	add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
+	add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc,0,0,pmode);
 }
 
 void Lens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
