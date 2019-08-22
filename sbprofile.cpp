@@ -752,7 +752,6 @@ double SB_Profile::window_rmax()
 
 void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits)
 {
-	// You need to fix the Fourier mode part--there needs to be 'f1=', 'f2=' etc. in front of them. Likewise for c0. FIX THIS!!!!!!!!!!!!!!!
 	scriptout << setprecision(16);
 	scriptout << "fit source " << model_name << " ";
 	if (!is_lensed) scriptout << "-unlensed ";

@@ -1178,8 +1178,8 @@ void Lens::process_commands(bool read_file)
 								"by sim_pixel_noise.\n\n"
 								"Optional arguments:\n"
 								"  [-fits] plots to FITS files; filename(s) must be specified with this option\n"
-								"  [-residual] plots residual image by subtracting from the data image, showing only masked pixels\n"
-								"  [-residual-nomask] plots residual image by subtracting from the data image, showing all pixels\n"
+								"  [-residual] plots residual image by subtracting from the data image\n"
+								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
 								"               aging 2x2 or 4x4 or 8x8 pixel groups to generate low-res pixel surface brightness\n"
@@ -6688,7 +6688,7 @@ void Lens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if (args[i]=="-residual") plot_residual = true;
-						else if (args[i]=="-residual-nomask") { plot_residual = true; show_mask_only = false; }
+						else if (args[i]=="-nomask") { show_mask_only = false; }
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
 						else if (args[i]=="-reduce2") reduce_factor = 2;
@@ -6712,7 +6712,7 @@ void Lens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
-				if ((plot_srcplane) and (range1 == "")) {
+				if ((source_fit_mode==Pixellated_Source) and (plot_srcplane) and (range1 == "")) {
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
 					xminstream << source_pixel_grid->srcgrid_xmin; xminstream >> xminstr;

@@ -4212,15 +4212,19 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
+			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j])) {
 				if (!plot_residual) pixel_image_file << surface_brightness[i][j];
 				else {
 					residual = lens->image_pixel_data->surface_brightness[i][j] - surface_brightness[i][j];
 					pixel_image_file << residual;
 				}
 			} else {
-				if ((!plot_residual) or (show_only_mask)) pixel_image_file << "NaN";
-				else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
+				if (plot_residual) {
+					if (show_only_mask) pixel_image_file << "NaN";
+					else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
+				} else {
+					pixel_image_file << "NaN";
+				}
 			}
 			if (i < x_N-1) pixel_image_file << " ";
 		}
