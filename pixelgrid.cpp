@@ -3135,6 +3135,7 @@ bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 	long naxes[2] = {1,1};
 	double *pixels;
 	double x, y, xstep, ystep;
+	double peak_sb = -1e30;
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
@@ -3158,6 +3159,7 @@ bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 
 					for (i=0; i < naxes[0]; i++) {
 						input_psf_matrix[i][j] = pixels[i];
+						if (pixels[i] > peak_sb) peak_sb = pixels[i];
 					}
 				}
 				delete[] pixels;
@@ -3175,7 +3177,7 @@ bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 	jmax = jmid;
 	for (i=0; i < nx; i++) {
 		for (j=0; j < ny; j++) {
-			if (input_psf_matrix[i][j] > psf_threshold) {
+			if (input_psf_matrix[i][j] > psf_threshold*peak_sb) {
 				if (i < imin) imin=i;
 				if (i > imax) imax=i;
 				if (j < jmin) jmin=j;
@@ -3215,7 +3217,7 @@ bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 	//}
 	//cout << psf_npixels_x << " " << psf_npixels_y << " " << nx_half << " " << ny_half << endl;
 
-	if ((verbal) and (mpi_id==0)) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
+	if ((verbal) and (mpi_id==0)) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << " (input PSF dimensions: " << nx << " " << ny << ")" << endl << endl;
 	for (i=0; i < nx; i++) delete[] input_psf_matrix[i];
 	delete[] input_psf_matrix;
 
@@ -3754,7 +3756,7 @@ void ImagePixelData::add_point_image_from_centroid(ImageData* point_image_data, 
 	point_image_data->add_image(pos,centroid_err,total_flux,flux_err,0,0);
 }
 
-void ImagePixelData::plot_surface_brightness(string outfile_root)
+void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -3773,13 +3775,10 @@ void ImagePixelData::plot_surface_brightness(string outfile_root)
 	}	
 	for (j=0; j < npixels_y; j++) {
 		for (i=0; i < npixels_x; i++) {
-			if ((require_fit == NULL) or (require_fit[i][j])) {
-				//if (abs(surface_brightness[i][j]) > lens->noise_threshold*lens->data_pixel_noise)
-					pixel_image_file << surface_brightness[i][j];
-				//else
-					//pixel_image_file << "0";
+			if ((!show_only_mask) or (require_fit == NULL) or (require_fit[i][j])) {
+				pixel_image_file << surface_brightness[i][j];
 			} else {
-				pixel_image_file << "0";
+				pixel_image_file << "NaN";
 			}
 			if (i < npixels_x-1) pixel_image_file << " ";
 		}
@@ -4192,7 +4191,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betaf
 	}
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual)
+void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -4210,6 +4209,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 	}	
 	int i,j;
 	double residual;
+
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
@@ -4219,7 +4219,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 					pixel_image_file << residual;
 				}
 			} else {
-				if (!plot_residual) pixel_image_file << "0";
+				if ((!plot_residual) or (show_only_mask)) pixel_image_file << "NaN";
 				else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
 			}
 			if (i < x_N-1) pixel_image_file << " ";
@@ -5448,11 +5448,11 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 	}
 #endif
 
-	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
 	else if (generate_PSF_matrix()==false) return;
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
 	ny_half = psf_npixels_y/2;
@@ -5606,7 +5606,6 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 
 void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 {
-	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -5623,6 +5622,7 @@ void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 			return;
 		}
 	}
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
 	ny_half = psf_npixels_y/2;

@@ -155,9 +155,11 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	fourier_mode_mvals.resize(n_fourier_modes);
 	fourier_mode_cosamp.resize(n_fourier_modes);
 	fourier_mode_sinamp.resize(n_fourier_modes);
+	fourier_mode_paramnum.resize(n_fourier_modes);
 	fourier_mode_mvals[n_fourier_modes-1] = m_in;
 	fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
 	fourier_mode_sinamp[n_fourier_modes-1] = phi_in;
+	fourier_mode_paramnum[n_fourier_modes-1] = n_params;
 	n_params += 2;
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
@@ -196,7 +198,6 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 
 void SB_Profile::remove_fourier_modes()
 {
-	fourier_mode_sinamp.resize(n_fourier_modes);
 	n_params -= n_fourier_modes*2;
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
@@ -211,7 +212,9 @@ void SB_Profile::remove_fourier_modes()
 
 	n_fourier_modes = 0;
 	fourier_mode_mvals.resize(n_fourier_modes);
+	fourier_mode_sinamp.resize(n_fourier_modes);
 	fourier_mode_cosamp.resize(n_fourier_modes);
+	fourier_mode_paramnum.resize(n_fourier_modes);
 
 	delete[] param;
 	param = new double*[n_params];
@@ -757,6 +760,11 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 	for (int i=0; i < n_params; i++) {
 		if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
 		else {
+			if (paramnames[i]=="c0") scriptout << "c0=";
+			if (paramnames[i]=="rfsc") scriptout << "rfsc=";
+			for (int j=0; j < n_fourier_modes; j++) {
+				if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "=";
+			}
 			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
 			else scriptout << *(param[i]);
 		}

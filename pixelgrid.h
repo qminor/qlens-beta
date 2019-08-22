@@ -231,7 +231,7 @@ class ImagePixelGrid : public Sort
 	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness();
-	void plot_surface_brightness(string outfile_root, bool plot_residual = false);
+	void plot_surface_brightness(string outfile_root, bool plot_residual = false, bool show_only_mask = true);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise(const double& pixel_noise_sig);
@@ -304,7 +304,7 @@ struct ImagePixelData
 		ymax=ymax_in;
 	}
 	void set_pixel_size(const double size) { pixel_size = size; }
-	void plot_surface_brightness(string outfile_root);
+	void plot_surface_brightness(string outfile_root, bool show_only_mask);
 };
 
 

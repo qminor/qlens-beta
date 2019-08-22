@@ -1178,7 +1178,8 @@ void Lens::process_commands(bool read_file)
 								"by sim_pixel_noise.\n\n"
 								"Optional arguments:\n"
 								"  [-fits] plots to FITS files; filename(s) must be specified with this option\n"
-								"  [-residual] plots residual image by subtracting from the data image\n"
+								"  [-residual] plots residual image by subtracting from the data image, showing only masked pixels\n"
+								"  [-residual-nomask] plots residual image by subtracting from the data image, showing all pixels\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
 								"               aging 2x2 or 4x4 or 8x8 pixel groups to generate low-res pixel surface brightness\n"
@@ -1223,6 +1224,8 @@ void Lens::process_commands(bool read_file)
 								"Plot the image surface brightness pixel data, which is loaded using 'sbmap loadimg'. If no\n"
 								"file argument is given, uses file label 'img_pixel' for plotting, and the result is plotted\n"
 								"to the screen (the output file conventions are the same as in 'sbmap plotimg').\n\n"
+								"Optional arguments:\n"
+								"  [-nomask] show all pixels, including those outside the chosen mask\n\n"
 								"OPTIONAL: arguments to 'sbmap plotdata' can be followed with terms in brackets [#:#][#:#]\n"
 								"specifying the plotting range for the x and y axes, respectively. A range is allowed\n"
 								"for both the source and image plots. An example in postscript mode:\n\n"
@@ -5814,7 +5817,7 @@ void Lens::process_commands(bool read_file)
 						run_plotter("imgdat");
 					else {
 						if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-						image_pixel_data->plot_surface_brightness("img_pixel");
+						image_pixel_data->plot_surface_brightness("img_pixel",true);
 						stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 						string xminstr, xmaxstr, yminstr, ymaxstr;
 						xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
@@ -6341,7 +6344,7 @@ void Lens::process_commands(bool read_file)
 				else Complain("could not create grid to plot images");
 			} else if ((nwords==2) and (words[1]=="sbmap")) {
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->plot_surface_brightness("img_pixel");
+				image_pixel_data->plot_surface_brightness("img_pixel",true);
 				if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {	// default source file
 					if (show_cc) run_plotter_range("imgpixel_imgpts_plural",range1);
 					else run_plotter_range("imgpixel_imgpts_plural_nocc",range1);
@@ -6499,9 +6502,9 @@ void Lens::process_commands(bool read_file)
 				if (!use_input_psf_matrix) Complain("no psf has been loaded from FITS file");
 				use_input_psf_matrix = false;
 				if (psf_matrix != NULL) {
-					cout << "Deleting PSF matrix now" << endl;
 					for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 					delete[] psf_matrix;
+					psf_matrix = NULL;
 				}
 			}
 			else if (words[1]=="makesrc")
@@ -6523,7 +6526,16 @@ void Lens::process_commands(bool read_file)
 			}
 			else if (words[1]=="plotdata")
 			{
+				bool show_mask_only = true;
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-nomask") show_mask_only = false;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
 				string range;
 				extract_word_starts_with('[',1,nwords-1,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if (range.empty()) {
@@ -6536,14 +6548,14 @@ void Lens::process_commands(bool read_file)
 					range = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
 				}
 				if (nwords == 2) {
-					image_pixel_data->plot_surface_brightness("data_pixel");
+					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only);
 					run_plotter_range("datapixel",range);
 				} else if (nwords == 3) {
 					if (terminal==TEXT) {
-						image_pixel_data->plot_surface_brightness(words[2]);
+						image_pixel_data->plot_surface_brightness(words[2],show_mask_only);
 					}
 					else {
-						image_pixel_data->plot_surface_brightness("data_pixel");
+						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only);
 						run_plotter("datapixel",words[2],range);
 					}
 				}
@@ -6665,6 +6677,7 @@ void Lens::process_commands(bool read_file)
 			{
 				bool replot = false;
 				bool plot_residual = false;
+				bool show_mask_only = true;
 				bool plot_fits = false;
 				bool omit_source = false;
 				int reduce_factor = 1;
@@ -6675,6 +6688,7 @@ void Lens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if (args[i]=="-residual") plot_residual = true;
+						else if (args[i]=="-residual-nomask") { plot_residual = true; show_mask_only = false; }
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
 						else if (args[i]=="-reduce2") reduce_factor = 2;
@@ -6711,7 +6725,7 @@ void Lens::process_commands(bool read_file)
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
 							if (!offload_to_data) {
 								if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 								if (show_cc) {
@@ -6725,9 +6739,9 @@ void Lens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,offload_to_data);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
 							if (show_cc) {
 								run_plotter("imgpixel",words[2],range1);
 							} else {
@@ -6737,11 +6751,11 @@ void Lens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,offload_to_data);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data);
 								if ((source_pixel_grid != NULL) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
 							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);

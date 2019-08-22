@@ -44,7 +44,7 @@ class SB_Profile
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical isophotes (zero by default)
-	ivector fourier_mode_mvals;
+	ivector fourier_mode_mvals, fourier_mode_paramnum;
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
 
 	void set_nparams(const int &n_params_in);

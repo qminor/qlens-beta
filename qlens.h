@@ -651,7 +651,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool offload_to_data = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool show_mask_only = true, bool offload_to_data = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();

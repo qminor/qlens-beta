@@ -7822,6 +7822,7 @@ double Lens::chi_square_fit_powell()
 		cout << "done\n\n";
 	}
 	if (mpi_id==0) {
+		// The following is the same code as in the simplex(...) function, which is stupid. You should put it in a separate function so that you don't have two copies of the same code. DO THIS LATER!!!
 		if (use_scientific_notation) cout << setiosflags(ios::scientific);
 		else {
 			cout << resetiosflags(ios::scientific);
@@ -7876,11 +7877,11 @@ double Lens::chi_square_fit_powell()
 			} else {
 				cout << "Error: Fisher matrix is singular, marginalized errors cannot be calculated\n";
 				for (int i=0; i < n_fit_parameters; i++)
-					cout << transformed_parameter_names[i] << ": " << fitparams[i];
+					cout << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
 			}
 		} else {
 			for (int i=0; i < n_fit_parameters; i++)
-				cout << transformed_parameter_names[i] << ": " << fitparams[i];
+				cout << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
 		}
 		cout << endl;
 		if (auto_save_bestfit) output_bestfit_model();
@@ -10144,7 +10145,7 @@ bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool offload_to_data, bool verbose)
+bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool show_mask_only, bool offload_to_data, bool verbose)
 {
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	if ((source_fit_mode==Parameterized_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
@@ -10207,7 +10208,7 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 	}
 
 	if (output_fits==false) {
-		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual);
+		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
