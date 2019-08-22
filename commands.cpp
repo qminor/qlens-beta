@@ -6712,7 +6712,7 @@ void Lens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
-				if ((source_fit_mode==Pixellated_Source) and (plot_srcplane) and (range1 == "")) {
+				if ((nwords != 3) and (plot_srcplane) and (range1 == "")) { // if nwords==3, then source plane isn't being plotted
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
 					xminstream << source_pixel_grid->srcgrid_xmin; xminstream >> xminstr;
