@@ -589,6 +589,16 @@ int main(int argc, char *argv[])
 					}
 				}
 				n_2dposts = post2d_i.size();
+#ifdef USE_OPENMP
+				int omp_nthreads0=omp_nthreads;
+				while (n_2dposts < mpi_np*omp_nthreads) {
+					omp_nthreads--;
+				}
+				if (omp_nthreads < omp_nthreads0) {
+					omp_set_num_threads(omp_nthreads);
+					if (mpi_id==0) cout << "Too many threads, reducing number of threads to " << omp_nthreads << "..." << endl;
+				}
+#endif
 
 				int mpi_chunk, mpi_start, mpi_end;
 				mpi_chunk = n_2dposts / mpi_np;
