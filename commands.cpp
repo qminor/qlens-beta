@@ -752,12 +752,13 @@ void Lens::process_commands(bool read_file)
 							"source point being plotted. So in the above example, critical curves are plotted for the source\n"
 							"redshift corresponding to image set 3.\n";
 					else if (words[2]=="run")
-						cout << "fit run [-resume]\n\n"
+						cout << "fit run [-resume/process]\n\n"
 							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's method)\n"
 							"or a Monte Carlo sampler (e.g. MCMC or nested sampling method) depending on the fit method that\n"
 							"has been selected. If using MultiNest or PolyChord, you can add the argument '-resume' to continue\n"
-							"a previous run that had been interrupted. For more information about the output produced by these\n"
-							"methods, type 'help fit method <method>' for whichever fit method is selected.\n";
+							"a previous run that had been interrupted; if a run has already been finished previously, you can\n"
+							"add the argument '-process' to process the chains from the previous run. For more info about the\n"
+							"output produced by these methods, type 'help fit method <method>'.\n";
 					else if (words[2]=="chisq")
 						cout << "fit chisq [diag]\n\n"
 							"Output the chi-square value for the current model and data. If using more than one chi-square\n"
@@ -5348,14 +5349,14 @@ void Lens::process_commands(bool read_file)
 						if (nwords==3) {
 							if (words[2]=="-resume") resume = true;
 							else if (words[2]=="-process") skip_run = true;
-							else Complain("invalid arguments after 'fit run'");
-						}
+							else Complain("invalid argument after 'fit run'");
+						} else Complain("only one (optional) argument allowed after 'fit run'");
 					}
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
 					else if (fitmethod==POLYCHORD) polychord(resume,skip_run);
-					else if (fitmethod==MULTINEST) multinest(resume);
+					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 				}

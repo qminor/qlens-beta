@@ -8023,12 +8023,12 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
-void Lens::multinest(const bool resume_sampling)
+void Lens::multinest(const bool resume_previous, const bool skip_run)
 {
 #ifdef USE_MULTINEST
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
-	if ((mpi_id==0) and (!resume_sampling) and (fit_output_dir != ".")) {
+	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
 		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
@@ -8113,7 +8113,7 @@ void Lens::multinest(const bool resume_sampling)
 	if (mpi_id==0) fb = 1;					// need feedback on standard output?
 	else fb = 0;
 
-	if (resume_sampling) resume = 1;					// resume from a previous job?
+	if (resume_previous) resume = 1;					// resume from a previous job?
 	else resume = 0;
 
 	outfile = 1;				// write output files?
@@ -8129,25 +8129,27 @@ void Lens::multinest(const bool resume_sampling)
 
 	running_fit = true;
 
+	if (!skip_run) {
 #ifdef MULTINEST_MOD
-	MPI_Group world_group;
-	MPI_Comm world_comm;
-	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
-	MPI_Comm_create(MPI_COMM_WORLD, world_group, &world_comm);
+		MPI_Group world_group;
+		MPI_Comm world_comm;
+		MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+		MPI_Comm_create(MPI_COMM_WORLD, world_group, &world_comm);
 
-	MPI_Group leader_group;
-	MPI_Comm leaders_comm;
-	MPI_Group_incl(world_group, mpi_ngroups, group_leader, &leader_group);
-	MPI_Comm_create(world_comm, leader_group, &leaders_comm);
+		MPI_Group leader_group;
+		MPI_Comm leaders_comm;
+		MPI_Group_incl(world_group, mpi_ngroups, group_leader, &leader_group);
+		MPI_Comm_create(world_comm, leader_group, &leaders_comm);
 
-	MPI_Fint fortran_comm = MPI_Comm_c2f(leaders_comm);
+		MPI_Fint fortran_comm = MPI_Comm_c2f(leaders_comm);
 
-	int follower_rank = (group_id==0) ? -1 : group_num;
+		int follower_rank = (group_id==0) ? -1 : group_num;
 
-	nested::run(fortran_comm, follower_rank, mpi_ngroups, IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
+		nested::run(fortran_comm, follower_rank, mpi_ngroups, IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
 #else
-	nested::run(IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
+		nested::run(IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
 #endif
+	}
 
 	bestfitparams.input(n_fit_parameters);
 

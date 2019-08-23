@@ -550,6 +550,37 @@ int main(int argc, char *argv[])
 			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
 			if ((!make_1d_posts) and (show_markers)) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			do {
+				int k, n_2dposts;
+				vector<int> post2d_i, post2d_j;
+				for (i=0; i < nparams_eff_2d; i++) {
+					if (hist2d_active_params[i]) {
+						for (j=i+1; j < nparams_eff_2d; j++) {
+							if (hist2d_active_params[j]) {
+								post2d_i.push_back(i);
+								post2d_j.push_back(j);
+							}
+						}
+					}
+				}
+				n_2dposts = post2d_i.size();
+
+				if (derived_param_fail) derived_param_fail = false;
+				#pragma omp parallel for private(i,j,k) schedule(dynamic)
+				for (k=0; k < n_2dposts; k++) {
+					i = post2d_i[k];
+					j = post2d_j[k];
+					string hist_out;
+					hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+					if (!Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH)) {
+						if ((i>=n_fitparams) or (j>=n_fitparams)) {
+							derived_param_fail = true;
+							warn("producing contours failed for derived parameter; we will drop the derived parameters and try again");
+						}
+					}
+					if (derived_param_fail) i = nparams_eff_2d + 1; // make sure it exits loop
+				}
+
+				/*
 				if (derived_param_fail) derived_param_fail = false;
 				#pragma omp parallel for private(i,j) schedule(dynamic)
 				for (i=0; i < nparams_eff_2d; i++) {
@@ -570,6 +601,8 @@ int main(int argc, char *argv[])
 						if (derived_param_fail) i = nparams_eff_2d + 1; // make sure it exits loop
 					}
 				}
+				*/
+
 				if (derived_param_fail) nparams_eff_2d = n_fitparams;
 			} while (derived_param_fail);
 #ifdef USE_OPENMP
