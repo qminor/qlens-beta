@@ -760,11 +760,15 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 	for (int i=0; i < n_params; i++) {
 		if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
 		else {
-			if (paramnames[i]=="c0") scriptout << "c0=";
-			if (paramnames[i]=="rfsc") scriptout << "rfsc=";
-			for (int j=0; j < n_fourier_modes; j++) {
-				if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "=";
+			// If this is an optional parameter, need to specify parameter name before the value
+			if (paramnames[i]=="c0") scriptout << "c0="; // boxiness parameter
+			else if (paramnames[i]=="rfsc") scriptout << "rfsc="; // Fourier mode/boxiness amplitude scale radius
+			else {
+				for (int j=0; j < n_fourier_modes; j++) {
+					if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "="; // Fourier mode
+				}
 			}
+
 			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
 			else scriptout << *(param[i]);
 		}

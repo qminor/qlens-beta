@@ -5345,9 +5345,11 @@ void Lens::process_commands(bool read_file)
 					bool resume = false;
 					bool skip_run = false;
 					if (nwords > 2) {
-						if ((nwords==3) and (words[2]=="-resume")) resume = true;
-						if ((nwords==3) and (words[2]=="-process")) skip_run = true;
-						else Complain("invalid arguments after 'fit run'");
+						if (nwords==3) {
+							if (words[2]=="-resume") resume = true;
+							else if (words[2]=="-process") skip_run = true;
+							else Complain("invalid arguments after 'fit run'");
+						}
 					}
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
