@@ -872,7 +872,7 @@ void Lens::process_commands(bool read_file)
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included.\n";
 					else if (words[2]=="mkposts")
-						cout << "fit mkposts <dirname> [-n#] [-N#] [-no2d] [-subonly]\n\n"
+						cout << "fit mkposts <dirname> [-n#] [-N#] [-no2d] [-nohist] [-subonly]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
 							"from QLens and generate 1d and 2d posteriors, copying the resulting PDF files from the chains directory\n"
 							"to directory <dirname> (which is created if it doesn't already exist; otherwise if <dirname> is omitted,\n"
@@ -5289,6 +5289,7 @@ void Lens::process_commands(bool read_file)
 					bool copy_subplot_only = false;
 					bool resampled_posts = false;
 					bool no2dposts = false;
+					bool nohists = false;
 					int nbins1d = 50, nbins2d = 40;
 					if (nwords > 2) {
 						for (int i=2; i < nwords; i++) {
@@ -5301,6 +5302,13 @@ void Lens::process_commands(bool read_file)
 						for (int i=2; i < nwords; i++) {
 							if (words[i]=="-no2d") {
 								no2dposts = true;
+								remove_word(i);
+								break;
+							}
+						}
+						for (int i=2; i < nwords; i++) {
+							if (words[i]=="-nohist") {
+								nohists = true;
 								remove_word(i);
 								break;
 							}
@@ -5336,9 +5344,9 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					if (nwords==2) {
-						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts);
+						run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
 					} else if (nwords==3) {
-						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts);
+						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if (words[1]=="run")
@@ -9152,7 +9160,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts)
+void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists)
 {
 	if (mpi_id==0) {
 		string filename = fit_output_filename;
@@ -9211,32 +9219,38 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 			nbins1d_str >> nbins1d_string;
 			nbins2d_str >> nbins2d_string;
 			string command = "cd " + fit_output_dir + "; ";
-			command += "mkdist " + filename + " -n" + nbins1d_string;
-			if (!no2dposts) command += " -N" + nbins2d_string; // plot histograms
-			if ((make_subplot) and (!no2dposts)) command += " -s";
-			if (post_title != "") command += " -t";
-			if (param_markers != "") {
-				command += " -m:" + filename + ".markers"; // add markers for plotting true values
-				if (n_param_markers < 10000) {
-					stringstream npmstr;
-					string npmstring;
-					npmstr << n_param_markers;
-					npmstr >> npmstring;
-					command += " -M" + npmstring;
+			if (!nohists) {
+				command += "mkdist " + filename + " -n" + nbins1d_string;
+				if (!no2dposts) command += " -N" + nbins2d_string; // plot histograms
+				if ((make_subplot) and (!no2dposts)) command += " -s";
+				if (post_title != "") command += " -t";
+				if (param_markers != "") {
+					command += " -m:" + filename + ".markers"; // add markers for plotting true values
+					if (n_param_markers < 10000) {
+						stringstream npmstr;
+						string npmstring;
+						npmstr << n_param_markers;
+						npmstr >> npmstring;
+						command += " -M" + npmstring;
+					}
 				}
+				command += "; ";
 			}
-			command += "; ";
 			command += "mkdist " + filename + " -i -b -E2";
 			if (param_markers != "") command += " -m:" + filename + ".markers -v"; // print true values to chain_info file
 			command += " >" + filename + ".chain_info; "; // produce best-fit point and credible intervals
-			command += "python " + filename + ".py; ";
-			if (!no2dposts) command += "python " + filename + "_tri.py; "; // run python scripts to make PDFs
-			if ((!no2dposts) and (make_subplot)) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot
+			if (!nohists) {
+				command += "python " + filename + ".py; ";
+				if (!no2dposts) command += "python " + filename + "_tri.py; "; // run python scripts to make PDFs
+				if ((!no2dposts) and (make_subplot)) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot
+			}
 			if (copy_post_files) {
 				command += "if [ ! -d ../" + posts_dirname + " ]; then mkdir ../" + posts_dirname + "; fi; ";
-				if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + filename + ".pdf ../" + posts_dirname + "; ";
-				if (!no2dposts) command += "cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
-				if ((!no2dposts) and (make_subplot)) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
+				if (!nohists) {
+					if ((!copy_subplot_only) or (!make_subplot)) command += "cp " + filename + ".pdf ../" + posts_dirname + "; ";
+					if (!no2dposts) command += "cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
+					if ((!no2dposts) and (make_subplot)) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
+				}
 				command += "cp *.chain_info ../" + posts_dirname + "; ";
 			}
 			command += "cd ..";

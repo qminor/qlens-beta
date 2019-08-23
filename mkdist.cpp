@@ -19,13 +19,17 @@
 #include "errors.h"
 #include <sys/stat.h>
 
+#ifdef USE_MPI
+#include "mpi.h"
+#endif
+
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
 
 using namespace std;
 
-void usage_error();
+void usage_error(const int mpi_id);
 void show_transform_usage();
 char *advance(char *p);
 bool file_exists(const string &filename);
@@ -33,6 +37,14 @@ void adjust_ranges_to_include_markers(double *minvals, double *maxvals, double *
 
 int main(int argc, char *argv[])
 {
+	int mpi_np=1, mpi_id=0;
+
+#ifdef USE_MPI
+	MPI_Init(NULL, NULL);
+	MPI_Comm_size(MPI_COMM_WORLD, &mpi_np);
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
+#endif
+
 	bool make_1d_posts = false;
 	bool make_2d_posts = false;
 	bool output_min_chisq_point = false;
@@ -73,9 +85,11 @@ int main(int argc, char *argv[])
 	double percentile = 0.5;
 	bool output_percentile = false;
 	bool show_uncertainties_as_percentiles = false;
+	bool marker_filename_specified = false;
+	bool use_bestfit_markers = false;
 	if (argc < 2) {
 		cerr << "Error: must enter at least one argument (file_root)\n";
-		usage_error();
+		usage_error(mpi_id);
 		return 0;
 	}
 
@@ -88,7 +102,7 @@ int main(int argc, char *argv[])
 	str1 << argv[1];
 	if (!(str1 >> file_label)) {
 		"Error: invalid argument (file_label)\n";
-		usage_error();
+		usage_error(mpi_id);
 		return 0;
 	}
 	if (file_label=="-T") show_transform_usage();
@@ -122,7 +136,7 @@ int main(int argc, char *argv[])
 						make_2d_posts = true;
 						break;
 					case 'B':
-						if (sscanf(argv[i], "B%lf", &threshold)==0) usage_error();
+						if (sscanf(argv[i], "B%lf", &threshold)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
 						break;
 					case 'T':
@@ -164,8 +178,13 @@ int main(int argc, char *argv[])
 						show_markers = true;
 						char marker_filename_char[100];
 						if (sscanf(argv[i], "m:%s", marker_filename_char)==1) {
+							marker_filename_specified = true;
 							argv[i] += (1 + strlen(marker_filename_char));
 							marker_filename.assign(marker_filename_char);
+							if (marker_filename=="bestfit") {
+								marker_filename_specified = false;
+								use_bestfit_markers = true;
+							}
 						}
 						argv[i] = advance(argv[i]);
 						break;
@@ -205,11 +224,11 @@ int main(int argc, char *argv[])
 						make_2d_posts = true;
 						break;
 					case 'c':
-						if (sscanf(argv[i], "c%i", &cut)==0) usage_error();
+						if (sscanf(argv[i], "c%i", &cut)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
 						break;
 					case 'p':
-						if (sscanf(argv[i], "p%lf", &percentile)==0) usage_error();
+						if (sscanf(argv[i], "p%lf", &percentile)==0) usage_error(mpi_id);
 						if ((percentile <= 0) or (percentile >= 1.0)) die("percentile must be between 0 and 1");
 						output_percentile = true;
 						argv[i] = advance(argv[i]);
@@ -227,14 +246,14 @@ int main(int argc, char *argv[])
 					case 't': add_title = true; break;
 					case 'F': include_shading = false; break;
 					case 'C':
-						if (sscanf(argv[i], "C%i", &nparams_subset)==0) usage_error();
+						if (sscanf(argv[i], "C%i", &nparams_subset)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
 						break;
 					case 'S': smoothing = true; break;
-					default: usage_error(); return 0; break;
+					default: usage_error(mpi_id); return 0; break;
 				}
 			}
-		} else { usage_error(); return 0; }
+		} else { usage_error(mpi_id); return 0; }
 	}
 
 	if (output_transform_usage) show_transform_usage();
@@ -311,10 +330,12 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename,include_log_evidence);
+		bool mpi_silent = true;
+		if (mpi_id==0) mpi_silent = silent;
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename,include_log_evidence);
 		Eval.get_nparams(nparams);
 	}
-	if (output_chain_info) Eval.OutputChainInfo();
+	if ((mpi_id==0) and (output_chain_info)) Eval.OutputChainInfo();
 	if (nparams==0) die();
 	nparams_eff = nparams;
 	if (n_fitparams==-1) n_fitparams = nparams;
@@ -350,19 +371,21 @@ int main(int argc, char *argv[])
 
 	if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
 
-	string out_paramnames_filename = file_root + ".py_paramnames";
-	ofstream paramnames_out(out_paramnames_filename.c_str());
-	for (i=0; i < nparams_eff; i++) {
-		paramnames_out << param_names[i] << endl;
-	}
-	paramnames_out.close();
+	if (mpi_id==0) {
+		string out_paramnames_filename = file_root + ".py_paramnames";
+		ofstream paramnames_out(out_paramnames_filename.c_str());
+		for (i=0; i < nparams_eff; i++) {
+			paramnames_out << param_names[i] << endl;
+		}
+		paramnames_out.close();
 
-	string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
-	ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
-	for (i=0; i < nparams_eff; i++) {
-		latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+		string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
+		ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
+		for (i=0; i < nparams_eff; i++) {
+			latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+		}
+		latex_paramnames_out.close();
 	}
-	latex_paramnames_out.close();
 
 	bool *hist2d_active_params = new bool[nparams_eff];
 	for (i=0; i < nparams_eff; i++) {
@@ -422,17 +445,18 @@ int main(int argc, char *argv[])
 	double *markers = new double[nparams_eff];
 	int n_markers = (n_markers_allowed < nparams_eff ? n_markers_allowed : nparams_eff);
 	if (show_markers) {
-		if (marker_filename=="") {
+		if (use_bestfit_markers) {
 			double *bestfit = new double[nparams];
 			Eval.min_chisq_pt(bestfit);
 			for (i=0; i < n_markers; i++) markers[i] = bestfit[i];
 			delete[] bestfit;
 		} else {
+			if (!marker_filename_specified) marker_filename = file_root + ".markers";
 			ifstream marker_file(marker_filename.c_str());
 			for (i=0; i < n_markers; i++) {
 				if (!(marker_file >> markers[i])) {
 					if (i==0) {
-						cerr << "marker values could not be read from file '" << marker_filename << "'; will not use markers when plotting" << endl;
+						if (mpi_id==0) cerr << "marker values could not be read from file '" << marker_filename << "'; will not use markers when plotting" << endl;
 						show_markers = false;
 						break;
 					}
@@ -444,21 +468,23 @@ int main(int argc, char *argv[])
 	}
 
 	if (use_fisher_matrix) {
-		if (make_1d_posts) {
-			for (i=0; i < nparams_eff; i++) {
-				string dist_out;
-				dist_out = file_root + "_p_" + param_names[i] + ".dat";
-				FEval.MkDist(201, dist_out.c_str(), i);
+		if (mpi_id==0) {
+			if (make_1d_posts) {
+				for (i=0; i < nparams_eff; i++) {
+					string dist_out;
+					dist_out = file_root + "_p_" + param_names[i] + ".dat";
+					FEval.MkDist(201, dist_out.c_str(), i);
+				}
 			}
-		}
-		if (make_2d_posts) {
-			for (i=0; i < nparams_eff_2d; i++) {
-				if (hist2d_active_params[i]) {
-					for (j=i+1; j < nparams_eff_2d; j++) {
-						if (hist2d_active_params[j]) {
-							string dist_out;
-							dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
-							FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
+			if (make_2d_posts) {
+				for (i=0; i < nparams_eff_2d; i++) {
+					if (hist2d_active_params[i]) {
+						for (j=i+1; j < nparams_eff_2d; j++) {
+							if (hist2d_active_params[j]) {
+								string dist_out;
+								dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+								FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
+							}
 						}
 					}
 				}
@@ -476,7 +502,7 @@ int main(int argc, char *argv[])
 			maxvals[i] = 1e30;
 		}
 
-		if (make_1d_posts) {
+		if ((make_1d_posts) and (mpi_id==0)) {
 			Eval.FindRanges(minvals,maxvals,nbins,threshold);
 			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
 			double rap[20];
@@ -488,7 +514,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		if (make_derived_posterior) {
+		if ((make_derived_posterior) and (mpi_id==0)) {
 			double rap[20];
 			double mean, sig;
 			//Eval.setRadius(radius);
@@ -543,7 +569,7 @@ int main(int argc, char *argv[])
 				#pragma omp master
 				omp_nthreads = omp_get_num_threads();
 			}
-			cout << "Generating 2D histograms with " << omp_nthreads << " OpenMP threads..." << endl;
+			if (mpi_id==0) cout << "Generating 2D histograms with " << omp_nthreads << " OpenMP threads..." << endl;
 			wtime0 = omp_get_wtime();
 #endif
 			bool derived_param_fail = false; // if contours can't be made for a derived parameter, we'll have it drop the derived parameters and try again
@@ -564,9 +590,16 @@ int main(int argc, char *argv[])
 				}
 				n_2dposts = post2d_i.size();
 
+				int mpi_chunk, mpi_start, mpi_end;
+				mpi_chunk = n_2dposts / mpi_np;
+				mpi_start = mpi_id*mpi_chunk;
+				if (mpi_id == mpi_np-1) mpi_chunk += (n_2dposts % mpi_np); // assign the remainder elements to the last mpi process
+				mpi_end = mpi_start + mpi_chunk;
+
 				if (derived_param_fail) derived_param_fail = false;
 				#pragma omp parallel for private(i,j,k) schedule(dynamic)
-				for (k=0; k < n_2dposts; k++) {
+				//for (k=0; k < n_2dposts; k++) {
+				for (k=mpi_start; k < mpi_end; k++) {
 					i = post2d_i[k];
 					j = post2d_j[k];
 					string hist_out;
@@ -605,77 +638,83 @@ int main(int argc, char *argv[])
 
 				if (derived_param_fail) nparams_eff_2d = n_fitparams;
 			} while (derived_param_fail);
+#ifdef USE_MPI
+			MPI_Barrier(MPI_COMM_WORLD);
+#endif
+
 #ifdef USE_OPENMP
 			wtime = omp_get_wtime() - wtime0;
-			cout << "Wall time for calculating 2D histograms: " << wtime << endl;
+			if (mpi_id==0) cout << "Wall time for calculating 2D histograms: " << wtime << endl;
 #endif
 		}
-		if (output_min_chisq_point) {
-			Eval.output_min_chisq_pt(param_names);
-		}
-		if (output_min_chisq_point_format2) {
-			Eval.output_min_chisq_pt2(param_names);
-		}
+		if (mpi_id==0) {
+			if (output_min_chisq_point) {
+				Eval.output_min_chisq_pt(param_names);
+			}
+			if (output_min_chisq_point_format2) {
+				Eval.output_min_chisq_pt2(param_names);
+			}
 
-		if (output_mean_and_errors) {
-			Eval.FindRanges(minvals,maxvals,nbins,threshold);
-			string covar_out = file_root + ".cov";
-			double *centers = new double[nparams];
-			double *sigs = new double[nparams];
-			Eval.FindCoVar(covar_out.c_str(),centers,sigs,minvals,maxvals);
-			for (i=0; i < nparams_eff; i++) {
-				// NOTE: The following errors are from standard deviation, not from CL's 
-				cout << param_names[i] << ": " << centers[i] << " +/- " << sigs[i] << endl;
-			}
-			cout << endl;
-			delete[] centers;
-			delete[] sigs;
-		}
-		if (output_cl) {
-			Eval.FindRanges(minvals,maxvals,nbins,threshold);
-			double *halfpct = new double[nparams];
-			double *lowcl = new double[nparams];
-			double *hicl = new double[nparams];
-			if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
-			else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
-			for (i=0; i < nparams_eff; i++) {
-				if (cl_2sigma) {
-					lowcl[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
-					hicl[i] = Eval.cl(0.975,i,minvals[i],maxvals[i]);
-				} else {
-					lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
-					hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
-				}
-				halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
-				if (show_uncertainties_as_percentiles)
-					cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
-				else
-					cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
-			}
-			cout << endl;
-			delete[] halfpct;
-			delete[] lowcl;
-			delete[] hicl;
-		}
-		if (output_percentile) {
-			Eval.FindRanges(minvals,maxvals,nbins,threshold);
-			// The following gives the 
-			cout << percentile << " percentile:\n\n";
-			double val;
-			for (i=0; i < nparams_eff; i++) {
-				val = Eval.cl(percentile,i,minvals[i],maxvals[i]);
-				cout << param_names[i] << " = " << val << endl;
-			}
-			cout << endl;
-		}
-		if (print_marker_values) {
-			if (show_markers) {
-				cout << "True parameter values (and bestfit values):\n";
-				for (i=0; i < n_markers; i++) {
+			if (output_mean_and_errors) {
+				Eval.FindRanges(minvals,maxvals,nbins,threshold);
+				string covar_out = file_root + ".cov";
+				double *centers = new double[nparams];
+				double *sigs = new double[nparams];
+				Eval.FindCoVar(covar_out.c_str(),centers,sigs,minvals,maxvals);
+				for (i=0; i < nparams_eff; i++) {
 					// NOTE: The following errors are from standard deviation, not from CL's 
-					cout << param_names[i] << ": " << markers[i] << " (" << Eval.output_min_chisq_value(i) << ")" << endl;
+					cout << param_names[i] << ": " << centers[i] << " +/- " << sigs[i] << endl;
 				}
 				cout << endl;
+				delete[] centers;
+				delete[] sigs;
+			}
+			if (output_cl) {
+				Eval.FindRanges(minvals,maxvals,nbins,threshold);
+				double *halfpct = new double[nparams];
+				double *lowcl = new double[nparams];
+				double *hicl = new double[nparams];
+				if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
+				else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+				for (i=0; i < nparams_eff; i++) {
+					if (cl_2sigma) {
+						lowcl[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
+						hicl[i] = Eval.cl(0.975,i,minvals[i],maxvals[i]);
+					} else {
+						lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
+						hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
+					}
+					halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
+					if (show_uncertainties_as_percentiles)
+						cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
+					else
+						cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+				}
+				cout << endl;
+				delete[] halfpct;
+				delete[] lowcl;
+				delete[] hicl;
+			}
+			if (output_percentile) {
+				Eval.FindRanges(minvals,maxvals,nbins,threshold);
+				// The following gives the 
+				cout << percentile << " percentile:\n\n";
+				double val;
+				for (i=0; i < nparams_eff; i++) {
+					val = Eval.cl(percentile,i,minvals[i],maxvals[i]);
+					cout << param_names[i] << " = " << val << endl;
+				}
+				cout << endl;
+			}
+			if (print_marker_values) {
+				if (show_markers) {
+					cout << "True parameter values (and bestfit values):\n";
+					for (i=0; i < n_markers; i++) {
+						// NOTE: The following errors are from standard deviation, not from CL's 
+						cout << param_names[i] << ": " << markers[i] << " (" << Eval.output_min_chisq_value(i) << ")" << endl;
+					}
+					cout << endl;
+				}
 			}
 		}
 
@@ -683,150 +722,154 @@ int main(int argc, char *argv[])
 		delete[] maxvals;
 	}
 
-	int system_returnval;
-	if (make_1d_posts)
-	{
-		string pyname = output_file_label + ".py";
-		ofstream pyscript(pyname.c_str());
-		pyscript << "import GetDistPlots, os" << endl;
-		pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-		pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
-		pyscript << "outdir=''" << endl;
-		pyscript << "roots=['" << file_label << "']" << endl;
-		if (show_markers) {
-			pyscript << "marker_list=[";
-			for (i=0; i < n_markers; i++) {
-				pyscript << markers[i];
-				if (i < nparams_eff-1) pyscript << ",";
+#ifdef USE_MPI
+	MPI_Barrier(MPI_COMM_WORLD);
+#endif
+	if (mpi_id==0) {
+		int system_returnval;
+		if (make_1d_posts)
+		{
+			string pyname = output_file_label + ".py";
+			ofstream pyscript(pyname.c_str());
+			pyscript << "import GetDistPlots, os" << endl;
+			pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
+			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+			pyscript << "outdir=''" << endl;
+			pyscript << "roots=['" << file_label << "']" << endl;
+			if (show_markers) {
+				pyscript << "marker_list=[";
+				for (i=0; i < n_markers; i++) {
+					pyscript << markers[i];
+					if (i < nparams_eff-1) pyscript << ",";
+				}
+				pyscript << "]" << endl;
+			} else {
+				pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
 			}
-			pyscript << "]" << endl;
-		} else {
-			pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
-		}
-		pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
-		//if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl; // 1d title doesn't look good
-		pyscript << "g.export(os.path.join(outdir,'" << output_file_label << ".pdf'))" << endl;
-		pyscript.close();
-		if (run_python_script) {
-			string pycommand = "python " + pyname;
-			if (system(pycommand.c_str()) == 0) {
-				cout << "Plot for 1D posteriors saved to '" << output_file_label << ".pdf'\n";
-				//string rmcommand = "rm " + pyname;
-				//system_returnval = system(rmcommand.c_str());
+			pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
+			//if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl; // 1d title doesn't look good
+			pyscript << "g.export(os.path.join(outdir,'" << output_file_label << ".pdf'))" << endl;
+			pyscript.close();
+			if (run_python_script) {
+				string pycommand = "python " + pyname;
+				if (system(pycommand.c_str()) == 0) {
+					cout << "Plot for 1D posteriors saved to '" << output_file_label << ".pdf'\n";
+					//string rmcommand = "rm " + pyname;
+					//system_returnval = system(rmcommand.c_str());
+				}
+				else cout << "Error: Could not generate PDF file for 1D posteriors\n";
+			} else {
+				cout << "Plotting script for 1D posteriors saved to '" << pyname << "'\n";
 			}
-			else cout << "Error: Could not generate PDF file for 1D posteriors\n";
-		} else {
-			cout << "Plotting script for 1D posteriors saved to '" << pyname << "'\n";
 		}
-	}
 
-
-	if (make_2d_posts)
-	{
-		string pyname = output_file_label + "_2D.py";
-		ofstream pyscript2d(pyname.c_str());
-		pyscript2d << "import GetDistPlots, os" << endl;
-		pyscript2d << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-		pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
-		pyscript2d << "outdir=''" << endl;
-		pyscript2d << "roots=['" << file_label << "']" << endl;
-		pyscript2d << "pairs=[]" << endl;
-		for (i=0; i < nparams_eff_2d; i++) {
-			for (j=i+1; j < nparams_eff_2d; j++) {
-				if ((hist2d_active_params[i]) and (hist2d_active_params[j])) {
-					pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
+		if (make_2d_posts)
+		{
+			string pyname = output_file_label + "_2D.py";
+			ofstream pyscript2d(pyname.c_str());
+			pyscript2d << "import GetDistPlots, os" << endl;
+			pyscript2d << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
+			pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+			pyscript2d << "outdir=''" << endl;
+			pyscript2d << "roots=['" << file_label << "']" << endl;
+			pyscript2d << "pairs=[]" << endl;
+			for (i=0; i < nparams_eff_2d; i++) {
+				for (j=i+1; j < nparams_eff_2d; j++) {
+					if ((hist2d_active_params[i]) and (hist2d_active_params[j])) {
+						pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
+					}
 				}
 			}
-		}
-		pyscript2d << "g.plots_2d(roots,param_pairs=pairs,";
-		if (include_shading) pyscript2d << "shaded=True";
-		else pyscript2d << "shaded=False";
-		pyscript2d << ")" << endl;
-		if (add_title) pyscript2d << "g.add_title(r'" << title << "')" << endl;
-		pyscript2d << "g.export(os.path.join(outdir,'" << output_file_label << "_2D.pdf'))" << endl;
-		/*
-		if (run_python_script) {
-			string pycommand = "python " + pyname;
-			if (system(pycommand.c_str()) == 0) {
-				cout << "Plot for 2D posteriors saved to '" << file_label << "_2D.pdf'\n";
-				//string rmcommand = "rm " + pyname;
-				//system_returnval = system(rmcommand.c_str());
+			pyscript2d << "g.plots_2d(roots,param_pairs=pairs,";
+			if (include_shading) pyscript2d << "shaded=True";
+			else pyscript2d << "shaded=False";
+			pyscript2d << ")" << endl;
+			if (add_title) pyscript2d << "g.add_title(r'" << title << "')" << endl;
+			pyscript2d << "g.export(os.path.join(outdir,'" << output_file_label << "_2D.pdf'))" << endl;
+			/*
+			if (run_python_script) {
+				string pycommand = "python " + pyname;
+				if (system(pycommand.c_str()) == 0) {
+					cout << "Plot for 2D posteriors saved to '" << file_label << "_2D.pdf'\n";
+					//string rmcommand = "rm " + pyname;
+					//system_returnval = system(rmcommand.c_str());
+				}
+				else cout << "Error: Could not generate PDF file for 2D posteriors\n";
+			} else {
+				cout << "Plotting script for 2D posteriors saved to '" << pyname << "'\n";
 			}
-			else cout << "Error: Could not generate PDF file for 2D posteriors\n";
-		} else {
-			cout << "Plotting script for 2D posteriors saved to '" << pyname << "'\n";
-		}
-		*/
+			*/
 
 
-		if (make_1d_posts) {
-			// make script for triangle plot
-			int n_triplots = 1;
-			if (make_subplot) n_triplots++;
-			for (int k=0; k < n_triplots; k++) {
-				if (k==0) pyname = output_file_label + "_tri.py";
-				else pyname = output_file_label + "_subtri.py";
-				ofstream pyscript(pyname.c_str());
-				pyscript << "import GetDistPlots, os" << endl;
-				pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
-				pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
-				pyscript << "outdir=''" << endl;
-				pyscript << "roots=['" << file_label << "']" << endl;
-				if (show_markers) {
-					pyscript << "marker_list=[";
-					for (i=0; i < n_markers; i++) {
+			if (make_1d_posts) {
+				// make script for triangle plot
+				int n_triplots = 1;
+				if (make_subplot) n_triplots++;
+				for (int k=0; k < n_triplots; k++) {
+					if (k==0) pyname = output_file_label + "_tri.py";
+					else pyname = output_file_label + "_subtri.py";
+					ofstream pyscript(pyname.c_str());
+					pyscript << "import GetDistPlots, os" << endl;
+					pyscript << "g=GetDistPlots.GetDistPlotter('" << output_dir << "/')" << endl;
+					pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+					pyscript << "outdir=''" << endl;
+					pyscript << "roots=['" << file_label << "']" << endl;
+					if (show_markers) {
+						pyscript << "marker_list=[";
+						for (i=0; i < n_markers; i++) {
+							if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
+								pyscript << markers[i];
+								if ((k==0) and (i != n_markers-1)) pyscript << ",";
+								else if (k==1) {
+									bool last_param = true;
+									for (int ii=i+1; ii < n_markers; ii++) {
+										if (subplot_active_params[ii]==true) last_param = false;
+									}
+									if (!last_param) pyscript << ",";
+								}
+							}
+						}
+						pyscript << "]" << endl;
+					} else {
+						pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+					}
+					pyscript << "g.triangle_plot(roots, [";
+					for (i=0; i < nparams_eff_2d; i++) {
 						if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
-							pyscript << markers[i];
-							if ((k==0) and (i != n_markers-1)) pyscript << ",";
+							pyscript << "'" << param_names[i] << "'";
+							if ((k==0) and (i != nparams_eff_2d-1)) pyscript << ",";
 							else if (k==1) {
 								bool last_param = true;
-								for (int ii=i+1; ii < n_markers; ii++) {
+								for (int ii=i+1; ii < nparams_eff_2d; ii++) {
 									if (subplot_active_params[ii]==true) last_param = false;
 								}
 								if (!last_param) pyscript << ",";
 							}
 						}
 					}
-					pyscript << "]" << endl;
-				} else {
-					pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
-				}
-				pyscript << "g.triangle_plot(roots, [";
-				for (i=0; i < nparams_eff_2d; i++) {
-					if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
-						pyscript << "'" << param_names[i] << "'";
-						if ((k==0) and (i != nparams_eff_2d-1)) pyscript << ",";
-						else if (k==1) {
-							bool last_param = true;
-							for (int ii=i+1; ii < nparams_eff_2d; ii++) {
-								if (subplot_active_params[ii]==true) last_param = false;
-							}
-							if (!last_param) pyscript << ",";
+					pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
+					if (show_markers) pyscript << "True";
+					else pyscript << "False";
+					pyscript << ",marker_2d='x',";
+					if (include_shading) pyscript << "shaded=True";
+					else pyscript << "shaded=False";
+					pyscript << ")" << endl;
+					if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl;
+					pyscript << "g.export(os.path.join(outdir,'" << output_file_label;
+					if (k==0) pyscript << "_tri.pdf'))" << endl;
+					else pyscript << "_subtri.pdf'))" << endl;
+					if (run_python_script) {
+						string pycommand = "python " + pyname;
+						if (system(pycommand.c_str()) == 0) {
+							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << output_file_label << "_tri.pdf'\n";
+							else cout << "Triangle subplot saved to '" << output_file_label << "_subtri.pdf'\n";
+							//string rmcommand = "rm " + pyname;
+							//system_returnval = system(rmcommand.c_str());
 						}
+						else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
+					} else {
+						cout << "Plotting script for triangle plot saved to '" << pyname << "'\n";
 					}
-				}
-				pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
-				if (show_markers) pyscript << "True";
-				else pyscript << "False";
-				pyscript << ",marker_2d='x',";
-				if (include_shading) pyscript << "shaded=True";
-				else pyscript << "shaded=False";
-				pyscript << ")" << endl;
-				if (add_title) pyscript << "g.add_title(r'" << title << "')" << endl;
-				pyscript << "g.export(os.path.join(outdir,'" << output_file_label;
-				if (k==0) pyscript << "_tri.pdf'))" << endl;
-				else pyscript << "_subtri.pdf'))" << endl;
-				if (run_python_script) {
-					string pycommand = "python " + pyname;
-					if (system(pycommand.c_str()) == 0) {
-						if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << output_file_label << "_tri.pdf'\n";
-						else cout << "Triangle subplot saved to '" << output_file_label << "_subtri.pdf'\n";
-						//string rmcommand = "rm " + pyname;
-						//system_returnval = system(rmcommand.c_str());
-					}
-					else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
-				} else {
-					cout << "Plotting script for triangle plot saved to '" << pyname << "'\n";
 				}
 			}
 		}
@@ -837,6 +880,11 @@ int main(int argc, char *argv[])
 	delete[] markers;
 	delete[] subplot_active_params;
 	delete[] hist2d_active_params;
+
+#ifdef USE_MPI
+	MPI_Finalize();
+#endif
+
 	return 0;
 }
 
@@ -876,35 +924,40 @@ char *advance(char *p)
 	return --p;
 }
 
-void usage_error()
+void usage_error(const int mpi_id)
 {
-	cerr << "Usage:\n\n";
-	cerr << "mkdist <file_root> ...\n\n";
-	cerr << "Argument options (after the first required argument):\n"
-			"  -d:<dir> set input/output directory to <dir> (default: 'chains_<file_root>/')\n"
-			"  -n#       make 1d histograms with # bins\n"
-			"  -N#       make 2d histograms with # by # bins\n"
-			"  -x        exclude the derived parameters when plotting histograms\n"
-			"  -C#       truncate number of params, i.e. include only the first # parameters when plotting histograms\n"
-			"  -s        make triangle subplot using file '<file_root>.subplot_params' containing flags (0 or 1) for each parameter\n"
-			"  -s        add a title for the triangle plots (contained in file <file_root>.plot_title)\n"
-			"  -P        execute Python scripts generated by mkdist to output posteriors as PDF files\n"
-			"  -S        plot smoothed histograms\n"
-			"  -F        do not include shading in 2D histograms\n"
-			"  -b        output minimum chi-square point\n"
-			"  -e        output mean parameters with standard errors in each parameter\n"
-			"  -E        output best-fit parameters with errors given by 15.8\% and 84.1\% probability\n"
-			"  -p#       output the #'th percentile for each parameter (where # must be between 0 and 1)\n"
-			"  -c        number of initial points to cut from each MCMC chain (if no cut is specified,\n"
-			"                the first 10% of points are cut by default)\n"
-			"  -B#       input minimum probability threshold used for defining parameter ranges\n"
-			"               for plotting (default = 3e-3; higher threshold --> smaller ranges)\n"
-			"  -f        use Fisher matrix to generate 1d,2d posteriors (MCMC data not required)\n"
-			"  -T:<file> transform parameters using an input script. For usage info, enter 'T' with\n"
-			"               no argument.\n"
-			"  -I:<file> define parameter priors for importance sampling using an input script.\n"
-			"  -L:<suffix> Add <suffix> onto the filenames of output python scripts and PDF files.\n"
-			"  -q        quiet mode (non-verbose)\n" << endl;
+	if (mpi_id==0) {
+		cerr << "Usage:\n\n";
+		cerr << "mkdist <file_root> ...\n\n";
+		cerr << "Argument options (after the first required argument):\n"
+				"  -d:<dir> set input/output directory to <dir> (default: 'chains_<file_root>/')\n"
+				"  -n#       make 1d histograms with # bins\n"
+				"  -N#       make 2d histograms with # by # bins\n"
+				"  -x        exclude the derived parameters when plotting histograms\n"
+				"  -C#       truncate number of params, i.e. include only the first # parameters when plotting histograms\n"
+				"  -s        make triangle subplot using file '<file_root>.subplot_params' containing flags (0 or 1) for each parameter\n"
+				"  -s        add a title for the triangle plots (contained in file <file_root>.plot_title)\n"
+				"  -P        execute Python scripts generated by mkdist to output posteriors as PDF files\n"
+				"  -S        plot smoothed histograms\n"
+				"  -F        do not include shading in 2D histograms\n"
+				"  -b        output minimum chi-square point\n"
+				"  -e        output mean parameters with standard errors in each parameter\n"
+				"  -E        output best-fit parameters with errors given by 15.8\% and 84.1\% probability\n"
+				"  -p#       output the #'th percentile for each parameter (where # must be between 0 and 1)\n"
+				"  -c        number of initial points to cut from each MCMC chain (if no cut is specified,\n"
+				"                the first 10% of points are cut by default)\n"
+				"  -B#       input minimum probability threshold used for defining parameter ranges\n"
+				"               for plotting (default = 3e-3; higher threshold --> smaller ranges)\n"
+				"  -f        use Fisher matrix to generate 1d,2d posteriors (MCMC data not required)\n"
+				"  -T:<file> transform parameters using an input script. For usage info, enter 'T' with\n"
+				"               no argument.\n"
+				"  -I:<file> define parameter priors for importance sampling using an input script.\n"
+				"  -L:<suffix> Add <suffix> onto the filenames of output python scripts and PDF files.\n"
+				"  -q        quiet mode (non-verbose)\n" << endl;
+	}
+#ifdef USE_MPI
+	MPI_Finalize();
+#endif
 	exit(1);
 }
 
