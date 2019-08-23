@@ -60,6 +60,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
 		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
 		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
+		fourier_mode_paramnum.input(sb_in->fourier_mode_paramnum);
 	}
 	include_boxiness_parameter = sb_in->include_boxiness_parameter;
 	include_fmode_rscale = sb_in->include_fmode_rscale;
