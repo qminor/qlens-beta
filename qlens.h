@@ -862,7 +862,7 @@ public:
 	double chi_square_fit_simplex();
 	double chi_square_fit_powell();
 	void nested_sampling();
-	void polychord(const bool resume_previous);
+	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous);
 	void chi_square_twalk();
 	bool add_dparams_to_chain();

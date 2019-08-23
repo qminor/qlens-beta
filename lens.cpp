@@ -8292,12 +8292,12 @@ void Lens::multinest(const bool resume_sampling)
 #endif
 }
 
-void Lens::polychord(const bool resume_previous)
+void Lens::polychord(const bool resume_previous, const bool skip_run)
 {
 #ifdef USE_POLYCHORD
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
-	if ((mpi_id==0) and (!resume_previous) and (fit_output_dir != ".")) {
+	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
 		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
@@ -8396,7 +8396,9 @@ void Lens::polychord(const bool resume_previous)
 
 	settings.boost_posterior= 1.0;
 
-	run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
+	if (!skip_run) {
+		run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
+	}
 
 	running_fit = false;
 
@@ -8487,7 +8489,6 @@ void Lens::polychord(const bool resume_previous)
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
 	}
-
 
 #ifdef USE_MPI
 	MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
