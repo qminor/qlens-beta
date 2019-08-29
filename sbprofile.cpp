@@ -10,6 +10,7 @@ using namespace std;
 
 bool SB_Profile::orient_major_axis_north;
 bool SB_Profile::use_ellipticity_components;
+bool SB_Profile::use_fmode_scaled_amplitudes;
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in)
@@ -38,8 +39,8 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	model_name = sb_in->model_name;
 	sbtype = sb_in->sbtype;
 	sb_number = sb_in->sb_number;
-	is_lensed = sb_in->is_lensed;
 	set_nparams(sb_in->n_params);
+	is_lensed = sb_in->is_lensed;
 	set_geometric_parameters_radians(sb_in->q,sb_in->theta,sb_in->x_center,sb_in->y_center);
 
 	paramnames = sb_in->paramnames;
@@ -648,24 +649,25 @@ double SB_Profile::surface_brightness(double x, double y)
 	}
 
 	double rsq = x*x + y*y/(q*q);
-	double rscale_fac, cc0;
+	double rscale_fac = 1.0, cc0;
 	if (include_fmode_rscale) {
-		if (fmode_rscale==0) rscale_fac = 1.0;
-		else rscale_fac = (erf((sqrt(rsq)*6.0/fmode_rscale-3.0))+1.0)/2;
-	} else {
-		rscale_fac = 1.0;
+		if (fmode_rscale != 0.0)
+			rscale_fac = (erf((sqrt(rsq)*6.0/fmode_rscale-3.0))+1.0)/2;
 	}
-	cc0 = c0*rscale_fac;
 	if ((include_boxiness_parameter) and (c0 != 0.0)) {
+		cc0 = c0*rscale_fac;
 		rsq = pow(pow(abs(x),cc0+2.0) + pow(abs(y/q),cc0+2.0),2.0/(cc0+2.0));
-	//} else {
-		//rsq = x*x + y*y/(q*q);
 	}
 	if (n_fourier_modes > 0) {
 		double fourier_factor = 1.0;
-		for (int i=0; i < n_fourier_modes; i++) {
-			//fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*(phi_q + fourier_mode_phivals[i]));
-			fourier_factor += rscale_fac*(fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q));
+		if (use_fmode_scaled_amplitudes) {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor += rscale_fac*(fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+			}
+		} else {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor += rscale_fac*(fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q));
+			}
 		}
 		rsq *= fourier_factor*fourier_factor;
 	}

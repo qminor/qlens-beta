@@ -70,6 +70,7 @@ class SB_Profile
 	void rotate_back(double&, double&);
 	static bool orient_major_axis_north;
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
+	static bool use_fmode_scaled_amplitudes; // if set to true, uses a_m = A_m/m and b_m = B_m/m as parameters instead of true amplitudes
 
 	public:
 	int sb_number;
@@ -88,7 +89,9 @@ class SB_Profile
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_fmode_rscale(const double rscale_in, const bool vary_rscale);
-	void set_lensed(const bool isl) { is_lensed = isl; }
+	void set_lensed(const bool isl) {
+		is_lensed = isl;
+	}
 
 	void remove_fourier_modes();
 

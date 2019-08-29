@@ -338,9 +338,9 @@ void ParamSettings::remove_dparam(int dparam_number)
 	bool* new_subplot_dparam;
 	bool* new_hist2d_dparam;
 	if (n_dparams > 1) {
-		string* new_dparam_names = new string[n_dparams-1];
-		bool* new_subplot_dparam = new bool[n_dparams-1];
-		bool* new_hist2d_dparam = new bool[n_dparams-1];
+		new_dparam_names = new string[n_dparams-1];
+		new_subplot_dparam = new bool[n_dparams-1];
+		new_hist2d_dparam = new bool[n_dparams-1];
 		int i,j;
 		for (i=0, j=0; i < n_dparams; i++) {
 			if (i != dparam_number) {
@@ -763,6 +763,8 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
+	SB_Profile::use_ellipticity_components = false;
+	SB_Profile::use_fmode_scaled_amplitudes = false; // if set to true, uses a_m = A_m/m and b_m = B_m/m as parameters instead of true amplitudes
 	default_parameter_mode = 0;
 	Shear::use_shear_component_params = false;
 	include_recursive_lensing = true;
@@ -2180,6 +2182,12 @@ void Lens::remove_lens(int lensnumber)
 	param_settings->remove_params(pi,pf);
 	update_parameter_list();
 	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+	for (int i=n_derived_params-1; i >= 0; i--) {
+		if (dparam_list[i]->lensnum_param==lensnumber) {
+			if (mpi_id==0) cout << "Removing derived param " << i << endl;
+			remove_derived_param(i);
+		}
+	}
 }
 
 void Lens::clear_lenses()
@@ -2243,6 +2251,7 @@ void Lens::clear_lenses()
 
 		reset();
 		get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+		clear_derived_params();
 	}
 }
 
@@ -2518,6 +2527,7 @@ void Lens::remove_derived_param(int dparam_number)
 	int i,j;
 	for (i=0, j=0; i < n_derived_params; i++)
 		if (i != dparam_number) { newlist[j] = dparam_list[i]; j++; }
+		else delete dparam_list[i];
 	delete[] dparam_list;
 	n_derived_params--;
 
@@ -2548,7 +2558,7 @@ void Lens::print_derived_param_list()
 	if (mpi_id==0) {
 		if (n_derived_params > 0) {
 			for (int i=0; i < n_derived_params; i++) {
-				cout << i << ". ";
+				cout << i << ". " << flush;
 				dparam_list[i]->print_param_description(this);
 			}
 		}

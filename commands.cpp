@@ -6993,6 +6993,17 @@ void Lens::process_commands(bool read_file)
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="use_scaled_fmode_amps")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use 1/m scaled Fourier mode amplitudes: " << display_switch(SB_Profile::use_fmode_scaled_amplitudes) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_scaled_fmode_amps' command; must specify 'on' or 'off'");
+				bool use_scaled_amps;
+				set_switch(use_scaled_amps,setword);
+				SB_Profile::use_fmode_scaled_amplitudes = use_scaled_amps;
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="emode")
 		{
 			if (nwords==1) {
@@ -9235,11 +9246,9 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 					}
 				}
 				command += "; ";
-			}
-			command += "mkdist " + filename + " -i -b -E2";
-			if (param_markers != "") command += " -m:" + filename + ".markers -v"; // print true values to chain_info file
-			command += " >" + filename + ".chain_info; "; // produce best-fit point and credible intervals
-			if (!nohists) {
+				command += "mkdist " + filename + " -i -b -E2";
+				if (param_markers != "") command += " -m:" + filename + ".markers -v"; // print true values to chain_info file
+				command += " >" + filename + ".chain_info; "; // produce best-fit point and credible intervals
 				command += "python " + filename + ".py; ";
 				if (!no2dposts) command += "python " + filename + "_tri.py; "; // run python scripts to make PDFs
 				if ((!no2dposts) and (make_subplot)) command += "python " + filename + "_subtri.py; "; // run python scripts to make PDF for subplot

@@ -5223,6 +5223,13 @@ void ImagePixelGrid::find_surface_brightness()
 	}
 	else
 	{
+		bool at_least_one_lensed_src = false;
+		for (int k=0; k < lens->n_sb; k++) {
+			if (lens->sb_list[k]->is_lensed) {
+				at_least_one_lensed_src = true;
+				break;
+			}
+		}
 		int i,j;
 		if (lens->split_imgpixels) {
 			#pragma omp parallel
@@ -5235,7 +5242,8 @@ void ImagePixelGrid::find_surface_brightness()
 #endif
 				int ii,jj,nsplit;
 				double u0, w0, sb;
-				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(dynamic)
+				lensvector center_pt, center_srcpt;
+				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb,center_pt,center_srcpt) schedule(dynamic)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;
@@ -5243,13 +5251,14 @@ void ImagePixelGrid::find_surface_brightness()
 							sb=0;
 							nsplit = nsplits[i][j];
 							for (ii=0; ii < nsplit; ii++) {
+								u0 = ((double) (1+2*ii))/(2*nsplit);
+								center_pt[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
 								for (jj=0; jj < nsplit; jj++) {
-									lensvector center_pt, center_srcpt;
-									u0 = ((double) (1+2*ii))/(2*nsplit);
 									w0 = ((double) (1+2*jj))/(2*nsplit);
-									center_pt[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
 									center_pt[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
-									lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
+									if (at_least_one_lensed_src) {
+										lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
+									}
 									for (int k=0; k < lens->n_sb; k++) {
 										if (lens->sb_list[k]->is_lensed) sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
 										else sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);

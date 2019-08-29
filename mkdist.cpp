@@ -569,7 +569,6 @@ int main(int argc, char *argv[])
 				#pragma omp master
 				omp_nthreads = omp_get_num_threads();
 			}
-			if (mpi_id==0) cout << "Generating 2D histograms with " << omp_nthreads << " OpenMP threads..." << endl;
 			wtime0 = omp_get_wtime();
 #endif
 			bool derived_param_fail = false; // if contours can't be made for a derived parameter, we'll have it drop the derived parameters and try again
@@ -589,6 +588,11 @@ int main(int argc, char *argv[])
 					}
 				}
 				n_2dposts = post2d_i.size();
+				if (mpi_id==0) {
+					cout << "Generating 2D histograms (total of " << n_2dposts << ") with ";
+					if (mpi_np > 1) cout << mpi_np << " processes and ";
+					cout << omp_nthreads << " OpenMP threads..." << endl;
+				}
 #ifdef USE_OPENMP
 				int omp_nthreads0=omp_nthreads;
 				while (n_2dposts < mpi_np*omp_nthreads) {
