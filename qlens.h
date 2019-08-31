@@ -817,6 +817,7 @@ public:
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
 	void reassign_lensparam_pointers_and_names();
+	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	void output_lens_commands(string filename, const bool use_limits);
 	void print_fit_model();
@@ -825,7 +826,7 @@ public:
 	double mass2d_r(const double r_arcsec, const int lensnum);
 	double mass3d_r(const double r_arcsec, const int lensnum);
 
-	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc);
+	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
 

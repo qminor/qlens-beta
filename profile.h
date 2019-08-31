@@ -66,7 +66,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	int n_params, n_vary_params;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
-	int ellipticity_paramnum; // used to keep track of ellipticity parameter so it can be easily converted to degrees and displayed
+	int ellipticity_paramnum; // used to keep track of ellipticity parameter (this feature is used only by qtab models)
 	boolvector vary_params;
 	string model_name;
 	string special_parameter_command;

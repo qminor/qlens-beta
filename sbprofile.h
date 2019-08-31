@@ -8,7 +8,7 @@
 #include <vector>
 using namespace std;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORED_SERSIC, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile
 {
@@ -30,7 +30,6 @@ class SB_Profile
 
 	int n_params, n_vary_params;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
-	int ellipticity_paramnum; // used to keep track of ellipticity parameter so it can be easily converted to degrees and displayed
 	bool include_boxiness_parameter;
 	bool include_fmode_rscale; // the rscale factor transitions the Fourier modes (and boxiness) from zero at r=0 to the full amplitude at ~rscale
 	boolvector vary_params;
@@ -57,11 +56,13 @@ class SB_Profile
 	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	void set_geometric_parameters_radians(const double &q_in, const double &theta_in, const double &xc_in, const double &yc_in);
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	void calculate_ellipticity_components();
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
+	void update_ellipticity_meta_parameters();
 	virtual void update_meta_parameters()
 	{
-		update_angle_meta_params();
+		update_ellipticity_meta_parameters();
 	}
 
 	void set_angle(const double &theta_degrees);
@@ -69,8 +70,8 @@ class SB_Profile
 	void rotate(double&, double&);
 	void rotate_back(double&, double&);
 	static bool orient_major_axis_north;
-	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
-	static bool use_fmode_scaled_amplitudes; // if set to true, uses a_m = A_m/m and b_m = B_m/m as parameters instead of true amplitudes
+	static bool use_sb_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
+	static bool use_fmode_scaled_amplitudes; // if set to true, uses a_m = m*A_m and b_m = m*B_m as parameters instead of true amplitudes
 
 	public:
 	int sb_number;
@@ -159,7 +160,7 @@ class Gaussian : public SB_Profile
 class Sersic : public SB_Profile
 {
 	private:
-	double s0, k, n; // sig_x is the dispersion along the major axis
+	double s0, k, n;
 	double Reff; // effective radius
 
 	double sb_rsq(const double);
@@ -169,6 +170,30 @@ class Sersic : public SB_Profile
 	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Sersic(const Sersic* sb_in);
 	~Sersic() {}
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	void print_parameters();
+	double window_rmax();
+};
+
+class Cored_Sersic : public SB_Profile
+{
+	private:
+	double s0, k, n, rc;
+	double Reff; // effective radius
+
+	double sb_rsq(const double);
+
+	public:
+	Cored_Sersic() : SB_Profile() {}
+	Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	Cored_Sersic(const Cored_Sersic* sb_in);
+	~Cored_Sersic() {}
 
 	void update_meta_parameters();
 	void assign_paramnames();

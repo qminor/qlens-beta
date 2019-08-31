@@ -9,7 +9,7 @@
 using namespace std;
 
 bool SB_Profile::orient_major_axis_north;
-bool SB_Profile::use_ellipticity_components;
+bool SB_Profile::use_sb_ellipticity_components;
 bool SB_Profile::use_fmode_scaled_amplitudes;
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
@@ -41,7 +41,13 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	sb_number = sb_in->sb_number;
 	set_nparams(sb_in->n_params);
 	is_lensed = sb_in->is_lensed;
-	set_geometric_parameters_radians(sb_in->q,sb_in->theta,sb_in->x_center,sb_in->y_center);
+
+	q = sb_in->q;
+	epsilon = sb_in->epsilon;
+	epsilon2 = sb_in->epsilon2;
+	set_angle_radians(sb_in->theta);
+	x_center = sb_in->x_center;
+	y_center = sb_in->y_center;
 
 	paramnames = sb_in->paramnames;
 	latex_paramnames = sb_in->latex_paramnames;
@@ -233,14 +239,12 @@ void SB_Profile::assign_param_pointers()
 void SB_Profile::set_geometric_param_pointers(int qi)
 {
 	// Sets parameter pointers for ellipticity (or axis ratio) and angle
-	if (use_ellipticity_components) {
+	if (use_sb_ellipticity_components) {
 		param[qi++] = &epsilon;
 		param[qi++] = &epsilon2;
 		angle_paramnum = -1; // there is no angle parameter if ellipticity components are being used
-		ellipticity_paramnum = -1; // no single ellipticity parameter here
 	} else {
-		param[qi] = &q;
-		ellipticity_paramnum = qi++;
+		param[qi++] = &q;
 		param[qi] = &theta;
 		angle_paramnum = qi++;
 	}
@@ -368,7 +372,6 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 					update_angle_meta_params();
 				}
 				else *(param[i]) = fitparams[index++];
-				//cout << "P" << i << ": " << *(param[i]) << " " << fitparams[index-1] << endl;
 			}
 		}
 		update_meta_parameters();
@@ -397,7 +400,7 @@ void SB_Profile::set_auto_stepsizes()
 
 void SB_Profile::set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i)
 {
-	if (use_ellipticity_components) {
+	if (use_sb_ellipticity_components) {
 		stepsizes[eparam1_i] = 0.1; // e1
 		stepsizes[eparam2_i] = 0.1; // e2
 	} else {
@@ -423,7 +426,7 @@ void SB_Profile::set_auto_ranges()
 
 void SB_Profile::set_geometric_param_auto_ranges(int param_i)
 {
-	if (use_ellipticity_components) {
+	if (use_sb_ellipticity_components) {
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
 	} else {
@@ -487,7 +490,7 @@ void SB_Profile::assign_paramnames()
 
 void SB_Profile::set_geometric_paramnames(int qi)
 {
-	if (use_ellipticity_components) {
+	if (use_sb_ellipticity_components) {
 		paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1,src"; qi++;
 		paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2,src"; qi++;
 	} else {
@@ -498,15 +501,22 @@ void SB_Profile::set_geometric_paramnames(int qi)
 	paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c,src"; qi++;
 }
 
-void SB_Profile::set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+void SB_Profile::set_geometric_parameters(const double &q1_in, const double &q2_in, const double &xc_in, const double &yc_in)
 {
 	qx_parameter = 1.0;
-	q=q_in;
-	if (q < 0) q = -q; // don't allow negative axis ratios
-	if (q > 1) q = 1.0; // don't allow q>1
-	set_angle(theta_degrees);
+
+	if (use_sb_ellipticity_components) {
+		epsilon = q1_in;
+		epsilon2 = q2_in;
+	} else {
+		q = q1_in;
+		if (q < 0) q = -q; // don't allow negative axis ratios
+		if (q > 1) q = 1.0; // don't allow q>1
+		theta = degrees_to_radians(q2_in);
+	}
 	x_center = xc_in;
 	y_center = yc_in;
+	update_ellipticity_meta_parameters();
 }
 
 void SB_Profile::set_geometric_parameters_radians(const double &q_in, const double &theta_in, const double &xc_in, const double &yc_in)
@@ -518,6 +528,25 @@ void SB_Profile::set_geometric_parameters_radians(const double &q_in, const doub
 	set_angle_radians(theta_in);
 	x_center = xc_in;
 	y_center = yc_in;
+}
+
+void SB_Profile::calculate_ellipticity_components()
+{
+	if (use_sb_ellipticity_components) {
+		double theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
+		epsilon = (1-q)*cos(2*theta_eff);
+		epsilon2 = (1-q)*sin(2*theta_eff);
+	}
+}
+
+void SB_Profile::update_ellipticity_meta_parameters()
+{
+	if (use_sb_ellipticity_components) {
+		q = 1 - sqrt(SQR(epsilon) + SQR(epsilon2));
+		set_angle_from_components(epsilon,epsilon2); // note this will automatically set the costheta, sintheta parameters
+	} else {
+		update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
+	}
 }
 
 void SB_Profile::update_angle_meta_params()
@@ -608,8 +637,10 @@ void SB_Profile::set_angle_from_components(const double &comp1, const double &co
 	}
 	angle = 0.5*angle;
 	if (orient_major_axis_north) angle -= M_HALFPI;
-	while (angle > M_HALFPI) angle -= M_PI;
-	while (angle <= -M_HALFPI) angle += M_PI;
+	//while (angle > M_HALFPI) angle -= M_PI;
+	//while (angle <= -M_HALFPI) angle += M_PI;
+	while (angle > M_PI) angle -= M_PI;
+	while (angle <= 0) angle += M_PI;
 	set_angle_radians(angle);
 }
 
@@ -907,7 +938,7 @@ void Sersic::update_meta_parameters()
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
 	k = b*pow(sqrt(q)/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
-	update_angle_meta_params();
+	update_ellipticity_meta_parameters();
 }
 
 void Sersic::assign_paramnames()
@@ -950,6 +981,87 @@ double Sersic::sb_rsq(const double rsq)
 }
 
 double Sersic::window_rmax()
+{
+	return pow(3.0/k,n);
+}
+
+Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+{
+	model_name = "csersic";
+	sbtype = CORED_SERSIC;
+	set_nparams(8);
+	n = n_in;
+	Reff = Reff_in;
+	s0 = s0_in;
+	rc = rc_in;
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+	assign_param_pointers();
+	assign_paramnames();
+}
+
+Cored_Sersic::Cored_Sersic(const Cored_Sersic* sb_in)
+{
+	s0 = sb_in->s0;
+	n = sb_in->n;
+	Reff = sb_in->Reff;
+	rc = sb_in->rc;
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void Cored_Sersic::update_meta_parameters()
+{
+	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	k = b*pow(sqrt(q)/Reff,1.0/n);
+	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
+	update_ellipticity_meta_parameters();
+}
+
+void Cored_Sersic::assign_paramnames()
+{
+	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
+	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
+	paramnames[3] = "rc"; latex_paramnames[3] = "r"; latex_param_subscripts[3] = "c";
+	set_geometric_paramnames(4);
+}
+
+void Cored_Sersic::assign_param_pointers()
+{
+	param[0] = &s0;
+	param[1] = &Reff;
+	param[2] = &n;
+	param[3] = &rc;
+	set_geometric_param_pointers(4);
+}
+
+void Cored_Sersic::set_auto_stepsizes()
+{
+	stepsizes[0] = 0.1; // arbitrary
+	stepsizes[1] = 0.1; // arbitrary
+	stepsizes[2] = 0.1; // arbitrary
+	stepsizes[3] = 0.1; // arbitrary
+	set_auto_eparam_stepsizes(4,5);
+	stepsizes[6] = 0.1;
+	stepsizes[7] = 0.1;
+}
+
+void Cored_Sersic::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_geometric_param_auto_ranges(4);
+}
+
+double Cored_Sersic::sb_rsq(const double rsq)
+{
+	return s0*exp(-k*pow(rsq+rc*rc,0.5/n));
+}
+
+double Cored_Sersic::window_rmax()
 {
 	return pow(3.0/k,n);
 }
@@ -1005,7 +1117,6 @@ void SB_Multipole::assign_paramnames()
 
 void SB_Multipole::assign_param_pointers()
 {
-	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &r0;
 	param[2] = &theta; angle_paramnum = 2;

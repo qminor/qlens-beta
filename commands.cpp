@@ -4258,7 +4258,8 @@ void Lens::process_commands(bool read_file)
 					stringstream* new_ws = new stringstream[nwords-1];
 					words[1] = (profile_name==SB_SPLINE) ? "sbspline" :
 									(profile_name==GAUSSIAN) ? "gaussian" :
-									(profile_name==SERSIC) ? "sersic" : "tophat";
+									(profile_name==SERSIC) ? "sersic" :
+									(profile_name==CORED_SERSIC) ? "csersic" : "tophat";
 					for (int i=2; i < nwords-1; i++)
 						words[i] = words[i+1];
 					for (int i=0; i < nwords-1; i++)
@@ -4450,7 +4451,7 @@ void Lens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_source_object(GAUSSIAN, sbnorm, sig, 0, q, theta, xc, yc);
+						add_source_object(GAUSSIAN, sbnorm, sig, 0, 0, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
@@ -4499,7 +4500,7 @@ void Lens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_source_object(SERSIC, s0, reff, n, q, theta, xc, yc);
+						add_source_object(SERSIC, s0, reff, 0, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
@@ -4510,6 +4511,56 @@ void Lens::process_commands(bool read_file)
 					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
+			}
+			else if (words[1]=="csersic")
+			{
+				if (nwords > 10) Complain("more than 8 parameters not allowed for model csersic");
+				if (nwords >= 7) {
+					double s0, reff, n, rc;
+					double q, theta = 0, xc = 0, yc = 0;
+					if (!(ws[2] >> s0)) Complain("invalid s0 parameter for model csersic");
+					if (!(ws[3] >> reff)) Complain("invalid R_eff parameter for model csersic");
+					if (!(ws[4] >> n)) Complain("invalid n parameter for model csersic");
+					if (!(ws[5] >> rc)) Complain("invalid rc parameter for model csersic");
+					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
+					if (nwords >= 8) {
+						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
+						if (nwords == 10) {
+							if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
+							if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
+						}
+					}
+
+					nparams_to_vary = 8;
+					param_vals.input(nparams_to_vary);
+					param_vals[0]=s0; param_vals[1]=reff; param_vals[2] = n; param_vals[3] = rc; param_vals[4]=q; param_vals[5]=theta; param_vals[6]=xc; param_vals[7]=yc;
+
+					if (vary_parameters) {
+						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_fmode_rscale) nparams_to_vary++;
+						nparams_to_vary += fourier_nmodes*2;
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,rc,q,theta,xc,yc) in model csersic");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+					} else {
+						add_source_object(CORED_SERSIC, s0, reff, rc, n, q, theta, xc, yc);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
+						for (int i=fourier_nmodes-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+						}
+						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+					}
+				}
+				else Complain("csersic requires at least 5 parameters (max_sb, k, n, rc, q)");
 			}
 			else if (words[1]=="sbmpole")
 			{
@@ -4615,7 +4666,7 @@ void Lens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_source_object(TOPHAT, sb, rad, 0, q, theta, xc, yc);
+						add_source_object(TOPHAT, sb, rad, 0, 0, q, theta, xc, yc);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6991,6 +7042,18 @@ void Lens::process_commands(bool read_file)
 				set_switch(use_comps,setword);
 				LensProfile::use_ellipticity_components = use_comps;
 				reassign_lensparam_pointers_and_names();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="sb_ellipticity_components")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use ellipticity components for SB profiles instead of (q,theta): " << display_switch(SB_Profile::use_sb_ellipticity_components) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'sb_ellipticity_components' command; must specify 'on' or 'off'");
+				bool use_comps;
+				set_switch(use_comps,setword);
+				SB_Profile::use_sb_ellipticity_components = use_comps;
+				reassign_sb_param_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="use_scaled_fmode_amps")

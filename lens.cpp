@@ -763,8 +763,8 @@ Lens::Lens() : UCMC()
 	LensProfile::use_ellipticity_components = false;
 	LensProfile::output_integration_errors = true;
 	LensProfile::default_ellipticity_mode = 1;
-	SB_Profile::use_ellipticity_components = false;
-	SB_Profile::use_fmode_scaled_amplitudes = false; // if set to true, uses a_m = A_m/m and b_m = B_m/m as parameters instead of true amplitudes
+	SB_Profile::use_sb_ellipticity_components = false;
+	SB_Profile::use_fmode_scaled_amplitudes = false; // if set to true, uses a_m = m*A_m and b_m = m*B_m as parameters instead of true amplitudes
 	default_parameter_mode = 0;
 	Shear::use_shear_component_params = false;
 	include_recursive_lensing = true;
@@ -2374,7 +2374,7 @@ void Lens::record_singular_points(double *zfacs)
 	n_singular_points = singular_pts.size();
 }
 
-void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, double logslope_param, double q, double theta, double xc, double yc)
+void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2388,6 +2388,8 @@ void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, 
 			newlist[n_sb] = new Gaussian(sb_norm, scale, q, theta, xc, yc); break;
 		case SERSIC:
 			newlist[n_sb] = new Sersic(sb_norm, scale, logslope_param, q, theta, xc, yc); break;
+		case CORED_SERSIC:
+			newlist[n_sb] = new Cored_Sersic(sb_norm, scale, logslope_param, scale2, q, theta, xc, yc); break;
 		case TOPHAT:
 			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc); break;
 		default:
@@ -5867,6 +5869,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 					fitmodel->sb_list[i] = new Gaussian((Gaussian*) sb_list[i]); break;
 				case SERSIC:
 					fitmodel->sb_list[i] = new Sersic((Sersic*) sb_list[i]); break;
+				case CORED_SERSIC:
+					fitmodel->sb_list[i] = new Cored_Sersic((Cored_Sersic*) sb_list[i]); break;
 				case SB_MULTIPOLE:
 					fitmodel->sb_list[i] = new SB_Multipole((SB_Multipole*) sb_list[i]); break;
 				case TOPHAT:
@@ -9464,6 +9468,20 @@ void Lens::reassign_lensparam_pointers_and_names()
 			lens_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
 			lens_list[i]->assign_param_pointers();
 			lens_list[i]->assign_paramnames();
+			// NOTE: this still doesn't update the parameter list in param_settings. FIX THIS! Should update the names, and also plimits.
+		}
+	}
+}
+
+void Lens::reassign_sb_param_pointers_and_names()
+{
+	// parameter pointers should be reassigned if the parameterization mode has been changed
+	if (n_sb > 0) {
+		for (int i=0; i < n_sb; i++) {
+			sb_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
+			sb_list[i]->assign_param_pointers();
+			sb_list[i]->assign_paramnames();
+			// NOTE: this still doesn't update the parameter list in param_settings. FIX THIS! Should update the names, and also plimits.
 		}
 	}
 }
