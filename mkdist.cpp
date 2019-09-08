@@ -561,7 +561,7 @@ int main(int argc, char *argv[])
 		*/
 
 		if (make_2d_posts) {
-			int omp_nthreads;
+			int omp_nthreads = 1;
 #ifdef USE_OPENMP
 			double wtime, wtime0;
 			#pragma omp parallel
@@ -591,7 +591,7 @@ int main(int argc, char *argv[])
 				if (mpi_id==0) {
 					cout << "Generating 2D histograms (total of " << n_2dposts << ") with ";
 					if (mpi_np > 1) cout << mpi_np << " processes and ";
-					cout << omp_nthreads << " OpenMP threads..." << endl;
+					cout << omp_nthreads << " threads..." << endl;
 				}
 #ifdef USE_OPENMP
 				int omp_nthreads0=omp_nthreads;
