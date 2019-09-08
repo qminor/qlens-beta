@@ -205,7 +205,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	totPts = 0;
 	
 	int jmin, mmin;
-	const int n_characters = 1024;
+	const int n_characters = 4096;
 	char line[n_characters];
 	string dum;
 	for (j = 0; j < numOfFiles; j++)

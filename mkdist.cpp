@@ -561,9 +561,9 @@ int main(int argc, char *argv[])
 		*/
 
 		if (make_2d_posts) {
+			int omp_nthreads;
 #ifdef USE_OPENMP
 			double wtime, wtime0;
-			int omp_nthreads;
 			#pragma omp parallel
 			{
 				#pragma omp master
