@@ -764,6 +764,11 @@ double SB_Profile::surface_brightness(double x, double y)
 	}
 	double sb = sb_rsq(rsq);
 	if (include_truncation_radius) sb *= pow(1+pow(rsq/(rt*rt),3),-2);
+	//if (include_truncation_radius) {
+		//double fac = pow(1.0+pow(rsq/(rt*rt),1.5),-1.33333);
+		//cout << "r=" << sqrt(rsq) << " rt=" << rt << " fac=" << fac << endl;
+		//sb *= fac;
+	//}
 	return sb;
 }
 

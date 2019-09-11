@@ -4375,30 +4375,30 @@ void Lens::process_commands(bool read_file)
 					sb_list[src_number]->remove_fourier_modes();
 				} else Complain("must specify a source number to remove Fourier modes from");
 			}
-			if ((nwords > 1) and (words[1]=="add_rt")) {
-				// This has problems, because if Fourier modes have already been added, it will screw up the order of parameters
-				// that is assumed by the set_geometric_param_pointers() function in sbprofile. Don't use this command for fitting!!!
-				if (nwords == 4) {
-					if (!(ws[2] >> src_number)) Complain("invalid source number");
-					if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
-					if (!(ws[3] >> rtval)) Complain("invalid rt value");
-					update_specific_parameters = true;
-					// The following code shows up again and again, and should be put in a separate function to reduce repetition
-					nparams_to_vary = 1;
-					vary_flags.input(nparams_to_vary);
-					for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
-					if (vary_parameters) {
-						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flag for rt");
-						bool invalid_params = false;
-						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
-						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
-					}
-					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
-					// Should probably just get the vary flags for that source object, tack on the new vary flag and then use set_sb_vary_parameters instead.
-					sb_list[src_number]->add_truncation_radius(rtval,vary_flags[0]);
-				} else Complain("must specify a source number to add truncation to, followed by rt value");
-			}
+			//if ((nwords > 1) and (words[1]=="add_rt")) {
+				//// This has BIG problems, because if Fourier modes have already been added, it will screw up the order of parameters
+				//// that is assumed by the set_geometric_param_pointers() function in sbprofile. Don't use this command for fitting!!!
+				//if (nwords == 4) {
+					//if (!(ws[2] >> src_number)) Complain("invalid source number");
+					//if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
+					//if (!(ws[3] >> rtval)) Complain("invalid rt value");
+					//update_specific_parameters = true;
+					//// The following code shows up again and again, and should be put in a separate function to reduce repetition
+					//nparams_to_vary = 1;
+					//vary_flags.input(nparams_to_vary);
+					//for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+					//if (vary_parameters) {
+						//if (read_command(false)==false) return;
+						//if (nwords != nparams_to_vary) Complain("Must specify vary flag for rt");
+						//bool invalid_params = false;
+						//for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						//if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					//}
+					//// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
+					//// Should probably just get the vary flags for that source object, tack on the new vary flag and then use set_sb_vary_parameters instead.
+					//sb_list[src_number]->add_truncation_radius(rtval,vary_flags[0]);
+				//} else Complain("must specify a source number to add truncation to, followed by rt value");
+			//}
 			if (update_parameters) {
 				int pos, n_updates = 0;
 				double pval;
