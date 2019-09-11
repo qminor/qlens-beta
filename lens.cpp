@@ -8145,6 +8145,7 @@ void Lens::multinest(const bool resume_previous, const bool skip_run)
 
 	if (!skip_run) {
 #ifdef MULTINEST_MOD
+		// This code uses a modified version of MultiNest that allows for the likelihood to be parallelized over a subset of MPI processes
 		MPI_Group world_group;
 		MPI_Comm world_comm;
 		MPI_Comm_group(MPI_COMM_WORLD, &world_group);

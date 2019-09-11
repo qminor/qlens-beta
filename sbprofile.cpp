@@ -70,8 +70,10 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		fourier_mode_paramnum.input(sb_in->fourier_mode_paramnum);
 	}
 	include_boxiness_parameter = sb_in->include_boxiness_parameter;
+	include_truncation_radius = sb_in->include_truncation_radius;
 	include_fmode_rscale = sb_in->include_fmode_rscale;
 	if (include_boxiness_parameter) c0 = sb_in->c0;
+	if (include_truncation_radius) rt = sb_in->rt;
 	if (include_fmode_rscale) fmode_rscale = sb_in->fmode_rscale;
 	assign_param_pointers();
 }
@@ -80,6 +82,7 @@ void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
 	include_boxiness_parameter = false;
+	include_truncation_radius = false;
 	include_fmode_rscale = false;
 	is_lensed = true; // default
 	n_fourier_modes = 0;
@@ -123,9 +126,50 @@ void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 	stepsizes[n_params-1] = 0.1; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
 
+	//delete[] param;
+	//param = new double*[n_params];
+	//assign_param_pointers();
+
+	double **new_param = new double*[n_params];
+	for (int i=0; i < n_params-1; i++) new_param[i] = param[i];
+	new_param[n_params-1] = &c0;
 	delete[] param;
-	param = new double*[n_params];
-	assign_param_pointers();
+	param = new_param;
+}
+
+void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
+{
+	if (include_truncation_radius) return;
+	include_truncation_radius = true;
+	rt = rt_in;
+	n_params++;
+
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	if (vary_rt) n_vary_params++;
+
+	vary_params[n_params-1] = vary_rt;
+	paramnames[n_params-1] = "rt";
+	latex_paramnames[n_params-1] = "r";
+	latex_param_subscripts[n_params-1] = "t";
+	stepsizes[n_params-1] = 0.1; // arbitrary
+	set_auto_penalty_limits[n_params-1] = false;
+
+	double **new_param = new double*[n_params];
+	for (int i=0; i < n_params-1; i++) new_param[i] = param[i];
+	new_param[n_params-1] = &rt;
+	delete[] param;
+	param = new_param;
+
+	//delete[] param;
+	//param = new double*[n_params];
+	//assign_param_pointers();
 }
 
 void SB_Profile::add_fmode_rscale(const double rscale_in, const bool vary_rscale)
@@ -152,9 +196,15 @@ void SB_Profile::add_fmode_rscale(const double rscale_in, const bool vary_rscale
 	stepsizes[n_params-1] = 0.01; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
 
+	double **new_param = new double*[n_params];
+	for (int i=0; i < n_params-1; i++) new_param[i] = param[i];
+	new_param[n_params-1] = &fmode_rscale;
 	delete[] param;
-	param = new double*[n_params];
-	assign_param_pointers();
+	param = new_param;
+
+	//delete[] param;
+	//param = new double*[n_params];
+	//assign_param_pointers();
 }
 
 void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2)
@@ -202,10 +252,19 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	delete[] param;
 	param = new double*[n_params];
 	assign_param_pointers();
+
+	double **new_param = new double*[n_params];
+	for (int i=0; i < n_params-2; i++) new_param[i] = param[i];
+	new_param[n_params-2] = &fourier_mode_cosamp[n_fourier_modes-1];
+	new_param[n_params-1] = &fourier_mode_sinamp[n_fourier_modes-1];
+	delete[] param;
+	param = new_param;
 }
 
 void SB_Profile::remove_fourier_modes()
 {
+	// This is not well-written, because it assumes the last parameters are fourier modes. Have it actually check the parameter name
+	// before deleting it. FIX!
 	n_params -= n_fourier_modes*2;
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
@@ -251,6 +310,7 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	param[qi++] = &x_center;
 	param[qi++] = &y_center;
 	if (include_boxiness_parameter) param[qi++] = &c0;
+	if (include_truncation_radius) param[qi++] = &rt;
 	if (include_fmode_rscale) param[qi++] = &fmode_rscale;
 	if (n_fourier_modes > 0) {
 		for (int i=0; i < n_fourier_modes; i++) {
@@ -702,7 +762,9 @@ double SB_Profile::surface_brightness(double x, double y)
 		}
 		rsq *= fourier_factor*fourier_factor;
 	}
-	return sb_rsq(rsq);
+	double sb = sb_rsq(rsq);
+	if (include_truncation_radius) sb *= pow(1+pow(rsq/(rt*rt),3),-2);
+	return sb;
 }
 
 double SB_Profile::surface_brightness_r(const double r)
@@ -795,6 +857,7 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 		else {
 			// If this is an optional parameter, need to specify parameter name before the value
 			if (paramnames[i]=="c0") scriptout << "c0="; // boxiness parameter
+			else if (paramnames[i]=="rt") scriptout << "rt="; // truncation radius
 			else if (paramnames[i]=="rfsc") scriptout << "rfsc="; // Fourier mode/boxiness amplitude scale radius
 			else {
 				for (int j=0; j < n_fourier_modes; j++) {

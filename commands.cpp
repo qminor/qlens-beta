@@ -4226,9 +4226,11 @@ void Lens::process_commands(bool read_file)
 			vector<double> fourier_Bmvals;
 			int fourier_nmodes=0;
 			bool include_boxiness_parameter = false;
+			bool include_truncation_radius = false;
 			bool include_fmode_rscale = false;
 			bool unlensed = false;
 			double c0val = 0;
+			double rtval = 0;
 			double rfsc_val = 0;
 
 			if (words[0]=="fit") {
@@ -4315,6 +4317,19 @@ void Lens::process_commands(bool read_file)
 					include_boxiness_parameter = true;
 				}
 			}
+
+			for (int i=2; i < nwords; i++) {
+				if ((words[i][0]=='r') and (words[i][1]=='t') and (words[i][2]=='=') and (!update_parameters)) {
+					string rtstring;
+					rtstring = words[i].substr(3);
+					stringstream rtstr;
+					rtstr << rtstring;
+					if (!(rtstr >> rtval)) Complain("invalid rt value");
+					remove_word(i);
+					include_truncation_radius = true;
+				}
+			}
+
 			for (int i=2; i < nwords; i++) {
 				if ((words[i][0]=='r') and (words[i][1]=='f') and (words[i][2]=='s') and (words[i][3]=='c') and (words[i][4]=='=') and (!update_parameters)) {
 					string rfscstring;
@@ -4338,7 +4353,7 @@ void Lens::process_commands(bool read_file)
 					for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
 					if (vary_parameters) {
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for all fourier modes");
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
@@ -4359,6 +4374,30 @@ void Lens::process_commands(bool read_file)
 					update_specific_parameters = true;
 					sb_list[src_number]->remove_fourier_modes();
 				} else Complain("must specify a source number to remove Fourier modes from");
+			}
+			if ((nwords > 1) and (words[1]=="add_rt")) {
+				// This has problems, because if Fourier modes have already been added, it will screw up the order of parameters
+				// that is assumed by the set_geometric_param_pointers() function in sbprofile. Don't use this command for fitting!!!
+				if (nwords == 4) {
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if ((n_sb <= src_number) or (src_number < 0)) Complain("specified source number does not exist");
+					if (!(ws[3] >> rtval)) Complain("invalid rt value");
+					update_specific_parameters = true;
+					// The following code shows up again and again, and should be put in a separate function to reduce repetition
+					nparams_to_vary = 1;
+					vary_flags.input(nparams_to_vary);
+					for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flag for rt");
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
+					// Should probably just get the vary flags for that source object, tack on the new vary flag and then use set_sb_vary_parameters instead.
+					sb_list[src_number]->add_truncation_radius(rtval,vary_flags[0]);
+				} else Complain("must specify a source number to add truncation to, followed by rt value");
 			}
 			if (update_parameters) {
 				int pos, n_updates = 0;
@@ -4438,6 +4477,7 @@ void Lens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_truncation_radius) nparams_to_vary++;
 						if (include_fmode_rscale) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
@@ -4453,6 +4493,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, 0, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -4487,6 +4528,7 @@ void Lens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_truncation_radius) nparams_to_vary++;
 						if (include_fmode_rscale) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
@@ -4502,6 +4544,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(SERSIC, s0, reff, 0, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -4537,6 +4580,7 @@ void Lens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
+						if (include_truncation_radius) nparams_to_vary++;
 						if (include_fmode_rscale) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
@@ -4552,6 +4596,7 @@ void Lens::process_commands(bool read_file)
 					} else {
 						add_source_object(CORED_SERSIC, s0, reff, rc, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -7290,9 +7335,7 @@ void Lens::process_commands(bool read_file)
 		{
 			double cbmin;
 			if (nwords == 2) {
-				if (words[1]=="auto") {
-					if (sbmin != -1e30) cbmin = sbmin; // sbmin was stored from last pixel image generated
-				}
+				if (words[1]=="auto") cbmin = -1e30; // the lens plotting script recognizes this as "auto"
 				else if (!(ws[1] >> cbmin)) Complain("invalid cbmin setting");
 				colorbar_min = cbmin;
 			} else if (nwords==1) {
@@ -7303,9 +7346,7 @@ void Lens::process_commands(bool read_file)
 		{
 			double cbmax;
 			if (nwords == 2) {
-				if (words[1]=="auto") {
-					if (sbmax != 1e30) cbmax = sbmax; // sbmax was stored from last pixel image generated
-				}
+				if (words[1]=="auto") cbmax = 1e30; // the lens plotting script recognizes this as "auto"
 				else if (!(ws[1] >> cbmax)) Complain("invalid cbmax setting");
 				colorbar_max = cbmax;
 			} else if (nwords==1) {

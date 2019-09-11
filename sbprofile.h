@@ -23,6 +23,7 @@ class SB_Profile
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived surface brightness models
 	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
 	double c0; // "boxiness" parameter
+	double rt; // truncation radius parameter
 	double fmode_rscale;
 	double costheta, sintheta;
 
@@ -31,6 +32,7 @@ class SB_Profile
 	int n_params, n_vary_params;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
 	bool include_boxiness_parameter;
+	bool include_truncation_radius;
 	bool include_fmode_rscale; // the rscale factor transitions the Fourier modes (and boxiness) from zero at r=0 to the full amplitude at ~rscale
 	boolvector vary_params;
 	string model_name;
@@ -89,6 +91,7 @@ class SB_Profile
 	bool vary_parameters(const boolvector& vary_params_in);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
+	void add_truncation_radius(const double rt_in, const bool vary_rt);
 	void add_fmode_rscale(const double rscale_in, const bool vary_rscale);
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
