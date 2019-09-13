@@ -2919,7 +2919,7 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 
 /***************************** SersicLens profile *****************************/
 
-SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &kappa_e_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
+SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
 	cosmo = cosmo_in;
 	lenstype = SERSIC_LENS;
@@ -2927,15 +2927,19 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	special_parameter_command = "";
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
+	if (parameter_mode==0) {
+		kappa_e = p1_in;
+	} else {
+		mstar = p1_in;
+	}
 	n = n_in;
 	re = Re_in;
-	kappa_e = kappa_e_in;
 
 	update_meta_parameters_and_pointers();
 }
@@ -2943,7 +2947,11 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 SersicLens::SersicLens(const SersicLens* lens_in)
 {
 	copy_base_lensdata(lens_in);
-	kappa_e = lens_in->kappa_e;
+	if (parameter_mode==0) {
+		kappa_e = lens_in->kappa_e;
+	} else {
+		mstar = lens_in->mstar;
+	}
 	n = lens_in->n;
 	re = lens_in->re;
 	b = lens_in->b;
@@ -2953,7 +2961,11 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 
 void SersicLens::assign_paramnames()
 {
-	paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+	if (parameter_mode==0) {
+		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+	} else {
+		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
+	}
 	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	set_geometric_paramnames(3);
@@ -2961,7 +2973,12 @@ void SersicLens::assign_paramnames()
 
 void SersicLens::assign_param_pointers()
 {
-	param[0] = &kappa_e;
+	if (parameter_mode==0) {
+		param[0] = &kappa_e;
+	} else {
+		param[0] = &mstar;
+	}
+
 	param[1] = &re;
 	param[2] = &n;
 	set_geometric_param_pointers(3);
@@ -2972,12 +2989,19 @@ void SersicLens::update_meta_parameters()
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	if (parameter_mode==1) {
+		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+	}
 	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
 }
 
 void SersicLens::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*kappa_e;
+	if (parameter_mode==0) {
+		stepsizes[0] = 0.2*kappa_e;
+	} else {
+		stepsizes[0] = 0.2*mstar;
+	}
 	stepsizes[1] = 0.2*re;
 	stepsizes[2] = 0.2;
 	set_auto_eparam_stepsizes(3,4);

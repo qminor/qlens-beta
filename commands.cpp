@@ -144,6 +144,8 @@ void Lens::process_commands(bool read_file)
 						"plot_key -- specify whether to display key in plots (on/off)\n"
 						"plot_key_outside -- specify whether to display key inside plots or next to plots (on/off)\n"
 						"colorbar -- specify whether to show color bar scale in pixel map plots (on/off)\n"
+						"cbmin -- minimum value on color bar scale ('auto' by default)\n"
+						"cbmax -- maximum value on color bar scale ('auto' by default)\n"
 						"\n";
 				} else if (words[1]=="imgsrch_settings") {
 					cout << 
@@ -1901,6 +1903,15 @@ void Lens::process_commands(bool read_file)
 					cout << "plot_key: " << display_switch(show_plot_key) << endl;
 					cout << "plot_key_outside: " << display_switch(plot_key_outside) << endl;
 					cout << "colorbar: " << display_switch(show_colorbar) << endl;
+
+					cout << "colorbar min surface brightness = ";
+					if (colorbar_min==-1e30) cout << "auto" << endl;
+					else cout << colorbar_min << endl;
+
+					cout << "colorbar max surface brightness = ";
+					if (colorbar_max==1e30) cout << "auto" << endl;
+					else cout << colorbar_max << endl;
+
 					cout << endl;
 				}
 				if (show_imgsrch_settings) {
@@ -3658,12 +3669,17 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="sersic")
 				{
 					int primary_lens_num;
+					if ((pmode < 0) or (pmode > 1)) Complain("parameter mode must be either 0 or 1");
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model sersic");
 					if (nwords >= 6) {
-						double kappe_e, re, n;
+						double p1, re, n;
 						double q, theta = 0, xc = 0, yc = 0;
 						int pos;
-						if (!(ws[2] >> kappe_e)) Complain("invalid kappe_e parameter for model sersic");
+						if (pmode==1) {
+							if (!(ws[2] >> p1)) Complain("invalid mstar parameter for model sersic");
+						} else {
+							if (!(ws[2] >> p1)) Complain("invalid kappe_e parameter for model sersic");
+						}
 						if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
 						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
@@ -3688,7 +3704,7 @@ void Lens::process_commands(bool read_file)
 						}
 						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-						param_vals[0]=kappe_e; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
@@ -3727,7 +3743,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, kappe_e, re, n, q, theta, xc, yc);
+							add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -7339,7 +7355,11 @@ void Lens::process_commands(bool read_file)
 				else if (!(ws[1] >> cbmin)) Complain("invalid cbmin setting");
 				colorbar_min = cbmin;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "colorbar min surface brightness = " << colorbar_min << endl;
+				if (mpi_id==0) {
+					cout << "colorbar min surface brightness = ";
+					if (colorbar_min==-1e30) cout << "auto" << endl;
+					else cout << colorbar_min << endl;
+				}
 			} else Complain("must specify either zero or one argument");
 		}
 		else if (words[0]=="cbmax")
@@ -7350,7 +7370,11 @@ void Lens::process_commands(bool read_file)
 				else if (!(ws[1] >> cbmax)) Complain("invalid cbmax setting");
 				colorbar_max = cbmax;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "colorbar max surface brightness = " << colorbar_max << endl;
+				if (mpi_id==0) {
+					cout << "colorbar max surface brightness = ";
+					if (colorbar_max==1e30) cout << "auto" << endl;
+					else cout << colorbar_max << endl;
+				}
 			} else Complain("must specify either zero or one argument");
 		}
 		else if (words[0]=="plot_square_axes")
@@ -9364,7 +9388,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 					if (!no2dposts) command += "cp " + filename + "_tri.pdf ../" + posts_dirname + "; ";
 					if ((!no2dposts) and (make_subplot)) command += "cp " + filename + "_subtri.pdf ../" + posts_dirname + "; ";
 				}
-				command += "cp *.chain_info ../" + posts_dirname + "; ";
+				if (!nohists) command += "cp *.chain_info ../" + posts_dirname + "; ";
 			}
 			command += "cd ..";
 			system(command.c_str());

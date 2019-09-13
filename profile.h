@@ -754,6 +754,7 @@ class SersicLens : public LensProfile
 	private:
 	double kappa_e, b, n;
 	double re; // effective radius
+	double mstar; // total stellar mass (alternate parameterization)
 	double def_factor; // used to calculate the spherical deflection
 
 	double kappa_rsq(const double rsq);
@@ -765,7 +766,7 @@ class SersicLens : public LensProfile
 	public:
 
 	SersicLens() : LensProfile() {}
-	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens*);
+	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens*);
 	SersicLens(const SersicLens* lens_in);
 
 	void assign_paramnames();
