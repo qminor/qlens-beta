@@ -1105,7 +1105,7 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 		params[2] = rt;
 	}
-	for (int i=2; i < n_params; i++) {
+	for (int i=3; i < n_params; i++) {
 		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}

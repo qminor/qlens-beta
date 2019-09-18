@@ -4466,9 +4466,27 @@ void Lens::process_commands(bool read_file)
 				if (nwords==2) {
 					clear_source_objects();
 				} else if (nwords==3) {
-					int source_number;
-					if (!(ws[2] >> source_number)) Complain("invalid source number");
-					remove_source_object(source_number);
+					//int source_number;
+					//if (!(ws[2] >> source_number)) Complain("invalid source number");
+					//remove_source_object(source_number);
+
+					int src_number, min_srcnumber, max_srcnumber, pos;
+					if ((pos = words[2].find("-")) != string::npos) {
+						string srcminstring, srcmaxstring;
+						srcminstring = words[2].substr(0,pos);
+						srcmaxstring = words[2].substr(pos+1);
+						stringstream srcmaxstream, srcminstream;
+						srcminstream << srcminstring;
+						srcmaxstream << srcmaxstring;
+						if (!(srcminstream >> min_srcnumber)) Complain("invalid min source number");
+						if (!(srcmaxstream >> max_srcnumber)) Complain("invalid max source number");
+						if (max_srcnumber >= n_sb) Complain("specified max source number exceeds number of data sets in list");
+						if ((min_srcnumber > max_srcnumber) or (min_srcnumber < 0)) Complain("specified min source number cannot exceed max source number");
+						for (int i=max_srcnumber; i >= min_srcnumber; i--) remove_source_object(i);
+					} else {
+						if (!(ws[2] >> src_number)) Complain("invalid source number");
+						remove_source_object(src_number);
+					}
 				} else Complain("source clear command requires either one or zero arguments");
 			}
 			else if (words[1]=="gaussian")
@@ -6170,6 +6188,15 @@ void Lens::process_commands(bool read_file)
 			if (terminal != TEXT) Complain("only text plotting supported for plotkappa (switch to 'term text')");
 			if (!islens()) Complain("must specify lens model first");
 			int lens_number = -1;
+			bool plot_percentiles_from_chain = false;
+			for (int i=2; i < nwords; i++) {
+				if (words[i]=="-pct_from_chain") {
+					plot_percentiles_from_chain = true;
+					remove_word(i);
+					break;
+				}
+			}
+
 			if (words[nwords-1].find("lens=")==0) {
 				string lstr = words[nwords-1].substr(5);
 				stringstream lstream;
@@ -6195,8 +6222,12 @@ void Lens::process_commands(bool read_file)
 					if (nwords==5) plot_total_kappa(rmin, rmax, steps, words[4].c_str());
 					else plot_total_kappa(rmin, rmax, steps, words[4].c_str(), words[5].c_str());
 				} else {
-					if (nwords==5) plot_kappa_profile(lens_number, rmin, rmax, steps, words[4].c_str());
-					else plot_kappa_profile(lens_number, rmin, rmax, steps, words[4].c_str(), words[5].c_str());
+					if (plot_percentiles_from_chain) {
+						plot_kappa_profile_percentiles_from_chain(lens_number, rmin, rmax, steps, words[4]);
+					} else {
+						if (nwords==5) plot_kappa_profile(lens_number, rmin, rmax, steps, words[4].c_str());
+						else plot_kappa_profile(lens_number, rmin, rmax, steps, words[4].c_str(), words[5].c_str());
+					}
 				}
 			} else
 			  Complain("plotkappa requires 5 parameters (rmin, rmax, steps, kappa_outname, kderiv_outname)");

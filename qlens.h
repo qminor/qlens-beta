@@ -868,6 +868,8 @@ public:
 	void chi_square_twalk();
 	bool add_dparams_to_chain();
 	bool adopt_point_from_chain(const unsigned long point_num);
+	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
+	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
 
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);

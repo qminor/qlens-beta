@@ -1566,6 +1566,15 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 	}
 }
 
+void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals)
+{
+	double rsq;
+	for (int i=0; i < n_rvals; i++) {
+		rsq = SQR(rvals[i]);
+		kapvals[i] = kappa_rsq(rsq);
+	}
+}
+
 void LensProfile::deflection_spherical_default(double x, double y, lensvector& def)
 {
 	double kapavg = x*x+y*y; // r^2 right now

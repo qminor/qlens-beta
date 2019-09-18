@@ -8766,6 +8766,112 @@ bool Lens::adopt_point_from_chain(const unsigned long line_num)
 	return true;
 }
 
+bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename)
+{
+	double r, rstep = pow(rmax/rmin, 1.0/(nbins-1));
+	double *rvals = new double[nbins];
+	int i;
+	for (i=0, r=rmin; i < nbins; i++, r *= rstep) {
+		rvals[i] = r;
+	}
+
+	int nparams, n_dparams_old;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams >> n_dparams_old;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	pnumfile.close();
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[n_fit_parameters];
+
+	string chain_str = fit_output_dir + "/" + fit_output_filename;
+	ifstream chain_file(chain_str.c_str());
+
+	unsigned long n_points=0;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+		n_points++;
+	}
+	chain_file.close();
+
+	double **weights = new double*[nbins];
+	double **kappa_r_pts = new double*[nbins];
+	for (i=0; i < nbins; i++) {
+		kappa_r_pts[i] = new double[n_points];
+		weights[i] = new double[n_points];
+	}
+	double *kappa_r_vals = new double[nbins];
+
+	chain_file.open(chain_str.c_str());
+	int j=0;
+	double weight;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+
+		istringstream datastream(dataline);
+		datastream >> weight;
+		for (i=0; i < n_fit_parameters; i++) {
+			datastream >> params[i];
+		}
+		dvector chain_params(params,n_fit_parameters);
+		adopt_model(chain_params);
+		//print_lens_list(false);
+		lens_list[lensnum]->plot_kappa_profile(nbins,rvals,kappa_r_vals);
+		for (i=0; i < nbins; i++) {
+			kappa_r_pts[i][j] = kappa_r_vals[i];
+			//cout << "RK: " << rvals[i] << " " << kappa_r_pts[i][j] << endl;
+			weights[i][j] = weight;
+		}
+
+		j++;
+	}
+	chain_file.close();
+
+	double tot = 1.0; // the weights output by Polychord/Multinest should add up to 1, but maybe generalize this later just in case
+	for (i=0; i < nbins; i++) {
+		sort(n_points,kappa_r_pts[i],weights[i]);
+	}
+	double kaplo1, kaplo2, kaphi1, kaphi2;
+	double pct;
+	ofstream outfile(kappa_filename.c_str());
+	for (i=0; i < nbins; i++) {
+		kaplo1 = find_percentile(n_points, 0.02275, tot, kappa_r_pts[i], weights[i]);
+		kaphi1 = find_percentile(n_points, 0.97725, tot, kappa_r_pts[i], weights[i]);
+		kaplo2 = find_percentile(n_points, 0.15865, tot, kappa_r_pts[i], weights[i]);
+		kaphi2 = find_percentile(n_points, 0.84135, tot, kappa_r_pts[i], weights[i]);
+		outfile << rvals[i] << " " << kaplo1 << " " << kaphi1 << " " << kaplo2 << " " << kaphi2 << endl;
+	}
+
+	delete[] params;
+	delete[] rvals;
+	delete[] kappa_r_vals;
+	for (i=0; i < nbins; i++) {
+		delete[] kappa_r_pts[i];
+		delete[] weights[i];
+	}
+	delete[] kappa_r_pts;
+	delete[] weights;
+	return true;
+}
+
+double Lens::find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights)
+{
+	double totsofar = 0;
+	for (int j = 0; j < npoints; j++)
+	{
+		totsofar += weights[j];
+		if (totsofar/tot >= pct)
+		{
+			return pts[j] + (pts[j-1] - pts[j])*(totsofar - pct*tot)/weights[j];
+		}
+	}
+}
+
 void Lens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
