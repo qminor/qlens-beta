@@ -8864,7 +8864,7 @@ bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, d
 			slope_lo1 = log(kaplo1/kaplo1_prev)/log(rvals[i]/rvals[i-1]);
 			slope_hi1 = log(kaphi1/kaphi1_prev)/log(rvals[i]/rvals[i-1]);
 			slope_lo2 = log(kaplo2/kaplo2_prev)/log(rvals[i]/rvals[i-1]);
-			slope_hi2 = log(kaphi1/kaphi1_prev)/log(rvals[i]/rvals[i-1]);
+			slope_hi2 = log(kaphi2/kaphi2_prev)/log(rvals[i]/rvals[i-1]);
 		}
 		kaplo1_prev = kaplo1;
 		kaphi1_prev = kaphi1;
@@ -8879,7 +8879,7 @@ bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, d
 			slope_lo1 = log(kaplo1/kaplo1_prev)/log(rvals[i]/rvals[i-1]);
 			slope_hi1 = log(kaphi1/kaphi1_prev)/log(rvals[i]/rvals[i-1]);
 			slope_lo2 = log(kaplo2/kaplo2_prev)/log(rvals[i]/rvals[i-1]);
-			slope_hi2 = log(kaphi1/kaphi1_prev)/log(rvals[i]/rvals[i-1]);
+			slope_hi2 = log(kaphi2/kaphi2_prev)/log(rvals[i]/rvals[i-1]);
 		}
 		kavglo1 = find_percentile(n_points, 0.02275, tot, kappa_avg_pts[i], weights2[i]);
 		kavghi1 = find_percentile(n_points, 0.97725, tot, kappa_avg_pts[i], weights2[i]);
