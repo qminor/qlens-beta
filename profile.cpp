@@ -1566,12 +1566,14 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 	}
 }
 
-void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals)
+void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals)
 {
 	double rsq;
 	for (int i=0; i < n_rvals; i++) {
 		rsq = SQR(rvals[i]);
 		kapvals[i] = kappa_rsq(rsq);
+		if (kapavgptr_rsq_spherical==NULL) kapavgvals[i] = 0; // just in case there is no radial deflection function defined
+		else kapavgvals[i] = (this->*kapavgptr_rsq_spherical)(rsq);
 	}
 }
 

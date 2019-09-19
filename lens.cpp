@@ -8768,6 +8768,7 @@ bool Lens::adopt_point_from_chain(const unsigned long line_num)
 
 bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename)
 {
+	double zl = lens_list[lensnum]->get_redshift();
 	double r, rstep = pow(rmax/rmin, 1.0/(nbins-1));
 	double *rvals = new double[nbins];
 	int i;
@@ -8799,63 +8800,90 @@ bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, d
 	chain_file.close();
 
 	double **weights = new double*[nbins];
+	double **weights2 = new double*[nbins];
 	double **kappa_r_pts = new double*[nbins];
+	double **kappa_avg_pts = new double*[nbins];
 	for (i=0; i < nbins; i++) {
 		kappa_r_pts[i] = new double[n_points];
+		kappa_avg_pts[i] = new double[n_points];
 		weights[i] = new double[n_points];
+		weights2[i] = new double[n_points];
 	}
 	double *kappa_r_vals = new double[nbins];
+	double *kappa_avg_vals = new double[nbins];
 
 	chain_file.open(chain_str.c_str());
 	int j=0;
-	double weight;
+	double weight, tot=0;
 	while (!chain_file.eof()) {
 		chain_file.getline(dataline,n_characters);
 		if (dataline[0]=='#') continue;
 
 		istringstream datastream(dataline);
 		datastream >> weight;
+		tot += weight;
 		for (i=0; i < n_fit_parameters; i++) {
 			datastream >> params[i];
 		}
 		dvector chain_params(params,n_fit_parameters);
 		adopt_model(chain_params);
 		//print_lens_list(false);
-		lens_list[lensnum]->plot_kappa_profile(nbins,rvals,kappa_r_vals);
+		lens_list[lensnum]->plot_kappa_profile(nbins,rvals,kappa_r_vals,kappa_avg_vals);
 		for (i=0; i < nbins; i++) {
 			kappa_r_pts[i][j] = kappa_r_vals[i];
+			kappa_avg_pts[i][j] = kappa_avg_vals[i];
 			//cout << "RK: " << rvals[i] << " " << kappa_r_pts[i][j] << endl;
 			weights[i][j] = weight;
+			weights2[i][j] = weight;
 		}
 
 		j++;
 	}
 	chain_file.close();
 
-	double tot = 1.0; // the weights output by Polychord/Multinest should add up to 1, but maybe generalize this later just in case
+	//double tot = 1.0; // the weights output by Polychord/Multinest should add up to 1, but maybe generalize this later just in case
 	for (i=0; i < nbins; i++) {
 		sort(n_points,kappa_r_pts[i],weights[i]);
+		sort(n_points,kappa_avg_pts[i],weights2[i]);
 	}
 	double kaplo1, kaplo2, kaphi1, kaphi2;
-	double pct;
+	double kavglo1, kavglo2, kavghi1, kavghi2;
+	double mavglo1, mavglo2, mavghi1, mavghi2;
 	ofstream outfile(kappa_filename.c_str());
+	double sigma_cr_arcsec = sigma_crit_arcsec(zl, reference_source_redshift);
+	double arcsec_to_kpc = angular_diameter_distance(zl)/(1e-3*(180/M_PI)*3600);
+	double rval_kpc;
 	for (i=0; i < nbins; i++) {
 		kaplo1 = find_percentile(n_points, 0.02275, tot, kappa_r_pts[i], weights[i]);
 		kaphi1 = find_percentile(n_points, 0.97725, tot, kappa_r_pts[i], weights[i]);
 		kaplo2 = find_percentile(n_points, 0.15865, tot, kappa_r_pts[i], weights[i]);
 		kaphi2 = find_percentile(n_points, 0.84135, tot, kappa_r_pts[i], weights[i]);
-		outfile << rvals[i] << " " << kaplo1 << " " << kaphi1 << " " << kaplo2 << " " << kaphi2 << endl;
+		kavglo1 = find_percentile(n_points, 0.02275, tot, kappa_avg_pts[i], weights2[i]);
+		kavghi1 = find_percentile(n_points, 0.97725, tot, kappa_avg_pts[i], weights2[i]);
+		kavglo2 = find_percentile(n_points, 0.15865, tot, kappa_avg_pts[i], weights2[i]);
+		kavghi2 = find_percentile(n_points, 0.84135, tot, kappa_avg_pts[i], weights2[i]);
+		mavglo1 = kavglo1*M_PI*SQR(rvals[i])*sigma_cr_arcsec;
+		mavghi1 = kavghi1*M_PI*SQR(rvals[i])*sigma_cr_arcsec;
+		mavglo2 = kavglo2*M_PI*SQR(rvals[i])*sigma_cr_arcsec;
+		mavghi2 = kavghi2*M_PI*SQR(rvals[i])*sigma_cr_arcsec;
+		rval_kpc = rvals[i]*arcsec_to_kpc;
+		outfile << rvals[i] << " " << rval_kpc << " " << kaplo1 << " " << kaphi1 << " " << kaplo2 << " " << kaphi2 << " " << kavglo1 << " " << kavghi1 << " " << kavglo2 << " " << kavghi2 << " " << mavglo1 << " " << mavghi1 << " " << mavglo2 << " " << mavghi2 << endl;
 	}
 
 	delete[] params;
 	delete[] rvals;
 	delete[] kappa_r_vals;
+	delete[] kappa_avg_vals;
 	for (i=0; i < nbins; i++) {
 		delete[] kappa_r_pts[i];
+		delete[] kappa_avg_pts[i];
 		delete[] weights[i];
+		delete[] weights2[i];
 	}
 	delete[] kappa_r_pts;
+	delete[] kappa_avg_pts;
 	delete[] weights;
+	delete[] weights2;
 	return true;
 }
 
