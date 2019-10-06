@@ -1003,6 +1003,10 @@ public:
 		fitmethod = fitmethod_in;
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(false);
+			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(false);
+		} else {
+			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
+			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(true);
 		}
 		if ((n_sourcepts_fit > 0) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 			if (sourcepts_lower_limit==NULL) sourcepts_lower_limit = new lensvector[n_sourcepts_fit];

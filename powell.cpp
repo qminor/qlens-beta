@@ -1,6 +1,7 @@
 #include "powell.h"
 #include "errors.h"
 #include <iostream>
+#include <csignal>
 #include <cmath>
 using namespace std;
 
@@ -15,6 +16,19 @@ inline double SIGN(const double &a, const double &b)
 	{return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 inline double MAX(const double &a, const double &b) { return (a > b ? a : b); }
 inline double MIN(const double &a, const double &b) { return (a < b ? a : b); }
+
+
+int POWELL_KEEP_RUNNING = 1;
+
+void powell_sighandler(int sig)
+{
+	POWELL_KEEP_RUNNING = 0;
+}
+
+void powell_quitproc(int sig)
+{
+	exit(0);
+}
 
 void Powell::powell_minimize(double* pp, const int nn)
 {
@@ -35,6 +49,7 @@ void Powell::powell_minimize(double* pp, const int nn)
 
 void Powell::powell_minimize(double* pp, const int nn, double* initial_stepsizes)
 {
+	POWELL_KEEP_RUNNING = 1;
 	n = nn;
 	double **ximat;
 	ximat = new double*[n];
@@ -52,6 +67,8 @@ void Powell::powell_minimize(double* pp, const int nn, double* initial_stepsizes
 
 void Powell::minimize(double* pp, double** ximat)
 {
+	POWELL_KEEP_RUNNING = 1;
+	powell_exit_status = true;
 	const int max_iterations = 200;
 	const double TINY = 1.0e-25;
 	double fptt;
@@ -65,6 +82,7 @@ void Powell::minimize(double* pp, double** ximat)
 	for (int j=0; j < n; j++) pt[j] = p[j];
 	for (iter=0;; ++iter)
 	{
+		if (powell_exit_status==false) break;
 		double fp = fret;
 		int ibig = 0;
 		double del = 0.0;
@@ -77,14 +95,16 @@ void Powell::minimize(double* pp, double** ximat)
 				del = fptt - fret;
 				ibig = i + 1;
 			}
+			if (powell_exit_status==false) break;
 		}
 		double hi = 2.0*(fp-fret);
 		double hi2 = ftol*(abs(fp) + abs(fret)) + TINY;
-		if (2.0*(fp-fret) <= ftol*(abs(fp) + abs(fret)) + TINY) {
+		if ((2.0*(fp-fret) <= ftol*(abs(fp) + abs(fret)) + TINY) or (powell_exit_status==false)) {
 			for (int j=0; j < n; j++) pp[j] = p[j];
 			return;
 		}
 		if (iter == max_iterations) die("powell exceeding maximum iterations.");
+		if (powell_exit_status==false) break;
 		for (int j=0; j < n; j++)
 		{
 			ptt[j] = 2.0*p[j] - pt[j];
@@ -92,6 +112,12 @@ void Powell::minimize(double* pp, double** ximat)
 			pt[j] = p[j];
 		}
 		fptt = (this->*func)(ptt);
+		signal(SIGABRT, &powell_sighandler);
+		signal(SIGTERM, &powell_sighandler);
+		signal(SIGINT, &powell_sighandler);
+		signal(SIGUSR1, &powell_sighandler);
+		signal(SIGQUIT, &powell_quitproc);
+		if (!POWELL_KEEP_RUNNING) { powell_exit_status = false; break; }
 		if (fptt < fp)
 		{
 			double tmp=fp-fret-del, tmp2=fp-fptt;
@@ -119,6 +145,12 @@ double Powell::f1dim(const double x)
 		xt[j] = p[j] + x*xi[j];
 	}
 	double ans = (this->*func)(xt);
+	signal(SIGABRT, &powell_sighandler);
+	signal(SIGTERM, &powell_sighandler);
+	signal(SIGINT, &powell_sighandler);
+	signal(SIGUSR1, &powell_sighandler);
+	signal(SIGQUIT, &powell_quitproc);
+	if (!POWELL_KEEP_RUNNING) powell_exit_status = false;
 	return ans;
 }
 
@@ -189,13 +221,14 @@ double Powell::minimize(void)
 	fw=fv=fx=f1dim(x);
 	for (int iter=0; iter < ITMAX; iter++)
 	{
+		if (powell_exit_status==false) return xmin=x;
 		xm=0.5*(a+b);
 		tol1 = tol*abs(x) + ZEPS;
 		tol2 = 2.0 * tol1;
 		// The following modification allows it to converge based on the function value criterion ftol
 		// (although if a better function value cannot be found, it can still converge based on x as well).
 		if ((2.0*abs(fx-fx_old) <= ftol*(abs(fx) + abs(fx_old) + TINY)) or (abs(x-xm) <= (tol2-0.5*(b-a)))) {
-		//if (abs(x-xm) <= (tol2-0.5*(b-a))) {
+		//if (abs(x-xm) <= (tol2-0.5*(b-a))) open bracket here (this is the original version)
 			fmin = fx;
 			return xmin = x;
 		}

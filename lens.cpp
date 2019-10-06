@@ -7665,11 +7665,11 @@ double Lens::chi_square_fit_simplex()
 
 	bool fisher_matrix_is_nonsingular;
 	if (calculate_parameter_errors) {
-		if (mpi_id==0) cout << "Calculating parameter errors..." << flush;
+		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
 		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
 		else bestfit_fisher_inverse.erase(); // just in case it was defined before
-		if (mpi_id==0) cout << "done\n\n";
+		if (mpi_id==0) cout << endl;
 	}
 	if (mpi_id==0) {
 		if (use_scientific_notation) cout << setiosflags(ios::scientific);
@@ -7829,11 +7829,11 @@ double Lens::chi_square_fit_powell()
 
 	bool fisher_matrix_is_nonsingular;
 	if (calculate_parameter_errors) {
-		if (mpi_id==0) cout << "Calculating parameter errors..." << flush;
+		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
 		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
 		else bestfit_fisher_inverse.erase(); // just in case it was defined before
-		cout << "done\n\n";
+		cout << endl;
 	}
 	if (mpi_id==0) {
 		// The following is the same code as in the simplex(...) function, which is stupid. You should put it in a separate function so that you don't have two copies of the same code. DO THIS LATER!!!

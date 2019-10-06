@@ -2095,10 +2095,11 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 	sine_term = sine;
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
+
+	m = m_in; // m will be used when assigning the amplitude parameter name (A_m or B_m)
 	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
 
 	n = n_in;
-	m = m_in;
 	A_n = A_m_in;
 	set_angle(theta_degrees);
 	x_center = xc_in;
@@ -2740,7 +2741,7 @@ void CoreCusp::set_auto_stepsizes()
 void CoreCusp::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
-	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2.99999;
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
 	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;

@@ -3,6 +3,7 @@
 
 #include "errors.h"
 #include <iostream>
+#include <csignal>
 
 class Powell
 {
@@ -22,6 +23,7 @@ class Powell
 	static const double tol;
 	double ax,bx,cx,fa,fb,fc;
 	inline void shft3(double &a, double &b, double &c, const double d) { a=b; b=c; c=d; }
+	bool powell_exit_status;
 
 	public:
 	Powell() { ftol = 3.0e-8; }

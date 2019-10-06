@@ -277,6 +277,7 @@ struct ImagePixelData
 	}
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
 	bool load_mask_fits(string fits_filename);
+	bool save_mask_fits(string fits_filename);
 	void set_no_required_data_pixels();
 	void assign_high_sn_pixels();
 	void set_all_required_data_pixels();

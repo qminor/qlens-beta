@@ -340,6 +340,7 @@ void Lens::process_commands(bool read_file)
 					if (nwords==2)
 						cout << "lens <lensmodel> <lens_parameter##> ... [z=#] [emode=#] [pmode=#]\n"
 							"lens update <lens_number> ...\n"
+							"lens changevary ...\n"
 							"lens clear [lens_number]\n"
 							"lens savetab <lens_number> <filename>   (applies to 'tab' models only)\n\n"
 							"Creates (or updates) a lens from given model and parameters. If other lenses are present, the new\n"
@@ -430,11 +431,15 @@ void Lens::process_commands(bool read_file)
 							"With the above command, qlens will update only the specific parameters above for lens 0, while leaving the\n"
 							"other parameters unchanged.\n";
 					else if (words[2]=="changevary")
-						cout << "lens changevary <lens_number>\n\n"
+						cout << "lens changevary <lens_number> [none]\n"
+									"lens changevary [none]\n\n"
 							"Change the parameter vary flags for a specific lens model that has already been created. After specifying\n"
 							"the lens, on the next lens vary flags are entered just as you do when creating the lens model. Note that\n"
 							"the number of vary flags must exactly match the number of parameters for the given lens (except that vary\n"
-							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n";
+							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n"
+							"If the optional argument 'none' is given after the lens number, all vary flags are set to '0' for that\n"
+							"lens, and you will not be prompted to enter vary flags; if the lens number is omitted ('lens changevary\n"
+							"none'), vary flags are set to '0' for all lenses.\n\n";
 					else if (words[2]=="savetab")
 						cout << "lens savetab <lens_number> <filename>\n\n"
 							"Save the interpolation tables from a 'tab' lens model to the specified file '<filename>.tab'. Note\n"
@@ -1134,6 +1139,7 @@ void Lens::process_commands(bool read_file)
 							"sbmap plotdata\n"
 							"sbmap invert\n"
 							"sbmap loadmask <mask_file>\n"      // WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap savemask <mask_file>\n"      // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap set_all_pixels\n"
 							"sbmap unset_all_pixels\n"
 							"sbmap set_data_annulus [...]\n"
@@ -1294,6 +1300,7 @@ void Lens::process_commands(bool read_file)
 				{
 					if (nwords==2)
 						cout << "source <sourcemodel> <source_parameter##> ...\n"
+							"source changevary ...\n"
 							"source clear\n\n"
 							"Creates a source object from specified source surface brightness profile model and parameters.\n"
 							"If other sources are present, the new source will be superimposed with the others. If no arguments\n"
@@ -1309,6 +1316,16 @@ void Lens::process_commands(bool read_file)
 						cout << "source clear <#>\n\n"
 							"Remove source model # from the list (the list of source objects can be printed using the\n"
 							"'source' command). If no arguments given, delete entire source configuration and start over.\n";
+					else if (words[2]=="changevary")
+						cout << "source changevary <source_number> [none]\n"
+									"source changevary [none]\n\n"
+							"Change the parameter vary flags for a specific source model that has already been created. After specifying\n"
+							"the source, on the next source vary flags are entered just as you do when creating the source model. Note that\n"
+							"the number of vary flags must exactly match the number of parameters for the given source (except that vary\n"
+							"flags for the center coordinates can be omitted if the source in question is anchored to another source).\n"
+							"If the optional argument 'none' is given after the source number, all vary flags are set to '0' for that\n"
+							"source, and you will not be prompted to enter vary flags; if the source number is omitted ('source changevary\n"
+							"none'), vary flags are set to '0' for all sourcees.\n\n";
 					else if (words[2]=="gaussian")
 						cout << "source gaussian <max_sb> <sigma> <q> [theta] [x-center] [y-center]\n\n"
 							"where <max_sb> is the peak value of the surface brightness, <sigma> is the dispersion of\n"
@@ -2327,7 +2344,7 @@ void Lens::process_commands(bool read_file)
 					anchor_param = false;
 					use_anchor_ratio = false;
 				}
-				void shift(const int np) { if (paramnum > np) paramnum--; }
+				void shift_down() { paramnum--; }
 			};
 			ParamAnchor parameter_anchors[20]; // number of anchors per lens can't exceed 20 (which will never happen!)
 			int parameter_anchor_i = 0;
@@ -2522,20 +2539,41 @@ void Lens::process_commands(bool read_file)
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
 				// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
-				if (nwords != 3) Complain("one argument required for 'lens changevary' (lens number)");
-				int lensnum;
-				if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
-				if (lensnum >= nlens) Complain("specified lens number does not exist");
-				if (read_command(false)==false) return;
-				bool vary_zl = check_vary_z(); // this looks for the 'varyz=#' arg. If it finds it, removes it and sets 'vary_zl' to true; if not, sets vary_zl to 'false'
-				int nparams_to_vary = nwords;
-				boolvector vary_flags(nparams_to_vary+1);
-				for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-				vary_flags[nparams_to_vary] = vary_zl;
-				int nparam;
-				if (set_lens_vary_parameters(lensnum,vary_flags)==false) {
-					int npar = lens_list[lensnum]->n_params;
-					Complain("number of vary flags does not match number of parameters (" << npar << ") for specified lens");
+				bool set_vary_none = false;
+				if (words[nwords-1]=="none") {
+					set_vary_none=true;
+					remove_word(nwords-1);
+				}
+				if ((nwords==2) and (set_vary_none)) {
+					for (int lensnum=0; lensnum < nlens; lensnum++) {
+						int npar = lens_list[lensnum]->n_params;
+						boolvector vary_flags(npar);
+						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						set_lens_vary_parameters(lensnum,vary_flags);
+					}
+				} else {
+					if (nwords != 3) Complain("one argument required for 'lens changevary' (lens number)");
+					int lensnum;
+					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
+					if (lensnum >= nlens) Complain("specified lens number does not exist");
+					if (!set_vary_none) {
+						if (read_command(false)==false) return;
+						bool vary_zl = check_vary_z(); // this looks for the 'varyz=#' arg. If it finds it, removes it and sets 'vary_zl' to true; if not, sets vary_zl to 'false'
+						int nparams_to_vary = nwords;
+						boolvector vary_flags(nparams_to_vary+1);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						vary_flags[nparams_to_vary] = vary_zl;
+						int nparam;
+						if (set_lens_vary_parameters(lensnum,vary_flags)==false) {
+							int npar = lens_list[lensnum]->n_params;
+							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified lens");
+						}
+					} else {
+						int npar = lens_list[lensnum]->n_params;
+						boolvector vary_flags(npar);
+						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						set_lens_vary_parameters(lensnum,vary_flags);
+					}
 				}
 				update_specific_parameters = true;
 			}
@@ -2810,7 +2848,7 @@ void Lens::process_commands(bool read_file)
 							delete[] ws;
 							ws = new_ws;
 							nwords--;
-							for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift(2);
+							for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift_down();
 						}
 						if (words[2].find("m=")==0) {
 							if (update_parameters) Complain("m=# argument cannot be specified when updating " << words[1]);
@@ -2826,7 +2864,7 @@ void Lens::process_commands(bool read_file)
 							delete[] ws;
 							ws = new_ws;
 							nwords--;
-							for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift(2);
+							for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift_down();
 						}
 						double theta = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> a_m)) Complain("invalid a_m parameter for model " << words[1]);
@@ -2896,7 +2934,9 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) {
+								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -3494,7 +3534,7 @@ void Lens::process_commands(bool read_file)
 						delete[] ws;
 						ws = new_ws;
 						nwords--;
-						for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift(2);
+						for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift_down();
 					}
 					if (nwords >= 8) {
 						double k0, gamma, n, a, s;
@@ -4441,18 +4481,39 @@ void Lens::process_commands(bool read_file)
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
 				// simplify all the error checking in the above code for adding lens models so that errors are printed using the same interface.
-				if (nwords != 3) Complain("one argument required for 'src changevary' (src number)");
-				int srcnum;
-				if (!(ws[2] >> srcnum)) Complain("Invalid src number to change vary parameters");
-				if (srcnum >= n_sb) Complain("specified src number does not exist");
-				if (read_command(false)==false) return;
-				int nparams_to_vary = nwords;
-				boolvector vary_flags(nparams_to_vary);
-				for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-				int nparam;
-				if (set_sb_vary_parameters(srcnum,vary_flags)==false) {
-					int npar = sb_list[srcnum]->n_params;
-					Complain("number of vary flags does not match number of parameters (" << npar << ") for specified src");
+				bool set_vary_none = false;
+				if (words[nwords-1]=="none") {
+					set_vary_none=true;
+					remove_word(nwords-1);
+				}
+				if ((nwords==2) and (set_vary_none)) {
+					for (int srcnum=0; srcnum < n_sb; srcnum++) {
+						int npar = sb_list[srcnum]->n_params;
+						boolvector vary_flags(npar);
+						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						set_sb_vary_parameters(srcnum,vary_flags);
+					}
+				} else {
+					if (nwords != 3) Complain("one argument required for 'src changevary' (src number)");
+					int srcnum;
+					if (!(ws[2] >> srcnum)) Complain("Invalid src number to change vary parameters");
+					if (srcnum >= n_sb) Complain("specified src number does not exist");
+					if (!set_vary_none) {
+						if (read_command(false)==false) return;
+						int nparams_to_vary = nwords;
+						boolvector vary_flags(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						int nparam;
+						if (set_sb_vary_parameters(srcnum,vary_flags)==false) {
+							int npar = sb_list[srcnum]->n_params;
+							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified src");
+						}
+					} else {
+						int npar = sb_list[srcnum]->n_params;
+						boolvector vary_flags(npar);
+						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						set_sb_vary_parameters(srcnum,vary_flags);
+					}
 				}
 				update_specific_parameters = true;
 			}
@@ -5832,7 +5893,10 @@ void Lens::process_commands(bool read_file)
 				} else if (words[1]=="load_bestfit") {
 					if (nwords <= 3) {
 						string scriptfile_str;
-						if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
+						if (nwords==3) {
+							if (auto_fit_output_dir) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
+							else scriptfile_str = fit_output_dir + "/" + words[2] + "_bf.in";
+						}
 						else {
 							if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
 							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
@@ -5842,7 +5906,10 @@ void Lens::process_commands(bool read_file)
 						string checklimits;
 						testbf >> checklimits;
 						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
-							if (nwords==3) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf_nolimits.in";
+							if (nwords==3) {
+								if (auto_fit_output_dir) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf_nolimits.in";
+								else scriptfile_str = fit_output_dir + "/" + words[2] + "_bf_nolimits.in";
+							}
 							else scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
 						} else if ((checklimits=="#nolimits") and ((fitmethod != SIMPLEX) and (fitmethod != POWELL))) {
 							Complain("The best-fit model did not have parameter limits defined. Switch to simplex or powell and try again");
@@ -6641,6 +6708,15 @@ void Lens::process_commands(bool read_file)
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->load_mask_fits(filename);
+			}
+			else if (words[1]=="savemask")
+			{
+				string filename;
+				if (nwords==3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
+				} else Complain("too many arguments to 'sbmap savemask'");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->save_mask_fits(filename);
 			}
 			else if (words[1]=="loadpsf")
 			{

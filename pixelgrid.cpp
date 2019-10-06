@@ -3113,6 +3113,52 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 #endif
 }
 
+bool ImagePixelData::save_mask_fits(string fits_filename)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+	int i,j,kk;
+	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix = -64, naxis = 2;
+	long naxes[2] = {npixels_x,npixels_y};
+	double *pixels;
+	double x, y, xstep, ystep;
+	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
+
+	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+	{
+		if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				pixels = new double[npixels_x];
+
+				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				{
+					for (i=0; i < npixels_x; i++) {
+						if (require_fit[i][j]) pixels[i] = 1.0;
+						else pixels[i] = 0.0;
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+				}
+				delete[] pixels;
+			}
+		}
+		fits_close_file(outfptr, &status);
+	} 
+
+	if (status) fits_report_error(stderr, status); // print any error message
+#endif
+}
+
+
+
 bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 {
 #ifndef USE_FITS

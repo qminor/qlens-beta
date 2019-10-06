@@ -137,6 +137,7 @@ class SB_Profile
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	int get_n_params() { return n_params; }
 	int get_n_vary_params() { return n_vary_params; }
+	void set_include_limits(bool inc) { include_limits = inc; }
 };
 
 class Gaussian : public SB_Profile
