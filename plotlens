@@ -653,7 +653,7 @@ then
 	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
 	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.kappalog`
 	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.kappalog`
-	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/12"`
+	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/24"`
 	C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 	Cf=`bc <<< "scale=15; $MAX-$STEP"`
 

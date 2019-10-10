@@ -2090,9 +2090,10 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 	string mstring;
 	mstr << m_in;
 	mstr >> mstring;
-	special_parameter_command = "m=" + mstring;
 	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
 	sine_term = sine;
+	string sine_command = (sine_term) ? "sin" : "cos";
+	special_parameter_command = sine_command + " m=" + mstring;
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
 

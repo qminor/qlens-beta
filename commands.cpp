@@ -572,11 +572,13 @@ void Lens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="corecusp")
-						cout << "lens corecusp [re_param] <k0/R_e> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]\n\n"
-							"This is a cored version of the halo model of Munoz et al. (2001), where <a> is the scale/tidal\n"
-							"radius, <k0> = 2*pi*rho_0*a/sigma_crit, <s> is the core radius, and <gamma>/<n> are the inner/outer\n"
-							"(3D) log-slopes respectively. To use the Einstein radius as a parameter instead of k0, include the\n"
-							"argument 're_param'. (The pseudo-Jaffe profile corresponds to gamma=2, n=4 and b=k0*a/(1-(s/a)^2).)\n"
+						cout << "lens corecusp <k0> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]    (pmode=0)\n"
+									"lens corecusp <R_e> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]    (pmode=0)\n\n"
+							"This is a cored version of the halo model of Munoz et al. (2001), where <a> is the scale/tidal radius,\n"
+							"<k0> = 2*pi*rho_0*a/sigma_crit, <s> is the core radius, and <gamma>/<n> are the inner/outer (3D) log-\n"
+							"slopes respectively. In pmode=1, the Einstein radius R_e is used instead of k0 (although note that for low\n"
+							"enough k0 values you get R_e=0, i.e. it is not strongly lensing, so for weak perturbations k0 should be\n"
+							"used). (Incidentally the pseudo-Jaffe profile corresponds to gamma=2, n=4 and b=k0*a/(1-(s/a)^2).)\n"
 							"As with the other models, <q/e> is the axis ratio or ellipticity (depending on the ellipticity mode),\n"
 							"and [theta] is the angle of rotation (counter-clockwise, in degrees) about the center (all defaults = 0).\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
@@ -2596,6 +2598,7 @@ void Lens::process_commands(bool read_file)
 			if (update_specific_parameters) ;
 			else if (nwords==1) {
 				if (mpi_id==0) print_lens_list(vary_parameters);
+				vary_parameters = false; // this gets it to skip to the end and not try to prompt for parameter limits
 			}
 			else if (words[1]=="clear")
 			{
@@ -3520,9 +3523,9 @@ void Lens::process_commands(bool read_file)
 				{
 					bool set_tidal_host = false;
 					// should change format so 'pmode=1' uses the re_param
-					int pmode = 0;
 					int hostnum;
 					if (nwords > 12) Complain("more than 10 parameters not allowed for model corecusp");
+					// The following is deprecated, because you can just do 'pmode=1', but I'm keeping it in for backwards compatibility
 					if ((nwords >= 8) and (words[2].find("re_param")==0)) {
 						if (update_parameters) Complain("Einstein radius parameterization cannot be changed when updating corecusp");
 						pmode = 1;
@@ -3537,9 +3540,12 @@ void Lens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift_down();
 					}
 					if (nwords >= 8) {
-						double k0, gamma, n, a, s;
+						double p1, gamma, n, a, s;
 						double q, theta = 0, xc = 0, yc = 0;
-						if (!(ws[2] >> k0)) Complain("invalid k0 parameter for model corecusp");
+						if (!(ws[2] >> p1)) {
+							if (pmode==0) Complain("invalid k0 parameter for model corecusp");
+							else Complain("invalid Re parameter for model corecusp");
+						}
 						if (!(ws[3] >> gamma)) Complain("invalid gamma parameter for model corecusp");
 						if (!(ws[4] >> n)) Complain("invalid n parameter for model corecusp");
 						if (words[5].find("host=")==0) {
@@ -3576,7 +3582,7 @@ void Lens::process_commands(bool read_file)
 						}
 						param_vals.input(10);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-						param_vals[0]=k0; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
+						param_vals[0]=p1; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[9]=zl_in;
 						else param_vals[9]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
@@ -3615,7 +3621,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(CORECUSP, emode, zl_in, reference_source_redshift, k0, a, s, q, theta, xc, yc, gamma, n, pmode);
+							add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
@@ -4520,7 +4526,8 @@ void Lens::process_commands(bool read_file)
 
 			if (update_specific_parameters) ;
 			else if (nwords==1) {
-				print_source_list(false);
+				print_source_list(vary_parameters);
+				vary_parameters = false; // this makes it skip to the next command so it doesn't try to prompt for parameter limits
 			}
 			else if (words[1]=="clear")
 			{

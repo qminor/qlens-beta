@@ -1,5 +1,6 @@
 #include "powell.h"
 #include "errors.h"
+#include <cstdlib>
 #include <iostream>
 #include <csignal>
 #include <cmath>
