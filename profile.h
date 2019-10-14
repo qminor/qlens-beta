@@ -79,7 +79,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
 
-	void setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in = 0);
+	void setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
 	void copy_base_lensdata(const LensProfile* lens_in);
 
 	void set_nparams_and_anchordata(const int &n_params_in);
@@ -174,6 +174,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	Lens* cosmo;
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
+	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
+	string subclass_label;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
 	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
@@ -252,6 +254,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
+	double average_log_slope(const double rmin, const double rmax);
 	virtual bool calculate_total_scaled_mass(double& total_mass);
 	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
 	virtual double calculate_scaled_mass_3d(const double r);
@@ -465,6 +468,7 @@ class Truncated_NFW : public LensProfile
 	private:
 	double ks, rs, rt;
 	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
+	int truncation_mode; // 0 --> outer profile goes like r^(-5); 1 --> outer profile goes like r^(-7)
 	double median_c_factor; // used if concentration is set to factor*median value
 	bool use_mc_parameters;
 
@@ -479,7 +483,7 @@ class Truncated_NFW : public LensProfile
 
 	public:
 	Truncated_NFW() : LensProfile() {}
-	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* lens_in);
+	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, Lens* lens_in);
 	Truncated_NFW(const Truncated_NFW* lens_in);
 
 	void assign_paramnames();

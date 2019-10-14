@@ -37,12 +37,13 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 	set_integration_pointers();
 }
 
-void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in)
+void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
 	zlens_current = zlens;
 	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 	parameter_mode = pmode_in;
+	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
 	set_nparams_and_anchordata(np);
 	center_anchored = false;
 	anchor_special_parameter = false;
@@ -86,6 +87,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
 	parameter_mode = lens_in->parameter_mode;
+	lens_subclass = lens_in->lens_subclass;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	perturber = lens_in->perturber;
 	analytic_3d_density = lens_in->analytic_3d_density;
@@ -571,7 +573,9 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 void LensProfile::print_parameters()
 {
 	if (ellipticity_mode==3) cout << "pseudo-";
-	cout << model_name << "(z=" << zlens << "): ";
+	cout << model_name << "(";
+	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
+	cout << "z=" << zlens << "): ";
 	for (int i=0; i < n_params-3; i++) {
 		cout << paramnames[i] << "=";
 		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
@@ -774,6 +778,14 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 		cout << endl;
 	}
 	return false; // no cosmology-dependent physical parameters to calculate for this model
+}
+
+double LensProfile::average_log_slope(const double rmin, const double rmax)
+{
+	double k1, k2;
+	k1 = kappa_rsq(rmin*rmin);
+	k2 = kappa_rsq(rmax*rmax);
+	return log(k2/k1)/log(rmax/rmin);
 }
 
 bool LensProfile::calculate_total_scaled_mass(double& total_mass)

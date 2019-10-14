@@ -1497,7 +1497,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 		case nfw:
 			lens_list[nlens-1] = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TRUNCATED_nfw:
-			lens_list[nlens-1] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			lens_list[nlens-1] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
 		case CORED_nfw:
 			lens_list[nlens-1] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case PJAFFE:
@@ -2508,7 +2508,7 @@ void Lens::print_source_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum)
+void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2)
 {
 	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
 	if (n_derived_params > 0) {
@@ -2516,7 +2516,8 @@ void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum
 			newlist[i] = dparam_list[i];
 		delete[] dparam_list;
 	}
-	newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum);
+	if (param2 == -1e30) newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum);
+	else newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,param2);
 	n_derived_params++;
 	dparam_list = newlist;
 	param_settings->add_dparam(dparam_list[n_derived_params-1]->name);
@@ -9708,6 +9709,11 @@ double Lens::mass3d_r(const double r_arcsec, const int lensnum)
 	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;
+}
+
+double Lens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax)
+{
+	return lens_list[lensnum]->average_log_slope(rmin,rmax);
 }
 
 void Lens::print_lens_list(bool show_vary_params)

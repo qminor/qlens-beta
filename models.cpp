@@ -958,15 +958,20 @@ bool NFW::output_cosmology_info(const int lens_number)
 
 /********************************** Truncated_NFW **********************************/
 
-Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
+Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, Lens* cosmo_in)
 {
 	cosmo = cosmo_in;
 	lenstype = TRUNCATED_nfw;
 	model_name = "tnfw";
-	special_parameter_command = "";
+	subclass_label = "t";
+	stringstream tstr;
+	string tstring;
+	tstr << truncation_mode_in;
+	tstr >> tstring;
+	special_parameter_command = "tmode=" + tstring;
 	zlens = zlens_in;
 	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens(8,true,parameter_mode_in,truncation_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	analytic_3d_density = true;
@@ -1209,16 +1214,24 @@ void Truncated_NFW::set_ks_rs_from_m200_c200()
 
 double Truncated_NFW::kappa_rsq(const double rsq)
 {
-	double xsq, tsq, sqrttx, lx, lf, tmp;
+	double xsq, tsq, sqrttx, lx, lf, tmp, ans;
 	xsq = rsq/(rs*rs);
 	tsq = SQR(rt/rs);
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
 	if (xsq < 1e-6) lf = -log(xsq/4)/2;
 	else lf = lens_function_xsq(xsq);
-	if (xsq==1) tmp = 2*(tsq+1)/3.0 + 8.0 + (tsq*tsq-1)/tsq/(tsq+1) + (-M_PI*(4*(tsq+1)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+1)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
-	else tmp = 2*(tsq+1)/(xsq-1)*(1-lf) + 8*lf + (tsq*tsq-1)/tsq/(tsq+xsq) + (-M_PI*(4*(tsq+xsq)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
-	return ks*tsq*tsq/CUBE(tsq+1)*tmp;
+	if (truncation_mode==0) {
+		if (xsq==1) tmp = (tsq+1)/3.0 + 2*lf - M_PI/sqrttx + (tsq-1)*lx/(sqrttx*rt/rs);
+		else tmp = ((tsq+1)/(xsq-1))*(1-lf) + 2*lf - M_PI/sqrttx + (tsq-1)*lx/(sqrttx*rt/rs);
+		ans = 2*ks*tsq/SQR(tsq+1)*tmp;
+	} else {
+
+		if (xsq==1) tmp = 2*(tsq+1)/3.0 + 8.0 + (tsq*tsq-1)/tsq/(tsq+1) + (-M_PI*(4*(tsq+1)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+1)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
+		else tmp = 2*(tsq+1)/(xsq-1)*(1-lf) + 8*lf + (tsq*tsq-1)/tsq/(tsq+xsq) + (-M_PI*(4*(tsq+xsq)+tsq+1) + (tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx/CUBE(rt/rs))/CUBE(sqrttx);
+		ans = ks*tsq*tsq/CUBE(tsq+1)*tmp;
+	}
+	return ans;
 }
 
 inline double Truncated_NFW::lens_function_xsq(const double &xsq)
@@ -1228,20 +1241,30 @@ inline double Truncated_NFW::lens_function_xsq(const double &xsq)
 
 double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 {
-	double xsq, tau, tsq, sqrttx, lx, tmp;
+	double xsq, tau, tsq, sqrttx, lx, tmp, ans;
 	xsq = rsq/(rs*rs);
 	tau = rt/rs;
 	tsq = tau*tau;
 	if ((xsq < 1e-6) and (xsq/tsq < 1e-6)) return -ks*(1+log(xsq/4)); // fixes numerical instability in limit of small r
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
-	tmp = 2*(tsq+1+4*(xsq-1))*lens_function_xsq(xsq) + (M_PI*(3*tsq-1) + 2*tau*(tsq-3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq+xsq)-tsq-1) + (-tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx)/CUBE(tau)/sqrttx;
-	return 2*ks*tsq*tsq/CUBE(tsq+1)/xsq*tmp; // now, tmp = kappa_average
+	if (truncation_mode==0) {
+		tmp = (tsq + 1 + 2*(xsq-1))*lens_function_xsq(xsq) + M_PI*tau + (tsq-1)*log(tau) + sqrttx*(-M_PI + (tsq-1)*lx/tau);
+		ans = 4*ks*tsq/SQR(tsq+1)/xsq*tmp; // now, tmp = kappa_average
+	} else {
+		tmp = 2*(tsq+1+4*(xsq-1))*lens_function_xsq(xsq) + (M_PI*(3*tsq-1) + 2*tau*(tsq-3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq+xsq)-tsq-1) + (-tsq*(tsq*tsq-1) + (tsq+xsq)*(3*tsq*tsq-6*tsq-1))*lx)/CUBE(tau)/sqrttx;
+		ans = 2*ks*tsq*tsq/CUBE(tsq+1)/xsq*tmp; // now, tmp = kappa_average
+	}
+	return ans;
 }
 
 double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 {
-	return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));
+	if (truncation_mode==0) {
+		return (ks/r/SQR(1+r/rs)/(1+SQR(r/rt)));
+	} else {
+		return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));
+	}
 }
 
 bool Truncated_NFW::output_cosmology_info(const int lens_number)
@@ -2086,6 +2109,7 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 	cosmo = cosmo_in;
 	lenstype = MULTIPOLE;
 	model_name = (kap==true) ? "kmpole" : "mpole";
+	subclass_label = "m";
 	stringstream mstr;
 	string mstring;
 	mstr << m_in;
@@ -2098,7 +2122,7 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 	zsrc_ref = zsrc_in;
 
 	m = m_in; // m will be used when assigning the amplitude parameter name (A_m or B_m)
-	setup_base_lens(6,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens(6,false,0,m); // number of parameters = 5, is_elliptical_lens = false
 
 	n = n_in;
 	A_n = A_m_in;

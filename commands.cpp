@@ -963,7 +963,7 @@ void Lens::process_commands(bool read_file)
 							"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
-							"fit dparams add <param_type> [param_arg] [lens#]     (lens# and/or param_arg are optional for some dparams)\n"
+							"fit dparams add <param_type> [param_args...] [lens#]     (lens# and/or param_arg are optional for some dparams)\n"
 							"fit dparams rename <param_type> <text_name> <latex_name>\n"
 							"fit dparams clear [param_num]\n\n"
 							"Define derived parameters whose values will be output along with the primary parameters after running\n"
@@ -979,6 +979,7 @@ void Lens::process_commands(bool read_file)
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
+							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
 							"lensparam -- The value of parameter <paramnum> for lens [lens#] using default pmode\n"
 							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
 							"                  (See Minor et al. 2017 for definition of perturbation radius for subhalos)\n"
@@ -3057,11 +3058,33 @@ void Lens::process_commands(bool read_file)
 				{
 					bool set_median_concentration = false;
 					double cmed_factor = 1.0;
+					int tmode = 1;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
 					}
 					if ((pmode < 0) or (pmode > 4)) Complain("parameter mode must be either 0, 1, 2, 3, or 4");
+
+					for (int i=2; i < nwords; i++) {
+						if (words[i].find("tmode=")==0) {
+							if (update_parameters) Complain("tmode=# argument cannot be specified when updating " << words[1]);
+							string tstr = words[2].substr(6);
+							stringstream tstream;
+							tstream << tstr;
+							if (!(tstream >> tmode)) Complain("invalid tmode value");
+							stringstream* new_ws = new stringstream[nwords-1];
+							words.erase(words.begin()+2);
+							for (int i=0; i < nwords-1; i++) {
+								new_ws[i] << words[i];
+							}
+							delete[] ws;
+							ws = new_ws;
+							nwords--;
+							for (int i=0; i < parameter_anchor_i; i++) parameter_anchors[i].shift_down();
+							if ((tmode < 0) or (tmode > 1)) Complain("truncation mode can only be set to 0 or 1");
+							break;
+						}
+					}
 
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model tnfw");
 					if (nwords >= 6) {
@@ -3157,7 +3180,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -5794,6 +5817,14 @@ void Lens::process_commands(bool read_file)
 									if (lensnum >= nlens) Complain("specified lens number does not exist");
 								} else lensnum = -1;
 								add_derived_param(DKappaR,dparam_arg,lensnum);
+							} else if (words[3]=="logslope") {
+								if (nwords != 7) Complain("derived parameter logslope requires three arguments (rmin,rmax,lens_number)");
+								double dparam_arg2;
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								if (!(ws[5] >> dparam_arg2)) Complain("invalid derived parameter argument");
+								if (!(ws[6] >> lensnum)) Complain("invalid lens number argument");
+								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								add_derived_param(AvgLogSlope,dparam_arg,lensnum,dparam_arg2);
 							} else if (words[3]=="mass2d_r") {
 								if (nwords != 6) Complain("derived parameter mass2d_r requires two arguments (r_arcsec,lens_number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");

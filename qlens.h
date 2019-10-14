@@ -52,6 +52,7 @@ enum DerivedParamType {
 	Einstein,
 	Einstein_Mass,
 	LensParam,
+	AvgLogSlope,
 	Perturbation_Radius,
 	Relative_Perturbation_Radius,
 	Robust_Perturbation_Mass,
@@ -825,6 +826,7 @@ public:
 	bool output_mass_r(const double r_arcsec, const int lensnum);
 	double mass2d_r(const double r_arcsec, const int lensnum);
 	double mass3d_r(const double r_arcsec, const int lensnum);
+	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax);
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
@@ -834,7 +836,7 @@ public:
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);
 
-	void add_derived_param(DerivedParamType type_in, double param, int lensnum);
+	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30);
 	void remove_derived_param(int dparam_number);
 	void rename_derived_param(int dparam_number, string newname, string new_latex_name);
 	void clear_derived_params();
@@ -1145,12 +1147,14 @@ struct DerivedParam
 {
 	DerivedParamType derived_param_type;
 	double funcparam; // if funcparam == -1, then there is no parameter required
+	double funcparam2;
 	int lensnum_param;
 	string name, latex_name;
-	DerivedParam(DerivedParamType type_in, double param, int lensnum) // if lensnum == -1, then it uses *all* the lenses (if possible)
+	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1) // if lensnum == -1, then it uses *all* the lenses (if possible)
 	{
 		derived_param_type = type_in;
 		funcparam = param;
+		funcparam2 = param2;
 		lensnum_param = lensnum;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
@@ -1166,6 +1170,8 @@ struct DerivedParam
 			name = "mass_re"; latex_name = "M_{Re}";
 		} else if (derived_param_type == LensParam) {
 			name = "lensparam"; latex_name = "\\lambda";
+		} else if (derived_param_type == AvgLogSlope) {
+			name = "logslope"; latex_name = "\\gamma_{avg}'";
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
 			name = "r_perturb_rel"; latex_name = "\\Delta r_{\\delta c}";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -1184,12 +1190,23 @@ struct DerivedParam
 		} else die("no user defined function yet");
 
 		if (funcparam != -1e30) {
-			stringstream paramstr;
-			string paramstring;
-			paramstr << funcparam;
-			paramstr >> paramstring;
-			name += "(" + paramstring + ")";
-			latex_name += "(" + paramstring + ")";
+			if (funcparam2==-1) {
+				stringstream paramstr;
+				string paramstring;
+				paramstr << funcparam;
+				paramstr >> paramstring;
+				name += "(" + paramstring + ")";
+				latex_name += "(" + paramstring + ")";
+			} else {
+				stringstream paramstr, paramstr2;
+				string paramstring, paramstring2;
+				paramstr << funcparam;
+				paramstr >> paramstring;
+				paramstr2 << funcparam2;
+				paramstr2 >> paramstring2;
+				name += "(" + paramstring + "," + paramstring2 + ")";
+				latex_name += "(" + paramstring + "," + paramstring2 + ")";
+			}
 		}
 	}
 	double get_derived_param(Lens* lens_in)
@@ -1202,11 +1219,15 @@ struct DerivedParam
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param);
-		} else if (derived_param_type == LensParam) return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
+		} else if (derived_param_type == LensParam) {
+			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
+		}
 		else if (derived_param_type == Relative_Perturbation_Radius) {
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,true);
 			return rmax;
+		} else if (derived_param_type == AvgLogSlope) {
+			return lens_in->calculate_average_log_slope(lensnum_param,funcparam,funcparam2);
 		} else if (derived_param_type == Perturbation_Radius) {
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
@@ -1255,6 +1276,8 @@ struct DerivedParam
 			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == LensParam) {
 			cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << endl;
+		} else if (derived_param_type == AvgLogSlope) {
+			cout << "Average log-slope of kappa from lens " << lensnum_param << " between r1=" << funcparam << " and r2=" << funcparam2 << endl;
 		} else if (derived_param_type == Perturbation_Radius) {
 			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
