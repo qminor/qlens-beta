@@ -88,6 +88,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	n_params = lens_in->n_params;
 	parameter_mode = lens_in->parameter_mode;
 	lens_subclass = lens_in->lens_subclass;
+	subclass_label = lens_in->subclass_label;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	perturber = lens_in->perturber;
 	analytic_3d_density = lens_in->analytic_3d_density;

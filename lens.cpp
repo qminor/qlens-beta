@@ -3380,7 +3380,6 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 		return false;
 	}
 	img_i = 0;
-	if (verbal==true) die("WTF?");
 	if (n_images > 1) {
 		if ((mpi_id==0) and (verbal)) {
 			warn("Well this is interesting. Perturber maps to more than one place in the primary lens plane! Using image furthest from primary lens center");
