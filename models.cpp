@@ -1221,7 +1221,7 @@ double Truncated_NFW::kappa_rsq(const double rsq)
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
 	if (xsq < 1e-6) lf = -log(xsq/4)/2;
 	else lf = lens_function_xsq(xsq);
-	if (truncation_mode==0) {
+	if (lens_subclass==0) {
 		if (xsq==1) tmp = (tsq+1)/3.0 + 2*lf - M_PI/sqrttx + (tsq-1)*lx/(sqrttx*rt/rs);
 		else tmp = ((tsq+1)/(xsq-1))*(1-lf) + 2*lf - M_PI/sqrttx + (tsq-1)*lx/(sqrttx*rt/rs);
 		ans = 2*ks*tsq/SQR(tsq+1)*tmp;
@@ -1248,7 +1248,7 @@ double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 	if ((xsq < 1e-6) and (xsq/tsq < 1e-6)) return -ks*(1+log(xsq/4)); // fixes numerical instability in limit of small r
 	sqrttx = sqrt(tsq+xsq);
 	lx = log(sqrt(xsq)/(sqrttx+sqrt(tsq)));
-	if (truncation_mode==0) {
+	if (lens_subclass==0) {
 		tmp = (tsq + 1 + 2*(xsq-1))*lens_function_xsq(xsq) + M_PI*tau + (tsq-1)*log(tau) + sqrttx*(-M_PI + (tsq-1)*lx/tau);
 		ans = 4*ks*tsq/SQR(tsq+1)/xsq*tmp; // now, tmp = kappa_average
 	} else {
@@ -1260,7 +1260,7 @@ double Truncated_NFW::kapavg_spherical_rsq(const double rsq)
 
 double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 {
-	if (truncation_mode==0) {
+	if (lens_subclass==0) {
 		return (ks/r/SQR(1+r/rs)/(1+SQR(r/rt)));
 	} else {
 		return (ks/r/SQR(1+r/rs)/SQR(1+SQR(r/rt)));

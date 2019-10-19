@@ -823,7 +823,7 @@ public:
 	void output_lens_commands(string filename, const bool use_limits);
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
-	bool output_mass_r(const double r_arcsec, const int lensnum);
+	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double mass2d_r(const double r_arcsec, const int lensnum);
 	double mass3d_r(const double r_arcsec, const int lensnum);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax);
@@ -932,6 +932,7 @@ public:
 	double einstein_radius_of_primary_lens(const double zfac);
 	double einstein_radius_root(const double r);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
+	void print_lensing_info_at_point(const double x, const double y);
 	bool make_random_sources(int nsources, const char *outfile);
 	bool total_cross_section(double&);
 	double total_cross_section_integrand(const double);

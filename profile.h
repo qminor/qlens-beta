@@ -468,7 +468,6 @@ class Truncated_NFW : public LensProfile
 	private:
 	double ks, rs, rt;
 	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
-	int truncation_mode; // 0 --> outer profile goes like r^(-5); 1 --> outer profile goes like r^(-7)
 	double median_c_factor; // used if concentration is set to factor*median value
 	bool use_mc_parameters;
 

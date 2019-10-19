@@ -3549,12 +3549,14 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		rmax_numerical = abs(rmax_numerical-rmax_unperturbed);
 	}
 
+	double rmax_kpc = rmax_numerical/kpc_to_arcsec_sub;
+
 	if (verbose) {
 		lensvector x;
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
 		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
-		cout << "rmax_numerical = " << abs(rmax_numerical) << endl;
+		cout << "rmax_numerical = " << abs(rmax_numerical) << " (rmax_kpc=" << abs(rmax_kpc) << ")" << endl;
 		cout << "rmax location: (" << x[0] << "," << x[1] << ")\n";
 		if (zlsub > zlprim) cout << "rmax_perturber_lensplane = " << rmax_perturber_lensplane << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
@@ -4411,6 +4413,37 @@ bool Lens::isspherical()
 		if (!(lens_list[i]->isspherical())) { all_spherical = false; break; }
 	return all_spherical;
 }
+
+void Lens::print_lensing_info_at_point(const double x, const double y)
+{
+	lensvector point, alpha, beta;
+	double sheartot, shear_angle;
+	point[0] = x; point[1] = y;
+	deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+	shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	beta[0] = point[0] - alpha[0];
+	beta[1] = point[1] - alpha[1];
+	double kappaval = 
+	kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
+	cout << "kappa = " << kappaval << endl;
+	cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
+	cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
+	cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
+	cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
+	cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
+	cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
+
+	if (n_lens_redshifts > 1) {
+		lensvector xl;
+		for (int i=1; i < n_lens_redshifts; i++) {
+			map_to_lens_plane(i,x,y,xl,0,reference_zfactors,default_zsrc_beta_factors);
+			cout << "x(z=" << lens_redshifts[i] << "): (" << xl[0] << "," << xl[1] << ")" << endl;
+		}
+	}
+	cout << endl;
+	//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
+}
+
 
 bool Lens::make_random_sources(int nsources, const char *outfilename)
 {
@@ -9668,14 +9701,20 @@ void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 	else cout << "No lens models have been specified" << endl << endl;
 }
 
-bool Lens::output_mass_r(const double r_arcsec, const int lensnum)
+bool Lens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 {
 	if (lensnum >= nlens) return false;
-	double zlens, sigma_cr, kpc_to_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
-	zlens = lens_list[lensnum]->zlens;
-	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
-	kpc_to_arcsec = 206.264806/angular_diameter_distance(zlens);
-	r_kpc = r_arcsec/kpc_to_arcsec;
+	double zlens, sigma_cr, kpc_to_arcsec, r_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
+	double zl = lens_list[lensnum]->zlens;
+	sigma_cr = sigma_crit_arcsec(zl,reference_source_redshift);
+	kpc_to_arcsec = 206.264806/angular_diameter_distance(zl);
+	if (!use_kpc) {
+		r_kpc = r/kpc_to_arcsec;
+		r_arcsec = r;
+	} else {
+		r_kpc = r;
+		r_arcsec = r*kpc_to_arcsec;
+	}
 	cout << "Radius: " << r_kpc << " kpc (" << r_arcsec << " arcsec)\n";
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	cout << "Mass enclosed (2D): " << mass_r_2d << " M_sol" << endl;

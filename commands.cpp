@@ -2307,13 +2307,18 @@ void Lens::process_commands(bool read_file)
 			} else Complain("either zero or one argument required for cosmology command (lens_number)");
 		}
 		else if (words[0]=="mass_r") {
+			bool use_kpc = false;
+			if ((nwords == 4) and (words[3]=="-kpc")) {
+				use_kpc = true;
+				remove_word(3);
+			}
 			if (nwords != 3) Complain("exactly two arguments required for mass_r command (lens_number,radius_arcsec)");
 			int lnum;
 			double r_arcsec;
 			if (!(ws[1] >> lnum)) Complain("invalid lens number");
 			if (lnum >= nlens) Complain("specified lens number does not exist");
 			if (!(ws[2] >> r_arcsec)) Complain("invalid radius");
-			if (mpi_id==0) output_mass_r(r_arcsec,lnum);
+			if (mpi_id==0) output_mass_r(r_arcsec,lnum,use_kpc);
 		}
 		else if ((words[0]=="lens") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="lens")))
 		{
@@ -2605,7 +2610,6 @@ void Lens::process_commands(bool read_file)
 			{
 				if (nwords==2) {
 					clear_lenses();
-					clear_source_objects();
 				} else if (nwords==3) {
 					int lensnumber, min_lensnumber, max_lensnumber, pos;
 					if ((pos = words[2].find("-")) != string::npos) {
@@ -7072,7 +7076,7 @@ void Lens::process_commands(bool read_file)
 			else if (words[1]=="invert")
 			{
 				if (!islens()) Complain("must specify lens model first");
-				invert_surface_brightness_map_from_data(verbal_mode);
+				invert_surface_brightness_map_from_data(true);
 
 				//test_fitmodel_invert(); // use this to make sure the fitmodel chi-square returns the same value as doing the inversion directly (runs chi-square twice just to make sure)
 			}
@@ -7091,32 +7095,7 @@ void Lens::process_commands(bool read_file)
 				double x, y;
 				if (!(ws[1] >> x)) Complain("invalid x-coordinate");
 				if (!(ws[2] >> y)) Complain("invalid y-coordinate");
-				lensvector point, alpha, beta;
-				double sheartot, shear_angle;
-				point[0] = x; point[1] = y;
-				deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
-				shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
-				beta[0] = point[0] - alpha[0];
-				beta[1] = point[1] - alpha[1];
-				double kappaval = 
-				kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
-				cout << "kappa = " << kappaval << endl;
-				cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
-				cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
-				cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
-				cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
-				cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
-				cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
-
-				if (n_lens_redshifts > 1) {
-					lensvector xl;
-					for (int i=1; i < n_lens_redshifts; i++) {
-						map_to_lens_plane(i,x,y,xl,0,reference_zfactors,default_zsrc_beta_factors);
-						cout << "x(z=" << lens_redshifts[i] << "): (" << xl[0] << "," << xl[1] << ")" << endl;
-					}
-				}
-				cout << endl;
-				//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
+				print_lensing_info_at_point(x,y);
 			}
 		}
 		else if (words[0]=="plotlensinfo")
