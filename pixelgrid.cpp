@@ -3116,7 +3116,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 bool ImagePixelData::save_mask_fits(string fits_filename)
 {
 #ifndef USE_FITS
-	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
 #else
 	int i,j,kk;
 	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
@@ -3154,10 +3154,9 @@ bool ImagePixelData::save_mask_fits(string fits_filename)
 	} 
 
 	if (status) fits_report_error(stderr, status); // print any error message
+	return true;
 #endif
 }
-
-
 
 bool Lens::load_psf_fits(string fits_filename, const bool verbal)
 {

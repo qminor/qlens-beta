@@ -6760,7 +6760,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap savemask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->save_mask_fits(filename);
+				if (image_pixel_data->save_mask_fits(filename)==false) Complain("mask could not be saved");
 			}
 			else if (words[1]=="loadpsf")
 			{
