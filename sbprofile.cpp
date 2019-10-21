@@ -506,6 +506,8 @@ void SB_Profile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower,
 				use_penalty_limits[index] = true;
 				lower[index] = penalty_lower_limits[i];
 				upper[index] = penalty_upper_limits[i];
+			} else {
+				use_penalty_limits[index] = false;
 			}
 			index++;
 		}

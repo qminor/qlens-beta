@@ -6925,9 +6925,8 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 void Lens::set_default_plimits()
 {
 	get_n_fit_parameters(n_fit_parameters);
-	boolvector use_penalty_limits;
-	dvector lower, upper;
-	param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
+	boolvector use_penalty_limits(n_fit_parameters);
+	dvector lower(n_fit_parameters), upper(n_fit_parameters);
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	if (source_fit_mode==Point_Source) {
@@ -9460,8 +9459,10 @@ double Lens::fitmodel_loglike_extended_source(double* params)
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
 			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+				//cout << "parameter " << i << ": plimits " << fitmodel->param_settings->penalty_limits_lo[i] << fitmodel->param_settings->penalty_limits_hi[i] << endl;
 				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
 			}
+			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
 		if (update_fitmodel(transformed_params)==false) return 1e30;
 		if (group_id==0) {
@@ -9659,8 +9660,9 @@ void Lens::reassign_lensparam_pointers_and_names()
 			lens_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
 			lens_list[i]->assign_param_pointers();
 			lens_list[i]->assign_paramnames();
-			// NOTE: this still doesn't update the parameter list in param_settings. FIX THIS! Should update the names, and also plimits.
 		}
+		set_default_plimits();
+		update_parameter_list();
 	}
 }
 
@@ -9672,8 +9674,9 @@ void Lens::reassign_sb_param_pointers_and_names()
 			sb_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
 			sb_list[i]->assign_param_pointers();
 			sb_list[i]->assign_paramnames();
-			// NOTE: this still doesn't update the parameter list in param_settings. FIX THIS! Should update the names, and also plimits.
 		}
+		set_default_plimits();
+		update_parameter_list();
 	}
 }
 

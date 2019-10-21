@@ -392,10 +392,10 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 			penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1;
 		}
 		param_i++;
-		set_auto_penalty_limits[param_i++] = false;
+		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
 	}
-	set_auto_penalty_limits[param_i++] = false;
-	set_auto_penalty_limits[param_i++] = false;
+	set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
+	set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
 	set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0.01; penalty_upper_limits[param_i] = zsrc_ref; param_i++;
 }
 
@@ -408,6 +408,8 @@ void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 				use_penalty_limits[index] = true;
 				lower[index] = penalty_lower_limits[i];
 				upper[index] = penalty_upper_limits[i];
+			} else {
+				use_penalty_limits[index] = false;
 			}
 			index++;
 		}
@@ -1574,7 +1576,7 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 		rsq = r*r;
 		if (kapavgptr_rsq_spherical==NULL) kavg=0; // just in case there is no radial deflection function defined
 		else kavg = (this->*kapavgptr_rsq_spherical)(rsq);
-		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq << endl;
+		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << endl;
 		if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }

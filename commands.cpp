@@ -573,7 +573,7 @@ void Lens::process_commands(bool read_file)
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="corecusp")
 						cout << "lens corecusp <k0> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]    (pmode=0)\n"
-									"lens corecusp <R_e> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]    (pmode=0)\n\n"
+									"lens corecusp <R_e> <gamma> <n> <a> <s> <q/e> [theta] [x-center] [y-center]    (pmode=1)\n\n"
 							"This is a cored version of the halo model of Munoz et al. (2001), where <a> is the scale/tidal radius,\n"
 							"<k0> = 2*pi*rho_0*a/sigma_crit, <s> is the core radius, and <gamma>/<n> are the inner/outer (3D) log-\n"
 							"slopes respectively. In pmode=1, the Einstein radius R_e is used instead of k0 (although note that for low\n"
@@ -2880,7 +2880,9 @@ void Lens::process_commands(bool read_file)
 							if (kappa_multipole) Complain("invalid beta parameter for model " << words[1]);
 							else Complain("invalid n parameter for model " << words[1]);
 						}
-						if ((kappa_multipole) and (n == 2-m)) Complain("for kmpole, beta cannot be equal to 2-m (or else deflections become infinite)");
+						bool anchoring_slope = false;
+						for (int i=0; i < parameter_anchor_i; i++) { if ((parameter_anchors[i].paramnum == 1)) anchoring_slope = true; }
+						if ((kappa_multipole) and (!anchoring_slope) and (n == 2-m)) Complain("for kmpole, beta cannot be equal to 2-m (or else deflections become infinite)");
 						if (nwords >= 5) {
 							if (!(ws[4] >> theta)) Complain("invalid theta parameter for model " << words[1]);
 							if (nwords == 6) {

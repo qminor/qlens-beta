@@ -1674,12 +1674,9 @@ struct ParamSettings
 	void update_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
 	{
 		for (int i=0; i < nparams; i++) {
-			if ((use_penalty_limits[i]==false) and (use_plimits[i]==true))
-			{
-				use_penalty_limits[i] = true;
-				penalty_limits_lo[i] = lower[i];
-				penalty_limits_hi[i] = upper[i];
-			}
+			use_penalty_limits[i] = use_plimits[i];
+			penalty_limits_lo[i] = lower[i];
+			penalty_limits_hi[i] = upper[i];
 		}
 	}
 	void clear_penalty_limit(const int i)
