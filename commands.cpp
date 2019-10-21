@@ -5587,6 +5587,8 @@ void Lens::process_commands(bool read_file)
 							else Complain("invalid argument after 'fit run'");
 						} else Complain("only one (optional) argument allowed after 'fit run'");
 					}
+					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
+					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();

@@ -1646,7 +1646,6 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 	kappa_avg = (this->*kapavgptr_rsq_spherical)(rsq);
 	r_dfdr = 2*(kappa_rsq(rsq) - kappa_avg)/rsq; // Here, r_dfdr = (1/r)*d/dr(kappa_avg)
 
-	//cout << "PJ: " << x << " " << y << " " << kappa_avg << " " << r_dfdr << endl;
 	hess[0][0] = kappa_avg + x*x*r_dfdr;
 	hess[1][1] = kappa_avg + y*y*r_dfdr;
 	hess[0][1] = x*y*r_dfdr;
@@ -1665,6 +1664,7 @@ double LensProfile::potential_spherical_integral(const double rsq)
 void LensProfile::deflection_numerical(const double x, const double y, lensvector& def)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
+		// return zero deflection, since there's a risk of getting 'NaN' if the center of the profile is evaluated
 		def[0]=0;
 		def[1]=0;
 		return;

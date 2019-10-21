@@ -3347,7 +3347,7 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 		int tot = count;
 		count = 0;
 		cout << endl << endl;
-		if (NDerivedParams > 0) cout << "Calculating derived parameters: [\033[21C]\033[22D" << flush;
+		if (NDerivedParams > 0) cout << "Calculating derived parameters: [\033[20C]\033[21D" << flush;
 
 		if (chain_info != "") out << "# CHAIN_INFO: " << chain_info << endl;
 		if (data_info != "") out << "# DATA_INFO: " << data_info << endl;
