@@ -501,7 +501,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_perturber_galaxies(lensvector* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
-	void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
+	//void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed = false);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
@@ -1321,6 +1321,7 @@ struct ParamSettings
 	ParamSettings(ParamSettings& param_settings_in) {
 		nparams = param_settings_in.nparams;
 		n_dparams = param_settings_in.n_dparams;
+		param_names = new string[nparams];
 		priors = new ParamPrior*[nparams];
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
@@ -1334,6 +1335,7 @@ struct ParamSettings
 		for (int i=0; i < nparams; i++) {
 			priors[i] = new ParamPrior(param_settings_in.priors[i]);
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
+			param_names[i] = param_settings_in.param_names[i];
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
 			hist2d_param[i] = param_settings_in.hist2d_param[i];
@@ -1550,88 +1552,9 @@ struct ParamSettings
 			use_penalty_limits[i] = false;
 		}
 	}
-	void print_priors()
-	{
-		if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-		cout << "Parameter settings:\n";
-		int max_length=0;
-		for (int i=0; i < nparams; i++) {
-			if (param_names[i].length() > max_length) max_length = param_names[i].length();
-		}
-		int extra_length;
-		for (int i=0; i < nparams; i++) {
-			cout << i << ". " << param_names[i] << ": ";
-			extra_length = max_length - param_names[i].length();
-			for (int j=0; j < extra_length; j++) cout << " ";
-			if ((nparams > 10) and (i < 10)) cout << " ";
-			if (priors[i]->prior==UNIFORM_PRIOR) cout << "uniform prior";
-			else if (priors[i]->prior==LOG_PRIOR) cout << "log prior";
-			else if (priors[i]->prior==GAUSS_PRIOR) {
-				cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ", sigma=" << priors[i]->gaussian_sig << ")";
-			}
-			else if (priors[i]->prior==GAUSS2_PRIOR) {
-				cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
-			} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
-				cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
-			}
-			else die("Prior type unknown");
-			if (transforms[i]->transform==NONE) ;
-			else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) cout << ", gaussian transformation (mean=" << transforms[i]->gaussian_pos << ", sigma=" << transforms[i]->gaussian_sig << ")";
-			else if (transforms[i]->transform==LINEAR_TRANSFORM) cout << ", linear transformation A*" << param_names[i] << " + b (A=" << transforms[i]->a << ", b=" << transforms[i]->b << ")";
-			else if (transforms[i]->transform==RATIO) cout << ", ratio transformation " << param_names[i] << "/" << param_names[transforms[i]->ratio_paramnum];
-			if (transforms[i]->include_jacobian==true) cout << " (include Jacobian in likelihood)";
-			cout << endl;
-		}
-	}
-	void print_stepsizes()
-	{
-		if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-		cout << "Parameter initial stepsizes:\n";
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		int max_length=0;
-		for (int i=0; i < nparams; i++) {
-			if (transformed_names[i].length() > max_length) max_length = transformed_names[i].length();
-		}
-		int extra_length;
-		for (int i=0; i < nparams; i++) {
-			cout << i << ". " << transformed_names[i] << ": ";
-			extra_length = max_length - transformed_names[i].length();
-			for (int j=0; j < extra_length; j++) cout << " ";
-			if ((nparams > 10) and (i < 10)) cout << " ";
-			cout << stepsizes[i];
-			if (auto_stepsize[i]) cout << " (auto)";
-			cout << endl;
-		}
-		delete[] transformed_names;
-	}
-	void print_penalty_limits()
-	{
-		if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-		cout << "Parameter limits imposed on chi-square:\n";
-		int max_length=0;
-		for (int i=0; i < nparams; i++) {
-			if (param_names[i].length() > max_length) max_length = param_names[i].length();
-		}
-		int extra_length;
-		for (int i=0; i < nparams; i++) {
-			cout << i << ". " << param_names[i] << ": ";
-			extra_length = max_length - param_names[i].length();
-			for (int j=0; j < extra_length; j++) cout << " ";
-			if ((nparams > 10) and (i < 10)) cout << " ";
-			if ((use_penalty_limits[i]==false) or ((penalty_limits_lo[i]==-1e30) and (penalty_limits_hi[i]==1e30))) cout << "none" << endl;
-			else {
-				cout << "[";
-				if (penalty_limits_lo[i]==-1e30) cout << "-inf";
-				else cout << penalty_limits_lo[i];
-				cout << ":";
-				if (penalty_limits_hi[i]==1e30) cout << "inf";
-				else cout << penalty_limits_hi[i];
-				cout << "]" << endl;
-			}
-		}
-	}
+	void print_priors();
+	void print_stepsizes();
+	void print_penalty_limits();
 	void scale_stepsizes(const double fac)
 	{
 		for (int i=0; i < nparams; i++) {
@@ -1679,6 +1602,16 @@ struct ParamSettings
 			penalty_limits_hi[i] = upper[i];
 		}
 	}
+	void update_specific_penalty_limits(const int pi, const int pf, boolvector& use_plimits, dvector& lower, dvector& upper)
+	{
+		int i, index;
+		for (i=0, index=pi; index < pf; i++, index++) {
+			use_penalty_limits[index] = use_plimits[i];
+			penalty_limits_lo[index] = lower[i];
+			penalty_limits_hi[index] = upper[i];
+		}
+	}
+
 	void clear_penalty_limit(const int i)
 	{
 		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);

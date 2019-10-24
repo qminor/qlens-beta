@@ -99,6 +99,10 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
+	stepsizes.input(lens_in->stepsizes);
+	set_auto_penalty_limits.input(lens_in->set_auto_penalty_limits);
+	penalty_lower_limits.input(lens_in->penalty_lower_limits);
+	penalty_upper_limits.input(lens_in->penalty_upper_limits);
 	set_default_base_settings(lens_in->numberOfPoints,lens_in->integral_tolerance);
 
 	if (ellipticity_mode != -1) {
@@ -419,12 +423,15 @@ void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
 {
 	int i;
+	//cout << "NPAR=" << n_params << endl;
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
+			//cout << "PAR " << i << "is being varied" << endl;
 			paramnames_vary.push_back(paramnames[i]);
 			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
 			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
 		}
+		//else cout << "PAR " << i << "is NOT being varied" << endl;
 	}
 }
 
@@ -1571,12 +1578,17 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 	if (kdname != NULL) kdout.open(kdname);
 	kout << setiosflags(ios::scientific);
 	if (kdname != NULL) kdout << setiosflags(ios::scientific);
-	double kavg, rsq;
+	double kavg, rsq, r_kpc, rho3d, scaled_rho;
+	bool converged;
 	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
 		rsq = r*r;
 		if (kapavgptr_rsq_spherical==NULL) kavg=0; // just in case there is no radial deflection function defined
 		else kavg = (this->*kapavgptr_rsq_spherical)(rsq);
-		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << endl;
+		r_kpc = r/kpc_to_arcsec;
+		scaled_rho = calculate_scaled_density_3d(r,1e-4,converged);
+		rho3d = (sigma_cr*CUBE(kpc_to_arcsec))*scaled_rho;
+
+		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << " " << r_kpc << " " << rho3d << endl;
 		if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }

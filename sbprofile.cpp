@@ -54,6 +54,10 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	latex_param_subscripts = sb_in->latex_param_subscripts;
 	n_vary_params = sb_in->n_vary_params;
 	vary_params.input(sb_in->vary_params);
+	stepsizes.input(sb_in->stepsizes);
+	set_auto_penalty_limits.input(sb_in->set_auto_penalty_limits);
+	penalty_lower_limits.input(sb_in->penalty_lower_limits);
+	penalty_upper_limits.input(sb_in->penalty_upper_limits);
 
 	include_limits = sb_in->include_limits;
 	if (include_limits) {
@@ -1039,7 +1043,7 @@ void Sersic::set_auto_stepsizes()
 
 void Sersic::set_auto_ranges()
 {
-	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
 	set_geometric_param_auto_ranges(3);
@@ -1119,7 +1123,7 @@ void Cored_Sersic::set_auto_stepsizes()
 
 void Cored_Sersic::set_auto_ranges()
 {
-	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;

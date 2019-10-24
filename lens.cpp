@@ -95,6 +95,7 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 			param_names[i] = names[i];
 		}
 		for (i=nparams; i < nparams_in; i++) {
+			//cout << "New parameter " << i << ", setting plimits to false" << endl;
 			newpriors[i] = new ParamPrior();
 			newtransforms[i] = new ParamTransform();
 			param_names[i] = names[i];
@@ -203,6 +204,7 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		new_prior_norms[j] = prior_norms[i];
 		new_use_penalty_limits[j] = use_penalty_limits[i];
 		new_param_names[j] = param_names[i];
+		//cout << "Penalty limit " << i << " is now penalty limit " << j << ", which is " << use_penalty_limits[i] << " with range " << penalty_limits_lo[i] << " " << penalty_limits_hi[i] << endl;
 	}
 	if (nparams > 0) {
 		for (i=0; i < nparams; i++) {
@@ -365,6 +367,98 @@ void ParamSettings::remove_dparam(int dparam_number)
 		hist2d_dparam = NULL;
 	}
 }
+
+void ParamSettings::print_priors()
+{
+	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
+	cout << "Parameter settings:\n";
+	int max_length=0;
+	for (int i=0; i < nparams; i++) {
+		if (param_names[i].length() > max_length) max_length = param_names[i].length();
+	}
+	int extra_length;
+	for (int i=0; i < nparams; i++) {
+		cout << i << ". " << param_names[i] << ": ";
+		extra_length = max_length - param_names[i].length();
+		for (int j=0; j < extra_length; j++) cout << " ";
+		if ((nparams > 10) and (i < 10)) cout << " ";
+		if (priors[i]->prior==UNIFORM_PRIOR) cout << "uniform prior";
+		else if (priors[i]->prior==LOG_PRIOR) cout << "log prior";
+		else if (priors[i]->prior==GAUSS_PRIOR) {
+			cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ", sigma=" << priors[i]->gaussian_sig << ")";
+		}
+		else if (priors[i]->prior==GAUSS2_PRIOR) {
+			cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
+		} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
+			cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
+		}
+		else die("Prior type unknown");
+		if (transforms[i]->transform==NONE) ;
+		else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
+		else if (transforms[i]->transform==GAUSS_TRANSFORM) cout << ", gaussian transformation (mean=" << transforms[i]->gaussian_pos << ", sigma=" << transforms[i]->gaussian_sig << ")";
+		else if (transforms[i]->transform==LINEAR_TRANSFORM) cout << ", linear transformation A*" << param_names[i] << " + b (A=" << transforms[i]->a << ", b=" << transforms[i]->b << ")";
+		else if (transforms[i]->transform==RATIO) cout << ", ratio transformation " << param_names[i] << "/" << param_names[transforms[i]->ratio_paramnum];
+		if (transforms[i]->include_jacobian==true) cout << " (include Jacobian in likelihood)";
+		cout << endl;
+	}
+}
+
+void ParamSettings::print_stepsizes()
+{
+	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
+	cout << "Parameter initial stepsizes:\n";
+	string *transformed_names = new string[nparams];
+	transform_parameter_names(param_names,transformed_names,NULL,NULL);
+	int max_length=0;
+	for (int i=0; i < nparams; i++) {
+		if (transformed_names[i].length() > max_length) max_length = transformed_names[i].length();
+	}
+	int extra_length;
+	for (int i=0; i < nparams; i++) {
+		cout << i << ". " << transformed_names[i] << ": ";
+		extra_length = max_length - transformed_names[i].length();
+		for (int j=0; j < extra_length; j++) cout << " ";
+		if ((nparams > 10) and (i < 10)) cout << " ";
+		cout << stepsizes[i];
+		if (auto_stepsize[i]) cout << " (auto)";
+		cout << endl;
+	}
+	delete[] transformed_names;
+}
+
+void ParamSettings::print_penalty_limits()
+{
+	//for (int i=0; i < nparams; i++) {
+		//if (use_penalty_limits[i]==true) {
+			//cout << "USE_LIMITS " << i << endl;
+		//}
+	//}
+
+	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
+	cout << "Parameter limits imposed on chi-square:\n";
+	int max_length=0;
+	for (int i=0; i < nparams; i++) {
+		if (param_names[i].length() > max_length) max_length = param_names[i].length();
+	}
+	int extra_length;
+	for (int i=0; i < nparams; i++) {
+		cout << i << ". " << param_names[i] << ": ";
+		extra_length = max_length - param_names[i].length();
+		for (int j=0; j < extra_length; j++) cout << " ";
+		if ((nparams > 10) and (i < 10)) cout << " ";
+		if (use_penalty_limits[i]==false) cout << "none" << endl;
+		else {
+			cout << "[";
+			if (penalty_limits_lo[i]==-1e30) cout << "-inf";
+			else cout << penalty_limits_lo[i];
+			cout << ":";
+			if (penalty_limits_hi[i]==1e30) cout << "inf";
+			else cout << penalty_limits_hi[i];
+			cout << "]" << endl;
+		}
+	}
+}
+
 
 void Lens::allocate_multithreaded_variables(const int& threads)
 {
@@ -2106,8 +2200,19 @@ bool Lens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags
 	dvector stepsizes(nparams);
 	get_parameter_names();
 	if (get_lens_parameter_numbers(lensnumber,pi,pf) == true) {
+		//cout << "Inserting parameters " << pi << " to " << pf << endl;
 		get_automatic_initial_stepsizes(stepsizes);
+		//param_settings->print_penalty_limits();
 		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+		//cout << "Inserting parameters done " << endl;
+		//param_settings->print_penalty_limits();
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		lens_list[lensnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
+		//param_settings->print_penalty_limits();
 	}
 	return true;
 }
@@ -2124,6 +2229,12 @@ bool Lens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 	if (get_sb_parameter_numbers(sbnumber,pi,pf) == true) {
 		get_automatic_initial_stepsizes(stepsizes);
 		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		sb_list[sbnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
 	}
 	return true;
 }
@@ -3181,6 +3292,9 @@ void Lens::plot_weak_lensing_shear_field()
 	sout.close();
 }
 
+/*
+// The following function uses the series expansions derived in Minor et al. 2017, but it's better to simply use a root finder, so
+// this approach is deprecated
 void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed)
 {
 	// the analytic formulas require a Pseudo-Jaffe or isothermal profile, and they only work for subhalos in the plane of the lens
@@ -3355,6 +3469,7 @@ void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool ve
 	mass_enclosed = menc/alpha;
 	rmax = rmax_analytic;
 }
+*/
 
 bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs)
 {
@@ -5920,6 +6035,18 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
+	// testing out copying plimits from lens to fitmodel
+	//get_n_fit_parameters(n_fit_parameters);
+	//boolvector use_penalty_limits(n_fit_parameters);
+	//dvector lower(n_fit_parameters), upper(n_fit_parameters);
+	//param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
+
+	//for (int i=0; i < n_fit_parameters; i++) { if (use_penalty_limits[i] == true) cout << "Using plimits for " << i << endl; }
+	//if (param_settings->use_penalty_limits[8] == true) cout << "WOWOWWOWOW Using plimits for 8" << endl; 
+	//fitmodel->param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
+
+	//return;
+
 	if (open_chisq_logfile) {
 		string logfile_str = fit_output_dir + "/" + fit_output_filename + ".log";
 		if (group_id==0) {
@@ -5935,6 +6062,12 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->logfile << setprecision(10);
 		}
 	}
+
+	//param_settings->print_penalty_limits();
+	//cout << "FITMODEL:" << endl;
+	//fitmodel->param_settings->print_penalty_limits();
+	fitmodel->update_parameter_list();
+	cout << endl;
 	return true;
 }
 
@@ -6928,12 +7061,16 @@ void Lens::set_default_plimits()
 	boolvector use_penalty_limits(n_fit_parameters);
 	dvector lower(n_fit_parameters), upper(n_fit_parameters);
 	int i, index=0;
-	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	}
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
-				if (vary_sourcepts_x[i]) index++;
-				if (vary_sourcepts_y[i]) index++;
+				//if (vary_sourcepts_x[i]) index++;
+				//if (vary_sourcepts_y[i]) index++;
+				if (vary_sourcepts_x[i]) { use_penalty_limits[index]=false; index++; }
+				if (vary_sourcepts_y[i]) { use_penalty_limits[index]=false; index++; }
 			}
 		}
 	}
@@ -7028,7 +7165,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	dvector stepsizes(n_fit_parameters);
 	get_automatic_initial_stepsizes(stepsizes);
 	param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
-	set_default_plimits();
+	//set_default_plimits();
 	param_settings->transform_parameters(fitparams.array());
 	transformed_parameter_names.resize(n_fit_parameters);
 	transformed_latex_parameter_names.resize(n_fit_parameters);
@@ -7429,6 +7566,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 		if ((mpi_id==0) and (show_status)) warn(warnings,"Warning: could not evaluate chi-square function");
 		return;
 	}
+	//fitmodel->param_settings->print_penalty_limits();
 
 	double (Lens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -7449,6 +7587,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	if (show_diagnostics) chisq_diagnostic = true;
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
+	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (!show_status) display_chisq_status = default_display_status;
 	//if ((mpi_id==0) and (show_status)) {
@@ -8686,7 +8825,7 @@ bool Lens::add_dparams_to_chain()
 	}
 
 	int nlines_chunk = nlines/20;
-	if (mpi_id==0) cout << "Calculating derived parameters: [\033[21C]" << endl << endl << flush;
+	if (mpi_id==0) cout << "Calculating derived parameters: [\033[20C]" << endl << endl << flush;
 	int prev_icount, icount = 0;
 	for (line=group_num; line < nlines; line += mpi_ngroups) {
 		istringstream datastream(chain_lines[line]);
@@ -8704,7 +8843,13 @@ bool Lens::add_dparams_to_chain()
 			cout << "\033[1B" << endl << flush;
 		}
 	}
+	if (mpi_id==0) {
+		cout << "\033[2ACalculating derived parameters: [" << flush;
+		for (j=0; j < 20; j++) cout << "=" << flush;
+		cout << "\033[1B" << endl << flush;
+	}
 	if (mpi_id==0) cout << endl;
+	//cout << "icount=" << icount << " prev=" << prev_icount << "line=" << line << " chunk=" << nlines_chunk << endl;
 
 #ifdef USE_MPI
 	int id;
@@ -9325,11 +9470,16 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
+		//fitmodel->param_settings->print_penalty_limits();
+		bool penalty_incurred = false;
 		for (int i=0; i < n_fit_parameters; i++) {
 			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+				//cout << "USE_LIMITS " << i << endl;
+				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) penalty_incurred = true;
 			}
 		}
+		//fitmodel->param_settings->print_penalty_limits();
+		if (penalty_incurred) return 1e30;
 		if (update_fitmodel(transformed_params)==false) return 1e30;
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
@@ -9663,6 +9813,7 @@ void Lens::reassign_lensparam_pointers_and_names()
 		}
 		set_default_plimits();
 		update_parameter_list();
+		if (mpi_id==0) cout << "NOTE: plimits have been reset, since lens parameterization has been changed" << endl;
 	}
 }
 
@@ -9677,6 +9828,7 @@ void Lens::reassign_sb_param_pointers_and_names()
 		}
 		set_default_plimits();
 		update_parameter_list();
+		if (mpi_id==0) cout << "NOTE: plimits have been reset, since source parameterization has been changed" << endl;
 	}
 }
 

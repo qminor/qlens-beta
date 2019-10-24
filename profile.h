@@ -430,7 +430,6 @@ class NFW : public LensProfile
 	double ks, rs;
 	double m200, c200, rs_kpc; // alternate parametrizations
 	double median_c_factor; // used if concentration is set to factor*median value
-	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
@@ -469,7 +468,6 @@ class Truncated_NFW : public LensProfile
 	double ks, rs, rt;
 	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
 	double median_c_factor; // used if concentration is set to factor*median value
-	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
 	double lens_function_xsq(const double&);
@@ -504,7 +502,6 @@ class Cored_NFW : public LensProfile
 	double ks, rs, rc;
 	double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
 	double median_c_factor;
-	bool use_mc_parameters;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double rsq);

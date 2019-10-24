@@ -771,9 +771,12 @@ void NFW::assign_param_pointers()
 void NFW::get_parameters_pmode(const int pmode, double* params)
 {
 	if (parameter_mode==0) {
-		// For parameter mode 0, you need to use a root-finder to solve for c, and then you can find m200 easily
-		// This should be done here because unless you need it here, it would waste CPU time to do this every
-		// time the parameters are varied
+		double ds, r200;
+		double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+		rs_kpc = rs / kpc_to_arcsec;
+		ds = ks * sigma_cr_kpc / rs_kpc;
+		// Using a root-finder to solve for c, then m200 can be solved for
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	}
 
 	if (pmode==2) {
@@ -863,7 +866,7 @@ void NFW::set_ks_c200_from_m200_rs()
 
 void NFW::set_ks_rs_from_m200_c200()
 {
-	double rvir_kpc, rs_kpc;
+	double rvir_kpc;
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
