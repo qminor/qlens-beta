@@ -5761,7 +5761,6 @@ void Lens::process_commands(bool read_file)
 					int nparams;
 					get_n_fit_parameters(nparams);
 					update_parameter_list();
-					//set_default_plimits();
 					if (nwords==2) { if (mpi_id==0) param_settings->print_penalty_limits(); }
 					else if (nwords == 3) {
 						if (words[2]=="reset") {
