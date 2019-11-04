@@ -9018,7 +9018,6 @@ bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, d
 	}
 	chain_file.close();
 
-	//double tot = 1.0; // the weights output by Polychord/Multinest should add up to 1, but maybe generalize this later just in case
 	for (i=0; i < nbins; i++) {
 		sort(n_points,kappa_r_pts[i],weights[i]);
 		sort(n_points,kappa_avg_pts[i],weights2[i]);

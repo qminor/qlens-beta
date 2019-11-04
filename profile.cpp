@@ -799,6 +799,15 @@ double LensProfile::average_log_slope(const double rmin, const double rmax)
 	return log(k2/k1)/log(rmax/rmin);
 }
 
+double LensProfile::average_log_slope_3d(const double rmin, const double rmax)
+{
+	double rho1, rho2;
+	bool converged;
+	rho1 = calculate_scaled_density_3d(rmin*rmin,1e-5,converged);
+	rho2 = calculate_scaled_density_3d(rmax*rmax,1e-5,converged);
+	return log(rho2/rho1)/log(rmax/rmin);
+}
+
 bool LensProfile::calculate_total_scaled_mass(double& total_mass)
 {
 	double u, mass_u, mass_u_prev;
@@ -1589,7 +1598,7 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 		scaled_rho = calculate_scaled_density_3d(r,1e-4,converged);
 		rho3d = (sigma_cr*CUBE(kpc_to_arcsec))*scaled_rho;
 
-		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << " " << r_kpc << " " << rho3d << endl;
+		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << " " << r_kpc << " " << kappa_rsq(rsq)*sigma_cr << " " << rho3d << endl;
 		if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }

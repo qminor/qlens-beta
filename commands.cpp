@@ -1548,10 +1548,10 @@ void Lens::process_commands(bool read_file)
 						"'primary_lens'). Any lens models which are not centered on the origin are ignored. In addition\n"
 						"to the kappa, the radius in kpc and density in solar masses per kpc^2 are given in the third and\n"
 						"fourth columns, i.e. the output file has the following format:\n\n"
-						"r(arcsec) kappa r(kpc) Sigma(M_sol/kpc^2)\n\n"
-						"If a specific lens is chosen by the 'lens=#' argument, only the kappa profile\n"
-						"for that lens is plotted; however, in addition, the average kappa, deflection, and enclosed mass\n"
-						"are plotted (as additional columns in the file <kappa_file>) for that lens.\n"
+						"r(arcsec) kappa r(kpc) Sigma(M_sun/kpc^2)\n\n"
+						"If a specific lens is chosen by the 'lens=#' argument, the following is plotted for that lens:\n\n"
+						"r(arcsec) kappa kappa_average deflection enclosed_mass r(kpc) Sigma(M_sun/kpc^2) rho3d(M_sun/kpc^3)\n\n"
+						"where Sigma and rho3d are the 2d and 3d density profiles of the lens, respectively.\n"
 						"(NOTE: Only text mode plotting is supported for this command.)\n";
 				else if (words[1]=="plotmass")
 					cout << "plotmass <rmin> <rmax> <steps> <mass_file>\n\n"

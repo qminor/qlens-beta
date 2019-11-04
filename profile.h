@@ -255,6 +255,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
 	double average_log_slope(const double rmin, const double rmax);
+	double average_log_slope_3d(const double rmin, const double rmax);
 	virtual bool calculate_total_scaled_mass(double& total_mass);
 	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
 	virtual double calculate_scaled_mass_3d(const double r);
