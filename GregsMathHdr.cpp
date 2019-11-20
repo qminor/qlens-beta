@@ -370,7 +370,7 @@ double IncGamma(const double a, const double x)
 	}
 }
 
-double IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam)
+void IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam)
 {
 	double gln;
 

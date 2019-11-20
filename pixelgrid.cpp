@@ -3311,6 +3311,20 @@ void ImagePixelData::set_all_required_data_pixels()
 	n_required_pixels = npixels_x*npixels_y;
 }
 
+bool ImagePixelData::inside_mask(const double x, const double y)
+{
+	if ((x <= xmin) or (x >= xmax) or (y <= ymin) or (y >= ymax)) return false;
+	int i,j;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if ((xvals[i] < x) and (xvals[i+1] >= x) and (yvals[j] < y) and (yvals[j+1] > y)) {
+				if (require_fit[i][j]) return true;
+			}
+		}
+	}
+	return false;
+}
+
 void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 {
 	vector<int> mask_window_sizes;

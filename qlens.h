@@ -525,7 +525,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny);
 	void plot_weak_lensing_shear_field();
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
-	void plot_logkappa_map(const int x_N, const int y_N, const string filename);
+	void plot_logkappa_map(const int x_N, const int y_N, const string filename, const bool ignore_mask);
 	void plot_logmag_map(const int x_N, const int y_N, const string filename);
 	void plot_logpot_map(const int x_N, const int y_N, const string filename);
 
@@ -757,7 +757,7 @@ public:
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
-	void run_plotter(string plotcommand);
+	void run_plotter(string plotcommand, string extra_command = "");
 	void run_plotter_file(string plotcommand, string filename);
 	void run_plotter_range(string plotcommand, string range);
 	void run_plotter(string plotcommand, string filename, string range);
@@ -798,7 +798,7 @@ public:
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
-	int update_lens_redshift_data();
+	void update_lens_redshift_data();
 	void add_new_lens_entry(const double zl);
 	void set_primary_lens();
 	void print_beta_matrices();
@@ -1256,6 +1256,7 @@ struct DerivedParam
 			return chisq_out;
 		}
 		else die("no user defined function yet");
+		return 0.0;
 	}
 	void print_param_description(Lens* lens_in)
 	{

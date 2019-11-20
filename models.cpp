@@ -3101,6 +3101,7 @@ void MassSheet::assign_paramnames()
 	paramnames[0] = "kext"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "ext";
 	paramnames[1] = "xc";   latex_paramnames[1] = "x";       latex_param_subscripts[1] = "c";
 	paramnames[2] = "yc";   latex_paramnames[2] = "y";       latex_param_subscripts[2] = "c";
+	paramnames[3] = "z";   latex_paramnames[3] = "z";       latex_param_subscripts[3] = "l";
 }
 
 void MassSheet::assign_param_pointers()
@@ -3108,13 +3109,14 @@ void MassSheet::assign_param_pointers()
 	param[0] = &kext;
 	param[1] = &x_center;
 	param[2] = &y_center;
+	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
 }
 
 void MassSheet::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.3*kext;
+	stepsizes[0] = (kext==0) ? 0.1 : 0.3*kext;
 	stepsizes[1] = 0.1; // arbitrary! really, the center should never be independently varied
 	stepsizes[2] = 0.1;
 	stepsizes[3] = 0.1;
@@ -3125,6 +3127,7 @@ void MassSheet::set_auto_ranges()
 	set_auto_penalty_limits[0] = false;
 	set_auto_penalty_limits[1] = false;
 	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = false;
 }
 
 void MassSheet::set_model_specific_integration_pointers()
@@ -3142,7 +3145,7 @@ double MassSheet::potential(double x, double y)
 
 double MassSheet::kappa(double x, double y)
 {
-	return kext; // really it's a delta function, but effectively zero for our purposes here
+	return kext;
 }
 
 double MassSheet::kapavg_spherical_rsq(const double rsq)
@@ -3181,6 +3184,105 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 	def[1] = kext*y;
 	hess[0][0] = kext;
 	hess[1][1] = kext;
+	hess[1][0] = 0;
+	hess[0][1] = 0;
+}
+
+/***************** External deflection (only relevant if multiple source redshifts) *****************/
+
+Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Lens* cosmo_in)
+{
+	cosmo = cosmo_in;
+	lenstype = DEFLECTION;
+	model_name = "deflection";
+	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	setup_base_lens(3,false); // number of parameters = 2, is_elliptical_lens = false
+	center_defined = false;
+
+	def_x = defx_in;
+	def_y = defy_in;
+	x_center = 0; y_center = 0; // will not be used anyway
+	update_meta_parameters_and_pointers();
+}
+
+Deflection::Deflection(const Deflection* lens_in)
+{
+	copy_base_lensdata(lens_in);
+	def_x = lens_in->def_x;
+	def_y = lens_in->def_y;
+	update_meta_parameters_and_pointers();
+}
+
+void Deflection::assign_paramnames()
+{
+	paramnames[0] = "def_x"; latex_paramnames[0] = "\\alpha"; latex_param_subscripts[0] = "x";
+	paramnames[1] = "def_y"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "y";
+	paramnames[2] = "z";   latex_paramnames[2] = "z";       latex_param_subscripts[2] = "l";
+}
+
+void Deflection::set_model_specific_integration_pointers()
+{
+	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Deflection::deflection);
+	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Deflection::hessian);
+	kapavgptr_rsq_spherical = NULL;
+	potptr_rsq_spherical = NULL;
+}
+
+void Deflection::assign_param_pointers()
+{
+	param[0] = &def_x;
+	param[1] = &def_y;
+	param[2] = &zlens;
+	ellipticity_paramnum = -1; // no ellipticity parameter here
+	angle_paramnum = -1; // since there is no angle parameter
+}
+
+void Deflection::set_auto_stepsizes()
+{
+	stepsizes[0] = (def_x==0) ? 0.1: 0.3*def_x;
+	stepsizes[1] = (def_y==0) ? 0.1: 0.3*def_y;
+	stepsizes[2] = 0.1;
+}
+
+void Deflection::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false;
+	set_auto_penalty_limits[1] = false;
+	set_auto_penalty_limits[2] = false;
+}
+
+double Deflection::potential(double x, double y)
+{
+	return def_x*x + def_y*y;
+}
+
+double Deflection::kappa(double x, double y)
+{
+	return 0; // really it's a delta function, but effectively zero for our purposes here
+}
+
+void Deflection::deflection(double x, double y, lensvector& def)
+{
+	def[0] = def_x;
+	def[1] = def_y;
+}
+
+void Deflection::hessian(double x, double y, lensmatrix& hess)
+{
+	hess[0][0] = 0;
+	hess[1][1] = 0;
+	hess[1][0] = 0;
+	hess[0][1] = 0;
+}
+
+void Deflection::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+{
+	def[0] = def_x;
+	def[1] = def_y;
+	hess[0][0] = 0;
+	hess[1][1] = 0;
 	hess[1][0] = 0;
 	hess[0][1] = 0;
 }

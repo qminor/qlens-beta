@@ -1583,6 +1583,8 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 			lens_list[nlens-1] = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
 		case SHEET:
 			lens_list[nlens-1] = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
+		case DEFLECTION:
+			lens_list[nlens-1] = new Deflection(zl, zs, scale1, scale2, this); break;
 		case ALPHA:
 			lens_list[nlens-1] = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case SHEAR:
@@ -1977,7 +1979,7 @@ void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_i
 	}
 }
 
-int Lens::update_lens_redshift_data()
+void Lens::update_lens_redshift_data()
 {
 	for (int i=0; i < nlens; i++) {
 		if (lens_redshifts[lens_redshift_idx[i]] != lens_list[i]->zlens) {
@@ -5982,6 +5984,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 				fitmodel->lens_list[i] = new PointMass((PointMass*) lens_list[i]); break;
 			case SHEET:
 				fitmodel->lens_list[i] = new MassSheet((MassSheet*) lens_list[i]); break;
+			case DEFLECTION:
+				fitmodel->lens_list[i] = new Deflection((Deflection*) lens_list[i]); break;
 			case TABULATED:
 				fitmodel->lens_list[i] = new Tabulated_Model((Tabulated_Model*) lens_list[i]); break;
 			case QTABULATED:
@@ -7587,6 +7591,8 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	if (show_diagnostics) chisq_diagnostic = true;
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
+
+	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (!show_status) display_chisq_status = default_display_status;
@@ -9097,6 +9103,7 @@ double Lens::find_percentile(const unsigned long npoints, const double pct, cons
 			return pts[j] + (pts[j-1] - pts[j])*(totsofar - pct*tot)/weights[j];
 		}
 	}
+	return 0.0;
 }
 
 void Lens::test_fitmodel_invert()
@@ -10150,7 +10157,7 @@ void Lens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double y
 	delete[] corner_sourcepts;
 }
 
-void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename)
+void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename, const bool ignore_mask)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -10182,13 +10189,16 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
-			//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
-			if (kap < 0) {
-				negkap = true;
-				kap = abs(kap);
+			if ((!ignore_mask) and (image_pixel_data != NULL) and (!image_pixel_data->inside_mask(x,y))) logkapout << "NaN ";
+			else {
+				kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
+				//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
+				if (kap < 0) {
+					negkap = true;
+					kap = abs(kap);
+				}
+				logkapout << log(kap)/log(10) << " ";
 			}
-			logkapout << log(kap)/log(10) << " ";
 		}
 		logkapout << endl;
 	}
@@ -11733,6 +11743,7 @@ Lens* lensptr;
 double mcsampler_set_lensptr(Lens* lens_in)
 {
 	lensptr = lens_in;
+	return 0.0;
 }
 
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived)

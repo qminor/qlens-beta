@@ -30,6 +30,7 @@ enum LensProfileName
 	PTMASS,
 	SHEAR,
 	SHEET,
+	DEFLECTION,
 	TABULATED,
 	QTABULATED,
 	TESTMODEL
@@ -52,6 +53,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	protected:
 	LensProfileName lenstype;
+	bool center_defined;
 	double zlens, zsrc_ref;
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	double sigma_cr, kpc_to_arcsec;
@@ -808,6 +810,43 @@ class MassSheet : public LensProfile
 	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
 	{
 		kap = kext;
+		potential_derivatives(x,y,def,hess);
+	}
+
+	void deflection(double, double, lensvector&);
+	void hessian(double, double, lensmatrix&);
+
+	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
+};
+
+class Deflection : public LensProfile
+{
+	private:
+	double def_x, def_y;
+
+	double kappa_rsq(const double rsq) { return 0; }
+	double kappa_rsq_deriv(const double rsq) { return 0; }
+	void set_model_specific_integration_pointers();
+
+	public:
+	Deflection() : LensProfile() {}
+	Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Lens*);
+	Deflection(const Deflection* lens_in);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters() {}
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double potential(double, double);
+	double kappa(double, double);
+
+	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
+	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+	{
+		kap = 0;
 		potential_derivatives(x,y,def,hess);
 	}
 

@@ -70,11 +70,11 @@ fit use_bestfit
 fit chisq
 
 # Once the nested sampling finishes, you can plot the resulting posterior probability distributions using the 'mkdist' tool,
-# included with qlens, from the UNIX command line. For a quick start, you can go to the directory 'chains_alpha_nest' and type
+# included with qlens, from the UNIX command line. For a quick start, you can go to the directory 'chains_alpha_poly' and type
 # 'mkdist -n40 -N40 -SP', then view the resulting PDF files that get created.
 
 # Alternatively, you can generate posteriors from qlens as follows. For the various plotting options, do "help fit mkposts"
-fit mkposts
+#fit mkposts
 
 # You may want to minimize the chi-square afterword, starting from the best-fit point returned by nested sampling
 #fit method simplex

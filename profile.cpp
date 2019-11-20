@@ -39,6 +39,7 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 
 void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
+	center_defined = true;
 	zlens_current = zlens;
 	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
@@ -77,6 +78,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
+	center_defined = lens_in->center_defined;
 	zlens = lens_in->zlens;
 	zsrc_ref = lens_in->zsrc_ref;
 	sigma_cr = lens_in->sigma_cr;
@@ -587,13 +589,22 @@ void LensProfile::print_parameters()
 	cout << model_name << "(";
 	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
 	cout << "z=" << zlens << "): ";
-	for (int i=0; i < n_params-3; i++) {
-		cout << paramnames[i] << "=";
-		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
-		else cout << *(param[i]);
-		cout << ", ";
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+			cout << paramnames[i] << "=";
+			if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
+			else cout << *(param[i]);
+			cout << ", ";
+		}
+		cout << "center=(" << x_center << "," << y_center << ")";
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+			cout << paramnames[i] << "=";
+			if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
+			else cout << *(param[i]);
+			if (i != n_params-2) cout << ", ";
+		}
 	}
-	cout << "center=(" << x_center << "," << y_center << ")";
 	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
@@ -678,20 +689,36 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
-	for (int i=0; i < n_params-3; i++) {
-		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-		else {
-			if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 			else {
-				if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-				else scriptout << *(param[i]);
+				if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+				else {
+					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+					else scriptout << *(param[i]);
+				}
+				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				scriptout << " ";
 			}
-			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-			scriptout << " ";
 		}
+		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
+		else scriptout << x_center << " " << y_center << " z=" << zlens << endl;
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+			else {
+				if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+				else {
+					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+					else scriptout << *(param[i]);
+				}
+				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				scriptout << " ";
+			}
+		}
+		scriptout << " z=" << zlens << endl;
 	}
-	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-	else scriptout << x_center << " " << y_center << " z=" << zlens << endl;
 	for (int i=0; i < n_params-1; i++) {
 		if (vary_params[i]) scriptout << "1 ";
 		else scriptout << "0 ";
@@ -742,29 +769,45 @@ void LensProfile::output_lens_command_nofit(string& command)
 	}
 	if (special_parameter_command != "") command += special_parameter_command += " ";
 
-	for (int i=0; i < n_params-3; i++) {
-			stringstream paramstr;
-			paramstr << setprecision(16);
-			string paramstring;
-		if (i==angle_paramnum) {
-			paramstr << radians_to_degrees(*(param[i]));
+	string xcstring = "";
+	string ycstring = "";
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+				stringstream paramstr;
+				paramstr << setprecision(16);
+				string paramstring;
+			if (i==angle_paramnum) {
+				paramstr << radians_to_degrees(*(param[i]));
+			}
+			else {
+				paramstr << *(param[i]);
+			}
+			paramstr >> paramstring;
+			command += paramstring + " ";
 		}
-		else {
-			paramstr << *(param[i]);
+		stringstream xcstr;
+		stringstream ycstr;
+		xcstr << setprecision(16);
+		xcstr << x_center;
+		xcstr >> xcstring;
+		ycstr << setprecision(16);
+		ycstr << y_center;
+		ycstr >> ycstring;
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+				stringstream paramstr;
+				paramstr << setprecision(16);
+				string paramstring;
+			if (i==angle_paramnum) {
+				paramstr << radians_to_degrees(*(param[i]));
+			}
+			else {
+				paramstr << *(param[i]);
+			}
+			paramstr >> paramstring;
+			command += paramstring + " ";
 		}
-		paramstr >> paramstring;
-		command += paramstring + " ";
 	}
-	stringstream xcstr;
-	string xcstring;
-	stringstream ycstr;
-	string ycstring;
-	xcstr << setprecision(16);
-	xcstr << x_center;
-	xcstr >> xcstring;
-	ycstr << setprecision(16);
-	ycstr << y_center;
-	ycstr >> ycstring;
 	stringstream zlstr;
 	string zlstring;
 	zlstr << setprecision(16);
