@@ -1808,6 +1808,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 
 double LensProfile::potential_numerical(const double x, const double y)
 {
+	if (this->kapavgptr_rsq_spherical==NULL) return 0.0; // cannot calculate potential without a spherical deflection defined
 	bool converged;
 	double ans;
 	LensIntegral lens_integral(this,x*x,y*y,q,0);

@@ -2946,7 +2946,7 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 	return (k0/M_2PI)*pow(a,n-1)*pow(rsq+s*s,-gamma/2)*pow(rsq+a*a,-(n-gamma)/2);
 }
 
-/***************************** SersicLens profile *****************************/
+/***************************** Sersic profile *****************************/
 
 SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
@@ -3070,6 +3070,140 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 	IncGammaP_and_Gamma(2*n,b*x,incgam2n,gamm2n);
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
+
+/***************************** Cored Sersic profile *****************************/
+
+Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
+{
+	cosmo = cosmo_in;
+	lenstype = CORED_SERSIC_LENS;
+	model_name = "csersic";
+	special_parameter_command = "";
+	zlens = zlens_in;
+	zsrc_ref = zsrc_in;
+	setup_base_lens(9,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+
+	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	set_default_base_settings(nn,acc);
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+
+	if (parameter_mode==0) {
+		kappa_e = p1_in;
+	} else {
+		mstar = p1_in;
+	}
+	n = n_in;
+	re = Re_in;
+	rc = rc_in;
+
+	update_meta_parameters_and_pointers();
+}
+
+Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
+{
+	copy_base_lensdata(lens_in);
+	if (parameter_mode==0) {
+		kappa_e = lens_in->kappa_e;
+	} else {
+		mstar = lens_in->mstar;
+	}
+	n = lens_in->n;
+	re = lens_in->re;
+	b = lens_in->b;
+	rc = lens_in->rc;
+
+	update_meta_parameters_and_pointers();
+}
+
+void Cored_SersicLens::assign_paramnames()
+{
+	if (parameter_mode==0) {
+		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+	} else {
+		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
+	}
+	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
+	paramnames[3] = "rc";       latex_paramnames[3] = "r";       latex_param_subscripts[3] = "c";
+	set_geometric_paramnames(4);
+}
+
+void Cored_SersicLens::assign_param_pointers()
+{
+	if (parameter_mode==0) {
+		param[0] = &kappa_e;
+	} else {
+		param[0] = &mstar;
+	}
+
+	param[1] = &re;
+	param[2] = &n;
+	param[3] = &rc;
+	set_geometric_param_pointers(4);
+}
+
+void Cored_SersicLens::update_meta_parameters()
+{
+	update_zlens_meta_parameters();
+	update_ellipticity_meta_parameters();
+	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	if (parameter_mode==1) {
+		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+	}
+	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+}
+
+void Cored_SersicLens::set_auto_stepsizes()
+{
+	if (parameter_mode==0) {
+		stepsizes[0] = 0.2*kappa_e;
+	} else {
+		stepsizes[0] = 0.2*mstar;
+	}
+	stepsizes[1] = 0.2*re;
+	stepsizes[2] = 0.2;
+	stepsizes[3] = 0.05*re;
+	set_auto_eparam_stepsizes(4,5);
+	stepsizes[6] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
+	stepsizes[7] = 0.3;
+	stepsizes[8] = 0.1;
+}
+
+void Cored_SersicLens::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = false;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_geometric_param_auto_ranges(4);
+}
+
+void Cored_SersicLens::set_model_specific_integration_pointers()
+{
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_SersicLens::kapavg_spherical_rsq);
+}
+
+double Cored_SersicLens::kappa_rsq(const double rsq)
+{
+	return kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1));
+}
+
+double Cored_SersicLens::kappa_rsq_deriv(const double rsq)
+{
+	return -kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow((rsq+rc*rc),0.5/n-1)/(2*n);
+}
+
+double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
+{
+	// This is a hack and probably incorrect for rc not equal to zero!
+	// Formula from Cardone et al. 2003
+	double x, alpha_e_times_2re, gamm2n, incgam2n;
+	x = pow((rsq+rc*rc)/(re*re),1.0/(2*n));
+	IncGammaP_and_Gamma(2*n,b*x,incgam2n,gamm2n);
+	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
+}
+
+
 
 /***************************** Mass sheet *****************************/
 

@@ -1607,6 +1607,8 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 			lens_list[nlens-1] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case SERSIC_LENS:
 			lens_list[nlens-1] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case CORED_SERSIC_LENS:
+			lens_list[nlens-1] = new Cored_SersicLens(zl, zs, mass_parameter, scale1, scale2, special_param1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TESTMODEL: // Model for testing purposes
 			lens_list[nlens-1] = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		default:
@@ -5980,6 +5982,8 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 				fitmodel->lens_list[i] = new CoreCusp((CoreCusp*) lens_list[i]); break;
 			case SERSIC_LENS:
 				fitmodel->lens_list[i] = new SersicLens((SersicLens*) lens_list[i]); break;
+			case CORED_SERSIC_LENS:
+				fitmodel->lens_list[i] = new Cored_SersicLens((Cored_SersicLens*) lens_list[i]); break;
 			case PTMASS:
 				fitmodel->lens_list[i] = new PointMass((PointMass*) lens_list[i]); break;
 			case SHEET:

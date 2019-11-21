@@ -489,7 +489,7 @@ class GetDistPlotter():
     def add_title(self, title_text, fontsize=38):
         self.fig.suptitle(title_text, fontsize=fontsize) 
     
-    def add_legend(self, legend_labels, legend_loc=None, line_offset=0, legend_ncol=None, colored_text=False, figure=False):
+    def add_legend(self, legend_labels, legend_loc=None, line_offset=0, legend_ncol=None, colored_text=False, figure=False, fontsize=20):
             if legend_loc is None:
                 if figure: legend_loc = self.settings.figure_legend_loc
                 else: legend_loc = self.settings.legend_loc
@@ -501,7 +501,7 @@ class GetDistPlotter():
                     lines.append(Line2D([0, 1], [0, 1], **args))
             else: lines = self.contours_added
             args = {'ncol':legend_ncol}
-            #self.settings.legend_fontsize = 22
+            self.settings.legend_fontsize = fontsize
             if self.settings.legend_fontsize is not None: args['prop'] = {'size':self.settings.legend_fontsize}
             if colored_text:
                 args['handlelength'] = 0

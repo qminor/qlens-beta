@@ -365,6 +365,7 @@ void Lens::process_commands(bool read_file)
 							"hern -- Hernquist model\n"
 							"expdisk -- exponential disk\n"
 							"sersic -- Sersic profile\n"
+							"csersic -- Cored Sersic profile\n"
 							"corecusp -- generalized profile with core, scale radius, inner & outer log-slope\n"
 							"kspline -- splined kappa profile (generated from an input file)\n"
 							"tab -- generic tabulated model, used to interpolate lensing properties in (r,phi) for above models\n"
@@ -595,6 +596,15 @@ void Lens::process_commands(bool read_file)
 							"kappa value at the effective (half-mass) radius R_eff, and b is a factor automatically determined from\n"
 							"the value for n to ensure that R_eff contains half the total mass (from Cardone et al. 2003). Here,\n"
 							"[theta] is the angle of rotation (counterclockwise, in degrees) about the center (defaults=0). Note that\n"
+							"for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major\n"
+							"axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
+					else if (words[2]=="csersic")
+						cout << "lens csersic <kappa_e> <R_eff> <n> <rc> <q/e> [theta] [x-center] [y-center]\n\n"
+							"The cored sersic profile is defined by kappa = kappa_e * exp(-b*((sqrt(R^2+rc^2)/R_eff)^(1/n)-1)), where\n"
+							"kappa_e is the kappa value at the effective (half-mass) radius R_eff, rc is the core size, and b is a factor\n"
+							"automatically determined from the value for n to ensure that R_eff contains half the total mass in the limit\n"
+							"of zero core size (from Cardone et al. 2003).\n"
+							"Here, [theta] is the angle of rotation (counterclockwise, in degrees) about the center (defaults=0). Note that\n"
 							"for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major\n"
 							"axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kspline")
@@ -2399,6 +2409,7 @@ void Lens::process_commands(bool read_file)
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
 									(profile_name==SERSIC_LENS) ? "sersic" :
+									(profile_name==CORED_SERSIC_LENS) ? "csersic" :
 									(profile_name==SHEAR) ? "shear" :
 									(profile_name==SHEET) ? "sheet" :
 									(profile_name==DEFLECTION) ? "deflection" :
@@ -3836,6 +3847,94 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
+				}
+				else if (words[1]=="csersic")
+				{
+					int primary_lens_num;
+					if ((pmode < 0) or (pmode > 1)) Complain("parameter mode must be either 0 or 1");
+					if (nwords > 10) Complain("more than 7 parameters not allowed for model csersic");
+					if (nwords >= 7) {
+						double p1, re, n, rc;
+						double q, theta = 0, xc = 0, yc = 0;
+						int pos;
+						if (pmode==1) {
+							if (!(ws[2] >> p1)) Complain("invalid mstar parameter for model csersic");
+						} else {
+							if (!(ws[2] >> p1)) Complain("invalid kappe_e parameter for model csersic");
+						}
+						if (!(ws[3] >> re)) Complain("invalid csersic parameter for model csersic");
+						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model csersic");
+						if (!(ws[5] >> rc)) Complain("invalid rc (core) parameter for model csersic");
+						if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
+						if (re <= 0) Complain("re cannot be less than or equal to zero");
+						if (nwords >= 8) {
+							if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
+							if (nwords == 9) {
+								if (words[8].find("anchor_center=")==0) {
+									string anchorstr = words[8].substr(14);
+									stringstream anchorstream;
+									anchorstream << anchorstr;
+									if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+									if (anchornum >= nlens) Complain("lens anchor number does not exist");
+									anchor_lens_center = true;
+								} else Complain("x-coordinate entered for center, but not y-coordinate");
+							}
+							if (nwords == 10) {
+								if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
+								if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
+								if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
+							}
+						}
+						param_vals.input(9);
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=rc; param_vals[4]=q; param_vals[5]=theta; param_vals[6]=xc; param_vals[7]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[8]=zl_in;
+						else param_vals[8]=lens_list[lens_number]->zlens;
+						if (vary_parameters) {
+							nparams_to_vary = (anchor_lens_center) ? 6 : 8;
+							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
+							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
+							if (nwords != tot_nparams_to_vary) {
+								string complain_str = "";
+								if (anchor_lens_center) {
+									if (nwords==tot_nparams_to_vary+2) {
+										if ((words[6] != "0") or (words[7] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+									} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model csersic (plus optional Fourier modes)";
+								}
+								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model csersic (plus optional Fourier modes)";
+								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
+									complain_str += ",\n     plus two shear parameters ";
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+								}
+								if (complain_str != "") Complain(complain_str);
+							}
+							vary_flags.input(nparams_to_vary+1);
+							if (add_shear) shear_vary_flags.input(2);
+							bool invalid_params = false;
+							int i,j;
+							for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
+							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
+						}
+						if (update_parameters) {
+							lens_list[lens_number]->update_parameters(param_vals.array());
+							update_anchored_parameters_and_redshift_data();
+							reset();
+							if (auto_ccspline) automatically_determine_ccspline_mode();
+						} else {
+							add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (auto_set_primary_lens) set_primary_lens();
+						}
+					}
+					else Complain("csersic requires at least 5 parameters (kappe_e, R_eff, n, rc, q)");
 				}
 				else if (words[1]=="sheet")
 				{
