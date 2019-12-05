@@ -3195,7 +3195,7 @@ double Cored_SersicLens::kappa_rsq_deriv(const double rsq)
 
 double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
 {
-	// This is a hack and probably incorrect for rc not equal to zero!
+	// WARNING! This is a hack and incorrect for rc not equal to zero! At some point, derive the correct formula!
 	// Formula from Cardone et al. 2003
 	double x, alpha_e_times_2re, gamm2n, incgam2n;
 	x = pow((rsq+rc*rc)/(re*re),1.0/(2*n));

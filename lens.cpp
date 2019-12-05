@@ -11061,6 +11061,68 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	return chisq;
 }
 
+double Lens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
+{
+
+	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
+	if ((source_fit_mode==Parameterized_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
+	if (image_pixel_data==NULL) { warn("no pixel data image has been loaded"); return false; }
+	double xmin,xmax,ymin,ymax;
+	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+	xmax += 1e-10; // is this still necessary? Check
+	ymax += 1e-10;
+	if (image_pixel_grid != NULL) delete image_pixel_grid;
+	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
+	if (image_pixel_data != NULL) image_pixel_grid->set_fit_window((*image_pixel_data)); 
+	//if (image_pixel_data != NULL) image_pixel_grid->set_neighbor_pixels(5); 
+	if (active_image_pixel_i != NULL) {
+		delete[] active_image_pixel_i;
+		delete[] active_image_pixel_j;
+		active_image_pixel_i = NULL;
+		active_image_pixel_j = NULL;
+	}
+
+	if (source_fit_mode==Pixellated_Source) {
+		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
+		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+		if (assign_pixel_mappings(verbal)==false) return false;
+	}
+	image_pixel_grid->find_surface_brightness();
+	vectorize_image_pixel_surface_brightness();
+	PSF_convolution_image_pixel_vector(verbal); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
+	store_image_pixel_surface_brightness();
+
+	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
+	if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
+	else covariance = SQR(data_pixel_noise);
+	double chisq = 0;
+	int img_index;
+	int i,j;
+	for (i=0; i < image_pixel_data->npixels_x; i++) {
+		for (j=0; j < image_pixel_data->npixels_y; j++) {
+			if (image_pixel_data->require_fit[i][j]) {
+				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+					img_index = image_pixel_grid->pixel_index[i][j];
+					chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+				} else {
+					chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance;
+				}
+			}
+		}
+	}
+	chisq0 = chisq;
+	clear_pixel_matrices();
+
+	if (group_id==0) {
+		if (logfile.is_open()) {
+			logfile << "it=" << chisq_it << " chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << " ";
+			if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
+		}
+	}
+	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
+}
+
 void Lens::plot_mc_curve(const string filename)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first

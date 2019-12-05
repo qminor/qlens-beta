@@ -24,7 +24,6 @@ class SB_Profile
 	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
 	double c0; // "boxiness" parameter
 	double rt; // truncation radius parameter
-	double fmode_rscale;
 	double costheta, sintheta;
 
 	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
@@ -33,7 +32,7 @@ class SB_Profile
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
-	bool include_fmode_rscale; // the rscale factor transitions the Fourier modes (and boxiness) from zero at r=0 to the full amplitude at ~rscale
+	bool include_contour_bumps; // localized isophote perturbation
 	boolvector vary_params;
 	string model_name;
 	vector<string> paramnames;
@@ -44,9 +43,14 @@ class SB_Profile
 	bool include_limits;
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
+
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical isophotes (zero by default)
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
+
+	int n_contour_bumps; // Number of contour "bump" perturbations to elliptical isophotes (zero by default)
+	ivector bump_paramnum;
+	dvector bump_amplitudes, bump_phivals, bump_widthvals, bump_rposvals, bump_rwidthvals;
 
 	void set_nparams(const int &n_params_in);
 	void copy_base_source_data(const SB_Profile* sb_in);
@@ -92,7 +96,7 @@ class SB_Profile
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
-	void add_fmode_rscale(const double rscale_in, const bool vary_rscale);
+	void add_contour_bump(const double amp, const double theta, const double width, const double rpos, const double rwidth, const bool vary_amp, const bool vary_theta, const bool vary_width, const bool vary_rpos, const bool vary_rwidth);
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
 	}

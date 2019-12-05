@@ -4476,11 +4476,15 @@ void Lens::process_commands(bool read_file)
 			int fourier_nmodes=0;
 			bool include_boxiness_parameter = false;
 			bool include_truncation_radius = false;
-			bool include_fmode_rscale = false;
 			bool unlensed = false;
 			double c0val = 0;
 			double rtval = 0;
-			double rfsc_val = 0;
+			int n_contour_bumps = 0;
+			vector<double> bump_amps;
+			vector<double> bump_phivals;
+			vector<double> bump_widthvals;
+			vector<double> bump_rposvals;
+			vector<double> bump_rwidthvals;
 
 			if (words[0]=="fit") {
 				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
@@ -4579,15 +4583,36 @@ void Lens::process_commands(bool read_file)
 				}
 			}
 
-			for (int i=2; i < nwords; i++) {
-				if ((words[i][0]=='r') and (words[i][1]=='f') and (words[i][2]=='s') and (words[i][3]=='c') and (words[i][4]=='=') and (!update_parameters)) {
-					string rfscstring;
-					rfscstring = words[i].substr(5);
-					stringstream rfscstr;
-					rfscstr << rfscstring;
-					if (!(rfscstr >> rfsc_val)) Complain("invalid rfsc value");
+			for (int i=nwords-1; i > 2; i--) {
+				if ((words[i][0]=='c') and (words[i][1]=='b') and (words[i][2]=='=') and (!update_parameters)) {
+					if (i > nwords-5) Complain("must specify five parameters for contour bump (amp,theta,width,rpos,rwidth)");
+
+					string ampstring;
+					ampstring = words[i].substr(3);
+					stringstream ampstr;
+					ampstr << ampstring;
+					double bump_amp, bump_theta, bump_width, bump_rpos, bump_rwidth;
+					if (!(ampstr >> bump_amp)) Complain("invalid amp value");
+					stringstream thetastr, wstr, rstr, rwstr;
+					thetastr << words[i+1];
+					wstr << words[i+2];
+					rstr << words[i+3];
+					rwstr << words[i+4];
+					if (!(thetastr >> bump_theta)) Complain("invalid bump_theta value");
+					if (!(wstr >> bump_width)) Complain("invalid bump_width value");
+					if (!(rstr >> bump_rpos)) Complain("invalid bump_rpos value");
+					if (!(rwstr >> bump_rwidth)) Complain("invalid bump_rwidth value");
+					bump_amps.push_back(bump_amp);
+					bump_phivals.push_back(bump_theta);
+					bump_widthvals.push_back(bump_width);
+					bump_rposvals.push_back(bump_rpos);
+					bump_rwidthvals.push_back(bump_rwidth);
+					remove_word(i+4);
+					remove_word(i+3);
+					remove_word(i+2);
+					remove_word(i+1);
 					remove_word(i);
-					include_fmode_rscale = true;
+					n_contour_bumps++;
 				}
 			}
 
@@ -4767,7 +4792,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						if (include_fmode_rscale) nparams_to_vary++;
+						nparams_to_vary += n_contour_bumps*5;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
@@ -4783,7 +4808,9 @@ void Lens::process_commands(bool read_file)
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, 0, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
-						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
+						for (int i=n_contour_bumps-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -4818,7 +4845,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						if (include_fmode_rscale) nparams_to_vary++;
+						nparams_to_vary += n_contour_bumps*5;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,q,theta,xc,yc) in model sersic");
@@ -4834,7 +4861,9 @@ void Lens::process_commands(bool read_file)
 						add_source_object(SERSIC, s0, reff, 0, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
-						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
+						for (int i=n_contour_bumps-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -4870,7 +4899,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						if (include_fmode_rscale) nparams_to_vary++;
+						nparams_to_vary += n_contour_bumps*5;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,rc,q,theta,xc,yc) in model csersic");
@@ -4886,7 +4915,9 @@ void Lens::process_commands(bool read_file)
 						add_source_object(CORED_SERSIC, s0, reff, rc, n, q, theta, xc, yc);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
-						if (include_fmode_rscale) sb_list[n_sb-1]->add_fmode_rscale(rfsc_val,false);
+						for (int i=n_contour_bumps-1; i >= 0; i--) {
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -9249,11 +9280,14 @@ void Lens::process_commands(bool read_file)
 			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
+			double chisq0;
+			calculate_chisq0_from_srcgrid(chisq0, true);
+
 			//plot_weak_lensing_shear_field();
 			//if (add_dparams_to_chain()==false) Complain("could not process chain data");
 			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
-			output_imgplane_chisq_vals();
+			//output_imgplane_chisq_vals();
 			//add_derived_param(KappaR,5.0,-1);
 			//add_derived_param(DKappaR,5.0,-1);
 			//generate_solution_chain_sdp81();
