@@ -3526,7 +3526,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	return true;
 }
 
-bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
+bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbal, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
 {
 	perturber_lens_number = lens_number;
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
@@ -3540,10 +3540,10 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	lens_list[perturber_lens_number]->get_center_coords(xc,yc);
 	perturber_center[0]=xc; perturber_center[1]=yc;
 	if (zlsub > zlprim) {
-		if (find_lensed_position_of_background_perturber(verbose,lens_number,perturber_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
+		if (find_lensed_position_of_background_perturber(verbal,lens_number,perturber_center,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 		xc = perturber_center[0];
 		yc = perturber_center[1];
-		if ((mpi_id==0) and (verbose)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
+		if ((mpi_id==0) and (verbal)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
 	}
 
 	lens_list[0]->get_center_coords(host_xc,host_yc);
@@ -3582,7 +3582,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	double (Brent::*dthetac_eq)(const double);
 	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
 	double bound = 0.6*b;
-	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbose);
+	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbal);
 	if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
 		rmax_numerical = 0.0; // subhalo too far from critical curve to cause a meaningful "local" perturbation
 		mass_enclosed = 0.0;
@@ -3664,13 +3664,13 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	if (subtract_unperturbed) {
 		double (Brent::*dthetac_eq_nosub)(const double);
 		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&Lens::perturbation_radius_equation_nosub);
-		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbose);
+		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbal);
 		rmax_numerical = abs(rmax_numerical-rmax_unperturbed);
 	}
 
 	double rmax_kpc = rmax_numerical/kpc_to_arcsec_sub;
 
-	if (verbose) {
+	if ((mpi_id==0) and (verbal)) {
 		lensvector x;
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
 		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
@@ -9853,6 +9853,8 @@ void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 	cout << "zlens = " << lens_redshift << endl;
 	cout << "zsrc = " << source_redshift << endl;
 	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
+	double rhocrit = 1e-9*critical_density(lens_redshift);
+	cout << "rho_crit(zlens): " << rhocrit << " M_sol/kpc^3" << endl;
 	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl;
 	double kpc_to_arcsec = 206.264806/angular_diameter_distance(lens_redshift);
 	cout << "1 arcsec = " << (1.0/kpc_to_arcsec) << " kpc" << endl;

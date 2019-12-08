@@ -777,13 +777,15 @@ void Lens::process_commands(bool read_file)
 							"source point being plotted. So in the above example, critical curves are plotted for the source\n"
 							"redshift corresponding to image set 3.\n";
 					else if (words[2]=="run")
-						cout << "fit run [-resume/process]\n\n"
+						cout << "fit run [-resume/process/noerrs]\n\n"
 							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's method)\n"
 							"or a Monte Carlo sampler (e.g. MCMC or nested sampling method) depending on the fit method that\n"
 							"has been selected. If using MultiNest or PolyChord, you can add the argument '-resume' to continue\n"
 							"a previous run that had been interrupted; if a run has already been finished previously, you can\n"
-							"add the argument '-process' to process the chains from the previous run. For more info about the\n"
-							"output produced by these methods, type 'help fit method <method>'.\n";
+							"add the argument '-process' to process the chains from the previous run. If doing an optimization,\n"
+							"you can add the argument '-noerrs' to skip calculating Fisher matrix errors (this can also be\n"
+							"toggled using the 'find_errors' variable). For more info about the output produced by these\n"
+							"methods, type 'help fit method <method>'.\n";
 					else if (words[2]=="chisq")
 						cout << "fit chisq [diag]\n\n"
 							"Output the chi-square value for the current model and data. If using more than one chi-square\n"
@@ -1191,7 +1193,7 @@ void Lens::process_commands(bool read_file)
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
 								"savesrc').\n";
 						else if (words[2]=="plotimg")
-							cout << "sbmap plotimg [-...] (optional arguments: [-fits] [-residual] [-replot] [-nosrc] [-reduce2/4/8])\n"
+							cout << "sbmap plotimg (optional: [-fits] [-residual] [-replot] [-nosrc] [-nocc] [-reduce2/4/8])\n"
 								"sbmap plotimg [-...] [image_file]\n"
 								"sbmap plotimg [-...] [source_file] [image_file]\n\n"
 								"Plot a lensed pixel image from a pixellated source surface brightness distribution under\n"
@@ -1209,6 +1211,7 @@ void Lens::process_commands(bool read_file)
 								"  [-residual] plots residual image by subtracting from the data image\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
+								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
 								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
 								"               aging 2x2 or 4x4 or 8x8 pixel groups to generate low-res pixel surface brightness\n"
 								"               values.\n"
@@ -4481,10 +4484,11 @@ void Lens::process_commands(bool read_file)
 			double rtval = 0;
 			int n_contour_bumps = 0;
 			vector<double> bump_amps;
-			vector<double> bump_phivals;
-			vector<double> bump_widthvals;
-			vector<double> bump_rposvals;
-			vector<double> bump_rwidthvals;
+			vector<double> bump_xvals;
+			vector<double> bump_yvals;
+			vector<double> bump_sigvals;
+			vector<double> bump_e1vals;
+			vector<double> bump_e2vals;
 
 			if (words[0]=="fit") {
 				if (source_fit_mode != Parameterized_Source) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile'");
@@ -4585,33 +4589,38 @@ void Lens::process_commands(bool read_file)
 
 			for (int i=nwords-1; i > 2; i--) {
 				if ((words[i][0]=='c') and (words[i][1]=='b') and (words[i][2]=='=') and (!update_parameters)) {
-					if (i > nwords-5) Complain("must specify five parameters for contour bump (amp,theta,width,rpos,rwidth)");
+					if (i > nwords-6) Complain("must specify six parameters for contour bump (amp,x,y,sig,e1,e2)");
 
 					string ampstring;
 					ampstring = words[i].substr(3);
 					stringstream ampstr;
 					ampstr << ampstring;
-					double bump_amp, bump_theta, bump_width, bump_rpos, bump_rwidth;
+					double bump_amp, bump_x, bump_y, bump_sig, bump_e1, bump_e2;
 					if (!(ampstr >> bump_amp)) Complain("invalid amp value");
-					stringstream thetastr, wstr, rstr, rwstr;
-					thetastr << words[i+1];
-					wstr << words[i+2];
-					rstr << words[i+3];
-					rwstr << words[i+4];
-					if (!(thetastr >> bump_theta)) Complain("invalid bump_theta value");
-					if (!(wstr >> bump_width)) Complain("invalid bump_width value");
-					if (!(rstr >> bump_rpos)) Complain("invalid bump_rpos value");
-					if (!(rwstr >> bump_rwidth)) Complain("invalid bump_rwidth value");
+					stringstream xstr, ystr, sigstr, e1str, e2str;
+					xstr << words[i+1];
+					ystr << words[i+2];
+					sigstr << words[i+3];
+					e1str << words[i+4];
+					e2str << words[i+5];
+					if (!(xstr >> bump_x)) Complain("invalid bump_x value");
+					if (!(ystr >> bump_y)) Complain("invalid bump_y value");
+					if (!(sigstr >> bump_sig)) Complain("invalid bump_sig value");
+					if (!(e1str >> bump_e1)) Complain("invalid bump_e1 value");
+					if (!(e2str >> bump_e2)) Complain("invalid bump_e2 value");
 					bump_amps.push_back(bump_amp);
-					bump_phivals.push_back(bump_theta);
-					bump_widthvals.push_back(bump_width);
-					bump_rposvals.push_back(bump_rpos);
-					bump_rwidthvals.push_back(bump_rwidth);
-					remove_word(i+4);
-					remove_word(i+3);
-					remove_word(i+2);
-					remove_word(i+1);
-					remove_word(i);
+					bump_xvals.push_back(bump_x);
+					bump_yvals.push_back(bump_y);
+					bump_sigvals.push_back(bump_sig);
+					bump_e1vals.push_back(bump_e1);
+					bump_e2vals.push_back(bump_e2);
+					for (int j=5; j >= 0; j--) remove_word(i+j);
+					//remove_word(i+5);
+					//remove_word(i+4);
+					//remove_word(i+3);
+					//remove_word(i+2);
+					//remove_word(i+1);
+					//remove_word(i);
 					n_contour_bumps++;
 				}
 			}
@@ -4792,7 +4801,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						nparams_to_vary += n_contour_bumps*5;
+						nparams_to_vary += n_contour_bumps*6;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
@@ -4809,7 +4818,7 @@ void Lens::process_commands(bool read_file)
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_xvals[i],bump_yvals[i],bump_sigvals[i],bump_e1vals[i],bump_e2vals[i]);
 						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -4845,7 +4854,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						nparams_to_vary += n_contour_bumps*5;
+						nparams_to_vary += n_contour_bumps*6;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,q,theta,xc,yc) in model sersic");
@@ -4862,7 +4871,7 @@ void Lens::process_commands(bool read_file)
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_xvals[i],bump_yvals[i],bump_sigvals[i],bump_e1vals[i],bump_e2vals[i]);
 						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -4899,7 +4908,7 @@ void Lens::process_commands(bool read_file)
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
 						if (include_truncation_radius) nparams_to_vary++;
-						nparams_to_vary += n_contour_bumps*5;
+						nparams_to_vary += n_contour_bumps*6;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
 						if (nwords != nparams_to_vary) Complain("Must specify vary flags for seven parameters (s0,Reff,n,rc,q,theta,xc,yc) in model csersic");
@@ -4916,7 +4925,7 @@ void Lens::process_commands(bool read_file)
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
-							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_phivals[i],bump_widthvals[i],bump_rposvals[i],bump_rwidthvals[i],false,false,false,false,false);
+							sb_list[n_sb-1]->add_contour_bump(bump_amps[i],bump_xvals[i],bump_yvals[i],bump_sigvals[i],bump_e1vals[i],bump_e2vals[i]);
 						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
@@ -5769,15 +5778,22 @@ void Lens::process_commands(bool read_file)
 				{
 					bool resume = false;
 					bool skip_run = false;
+					bool no_errors = false;
 					if (nwords > 2) {
 						if (nwords==3) {
 							if (words[2]=="-resume") resume = true;
 							else if (words[2]=="-process") skip_run = true;
+							else if (words[2]=="-noerrs") no_errors = true;
 							else Complain("invalid argument after 'fit run'");
 						} else Complain("only one (optional) argument allowed after 'fit run'");
 					}
 					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
 					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
+					bool old_error_setting;
+					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) {
+						old_error_setting = calculate_parameter_errors;
+						calculate_parameter_errors = false;
+					}
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
@@ -5785,6 +5801,7 @@ void Lens::process_commands(bool read_file)
 					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
+					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
 				}
 				else if (words[1]=="chisq")
 				{
@@ -7168,6 +7185,8 @@ void Lens::process_commands(bool read_file)
 				bool omit_source = false;
 				int reduce_factor = 1;
 				bool offload_to_data = false;
+				bool omit_cc = false;
+				bool old_cc_setting = show_cc;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -7177,6 +7196,7 @@ void Lens::process_commands(bool read_file)
 						else if (args[i]=="-nomask") { show_mask_only = false; }
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
+						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-reduce2") reduce_factor = 2;
 						else if (args[i]=="-reduce4") reduce_factor = 4;
 						else if (args[i]=="-reduce8") reduce_factor = 8;
@@ -7254,6 +7274,7 @@ void Lens::process_commands(bool read_file)
 					} else Complain("invalid number of arguments to 'sbmap plotimg'");
 				} else if (!foundcc) Complain("could not find critical curves");
 				if (omit_source) plot_srcplane = old_plot_srcplane;
+				if (omit_cc) show_cc = old_cc_setting;
 			}
 			else if (words[1]=="plotsrc")
 			{

@@ -79,11 +79,14 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	if (include_boxiness_parameter) c0 = sb_in->c0;
 	if (include_truncation_radius) rt = sb_in->rt;
 	if (n_contour_bumps > 0) {
-		bump_amplitudes.input(sb_in->bump_amplitudes);
+		bump_drvals.input(sb_in->bump_drvals);
+		bump_xvals.input(sb_in->bump_xvals);
+		bump_yvals.input(sb_in->bump_yvals);
+		bump_sigvals.input(sb_in->bump_sigvals);
+		bump_e1vals.input(sb_in->bump_e1vals);
+		bump_e2vals.input(sb_in->bump_e2vals);
+		bump_qvals.input(sb_in->bump_qvals);
 		bump_phivals.input(sb_in->bump_phivals);
-		bump_widthvals.input(sb_in->bump_widthvals);
-		bump_rposvals.input(sb_in->bump_rposvals);
-		bump_rwidthvals.input(sb_in->bump_rwidthvals);
 		bump_paramnum.input(sb_in->bump_paramnum);
 	}
 
@@ -184,22 +187,26 @@ void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
 	//assign_param_pointers();
 }
 
-void SB_Profile::add_contour_bump(const double amp, const double theta, const double width, const double rpos, const double rwidth, const bool vary_amp, const bool vary_theta, const bool vary_width, const bool vary_rpos, const bool vary_rwidth)
+void SB_Profile::add_contour_bump(const double amp, const double x, const double y, const double sig, const double e1, const double e2)
 {
 	n_contour_bumps++;
 	bump_paramnum.resize(n_contour_bumps);
-	bump_amplitudes.resize(n_contour_bumps);
+	bump_drvals.resize(n_contour_bumps);
+	bump_xvals.resize(n_contour_bumps);
+	bump_yvals.resize(n_contour_bumps);
+	bump_sigvals.resize(n_contour_bumps);
+	bump_e1vals.resize(n_contour_bumps);
+	bump_e2vals.resize(n_contour_bumps);
 	bump_phivals.resize(n_contour_bumps);
-	bump_widthvals.resize(n_contour_bumps);
-	bump_rposvals.resize(n_contour_bumps);
-	bump_rwidthvals.resize(n_contour_bumps);
+	bump_qvals.resize(n_contour_bumps);
 	bump_paramnum[n_contour_bumps-1] = n_params;
-	bump_amplitudes[n_contour_bumps-1] = amp;
-	bump_phivals[n_contour_bumps-1] = theta;
-	bump_widthvals[n_contour_bumps-1] = width;
-	bump_rposvals[n_contour_bumps-1] = rpos;
-	bump_rwidthvals[n_contour_bumps-1] = rwidth;
-	n_params += 5;
+	bump_drvals[n_contour_bumps-1] = amp;
+	bump_xvals[n_contour_bumps-1] = x;
+	bump_yvals[n_contour_bumps-1] = y;
+	bump_sigvals[n_contour_bumps-1] = sig;
+	bump_e1vals[n_contour_bumps-1] = e1;
+	bump_e2vals[n_contour_bumps-1] = e2;
+	n_params += 6;
 
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
@@ -209,17 +216,8 @@ void SB_Profile::add_contour_bump(const double amp, const double theta, const do
 	set_auto_penalty_limits.resize(n_params);
 	penalty_lower_limits.resize(n_params);
 	penalty_upper_limits.resize(n_params);
-	if (vary_amp) n_vary_params++;
-	if (vary_theta) n_vary_params++;
-	if (vary_width) n_vary_params++;
-	if (vary_rpos) n_vary_params++;
-	if (vary_rwidth) n_vary_params++;
 
-	vary_params[n_params-5] = vary_amp;
-	vary_params[n_params-4] = vary_theta;
-	vary_params[n_params-3] = vary_width;
-	vary_params[n_params-2] = vary_rpos;
-	vary_params[n_params-1] = vary_rwidth;
+	for (int i=6; i >= 1; i--) vary_params[n_params-i] = false;
 
 	stringstream nstream;
 	string nstring;
@@ -227,42 +225,50 @@ void SB_Profile::add_contour_bump(const double amp, const double theta, const do
 	nstream << nbump;
 	nstream >> nstring;
 
-	paramnames[n_params-5] = "dsamp" + nstring;
-	latex_paramnames[n_params-5] = "A";
+	paramnames[n_params-6] = "ds" + nstring + "_amp";
+	latex_paramnames[n_params-6] = "A";
+	latex_param_subscripts[n_params-6] = "\\delta s" + nstring;
+	paramnames[n_params-5] = "ds" + nstring + "_xc";
+	latex_paramnames[n_params-5] = "x";
 	latex_param_subscripts[n_params-5] = "\\delta s" + nstring;
-	paramnames[n_params-4] = "dstheta" + nstring;
-	latex_paramnames[n_params-4] = "\\theta";
+	paramnames[n_params-4] = "ds" + nstring + "_yc";
+	latex_paramnames[n_params-4] = "y";
 	latex_param_subscripts[n_params-4] = "\\delta s" + nstring;
-	paramnames[n_params-3] = "dssig" + nstring;
+	paramnames[n_params-3] = "ds" + nstring + "_sig";
 	latex_paramnames[n_params-3] = "\\sigma";
 	latex_param_subscripts[n_params-3] = "\\delta s" + nstring;
-	paramnames[n_params-2] = "dsrpos" + nstring;
-	latex_paramnames[n_params-2] = "r";
-	latex_param_subscripts[n_params-2] = "\\delta s" + nstring;
-	paramnames[n_params-1] = "dsrsig" + nstring;
-	latex_paramnames[n_params-1] = "\\sigma";
-	latex_param_subscripts[n_params-1] = "r,\\delta s" + nstring;
+	paramnames[n_params-2] = "ds" + nstring + "_e1";
+	latex_paramnames[n_params-2] = "e";
+	latex_param_subscripts[n_params-2] = "1,\\delta s" + nstring;
+	paramnames[n_params-1] = "ds" + nstring + "_e2";
+	latex_paramnames[n_params-1] = "e";
+	latex_param_subscripts[n_params-1] = "2,\\delta s" + nstring;
 
-	stepsizes[n_params-5] = 0.05; // arbitrary
+	stepsizes[n_params-6] = 0.01; // arbitrary
+	set_auto_penalty_limits[n_params-6] = false;
+	stepsizes[n_params-5] = 0.01; // arbitrary
 	set_auto_penalty_limits[n_params-5] = false;
-	stepsizes[n_params-4] = 2; // arbitrary
+	stepsizes[n_params-4] = 0.01; // arbitrary
 	set_auto_penalty_limits[n_params-4] = false;
-	stepsizes[n_params-3] = 2; // arbitrary
+	stepsizes[n_params-3] = 0.01; // arbitrary
 	set_auto_penalty_limits[n_params-3] = false;
-	stepsizes[n_params-2] = 0.01; // arbitrary
+	stepsizes[n_params-2] = 0.05; // arbitrary
 	set_auto_penalty_limits[n_params-2] = false;
-	stepsizes[n_params-1] = 0.01; // arbitrary
+	stepsizes[n_params-1] = 0.05; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
 
 	double **new_param = new double*[n_params];
-	for (int i=0; i < n_params-5; i++) new_param[i] = param[i];
-	new_param[n_params-5] = &bump_amplitudes[n_contour_bumps-1];
-	new_param[n_params-4] = &bump_phivals[n_contour_bumps-1];
-	new_param[n_params-3] = &bump_widthvals[n_contour_bumps-1];
-	new_param[n_params-2] = &bump_rposvals[n_contour_bumps-1];
-	new_param[n_params-1] = &bump_rwidthvals[n_contour_bumps-1];
+	for (int i=0; i < n_params-6; i++) new_param[i] = param[i];
+	new_param[n_params-6] = &bump_drvals[n_contour_bumps-1];
+	new_param[n_params-5] = &bump_xvals[n_contour_bumps-1];
+	new_param[n_params-4] = &bump_yvals[n_contour_bumps-1];
+	new_param[n_params-3] = &bump_sigvals[n_contour_bumps-1];
+	new_param[n_params-2] = &bump_e1vals[n_contour_bumps-1];
+	new_param[n_params-1] = &bump_e2vals[n_contour_bumps-1];
 	delete[] param;
 	param = new_param;
+
+	update_ellipticity_meta_parameters();
 
 	//delete[] param;
 	//param = new double*[n_params];
@@ -375,11 +381,12 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	if (include_truncation_radius) param[qi++] = &rt;
 	if (n_contour_bumps > 0) {
 		for (int i=0; i < n_contour_bumps; i++) {
-			param[qi++] = &bump_amplitudes[i];
-			param[qi++] = &bump_phivals[i];
-			param[qi++] = &bump_widthvals[i];
-			param[qi++] = &bump_rposvals[i];
-			param[qi++] = &bump_rwidthvals[i];
+			param[qi++] = &bump_drvals[i];
+			param[qi++] = &bump_xvals[i];
+			param[qi++] = &bump_yvals[i];
+			param[qi++] = &bump_sigvals[i];
+			param[qi++] = &bump_e1vals[i];
+			param[qi++] = &bump_e2vals[i];
 		}
 	}
 	if (n_fourier_modes > 0) {
@@ -679,6 +686,29 @@ void SB_Profile::update_ellipticity_meta_parameters()
 	} else {
 		update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
 	}
+	if (n_contour_bumps > 0) {
+		for (int i=0; i < n_contour_bumps; i++) {
+			bump_qvals[i] = 1 - sqrt(SQR(bump_e1vals[i]) + SQR(bump_e2vals[i]));
+			if (bump_qvals[i] < 0) bump_qvals[i] = 0.001;
+			if (bump_e1vals[i]==0) {
+				if (bump_e2vals[i] > 0) bump_phivals[i] = M_HALFPI;
+				else bump_phivals[i] = -M_HALFPI;
+			} else {
+				bump_phivals[i] = atan(abs(bump_e2vals[i]/bump_e1vals[i]));
+				if (bump_e1vals[i] < 0) {
+					if (bump_e2vals[i] < 0)
+						bump_phivals[i] = bump_phivals[i] - M_PI;
+					else
+						bump_phivals[i] = M_PI - bump_phivals[i];
+				} else if (bump_e2vals[i] < 0) {
+					bump_phivals[i] = -bump_phivals[i];
+				}
+			}
+			bump_phivals[i] = 0.5*bump_phivals[i];
+			while (bump_phivals[i] > M_PI) bump_phivals[i] -= M_PI;
+			while (bump_phivals[i] <= 0) bump_phivals[i] += M_PI;
+		}
+	}
 }
 
 void SB_Profile::update_angle_meta_params()
@@ -812,7 +842,6 @@ double SB_Profile::surface_brightness(double x, double y)
 	}
 
 	double rsq, rsq_ell = x*x + y*y/(q*q);
-	double bump_fac = 1.0;
 	if ((include_boxiness_parameter) and (c0 != 0.0)) {
 		rsq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
 	} else {
@@ -832,13 +861,20 @@ double SB_Profile::surface_brightness(double x, double y)
 		if (n_contour_bumps > 0) {
 			double phi_degrees;
 			double r = sqrt(rsq_ell);
+			double xprime, yprime, temp;
 			for (int i=0; i < n_contour_bumps; i++) {
-				phi_degrees = phi_q*180/M_PI;
-				while (abs(phi_degrees-bump_phivals[i]) > 180) {
-					if (phi_degrees > bump_phivals[i]) phi_degrees -= 360;
-					else phi_degrees += 360;
-				}
-				fourier_factor -= bump_amplitudes[i]*exp(-SQR((phi_degrees-bump_phivals[i])/bump_widthvals[i])/2)*exp(-SQR((r-bump_rposvals[i])/bump_rwidthvals[i])/2);
+				//phi_degrees = phi_q*180/M_PI;
+				//while (abs(phi_degrees-bump_xvals[i]) > 180) {
+					//if (phi_degrees > bump_xvals[i]) phi_degrees -= 360;
+					//else phi_degrees += 360;
+				//}
+				xprime = x - bump_xvals[i];
+				yprime = y - bump_yvals[i];
+				temp = xprime*cos(bump_phivals[i]) + yprime*sin(bump_phivals[i]);
+				yprime = -xprime*sin(bump_phivals[i]) + yprime*cos(bump_phivals[i]);
+				xprime = temp;
+
+				fourier_factor -= (bump_drvals[i]/r)*exp(-(SQR(xprime) + SQR(yprime/bump_qvals[i]))/SQR(bump_sigvals[i])/2);
 			}
 		}
 		rsq *= fourier_factor*fourier_factor;

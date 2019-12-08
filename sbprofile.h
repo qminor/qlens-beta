@@ -50,7 +50,8 @@ class SB_Profile
 
 	int n_contour_bumps; // Number of contour "bump" perturbations to elliptical isophotes (zero by default)
 	ivector bump_paramnum;
-	dvector bump_amplitudes, bump_phivals, bump_widthvals, bump_rposvals, bump_rwidthvals;
+	dvector bump_drvals, bump_xvals, bump_yvals, bump_sigvals, bump_e1vals, bump_e2vals;
+	dvector bump_qvals, bump_phivals; // meta-parameters
 
 	void set_nparams(const int &n_params_in);
 	void copy_base_source_data(const SB_Profile* sb_in);
@@ -96,7 +97,7 @@ class SB_Profile
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
-	void add_contour_bump(const double amp, const double theta, const double width, const double rpos, const double rwidth, const bool vary_amp, const bool vary_theta, const bool vary_width, const bool vary_rpos, const bool vary_rwidth);
+	void add_contour_bump(const double amp, const double x, const double y, const double sig, const double e1, const double e2);
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
 	}
