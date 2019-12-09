@@ -4589,14 +4589,14 @@ void Lens::process_commands(bool read_file)
 
 			for (int i=nwords-1; i > 2; i--) {
 				if ((words[i][0]=='c') and (words[i][1]=='b') and (words[i][2]=='=') and (!update_parameters)) {
-					if (i > nwords-6) Complain("must specify six parameters for contour bump (amp,x,y,sig,e1,e2)");
+					if (i > nwords-6) Complain("must specify six parameters for contour bump (dr,x,y,sig,e1,e2)");
 
 					string ampstring;
 					ampstring = words[i].substr(3);
 					stringstream ampstr;
 					ampstr << ampstring;
 					double bump_amp, bump_x, bump_y, bump_sig, bump_e1, bump_e2;
-					if (!(ampstr >> bump_amp)) Complain("invalid amp value");
+					if (!(ampstr >> bump_amp)) Complain("invalid dr value");
 					stringstream xstr, ystr, sigstr, e1str, e2str;
 					xstr << words[i+1];
 					ystr << words[i+2];

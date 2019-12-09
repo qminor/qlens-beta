@@ -225,22 +225,22 @@ void SB_Profile::add_contour_bump(const double amp, const double x, const double
 	nstream << nbump;
 	nstream >> nstring;
 
-	paramnames[n_params-6] = "ds" + nstring + "_amp";
+	paramnames[n_params-6] = "cb" + nstring + "_dr";
 	latex_paramnames[n_params-6] = "A";
 	latex_param_subscripts[n_params-6] = "\\delta s" + nstring;
-	paramnames[n_params-5] = "ds" + nstring + "_xc";
+	paramnames[n_params-5] = "cb" + nstring + "_xc";
 	latex_paramnames[n_params-5] = "x";
 	latex_param_subscripts[n_params-5] = "\\delta s" + nstring;
-	paramnames[n_params-4] = "ds" + nstring + "_yc";
+	paramnames[n_params-4] = "cb" + nstring + "_yc";
 	latex_paramnames[n_params-4] = "y";
 	latex_param_subscripts[n_params-4] = "\\delta s" + nstring;
-	paramnames[n_params-3] = "ds" + nstring + "_sig";
+	paramnames[n_params-3] = "cb" + nstring + "_sig";
 	latex_paramnames[n_params-3] = "\\sigma";
 	latex_param_subscripts[n_params-3] = "\\delta s" + nstring;
-	paramnames[n_params-2] = "ds" + nstring + "_e1";
+	paramnames[n_params-2] = "cb" + nstring + "_e1";
 	latex_paramnames[n_params-2] = "e";
 	latex_param_subscripts[n_params-2] = "1,\\delta s" + nstring;
-	paramnames[n_params-1] = "ds" + nstring + "_e2";
+	paramnames[n_params-1] = "cb" + nstring + "_e2";
 	latex_paramnames[n_params-1] = "e";
 	latex_param_subscripts[n_params-1] = "2,\\delta s" + nstring;
 
