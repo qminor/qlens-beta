@@ -2522,7 +2522,6 @@ void Lens::process_commands(bool read_file)
 								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 								parameter_anchors[parameter_anchor_i].ratio = ratio;
 								parameter_anchors[parameter_anchor_i].exponent = anchor_exponent;
-								cout << "HI! ******************** " << ratio << " " << anchor_exponent << " " << expstring << endl;
 								parameter_anchor_i++;
 								words[i] = pvalstring;
 								ws[i].str(""); ws[i].clear();
