@@ -143,6 +143,7 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 	parameter_anchor_lens = new LensProfile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
 	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
 	param = new double*[n_params];
 	for (int i=0; i < n_params; i++) {
 		vary_params[i] = false;
@@ -150,6 +151,7 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 		parameter_anchor_lens[i] = NULL;
 		parameter_anchor_paramnum[i] = -1;
 		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
 	}
 }
 
@@ -323,7 +325,7 @@ void LensProfile::update_anchored_parameters()
 	bool at_least_one_param_anchored = false;
 	for (int i=0; i < n_params; i++) {
 		if (anchor_parameter[i]) {
-			(*param[i]) = parameter_anchor_ratio[i]*(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]));
+			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
 			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 		}
 	}
@@ -459,11 +461,13 @@ void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 	parameter_anchor_paramnum = new int[n_params];
 	param = new double*[n_params];
 	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
 	for (int i=0; i < n_params; i++) {
 		anchor_parameter[i] = lens_in->anchor_parameter[i];
 		parameter_anchor_lens[i] = lens_in->parameter_anchor_lens[i];
 		parameter_anchor_paramnum[i] = lens_in->parameter_anchor_paramnum[i];
 		parameter_anchor_ratio[i] = lens_in->parameter_anchor_ratio[i];
+		parameter_anchor_exponent[i] = lens_in->parameter_anchor_exponent[i];
 	}
 	if (anchor_special_parameter) copy_special_parameter_anchor(lens_in);
 }
@@ -474,24 +478,29 @@ void LensProfile::copy_special_parameter_anchor(const LensProfile *lens_in)
 }
 
 
-void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens)
+void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile* param_anchor_lens)
 {
 	if (paramnum >= n_params) die("Parameter does not exist for this lens");
 	if (anchor_paramnum >= param_anchor_lens->n_params) die("Parameter does not exist for lens you are anchoring to");
 	anchor_parameter[paramnum] = true;
 	parameter_anchor_lens[paramnum] = param_anchor_lens;
 	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
-	if (!use_anchor_ratio) {
+	if ((!use_implicit_ratio) and (!use_exponent)) {
 		parameter_anchor_ratio[paramnum] = 1.0;
 		(*param[paramnum]) = *(param_anchor_lens->param[anchor_paramnum]);
 	}
-	else {
+	else if (use_implicit_ratio) {
+		parameter_anchor_exponent[paramnum] = 1.0;
 		if ((*(param_anchor_lens->param[anchor_paramnum]))==0) {
 			if (*param[paramnum]==0) parameter_anchor_ratio[paramnum] = 1.0;
 			else die("cannot anchor to parameter with specified ratio if parameter is equal to zero");
 		} else {
 			parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_lens->param[anchor_paramnum]));
 		}
+	}
+	else if (use_exponent) {
+		parameter_anchor_ratio[paramnum] = ratio;
+		parameter_anchor_exponent[paramnum] = exponent;
 	}
 }
 
@@ -504,6 +513,7 @@ void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 			anchor_parameter[i] = false;
 			parameter_anchor_paramnum[i] = -1;
 			parameter_anchor_ratio[i] = 1.0;
+			parameter_anchor_exponent[i] = 1.0;
 		}
 	}
 }
@@ -652,8 +662,12 @@ void LensProfile::print_vary_parameters()
 		for (int i=0; i < n_params; i++) {
 			if (anchor_parameter[i]) {
 				if (j > 0) cout << ", ";
-				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": " << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
-				if (parameter_anchor_ratio[i] != 1.0) cout << "*" << parameter_anchor_ratio[i];
+				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": ";
+				if ((parameter_anchor_ratio[i] != 1.0) or (parameter_anchor_exponent[i] != 1.0)) {
+					cout << parameter_anchor_ratio[i] << "*" << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
+					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
+				}
+				else cout << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
 				cout << ")";
 				j++;
 			}

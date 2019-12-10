@@ -2366,11 +2366,17 @@ void Lens::process_commands(bool read_file)
 				bool anchor_param;
 				int paramnum;
 				int anchor_paramnum;
-				bool use_anchor_ratio;
+				bool use_implicit_ratio;
+				bool use_exponent;
 				int anchor_lens_number;
+				double ratio;
+				double exponent;
 				ParamAnchor() {
 					anchor_param = false;
-					use_anchor_ratio = false;
+					use_implicit_ratio = false;
+					use_exponent = false;
+					ratio = 1.0;
+					exponent = 1.0;
 				}
 				void shift_down() { paramnum--; }
 			};
@@ -2484,33 +2490,71 @@ void Lens::process_commands(bool read_file)
 				}
 
 				for (int i=2; i < nwords; i++) {
-					int pos0;
+					int pos0, pos1;
 					if ((pos0 = words[i].find("/anchor=")) != string::npos) {
-						string pvalstring, astr;
-						pvalstring = words[i].substr(0,pos0);
-						astr = words[i].substr(pos0+8);
-						int pos, lnum, pnum;
-						if ((pos = astr.find(",")) != string::npos) {
-							string lnumstring, pnumstring;
-							lnumstring = astr.substr(0,pos);
-							pnumstring = astr.substr(pos+1);
-							stringstream lnumstr, pnumstr;
-							lnumstr << lnumstring;
-							if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-							pnumstr << pnumstring;
-							if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
-							if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
-							if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
-							parameter_anchors[parameter_anchor_i].anchor_param = true;
-							parameter_anchors[parameter_anchor_i].use_anchor_ratio = true;
-							parameter_anchors[parameter_anchor_i].paramnum = i-2;
-							parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
-							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
-							parameter_anchor_i++;
-							words[i] = pvalstring;
-							ws[i].str(""); ws[i].clear();
-							ws[i] << words[i];
-						} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+						if ((pos1 = words[i].find("x^")) != string::npos) {
+							string pvalstring, expstring, astr;
+							pvalstring = words[i].substr(0,pos1);
+							expstring = words[i].substr(pos1+2,pos0-pos1-2);
+							astr = words[i].substr(pos0+8);
+							int pos, lnum, pnum;
+							double ratio, anchor_exponent;
+							stringstream rstr, expstr;
+							rstr << pvalstring;
+							rstr >> ratio;
+							expstr << expstring;
+							expstr >> anchor_exponent;
+							if ((pos = astr.find(",")) != string::npos) {
+								string lnumstring, pnumstring;
+								lnumstring = astr.substr(0,pos);
+								pnumstring = astr.substr(pos+1);
+								stringstream lnumstr, pnumstr;
+								lnumstr << lnumstring;
+								if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+								pnumstr << pnumstring;
+								if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+								if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+								if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
+								parameter_anchors[parameter_anchor_i].anchor_param = true;
+								parameter_anchors[parameter_anchor_i].use_exponent = true;
+								parameter_anchors[parameter_anchor_i].paramnum = i-2;
+								parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+								parameter_anchors[parameter_anchor_i].ratio = ratio;
+								parameter_anchors[parameter_anchor_i].exponent = anchor_exponent;
+								cout << "HI! ******************** " << ratio << " " << anchor_exponent << " " << expstring << endl;
+								parameter_anchor_i++;
+								words[i] = pvalstring;
+								ws[i].str(""); ws[i].clear();
+								ws[i] << words[i];
+							} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+						} else {
+							string pvalstring, astr;
+							pvalstring = words[i].substr(0,pos0);
+							astr = words[i].substr(pos0+8);
+							int pos, lnum, pnum;
+							if ((pos = astr.find(",")) != string::npos) {
+								string lnumstring, pnumstring;
+								lnumstring = astr.substr(0,pos);
+								pnumstring = astr.substr(pos+1);
+								stringstream lnumstr, pnumstr;
+								lnumstr << lnumstring;
+								if (!(lnumstr >> lnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+								pnumstr << pnumstring;
+								if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+								if (lnum > nlens) Complain("specified lens number to anchor to does not exist");
+								if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
+								parameter_anchors[parameter_anchor_i].anchor_param = true;
+								parameter_anchors[parameter_anchor_i].use_implicit_ratio = true;
+								parameter_anchors[parameter_anchor_i].paramnum = i-2;
+								parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+								parameter_anchor_i++;
+								words[i] = pvalstring;
+								ws[i].str(""); ws[i].clear();
+								ws[i] << words[i];
+							} else Complain("incorrect format for anchoring parameter; must type 'anchor=<lens_number>,<param_number>' in place of parameter");
+						}
 					}
 				}	
 
@@ -2751,7 +2795,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -2846,7 +2890,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
@@ -2968,7 +3012,7 @@ void Lens::process_commands(bool read_file)
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) {
-								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3071,7 +3115,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3211,7 +3255,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3318,7 +3362,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3400,7 +3444,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3485,7 +3529,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3563,7 +3607,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3675,7 +3719,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
@@ -3757,7 +3801,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -3843,7 +3887,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3931,7 +3975,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4005,7 +4049,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4055,7 +4099,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4125,7 +4169,7 @@ void Lens::process_commands(bool read_file)
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4231,7 +4275,7 @@ void Lens::process_commands(bool read_file)
 								if (!add_tabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (tabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4337,7 +4381,7 @@ void Lens::process_commands(bool read_file)
 								if (!add_qtabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, q, theta, xc, yc, filename)) Complain("input file for qtabulated model either does not exist, or is in incorrect format");
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_anchor_ratio,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (qtabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();

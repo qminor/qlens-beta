@@ -6011,7 +6011,7 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
 				LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->parameter_anchor_lens[j]->lens_number];
 				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
-				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,parameter_anchor_lens);
+				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,true,lens_list[i]->parameter_anchor_ratio[j],lens_list[i]->parameter_anchor_exponent[j],parameter_anchor_lens);
 			}
 		}
 	}

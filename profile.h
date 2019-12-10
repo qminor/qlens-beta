@@ -165,6 +165,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	LensProfile** parameter_anchor_lens;
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
+	double* parameter_anchor_exponent;
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
@@ -181,7 +182,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	string subclass_label;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
-	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0)
+	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0), parameter_anchor_exponent(0)
 	{
 		set_default_base_settings(20,5e-3); // is this really necessary? check...
 		zfac = 1.0;
@@ -194,6 +195,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
 		if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 		if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+		if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
 	}
 
 	// in all derived classes, each of the following function pointers can be redirected if analytic formulas
@@ -239,7 +241,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void unassign_special_anchored_parameter() { anchor_special_parameter = false; }
 	void copy_special_parameter_anchor(const LensProfile *lens_in);
 	void delete_special_parameter_anchor();
-	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_anchor_ratio, LensProfile* param_anchor_lens);
+	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile* param_anchor_lens);
 	void copy_parameter_anchors(const LensProfile* lens_in);
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void print_parameters();
