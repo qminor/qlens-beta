@@ -502,6 +502,7 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 		parameter_anchor_ratio[paramnum] = ratio;
 		parameter_anchor_exponent[paramnum] = exponent;
 	}
+	update_anchored_parameters();
 }
 
 void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)

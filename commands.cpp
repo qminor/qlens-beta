@@ -4790,7 +4790,7 @@ void Lens::process_commands(bool read_file)
 
 			if (update_specific_parameters) ;
 			else if (nwords==1) {
-				print_source_list(vary_parameters);
+				if (mpi_id==0) print_source_list(vary_parameters);
 				vary_parameters = false; // this makes it skip to the next command so it doesn't try to prompt for parameter limits
 			}
 			else if (words[1]=="clear")
