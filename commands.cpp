@@ -11,8 +11,12 @@
 #include <vector>
 #include <sstream>
 #include <cstdlib>
+
+#ifdef USE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#endif
+
 #include <unistd.h>
 using namespace std;
 
@@ -186,6 +190,7 @@ void Lens::process_commands(bool read_file)
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
 						"psf_threshold -- threshold below which PSF is approximated as zero (sets pixel width of PSF)\n"
 						"psf_mpi -- parallelize PSF convolution using MPI (on/off)\n"
+						"sb_ellipticity_components -- for sbprofiles, use components e=1-q instead of (q,theta)\n"
 						"\n"
 						"\033[4mSource pixel reconstruction settings\033[0m\n"
 						"inversion_method -- set method for image matrix inversion (mumps, umfpack, or cg)\n"
@@ -1349,8 +1354,8 @@ void Lens::process_commands(bool read_file)
 							"source, and you will not be prompted to enter vary flags; if the source number is omitted ('source changevary\n"
 							"none'), vary flags are set to '0' for all sourcees.\n\n";
 					else if (words[2]=="gaussian")
-						cout << "source gaussian <max_sb> <sigma> <q> [theta] [x-center] [y-center]\n\n"
-							"where <max_sb> is the peak value of the surface brightness, <sigma> is the dispersion of\n"
+						cout << "source gaussian <sbtot> <sigma> <q> [theta] [x-center] [y-center]\n\n"
+							"where <sbtot> is the total surface brightness (not the peak), <sigma> is the dispersion of\n"
 							"the surface brightness along the major axis of the profile, <q> is the axis ratio (so that\n"
 							"the dispersion along the minor axis is q*max_sb), and [theta] is the angle of rotation\n"
 							"(counterclockwise, in degrees) about the center (defaults=0). Note that for theta=0, the\n"
@@ -4510,6 +4515,8 @@ void Lens::process_commands(bool read_file)
 			bool update_parameters = false;
 			bool update_specific_parameters = false; // option for user to update one (or more) specific parameters rather than update all of them at once
 			bool vary_parameters = false;
+			bool anchor_source_center = false;
+			int anchornum; // in case new source is being anchored to existing lens
 			boolvector vary_flags;
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
@@ -4523,6 +4530,7 @@ void Lens::process_commands(bool read_file)
 			bool include_boxiness_parameter = false;
 			bool include_truncation_radius = false;
 			bool unlensed = false;
+			bool zoom = false;
 			double c0val = 0;
 			double rtval = 0;
 			int n_contour_bumps = 0;
@@ -4572,9 +4580,12 @@ void Lens::process_commands(bool read_file)
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
 			}
-			for (int i=1; i < nwords; i++) {
+			for (int i=nwords-1; i > 1; i--) {
 				if (words[i]=="-unlensed") {
 					unlensed = true;
+					remove_word(i);
+				} else if (words[i]=="-zoom") {
+					zoom = true;
 					remove_word(i);
 				}
 			}
@@ -4832,7 +4843,16 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model gaussian");
-						if (nwords == 8) {
+						if (nwords == 7) {
+							if (words[6].find("anchor_center=")==0) {
+								string anchorstr = words[6].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_source_center = true;
+							}
+						} else if (nwords == 8) {
 							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model gaussian");
 							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model gaussian");
 						}
@@ -4847,7 +4867,7 @@ void Lens::process_commands(bool read_file)
 						nparams_to_vary += n_contour_bumps*6;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbtot,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -4858,6 +4878,7 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(GAUSSIAN, sbnorm, sig, 0, 0, q, theta, xc, yc);
+						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
@@ -4868,6 +4889,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
 				else Complain("gaussian requires at least 3 parameters (max_sb, sig, q)");
@@ -4884,7 +4906,16 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
-						if (nwords == 9) {
+						if (nwords == 8) {
+							if (words[7].find("anchor_center=")==0) {
+								string anchorstr = words[7].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_source_center = true;
+							}
+						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sersic");
 							if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 						}
@@ -4911,6 +4942,7 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(SERSIC, s0, reff, 0, n, q, theta, xc, yc);
+						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
@@ -4938,7 +4970,16 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
 					if (nwords >= 8) {
 						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
-						if (nwords == 10) {
+						if (nwords == 9) {
+							if (words[8].find("anchor_center=")==0) {
+								string anchorstr = words[8].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_source_center = true;
+							}
+						} else if (nwords == 10) {
 							if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
 							if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
 						}
@@ -4965,6 +5006,7 @@ void Lens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(CORED_SERSIC, s0, reff, rc, n, q, theta, xc, yc);
+						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=n_contour_bumps-1; i >= 0; i--) {
@@ -9366,11 +9408,16 @@ void Lens::process_commands(bool read_file)
 			//plot_shear_field(-3,3,50,-3,3,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
 		}
-		else if (words[0]=="test2") {
+		else if (words[0]=="plotmc") {
+			// You should have two extra arguments that specify logm_min and logm_max, and maybe even a third arg for number of points
+			// Implement this later!
+			if (nwords==1) Complain("must specify which subhalo lens number to plot mc relation for");
+			int lensnumber = 0;
+			if (!(ws[1] >> lensnumber)) Complain("invalid lens number)");
 			string filename;
-			if (nwords > 1) filename = words[1];
+			if (nwords > 2) filename = words[2];
 			else filename = "mcplot.dat";
-			plot_mc_curve(filename);
+			plot_mc_curve(lensnumber,filename);
 			//double xmin,xmax,ymin,ymax;
 			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
@@ -9388,7 +9435,9 @@ void Lens::process_commands(bool read_file)
 		}
 		else if (mpi_id==0) Complain("command not recognized");
 	}
+#ifdef USE_READLINE
 	free(buffer);
+#endif
 }
 
 bool Lens::read_command(bool show_prompt)
@@ -9411,6 +9460,10 @@ bool Lens::read_command(bool show_prompt)
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;
 		}
 	} else {
+#ifndef USE_READLINE
+		warn("cannot run qlens in interactive mode without GNU readline");
+		return false;
+#else
 		if (mpi_id==0) {
 			if (show_prompt) buffer = readline("> ");
 			else buffer = readline("");
@@ -9437,6 +9490,7 @@ bool Lens::read_command(bool show_prompt)
 			add_history(buffer);
 			lines.push_back(line);
 		}
+#endif
 	}
 	words.clear();
 	if ((line.empty()) or (line=="\r")) return read_command(show_prompt); // skip to the next line if this one is blank (you get carriage return "\r" from Mac or Windows editors)

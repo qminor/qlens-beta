@@ -14,6 +14,7 @@ enum Mode {
 	Display_Sigma_Crit,
 	Convert_Length_To_Arcsec,
 	Convert_Arcsec_To_Length,
+	Plot_MC_Relation,
 	Testing
 } mode;
 
@@ -29,6 +30,7 @@ int main(int argc, char *argv[])
 	double redshift=0;
 	double redshift_source = 2.0; // for lensing
 	double object_size=0;
+	double xsub=1.0; // defined as rsub/rvir, where rvir is the virial radius of host galaxy (xsub = 1 means it's effectively a field halo)
 	bool display_sigma_crit_in_kpc = false; // for lensing
 	if (argc==1) usage_error();
 	for (i = 1; i < argc; i++)    /* Process command-line arguments */
@@ -56,6 +58,10 @@ int main(int argc, char *argv[])
 					argv[i] = advance(argv[i]);
 					mode = Convert_Arcsec_To_Length;
 					break;
+				case 'x':
+					if (sscanf(argv[i], "x%lf", &xsub)==0) die("invalid xsub value");
+					argv[i] = advance(argv[i]);
+					break;
 				case 'k': display_sigma_crit_in_kpc = true; break;
 				case 'c':
 					if (sscanf(argv[i], "c:%s", params_file)==1) {
@@ -64,6 +70,7 @@ int main(int argc, char *argv[])
 						cosmology_filename += ".csm";
 					}
 					break;
+				case 'C': mode = Plot_MC_Relation; break;
 				default: usage_error(); break;
 				}
 			}
@@ -111,6 +118,8 @@ int main(int argc, char *argv[])
 		double object_size_kpc = object_size / kpc_to_arcsec;
 		cout << "angular size: " << object_size << " arcsec\n";
 		cout << "object size: " << object_size_kpc << " kpc\n";
+	} else if (mode==Plot_MC_Relation) {
+		cosmo.plot_mc_relation_dutton_moline(redshift,xsub);
 	} else if (mode==Testing) {
 	}
 	return 0;

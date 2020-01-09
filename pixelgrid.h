@@ -236,7 +236,7 @@ class ImagePixelGrid : public Sort
 
 	void add_pixel_noise(const double& pixel_noise_sig);
 	void set_pixel_noise(const double& pn) { pixel_noise = pn; }
-	double calculate_signal_to_noise(const double& pixel_noise_sig);
+	double calculate_signal_to_noise(const double& pixel_noise_sig, double &total_signal);
 	void assign_image_mapping_flags();
 	int count_nonzero_source_pixel_mappings();
 };

@@ -3,6 +3,8 @@
 
 #include "mathexpr.h"
 #include "spline.h"
+#include "lensvec.h"
+#include "profile.h"
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -83,6 +85,9 @@ class SB_Profile
 	public:
 	int sb_number;
 	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
+	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
+	bool center_anchored;
+	LensProfile* center_anchor_lens;
 
 	SB_Profile() : qx_parameter(1), param(0) {}
 	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in);
@@ -91,6 +96,8 @@ class SB_Profile
 		if (param != NULL) delete[] param;
 	}
 
+	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
+	void delete_center_anchor();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool vary_parameters(const boolvector& vary_params_in);
@@ -100,6 +107,9 @@ class SB_Profile
 	void add_contour_bump(const double amp, const double x, const double y, const double sig, const double e1, const double e2);
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
+	}
+	void set_zoom_subgridding(const bool zoom) {
+		zoom_subgridding = zoom;
 	}
 
 	void remove_fourier_modes();
@@ -124,6 +134,7 @@ class SB_Profile
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_anchor_center();
 	void print_parameters();
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
@@ -137,18 +148,20 @@ class SB_Profile
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double surface_brightness_r(const double r);
 	virtual double surface_brightness(double x, double y);
+	virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
 
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	int get_n_params() { return n_params; }
 	int get_n_vary_params() { return n_vary_params; }
+	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	void set_include_limits(bool inc) { include_limits = inc; }
 };
 
 class Gaussian : public SB_Profile
 {
 	private:
-	double max_sb, sig_x; // sig_x is the dispersion along the major axis
+	double sbtot, max_sb, sig_x; // sig_x is the dispersion along the major axis
 
 	double sb_rsq(const double);
 
@@ -158,6 +171,9 @@ class Gaussian : public SB_Profile
 	Gaussian(const Gaussian* sb_in);
 	~Gaussian() {}
 
+	double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+
+	void update_meta_parameters();
 	void assign_paramnames();
 	void assign_param_pointers();
 	void set_auto_stepsizes();

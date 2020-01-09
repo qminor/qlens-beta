@@ -1042,7 +1042,7 @@ public:
 
 	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
 	double rmax_true_mc, menc_true_mc;
-	void plot_mc_curve(const string filename);
+	void plot_mc_curve(const int lensnumber, const string filename);
 	double croot_eq(const double c);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);

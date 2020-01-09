@@ -4681,7 +4681,7 @@ bool ImagePixelData::test_if_in_fit_region(const double& x, const double& y)
 	return false;
 }
 
-double ImagePixelGrid::calculate_signal_to_noise(const double& pixel_noise_sig)
+double ImagePixelGrid::calculate_signal_to_noise(const double& pixel_noise_sig, double& total_signal)
 {
 	// NOTE: This function should be called *before* adding noise to the image.
 	double sbmax=-1e30;
@@ -4702,6 +4702,7 @@ double ImagePixelGrid::calculate_signal_to_noise(const double& pixel_noise_sig)
 			}
 		}
 	}
+	total_signal = signal_mean * pixel_xlength * pixel_ylength;
 	if (npixels > 0) signal_mean /= npixels;
 	return signal_mean / pixel_noise_sig;
 }
@@ -5320,7 +5321,10 @@ void ImagePixelGrid::find_surface_brightness()
 									}
 									for (int k=0; k < lens->n_sb; k++) {
 										if (lens->sb_list[k]->is_lensed) sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
-										else sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+										else {
+											if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+											else sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[0],center_pt[1],pixel_xlength/nsplit,pixel_ylength/nsplit);
+										}
 									}
 								}
 							}
@@ -5345,7 +5349,10 @@ void ImagePixelGrid::find_surface_brightness()
 						lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 						for (int k=0; k < lens->n_sb; k++) {
 							if (lens->sb_list[k]->is_lensed) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
-							else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+							else {
+								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j][0],center_pts[i][j][1],pixel_xlength,pixel_ylength);
+							}
 						}
 					}
 				}

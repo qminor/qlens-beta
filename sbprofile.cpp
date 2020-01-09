@@ -40,7 +40,10 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	sbtype = sb_in->sbtype;
 	sb_number = sb_in->sb_number;
 	set_nparams(sb_in->n_params);
+	center_anchored = sb_in->center_anchored;
+	center_anchor_lens = sb_in->center_anchor_lens;
 	is_lensed = sb_in->is_lensed;
+	zoom_subgridding = sb_in->zoom_subgridding;
 
 	q = sb_in->q;
 	epsilon = sb_in->epsilon;
@@ -96,9 +99,11 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 void SB_Profile::set_nparams(const int &n_params_in)
 {
 	n_params = n_params_in;
+	center_anchored = false;
 	include_boxiness_parameter = false;
 	include_truncation_radius = false;
 	is_lensed = true; // default
+	zoom_subgridding = false; // default
 	n_fourier_modes = 0;
 	n_contour_bumps = 0;
 	n_vary_params = 0;
@@ -114,6 +119,22 @@ void SB_Profile::set_nparams(const int &n_params_in)
 	param = new double*[n_params];
 	for (int i=0; i < n_params; i++) {
 		vary_params[i] = false;
+	}
+}
+
+void SB_Profile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
+{
+	if (!center_anchored) center_anchored = true;
+	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
+	x_center = center_anchor_lens->x_center;
+	y_center = center_anchor_lens->y_center;
+}
+
+void SB_Profile::delete_center_anchor()
+{
+	if (center_anchored) {
+		center_anchored = false;
+		center_anchor_lens = NULL;
 	}
 }
 
@@ -515,6 +536,14 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 	}
 }
 
+void SB_Profile::update_anchor_center()
+{
+	if (center_anchored) {
+		x_center = center_anchor_lens->x_center;
+		y_center = center_anchor_lens->y_center;
+	}
+}
+
 void SB_Profile::get_fit_parameters(dvector& fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
@@ -889,6 +918,11 @@ double SB_Profile::surface_brightness(double x, double y)
 	return sb;
 }
 
+double SB_Profile::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
+{
+	return 0; // cop-out, because we're only using this feature for Gaussian profiles at the moment
+}
+
 double SB_Profile::surface_brightness_r(const double r)
 {
 	return sb_rsq(r*r);
@@ -898,6 +932,7 @@ void SB_Profile::print_parameters()
 {
 	cout << model_name;
 	if (!is_lensed) cout << "(unlensed)";
+	if (zoom_subgridding) cout << "(zoom)";
 	cout << ": ";
 	for (int i=0; i < n_params; i++) {
 		cout << paramnames[i] << "=";
@@ -905,6 +940,7 @@ void SB_Profile::print_parameters()
 		else cout << *(param[i]);
 		if (i != n_params-1) cout << ", ";
 	}
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
 	cout << endl;
 }
 
@@ -1038,41 +1074,50 @@ inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scri
 
 /********************************* Specific SB_Profile models (derived classes) *********************************/
 
-Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+Gaussian::Gaussian(const double &sbtot_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	model_name = "gaussian";
 	sbtype = GAUSSIAN;
 	set_nparams(6);
-	max_sb = max_sb_in; sig_x = sig_x_in;
+	sbtot = sbtot_in; sig_x = sig_x_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
 	assign_param_pointers();
 	assign_paramnames();
 }
 
 Gaussian::Gaussian(const Gaussian* sb_in)
 {
-	max_sb = sb_in->max_sb;
+	sbtot = sb_in->sbtot;
 	sig_x = sb_in->sig_x;
+	max_sb = sb_in->max_sb;
 	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void Gaussian::update_meta_parameters()
+{
+	max_sb = sbtot/(M_2PI*q*sig_x*sig_x);
+	update_ellipticity_meta_parameters();
 }
 
 void Gaussian::assign_paramnames()
 {
-	paramnames[0] = "sbmax";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "max";
+	paramnames[0] = "sbtot";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "max";
 	paramnames[1] = "sigma"; latex_paramnames[1] = "\\sigma"; latex_param_subscripts[1] = "";
 	set_geometric_paramnames(2);
 }
 
 void Gaussian::assign_param_pointers()
 {
-	param[0] = &max_sb;
+	param[0] = &sbtot;
 	param[1] = &sig_x;
 	set_geometric_param_pointers(2);
 }
 
 void Gaussian::set_auto_stepsizes()
 {
-	stepsizes[0] = (max_sb != 0) ? 0.1*max_sb : 0.1;
+	stepsizes[0] = (sbtot != 0) ? 0.1*sbtot : 0.1;
 	stepsizes[1] = (sig_x != 0) ? 0.1*sig_x : 0.1; // arbitrary
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.1;
@@ -1089,6 +1134,54 @@ void Gaussian::set_auto_ranges()
 double Gaussian::sb_rsq(const double rsq)
 {
 	return max_sb*exp(-0.5*rsq/(sig_x*sig_x));
+}
+
+double Gaussian::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
+{
+	double x1, x2, y1, y2;
+	bool subgrid = false;
+	x1 = x - pixel_xlength/2;
+	x2 = x + pixel_xlength/2;
+	y1 = y - pixel_ylength/2;
+	y2 = y + pixel_ylength/2;
+	double pl = SQR(dmax(pixel_xlength,pixel_ylength))/4.0;
+	if ((pixel_xlength < sig_x/6) and (pixel_ylength < sig_x*q/6)) ; // grid already fine enough
+	else if ((x_center >= x1) and (x_center <= x2) and (y_center >= y1) and (y_center <= y2)) { subgrid = true; }
+	else {
+		double rsq;
+		rsq = SQR(x1-x_center) + SQR(y1-y_center);
+		if (rsq < pl) subgrid = true;
+		rsq = SQR(x1-x_center) + SQR(y2-y_center);
+		if (rsq < pl) subgrid = true;
+		rsq = SQR(x2-x_center) + SQR(y1-y_center);
+		if (rsq < pl) subgrid = true;
+		rsq = SQR(x2-x_center) + SQR(y2-y_center);
+		if (rsq < pl) subgrid = true;
+	}
+	if (!subgrid) return surface_brightness(x,y);
+	int nsplit, xsplit, ysplit;
+	xsplit = ((int) 6*pixel_xlength/sig_x) + 1;
+	ysplit = ((int) 6*pixel_ylength/(sig_x*q)) + 1;
+	nsplit = imax(xsplit,ysplit);
+	//cout << "nsplit=" << nsplit << endl;
+	double sb = 0;
+	double u0, w0, xs, ys;
+	int ii,jj;
+	double sbadd;
+	for (ii=0; ii < nsplit; ii++) {
+		u0 = ((double) (1+2*ii))/(2*nsplit);
+		xs = u0*x1 + (1-u0)*x2;
+		for (jj=0; jj < nsplit; jj++) {
+			w0 = ((double) (1+2*jj))/(2*nsplit);
+			ys = w0*y1 + (1-w0)*y2;
+			sbadd = surface_brightness(xs,ys);
+			sb += surface_brightness(xs,ys);
+		}
+	}
+	sb /= (nsplit*nsplit);
+	//if (sb > 0) cout << "sb=" << sb << endl;
+
+	return sb;
 }
 
 double Gaussian::window_rmax() // used to define the window size for pixellated surface brightness maps

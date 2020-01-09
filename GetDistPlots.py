@@ -348,10 +348,10 @@ class GetDistPlotter():
     def addpoint(self, x, y, point_type='x', marker_size=12, color='black', width=2):
         plot(x,y,marker=point_type,markersize=marker_size,markerfacecolor=color,markeredgecolor=color,markeredgewidth=width)
 
-    def addcurve(self, x, y, label='Loaded from file',color='black'):
-        plt.plot(x,y, label=label,color=color)
+    def addcurve(self, x, y, label='Loaded from file',color='black',linestyle='-'):
+        plt.plot(x,y, label=label,color=color,linestyle=linestyle)
 
-    def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, add_legend_proxy=True, **ax_args):
+    def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, log=False, add_legend_proxy=True, **ax_args):
         if self.fig is None: self.make_figure()
         if isinstance(roots, basestring):roots = [roots]
         param_pair = self.get_param_array(roots[0], param_pair)
@@ -373,6 +373,7 @@ class GetDistPlotter():
         self.setAxes(param_pair, **ax_args)
         if xmark is not None and ymark is not None:
             plot(xmark,ymark,c=mark_color,marker=truemarker,markersize=truemarksize,mew=self.settings.axis_marker_lw)
+        if log is True: yscale('log')
         #plot(10,15,marker='x',markersize=12)
 
     def add_1d_marker(self, marker, color=None, ls=None):

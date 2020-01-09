@@ -131,6 +131,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 	void plot_primordial_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 
+	double plot_mc_relation_dutton_moline(const double z, const double xsub);
 	double median_concentration_bullock(const double mass, const double z);
 	double median_concentration_dutton(const double mass, const double z);
 	double mstar(const double z);

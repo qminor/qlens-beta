@@ -2274,6 +2274,10 @@ void Lens::remove_lens(int lensnumber)
 		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_special_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_special_parameter_anchor();
 		if (i != lensnumber) lens_list[i]->unanchor_parameter(lens_list[lensnumber]); // this unanchors the lens if any of its parameters are anchored to the lens being deleted
 	}
+	for (i=0; i < n_sb; i++) {
+		// If any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
+		if ((sb_list[i]->center_anchored==true) and (sb_list[i]->get_center_anchor_number()==lensnumber)) sb_list[i]->delete_center_anchor();
+	}
 	remove_old_lens_redshift(lens_redshift_idx[lensnumber], lensnumber, true); // removes the lens redshift from the list if no other lenses share that redshift
 	for (i=0,j=0; i < nlens; i++) {
 		if (i != lensnumber) {
@@ -3661,11 +3665,13 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		menc_z = mass_enclosed*mass_scale_factor;
 		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot));
 	}
-	if (subtract_unperturbed) {
+	double rmax_relative = rmax_numerical;
+	if ((subtract_unperturbed) or (verbal)) {
 		double (Brent::*dthetac_eq_nosub)(const double);
 		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&Lens::perturbation_radius_equation_nosub);
 		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbal);
-		rmax_numerical = abs(rmax_numerical-rmax_unperturbed);
+		rmax_relative = abs(rmax_numerical-rmax_unperturbed);
+		if (subtract_unperturbed) rmax_numerical = rmax_relative;
 	}
 
 	double rmax_kpc = rmax_numerical/kpc_to_arcsec_sub;
@@ -3676,6 +3682,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
 		cout << "rmax_numerical = " << abs(rmax_numerical) << " (rmax_kpc=" << abs(rmax_kpc) << ")" << endl;
+		cout << "rmax_relative = " << abs(rmax_relative) << endl;
 		cout << "rmax location: (" << x[0] << "," << x[1] << ")\n";
 		if (zlsub > zlprim) cout << "rmax_perturber_lensplane = " << rmax_perturber_lensplane << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
@@ -6035,6 +6042,9 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 					die("surface brightness profile type not supported for fitting");
 			}
 		}
+		for (i=0; i < n_sb; i++) {
+			if (fitmodel->sb_list[i]->center_anchored==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
+		}
 	}
 
 	fitmodel->fitmethod = fitmethod;
@@ -6085,6 +6095,9 @@ void Lens::update_anchored_parameters_and_redshift_data()
 		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
 		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
 		lens_list[i]->update_anchored_parameters();
+	}
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->center_anchored) sb_list[i]->update_anchor_center();
 	}
 	update_lens_redshift_data();
 }
@@ -10602,10 +10615,16 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 		delete[] sb_old;
 	}
 
-	if (sim_pixel_noise != 0) {
+	if ((sim_pixel_noise != 0) or (data_pixel_noise != 0)) {
 		if (verbose) {
-			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(sim_pixel_noise);
-			if (mpi_id==0) cout << "Signal-to-noise ratio = " << signal_to_noise << endl;
+			double total_signal, noise;
+			if (sim_pixel_noise != 0) noise = sim_pixel_noise;
+			else noise = data_pixel_noise;
+			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(noise,total_signal);
+			if (mpi_id==0) {
+				cout << "Signal-to-noise ratio = " << signal_to_noise << " (using noise=" << noise << ")" << endl;
+				cout << "Total integrated signal = " << total_signal << endl;
+			}
 		}
 		image_pixel_grid->add_pixel_noise(sim_pixel_noise);
 	}
@@ -11125,7 +11144,9 @@ double Lens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
 }
 
-void Lens::plot_mc_curve(const string filename)
+int croot_lensnumber;
+
+void Lens::plot_mc_curve(const int lensnumber, const string filename)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first
 	/*
@@ -11138,13 +11159,14 @@ void Lens::plot_mc_curve(const string filename)
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
 	add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
+	croot_lensnumber = lensnumber;
 	double rmax,rmax_true,avgsig,menc,menc_true;
-	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
-	menc_true = mass2d_r(rmax_true,2);
+	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
+	menc_true = mass2d_r(rmax_true,lensnumber);
 
 	// overriding the above
 	//rmax_true = 0.07;
-	//menc_true = mass2d_r(rmax_true,2);
+	//menc_true = mass2d_r(rmax_true,lensnumber);
 
 	rmax_true_mc = rmax_true; // for root finder
 	menc_true_mc = menc_true; // for root finder
@@ -11154,23 +11176,24 @@ void Lens::plot_mc_curve(const string filename)
 	double (Brent::*mc_eq)(const double);
 	mc_eq = static_cast<double (Brent::*)(const double)> (&Lens::croot_eq);
 
-	double mvir, c, logm, logm_min=8, logm_max=10, logm_step;
+	double mvir, c, logm, logm_min=9.7, logm_max=11, logm_step;
 	int i,n_logm = 100;
 	logm_step = (logm_max-logm_min)/(n_logm-1);
 	//ofstream mcout("mc_m2_c1_fit.dat");
 	ofstream mcout(filename.c_str());
 	for (i=0, logm=logm_min; i < n_logm; i++, logm += logm_step) {
 		mvir = pow(10,logm);
-		if (lens_list[2]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-		c = BrentsMethod(mc_eq, 1, 500, 1e-5);
-		mcout << logm << " " << c << endl;
+		if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+		c = BrentsMethod(mc_eq, 1, 1000000, 1e-5);
+		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc);
+		mcout << logm << " " << c << " " << rmax << endl;
 	}
 }
 
 double Lens::croot_eq(const double c)
 {
-	if (lens_list[2]->update_specific_parameter("c",c)==false) die("could not find parameter");
-	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
+	if (lens_list[croot_lensnumber]->update_specific_parameter("c",c)==false) die("could not find parameter");
+	return (mass2d_r(rmax_true_mc,croot_lensnumber) - menc_true_mc);
 }
 
 void Lens::find_equiv_mvir(const double newc)
@@ -11215,8 +11238,6 @@ double Lens::mroot_eq(const double logm)
 	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
 	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
 }
-
-
 
 /*
 double Lens::set_required_data_pixel_window(bool verbal)

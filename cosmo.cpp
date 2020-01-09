@@ -663,6 +663,20 @@ void Cosmology::plot_angular_power_spectrum(int nsteps, const double log10k_min,
 	}
 }
 
+double Cosmology::plot_mc_relation_dutton_moline(const double z, const double xsub)
+{
+	// This uses the Dutton mass-concentration relation, with the (1+b*log(xsub)) factor for subhalos introduced
+	// by Moline et al where xsub = rsub/rvir; note that xsub=1 is the same as field halos
+	int i,n_logm=300;
+	double c200, logm, logmi=8.0, logmf=11.0;
+	double logmstep = (logmf-logmi)/(n_logm-1);
+	for (i=0, logm=logmi; i < n_logm; i++, logm += logmstep) {
+		c200 = median_concentration_dutton(pow(10,logm),z);
+		if (xsub != 1.0) c200 *= (1-0.54*log(xsub)/ln10);
+		cout << logm << " " << c200 << " " << c200/1.66 << " " << c200*1.66 << endl; // the 1.66 is twice the 1-sigma scatter in c200 (1.29^2)
+	}
+}
+
 double Cosmology::median_concentration_dutton(const double mass, const double z)
 {
 	double a, b, logc;
