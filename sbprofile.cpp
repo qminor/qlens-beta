@@ -1009,6 +1009,7 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 	scriptout << setprecision(16);
 	scriptout << "fit source " << model_name << " ";
 	if (!is_lensed) scriptout << "-unlensed ";
+	if (zoom_subgridding) scriptout << "-zoom ";
 
 	for (int i=0; i < n_params; i++) {
 		if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));

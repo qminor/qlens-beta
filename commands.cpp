@@ -1214,6 +1214,7 @@ void Lens::process_commands(bool read_file)
 								"Optional arguments:\n"
 								"  [-fits] plots to FITS files; filename(s) must be specified with this option\n"
 								"  [-residual] plots residual image by subtracting from the data image\n"
+								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
@@ -1225,11 +1226,13 @@ void Lens::process_commands(bool read_file)
 								"     the lensed pixel images again.\n\n"
 								"OPTIONAL: arguments to 'sbmap plotimg' can be followed with terms in brackets [#:#][#:#]\n"
 								"specifying the plotting range for the x and y axes, respectively. A range is allowed\n"
-								"for both the source and image plots. Two examples in postscript mode:\n\n"
+								"for both the source and image plots. Three examples in postscript mode:\n\n"
 								"sbmap plotimg source.ps image.ps [-5:5][-5:5] [-15:15][-15:15]\n"
-								"sbmap plotimg source.ps image.ps [][] [0:15][0:15]\n\n"
-								"In the first example a range is specified for both the x/y axes for both plots,\n"
-								"whereas in the second example a range is specified only for the image plot.\n";
+								"sbmap plotimg source.ps image.ps [][] [0:15][0:15]\n"
+								"sbmap plotimg image.ps [0:15][0:15]                      (sbprofile mode only)\n\n"
+								"In the first example a range is specified for both the x/y axes for both plots, whereas in the\n"
+								"second example a range is specified only for the image plot. In example 3, if the source mode\n"
+								"is 'sbprofile' and no pixellated source has been created, only the image plot arg's are given.\n";
 						else if (words[2]=="makesrc")
 							cout << "makesrc\n"
 								"Create a pixellated source surface brightness map from one or more analytic surface brightness\n"
@@ -2737,6 +2740,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[3] >> alpha)) Complain("invalid alpha parameter for model alpha");
 						if (!(ws[4] >> s)) Complain("invalid s (core) parameter for model alpha");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model alpha");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (alpha <= 0) Complain("alpha cannot be less than or equal to zero (or else the mass diverges near r=0)");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model alpha");
@@ -2831,6 +2835,7 @@ void Lens::process_commands(bool read_file)
 						} else if (!(ws[3] >> p2)) Complain("invalid a parameter for model pjaffe");
 						if (!(ws[4] >> p3)) Complain("invalid s (core) parameter for model pjaffe");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model pjaffe");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model pjaffe");
 							if (nwords == 8) {
@@ -3058,6 +3063,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
 						}
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model nfw");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfw");
 							if (nwords == 7) {
@@ -3198,6 +3204,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> p3)) Complain("invalid p3 parameter for model tnfw");
 						}
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model tnfw");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model tnfw");
 							if (nwords == 8) {
@@ -3304,6 +3311,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> p3)) Complain("invalid rc parameter for model cnfw");
 						}
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model cnfw");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model cnfw");
 							if (nwords == 8) {
@@ -3387,6 +3395,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> k0)) Complain("invalid k0 parameter for model expdisk");
 						if (!(ws[3] >> R_d)) Complain("invalid R_d parameter for model expdisk");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model expdisk");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model expdisk");
 							if (nwords == 7) {
@@ -3550,6 +3559,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> ks)) Complain("invalid ks parameter for model hern");
 						if (!(ws[3] >> rs)) Complain("invalid rs parameter for model hern");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model hern");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model hern");
 							if (nwords == 7) {
@@ -3662,6 +3672,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[6] >> s)) Complain("invalid s (core) parameter for model corecusp");
 						if (a < s) Complain("scale radius a cannot be smaller than s");
 						if (!(ws[7] >> q)) Complain("invalid q parameter for model corecusp");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 9) {
 							if (!(ws[8] >> theta)) Complain("invalid theta parameter for model corecusp");
 							if (nwords == 10) {
@@ -3829,6 +3840,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
 						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (re <= 0) Complain("re cannot be less than or equal to zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
@@ -3917,6 +3929,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model csersic");
 						if (!(ws[5] >> rc)) Complain("invalid rc (core) parameter for model csersic");
 						if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (re <= 0) Complain("re cannot be less than or equal to zero");
 						if (nwords >= 8) {
 							if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
@@ -4320,6 +4333,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> kscale)) Complain("invalid kscale parameter for model qtab");
 						if (!(ws[3] >> rscale)) Complain("invalid rscale parameter for model qtab");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model qtab");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model qtab");
 							if (nwords == 7) {
@@ -4399,6 +4413,7 @@ void Lens::process_commands(bool read_file)
 					if (nwords >= 3) {
 						double q, theta = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> q)) Complain("invalid q parameter for model testmodel");
+						if (q <= 0) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 4) {
 							if (!(ws[3] >> theta)) Complain("invalid theta parameter for model testmodel");
 							if (nwords == 5) Complain("x-coordinate specified for center, but not y-coordinate");
@@ -4841,6 +4856,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> sbnorm)) Complain("invalid surface brightness normalization parameter for model gaussian");
 					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model gaussian");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
+					if (q <= 0) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model gaussian");
 						if (nwords == 7) {
@@ -4904,6 +4920,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[3] >> reff)) Complain("invalid R_eff parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
+					if (q <= 0) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
 						if (nwords == 8) {
@@ -4968,6 +4985,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model csersic");
 					if (!(ws[5] >> rc)) Complain("invalid rc parameter for model csersic");
 					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
+					if (q <= 0) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 8) {
 						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
 						if (nwords == 9) {
@@ -5100,6 +5118,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> sb)) Complain("invalid surface brightness normalization parameter for model tophat");
 					if (!(ws[3] >> rad)) Complain("invalid radius parameter for model tophat");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model tophat");
+					if (q <= 0) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model tophat");
 						if (nwords == 8) {
@@ -5141,6 +5160,7 @@ void Lens::process_commands(bool read_file)
 				if (nwords >= 4) {
 					double q, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
 					if (!(ws[3] >> q)) Complain("invalid q parameter");
+					if (q <= 0) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 5) {
 						if (!(ws[4] >> theta)) Complain("invalid theta parameter");
 						if (nwords >= 7) {
@@ -6331,6 +6351,8 @@ void Lens::process_commands(bool read_file)
 					bool show_sbmap = false;
 					bool show_all = false;
 					int dataset;
+					string range;
+					extract_word_starts_with('[',1,3,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					if (words[nwords-1]=="sbmap") {
 						show_sbmap = true;
 						stringstream* new_ws = new stringstream[nwords-1];
@@ -6365,13 +6387,15 @@ void Lens::process_commands(bool read_file)
 					else {
 						if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 						image_pixel_data->plot_surface_brightness("img_pixel",true);
-						stringstream xminstream, xmaxstream, yminstream, ymaxstream;
-						string xminstr, xmaxstr, yminstr, ymaxstr;
-						xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
-						yminstream << image_pixel_data->yvals[0]; yminstream >> yminstr;
-						xmaxstream << image_pixel_data->xvals[image_pixel_data->npixels_x]; xmaxstream >> xmaxstr;
-						ymaxstream << image_pixel_data->yvals[image_pixel_data->npixels_y]; ymaxstream >> ymaxstr;
-						string range = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
+						if (range=="") {
+							stringstream xminstream, xmaxstream, yminstream, ymaxstream;
+							string xminstr, xmaxstr, yminstr, ymaxstr;
+							xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
+							yminstream << image_pixel_data->yvals[0]; yminstream >> yminstr;
+							xmaxstream << image_pixel_data->xvals[image_pixel_data->npixels_x]; xmaxstream >> xmaxstr;
+							ymaxstream << image_pixel_data->yvals[image_pixel_data->npixels_y]; ymaxstream >> ymaxstr;
+							range = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
+						}
 						run_plotter_range("imgpixel_imgdat",range);
 					}
 				} else if (words[1]=="add_from_centroid") {
@@ -7265,6 +7289,7 @@ void Lens::process_commands(bool read_file)
 			{
 				bool replot = false;
 				bool plot_residual = false;
+				bool plot_foreground_only = false;
 				bool show_mask_only = true;
 				bool plot_fits = false;
 				bool omit_source = false;
@@ -7278,6 +7303,7 @@ void Lens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if (args[i]=="-residual") plot_residual = true;
+						else if (args[i]=="-fg") plot_foreground_only = true;
 						else if (args[i]=="-nomask") { show_mask_only = false; }
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
@@ -7290,8 +7316,6 @@ void Lens::process_commands(bool read_file)
 					}
 				}
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
-				bool old_plot_srcplane = plot_srcplane;
-				if (omit_source) plot_srcplane = false;
 
 				if (reduce_factor > 1) {
 					n_image_pixels_x *= reduce_factor;
@@ -7299,6 +7323,9 @@ void Lens::process_commands(bool read_file)
 				}
 				if (!islens()) Complain("must specify lens model first");
 				if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid == NULL)) Complain("No source surface brightness map has been loaded");
+				if ((source_fit_mode==Parameterized_Source) and (source_pixel_grid == NULL)) omit_source = true;
+				bool old_plot_srcplane = plot_srcplane;
+				if (omit_source) plot_srcplane = false;
 				string range1, range2;
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -7316,7 +7343,7 @@ void Lens::process_commands(bool read_file)
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
 							if (!offload_to_data) {
 								if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 								if (show_cc) {
@@ -7330,9 +7357,9 @@ void Lens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
 							if (show_cc) {
 								run_plotter("imgpixel",words[2],range1);
 							} else {
@@ -7342,11 +7369,11 @@ void Lens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data);
 								if ((source_pixel_grid != NULL) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,show_mask_only,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
 							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);

@@ -15,6 +15,10 @@ enum Mode {
 	Convert_Length_To_Arcsec,
 	Convert_Arcsec_To_Length,
 	Plot_MC_Relation,
+	Calculate_BBand_Luminosity,
+	Calculate_VBand_Luminosity,
+	Calculate_RBand_Luminosity,
+	Calculate_IBand_Luminosity,
 	Testing
 } mode;
 
@@ -30,6 +34,8 @@ int main(int argc, char *argv[])
 	double redshift=0;
 	double redshift_source = 2.0; // for lensing
 	double object_size=0;
+	double magnitude=-1e30;
+	double abs_magnitude=-1e30;
 	double xsub=1.0; // defined as rsub/rvir, where rvir is the virial radius of host galaxy (xsub = 1 means it's effectively a field halo)
 	bool display_sigma_crit_in_kpc = false; // for lensing
 	if (argc==1) usage_error();
@@ -52,6 +58,26 @@ int main(int argc, char *argv[])
 					if (sscanf(argv[i], "s%lf", &object_size)==0) die("invalid length");
 					argv[i] = advance(argv[i]);
 					mode = Convert_Length_To_Arcsec;
+					break;
+				case 'b':
+					if (sscanf(argv[i], "b%lf", &magnitude)==0) die("invalid magnitude");
+					argv[i] = advance(argv[i]);
+					mode = Calculate_BBand_Luminosity;
+					break;
+				case 'v':
+					if (sscanf(argv[i], "v%lf", &magnitude)==0) die("invalid magnitude");
+					argv[i] = advance(argv[i]);
+					mode = Calculate_VBand_Luminosity;
+					break;
+				case 'r':
+					if (sscanf(argv[i], "r%lf", &magnitude)==0) die("invalid magnitude");
+					argv[i] = advance(argv[i]);
+					mode = Calculate_RBand_Luminosity;
+					break;
+				case 'i':
+					if (sscanf(argv[i], "i%lf", &magnitude)==0) die("invalid magnitude");
+					argv[i] = advance(argv[i]);
+					mode = Calculate_IBand_Luminosity;
 					break;
 				case 'S':
 					if (sscanf(argv[i], "S%lf", &object_size)==0) die("invalid angular size");
@@ -79,16 +105,34 @@ int main(int argc, char *argv[])
 	if (cosmology.load_params(cosmology_filename)==false) die();
 
 	Cosmology cosmo(cosmology);
-	if (mode==Display_Distances) {
-		double comoving_distance, angular_diameter_distance, luminosity_distance;
-		const double Mpc_to_Gpc = 1e-3;
-		comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance(redshift);
-		angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance(redshift);
-		luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance(redshift);
-		cout << "z = " << redshift << " (assuming flat Universe)" << endl;
-		cout << "Comoving distance: " << comoving_distance << " Gpc" << endl;
-		cout << "Angular diameter distance: " << angular_diameter_distance << " Gpc" << endl;
-		cout << "Luminosity distance: " << luminosity_distance << " Gpc" << endl;
+	double comoving_distance, angular_diameter_distance, luminosity_distance;
+	const double Mpc_to_Gpc = 1e-3;
+	const double pc_to_Gpc = 1e-9;
+	comoving_distance = Mpc_to_Gpc*cosmo.comoving_distance(redshift);
+	angular_diameter_distance = Mpc_to_Gpc*cosmo.angular_diameter_distance(redshift);
+	luminosity_distance = Mpc_to_Gpc*cosmo.luminosity_distance(redshift);
+	cout << "z = " << redshift << " (assuming flat Universe)" << endl;
+	cout << "Comoving distance: " << comoving_distance << " Gpc" << endl;
+	cout << "Angular diameter distance: " << angular_diameter_distance << " Gpc" << endl;
+	cout << "Luminosity distance: " << luminosity_distance << " Gpc" << endl << endl;
+	if (magnitude != -1e30) abs_magnitude = magnitude - 40 - 5*log10(luminosity_distance);
+
+	if (mode==Calculate_BBand_Luminosity) {
+		double luminosity = pow(10.0,0.4*(5.31-abs_magnitude));
+		cout << "Absolute B-band magnitude: " << abs_magnitude << endl;
+		cout << "Luminosity: " << luminosity << " L_sun" << endl << endl;
+	} else if (mode==Calculate_VBand_Luminosity) {
+		double luminosity = pow(10.0,0.4*(4.83-abs_magnitude));
+		cout << "Absolute V-band magnitude: " << abs_magnitude << endl;
+		cout << "Luminosity: " << luminosity << " L_sun" << endl << endl;
+	} else if (mode==Calculate_RBand_Luminosity) {
+		double luminosity = pow(10.0,0.4*(4.60-abs_magnitude));
+		cout << "Absolute R-band magnitude: " << abs_magnitude << endl;
+		cout << "Luminosity: " << luminosity << " L_sun" << endl << endl;
+	} else if (mode==Calculate_IBand_Luminosity) {
+		double luminosity = pow(10.0,0.4*(4.51-abs_magnitude));
+		cout << "Absolute I-band magnitude: " << abs_magnitude << endl;
+		cout << "Luminosity: " << luminosity << " L_sun" << endl << endl;
 	} else if (mode==Display_Sigma_Crit) {
 		cout << "z_lens = " << redshift << ", z_source = " << redshift_source << endl;
 		if (redshift==0) cout << "Cannot find sigma_crit if z_lens = 0\n";
@@ -141,6 +185,10 @@ void usage_error(void)
 				"  -z##     Set redshift of object (for lensing, this is redshift of lens; default z=0)\n"
 				"  -Z##     Set redshift of source object (for lensing only; default Z=2)\n"
 				"  -l       Show lensing information (critical surface mass density and time delay factor)\n"
+				"  -v##     Calculate luminosity (in units of L_sun) from V-band magnitude (with AB zero point)\n"
+				"  -i##     Calculate luminosity (in units of L_sun) from I-band magnitude (with AB zero point)\n"
+				"  -b##     Calculate luminosity (in units of L_sun) from B-band magnitude (with AB zero point)\n"
+				"  -r##     Calculate luminosity (in units of L_sun) from R-band magnitude (with AB zero point)\n"
 				"  -k       Set lensing units to kpc (in the lens plane) rather than arcseconds (for -s option)\n"
 				"  -s##     Convert physical size of an object (at redshift z) to angular size (in arcsec)\n"
 				"  -S##     Convert angular size of an object (at redshift z, in arcsec) to physical size\n"

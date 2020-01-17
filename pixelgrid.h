@@ -230,7 +230,7 @@ class ImagePixelGrid : public Sort
 	void set_source_pixel_grid(SourcePixelGrid* source_pixel_ptr) { source_pixel_grid = source_pixel_ptr; }
 	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
-	void find_surface_brightness();
+	void find_surface_brightness(bool plot_foreground_only = false);
 	void plot_surface_brightness(string outfile_root, bool plot_residual = false, bool show_only_mask = true);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 

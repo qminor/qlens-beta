@@ -644,7 +644,7 @@ then
 	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 	#KEYPLOT="set title ' '; plot [][1e12:2e12] 'imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
 
-	PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'; plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1)"
+	PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'; plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 0 t columnheader(1)"
 	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt IDX ps $PTSIZE lc 3 t columnheader(1)"
 
 	if [[ $TERM != "" ]]; then

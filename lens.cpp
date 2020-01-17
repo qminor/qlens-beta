@@ -775,6 +775,7 @@ Lens::Lens() : UCMC()
 	Rmatrix_index = NULL;
 	Dvector = NULL;
 	image_surface_brightness = NULL;
+	foreground_surface_brightness = NULL;
 	source_surface_brightness = NULL;
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
@@ -1082,6 +1083,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	image_surface_brightness = NULL;
+	foreground_surface_brightness = NULL;
 	source_surface_brightness = NULL;
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
@@ -10391,6 +10393,7 @@ void Lens::find_optimal_sourcegrid_for_analytic_source()
 	if (n_sb > 1) {
 		double xmin, xmax, ymin, ymax;
 		for (int i=1; i < n_sb; i++) {
+			if (!sb_list[i]->is_lensed) continue;
 			sb_list[i]->window_params(xmin,xmax,ymin,ymax);
 			if (xmin < sourcegrid_xmin) {
 				if (xmin > sourcegrid_limit_xmin) sourcegrid_xmin = xmin;
@@ -10561,7 +10564,7 @@ bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool show_mask_only, bool offload_to_data, bool verbose)
+bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool verbose)
 {
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	if ((source_fit_mode==Parameterized_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
@@ -10587,8 +10590,8 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) return false;
 	}
-	image_pixel_grid->find_surface_brightness();
-	vectorize_image_pixel_surface_brightness();
+	image_pixel_grid->find_surface_brightness(plot_foreground_only);
+	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 	if (reduce_factor==1) PSF_convolution_image_pixel_vector(verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 	store_image_pixel_surface_brightness();
 	clear_pixel_matrices();
@@ -10891,7 +10894,8 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		initialize_pixel_matrices(verbal);
 		if (regularization_method != None) create_regularization_matrix();
 		PSF_convolution_Lmatrix(verbal);
-		image_pixel_grid->fill_surface_brightness_vector();
+		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
+		calculate_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		create_lensing_matrices_from_Lmatrix(verbal);
@@ -11806,6 +11810,7 @@ Lens::~Lens()
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
 	if ((image_pixel_data != NULL) and (borrowed_image_data==false)) delete image_pixel_data;
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (foreground_surface_brightness != NULL) delete[] foreground_surface_brightness;
 	if (source_surface_brightness != NULL) delete[] source_surface_brightness;
 	if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;

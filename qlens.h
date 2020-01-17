@@ -566,6 +566,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
 	double *image_surface_brightness;
+	double *foreground_surface_brightness;
 	double *source_surface_brightness;
 	double *source_pixel_n_images;
 
@@ -622,6 +623,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void assign_Lmatrix(bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	void PSF_convolution_image_pixel_vector(bool verbal = false);
+	void PSF_convolution_foreground_pixel_vector(bool verbal = false);
 	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
@@ -639,6 +641,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
+	void calculate_foreground_pixel_surface_brightness();
+	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness();
 	void plot_image_pixel_surface_brightness(string outfile_root);
@@ -654,7 +658,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool show_mask_only = true, bool offload_to_data = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool show_mask_only = true, bool offload_to_data = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
