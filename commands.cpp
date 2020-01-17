@@ -2740,7 +2740,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[3] >> alpha)) Complain("invalid alpha parameter for model alpha");
 						if (!(ws[4] >> s)) Complain("invalid s (core) parameter for model alpha");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model alpha");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (alpha <= 0) Complain("alpha cannot be less than or equal to zero (or else the mass diverges near r=0)");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model alpha");
@@ -2835,7 +2835,7 @@ void Lens::process_commands(bool read_file)
 						} else if (!(ws[3] >> p2)) Complain("invalid a parameter for model pjaffe");
 						if (!(ws[4] >> p3)) Complain("invalid s (core) parameter for model pjaffe");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model pjaffe");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model pjaffe");
 							if (nwords == 8) {
@@ -3063,7 +3063,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
 						}
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model nfw");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfw");
 							if (nwords == 7) {
@@ -3204,7 +3204,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> p3)) Complain("invalid p3 parameter for model tnfw");
 						}
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model tnfw");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model tnfw");
 							if (nwords == 8) {
@@ -3311,7 +3311,7 @@ void Lens::process_commands(bool read_file)
 							if (!(ws[4] >> p3)) Complain("invalid rc parameter for model cnfw");
 						}
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model cnfw");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model cnfw");
 							if (nwords == 8) {
@@ -3395,7 +3395,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> k0)) Complain("invalid k0 parameter for model expdisk");
 						if (!(ws[3] >> R_d)) Complain("invalid R_d parameter for model expdisk");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model expdisk");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model expdisk");
 							if (nwords == 7) {
@@ -3559,7 +3559,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> ks)) Complain("invalid ks parameter for model hern");
 						if (!(ws[3] >> rs)) Complain("invalid rs parameter for model hern");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model hern");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model hern");
 							if (nwords == 7) {
@@ -3672,7 +3672,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[6] >> s)) Complain("invalid s (core) parameter for model corecusp");
 						if (a < s) Complain("scale radius a cannot be smaller than s");
 						if (!(ws[7] >> q)) Complain("invalid q parameter for model corecusp");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 9) {
 							if (!(ws[8] >> theta)) Complain("invalid theta parameter for model corecusp");
 							if (nwords == 10) {
@@ -3840,7 +3840,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
 						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (re <= 0) Complain("re cannot be less than or equal to zero");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
@@ -3929,7 +3929,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model csersic");
 						if (!(ws[5] >> rc)) Complain("invalid rc (core) parameter for model csersic");
 						if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (re <= 0) Complain("re cannot be less than or equal to zero");
 						if (nwords >= 8) {
 							if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
@@ -4333,7 +4333,7 @@ void Lens::process_commands(bool read_file)
 						if (!(ws[2] >> kscale)) Complain("invalid kscale parameter for model qtab");
 						if (!(ws[3] >> rscale)) Complain("invalid rscale parameter for model qtab");
 						if (!(ws[4] >> q)) Complain("invalid q parameter for model qtab");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 6) {
 							if (!(ws[5] >> theta)) Complain("invalid theta parameter for model qtab");
 							if (nwords == 7) {
@@ -4413,7 +4413,7 @@ void Lens::process_commands(bool read_file)
 					if (nwords >= 3) {
 						double q, theta = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> q)) Complain("invalid q parameter for model testmodel");
-						if (q <= 0) Complain("axis ratio q must be greater than zero");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (nwords >= 4) {
 							if (!(ws[3] >> theta)) Complain("invalid theta parameter for model testmodel");
 							if (nwords == 5) Complain("x-coordinate specified for center, but not y-coordinate");
@@ -4856,7 +4856,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> sbnorm)) Complain("invalid surface brightness normalization parameter for model gaussian");
 					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model gaussian");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
-					if (q <= 0) Complain("axis ratio q must be greater than zero");
+					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model gaussian");
 						if (nwords == 7) {
@@ -4920,7 +4920,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[3] >> reff)) Complain("invalid R_eff parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
-					if (q <= 0) Complain("axis ratio q must be greater than zero");
+					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
 						if (nwords == 8) {
@@ -4985,7 +4985,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model csersic");
 					if (!(ws[5] >> rc)) Complain("invalid rc parameter for model csersic");
 					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
-					if (q <= 0) Complain("axis ratio q must be greater than zero");
+					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 8) {
 						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
 						if (nwords == 9) {
@@ -5118,7 +5118,7 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[2] >> sb)) Complain("invalid surface brightness normalization parameter for model tophat");
 					if (!(ws[3] >> rad)) Complain("invalid radius parameter for model tophat");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model tophat");
-					if (q <= 0) Complain("axis ratio q must be greater than zero");
+					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model tophat");
 						if (nwords == 8) {
@@ -5160,7 +5160,7 @@ void Lens::process_commands(bool read_file)
 				if (nwords >= 4) {
 					double q, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
 					if (!(ws[3] >> q)) Complain("invalid q parameter");
-					if (q <= 0) Complain("axis ratio q must be greater than zero");
+					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 5) {
 						if (!(ws[4] >> theta)) Complain("invalid theta parameter");
 						if (nwords >= 7) {
