@@ -900,10 +900,6 @@ double SB_Profile::surface_brightness(double x, double y)
 			double r = sqrt(rsq_ell);
 			double xprime, yprime, temp;
 			for (int i=0; i < n_contour_bumps; i++) {
-				//double xc = bump_xcvals[i] - x_center;
-				//double yc = bump_ycvals[i] - y_center;
-				//if (theta != 0) rotate(xc,yc);
-
 				//phi_degrees = phi_q*180/M_PI;
 				//while (abs(phi_degrees-bump_xcvals[i]) > 180) {
 					//if (phi_degrees > bump_xcvals[i]) phi_degrees -= 360;

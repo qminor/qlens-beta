@@ -5197,7 +5197,6 @@ void Lens::process_commands(bool read_file)
 					vector<string> paramnames;
 					sb_list[n_sb-1]->get_fit_parameter_names(paramnames);
 					int i,j;
-					cout << "NPARAMS: " << nparams_to_vary << endl;
 					for (i=0, j=0; j < nparams_to_vary; j++) {
 						if (vary_flags[j]) {
 							if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
