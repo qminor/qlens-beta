@@ -72,13 +72,13 @@ qlens.o: qlens.cpp qlens.h
 commands.o: commands.cpp qlens.h lensvec.h profile.h
 	$(CC_NO_OPT) -c commands.cpp
 
-lens.o: lens.cpp profile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp lensvec.h pixelgrid.h qlens.h matrix.h cg.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h

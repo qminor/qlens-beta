@@ -83,13 +83,15 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	if (include_truncation_radius) rt = sb_in->rt;
 	if (n_contour_bumps > 0) {
 		bump_drvals.input(sb_in->bump_drvals);
-		bump_xvals.input(sb_in->bump_xvals);
-		bump_yvals.input(sb_in->bump_yvals);
+		bump_xcvals.input(sb_in->bump_xcvals);
+		bump_ycvals.input(sb_in->bump_ycvals);
 		bump_sigvals.input(sb_in->bump_sigvals);
 		bump_e1vals.input(sb_in->bump_e1vals);
 		bump_e2vals.input(sb_in->bump_e2vals);
 		bump_qvals.input(sb_in->bump_qvals);
 		bump_phivals.input(sb_in->bump_phivals);
+		bump_xcprime.input(sb_in->bump_xcprime);
+		bump_ycprime.input(sb_in->bump_ycprime);
 		bump_paramnum.input(sb_in->bump_paramnum);
 	}
 
@@ -213,17 +215,19 @@ void SB_Profile::add_contour_bump(const double amp, const double x, const double
 	n_contour_bumps++;
 	bump_paramnum.resize(n_contour_bumps);
 	bump_drvals.resize(n_contour_bumps);
-	bump_xvals.resize(n_contour_bumps);
-	bump_yvals.resize(n_contour_bumps);
+	bump_xcvals.resize(n_contour_bumps);
+	bump_ycvals.resize(n_contour_bumps);
 	bump_sigvals.resize(n_contour_bumps);
 	bump_e1vals.resize(n_contour_bumps);
 	bump_e2vals.resize(n_contour_bumps);
 	bump_phivals.resize(n_contour_bumps);
 	bump_qvals.resize(n_contour_bumps);
+	bump_xcprime.resize(n_contour_bumps);
+	bump_ycprime.resize(n_contour_bumps);
 	bump_paramnum[n_contour_bumps-1] = n_params;
 	bump_drvals[n_contour_bumps-1] = amp;
-	bump_xvals[n_contour_bumps-1] = x;
-	bump_yvals[n_contour_bumps-1] = y;
+	bump_xcvals[n_contour_bumps-1] = x;
+	bump_ycvals[n_contour_bumps-1] = y;
 	bump_sigvals[n_contour_bumps-1] = sig;
 	bump_e1vals[n_contour_bumps-1] = e1;
 	bump_e2vals[n_contour_bumps-1] = e2;
@@ -281,8 +285,8 @@ void SB_Profile::add_contour_bump(const double amp, const double x, const double
 	double **new_param = new double*[n_params];
 	for (int i=0; i < n_params-6; i++) new_param[i] = param[i];
 	new_param[n_params-6] = &bump_drvals[n_contour_bumps-1];
-	new_param[n_params-5] = &bump_xvals[n_contour_bumps-1];
-	new_param[n_params-4] = &bump_yvals[n_contour_bumps-1];
+	new_param[n_params-5] = &bump_xcvals[n_contour_bumps-1];
+	new_param[n_params-4] = &bump_ycvals[n_contour_bumps-1];
 	new_param[n_params-3] = &bump_sigvals[n_contour_bumps-1];
 	new_param[n_params-2] = &bump_e1vals[n_contour_bumps-1];
 	new_param[n_params-1] = &bump_e2vals[n_contour_bumps-1];
@@ -403,8 +407,8 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	if (n_contour_bumps > 0) {
 		for (int i=0; i < n_contour_bumps; i++) {
 			param[qi++] = &bump_drvals[i];
-			param[qi++] = &bump_xvals[i];
-			param[qi++] = &bump_yvals[i];
+			param[qi++] = &bump_xcvals[i];
+			param[qi++] = &bump_ycvals[i];
 			param[qi++] = &bump_sigvals[i];
 			param[qi++] = &bump_e1vals[i];
 			param[qi++] = &bump_e2vals[i];
@@ -717,6 +721,10 @@ void SB_Profile::update_ellipticity_meta_parameters()
 	}
 	if (n_contour_bumps > 0) {
 		for (int i=0; i < n_contour_bumps; i++) {
+			bump_xcprime[i] = bump_xcvals[i] - x_center;
+			bump_ycprime[i] = bump_ycvals[i] - y_center;
+			if (theta != 0) rotate(bump_xcprime[i],bump_ycprime[i]);
+
 			bump_qvals[i] = 1 - sqrt(SQR(bump_e1vals[i]) + SQR(bump_e2vals[i]));
 			if (bump_qvals[i] < 0) bump_qvals[i] = 0.001;
 			if (bump_e1vals[i]==0) {
@@ -892,13 +900,17 @@ double SB_Profile::surface_brightness(double x, double y)
 			double r = sqrt(rsq_ell);
 			double xprime, yprime, temp;
 			for (int i=0; i < n_contour_bumps; i++) {
+				//double xc = bump_xcvals[i] - x_center;
+				//double yc = bump_ycvals[i] - y_center;
+				//if (theta != 0) rotate(xc,yc);
+
 				//phi_degrees = phi_q*180/M_PI;
-				//while (abs(phi_degrees-bump_xvals[i]) > 180) {
-					//if (phi_degrees > bump_xvals[i]) phi_degrees -= 360;
+				//while (abs(phi_degrees-bump_xcvals[i]) > 180) {
+					//if (phi_degrees > bump_xcvals[i]) phi_degrees -= 360;
 					//else phi_degrees += 360;
 				//}
-				xprime = x - bump_xvals[i];
-				yprime = y - bump_yvals[i];
+				xprime = x - bump_xcprime[i];
+				yprime = y - bump_ycprime[i];
 				temp = xprime*cos(bump_phivals[i]) + yprime*sin(bump_phivals[i]);
 				yprime = -xprime*sin(bump_phivals[i]) + yprime*cos(bump_phivals[i]);
 				xprime = temp;

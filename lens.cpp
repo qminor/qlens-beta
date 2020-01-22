@@ -4551,8 +4551,7 @@ void Lens::print_lensing_info_at_point(const double x, const double y)
 	shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 	beta[0] = point[0] - alpha[0];
 	beta[1] = point[1] - alpha[1];
-	double kappaval = 
-	kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
+	double kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
 	cout << "kappa = " << kappaval << endl;
 	cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
 	cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
@@ -4632,6 +4631,25 @@ void Lens::make_source_ellipse(const double xcenter, const double ycenter, const
 			source[0] = xcenter + x*cos(angle) - y*sin(angle);
 			source[1] = ycenter + x*sin(angle) + y*cos(angle);
 			source_file << source[0] << " " << source[1] << endl;
+		}
+	}
+}
+
+void Lens::raytrace_image_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
+{
+	ofstream sourcetab(source_filename.c_str());
+	int i,j;
+	double x,y,xs,ys,xstep,ystep;
+	lensvector point, alpha;
+	xstep = (xmax-xmin)/(xsteps-1);
+	ystep = (ymax-ymin)/(ysteps-1);
+	for (i=0, x=xmin; i < xsteps; i++, x += xstep) {
+		for (j=0, y=ymin; j < ysteps; j++, y += ystep) {
+			point[0] = x; point[1] = y;
+			deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+			xs = point[0] - alpha[0];
+			ys = point[1] - alpha[1];
+			sourcetab << xs << " " << ys << endl;
 		}
 	}
 }

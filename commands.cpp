@@ -101,6 +101,7 @@ void Lens::process_commands(bool read_file)
 						"plotimg -- find and plot image positions corresponding to a given source position\n"
 						"mksrctab -- create file containing Cartesian grid of point sources to be read by 'findimgs'\n"
 						"mksrcgal -- create file containing elliptical grid of point sources to be read by 'findimgs'\n"
+						"raytracetab -- create file containing source points ray-traced from grid of image points\n"
 						"findimgs -- find sets of images from source positions listed in a given input file\n"
 						"plotimgs -- find and plot image positions from sources listed in a given input file\n"
 						"replotimgs -- replot image positions previously found by 'plotimgs' command\n"
@@ -1560,6 +1561,10 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="mksrctab")
 					cout << "mksrctab <xmin> <xmax> <xpoints> <ymin> <ymax> <ypoints> [source_outfile]\n\n"
 						"Creates a regular grid of sources and plots to [source_outfile] (default='sourcexy.in')\n";
+				else if (words[1]=="raytracetab")
+					cout << "raytracetab <xmin> <xmax> <xpoints> <ymin> <ymax> <ypoints> [source_outfile]\n\n"
+						"Creates a regular grid of images, ray-traces them to the source plane, and plots the resulting\n"
+						"source points to [source_outfile] (default='sourcexy.in')\n";
 				else if (words[1]=="mksrcgal")
 					cout << "mksrcgal <xcenter> <ycenter> <a> <q> <angle> <n_ellipses> <pts_per_ellipse> [outfile]\n\n"
 						"Creates an elliptical grid of sources (representing a galaxy) with major axis a, axis ratio q.\n"
@@ -5192,6 +5197,7 @@ void Lens::process_commands(bool read_file)
 					vector<string> paramnames;
 					sb_list[n_sb-1]->get_fit_parameter_names(paramnames);
 					int i,j;
+					cout << "NPARAMS: " << nparams_to_vary << endl;
 					for (i=0, j=0; j < nparams_to_vary; j++) {
 						if (vary_flags[j]) {
 							if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
@@ -6906,6 +6912,24 @@ void Lens::process_commands(bool read_file)
 				else outfile = "sourcexy.in";
 				make_source_ellipse(xcenter,ycenter,major_axis,q,angle,n_ellipses,points_per_ellipse,outfile);
 			} else Complain("mksrcgal requires at least 7 parameters: xcenter, ycenter, major_axis, q, theta, n_ellipses points_per_ellipse");
+		}
+		else if (words[0]=="raytracetab")
+		{
+			if (nwords >= 7) {
+				double xmin, xmax, ymin, ymax;
+				int xsteps, ysteps;
+				if (!(ws[1] >> xmin)) Complain("invalid xmin parameter");
+				if (!(ws[2] >> xmax)) Complain("invalid xmax parameter");
+				if (!(ws[3] >> xsteps)) Complain("invalid xsteps parameter; must be integral number of steps");
+				if (!(ws[4] >> ymin)) Complain("invalid ymin parameter");
+				if (!(ws[5] >> ymax)) Complain("invalid ymax parameter");
+				if (!(ws[6] >> ysteps)) Complain("invalid ysteps parameter; must be integral number of steps");
+				string outfile;
+				if (nwords==8) outfile = words[7];
+				else if (nwords > 8) { Complain("too many parameters in raytracetab"); }
+				else outfile = "sourcexy.in";
+				raytrace_image_rectangle(xmin,xmax,xsteps,ymin,ymax,ysteps,outfile);
+			} else Complain("raytracetab requires at least 6 parameters: xmin, xmax, xpoints, ymin, ymax, ypoints");
 		}
 		else if (words[0]=="mkrandsrc")
 		{

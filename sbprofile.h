@@ -52,8 +52,8 @@ class SB_Profile
 
 	int n_contour_bumps; // Number of contour "bump" perturbations to elliptical isophotes (zero by default)
 	ivector bump_paramnum;
-	dvector bump_drvals, bump_xvals, bump_yvals, bump_sigvals, bump_e1vals, bump_e2vals;
-	dvector bump_qvals, bump_phivals; // meta-parameters
+	dvector bump_drvals, bump_xcvals, bump_ycvals, bump_sigvals, bump_e1vals, bump_e2vals;
+	dvector bump_qvals, bump_phivals, bump_xcprime, bump_ycprime; // meta-parameters
 
 	void set_nparams(const int &n_params_in);
 	void copy_base_source_data(const SB_Profile* sb_in);
