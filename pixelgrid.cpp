@@ -4668,6 +4668,88 @@ void ImagePixelGrid::redo_lensing_calculations()
 	delete[] twiststat;
 }
 
+void ImagePixelGrid::redo_lensing_calculations_corners()
+{
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
+#endif
+
+#ifdef USE_OPENMP
+	double wtime0, wtime;
+	if (lens->show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	int i,j,n,n_cell,n_yp;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+			else nsplits[i][j] = 1;
+		}
+	}
+	long int ntot_corners = (x_N+1)*(y_N+1);
+	long int ntot_cells = x_N*y_N;
+	double *defx_corners, *defy_corners;
+	defx_corners = new double[ntot_corners];
+	defy_corners = new double[ntot_corners];
+
+	int mpi_chunk, mpi_start, mpi_end;
+	mpi_chunk = ntot_corners / lens->group_np;
+	mpi_start = lens->group_id*mpi_chunk;
+	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end = mpi_start + mpi_chunk;
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		lensvector d1,d2,d3,d4;
+		#pragma omp for private(n,i,j) schedule(dynamic)
+		for (n=mpi_start; n < mpi_end; n++) {
+			j = n / (x_N+1);
+			i = n % (x_N+1);
+			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+		}
+	}
+#ifdef USE_MPI
+		#pragma omp master
+		{
+			int id, chunk, start;
+			for (id=0; id < lens->group_np; id++) {
+				chunk = ntot_corners / lens->group_np;
+				start = id*chunk;
+				if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+				MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+			}
+		}
+		#pragma omp barrier
+#endif
+	for (n=0; n < ntot_corners; n++) {
+		j = n / (x_N+1);
+		i = n % (x_N+1);
+		corner_sourcepts[i][j][0] = defx_corners[n];
+		corner_sourcepts[i][j][1] = defy_corners[n];
+	}
+
+#ifdef USE_OPENMP
+	if (lens->show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
+	}
+#endif
+	delete[] defx_corners;
+	delete[] defy_corners;
+}
+
 bool ImagePixelData::test_if_in_fit_region(const double& x, const double& y)
 {
 	// it would be faster to just use division to figure out which pixel it's in, but this is good enough
@@ -5008,6 +5090,7 @@ void ImagePixelGrid::assign_image_mapping_flags()
 
 void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 {
+	//ofstream blergh("blergh.dat");
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
 #ifdef USE_OPENMP
@@ -5040,7 +5123,7 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 						for (int k=0; k < lens->n_sb; k++) {
 							if (!lens->sb_list[k]->is_lensed) {
 								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j][0],center_pts[i][j][1],pixel_xlength,pixel_ylength);
+								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
 							}
 						}
 					}
@@ -5061,6 +5144,10 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 #endif
 					int ii,jj,nsplit;
 					double u0, w0, sb;
+					lensvector corner1, corner2, corner3, corner4;
+					double subpixel_xlength, subpixel_ylength;
+					subpixel_xlength = pixel_xlength/nsplit;
+					subpixel_ylength = pixel_ylength/nsplit;
 					#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(dynamic)
 					for (j=0; j < y_N; j++) {
 						for (i=0; i < x_N; i++) {
@@ -5083,7 +5170,17 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 											for (int k=0; k < lens->n_sb; k++) {
 												if (!lens->sb_list[k]->is_lensed) {
 													if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
-													else sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[0],center_pt[1],pixel_xlength/nsplit,pixel_ylength/nsplit);
+													else {
+														corner1[0] = center_pt[0] - subpixel_xlength/2;
+														corner1[1] = center_pt[1] - subpixel_ylength/2;
+														corner2[0] = center_pt[0] + subpixel_xlength/2;
+														corner2[1] = center_pt[1] - subpixel_ylength/2;
+														corner3[0] = center_pt[0] - subpixel_xlength/2;
+														corner3[1] = center_pt[1] + subpixel_ylength/2;
+														corner4[0] = center_pt[0] + subpixel_xlength/2;
+														corner4[1] = center_pt[1] + subpixel_ylength/2;
+														sb += lens->sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+													}
 												}
 											}
 										}
@@ -5105,7 +5202,7 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 							for (int k=0; k < lens->n_sb; k++) {
 								if (!lens->sb_list[k]->is_lensed) {
 									if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-									else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j][0],center_pts[i][j][1],pixel_xlength,pixel_ylength);
+									else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
 								}
 							}
 						}
@@ -5119,10 +5216,11 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 	else
 	{
 		bool at_least_one_lensed_src = false;
+		bool at_least_one_zoom_lensed_src = false;
 		for (int k=0; k < lens->n_sb; k++) {
 			if (lens->sb_list[k]->is_lensed) {
 				at_least_one_lensed_src = true;
-				break;
+				if (lens->sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
 			}
 		}
 		int i,j;
@@ -5137,28 +5235,65 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 #endif
 				int ii,jj,nsplit;
 				double u0, w0, sb;
+				double U0, W0, U1, W1;
 				lensvector center_pt, center_srcpt;
-				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb,center_pt,center_srcpt) schedule(dynamic)
+				lensvector corner1, corner2, corner3, corner4;
+				lensvector corner1_src, corner2_src, corner3_src, corner4_src;
+				double subpixel_xlength, subpixel_ylength;
+				#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,U0,W0,U1,W1,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src) schedule(dynamic)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 							sb=0;
 							nsplit = nsplits[i][j];
+							subpixel_xlength = pixel_xlength/nsplit;
+							subpixel_ylength = pixel_ylength/nsplit;
 							for (ii=0; ii < nsplit; ii++) {
 								u0 = ((double) (1+2*ii))/(2*nsplit);
 								center_pt[0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
 								for (jj=0; jj < nsplit; jj++) {
 									w0 = ((double) (1+2*jj))/(2*nsplit);
 									center_pt[1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+									if (at_least_one_zoom_lensed_src) {
+										U0 = ((double) (2*ii))/(2*nsplit);
+										W0 = ((double) (2*jj))/(2*nsplit);
+										U1 = ((double) (2+2*ii))/(2*nsplit);
+										W1 = ((double) (2+2*jj))/(2*nsplit);
+
+										corner1_src[0] = (U1*corner_sourcepts[i][j][0] + (1-U1)*corner_sourcepts[i+1][j][0])*W1 + (U1*corner_sourcepts[i][j+1][0] + (1-U1)*corner_sourcepts[i+1][j+1][0])*(1-W1);
+										corner1_src[1] = (U1*corner_sourcepts[i][j][1] + (1-U1)*corner_sourcepts[i+1][j][1])*W1 + (U1*corner_sourcepts[i][j+1][1] + (1-U1)*corner_sourcepts[i+1][j+1][1])*(1-W1);
+										corner2_src[0] = (U0*corner_sourcepts[i][j][0] + (1-U0)*corner_sourcepts[i+1][j][0])*W1 + (U0*corner_sourcepts[i][j+1][0] + (1-U0)*corner_sourcepts[i+1][j+1][0])*(1-W1);
+										corner2_src[1] = (U0*corner_sourcepts[i][j][1] + (1-U0)*corner_sourcepts[i+1][j][1])*W1 + (U0*corner_sourcepts[i][j+1][1] + (1-U0)*corner_sourcepts[i+1][j+1][1])*(1-W1);
+										corner3_src[0] = (U1*corner_sourcepts[i][j][0] + (1-U1)*corner_sourcepts[i+1][j][0])*W0 + (U1*corner_sourcepts[i][j+1][0] + (1-U1)*corner_sourcepts[i+1][j+1][0])*(1-W0);
+										corner3_src[1] = (U1*corner_sourcepts[i][j][1] + (1-U1)*corner_sourcepts[i+1][j][1])*W0 + (U1*corner_sourcepts[i][j+1][1] + (1-U1)*corner_sourcepts[i+1][j+1][1])*(1-W0);
+										corner4_src[0] = (U0*corner_sourcepts[i][j][0] + (1-U0)*corner_sourcepts[i+1][j][0])*W0 + (U0*corner_sourcepts[i][j+1][0] + (1-U0)*corner_sourcepts[i+1][j+1][0])*(1-W0);
+										corner4_src[1] = (U0*corner_sourcepts[i][j][1] + (1-U0)*corner_sourcepts[i+1][j][1])*W0 + (U0*corner_sourcepts[i][j+1][1] + (1-U0)*corner_sourcepts[i+1][j+1][1])*(1-W0);
+
+									}
 									if ((!plot_foreground_only) and (at_least_one_lensed_src)) {
 										lens->find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
 									}
 									for (int k=0; k < lens->n_sb; k++) {
-										if ((lens->sb_list[k]->is_lensed) and (!plot_foreground_only)) sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+										if ((lens->sb_list[k]->is_lensed) and (!plot_foreground_only)) {
+											if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+											else {
+												sb += lens->sb_list[k]->surface_brightness_zoom(center_srcpt,corner1_src,corner2_src,corner3_src,corner4_src);
+											}
+										}
 										else {
 											if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
-											else sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[0],center_pt[1],pixel_xlength/nsplit,pixel_ylength/nsplit);
+											else {
+												corner1[0] = center_pt[0] - subpixel_xlength/2;
+												corner1[1] = center_pt[1] - subpixel_ylength/2;
+												corner2[0] = center_pt[0] + subpixel_xlength/2;
+												corner2[1] = center_pt[1] - subpixel_ylength/2;
+												corner3[0] = center_pt[0] - subpixel_xlength/2;
+												corner3[1] = center_pt[1] + subpixel_ylength/2;
+												corner4[0] = center_pt[0] + subpixel_xlength/2;
+												corner4[1] = center_pt[1] + subpixel_ylength/2;
+												sb += lens->sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+											}
 										}
 									}
 								}
@@ -5185,10 +5320,20 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 							lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
 						}
 						for (int k=0; k < lens->n_sb; k++) {
-							if ((lens->sb_list[k]->is_lensed) and (!plot_foreground_only)) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+							if ((lens->sb_list[k]->is_lensed) and (!plot_foreground_only)) {
+								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+								else {
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_sourcepts[i][j],corner_sourcepts[i][j],corner_sourcepts[i+1][j],corner_sourcepts[i][j+1],corner_sourcepts[i+1][j+1]);
+									//if (!subgridded) blergh << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << i << " " << j << endl;
+									//else blergh << "subgrid: " << center_pt[0] << " " << center_pt[1] << " " << i << " " << j << endl;
+								}
+							}
 							else {
 								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j][0],center_pts[i][j][1],pixel_xlength,pixel_ylength);
+								else {
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
+
+								}
 							}
 						}
 					}
@@ -5203,6 +5348,49 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 	}
 #endif
 }
+
+double Lens::find_surface_brightness(lensvector &pt)
+{
+	//double xl=0.01, yl=0.01;
+	//lensvector pt1,pt2,pt3,pt4;
+	//pt1[0] = pt[0] - xl/2;
+	//pt1[1] = pt[1] - yl/2;
+
+	//pt2[0] = pt[0] + xl/2;
+	//pt2[1] = pt[1] - yl/2;
+
+	//pt3[0] = pt[0] - xl/2;
+	//pt3[1] = pt[1] + yl/2;
+
+	//pt4[0] = pt[0] + xl/2;
+	//pt4[1] = pt[1] + yl/2;
+	double sb = 0;
+	lensvector srcpt;
+	
+	find_sourcept(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
+	//cout << "src=" << srcpt[0] << "," << srcpt[1] << " pt=" << pt[0] << "," << pt[1] << endl;
+	for (int k=0; k < n_sb; k++) {
+		if (sb_list[k]->is_lensed) {
+			sb += sb_list[k]->surface_brightness(srcpt[0],srcpt[1]);
+			//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(srcpt[0],srcpt[1]);
+			//else {
+				//lensvector srcpt1,srcpt2,srcpt3,srcpt4;
+				//find_sourcept(pt1,srcpt1,0,reference_zfactors,default_zsrc_beta_factors);
+				//find_sourcept(pt2,srcpt2,0,reference_zfactors,default_zsrc_beta_factors);
+				//find_sourcept(pt3,srcpt3,0,reference_zfactors,default_zsrc_beta_factors);
+				//find_sourcept(pt4,srcpt4,0,reference_zfactors,default_zsrc_beta_factors);
+				//sb += sb_list[k]->surface_brightness_zoom(pt,srcpt1,srcpt2,srcpt3,srcpt4);
+			//}
+		} else {
+			sb += sb_list[k]->surface_brightness(pt[0],pt[1]);
+			//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(pt[0],pt[1]);
+			//else sb += sb_list[k]->surface_brightness_zoom(pt,pt1,pt2,pt3,pt4);
+		}
+		//cout << "object " << k << ": sb=" << sb << endl;
+	}
+	return sb;
+}
+
 
 ImagePixelGrid::~ImagePixelGrid()
 {
@@ -5816,6 +6004,7 @@ void Lens::PSF_convolution_foreground_pixel_vector(bool verbal)
 	int i,j,k,l;
 	int psf_k, psf_l;
 	int img_index1, img_index2;
+
 	#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l) schedule(static)
 	for (img_index1=0; img_index1 < image_npixels; img_index1++)
 	{ // this loops over columns of the PSF blurring matrix
@@ -7165,6 +7354,7 @@ void Lens::calculate_image_pixel_surface_brightness()
 
 void Lens::calculate_foreground_pixel_surface_brightness()
 {
+	bool subgridded;
 	int img_index;
 	int i,j,k;
 	bool at_least_one_foreground_src = false;
@@ -7189,6 +7379,10 @@ void Lens::calculate_foreground_pixel_surface_brightness()
 		double u0, w0, sb;
 		sb = 0;
 		nsplit = image_pixel_grid->nsplits[i][j];
+		lensvector corner1, corner2, corner3, corner4;
+		double subpixel_xlength, subpixel_ylength;
+		subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
+		subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
 		for (ii=0; ii < nsplit; ii++) {
 			for (jj=0; jj < nsplit; jj++) {
 				lensvector center_pt, center_srcpt;
@@ -7199,7 +7393,17 @@ void Lens::calculate_foreground_pixel_surface_brightness()
 				for (int k=0; k < n_sb; k++) {
 					if (!sb_list[k]->is_lensed) {
 						if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
-						else sb += sb_list[k]->surface_brightness_zoom(center_pt[0],center_pt[1],image_pixel_grid->pixel_xlength/nsplit,image_pixel_grid->pixel_ylength/nsplit);
+						else {
+							corner1[0] = center_pt[0] - subpixel_xlength;
+							corner1[1] = center_pt[1] - subpixel_ylength;
+							corner2[0] = center_pt[0] + subpixel_xlength;
+							corner2[1] = center_pt[1] - subpixel_ylength;
+							corner3[0] = center_pt[0] - subpixel_xlength;
+							corner3[1] = center_pt[1] + subpixel_ylength;
+							corner4[0] = center_pt[0] + subpixel_xlength;
+							corner4[1] = center_pt[1] + subpixel_ylength;
+							sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+						}
 					}
 				}
 			}

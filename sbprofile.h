@@ -81,6 +81,8 @@ class SB_Profile
 	static bool orient_major_axis_north;
 	static bool use_sb_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static bool use_fmode_scaled_amplitudes; // if set to true, uses a_m = m*A_m and b_m = m*B_m as parameters instead of true amplitudes
+	static double zoom_split_factor; 
+	static double zoom_scale; 
 
 	public:
 	int sb_number;
@@ -144,11 +146,13 @@ class SB_Profile
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	virtual void window_params(double& xmin, double& xmax, double& ymin, double& ymax);
 	virtual double window_rmax();
+	virtual double length_scale(); // retrieves characteristic length scale of object (used for zoom subgridding)
 
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double surface_brightness_r(const double r);
 	virtual double surface_brightness(double x, double y);
-	virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
@@ -171,7 +175,8 @@ class Gaussian : public SB_Profile
 	Gaussian(const Gaussian* sb_in);
 	~Gaussian() {}
 
-	double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	//double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	//double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
 	void update_meta_parameters();
 	void assign_paramnames();
@@ -180,6 +185,7 @@ class Gaussian : public SB_Profile
 	void set_auto_ranges();
 
 	double window_rmax();
+	double length_scale();
 };
 
 class Sersic : public SB_Profile
@@ -204,6 +210,7 @@ class Sersic : public SB_Profile
 
 	void print_parameters();
 	double window_rmax();
+	double length_scale();
 };
 
 class Cored_Sersic : public SB_Profile
@@ -228,6 +235,7 @@ class Cored_Sersic : public SB_Profile
 
 	void print_parameters();
 	double window_rmax();
+	double length_scale();
 };
 
 class SB_Multipole : public SB_Profile
@@ -252,6 +260,7 @@ class SB_Multipole : public SB_Profile
 
 	void print_parameters();
 	double window_rmax();
+	double length_scale();
 };
 
 class TopHat : public SB_Profile
@@ -274,6 +283,7 @@ class TopHat : public SB_Profile
 
 	void print_parameters();
 	double window_rmax();
+	double length_scale();
 };
 
 

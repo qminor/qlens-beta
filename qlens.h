@@ -505,7 +505,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed = false);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
-	bool calculate_perturber_subgridding_scale(int lens_number, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
+	bool calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
 	double galaxy_subgridding_scale_equation(const double r);
 
 	double subhalo_perturbation_radius_equation(const double r);
@@ -514,6 +514,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	// needed for calculating the subhalo perturbation radius and scale for perturber subgridding
 	bool use_perturber_flags;
 	int perturber_lens_number;
+	bool* linked_perturber_list;
 	double theta_shear;
 	lensvector perturber_center;
 	int subgridding_parity_at_center;
@@ -620,6 +621,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	void initialize_pixel_matrices(bool verbal);
 	void clear_pixel_matrices();
 	void clear_lensing_matrices();
+	double find_surface_brightness(lensvector &pt);
 	void assign_Lmatrix(bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	void PSF_convolution_image_pixel_vector(bool verbal = false);
@@ -727,6 +729,19 @@ public:
 	//double shear(const lensvector &x, double* zfacs) { return shear(x,0,zfacs); }
 	//void shear(const lensvector &x, double& shear_tot, double& angle, double* zfacs) { return shear(x,shear_tot,angle,0,zfacs); }
 
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs);
+	double magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	double shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	void shear_exclude(const lensvector &x, double& shear, double& angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	double kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs);
+
+	// non-multithreaded versions
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, double* zfacs, double** betafacs) { hessian_exclude(x,y,exclude,hess_tot,0,zfacs,betafacs); }
+	double magnification_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return magnification_exclude(x,exclude,0,zfacs,betafacs); }
+	double shear_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude(x,exclude,0,zfacs,betafacs); }
+	void shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude,0,zfacs,betafacs); }
+
+/*
 	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs);
 	double magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs);
 	double shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs);
@@ -738,6 +753,7 @@ public:
 	double magnification_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs) { return magnification_exclude(x,exclude_i,0,zfacs,betafacs); }
 	double shear_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs) { return shear_exclude(x,exclude_i,0,zfacs,betafacs); }
 	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude_i,0,zfacs,betafacs); }
+	*/
 
 	bool test_for_elliptical_symmetry();
 	bool test_for_singularity();
@@ -2549,6 +2565,205 @@ inline void Lens::reduced_shear_components(const lensvector &x, double& g1, doub
 // the following functions find the shear, kappa and magnification at the position where a perturber is placed;
 // this information is used to determine the optimal subgrid size and resolution
 
+inline void Lens::hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
+{
+	bool skip_lens_plane = false;
+	int skip_i = -1;
+	lensvector *x_i = &xvals_i[thread];
+	lensmatrix *A_i = &Amats_i[thread];
+	lensvector *def = &defs_i[thread];
+	lensvector **def_i = &defs_subtot[thread];
+	lensmatrix *hess = &hesses_i[thread];
+	lensmatrix **hess_i = &hesses_subtot[thread];
+
+	int i,j;
+	for (i=0; i < n_lens_redshifts; i++) {
+		if ((zlens_group_size[i]==1) and (exclude[zlens_group_lens_indx[i][0]])) {
+			skip_lens_plane = true;
+			skip_i = i;
+			// should allow for multiple redshifts to be excluded...fix later
+		}
+	}
+	hess_tot[0][0] = 0;
+	hess_tot[1][1] = 0;
+	hess_tot[0][1] = 0;
+	hess_tot[1][0] = 0;
+	if (n_lens_redshifts > 1) {
+		for (i=0; i < n_lens_redshifts; i++) {
+			if ((!skip_lens_plane) or (skip_i != i)) {
+				(*hess_i)[i][0][0] = 0;
+				(*hess_i)[i][1][1] = 0;
+				(*hess_i)[i][0][1] = 0;
+				(*hess_i)[i][1][0] = 0;
+				(*A_i)[0][0] = 1;
+				(*A_i)[1][1] = 1;
+				(*A_i)[0][1] = 0;
+				(*A_i)[1][0] = 0;
+				(*def_i)[i][0] = 0;
+				(*def_i)[i][1] = 0;
+				(*x_i)[0] = x;
+				(*x_i)[1] = y;
+				for (j=0; j < i; j++) {
+					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
+					if ((!skip_lens_plane) or (skip_i != j)) {
+						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+						(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
+					}
+				}
+				for (j=0; j < zlens_group_size[i]; j++) {
+					// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
+					// end when we add up hessian, because we want the nonlinear effects taken into account here
+					if (exclude[zlens_group_lens_indx[i][j]]) ;
+					else {
+						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
+						//cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << endl;
+						(*hess_i)[i][0][0] += (*hess)[0][0];
+						(*hess_i)[i][1][1] += (*hess)[1][1];
+						(*hess_i)[i][0][1] += (*hess)[0][1];
+						(*hess_i)[i][1][0] += (*hess)[1][0];
+						if (i < n_lens_redshifts-1) {
+							lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+							(*def_i)[i][0] += (*def)[0];
+							(*def_i)[i][1] += (*def)[1];
+						}
+					}
+				}
+				if (i < n_lens_redshifts-1) {
+					(*def_i)[i][0] *= zfacs[i];
+					(*def_i)[i][1] *= zfacs[i];
+				}
+				(*hess_i)[i][0][0] *= zfacs[i];
+				(*hess_i)[i][1][1] *= zfacs[i];
+				(*hess_i)[i][0][1] *= zfacs[i];
+				(*hess_i)[i][1][0] *= zfacs[i];
+
+				//cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
+				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
+				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
+				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
+				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
+				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
+				//cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+
+				hess_tot += (*hess_i)[i];
+			}
+		}
+	} else {
+		if (use_perturber_flags) {
+			for (i=0; i < nlens; i++) {
+				if ((!exclude[i]) and (lens_list[i]->perturber==false)) {
+					lens_list[i]->hessian(x,y,(*hess));
+					hess_tot[0][0] += (*hess)[0][0];
+					hess_tot[1][1] += (*hess)[1][1];
+					hess_tot[0][1] += (*hess)[0][1];
+					hess_tot[1][0] += (*hess)[1][0];
+				}
+			}
+		} else {
+			for (i=0; i < nlens; i++) {
+				if (!exclude[i]) {
+					lens_list[i]->hessian(x,y,(*hess));
+					hess_tot[0][0] += (*hess)[0][0];
+					hess_tot[1][1] += (*hess)[1][1];
+					hess_tot[0][1] += (*hess)[0][1];
+					hess_tot[1][0] += (*hess)[1][0];
+				}
+			}
+		}
+		hess_tot[0][0] *= zfacs[0];
+		hess_tot[1][1] *= zfacs[0];
+		hess_tot[0][1] *= zfacs[0];
+		hess_tot[1][0] *= zfacs[0];
+	}
+}
+
+inline double Lens::magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+{
+	lensmatrix *jac = &jacs[thread];
+	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	(*jac)[0][0] = 1 - (*jac)[0][0];
+	(*jac)[1][1] = 1 - (*jac)[1][1];
+	(*jac)[0][1] = -(*jac)[0][1];
+	(*jac)[1][0] = -(*jac)[1][0];
+
+	return 1.0/determinant((*jac));
+}
+
+inline double Lens::shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+{
+	lensmatrix *jac = &jacs[thread];
+	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	(*jac)[0][0] = 1 - (*jac)[0][0];
+	(*jac)[1][1] = 1 - (*jac)[1][1];
+	(*jac)[0][1] = -(*jac)[0][1];
+	(*jac)[1][0] = -(*jac)[1][0];
+	double shear1, shear2;
+	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
+	shear2 = -(*jac)[0][1];
+	return sqrt(shear1*shear1+shear2*shear2);
+}
+
+inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+{
+	lensmatrix *jac = &jacs[thread];
+	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	(*jac)[0][0] = 1 - (*jac)[0][0];
+	(*jac)[1][1] = 1 - (*jac)[1][1];
+	(*jac)[0][1] = -(*jac)[0][1];
+	(*jac)[1][0] = -(*jac)[1][0];
+	double shear1, shear2;
+	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
+	shear2 = -(*jac)[0][1];
+	shear = sqrt(shear1*shear1+shear2*shear2);
+	if (shear1==0) {
+		if (shear2 > 0) angle = M_HALFPI;
+		else angle = -M_HALFPI;
+	} else {
+		angle = atan(abs(shear2/shear1));
+		if (shear1 < 0) {
+			if (shear2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (shear2 < 0) {
+			angle = -angle;
+		}
+	}
+	angle = 0.5*radians_to_degrees(angle);
+}
+
+inline double Lens::kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs)
+{
+
+	double kappa;
+	if (n_lens_redshifts==1) {
+		double kappa_subtot;
+		int j;
+		kappa=0;
+		if (use_perturber_flags) {
+			for (j=0; j < nlens; j++) {
+				if ((!exclude[j]) and (lens_list[j]->perturber==false))
+					kappa += lens_list[j]->kappa(x[0],x[1]);
+			}
+		} else {
+			for (j=0; j < nlens; j++) {
+				if (!exclude[j])
+					kappa += lens_list[j]->kappa(x[0],x[1]);
+			}
+		}
+		kappa *= zfacs[0];
+	} else {
+		lensmatrix *jac = &jacs[0];
+		hessian_exclude(x[0],x[1],exclude,(*jac),0,zfacs,betafacs);
+		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
+	}
+	return kappa;
+}
+
+/*
+
 inline void Lens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
 {
 	bool skip_lens_plane = false;
@@ -2744,5 +2959,8 @@ inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, dou
 	}
 	return kappa;
 }
+
+*/
+
 
 #endif // QLENS_H

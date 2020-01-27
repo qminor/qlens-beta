@@ -11,6 +11,8 @@ using namespace std;
 bool SB_Profile::orient_major_axis_north;
 bool SB_Profile::use_sb_ellipticity_components;
 bool SB_Profile::use_fmode_scaled_amplitudes;
+double SB_Profile::zoom_split_factor;
+double SB_Profile::zoom_scale;
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in)
@@ -926,10 +928,199 @@ double SB_Profile::surface_brightness(double x, double y)
 	return sb;
 }
 
-double SB_Profile::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
+//double SB_Profile::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
+//double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
+//{
+	//return 0; // cop-out, because we're only using this feature for Gaussian profiles at the moment
+//}
+
+double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
 {
-	return 0; // cop-out, because we're only using this feature for Gaussian profiles at the moment
+	//double pt1[0], pt2[0], pt1[1], pt2[1];
+	bool subgrid = false;
+	//pt1[0] = x - pixel_xlength/2;
+	//pt2[0] = x + pixel_xlength/2;
+	//pt1[1] = y - pixel_ylength/2;
+	//pt2[1] = y + pixel_ylength/2;
+
+	double scale = zoom_scale*length_scale();
+	lensvector sbcenter; sbcenter[0] = x_center; sbcenter[1] = y_center;
+	lensvector d1, d2, d3;
+	double product1, product2, product3;
+	lensvector scpt1, scpt2, scpt3, scpt4;
+	//cout << "SCALE : " << scale << endl;
+	d1[0] = pt1[0]-centerpt[0];
+	d1[1] = pt1[1]-centerpt[1];
+	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
+	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
+	//cout << "WTF? " << d2.norm() << " " << (20*scale) << endl;
+	scpt1 = pt1 + d2;
+	//scpt1 = centerpt + d2;
+
+	d1[0] = pt2[0]-centerpt[0];
+	d1[1] = pt2[1]-centerpt[1];
+	d1 = pt2-centerpt;
+	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
+	scpt2 = pt2 + d2;
+	//scpt2 = centerpt + d2;
+
+	d1[0] = pt3[0]-centerpt[0];
+	d1[1] = pt3[1]-centerpt[1];
+	d1 = pt3-centerpt;
+	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
+	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
+	scpt3 = pt3 + d2;
+	//scpt3 = centerpt + d2;
+
+	d1[0] = pt4[0]-centerpt[0];
+	d1[1] = pt4[1]-centerpt[1];
+	d1 = pt4-centerpt;
+	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
+	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
+	scpt4 = pt4 + d2;
+	//scpt4 = centerpt + d2;
+
+	d1[0] = sbcenter[0] - scpt3[0];
+	d1[1] = sbcenter[1] - scpt3[1];
+	d2[0] = sbcenter[0] - scpt2[0];
+	d2[1] = sbcenter[1] - scpt2[1];
+	d3[0] = sbcenter[0] - scpt1[0];
+	d3[1] = sbcenter[1] - scpt1[1];
+	product1 = d1 ^ d2;
+	product2 = d3 ^ d1;
+	product3 = d2 ^ d3;
+	if ((product1 > 0) and (product2 > 0) and (product3 > 0)) subgrid = true;
+	else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) subgrid = true;
+	else {
+		d3[0] = sbcenter[0] - scpt4[0];
+		d3[1] = sbcenter[1] - scpt4[1];
+		product2 = d3 ^ d1;
+		product3 = d2 ^ d3;
+		if ((product1 > 0) and (product2 > 0) and (product3 > 0)) subgrid = true;
+		else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) subgrid = true;
+	}
+
+	// Now find the middle point of each side, and see if it is close enough to sbcenter
+	// This could still fail if the cell is very large, and sbcenter is only close to some off-center point
+	// on one of the edges, but hopefully it's enough to get the job done.
+	if (!subgrid) {
+		d1[0] = 0.5*(pt1[0] + pt2[0]);
+		d1[1] = 0.5*(pt1[1] + pt2[1]);
+		d2[0] = d1[0] - sbcenter[0];
+		d2[1] = d1[1] - sbcenter[1];
+		if (d2.norm() < scale) subgrid = true;
+
+		d1[0] = 0.5*(pt1[0] + pt3[0]);
+		d1[1] = 0.5*(pt1[1] + pt3[1]);
+		d2[0] = d1[0] - sbcenter[0];
+		d2[1] = d1[1] - sbcenter[1];
+		if (d2.norm() < scale) subgrid = true;
+
+		d1[0] = 0.5*(pt2[0] + pt4[0]);
+		d1[1] = 0.5*(pt2[1] + pt4[1]);
+		d2[0] = d1[0] - sbcenter[0];
+		d2[1] = d1[1] - sbcenter[1];
+		if (d2.norm() < scale) subgrid = true;
+
+		d1[0] = 0.5*(pt3[0] + pt4[0]);
+		d1[1] = 0.5*(pt3[1] + pt4[1]);
+		d2[0] = d1[0] - sbcenter[0];
+		d2[1] = d1[1] - sbcenter[1];
+		if (d2.norm() < scale) subgrid = true;
+	}
+
+	/*
+	if ((iii==25) and (jjj==13)) {
+		//if (subgrid) cout << "SUBGRIDDING!" << endl;
+		//else cout << " NOT SUBGRIDDING! WTF???!!!!" << endl;
+		ofstream blargh("blargh.dat");
+		blargh << pt1[0] << " " << pt1[1] << endl;
+		blargh << pt2[0] << " " << pt2[1] << endl;
+		blargh << pt4[0] << " " << pt4[1] << endl;
+		blargh << pt3[0] << " " << pt3[1] << endl;
+		blargh << pt1[0] << " " << pt1[1] << endl << endl;
+		blargh << scpt1[0] << " " << scpt1[1] << endl;
+		blargh << scpt2[0] << " " << scpt2[1] << endl;
+		blargh << scpt4[0] << " " << scpt4[1] << endl;
+		blargh << scpt3[0] << " " << scpt3[1] << endl;
+		blargh << scpt1[0] << " " << scpt1[1] << endl << endl;
+		ofstream blarghpt("blarghpt.dat");
+		blarghpt << sbcenter[0] << " " << sbcenter[1] << endl;
+		ofstream blarghpt2("blarghpt2.dat");
+		blarghpt2 << centerpt[0] << " " << centerpt[1] << endl;
+	}
+	*/
+
+	/*
+	double pixel_xlength = dmax(pt2[0]-pt1[0],pt4[0]-pt3[0]); // a bit rough
+	double pixel_ylength = dmax(pt3[1]-pt1[1],pt4[1]-pt2[1]); // a bit rough
+	double pl = SQR(dmax(pixel_xlength,pixel_ylength))/4.0;
+	double scale = length_scale();
+	if ((pixel_xlength < scale/6) and (pixel_ylength < scale*q/6)) ; // grid already fine enough
+	// Redo the below line using cross products!
+	else if ((x_center >= pt1[0]) and (x_center <= pt2[0]) and (y_center >= pt1[1]) and (y_center <= pt2[1])) { subgrid = true; }
+	else {
+		double rsq;
+		rsq = SQR(pt1[0]-x_center) + SQR(pt1[1]-y_center);
+		if (rsq < 3*pl) subgrid = true;
+		rsq = SQR(pt2[0]-x_center) + SQR(pt2[1]-y_center);
+		if (rsq < 3*pl) subgrid = true;
+		rsq = SQR(pt3[0]-x_center) + SQR(pt3[1]-y_center);
+		if (rsq < 3*pl) subgrid = true;
+		rsq = SQR(pt4[0]-x_center) + SQR(pt4[1]-y_center);
+		if (rsq < 3*pl) subgrid = true;
+	}
+	*/
+	if (!subgrid) return surface_brightness(centerpt[0],centerpt[1]);
+	//if (subgrid) cout << "Subgridding! pt=" << centerpt[0] << "," << centerpt[1] << endl;
+	double pixel_xlength, pixel_ylength;
+	d1 = pt2 - pt1;
+	d2 = pt4 - pt3;
+	pixel_xlength = dmax(d1.norm(),d2.norm());
+	d1 = pt3 - pt1;
+	d2 = pt4 - pt2;
+	pixel_ylength = dmax(d1.norm(),d2.norm());
+	int xsplit, ysplit;
+	double lscale = length_scale();
+	xsplit = ((int) (zoom_split_factor*pixel_xlength/lscale)) + 1;
+	ysplit = ((int) (zoom_split_factor*pixel_ylength/lscale)) + 1;
+	//cout << "HI " << xsplit << " " << ysplit << endl;
+	//nsplit = imax(xsplit,ysplit);
+	//cout << "nsplit=" << nsplit << endl;
+	double sb = 0;
+	double u0, w0, xs, ys;
+	int ii,jj;
+	//double sbadd;
+	//ofstream testsplit("testsplit.dat");
+
+	for (ii=0; ii < xsplit; ii++) {
+		u0 = ((double) (1+2*ii))/(2*xsplit);
+		for (jj=0; jj < ysplit; jj++) {
+			//xs = u0*pt1[0] + (1-u0)*pt2[0];
+			w0 = ((double) (1+2*jj))/(2*ysplit);
+			xs = (pt1[0]*u0 + pt2[0]*(1-u0))*w0 + (pt3[0]*u0 + pt4[0]*(1-u0))*(1-w0);
+			ys = (pt1[1]*u0 + pt2[1]*(1-u0))*w0 + (pt3[1]*u0 + pt4[1]*(1-u0))*(1-w0);
+			//ys = w0*pt1[1] + (1-w0)*pt2[1];
+			//sbadd = surface_brightness(xs,ys);
+			sb += surface_brightness(xs,ys);
+			//testsplit << xs << " " << ys << endl;
+		}
+	}
+	sb /= (xsplit*ysplit);
+	//if (sb > 0) cout << "sb=" << sb << endl;
+
+	return sb;
 }
+
+
 
 double SB_Profile::surface_brightness_r(const double r)
 {
@@ -1008,6 +1199,11 @@ void SB_Profile::window_params(double& xmin, double& xmax, double& ymin, double&
 }
 
 double SB_Profile::window_rmax()
+{
+	return qx_parameter*sb_spline.xmax();
+}
+
+double SB_Profile::length_scale()
 {
 	return qx_parameter*sb_spline.xmax();
 }
@@ -1145,57 +1341,14 @@ double Gaussian::sb_rsq(const double rsq)
 	return max_sb*exp(-0.5*rsq/(sig_x*sig_x));
 }
 
-double Gaussian::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
-{
-	double x1, x2, y1, y2;
-	bool subgrid = false;
-	x1 = x - pixel_xlength/2;
-	x2 = x + pixel_xlength/2;
-	y1 = y - pixel_ylength/2;
-	y2 = y + pixel_ylength/2;
-	double pl = SQR(dmax(pixel_xlength,pixel_ylength))/4.0;
-	if ((pixel_xlength < sig_x/6) and (pixel_ylength < sig_x*q/6)) ; // grid already fine enough
-	else if ((x_center >= x1) and (x_center <= x2) and (y_center >= y1) and (y_center <= y2)) { subgrid = true; }
-	else {
-		double rsq;
-		rsq = SQR(x1-x_center) + SQR(y1-y_center);
-		if (rsq < pl) subgrid = true;
-		rsq = SQR(x1-x_center) + SQR(y2-y_center);
-		if (rsq < pl) subgrid = true;
-		rsq = SQR(x2-x_center) + SQR(y1-y_center);
-		if (rsq < pl) subgrid = true;
-		rsq = SQR(x2-x_center) + SQR(y2-y_center);
-		if (rsq < pl) subgrid = true;
-	}
-	if (!subgrid) return surface_brightness(x,y);
-	int nsplit, xsplit, ysplit;
-	xsplit = ((int) 6*pixel_xlength/sig_x) + 1;
-	ysplit = ((int) 6*pixel_ylength/(sig_x*q)) + 1;
-	nsplit = imax(xsplit,ysplit);
-	//cout << "nsplit=" << nsplit << endl;
-	double sb = 0;
-	double u0, w0, xs, ys;
-	int ii,jj;
-	double sbadd;
-	for (ii=0; ii < nsplit; ii++) {
-		u0 = ((double) (1+2*ii))/(2*nsplit);
-		xs = u0*x1 + (1-u0)*x2;
-		for (jj=0; jj < nsplit; jj++) {
-			w0 = ((double) (1+2*jj))/(2*nsplit);
-			ys = w0*y1 + (1-w0)*y2;
-			sbadd = surface_brightness(xs,ys);
-			sb += surface_brightness(xs,ys);
-		}
-	}
-	sb /= (nsplit*nsplit);
-	//if (sb > 0) cout << "sb=" << sb << endl;
-
-	return sb;
-}
-
 double Gaussian::window_rmax() // used to define the window size for pixellated surface brightness maps
 {
 	return 7*sig_x;
+}
+
+double Gaussian::length_scale()
+{
+	return sig_x;
 }
 
 Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -1272,6 +1425,12 @@ double Sersic::window_rmax()
 {
 	return pow(3.0/k,n);
 }
+
+double Sersic::length_scale()
+{
+	return Reff;
+}
+
 
 Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
@@ -1352,6 +1511,11 @@ double Cored_Sersic::sb_rsq(const double rsq)
 double Cored_Sersic::window_rmax()
 {
 	return pow(3.0/k,n);
+}
+
+double Cored_Sersic::length_scale()
+{
+	return Reff;
 }
 
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine)
@@ -1452,6 +1616,11 @@ double SB_Multipole::window_rmax() // used to define the window size for pixella
 	return 7*r0;
 }
 
+double SB_Multipole::length_scale()
+{
+	return r0;
+}
+
 TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	model_name = "tophat";
@@ -1508,6 +1677,11 @@ double TopHat::sb_rsq(const double rsq)
 double TopHat::window_rmax()
 {
 	return 2*rad;
+}
+
+double TopHat::length_scale()
+{
+	return rad;
 }
 
 

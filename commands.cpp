@@ -4852,6 +4852,34 @@ void Lens::process_commands(bool read_file)
 					}
 				} else Complain("source clear command requires either one or zero arguments");
 			}
+			else if (words[1]=="zoom")
+			{
+				if (nwords != 3) Complain("one argument required for 'source zoom' (source number, or 'all')");
+				if (words[2]=="all") {
+					for (int i=0; i < n_sb; i++) {
+						sb_list[i]->set_zoom_subgridding(true);
+					}
+				} else {
+					int src_number;
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if (src_number >= n_sb) Complain("source number does not exist");
+					sb_list[src_number]->set_zoom_subgridding(true);
+				}
+			}
+			else if (words[1]=="unzoom")
+			{
+				if (nwords != 3) Complain("one argument required for 'source unzoom' (source number)");
+				if (words[2]=="all") {
+					for (int i=0; i < n_sb; i++) {
+						sb_list[i]->set_zoom_subgridding(false);
+					}
+				} else {
+					int src_number;
+					if (!(ws[2] >> src_number)) Complain("invalid source number");
+					if (src_number >= n_sb) Complain("source number does not exist");
+					sb_list[src_number]->set_zoom_subgridding(false);
+				}
+			}
 			else if (words[1]=="gaussian")
 			{
 				if (nwords > 8) Complain("more than 7 parameters not allowed for model gaussian");
@@ -4975,6 +5003,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
@@ -5040,6 +5069,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
 				else Complain("csersic requires at least 5 parameters (max_sb, k, n, rc, q)");
@@ -5110,6 +5140,7 @@ void Lens::process_commands(bool read_file)
 						add_multipole_source(m, a_m, r0, theta, xc, yc, sine_term);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
 				else Complain("sbmpole requires at least 2 parameters (a_m, r0)");
@@ -5155,6 +5186,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
 				else Complain("tophat requires at least 3 parameters (sb, radius, q)");
@@ -5185,6 +5217,7 @@ void Lens::process_commands(bool read_file)
 						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 					}
 					if (unlensed) sb_list[n_sb-1]->set_lensed(false);
+					if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 				}
 				else Complain("spline requires at least 2 parameters (filename, q)");
 			}
@@ -7619,6 +7652,26 @@ void Lens::process_commands(bool read_file)
 				set_switch(use_scaled_amps,setword);
 				SB_Profile::use_fmode_scaled_amplitudes = use_scaled_amps;
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="zoom_splitfac")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "source zoom subgridding split factor = " << SB_Profile::zoom_split_factor << endl;
+			} else if (nwords==2) {
+				double fac;
+				if (!(ws[1] >> fac)) Complain("invalid argument to 'zoom_splitfac' command; must be real number");
+				SB_Profile::zoom_split_factor = fac;
+			} else Complain("only one argument allowed for 'zoom_splitfac' (splitting factor)");
+		}
+		else if (words[0]=="zoom_scale")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "source zoom subgridding split factor = " << SB_Profile::zoom_scale << endl;
+			} else if (nwords==2) {
+				double fac;
+				if (!(ws[1] >> fac)) Complain("invalid argument to 'zoom_scale' command; must be real number");
+				SB_Profile::zoom_scale = fac;
+			} else Complain("only one argument allowed for 'zoom_scale' (splitting factor)");
 		}
 		else if (words[0]=="emode")
 		{
