@@ -955,6 +955,12 @@ bool NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sol\n";
 		cout << "r_200 = " << r200 << " kpc\n";
 	}
+	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//c200 = r200/rs_kpc;
+	//cout << "M_200(z=5) = " << m200 << " M_sol\n";
+	//cout << "r_200(z=5) = " << r200 << " kpc\n";
+	//cout << "c(z=5) = " << c200 << endl;
+
 	cout << endl;
 	return true;
 }
@@ -1298,6 +1304,17 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sol (ignores truncation)\n";
 		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
 	}
+
+	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//zlens = 5;
+	//update_zlens_meta_parameters();
+	//c200 = r200/rs_kpc;
+	//set_ks_rs_from_m200_c200();
+	//cout << "M_200(z=5) = " << m200 << " M_sol\n";
+	//cout << "r_200(z=5) = " << r200 << " kpc\n";
+	//cout << "c(z=5) = " << c200 << endl;
+
+
 	cout << endl;
 	return true;
 }

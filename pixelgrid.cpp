@@ -2879,8 +2879,12 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 	double *pixels;
 	double x, y, xstep, ystep;
 
+	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
+		 //if ( fits_movabs_hdu(fptr, 2, &hdutype, &status) ) /* move to 2nd HDU */
+			//die("fuck");
+
 		if (xvals != NULL) delete[] xvals;
 		if (yvals != NULL) delete[] yvals;
 		if (surface_brightness != NULL) {

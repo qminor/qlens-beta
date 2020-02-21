@@ -3037,6 +3037,7 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="nfw")
 				{
 					bool set_median_concentration = false;
+					bool no_cmed_anchoring = false; // if set_median_concentration = true, then this says to only set the initial c200 this way, but not anchor to cmed
 					double cmed_factor = 1.0;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
@@ -3056,12 +3057,14 @@ void Lens::process_commands(bool read_file)
 							int pos;
 							if ((pos = words[3].find("*cmed")) != string::npos) {
 								set_median_concentration = true;
+								if (words[3].find("*cmed*") != string::npos) no_cmed_anchoring = true;
 								string facstring;
 								facstring = words[3].substr(0,pos);
 								stringstream facstream;
 								facstream << facstring;
 								if (!(facstream >> cmed_factor)) Complain("invalid factor of median concentration");
-							} else if (words[3]=="cmed") set_median_concentration = true;
+							} else if (words[3]=="cmed") { set_median_concentration = true; }
+							else if (words[3]=="cmed*") { set_median_concentration = true; no_cmed_anchoring = true; }
 							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
 						} else {
 							if (!(ws[2] >> p1)) Complain("invalid ks parameter for model nfw");
@@ -3133,7 +3136,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
-								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
+								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3145,6 +3148,7 @@ void Lens::process_commands(bool read_file)
 				else if (words[1]=="tnfw")
 				{
 					bool set_median_concentration = false;
+					bool no_cmed_anchoring = false;
 					double cmed_factor = 1.0;
 					int tmode = 1;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
@@ -3191,12 +3195,14 @@ void Lens::process_commands(bool read_file)
 							int pos;
 							if ((pos = words[3].find("*cmed")) != string::npos) {
 								set_median_concentration = true;
+								if (words[3].find("*cmed*") != string::npos) no_cmed_anchoring = true;
 								string facstring;
 								facstring = words[3].substr(0,pos);
 								stringstream facstream;
 								facstream << facstring;
 								if (!(facstream >> cmed_factor)) Complain("invalid factor of median concentration");
-							} else if (words[3]=="cmed") set_median_concentration = true;
+							} else if (words[3]=="cmed") { set_median_concentration = true; }
+							else if (words[3]=="cmed*") { set_median_concentration = true; no_cmed_anchoring = true; }
 							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
 							if (pmode==1) {
 								if (!(ws[4] >> p3)) Complain("invalid rt_kpc parameter for model tnfw");
@@ -3274,7 +3280,7 @@ void Lens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
-								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
+								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
