@@ -27,6 +27,7 @@ using namespace std;
 
 void Lens::process_commands(bool read_file)
 {
+	// hello
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
 	plot_key_outside = false;
@@ -7672,7 +7673,7 @@ void Lens::process_commands(bool read_file)
 		else if (words[0]=="zoom_scale")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "source zoom subgridding split factor = " << SB_Profile::zoom_scale << endl;
+				if (mpi_id==0) cout << "source zoom subgridding scale = " << SB_Profile::zoom_scale << endl;
 			} else if (nwords==2) {
 				double fac;
 				if (!(ws[1] >> fac)) Complain("invalid argument to 'zoom_scale' command; must be real number");

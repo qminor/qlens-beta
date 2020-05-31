@@ -11900,7 +11900,8 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 	// the posterior distribution
 	// postdist will have nPar parameters in the first nPar columns & loglike value & the posterior probability in the last two columns
 	
-	int i, j;
+	int i, j, k;
+	k=0;
 	
 	double postdist[nSamples][nPar + 2];
 	for( i = 0; i < nPar + 2; i++ )
