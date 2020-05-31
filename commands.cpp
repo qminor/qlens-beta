@@ -27,7 +27,6 @@ using namespace std;
 
 void Lens::process_commands(bool read_file)
 {
-	// hello
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
 	plot_key_outside = false;
