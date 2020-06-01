@@ -1068,6 +1068,7 @@ public:
 	double croot_eq(const double c);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
+	int sample_add(const int i, const int j);
 };
 
 struct ImageData

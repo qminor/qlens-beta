@@ -9965,3 +9965,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 #endif
 }
 
+int Lens::sample_add(const int i, const int j) {
+	return i+j;
+}
+
