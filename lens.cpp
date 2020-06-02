@@ -660,7 +660,7 @@ Lens::Lens() : UCMC()
 	grid_xcenter = 0;
 	grid_ycenter = 0;
 	rmin_frac = default_rmin_frac;
-	plot_ptsize = 1.0;
+	plot_ptsize = 1.2;
 	plot_pttype = 7;
 
 	fit_output_filename = "fit";
