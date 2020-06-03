@@ -12,19 +12,20 @@
 #POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
 # Version without MUMPS
-default: qlens mkdist cosmocalc 
+default: qlens mkdist cosmocalc qlens-wrap
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3
-OPTS_NO_OPT = -Wno-write-strings
+OPTS = -Wno-write-strings -O3 -fPIC 
+OPTS_NO_OPT = -Wno-write-strings -fPIC
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-FLAGS = -DUSE_READLINE
+#FLAGS = -DUSE_READLINE
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  -lm -lreadline
+#OTHERLIBS =  -lm -lreadline
+OTHERLIBS =  -lm 
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -49,6 +50,11 @@ objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
+wrapper_objects = commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
+				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
+				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+				simplex.o powell.o mcmceval.o
+
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
 cosmocalc_objects = cosmocalc.o
@@ -56,6 +62,10 @@ cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
+
+qlens-wrap: $(wrapper_objects)
+#	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
+	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so -I /usr/include/python3.6m -I /home/ubuntu/.local/lib/python3.6/site-packages/pybind11/include -O3 -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
 
 mkdist: $(mkdist_objects)
 	$(GCC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
@@ -88,58 +98,58 @@ mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
 	$(CC) -c mcmchdr.cpp
 
 profile.o: profile.h profile.cpp lensvec.h
-	$(GCC) -c profile.cpp
+	$(CC) -c profile.cpp
 
 models.o: profile.h models.cpp
-	$(GCC) -c models.cpp
+	$(CC) -c models.cpp
 
 sbprofile.o: sbprofile.h sbprofile.cpp
-	$(GCC) -c sbprofile.cpp
+	$(CC) -c sbprofile.cpp
 
 errors.o: errors.cpp errors.h
-	$(GCC) -c errors.cpp
+	$(CC) -c errors.cpp
 
 brent.o: brent.h brent.cpp
-	$(GCC) -c brent.cpp
+	$(CC) -c brent.cpp
 
 simplex.o: simplex.h rand.h simplex.cpp
-	$(GCC) -c simplex.cpp
+	$(CC) -c simplex.cpp
 
 powell.o: powell.h powell.cpp
-	$(GCC) -c powell.cpp
+	$(CC) -c powell.cpp
 
 sort.o: sort.h sort.cpp
-	$(GCC) -c sort.cpp
+	$(CC) -c sort.cpp
 
 gauss.o: gauss.cpp gauss.h
-	$(GCC) -c gauss.cpp
+	$(CC) -c gauss.cpp
 
 romberg.o: romberg.cpp romberg.h
-	$(GCC) -c romberg.cpp
+	$(CC) -c romberg.cpp
 
 spline.o: spline.cpp spline.h errors.h
-	$(GCC) -c spline.cpp
+	$(CC) -c spline.cpp
 
 trirectangle.o: trirectangle.cpp lensvec.h trirectangle.h
-	$(GCC) -c trirectangle.cpp
+	$(CC) -c trirectangle.cpp
 
 GregsMathHdr.o: GregsMathHdr.cpp GregsMathHdr.h
-	$(GCC) -c GregsMathHdr.cpp
+	$(CC) -c GregsMathHdr.cpp
 
 mcmceval.o: mcmceval.cpp mcmceval.h GregsMathHdr.h random.h errors.h
-	$(GCC) -c mcmceval.cpp
+	$(CC) -c mcmceval.cpp
 
 mkdist.o: mkdist.cpp mcmceval.h errors.h
-	$(GCC) -c mkdist.cpp
+	$(CC) -c mkdist.cpp
 
 hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
-	$(GCC) -c hyp_2F1.cpp
+	$(CC) -c hyp_2F1.cpp
 
 cosmocalc.o: cosmocalc.cpp errors.h cosmo.h
-	$(GCC) -c cosmocalc.cpp
+	$(CC) -c cosmocalc.cpp
 
 cosmo.o: cosmo.cpp cosmo.h
-	$(GCC) -c cosmo.cpp
+	$(CC) -c cosmo.cpp
 
 clean_qlens:
 	rm qlens $(objects)
