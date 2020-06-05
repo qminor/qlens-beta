@@ -65,7 +65,7 @@ qlens: $(objects) $(LIBDMUMPS)
 
 qlens-wrap: $(wrapper_objects)
 #	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
-	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so -I /usr/include/python3.6m -I /home/ubuntu/.local/lib/python3.6/site-packages/pybind11/include -O3 -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
+	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so `python3 -m pybind11 --includes` -O3 -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
 
 mkdist: $(mkdist_objects)
 	$(GCC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
