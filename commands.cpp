@@ -226,8 +226,10 @@ void Lens::process_commands(bool read_file)
 						"\033[4mChi-square function settings\033[0m\n"
 						"imgplane_chisq -- use chi-square defined in image plane (if on) or source plane (if off)\n"
 						"chisqmag -- use magnification in source plane chi-square function for image positions\n"
+						"chisqpos -- include image positions in chi-square fit (on/off)\n"
 						"chisqflux -- include flux information in chi-square fit (on/off)\n"
 						"chisq_time_delays -- include time delay information in chi-square fit (on/off)\n"
+						"chisq_weak_lensing -- include weak lensing information in chi-square fit (on/off)\n"
 						"chisq_parity -- include parity information in flux chi-square fit (on/off)\n"
 						"analytic_bestfit_src -- find (approx) best-fit source coordinates automatically during fit\n"
 						"chisq_mag_threshold -- exclude images from chi-square whose magnification is below threshold\n"
@@ -300,6 +302,7 @@ void Lens::process_commands(bool read_file)
 						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
 						"sim_err_flux -- random error in image fluxes, added when producing simulated image data\n"
 						"sim_err_td -- random error in time delays, added when producing simulated image data\n"
+						"sim_err_shear -- random error in shear, added when producing simulated weak lensing data\n"
 						"\n";
 				} else if (words[1]=="read")
 					cout << "read <filename>\n\n"
@@ -1721,6 +1724,10 @@ void Lens::process_commands(bool read_file)
 					cout << "chisqmag <on/off>\n\n"
 						"Use magnification in chi-square function for image positions (if on). Note that this is\n"
 						"only relevant for the source plane chi-square (i.e. imgplane_chisq is set to 'off').\n";
+				else if (words[1]=="chisqpos")
+					cout << "chisqpos <on/off>\n\n"
+						"Include the image positions in the chi-square function (if on). Note that this is only relevant\n"
+						"for point source searches (i.e. fit source_mode = ptsource). (default=on)\n";
 				else if (words[1]=="chisqflux")
 					cout << "chisqflux <on/off>\n\n"
 						"Include the image fluxes in the chi-square function (if on). Note that this is only relevant\n"
@@ -2059,8 +2066,10 @@ void Lens::process_commands(bool read_file)
 					cout << "\033[4mChi-square function settings\033[0m\n";
 					cout << "imgplane_chisq: " << display_switch(use_image_plane_chisq) << endl;
 					cout << "chisqmag: " << display_switch(use_magnification_in_chisq) << endl;
+					cout << "chisqpos: " << display_switch(include_imgpos_chisq) << endl;
 					cout << "chisqflux: " << display_switch(include_flux_chisq) << endl;
 					cout << "chisq_time_delays: " << display_switch(include_time_delay_chisq) << endl;
+					cout << "chisq_weak_lensing: " << display_switch(include_weak_lensing_chisq) << endl;
 					cout << "chisq_parity: " << display_switch(include_parity_in_chisq) << endl;
 					cout << "analytic_bestfit_src: " << display_switch(use_analytic_bestfit_src) << endl;
 					cout << "chisq_mag_threshold = " << chisq_magnification_threshold << endl;
@@ -2144,6 +2153,7 @@ void Lens::process_commands(bool read_file)
 					cout << "sim_err_pos = " << sim_err_pos << endl;
 					cout << "sim_err_flux = " << sim_err_flux << endl;
 					cout << "sim_err_td = " << sim_err_td << endl;
+					cout << "sim_err_shear = " << sim_err_shear << endl;
 					cout << endl;
 				}
 			}
@@ -2962,7 +2972,7 @@ void Lens::process_commands(bool read_file)
 							else Complain("invalid n parameter for model " << words[1]);
 						}
 						bool anchoring_slope = false;
-						for (int i=0; i < parameter_anchor_i; i++) { if ((parameter_anchors[i].paramnum == 1)) anchoring_slope = true; }
+						for (int i=0; i < parameter_anchor_i; i++) { if (parameter_anchors[i].paramnum == 1) anchoring_slope = true; }
 						if ((kappa_multipole) and (!anchoring_slope) and (n == 2-m)) Complain("for kmpole, beta cannot be equal to 2-m (or else deflections become infinite)");
 						if (nwords >= 5) {
 							if (!(ws[4] >> theta)) Complain("invalid theta parameter for model " << words[1]);
@@ -4725,7 +4735,7 @@ void Lens::process_commands(bool read_file)
 					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
 					// Should probably just get the vary flags for that source object, tack on the new Fourier vary flags and then use set_sb_vary_parameters instead.
 					for (int i=fourier_nmodes-1; i >= 0; i--) {
-						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j++],vary_flags[j++]);
+						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j++],vary_flags[j++]); // yes, the j++'s should be there!
 					}
 				} else Complain("must specify a source number to add Fourier modes to, followed by modes");
 			}
@@ -6510,6 +6520,19 @@ void Lens::process_commands(bool read_file)
 					idstr << weak_lensing_data.n_sources;
 					idstr >> id_string;
 					add_simulated_weak_lensing_data(id_string,src,zsrc);
+				}
+				else if (words[1]=="add_random") {
+					if (nwords != 9) Complain("7 arguments required for 'wldata add_random' (nsrc,xmin,xmax,ymin,ymax,zmin,zmax)");
+					int nsrc;
+					double xmin,xmax,ymin,ymax,zmin,zmax;
+					if (!(ws[2] >> nsrc)) Complain("invalid number of sources");
+					if (!(ws[3] >> xmin)) Complain("invalid xmin value");
+					if (!(ws[4] >> xmax)) Complain("invalid xmax value");
+					if (!(ws[5] >> ymin)) Complain("invalid ymin value");
+					if (!(ws[6] >> ymax)) Complain("invalid ymax value");
+					if (!(ws[7] >> zmin)) Complain("invalid zmin value");
+					if (!(ws[8] >> zmax)) Complain("invalid zmax value");
+					add_weak_lensing_data_from_random_sources(nsrc,xmin,xmax,ymin,ymax,zmin,zmax);
 				}
 				else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'wldata read' (filename)");
@@ -8617,6 +8640,16 @@ void Lens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "simulated error in image time delays = " << sim_err_td << endl;
 			} else Complain("must specify either zero or one argument (error in simulated image time delays)");
+		}
+		else if (words[0]=="sim_err_shear")
+		{
+			double simerr;
+			if (nwords == 2) {
+				if (!(ws[1] >> simerr)) Complain("invalid position error");
+				sim_err_shear = simerr;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "simulated error in weak lensing shear = " << sim_err_shear << endl;
+			} else Complain("must specify either zero or one argument (error in simulated weak lensing shear)");
 		}
 		else if (words[0]=="subhalo_rmax")
 		{

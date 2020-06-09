@@ -419,6 +419,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	bool load_weak_lensing_data(string filename);
 	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
+	void add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax);
 
 	bool read_data_line(ifstream& infile, vector<string>& datawords, int &n_datawords);
 	bool datastring_convert(const string& instring, int& outvar);

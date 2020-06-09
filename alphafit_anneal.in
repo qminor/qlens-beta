@@ -61,6 +61,7 @@ nrepeat 2          # this tells it to minimize the chi-square again twice (at T=
                    # we are really at a minimum (default = 1)
 						 #
 # By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+pause
 fit run                  # for the first run, you might want to use the source plane chi-square to find the right region of
                           #   parameter space (which is faster and sometimes less prone to getting stuck in a rut, but not always accurate)
 fit use_bestfit          # adopt the best fit parameters so they can be used as initial parameters for the next run
