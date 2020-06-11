@@ -22,10 +22,10 @@ OPTS_NO_OPT = -Wno-write-strings -fPIC
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-#FLAGS = -DUSE_READLINE
-#OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-#OTHERLIBS =  -lm -lreadline
-OTHERLIBS =  -lm 
+FLAGS = -DUSE_READLINE
+# OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
+OTHERLIBS =  -lm -lreadline
+# OTHERLIBS =  -lm 
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -53,7 +53,7 @@ objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 wrapper_objects = commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
-				simplex.o powell.o mcmceval.o
+				simplex.o powell.o mcmceval.o qlens_wrapper.o
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
