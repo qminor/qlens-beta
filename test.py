@@ -20,11 +20,14 @@ def test_img_add_fail():
     q.imgdata_add() # Should fail
 
 def test_img_add_ok():
-    q.imgdata_add(0, 0)
+    for i in range(0, 5):
+        q.imgdata_add(0, i)
+    q.imgdata_write("sample.a")
 
 tests = [test_img_load, test_img_write, test_img_clear, 
             test_img_clear_fail, test_img_clear_ok,
-            test_img_add_ok, test_img_add_fail]
+            test_img_add_ok, test_img_add_fail
+        ]
 
 for i in tests:
     try:
