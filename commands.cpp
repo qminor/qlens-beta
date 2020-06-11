@@ -1122,6 +1122,7 @@ void Lens::process_commands(bool read_file)
 						cout << "wldata\n"
 							"wldata read <filename>\n"
 							"wldata add <x_coord> <y_coord>\n"
+							"wldata add_random <nsrc> <xmin> <xmax> <ymin> <ymax> <zsrc_min> <zsrc_max>\n"
 							"wldata write <filename>\n"
 							"wldata clear [dataset_number]\n\n"
 							"Commands for loading (or simulating) weak lensing data for lens model fitting. For help\n"
@@ -6370,8 +6371,8 @@ void Lens::process_commands(bool read_file)
 					lensvector src;
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
-					add_simulated_image_data(src);
-					update_parameter_list();
+					if (add_simulated_image_data(src))
+						update_parameter_list();
 				} else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'imgdata read' (filename)");
 					if (load_image_data(words[2])==false) Complain("unable to load image data");
@@ -9528,10 +9529,10 @@ void Lens::process_commands(bool read_file)
 			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
-			double chisq0;
-			calculate_chisq0_from_srcgrid(chisq0, true);
+			//double chisq0;
+			//calculate_chisq0_from_srcgrid(chisq0, true);
 
-			//plot_weak_lensing_shear_field();
+			plot_weak_lensing_shear_field();
 			//if (add_dparams_to_chain()==false) Complain("could not process chain data");
 			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");

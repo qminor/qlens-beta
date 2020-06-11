@@ -4722,11 +4722,12 @@ void Lens::plot_perturber_deflection_vs_area()
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
-void Lens::add_simulated_image_data(const lensvector &sourcept)
+bool Lens::add_simulated_image_data(const lensvector &sourcept)
 {
 	int i,j,k,n_images;
+	if (nlens==0) { warn("no lens model has been created"); return false; }
 	image *imgs = get_images(sourcept, n_images, false);
-	if (n_images==0) { warn("could not find any images; no data added"); return; }
+	if (n_images==0) { warn("could not find any images; no data added"); return false; }
 
 	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit+1];
 	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit+1];
@@ -4829,6 +4830,7 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		sourcepts_lower_limit = new_sourcepts_lower_limit;
 	}
 	sort_image_data_into_redshift_groups();
+	return true;
 }
 
 void Lens::write_image_data(string filename)

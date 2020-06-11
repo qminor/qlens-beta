@@ -410,7 +410,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	bool fits_format;
 	double data_pixel_size;
-	void add_simulated_image_data(const lensvector &sourcept);
+	bool add_simulated_image_data(const lensvector &sourcept);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
