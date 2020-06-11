@@ -4722,11 +4722,12 @@ void Lens::plot_perturber_deflection_vs_area()
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
-void Lens::add_simulated_image_data(const lensvector &sourcept)
+bool Lens::add_simulated_image_data(const lensvector &sourcept)
 {
 	int i,j,k,n_images;
+	if (nlens==0) { warn("no lens model has been created"); return false; }
 	image *imgs = get_images(sourcept, n_images, false);
-	if (n_images==0) { warn("could not find any images; no data added"); return; }
+	if (n_images==0) { warn("could not find any images; no data added"); return false; }
 
 	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit+1];
 	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit+1];
@@ -4829,6 +4830,7 @@ void Lens::add_simulated_image_data(const lensvector &sourcept)
 		sourcepts_lower_limit = new_sourcepts_lower_limit;
 	}
 	sort_image_data_into_redshift_groups();
+	return true;
 }
 
 void Lens::write_image_data(string filename)
@@ -5378,11 +5380,38 @@ bool Lens::load_weak_lensing_data(string filename)
 
 void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc)
 {
+	double *zfacs = new double[n_lens_redshifts];
+
+	for (int i=0; i < n_lens_redshifts; i++) {
+		zfacs[i] = kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+	}
 	double shear1, shear2;
-	reduced_shear_components(sourcept,shear1,shear2,0,reference_zfactors);
+	reduced_shear_components(sourcept,shear1,shear2,0,zfacs);
 	shear1 += sim_err_shear*NormalDeviate();
 	shear2 += sim_err_shear*NormalDeviate();
 	weak_lensing_data.add_source(id,sourcept,shear1,shear2,sim_err_shear,sim_err_shear,zsrc);
+	if (!include_weak_lensing_chisq) include_weak_lensing_chisq = true;
+	delete[] zfacs;
+}
+
+void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax)
+{
+	int wl_index = weak_lensing_data.n_sources;
+	lensvector src;
+	string id_string;
+	double zsrc;
+	for (int i=0; i < num_sources; i++) {
+		stringstream idstr;
+		idstr << wl_index;
+		idstr >> id_string;
+
+		src[0] = (xmax-xmin)*RandomNumber() + xmin;
+		src[1] = (ymax-ymin)*RandomNumber() + ymin;
+		zsrc = (zmax-zmin)*RandomNumber() + zmin; // redshift
+		add_simulated_weak_lensing_data(id_string,src,zsrc);
+
+		wl_index++;
+	}
 }
 
 bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
@@ -7007,9 +7036,15 @@ double Lens::chisq_weak_lensing()
 			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
 
+			//cout << "COMPS: " << g1 << " " << weak_lensing_data.reduced_shear1[i] << " " << g2 << " " << weak_lensing_data.reduced_shear2[i] << endl;
+			//double blaergh = ((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]);
+			//cout << "xchi: " << blaergh << endl;
+			//blaergh = ((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]);
+			//cout << "ychi: " << blaergh << endl;
+
+
 			/*
 			// For testing purposes
-			cout << "COMPS: " << g1 << " " << weak_lensing_data.reduced_shear1[i] << " " << g2 << " " << weak_lensing_data.reduced_shear2[i] << endl;
 			double shearval, shear_angle;
 
 			shearval = sqrt(g1*g1+g2*g2);
@@ -11174,6 +11209,7 @@ double Lens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
+	return true;
 }
 
 int croot_lensnumber;
