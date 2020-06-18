@@ -45,15 +45,15 @@ CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 GCC   := g++ -Wno-write-strings -O3
 
-objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
+objects = qlens.o mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
-				simplex.o powell.o mcmceval.o
+				simplex.o powell.o 
 
-wrapper_objects = commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
+wrapper_objects = mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
 				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
-				simplex.o powell.o mcmceval.o qlens_wrapper.o
+				simplex.o powell.o qlens_wrapper.o
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
@@ -63,9 +63,9 @@ cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
-qlens-wrap: $(wrapper_objects)
+qlens-wrap: $(wrapper_objects) 
 #	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
-	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so `python3 -m pybind11 --includes` -O3 -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
+	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
 
 mkdist: $(mkdist_objects)
 	$(GCC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
@@ -155,7 +155,7 @@ clean_qlens:
 	rm qlens $(objects)
 
 clean:
-	rm qlens mkdist cosmocalc $(objects) $(mkdist_objects) $(cosmocalc_objects)
+	rm qlens mkdist cosmocalc $(objects) $(mkdist_objects) $(cosmocalc_objects) $(wrapper_objects)
 
 clmain:
 	rm qlens.o
