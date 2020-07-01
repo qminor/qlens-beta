@@ -1,4 +1,7 @@
 #include "qlens.h"
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
 
 class Lens_Wrap: public Lens {
 public:
@@ -39,8 +42,8 @@ public:
         throw runtime_error("Specify proper range or leave empty to clear all data.");
     }
 
-    void imgdata_add(double x=-1.0, double y=-1.0) {
-        if(x==-1 || y==-1) { throw runtime_error("Please specify a proper coodinate"); }
+    void imgdata_add(double x, double y) {
+        if(x<=-1 || y<=-1) { throw runtime_error("Please specify a proper coodinate"); }
 
         lensvector src;
         src[0] = x;
@@ -68,6 +71,41 @@ public:
             std::string mode="alpha", int emode=1, int zl_in=0, int reference_source_redshift=2){
         add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
         }
+
+    void lens_add_alpha(double b, double alpha, double s, double q, double reference_source_redshift=2, double zl_in = 0, double emode=1, double theta = 0, double xc = 0, double yc = 0){
+        if (alpha <= 0) {throw runtime_error("Alpha cannot be less than or equal to 0");}
+        add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
+        // 
+        // if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+        // for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+        // if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+        // if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+        // if (auto_set_primary_lens) set_primary_lens();
+    }
+
+    void update_lens(py::args args, py::kwargs kwargs, int loc=-1) {
+        /* FEATURE IDEA: from https://pybind11.readthedocs.io/en/stable/advanced/functions.html#accepting-args-and-kwargs
+
+            1. Accept *args, **kwargs from python user
+            2. If an argument matches with lens parameter
+        */
+        // TODO: Verify with Quinn on where in commands.cpp gets the updated and then adapt here.
+        if (loc == -1) throw runtime_error("Please specify the lens to update.");
+        // if (kwargs) {
+            
+        // }
+    }
+
+    void export_lens() {
+        // GOAL: Give python access to the list/vectors of data points for MatplotLib processing
+        // Density vs Radius
+        // TODO: Verify with Quinn on how the data is stored
+    }
+
+    void lens_add_shear(double shear, double theta, double xc, double yc, double zl_in=0, double reference_source_redshift=2){
+        // TODO: Guards for input ranges
+        add_shear_lens(zl_in, reference_source_redshift, shear, theta, xc, yc);
+    }
         
 private:
 };

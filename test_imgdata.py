@@ -30,7 +30,8 @@ def test_img_add_ok():
 tests = [
             test_img_load, test_img_write, test_img_clear, 
             test_img_clear_fail, test_img_clear_ok,
-            test_img_add_ok, test_img_add_fail
+            test_img_add_ok, 
+            test_img_add_fail
         ]
 
 for i in tests:

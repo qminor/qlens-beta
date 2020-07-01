@@ -63,6 +63,9 @@ cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
+qlens_wrapper.o: $(objects)
+	$(CL) -o qlens_wrapper.o `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_wrapper.cpp $(objects)
+
 qlens-wrap: $(wrapper_objects) 
 #	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
 	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)

@@ -268,6 +268,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool calculate_half_mass_radius(double& half_mass_radius, const double mtot_in = -10);
 	double mass_rsq(const double rsq);
+	double get_theta() {return theta;} //  @EXCEL: NEED TO REMOVE
 
 	virtual double kappa_avg_r(const double r);
 	void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
