@@ -419,7 +419,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 
 	bool load_weak_lensing_data(string filename);
 	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
-	void add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax);
+	void add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude);
 
 	bool read_data_line(ifstream& infile, vector<string>& datawords, int &n_datawords);
 	bool datastring_convert(const string& instring, int& outvar);
@@ -524,8 +524,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	double **subgridding_betafacs;
 
 	static const double perturber_einstein_radius_fraction;
-	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny);
-	void plot_weak_lensing_shear_field();
+	void plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny, const string filename = "shearfield.dat");
+	void plot_weak_lensing_shear_data(const bool include_model_shear, const string filename = "shear.dat");
 	void plot_lensinfo_maps(string file_root, const int x_n, const int y_N);
 	void plot_logkappa_map(const int x_N, const int y_N, const string filename, const bool ignore_mask);
 	void plot_logmag_map(const int x_N, const int y_N, const string filename);
@@ -815,10 +815,11 @@ public:
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
-	void add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
+	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
+	void add_lens(LensProfile *new_lens);
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	void update_lens_redshift_data();
@@ -835,7 +836,7 @@ public:
 	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
 	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 
-	void add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
 	void update_parameter_list();

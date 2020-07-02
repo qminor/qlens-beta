@@ -79,6 +79,7 @@ struct ParamPriorWeight
 		else if (prior_type==EVAL_LOG_PRIOR) return normfac/param;
 		//else if (prior_weight==EVAL_GAUSS_PRIOR)
 		//else if (prior_weight==INVERSE_EVAL_GAUSS_PRIOR)
+		else return 1.0;
 	}
 };
 

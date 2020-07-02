@@ -274,6 +274,7 @@ double Powell::minimize(void)
 		}
 	}
 	die("Too many iterations in Brent's Method (for minimizing)");
+	return 0;
 }
 
 double Powell::linemin()

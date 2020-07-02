@@ -212,7 +212,7 @@ class GetDistPlotter():
     def __init__(self, plot_data, settings=None):
         if settings is None: self.settings = defaultSettings
         else: self.settings = settings
-        if isinstance(plot_data, basestring): self.plot_data = [plot_data]
+        if isinstance(plot_data, str): self.plot_data = [plot_data]
         else: self.plot_data = plot_data
         self.sampleAnalyser = SampleAnalysisGetDist(self.plot_data)
         self.newPlot()
@@ -311,7 +311,7 @@ class GetDistPlotter():
                 if color is None:
                     if of is not None:color = self.settings.solid_colors[of - plotno - 1]
                     else: color = self.settings.solid_colors[plotno]
-                if isinstance(color, basestring):
+                if isinstance(color, str):
                     cols = [matplotlib.colors.colorConverter.to_rgb(color)]
                     for _ in range(1, len(density.contours)):
                         cols = [[c * (1 - self.settings.solid_contour_palefactor) + self.settings.solid_contour_palefactor for c in cols[0]]] + cols
@@ -354,7 +354,7 @@ class GetDistPlotter():
 
     def plot_2d(self, roots, param_pair, xmark=None, ymark=None, truemarker='x', mark_color='gray', truemarksize=12, shaded=True, filled=False, log=False, add_legend_proxy=True, **ax_args):
         if self.fig is None: self.make_figure()
-        if isinstance(roots, basestring):roots = [roots]
+        if isinstance(roots, str):roots = [roots]
         param_pair = self.get_param_array(roots[0], param_pair)
         if self.settings.progress: print('plotting: ', [param.name for param in param_pair])
         if shaded and not filled: self.add_2d_shading(roots[0], param_pair[0], param_pair[1])
@@ -430,7 +430,7 @@ class GetDistPlotter():
 
     def plot_1d(self, roots, param, marker=None, marker_color=None, label_right=False,
                 no_ylabel=False, no_ytick=False, no_zero=False, **ax_args):
-        if isinstance(roots, basestring):roots = [roots]
+        if isinstance(roots, str):roots = [roots]
         if self.fig is None: self.make_figure()
         param = self.check_param(roots[0], param)
         xmin = None
@@ -510,13 +510,15 @@ class GetDistPlotter():
                 args['handletextpad'] = 0
             if figure:
 #                args['frameon'] = self.settings.figure_legend_frame
-                self.legend = self.fig.legend(lines, legend_labels, legend_loc, **args)
+                #self.legend = self.fig.legend(lines, legend_labels, legend_loc, **args)
+                self.legend = self.fig.legend(lines, legend_labels, **args)
                 if not self.settings.figure_legend_frame:
                     # this works with tight_layout
                     self.legend.get_frame().set_edgecolor('none')
             else:
                 args['frameon'] = self.settings.legend_frame and not colored_text
-                self.legend = gca().legend(lines, legend_labels, legend_loc, **args)
+                #self.legend = gca().legend(lines, legend_labels, legend_loc, **args)
+                self.legend = gca().legend(lines, legend_labels, **args)
             if not self.settings.legend_rect_border:
                 for rect in self.legend.get_patches():
                     rect.set_edgecolor(rect.get_facecolor())
@@ -627,7 +629,7 @@ class GetDistPlotter():
             return tick
 
     def triangle_plot(self, roots, in_params=None, legend_labels=None, markers=None, show_marker_2d=False, marker_2d='x', marker_color='gray', marker_color_2d=None, plot_3d_with_param=None, filled_compare=False, shaded=False):
-        if isinstance(roots, basestring):roots = [roots]
+        if isinstance(roots, str):roots = [roots]
         if marker_color_2d is None: marker_color_2d = marker_color
         old_axis_marker_lw = self.settings.axis_marker_lw
         self.settings.axis_marker_lw = self.settings.axis_marker_lw * 1.5  # the markers need to look a bit thicker compared to just plotting 1d posteriors
@@ -753,7 +755,7 @@ class GetDistPlotter():
         return [mins, maxs]
 
     def plot_3d(self, roots, in_params, color_bar=True, line_offset=0, filled=False, **ax_args):
-        if isinstance(roots, basestring):roots = [roots]
+        if isinstance(roots, str):roots = [roots]
         params = self.get_param_array(roots[0], in_params)
         if self.fig is None: self.make_figure()
         mins, maxs = self.add_3d_scatter(roots[0], params, color_bar=color_bar)

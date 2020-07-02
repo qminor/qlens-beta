@@ -23,7 +23,7 @@ inline bool isfinite (const complex<double> &z)
 {
   const double x = real (z), y = imag (z);
 
-  return (finite (x) && finite (y));
+  return (isfinite (x) && isfinite (y));
 }
 
 

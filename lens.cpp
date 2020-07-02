@@ -1571,7 +1571,59 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 	jac_tot[1][0] = -jac_tot[1][0];
 }
 
-void Lens::add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+void Lens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+{
+	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
+	
+	LensProfile* new_lens;
+
+	int old_emode = LensProfile::default_ellipticity_mode;
+	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
+
+		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
+
+	switch (name) {
+		case PTMASS:
+			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
+		case SHEET:
+			new_lens = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
+		case DEFLECTION:
+			new_lens = new Deflection(zl, zs, scale1, scale2, this); break;
+		case ALPHA:
+			new_lens = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+		case SHEAR:
+			new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
+		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
+		case nfw:
+			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case TRUNCATED_nfw:
+			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
+		case CORED_nfw:
+			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case PJAFFE:
+			new_lens = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case EXPDISK:
+			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+		case HERNQUIST:
+			new_lens = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+		case CORECUSP:
+			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
+			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case SERSIC_LENS:
+			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case CORED_SERSIC_LENS:
+			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, scale2, special_param1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case TESTMODEL: // Model for testing purposes
+			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+		default:
+			die("Lens type not recognized");
+	}
+	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
+	add_lens(new_lens);
+}
+
+/*
+void Lens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	
@@ -1607,7 +1659,7 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 		case HERNQUIST:
 			lens_list[nlens-1] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case CORECUSP:
-			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to add_lens(...) function for model CORECUSP");
+			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
 			lens_list[nlens-1] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case SERSIC_LENS:
 			lens_list[nlens-1] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
@@ -1625,8 +1677,9 @@ void Lens::add_lens(LensProfileName name, const int emode, const double zl, cons
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
+*/
 
-void Lens::add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
+void Lens::create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
 	add_new_lens_entry(zl);
 
@@ -1642,17 +1695,17 @@ void Lens::add_lens(const char *splinefile, const int emode, const double zl, co
 
 void Lens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
 {
-	add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
+	create_and_add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
 void Lens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode)
 {
-	add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc,0,0,pmode);
+	create_and_add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc,0,0,pmode);
 }
 
 void Lens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
 {
-	add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
+	create_and_add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
 }
 
 void Lens::add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
@@ -1815,6 +1868,18 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	reset();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	return true;
+}
+
+void Lens::add_lens(LensProfile *new_lens)
+{
+	add_new_lens_entry(new_lens->zlens);
+
+	lens_list[nlens-1] = new_lens;
+
+	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset();
+	if (auto_ccspline) automatically_determine_ccspline_mode();
+	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 
 void Lens::add_new_lens_entry(const double zl)
@@ -3200,7 +3265,7 @@ double Lens::galaxy_subgridding_scale_equation(const double r)
 	return (lambda0 - perturber_avg_kappa);
 }
 
-void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny)
+void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny, const string filename)
 {
 	int i, j, k;
 	double x, y;
@@ -3211,7 +3276,8 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 	double compass_step = scale / (compass_steps-1);
 	lensvector pos;
 	double kapval,shearval,shear_angle,xp,yp,t;
-	ofstream sout("shear.dat");
+	ofstream sout;
+	open_output_file(sout,filename);
 	for (i=0, x=xmin; i < nx; i++, x += xstep) {
 		for (j=0, y=ymin; j < ny; j++, y += ystep) {
 			pos[0]=x; pos[1]=y;
@@ -3232,11 +3298,13 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 	sout.close();
 }
 
-void Lens::plot_weak_lensing_shear_field()
+void Lens::plot_weak_lensing_shear_data(const bool include_model_shear, const string filename)
 {
+	double *zfacs = new double[n_lens_redshifts];
 	int i, j, k;
 	double x, y;
 	double shearval,shear_angle,shear1,shear2,xp,yp,t;
+	double model_shear1,model_shear2,model_shearval,model_shear_angle,xmp,ymp,tm;
 	double xmin=1e30, xmax=-1e30, ymin=1e30, ymax=-1e30, min_shear=1e30, max_shear=-1e30;
 	for (i=0; i < weak_lensing_data.n_sources; i++) {
 		shear1 = weak_lensing_data.reduced_shear1[i];
@@ -3254,14 +3322,21 @@ void Lens::plot_weak_lensing_shear_field()
 	int nsteps_approx = (int) sqrt(weak_lensing_data.n_sources);
 	double xstep = (xmax-xmin)/nsteps_approx;
 	double ystep = (ymax-ymin)/nsteps_approx;
-	double scale = 0.5*dmin(xstep,ystep);
+	double scale_factor = 1.7; // slightly enlarges the "arrows" so they're easier to see on the screen
+	double scale = scale_factor*dmin(xstep,ystep)/2.0;
+	double zsrc;
 	int compass_steps = 2;
-	double compass_step = scale / (compass_steps-1);
+	double compass_step, model_compass_step;
 
-	ofstream sout("shear.dat");
+	ofstream sout;
+	open_output_file(sout,filename);
 	for (i=0; i < weak_lensing_data.n_sources; i++) {
 		x = weak_lensing_data.pos[i][0];
 		y = weak_lensing_data.pos[i][1];
+		zsrc = weak_lensing_data.zsrc[i];
+		for (int i=0; i < n_lens_redshifts; i++) {
+			zfacs[i] = kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+		}
 		shear1 = weak_lensing_data.reduced_shear1[i];
 		shear2 = weak_lensing_data.reduced_shear2[i];
 		shearval = sqrt(shear1*shear1+shear2*shear2);
@@ -3276,16 +3351,42 @@ void Lens::plot_weak_lensing_shear_field()
 			shear_angle = -shear_angle;
 		}
 		shear_angle *= 0.5;
+
+		if (include_model_shear) {
+			lensvector xvec(x,y);
+			reduced_shear_components(xvec,model_shear1,model_shear2,0,zfacs);
+			model_shearval = sqrt(model_shear1*model_shear1 + model_shear2*model_shear2);
+			model_shear_angle = atan(abs(model_shear2/model_shear1));
+			if (model_shear1 < 0) {
+				if (model_shear2 < 0)
+					model_shear_angle = model_shear_angle - M_PI;
+				else
+					model_shear_angle = M_PI - model_shear_angle;
+			} else if (model_shear2 < 0) {
+				model_shear_angle = -model_shear_angle;
+			}
+			model_shear_angle *= 0.5;
+			model_compass_step = scale*(model_shearval/max_shear) / (compass_steps-1);
+		}
+
 		for (k=-compass_steps+1; k < compass_steps; k++)
 		{
 			t = k*compass_step;
+			tm = k*model_compass_step;
 			xp = x + t*cos(shear_angle);
 			yp = y + t*sin(shear_angle);
-			sout << xp << " " << yp << endl;
+			if (include_model_shear) {
+				xmp = x + tm*cos(model_shear_angle);
+				ymp = y + tm*sin(model_shear_angle);
+				sout << xp << " " << yp << " " << xmp << " " << ymp << endl;
+			} else {
+				sout << xp << " " << yp << endl;
+			}
 		}
 		sout << endl;
 	}
 	sout.close();
+	delete[] zfacs;
 }
 
 /*
@@ -5394,7 +5495,7 @@ void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept
 	delete[] zfacs;
 }
 
-void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax)
+void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude)
 {
 	int wl_index = weak_lensing_data.n_sources;
 	lensvector src;
@@ -5405,8 +5506,10 @@ void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, cons
 		idstr << wl_index;
 		idstr >> id_string;
 
-		src[0] = (xmax-xmin)*RandomNumber() + xmin;
-		src[1] = (ymax-ymin)*RandomNumber() + ymin;
+		do {
+			src[0] = (xmax-xmin)*RandomNumber() + xmin;
+			src[1] = (ymax-ymin)*RandomNumber() + ymin;
+		} while (sqrt(SQR(src[0]-grid_xcenter)+SQR(src[1]-grid_ycenter)) <= r_exclude);
 		zsrc = (zmax-zmin)*RandomNumber() + zmin; // redshift
 		add_simulated_weak_lensing_data(id_string,src,zsrc);
 
@@ -11222,10 +11325,10 @@ void Lens::plot_mc_curve(const int lensnumber, const string filename)
 	LensProfile::use_ellipticity_components = true;
 	Shear::use_shear_component_params = true;
 
-	add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
 	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
-	add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
+	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
 	croot_lensnumber = lensnumber;
 	double rmax,rmax_true,avgsig,menc,menc_true;
@@ -11272,10 +11375,10 @@ void Lens::find_equiv_mvir(const double newc)
 	LensProfile::use_ellipticity_components = true;
 	Shear::use_shear_component_params = true;
 
-	add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
 	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
-	add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
+	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
 	double rmax,rmax_true,avgsig,menc,menc_true;
 	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
@@ -11405,9 +11508,9 @@ void Lens::generate_solution_chain_sdp81()
 
 			xs_true = -rs*cos(theta_sub);
 			ys_true = -rs*sin(theta_sub);
-			add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-			add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
 			//cout << endl;
 			create_source_surface_brightness_grid(false);
@@ -11421,7 +11524,7 @@ void Lens::generate_solution_chain_sdp81()
 
 			auto_srcgrid_npixels = true;
 			auto_sourcegrid = true;
-			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
@@ -11433,7 +11536,7 @@ void Lens::generate_solution_chain_sdp81()
 			shear_vary_flags[1] = true;
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
-				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
 				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -11476,9 +11579,9 @@ void Lens::generate_solution_chain_sdp81()
 			double avg_kappa, menc_true;
 			if (include_subhalo) {
 				clear_lenses();
-				add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-				add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
 				menc_true = avg_kappa*M_PI*SQR(rmax)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
 				mtot_fit = M_PI*a_fit*bs_fit*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
@@ -11517,9 +11620,9 @@ void Lens::generate_solution_chain_sdp81()
 
 			xs_true = -rs*cos(theta_sub);
 			ys_true = -rs*sin(theta_sub);
-			add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-			add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
 			//cout << endl;
 			create_source_surface_brightness_grid(false);
@@ -11533,7 +11636,7 @@ void Lens::generate_solution_chain_sdp81()
 
 			auto_srcgrid_npixels = true;
 			auto_sourcegrid = true;
-			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
@@ -11545,7 +11648,7 @@ void Lens::generate_solution_chain_sdp81()
 			shear_vary_flags[1] = true;
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
-				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
 				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -11592,9 +11695,9 @@ void Lens::generate_solution_chain_sdp81()
 			double avg_kappa, menc_true;
 			if (include_subhalo) {
 				clear_lenses();
-				add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-				add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
 				menc_true = avg_kappa*M_PI*SQR(rmax)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
 				mtot_fit = M_PI*a_fit*bs_fit*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
@@ -11657,9 +11760,9 @@ void Lens::generate_solution_chain_sdp81()
 //			xs_true = -r_initial*cos(theta_sub);
 //			ys_true = -r_initial*sin(theta_sub);
 //			a_true = SQR(21.6347)*ks_true/1.606; // from formula for tidal radius of Munoz profile, see Minor et al. (2016)
-//			add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 //			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-//			add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+//			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 //			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
 //			//cout << endl;
 //			create_source_surface_brightness_grid(false);
@@ -11673,7 +11776,7 @@ void Lens::generate_solution_chain_sdp81()
 //
 //			auto_srcgrid_npixels = true;
 //			auto_sourcegrid = true;
-//			add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+//			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 //			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 //			lens_list[1]->anchor_center_to_lens(lens_list,0);
 //			boolvector vary_flags(7);
@@ -11685,7 +11788,7 @@ void Lens::generate_solution_chain_sdp81()
 //			shear_vary_flags[1] = true;
 //			lens_list[1]->vary_parameters(shear_vary_flags);
 //			if (include_subhalo) {
-//				add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+//				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
 //				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 //				boolvector pjaffe_vary_flags(7);
 //				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -11734,9 +11837,9 @@ void Lens::generate_solution_chain_sdp81()
 //			double avg_kappa, menc_true;
 //			if (include_subhalo) {
 //				clear_lenses();
-//				add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 //				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
-//				add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
+//				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 //				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
 //				menc_true = avg_kappa*M_PI*SQR(rmax)*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81
 //				mtot_fit = M_PI*a_fit*bs_fit*4.59888e10; // the last number is sigma_cr for the lens/source redshifts of SDP.81

@@ -607,7 +607,7 @@ void LensProfile::print_parameters()
 			else cout << *(param[i]);
 			cout << ", ";
 		}
-		cout << "center=(" << x_center << "," << y_center << ")";
+		cout << "xc=" << x_center << ", yc=" << y_center;
 	} else {
 		for (int i=0; i < n_params-1; i++) {
 			cout << paramnames[i] << "=";
@@ -1656,8 +1656,8 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, const 
 		scaled_rho = calculate_scaled_density_3d(r,1e-4,converged);
 		rho3d = (sigma_cr*CUBE(kpc_to_arcsec))*scaled_rho;
 
-		kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << " " << r_kpc << " " << kappa_rsq(rsq)*sigma_cr << " " << rho3d << endl;
-		if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
+		//kout << r << " " << kappa_rsq(rsq) << " " << kavg << " " << kavg*r << " " << M_PI*kavg*rsq*sigma_cr << " " << r_kpc << " " << kappa_rsq(rsq)*sigma_cr << " " << rho3d << endl;
+		//if (kdname != NULL) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }
 
