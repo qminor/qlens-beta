@@ -695,7 +695,7 @@ Lens::Lens() : UCMC()
 	use_magnification_in_chisq = true;
 	use_magnification_in_chisq_during_repeats = true;
 	include_central_image = true;
-	include_imgpos_chisq = true;
+	include_imgpos_chisq = false;
 	include_flux_chisq = false;
 	include_weak_lensing_chisq = false;
 	include_parity_in_chisq = false;
@@ -4931,6 +4931,7 @@ bool Lens::add_simulated_image_data(const lensvector &sourcept)
 		sourcepts_lower_limit = new_sourcepts_lower_limit;
 	}
 	sort_image_data_into_redshift_groups();
+	include_imgpos_chisq = true;
 	return true;
 }
 
@@ -5167,6 +5168,7 @@ bool Lens::load_image_data(string filename)
 		//cout << source_redshift_groups[i] << endl;
 	//}
 
+	include_imgpos_chisq = true;
 	return true;
 }
 
@@ -6030,7 +6032,13 @@ void WeakLensingData::clear()
 bool Lens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
-		if ((sourcepts_fit==NULL) or (image_data==NULL)) { warn("cannot do fit; image data points have not been defined"); return false; }
+		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit==NULL) or (image_data==NULL))) {
+			warn("cannot do fit; image data points have not been defined");
+			return false;
+		}
+		if ((image_data==NULL) and (include_imgpos_chisq)) { warn("cannot evaluate image position chi-square; no image data has been defined"); return false; }
+		else if ((image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data has been defined"); return false; }
+		else if ((image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data has been defined"); return false; }
 	} else if ((source_fit_mode == Pixellated_Source) or (source_fit_mode==Parameterized_Source)) {
 		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return false; }
 	}
@@ -9400,7 +9408,10 @@ bool Lens::adopt_model(dvector &fitparams)
 	if (nlens == 0) { if (mpi_id==0) warn(warnings,"No fit model has been specified"); return false; }
 	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
 	if (fitparams.size() != n_fit_parameters) {
-		if (mpi_id==0) warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+		if (mpi_id==0) {
+			if (fitparams.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
+			else warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+		}
 		return false;
 	}
 	int i, index=0;
@@ -10105,7 +10116,7 @@ void Lens::print_lens_list(bool show_vary_params)
 			if (show_vary_params)
 				lens_list[i]->print_vary_parameters();
 		}
-		if (source_redshift != reference_source_redshift) cout << "NOTE: for all lenses, kappa is scaled by zsrc_ref = " << reference_source_redshift << endl;
+		if (source_redshift != reference_source_redshift) cout << "NOTE: for all lenses, kappa is defined by zsrc_ref = " << reference_source_redshift << endl;
 	}
 	else cout << "No lens models have been specified" << endl;
 	cout << endl;

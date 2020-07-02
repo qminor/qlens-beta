@@ -2200,7 +2200,7 @@ void Lens::process_commands(bool read_file)
 					n_infiles++;
 				}
 				else {
-					cerr << "Error: input file '" << words[1] << "' could not be opened" << endl;
+					cerr << "input file '" << words[1] << "' could not be opened" << endl;
 					if (n_infiles > 0) infile--;
 				}
 			} else if (nwords == 1) {
@@ -2218,7 +2218,7 @@ void Lens::process_commands(bool read_file)
 					}
 					outfile.close();
 				}
-				else cerr << "Error: output file '" << words[1] << "' could not be opened" << endl;
+				else cerr << "output file '" << words[1] << "' could not be opened" << endl;
 			} else if (nwords == 1) {
 				Complain("must specify filename for output file to be written to");
 			} else Complain("invalid number of arguments; must specify one filename to be read");
@@ -6359,7 +6359,7 @@ void Lens::process_commands(bool read_file)
 							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
 						}
 						ifstream testbf(scriptfile_str.c_str());
-						if (!testbf.is_open()) Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
+						if (!testbf.is_open()) Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
 						string checklimits;
 						testbf >> checklimits;
 						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
@@ -6385,7 +6385,7 @@ void Lens::process_commands(bool read_file)
 						}
 						else {
 							if (n_infiles > 0) infile--;
-							Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
+							Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
 						}
 						getline((*infile),line); // skip the first comment line
 						clear_lenses();
