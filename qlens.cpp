@@ -35,9 +35,9 @@ int main(int argc, char *argv[])
 #else
 	n_omp_threads = 1;
 #endif
-	//Grid::allocate_multithreaded_variables(n_omp_threads);
-	//SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
-	//Lens::allocate_multithreaded_variables(n_omp_threads);
+	Grid::allocate_multithreaded_variables(n_omp_threads);
+	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+	Lens::allocate_multithreaded_variables(n_omp_threads);
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
