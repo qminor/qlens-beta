@@ -199,7 +199,7 @@ public:
 	void reassign_coordinates(lensvector** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
 
 	static void set_splitting(int rs0, int ts0, int sl, int ccsl, double max_cs, bool neighbor_split);
-	static void allocate_multithreaded_variables(const int& threads);
+	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	static void reset_search_parameters();
 	~Grid();
@@ -681,7 +681,7 @@ public:
 	friend class SB_Profile;
 	Lens();
 	Lens(Lens *lens_in);
-	static void allocate_multithreaded_variables(const int& threads);
+	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	~Lens();
 #ifdef USE_MPI

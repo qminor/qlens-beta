@@ -51,10 +51,10 @@ bool Lens::respline_at_end; // for creating deflection spline
 int Lens::resplinesteps; // for creating deflection spline
 string Lens::fit_output_filename;
 
-int Lens::nthreads;
-lensvector *Lens::defs, **Lens::defs_subtot, *Lens::defs_i, *Lens::xvals_i;
-lensmatrix *Lens::jacs, *Lens::hesses, **Lens::hesses_subtot, *Lens::hesses_i, *Lens::Amats_i;
-int *Lens::indxs;
+int Lens::nthreads = 0;
+lensvector *Lens::defs = NULL, **Lens::defs_subtot = NULL, *Lens::defs_i = NULL, *Lens::xvals_i = NULL;
+lensmatrix *Lens::jacs = NULL, *Lens::hesses = NULL, **Lens::hesses_subtot = NULL, *Lens::hesses_i = NULL, *Lens::Amats_i = NULL;
+int *Lens::indxs = NULL;
 
 // The ParamSettings stuff should go in a separate cpp file!! Doesn't belong in lens.cpp
 void ParamSettings::update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
@@ -460,8 +460,12 @@ void ParamSettings::print_penalty_limits()
 }
 
 
-void Lens::allocate_multithreaded_variables(const int& threads)
+void Lens::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
+	if (xvals_i != NULL) {
+		if (!reallocate) return;
+		else deallocate_multithreaded_variables();
+	}
 	nthreads = threads;
 	// Note: the grid construction is not being parallelized any more...if you decide to ditch it for good, then get rid of these multithreaded variables and replace by single-thread version
 	xvals_i = new lensvector[nthreads];
@@ -481,19 +485,31 @@ void Lens::allocate_multithreaded_variables(const int& threads)
 
 void Lens::deallocate_multithreaded_variables()
 {
-	delete[] xvals_i;
-	delete[] defs;
-	delete[] defs_i;
-	delete[] jacs;
-	delete[] hesses;
-	delete[] hesses_i;
-	delete[] Amats_i;
-	for (int i=0; i < nthreads; i++) {
-		delete[] defs_subtot[i];
-		delete[] hesses_subtot[i];
+	if (xvals_i != NULL) {
+		delete[] xvals_i;
+		delete[] defs;
+		delete[] defs_i;
+		delete[] jacs;
+		delete[] hesses;
+		delete[] hesses_i;
+		delete[] Amats_i;
+		for (int i=0; i < nthreads; i++) {
+			delete[] defs_subtot[i];
+			delete[] hesses_subtot[i];
+		}
+		delete[] defs_subtot;
+		delete[] hesses_subtot;
+
+		xvals_i = NULL;
+		defs = NULL;
+		defs_i = NULL;
+		jacs = NULL;
+		hesses = NULL;
+		hesses_i = NULL;
+		Amats_i = NULL;
+		defs_subtot = NULL;
+		hesses_subtot = NULL;
 	}
-	delete[] defs_subtot;
-	delete[] hesses_subtot;
 }
 
 #ifdef USE_MUMPS
@@ -565,6 +581,16 @@ Lens::Lens() : UCMC()
 	mpi_group = NULL;
 #endif
 
+	int threads = 1;
+#ifdef USE_OPENMP
+	#pragma omp parallel
+	{
+		#pragma omp master
+		threads = omp_get_num_threads();
+	}
+#endif
+
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
 	hubble = 0.7;
 	omega_matter = 0.3;
 	set_cosmology(omega_matter,0.04,hubble,2.215);

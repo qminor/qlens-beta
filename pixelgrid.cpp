@@ -26,21 +26,21 @@
 #define JOB_END -2
 using namespace std;
 
-int SourcePixelGrid::nthreads;
+int SourcePixelGrid::nthreads = 0;
 const int SourcePixelGrid::max_levels = 6;
 int SourcePixelGrid::number_of_pixels;
 int *SourcePixelGrid::imin, *SourcePixelGrid::imax, *SourcePixelGrid::jmin, *SourcePixelGrid::jmax;
-TriRectangleOverlap *SourcePixelGrid::trirec;
-InterpolationCells *SourcePixelGrid::nearest_interpolation_cells;
+TriRectangleOverlap *SourcePixelGrid::trirec = NULL;
+InterpolationCells *SourcePixelGrid::nearest_interpolation_cells = NULL;
 lensvector **SourcePixelGrid::interpolation_pts[3];
-int *SourcePixelGrid::n_interpolation_pts;
+int *SourcePixelGrid::n_interpolation_pts = NULL;
 
 // The following should probably just be private, local variables in the relevant functions, that have to keep getting set from the lens pointers.
 // Otherwise it will be bug prone whenever changes are made, since the zfactors/betafactors pointers may be deleted and reassigned
-double *SourcePixelGrid::srcgrid_zfactors;
-double *ImagePixelGrid::imggrid_zfactors;
-double **SourcePixelGrid::srcgrid_betafactors;
-double **ImagePixelGrid::imggrid_betafactors;
+double *SourcePixelGrid::srcgrid_zfactors = NULL;
+double *ImagePixelGrid::imggrid_zfactors = NULL;
+double **SourcePixelGrid::srcgrid_betafactors = NULL;
+double **ImagePixelGrid::imggrid_betafactors = NULL;
 
 // parameters for creating the recursive grid
 double SourcePixelGrid::xcenter, SourcePixelGrid::ycenter;
@@ -53,13 +53,13 @@ double SourcePixelGrid::min_cell_area;
 int SourcePixelGrid::levels, SourcePixelGrid::splitlevels;
 //lensvector SourcePixelGrid::d1, SourcePixelGrid::d2, SourcePixelGrid::d3, SourcePixelGrid::d4;
 //double SourcePixelGrid::product1, SourcePixelGrid::product2, SourcePixelGrid::product3;
-ImagePixelGrid* SourcePixelGrid::image_pixel_grid;
+ImagePixelGrid* SourcePixelGrid::image_pixel_grid = NULL;
 bool SourcePixelGrid::regrid;
-int *SourcePixelGrid::maxlevs;
-lensvector ***SourcePixelGrid::xvals_threads;
-lensvector ***SourcePixelGrid::corners_threads;
-lensvector **SourcePixelGrid::twistpts_threads;
-int **SourcePixelGrid::twist_status_threads;
+int *SourcePixelGrid::maxlevs = NULL;
+lensvector ***SourcePixelGrid::xvals_threads = NULL;
+lensvector ***SourcePixelGrid::corners_threads = NULL;
+lensvector **SourcePixelGrid::twistpts_threads = NULL;
+int **SourcePixelGrid::twist_status_threads = NULL;
 
 ifstream SourcePixelGrid::sb_infile;
 
@@ -73,8 +73,12 @@ void SourcePixelGrid::set_splitting(int usplit0, int wsplit0, double min_cs)
 	min_cell_area = min_cs;
 }
 
-void SourcePixelGrid::allocate_multithreaded_variables(const int& threads)
+void SourcePixelGrid::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
+	if (trirec != NULL) {
+		if (!reallocate) return;
+		else deallocate_multithreaded_variables();
+	}
 	nthreads = threads;
 	trirec = new TriRectangleOverlap[nthreads];
 	imin = new int[nthreads];
@@ -99,29 +103,55 @@ void SourcePixelGrid::allocate_multithreaded_variables(const int& threads)
 
 void SourcePixelGrid::deallocate_multithreaded_variables()
 {
-	delete[] trirec;
-	delete[] imin;
-	delete[] imax;
-	delete[] jmin;
-	delete[] jmax;
-	delete[] nearest_interpolation_cells;
-	delete[] maxlevs;
-	for (int i=0; i < 3; i++) delete[] interpolation_pts[i];
-	delete[] n_interpolation_pts;
-	int i,j;
-	for (j=0; j < nthreads; j++) {
-		for (i=0; i <= 2; i++) delete[] xvals_threads[j][i];
-		delete[] xvals_threads[j];
-		delete[] corners_threads[j];
+	if (trirec != NULL) {
+		delete[] trirec;
+		delete[] imin;
+		delete[] imax;
+		delete[] jmin;
+		delete[] jmax;
+		delete[] nearest_interpolation_cells;
+		delete[] maxlevs;
+		for (int i=0; i < 3; i++) delete[] interpolation_pts[i];
+		delete[] n_interpolation_pts;
+		int i,j;
+		for (j=0; j < nthreads; j++) {
+			for (i=0; i <= 2; i++) delete[] xvals_threads[j][i];
+			delete[] xvals_threads[j];
+			delete[] corners_threads[j];
+		}
+		delete[] xvals_threads;
+		delete[] corners_threads;
+		delete[] twistpts_threads;
+		delete[] twist_status_threads;
+
+		trirec = NULL;
+		imin = NULL;
+		imax = NULL;
+		jmin = NULL;
+		jmax = NULL;
+		nearest_interpolation_cells = NULL;
+		maxlevs = NULL;
+		for (int i=0; i < 3; i++) interpolation_pts[i] = NULL;
+		n_interpolation_pts = NULL;
+		xvals_threads = NULL;
+		corners_threads = NULL;
+		twistpts_threads = NULL;
+		twist_status_threads = NULL;
 	}
-	delete[] xvals_threads;
-	delete[] corners_threads;
-	delete[] twistpts_threads;
-	delete[] twist_status_threads;
 }
 
 SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, double y_min, double y_max) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
+	int threads = 1;
+#ifdef USE_OPENMP
+	#pragma omp parallel
+	{
+		#pragma omp master
+		threads = omp_get_num_threads();
+	}
+#endif
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+
 // this constructor is used for a Cartesian grid
 	center_pt = 0;
 	// For the Cartesian grid, u = x, w = y
@@ -181,6 +211,16 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, doub
 
 SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, const double& minarea_in) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
+	int threads = 1;
+#ifdef USE_OPENMP
+	#pragma omp parallel
+	{
+		#pragma omp master
+		threads = omp_get_num_threads();
+	}
+#endif
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+
 	min_cell_area = minarea_in;
 	string info_filename = pixel_data_fileroot + ".info";
 	ifstream infofile(info_filename.c_str());
@@ -253,6 +293,16 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, cons
 // a pointer to the zeroth-level grid).
 SourcePixelGrid::SourcePixelGrid(Lens* lens_in, SourcePixelGrid* input_pixel_grid) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
+	int threads = 1;
+#ifdef USE_OPENMP
+	#pragma omp parallel
+	{
+		#pragma omp master
+		threads = omp_get_num_threads();
+	}
+#endif
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+
 	// these are all static anyway, so this might be superfluous
 	min_cell_area = input_pixel_grid->min_cell_area;
 	u_split_initial = input_pixel_grid->u_split_initial;

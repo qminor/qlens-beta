@@ -101,7 +101,7 @@ class SourcePixelGrid
 	SourcePixelGrid(Lens* lens_in, SourcePixelGrid* input_pixel_grid);
 	SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, const double& minarea_in);
 	static void set_splitting(int rs0, int ts0, double min_cs);
-	static void allocate_multithreaded_variables(const int& threads);
+	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid);
 	inline bool check_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
