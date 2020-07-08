@@ -19,16 +19,11 @@ bool LensProfile::output_integration_errors;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Lens* lens_in)
 {
-	lens = lens_in;
-	lenstype = KSPLINE;
-	model_name = "kspline";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_lens_properties();
+	setup_cosmology(lens_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	qx_parameter = qx_in;
 	f_parameter = f_in;
 	kspline.input(splinefile);
@@ -37,12 +32,17 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 	set_integration_pointers();
 }
 
+void LensProfile::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = KSPLINE;
+	model_name = "kspline";
+	special_parameter_command = "";
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+}
+
 void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
 	center_defined = true;
-	zlens_current = zlens;
-	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
 	parameter_mode = pmode_in;
 	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
 	set_nparams_and_anchordata(np);
@@ -59,6 +59,16 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, c
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
 	assign_paramnames();
+}
+
+void LensProfile::setup_cosmology(Lens* lens_in, const double zlens_in, const double zsrc_in)
+{
+	lens = lens_in;
+	zlens = zlens_in;
+	zlens_current = zlens_in;
+	zsrc_ref = zsrc_in;
+	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)

@@ -1608,6 +1608,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 
 		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
 
+	Alpha* alphaptr;
 	switch (name) {
 		case PTMASS:
 			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
@@ -1616,7 +1617,15 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 		case DEFLECTION:
 			new_lens = new Deflection(zl, zs, scale1, scale2, this); break;
 		case ALPHA:
-			new_lens = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+			//new_lens = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break; // the old way
+			
+			alphaptr = new Alpha();
+			alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
+
+			//alphaptr = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
+		
+			new_lens = alphaptr;
+			break;
 		case SHEAR:
 			new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
@@ -1645,7 +1654,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 			die("Lens type not recognized");
 	}
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
-	add_lens(new_lens);
+	add_lens(new_lens,zl,zs);
 }
 
 /*
@@ -1896,8 +1905,11 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	return true;
 }
 
-void Lens::add_lens(LensProfile *new_lens)
+void Lens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 {
+	new_lens->set_default_base_settings(Gauss_NN, integral_tolerance);
+	new_lens->setup_cosmology(this,zl,zs);
+
 	add_new_lens_entry(new_lens->zlens);
 
 	lens_list[nlens-1] = new_lens;
@@ -7173,45 +7185,6 @@ double Lens::chisq_weak_lensing()
 			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
 
-			//cout << "COMPS: " << g1 << " " << weak_lensing_data.reduced_shear1[i] << " " << g2 << " " << weak_lensing_data.reduced_shear2[i] << endl;
-			//double blaergh = ((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]);
-			//cout << "xchi: " << blaergh << endl;
-			//blaergh = ((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]);
-			//cout << "ychi: " << blaergh << endl;
-
-
-			/*
-			// For testing purposes
-			double shearval, shear_angle;
-
-			shearval = sqrt(g1*g1+g2*g2);
-			shear_angle = atan(abs(g2/g1));
-			if (g1 < 0) {
-				if (g2 < 0)
-					shear_angle = shear_angle - M_PI;
-				else
-					shear_angle = M_PI - shear_angle;
-			} else if (g2 < 0) {
-				shear_angle = -shear_angle;
-			}
-			shear_angle *= 0.5;
-			shear_angle *= 180.0/M_PI;
-
-			double shearval2, shear_angle2;
-			shearval2 = sqrt(weak_lensing_data.reduced_shear1[i]*weak_lensing_data.reduced_shear1[i]+weak_lensing_data.reduced_shear2[i]*weak_lensing_data.reduced_shear2[i]);
-			shear_angle2 = atan(abs(weak_lensing_data.reduced_shear2[i]/weak_lensing_data.reduced_shear1[i]));
-			if (weak_lensing_data.reduced_shear1[i] < 0) {
-				if (weak_lensing_data.reduced_shear2[i] < 0)
-					shear_angle2 = shear_angle2 - M_PI;
-				else
-					shear_angle2 = M_PI - shear_angle2;
-			} else if (weak_lensing_data.reduced_shear2[i] < 0) {
-				shear_angle2 = -shear_angle2;
-			}
-			shear_angle2 *= 0.5;
-			shear_angle2 *= 180.0/M_PI;
-			cout << shearval << " " << shearval2 << " " << shear_angle << " " << shear_angle2 << endl;
-			*/
 		}
 	}
 	for (i=0; i < nsrc; i++) delete[] zfacs[i];

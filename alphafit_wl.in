@@ -15,6 +15,7 @@ fit method simplex      # This is the default fit method (downhill simplex metho
 chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
 sci_notation off        # This is just up to your personal preference
 central_image off       # The image data does not include a central image, so this tells QLens not to search for one.
+plot_square_axes on     # Makes it so the x- and y-axes have similar length scale on the screen when plotting.
 wldata read alpha_wl.dat    # Loads in the weak lensing data
 wldata                      # Shows the image data so you can see what it looks like
 
