@@ -5981,6 +5981,9 @@ void Lens::process_commands(bool read_file)
 				}
 				else if (words[1]=="run")
 				{
+					int nparams;
+					get_n_fit_parameters(nparams);
+					if (nparams==0) Complain("cannot run fit; no parameters are being varied");
 					bool resume = false;
 					bool skip_run = false;
 					bool no_errors = false;
@@ -9614,6 +9617,7 @@ void Lens::process_commands(bool read_file)
 			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
+			test_lens_functions();
 			//double chisq0;
 			//calculate_chisq0_from_srcgrid(chisq0, true);
 
@@ -9633,8 +9637,9 @@ void Lens::process_commands(bool read_file)
 			//double rmax,menc;
 			//calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);
-			plot_shear_field(-10,10,50,-10,10,50);
+			//plot_shear_field(-10,10,50,-10,10,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
+			//lens_list[0]->tryupdate();
 		}
 		else if (words[0]=="plotmc") {
 			// You should have two extra arguments that specify logm_min and logm_max, and maybe even a third arg for number of points

@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
 	bool read_from_file = false;
 	bool verbal_mode = true;
 	bool quit_after_reading_file = false;
+	bool run_test_function = false;
 	char input_filename[40];
 	bool find_total_time = false;
 	int inversion_nthread = n_omp_threads;
@@ -69,8 +70,9 @@ int main(int argc, char *argv[])
 					case 'p': mumps_mpi = false; break;
 					case 'Q': quit_if_error = false; break;
 					case 'n': suppress_plots = true; break;
-					case 't':
-						if (sscanf(argv[i], "t%i", &inversion_nthread)==0) usage_error(mpi_id);
+					case 't': run_test_function = true; break;
+					case 'i':
+						if (sscanf(argv[i], "i%i", &inversion_nthread)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
 						break;
 					case 'f':
@@ -236,7 +238,8 @@ int main(int argc, char *argv[])
 #endif
 	}
 
-	lens.process_commands(read_from_file);
+	if (run_test_function) lens.test_lens_functions();
+	else lens.process_commands(read_from_file);
 
 	if (disptime) {
 		double wtime;
