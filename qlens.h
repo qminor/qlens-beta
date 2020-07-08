@@ -1071,6 +1071,7 @@ public:
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
 	int sample_add(const int i, const int j);
+	void test_lens_functions();
 };
 
 struct ImageData
@@ -1871,7 +1872,6 @@ inline double Lens::kappa(const double& x, const double& y, double* zfacs, doubl
 {
 	double kappa;
 	if (n_lens_redshifts==1) {
-		double kappa_subtot;
 		int j;
 		kappa=0;
 		for (j=0; j < nlens; j++) {
@@ -2742,7 +2742,6 @@ inline double Lens::kappa_exclude(const lensvector &x, bool* exclude, double* zf
 
 	double kappa;
 	if (n_lens_redshifts==1) {
-		double kappa_subtot;
 		int j;
 		kappa=0;
 		if (use_perturber_flags) {
@@ -2940,7 +2939,6 @@ inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, dou
 
 	double kappa;
 	if (n_lens_redshifts==1) {
-		double kappa_subtot;
 		int j;
 		kappa=0;
 		if (use_perturber_flags) {

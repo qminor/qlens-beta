@@ -182,14 +182,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static bool output_integration_errors; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
 	static int default_ellipticity_mode;
-	Lens* cosmo;
+	Lens* lens;
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
 	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
 	string subclass_label;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
-	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0), parameter_anchor_exponent(0)
+	LensProfile() : defptr(0), kapavgptr_rsq_spherical(0), potptr_rsq_spherical(0), hessptr(0), potptr(0), def_and_hess_ptr(0), qx_parameter(1), anchor_parameter(0), parameter_anchor_lens(0), parameter_anchor_paramnum(0), param(0), parameter_anchor_ratio(0), parameter_anchor_exponent(0), lens(0)
 	{
 		set_default_base_settings(20,5e-3); // is this really necessary? check...
 		zfac = 1.0;

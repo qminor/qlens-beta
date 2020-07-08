@@ -6193,7 +6193,7 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 			default:
 				die("lens type not supported for fitting");
 		}
-		fitmodel->lens_list[i]->cosmo = fitmodel; // point to the cosmology in fitmodel, since this may be varied (by varying H0, e.g.)
+		fitmodel->lens_list[i]->lens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
 	for (i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
@@ -7350,7 +7350,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	//}
 	if (nlens==0) { warn("cannot do fit; no lens models have been defined"); return false; }
 	get_n_fit_parameters(n_fit_parameters);
-	//if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
+	if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
 	fitparams.input(n_fit_parameters);
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
@@ -9688,6 +9688,7 @@ void Lens::output_bestfit_model()
 
 double Lens::fitmodel_loglike_point_source(double* params)
 {
+	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
@@ -9731,39 +9732,43 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		}
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (running_fit) cout << "\033[2A" << flush;
-			if (used_imgplane_chisq) {
-				if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
-				int tot_data_images = 0;
-				for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-				cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
-				if (fitmodel->chisq_it % chisq_display_frequency == 0) {
-					cout << ", chisq_pos=" << chisq;
-					if (syserr_pos != 0.0) {
-						double signormfac, chisq_sys = chisq;
-						int i,k;
-						for (i=0; i < n_sourcepts_fit; i++) {
-							for (k=0; k < image_data[i].n_images; k++) {
-								signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
-								chisq_sys -= signormfac;
+			if (include_imgpos_chisq) {
+				if (used_imgplane_chisq) {
+					if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
+					int tot_data_images = 0;
+					for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
+					cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
+					if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+						cout << ", chisq_pos=" << chisq;
+						if (syserr_pos != 0.0) {
+							double signormfac, chisq_sys = chisq;
+							int i,k;
+							for (i=0; i < n_sourcepts_fit; i++) {
+								for (k=0; k < image_data[i].n_images; k++) {
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+									chisq_sys -= signormfac;
+								}
 							}
+							cout << ", chisq_pos_sys=" << chisq_sys;
 						}
-						cout << ", chisq_pos_sys=" << chisq_sys;
+						showed_first_chisq = true;
 					}
-				}
-			} else {
-				if (fitmodel->chisq_it % chisq_display_frequency == 0) {
-					cout << "chisq_pos=" << chisq;
-					// redundant and ugly! make it prettier later
-					if (syserr_pos != 0.0) {
-						double signormfac, chisq_sys = chisq;
-						int i,k;
-						for (i=0; i < n_sourcepts_fit; i++) {
-							for (k=0; k < image_data[i].n_images; k++) {
-								signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
-								chisq_sys -= signormfac;
+				} else {
+					if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+						cout << "chisq_pos=" << chisq;
+						// redundant and ugly! make it prettier later
+						if (syserr_pos != 0.0) {
+							double signormfac, chisq_sys = chisq;
+							int i,k;
+							for (i=0; i < n_sourcepts_fit; i++) {
+								for (k=0; k < image_data[i].n_images; k++) {
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+									chisq_sys -= signormfac;
+								}
 							}
+							cout << ", chisq_pos_sys=" << chisq_sys;
 						}
-						cout << ", chisq_pos_sys=" << chisq_sys;
+						showed_first_chisq = true;
 					}
 				}
 			}
@@ -9771,7 +9776,10 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	} else {
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (running_fit) cout << "\033[2A" << flush;
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=0";
+			if ((fitmodel->chisq_it % chisq_display_frequency == 0) and (include_imgpos_chisq)) {
+				cout << "chisq_pos=0";
+				showed_first_chisq = true;
+			}
 		}
 	}
 	chisq_total += chisq;
@@ -9779,21 +9787,27 @@ double Lens::fitmodel_loglike_point_source(double* params)
 		chisq = fitmodel->chisq_flux();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_flux=" << chisq;
+			if (showed_first_chisq) cout << ", ";
+			else showed_first_chisq = true;
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_flux=" << chisq;
 		}
 	}
 	if (include_time_delay_chisq) {
 		chisq = fitmodel->chisq_time_delays();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_td=" << chisq;
+			if (showed_first_chisq) cout << ", ";
+			else showed_first_chisq = true;
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_td=" << chisq;
 		}
 	}
 	if (include_weak_lensing_chisq) {
 		chisq = fitmodel->chisq_weak_lensing();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
-			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << ", chisq_weak_lensing=" << chisq;
+			if (showed_first_chisq) cout << ", ";
+			else showed_first_chisq = true;
+			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_weak_lensing=" << chisq;
 		}
 	}
 	raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
@@ -12092,3 +12106,17 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 			pLivePts[j][i] = physLive[0][i * nlive + j];
 }
 
+void Lens::test_lens_functions()
+{
+	clear_lenses();
+
+	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.85,30,0.0152892,-0.00558392);
+	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,60,0.0152892,-0.00558392);
+	lens_list[1]->anchor_center_to_lens(lens_list,0);
+	print_lens_list(false);
+	lens_list[0]->update_specific_parameter("b",1.4);
+	lens_list[0]->update_specific_parameter("theta",45);
+	lens_list[0]->update_specific_parameter("xc",0.03);
+	update_anchored_parameters_and_redshift_data();
+	print_lens_list(false);
+}

@@ -626,11 +626,11 @@ private:
         double **endEndVec;
         double **sEndVec;
         int proj, extra;
-        double alim, alimt;
+        double alimt;
         double sqrtAlim, powAlim, ratioAlim, ratioAlimt;
         
 public:
-        RandomPlane(const int projin, const int nin, const double din, const double alim, const double alimt, unsigned long long iin) : AdvanceDevs(nin, din, iin), proj(projin), alim(alim), alimt(alimt)
+        RandomPlane(const int projin, const int nin, const double din, const double alim, const double alimt, unsigned long long iin) : AdvanceDevs(nin, din, iin), proj(projin), alimt(alimt)
         {
                 rotVec = matrix <double> (nin, nin);
                 RandRot();

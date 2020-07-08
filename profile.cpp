@@ -25,7 +25,7 @@ bool LensProfile::output_integration_errors;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Lens* lens_in)
 {
-	cosmo = lens_in;
+	lens = lens_in;
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	special_parameter_command = "";
@@ -47,8 +47,8 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, c
 {
 	center_defined = true;
 	zlens_current = zlens;
-	sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
 	parameter_mode = pmode_in;
 	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
 	set_nparams_and_anchordata(np);
@@ -80,7 +80,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 {
-	cosmo = lens_in->cosmo;
+	lens = lens_in->lens;
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
@@ -857,11 +857,11 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		double kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1414,8 +1414,8 @@ void LensProfile::set_angle_radians(const double &theta_in)
 void LensProfile::update_zlens_meta_parameters()
 {
 	if (zlens != zlens_current) {
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
 		zlens_current = zlens;
 	}
 }
@@ -1822,7 +1822,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 {
 	if ((!converged) and (output_integration_errors)) {
 		if (integral_method==Gauss_Patterson_Quadrature) {
-			if ((cosmo->mpi_id==0) and (cosmo->warnings)) {
+			if ((lens->mpi_id==0) and (lens->warnings)) {
 				cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << "); switched to 1023-pt. Gauss-Legendre                  " << endl;
 				cout << "Lens: " << model_name << ", Params: ";
 				for (int i=0; i < n_params; i++) {
@@ -1832,7 +1832,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 					if (i != n_params-1) cout << ", ";
 				}
 				cout << "     " << endl;
-				if (cosmo->running_fit) {
+				if (lens->running_fit) {
 					cout << "\033[2A";
 				}
 			}
