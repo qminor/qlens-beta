@@ -9,7 +9,7 @@
 #include <iomanip>
 using namespace std;
 
-int Grid::nthreads;
+int Grid::nthreads = 0;
 double Grid::image_pos_accuracy = 1e-6; // default
 const int Grid::max_images = 10;
 const int Grid::max_level = 10;
@@ -32,12 +32,12 @@ int Grid::levels, Grid::splitlevels, Grid::cc_splitlevels;
 double Grid::min_cell_area;
 
 // multithreaded variables
-lensvector *Grid::d1, *Grid::d2, *Grid::d3, *Grid::d4;
-double *Grid::product1, *Grid::product2, *Grid::product3;
-bool *Grid::newton_check;
-lensvector *Grid::fvec;
-int *Grid::maxlevs;
-lensvector ***Grid::xvals_threads;
+lensvector *Grid::d1 = NULL, *Grid::d2 = NULL, *Grid::d3 = NULL, *Grid::d4 = NULL;
+double *Grid::product1 = NULL, *Grid::product2 = NULL, *Grid::product3 = NULL;
+bool *Grid::newton_check = NULL;
+lensvector *Grid::fvec = NULL;
+int *Grid::maxlevs = NULL;
+lensvector ***Grid::xvals_threads = NULL;
 
 int Grid::nfound, Grid::nfound_max, Grid::nfound_pos, Grid::nfound_neg;
 bool Grid::finished_search;
@@ -58,8 +58,12 @@ void Grid::set_splitting(int rs0, int ts0, int sl, int ccsl, double min_cs, bool
 	cc_neighbor_splittings = neighbor_split;
 }
 
-void Grid::allocate_multithreaded_variables(const int& threads)
+void Grid::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
+	if (d1 != NULL) {
+		if (!reallocate) return;
+		else deallocate_multithreaded_variables();
+	}
 	nthreads = threads;
 	d1 = new lensvector[threads];
 	d2 = new lensvector[threads];
@@ -81,26 +85,46 @@ void Grid::allocate_multithreaded_variables(const int& threads)
 
 void Grid::deallocate_multithreaded_variables()
 {
-	delete[] d1;
-	delete[] d2;
-	delete[] d3;
-	delete[] d4;
-	delete[] product1;
-	delete[] product2;
-	delete[] product3;
-	delete[] newton_check;
-	delete[] fvec;
-	delete[] maxlevs;
-	int i,j;
-	for (j=0; j < nthreads; j++) {
-		for (i=0; i <= u_split; i++) delete[] xvals_threads[j][i];
-		delete[] xvals_threads[j];
+	if (d1 != NULL) {
+		delete[] d1;
+		delete[] d2;
+		delete[] d3;
+		delete[] d4;
+		delete[] product1;
+		delete[] product2;
+		delete[] product3;
+		delete[] newton_check;
+		delete[] fvec;
+		delete[] maxlevs;
+		int i,j;
+		for (j=0; j < nthreads; j++) {
+			for (i=0; i <= u_split; i++) delete[] xvals_threads[j][i];
+			delete[] xvals_threads[j];
+		}
+		delete[] xvals_threads;
+
+		d1 = NULL;
+		d2 = NULL;
+		d3 = NULL;
+		d4 = NULL;
+		product1 = NULL;
+		product2 = NULL;
+		product3 = NULL;
+		newton_check = NULL;
+		fvec = NULL;
+		maxlevs = NULL;
+		xvals_threads = NULL;
 	}
-	delete[] xvals_threads;
 }
 
 Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double *zfactor_in, double **betafactor_in)	// use for top-level cell only; subcells use constructor below
 {
+	int threads = 1;
+#ifdef USE_OPENMP
+	threads = omp_get_num_threads();
+#endif
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+
 	// this constructor is used for a Cartesian grid
 	radial_grid = false;
 	center_imgplane[0] = 0; // these should not be used for the top-level grid
@@ -187,6 +211,12 @@ Grid::Grid(double xcenter_in, double ycenter_in, double xlength, double ylength,
 
 Grid::Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double *zfactor_in, double **betafactor_in) // use for top-level cell only; subcells use constructor below
 {
+	int threads = 1;
+#ifdef USE_OPENMP
+	threads = omp_get_num_threads();
+#endif
+	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+
 	// this constructor is used for a radial grid
 	radial_grid = true;
 	center_imgplane[0] = 0; // these should not be used for the top-level grid

@@ -9,21 +9,26 @@ PYBIND11_MODULE(qlens, m) {
     m.doc() = "QLens Python Plugin"; // optional module docstring
 
     py::class_<LensProfile>(m, "LensProfile")
-        .def(py::init<>())
-        .def_property("theta", &LensProfile::get_theta, &LensProfile::set_theta)
+        .def(py::init<>([](){return new LensProfile();}))
+        .def(py::init<const LensProfile*>())
+        .def(py::init<>([](const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens* lens_in){
+                return new LensProfile(splinefile, zlens_in, zsrc_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, qx_in, f_in, lens_in);
+        }))
+        .def("update", &LensProfile::update_from_python)
         .def("print_parameters", &LensProfile::print_parameters)
+        .def("print_vary_parameters", &LensProfile::print_vary_parameters)
         .def("set_center", &LensProfile::set_center)
         .def("get_model_name", &LensProfile::get_model_name);
 
-    py::class_<Alpha, LensProfile>(m, "Alpha")
-        .def(py::init<>())
+    py::class_<Alpha, LensProfile>(m, "Alpha", py::dynamic_attr())
+        .def(py::init<>([](){return new Alpha();}))
         .def(py::init<const Alpha*>())
         .def(py::init([](const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in) {
                                 return new Alpha(zlens_in, zsrc_in, b_in, alpha_in, s_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, lens_in);
                         }));
 
-    py::class_<Shear>(m, "Shear")
+    py::class_<Shear, LensProfile>(m, "Shear")
         .def(py::init<>())
         .def(py::init<const Shear*>())
         .def(py::init([](const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Lens* lens) {
@@ -159,18 +164,6 @@ PYBIND11_MODULE(qlens, m) {
         .def("lens_clear", &Lens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
-        .def("lens_add", &Lens_Wrap::lens_add,
-                py::arg("b"), py::arg("alpha"), py::arg("s"),  
-                py::arg("q"), py::arg("theta"), py::arg("xc"), py::arg("yc"),   
-                py::arg("mode") = "alpha", py::arg("emode")=1,
-                py::arg("zl_in") = 0, py::arg("reference_source_redshift") = 2)
-        .def("lens_add_alpha", &Lens_Wrap::lens_add_alpha,
-                py::arg("b"), py::arg("alpha"), py::arg("s"),  
-                py::arg("q"), py::arg("theta") = 0.0, py::arg("xc")=0.0, py::arg("yc")=0.0,   
-                py::arg("emode")=1.0, py::arg("reference_source_redshift")=2,
-                py::arg("zl_in") = 0.0)
-        .def("lens_add_shear", &Lens_Wrap::lens_add_shear,
-                py::arg("shear"), py::arg("theta"), py::arg("xc"), py::arg("yc"),
-                py::arg("zl_in")=0, py::arg("reference_source_redshift")=2)
+        .def("add_lenses", &Lens_Wrap::batch_add_lenses)
         ;
 }

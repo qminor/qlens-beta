@@ -6,6 +6,11 @@ namespace py = pybind11;
 class Lens_Wrap: public Lens {
 public:
 
+    void batch_add_lenses(py::list list) {
+        for (auto item : list)
+            add_lens(py::cast<LensProfile*>(item));
+    }
+
     std::string imgdata_load_file(const std::string &name_) { 
         if (load_image_data(name_)==false) throw runtime_error("Unable to read data");
         update_parameter_list();
@@ -67,22 +72,6 @@ public:
         }
     }
 
-    void lens_add(double b, int alpha, int s, double q, int theta, double xc, double yc,
-            std::string mode="alpha", int emode=1, int zl_in=0, int reference_source_redshift=2){
-        add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
-        }
-
-    void lens_add_alpha(double b, double alpha, double s, double q, double reference_source_redshift=2, double zl_in = 0, double emode=1, double theta = 0, double xc = 0, double yc = 0){
-        if (alpha <= 0) {throw runtime_error("Alpha cannot be less than or equal to 0");}
-        add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
-        // 
-        // if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
-        // for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
-        // if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-        // if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-        // if (auto_set_primary_lens) set_primary_lens();
-    }
-
     void update_lens(py::args args, py::kwargs kwargs, int loc=-1) {
         /* FEATURE IDEA: from https://pybind11.readthedocs.io/en/stable/advanced/functions.html#accepting-args-and-kwargs
 
@@ -94,17 +83,6 @@ public:
         // if (kwargs) {
             
         // }
-    }
-
-    void export_lens() {
-        // GOAL: Give python access to the list/vectors of data points for MatplotLib processing
-        // Density vs Radius
-        // TODO: Verify with Quinn on how the data is stored
-    }
-
-    void lens_add_shear(double shear, double theta, double xc, double yc, double zl_in=0, double reference_source_redshift=2){
-        // TODO: Guards for input ranges
-        add_shear_lens(zl_in, reference_source_redshift, shear, theta, xc, yc);
     }
         
 private:

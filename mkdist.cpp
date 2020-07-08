@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 	stringstream str3;
 	str1 << argv[1];
 	if (!(str1 >> file_label)) {
-		"Error: invalid argument (file_label)\n";
+		cerr << "Error: invalid argument (file_label)\n";
 		usage_error(mpi_id);
 		return 0;
 	}
@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 	for (i=2; i < argc; i++)   // Process extra command-line arguments
 	{
 		if ((*argv[i] == '-') and (isalpha(*(argv[i]+1)))) {
-			while (c = *++argv[i]) {
+			while ((c = *++argv[i])) {
 				switch (c) {
 					case 'b': output_min_chisq_point = true; break;
 					case 'O': output_min_chisq_point_format2 = true; break;

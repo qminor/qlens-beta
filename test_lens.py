@@ -1,5 +1,5 @@
-import qlens
-q = qlens.Lens()
+from qlens import *
+q = Lens()
 
 def test_lens_clear():
     q.lens_clear()
@@ -50,6 +50,10 @@ def test_lens_shear_add():
 def test_lens_shear_add_fail():
     q.lens_add_shear()
 
+def test_update_lens():
+    A = Alpha()
+    A.update({"b": 20})
+
 tests = [
             test_lens_clear,
             test_lens_display,
@@ -58,6 +62,7 @@ tests = [
             test_lens_alpha_add,
             test_lens_shear_add,
             test_lens_shear_add_fail,
+            test_update_lens
         ]
 
 for i in tests:

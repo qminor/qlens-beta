@@ -131,7 +131,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 	void plot_primordial_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
 
-	double plot_mc_relation_dutton_moline(const double z, const double xsub);
+	void plot_mc_relation_dutton_moline(const double z, const double xsub);
 	double median_concentration_bullock(const double mass, const double z);
 	double median_concentration_dutton(const double mass, const double z);
 	double mstar(const double z);
@@ -144,6 +144,7 @@ class Cosmology : public Spline, public Romberg, public Brent
 
 	// note: the following distance functions assume a flat universe
 	void spline_comoving_distance(void);
+	void redshift_distribution(void);
 	double comoving_distance_derivative(const double z);
 	double angular_radius(double chi);
 	double comoving_distance(const double z) { return (comoving_distance_spline.splint(z)); }

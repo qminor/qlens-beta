@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	{
 		if ((*argv[i] == '-') and (isalpha(*(argv[i]+1)))) {
 			int c;
-			while (c = *++argv[i]) {
+			while ((c = *++argv[i])) {
 				switch (c) {
 					case 's': verbal_mode = false; break;
 					case 'q': quit_after_reading_file = true; break;

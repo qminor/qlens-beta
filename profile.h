@@ -11,6 +11,12 @@
 #include <iostream>
 #include <vector>
 #include <complex>
+
+#ifdef USE_PYBIND
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+#endif
+
 using namespace std;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature };
@@ -231,7 +237,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
+
 	bool update_specific_parameter(const string name_in, const double& value);
+#ifdef USE_PYBIND
+	bool update_from_python(py::dict dict); 
+#endif
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_ellipticity_parameter(const double param);

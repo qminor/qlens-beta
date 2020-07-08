@@ -409,6 +409,24 @@ void Cosmology::spline_comoving_distance(void)
 	comoving_distance_spline.input(z_table, d_table);
 }
 
+void Cosmology::redshift_distribution(void)
+{
+	const int zsteps = 200;
+	int i;
+	double z, zmin, zmax, zstep;
+	double chi, nz;
+	zmin=0, zmax=10, zstep=(zmax-zmin)/(zsteps-1);
+
+	ofstream nzout("nz.dat");
+	double (Romberg::*comoving_dist_ptr)(const double);
+	comoving_dist_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::comoving_distance_derivative);
+	for (i=0, z=zmin; i < zsteps; i++, z += zstep) {
+		chi = romberg(comoving_dist_ptr, 0, z, 1e-6, 5)/hubble_length;
+		nz = chi*chi/pow(1+z,5);
+		nzout << z << " " << chi << " " << nz << endl;
+	}
+}
+
 double Cosmology::comoving_distance_exact(const double z)
 {
 	double (Romberg::*comoving_dist_ptr)(const double);
@@ -431,6 +449,7 @@ double Cosmology::angular_radius(double chi)
 double Cosmology::comoving_distance_derivative(const double z)
 {
 	return (hubble_length*pow(omega_m*CUBE(1+z)+(1-omega_m-omega_lambda)*SQR(1+z) + omega_lambda, -0.5));
+	//return pow(1+z,-1.5);
 }
 
 double Cosmology::critical_density(const double z)
@@ -663,7 +682,7 @@ void Cosmology::plot_angular_power_spectrum(int nsteps, const double log10k_min,
 	}
 }
 
-double Cosmology::plot_mc_relation_dutton_moline(const double z, const double xsub)
+void Cosmology::plot_mc_relation_dutton_moline(const double z, const double xsub)
 {
 	// This uses the Dutton mass-concentration relation, with the (1+b*log(xsub)) factor for subhalos introduced
 	// by Moline et al where xsub = rsub/rvir; note that xsub=1 is the same as field halos

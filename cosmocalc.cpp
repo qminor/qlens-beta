@@ -43,8 +43,9 @@ int main(int argc, char *argv[])
 	{
 		if ((*argv[i] == '-') && (isalpha(*(argv[i]+1)))) {
 			int c;
-			while (c = *++argv[i]) {
+			while ((c = *++argv[i])) {
 				switch (c) {
+				case 't': mode = Testing; break;
 				case 'z':
 					if (sscanf(argv[i], "z%lf", &redshift)==0) die("invalid redshift");
 					argv[i] = advance(argv[i]);
@@ -165,6 +166,7 @@ int main(int argc, char *argv[])
 	} else if (mode==Plot_MC_Relation) {
 		cosmo.plot_mc_relation_dutton_moline(redshift,xsub);
 	} else if (mode==Testing) {
+		cosmo.redshift_distribution();
 	}
 	return 0;
 }

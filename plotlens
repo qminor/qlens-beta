@@ -244,6 +244,45 @@ then
 	else
 		PLOTLINE="$SETTERM; $PLOTCOMMAND"
 	fi
+elif [[ $COMMAND == "shearfits" ]]
+then
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shear.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shear.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "shearfits_nocc" ]]
+then
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shear.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shear.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "sheardata" ]]
+then
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data'" 
+	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/shear.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data'"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
 elif [[ $COMMAND == "imgfit_nocc" ]]
 then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images', '$PLOTDIR/imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
@@ -448,6 +487,32 @@ then
 	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
 	if [[ $TERM != "" ]]; then
 		#KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "shearfield" ]]
+then
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/shearfield.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shearfield.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/shearfield.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shearfield.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		else
+			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "shearfield_nocc" ]]
+then
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/shearfield.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shearfield.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/shearfield.dat' u 1:2 w lines lw $LINEWIDTH lc 2 t 'shear data', '$PLOTDIR/shearfield.dat' u 3:4 w lines lw $LINEWIDTH lc 1 t 'model shear'"
+	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
 		else

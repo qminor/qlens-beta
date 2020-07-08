@@ -4,8 +4,6 @@
 #LIBMUMPS_COMMON = $(libdir)/libmumps_common$(PLAT)$(LIBEXT)
 #LIBDMUMPS = $(libdir)/libdmumps$(PLAT)$(LIBEXT) $(LIBMUMPS_COMMON)
 
-#include ./qlens_umfpack_config.mk
-
 #CMULTINEST = # put multinest include directory here
 #CPOLYCHORD = # put polychord include directory here
 #MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
@@ -13,20 +11,20 @@
 
 # Version without MUMPS
 default: qlens mkdist cosmocalc qlens-wrap
-CCOMP = g++
+CCOMP = g++ 
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3 -fPIC 
+OPTS = -Wno-write-strings -O3 -fPIC -g
 OPTS_NO_OPT = -Wno-write-strings -fPIC
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-FLAGS = -DUSE_READLINE
+FLAGS = -DUSE_READLINE -DUSE_PYBIND 
 # OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  -lm -lreadline
+OTHERLIBS =  -lm -lreadline 
 # OTHERLIBS =  -lm 
-LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
+LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB) `python3-config --ldflags`
 
 # Version with MUMPS
 #default: qlens mkdist cosmocalc
@@ -35,6 +33,7 @@ LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 #OPTS_NO_OPT = -Wno-write-strings -fopenmp
 #FLAGS = -DUSE_OPENMP -DUSE_MUMPS -DUSE_FITS -DUSE_UMFPACK
 #CMUMPS = $(INCS) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src
+INC = `python3 -m pybind11 --includes`
 #MUMPSLIBS = $(LIBDMUMPS) $(LORDERINGS) $(LIBS) $(LIBBLAS) $(LIBOTHERS) -lgfortran
 #OTHERLIBS =  -lm -lreadline -lcfitsio -ltcmalloc
 ##OTHERLIBS =  -lm -lreadline -lcfitsio
@@ -42,16 +41,15 @@ LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
-CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
-GCC   := g++ -Wno-write-strings -O3
+CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(CMUMPS) $(FLAGS) $(INC)
 
-objects = qlens.o mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
-				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
+objects = profile.o qlens.o mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
+				models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o 
 
-wrapper_objects = mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
-				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
+wrapper_objects = profile.o mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
+				models.o sbprofile.o errors.o brent.o sort.o gauss.o \
 				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o qlens_wrapper.o
 
@@ -61,20 +59,20 @@ cosmocalc_objects = cosmocalc.o
 cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
-	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
+	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) $(INC)
 
 qlens_wrapper.o: $(objects)
 	$(CL) -o qlens_wrapper.o `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_wrapper.cpp $(objects)
 
 qlens-wrap: $(wrapper_objects) 
 #	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
-	$(CL) -o qlens.cpython-36m-x86_64-linux-gnu.so `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
+	$(CL) -o qlens`python3-config --extension-suffix` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
 
 mkdist: $(mkdist_objects)
-	$(GCC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
+	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
 
 cosmocalc: $(cosmocalc_objects)
-	$(GCC) -o cosmocalc $(cosmocalc_objects) $(cosmocalc_shared_objects) -lm
+	$(CC) -o cosmocalc $(cosmocalc_objects) $(cosmocalc_shared_objects) -lm
 
 mumps:
 	(cd MUMPS_5.0.1; $(MAKE))
@@ -101,7 +99,7 @@ mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
 	$(CC) -c mcmchdr.cpp
 
 profile.o: profile.h profile.cpp lensvec.h
-	$(CC) -c profile.cpp
+	$(CC) -c profile.cpp  
 
 models.o: profile.h models.cpp
 	$(CC) -c models.cpp

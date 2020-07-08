@@ -678,6 +678,7 @@ void Lens::process_commands(bool read_file)
 							"fit findimg [sourcept_num]\n"
 							"fit plotimg [src=#]\n"
 							"fit plotsrc [src=#]\n"
+							"fit plotshear\n"
 							"fit data_imginfo       (NEED TO WRITE HELP DOCS FOR THIS)\n"
 							"fit method <method>\n"
 							"fit label <label>\n"
@@ -784,7 +785,14 @@ void Lens::process_commands(bool read_file)
 							"plotted that correspond to the source redshift given by 'zsrc'; otherwise if plotting for a subset\n"
 							"of sources, the critical curves and caustics shown correspond to the source redshift of the first\n"
 							"source point being plotted. So in the above example, critical curves are plotted for the source\n"
-							"redshift corresponding to image set 3.\n";
+							"redshift corresponding to image set 3. If filenames are specified, the image data/fits are\n"
+							"plotted to a file (the file type depends on the 'terminal' setting, either 'text', 'pdf' or 'ps').\n";
+					else if (words[2]=="plotshear")
+						cout << "fit plotshear [filename]\n\n"
+							"Plot the reduced shear data (listed by the 'wldata' command) as well as the reduced shear produced\n"
+							"by the model at the locations of the shear data. The length of each line segment is proportional to\n"
+							"the magnitude of the reduced shear at that location. If [filename] is specified, the shear data/fits\n"
+							"are plotted to a file (file type depends on the 'terminal' setting, either 'text', 'pdf' or 'ps').\n";
 					else if (words[2]=="run")
 						cout << "fit run [-resume/process/noerrs]\n\n"
 							"Run the selected model fit routine, which can either be a minimization (e.g. Powell's method)\n"
@@ -1122,8 +1130,9 @@ void Lens::process_commands(bool read_file)
 						cout << "wldata\n"
 							"wldata read <filename>\n"
 							"wldata add <x_coord> <y_coord>\n"
-							"wldata add_random <nsrc> <xmin> <xmax> <ymin> <ymax> <zsrc_min> <zsrc_max>\n"
+							"wldata add_random <nsrc> <xmin> <xmax> <ymin> <ymax> <zsrc_min> <zsrc_max> [rmin]\n"
 							"wldata write <filename>\n"
+							"wldata plot [filename]\n"
 							"wldata clear [dataset_number]\n\n"
 							"Commands for loading (or simulating) weak lensing data for lens model fitting. For help\n"
 							"on each command type 'help wldata <command>'. If 'wldata' is typed with no argument,\n"
@@ -1142,6 +1151,10 @@ void Lens::process_commands(bool read_file)
 							cout << "wldata write <filename>\n\n"
 								"Outputs the current weak lensing data set to file, with the same format as required by\n"
 								"'wldata read' command. (For a description of the required format, type 'help wldata read')\n";
+						else if (words[2]=="plot")
+							cout << "wldata plot <filename>\n\n"
+								"Plots the reduced shear from the current data set, where the lengths of the line segements are\n"
+								"proportional to the magnitude of the reduced shear.\n";
 						else if (words[2]=="add")
 							cout << "wldata add <x-coord> <y-coord> [z=#]\n\n"
 								"Add simulated weak lensing source defined by the source point (<x-coord>,<y-coord>) lensed by the\n"
@@ -1149,6 +1162,11 @@ void Lens::process_commands(bool read_file)
 								"this argument is not entered, the source has a default redshift given by the value of 'zsrc'.\n"
 								"The errors in the reduced shear are given by the variable sim_err_shear, so that a corresponding\n"
 								"random Gaussian error is added to the reduced shear components g1 and g2.\n";
+						else if (words[2]=="add_random")
+							cout << "wldata add_random <nsrc> <xmin> <xmax> <ymin> <ymax> <zsrc_min> <zsrc_max> [rmin]\n\n"
+								"Add simulated weak lensing data from sources with positions and redshifts drawn from uniform\n"
+								"random deviates over the defined grid and redshift range. In order to exclude the strong lensing\n"
+								"regime, one may optionally specify [rmin] to exclude source points within the specified radius.\n";
 						else if (words[2]=="clear")
 							cout << "wldata clear\n\n"
 								"Removes all the weak lensing data from the current configuration.\n";
@@ -1343,7 +1361,7 @@ void Lens::process_commands(bool read_file)
 							"parameter values. To remove a source or delete the entire configuration, use 'source clear'.\n\n"
 							"Available source models:    (type 'help source '<sourcemodel>' for usage information)\n\n"
 							"gaussian -- Gaussian with dispersion <sig> and q*<sig> along major/minor axes respectively\n"
-							"sersic -- Sersic profile S = S0*exp(k*r^(1/n))\n"
+							"sersic -- Sersic profile S = S0 * exp(-b*(R/R_eff)^(1/n))\n"
 							"sbmpole -- multipole term\n"
 							"tophat -- ellipsoidal 'top hat' profile\n"
 							"spline -- splined surface brightness profile (generated from an input file)\n\n";
@@ -1371,9 +1389,9 @@ void Lens::process_commands(bool read_file)
 							"theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="sersic")
 						cout << "source sersic <s0> <R_eff> <n> <q> [theta] [x-center] [y-center]\n\n"
-							"The sersic profile is defined by s = s0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
+							"The sersic profile is defined by S = S0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
 							"determined from the value for n (enforces the half-light radius Re). For an elliptical model, we make\n"
-							"the replacement R --> sqrt(q*x^2 + (y^2/q), analogous to the elliptical radius defined in the lens\n"
+							"the replacement R --> sqrt(q*x^2 + (y^2/q)), analogous to the elliptical radius defined in the lens\n"
 							"models. Here, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
@@ -1475,6 +1493,15 @@ void Lens::process_commands(bool read_file)
 						"In the first example a range is specified for both the x/y axes for both plots,\n"
 						"whereas in the second example a range is specified only for the image plot.\n\n"
 						"If the argument 'grid' is added, plots the grid used for searching along with the images.\n\n";
+				else if (words[1]=="plotshear")
+					cout << "plotshear\n"
+						"plotshear <xmin> <xmax> <nx> <ymin> <ymax> <ny> [shear_outfile]\n\n"
+						"Plots a representation of the shear field over a grid of points in the image plane, where the\n"
+						"line segments indicate the direction of the shear at the center of that line segment. (The length\n"
+						"of the line segments are meaningless and do not indicate shear magnitude). If no arguments are\n"
+						"given, the grid is chosen to be co-centered and twice as large as the image grid specified by\n"
+						"the 'grid' command, and by default nx=60, ny=60. The result is plotted to the screen unless\n"
+						"all grid parameters are specified along with an output filename.\n";
 				else if (words[1]=="findimgs")
 					cout << "findimgs [source_file] [images_file]\n"
 						"findimgs [source_file]\n\n"
@@ -2173,7 +2200,7 @@ void Lens::process_commands(bool read_file)
 					n_infiles++;
 				}
 				else {
-					cerr << "Error: input file '" << words[1] << "' could not be opened" << endl;
+					cerr << "input file '" << words[1] << "' could not be opened" << endl;
 					if (n_infiles > 0) infile--;
 				}
 			} else if (nwords == 1) {
@@ -2191,7 +2218,7 @@ void Lens::process_commands(bool read_file)
 					}
 					outfile.close();
 				}
-				else cerr << "Error: output file '" << words[1] << "' could not be opened" << endl;
+				else cerr << "output file '" << words[1] << "' could not be opened" << endl;
 			} else if (nwords == 1) {
 				Complain("must specify filename for output file to be written to");
 			} else Complain("invalid number of arguments; must specify one filename to be read");
@@ -2817,7 +2844,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
+							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -2913,7 +2940,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
@@ -3142,7 +3169,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3286,7 +3313,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
+							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3394,7 +3421,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3477,7 +3504,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
+							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3562,7 +3589,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
+							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3641,7 +3668,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
+							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3754,7 +3781,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
+							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
@@ -3923,7 +3950,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -4012,7 +4039,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
+							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -4136,7 +4163,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
+							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -4445,7 +4472,7 @@ void Lens::process_commands(bool read_file)
 								if (!(ws[5] >> yc)) Complain("invalid y-center parameter for model testmodel");
 							}
 						}
-						add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
+						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
 						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 						if (auto_set_primary_lens) set_primary_lens();
@@ -4736,7 +4763,8 @@ void Lens::process_commands(bool read_file)
 					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
 					// Should probably just get the vary flags for that source object, tack on the new Fourier vary flags and then use set_sb_vary_parameters instead.
 					for (int i=fourier_nmodes-1; i >= 0; i--) {
-						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j++],vary_flags[j++]); // yes, the j++'s should be there!
+						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j],vary_flags[j+1]); // yes, both j++'s should be on this line!
+						j += 2;
 					}
 				} else Complain("must specify a source number to add Fourier modes to, followed by modes");
 			}
@@ -5854,6 +5882,23 @@ void Lens::process_commands(bool read_file)
 					delete[] srcflux;
 					delete[] srcpts;
 				}
+				else if (words[1]=="plotshear")
+				{
+					if (weak_lensing_data.n_sources==0) Complain("no weak lensing data has been loaded");
+					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotshear' requires either zero or one arguments (shear_filename)");
+					string filename = "shear.dat";
+					if ((terminal==TEXT) and (nwords==3)) filename = words[2];
+					plot_weak_lensing_shear_data(true,filename);
+					if (nwords==3) {
+						if (terminal != TEXT) {
+							if (show_cc) run_plotter("shearfits",words[2],"");
+							else run_plotter("shearfits_nocc",words[2],"");
+						}
+					} else {
+						if (show_cc) run_plotter("shearfits");
+						else run_plotter("shearfits_nocc");
+					}
+				}
 				else if (words[1]=="plot_chisq1d")
 				{
 					if ((nwords >= 6) and (nwords < 8)) {
@@ -6314,7 +6359,7 @@ void Lens::process_commands(bool read_file)
 							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
 						}
 						ifstream testbf(scriptfile_str.c_str());
-						if (!testbf.is_open()) Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
+						if (!testbf.is_open()) Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
 						string checklimits;
 						testbf >> checklimits;
 						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
@@ -6340,7 +6385,7 @@ void Lens::process_commands(bool read_file)
 						}
 						else {
 							if (n_infiles > 0) infile--;
-							Complain("Error: best-fit lens model file '" << scriptfile_str << "' could not be opened");
+							Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
 						}
 						getline((*infile),line); // skip the first comment line
 						clear_lenses();
@@ -6523,9 +6568,10 @@ void Lens::process_commands(bool read_file)
 					add_simulated_weak_lensing_data(id_string,src,zsrc);
 				}
 				else if (words[1]=="add_random") {
-					if (nwords != 9) Complain("7 arguments required for 'wldata add_random' (nsrc,xmin,xmax,ymin,ymax,zmin,zmax)");
+					if ((nwords != 9) and (nwords != 10)) Complain("7 or 8 arguments required for 'wldata add_random' (nsrc,xmin,xmax,ymin,ymax,zmin,zmax,[rmin])");
 					int nsrc;
 					double xmin,xmax,ymin,ymax,zmin,zmax;
+					double rmin=0;
 					if (!(ws[2] >> nsrc)) Complain("invalid number of sources");
 					if (!(ws[3] >> xmin)) Complain("invalid xmin value");
 					if (!(ws[4] >> xmax)) Complain("invalid xmax value");
@@ -6533,7 +6579,8 @@ void Lens::process_commands(bool read_file)
 					if (!(ws[6] >> ymax)) Complain("invalid ymax value");
 					if (!(ws[7] >> zmin)) Complain("invalid zmin value");
 					if (!(ws[8] >> zmax)) Complain("invalid zmax value");
-					add_weak_lensing_data_from_random_sources(nsrc,xmin,xmax,ymin,ymax,zmin,zmax);
+					if ((nwords==10) and (!(ws[9] >> rmin))) Complain("invalid rmin value");
+					add_weak_lensing_data_from_random_sources(nsrc,xmin,xmax,ymin,ymax,zmin,zmax,rmin);
 				}
 				else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'wldata read' (filename)");
@@ -6541,6 +6588,12 @@ void Lens::process_commands(bool read_file)
 				} else if (words[1]=="write") {
 					if (nwords != 3) Complain("One argument required for 'wldata write' (filename)");
 					weak_lensing_data.write_to_file(words[2]);
+				} else if (words[1]=="plot") {
+					if (nwords > 3) Complain("Only 0 or 1 arguments allowed for 'wldata plot'");
+					string filename = "shear.dat";
+					if (nwords==3) filename = words[2];
+					plot_weak_lensing_shear_data(false,filename);
+					if (nwords==2) run_plotter("sheardata"); // if no filename is specified, just plot to the screen
 				} else if (words[1]=="clear") {
 					weak_lensing_data.clear();
 				} else Complain("invalid argument to command 'wldata'");
@@ -6725,8 +6778,40 @@ void Lens::process_commands(bool read_file)
 						else plot_kappa_profile(lens_number, rmin, rmax, steps, words[4].c_str(), words[5].c_str());
 					}
 				}
-			} else
-			  Complain("plotkappa requires 5 parameters (rmin, rmax, steps, kappa_outname, kderiv_outname)");
+			} else Complain("plotkappa requires 5 parameters (rmin, rmax, steps, kappa_outname, kderiv_outname)");
+		}
+		else if (words[0]=="plotshear")
+		{
+			if (nwords > 8) Complain("too many parameters in plotshear (no more than 7 allowed)");
+			if ((nwords==1) or (nwords >= 7)) {
+				double xmin, xmax, ymin, ymax;
+				int xsteps, ysteps;
+				if (nwords==1) {
+					xmin = grid_xcenter-grid_xlength; xmax = grid_xcenter+grid_xlength;
+					ymin = grid_ycenter-grid_ylength; ymax = grid_ycenter+grid_ylength;
+					xsteps = 60;
+					ysteps = 60;
+				} else {
+					if (!(ws[1] >> xmin)) Complain("invalid xmin parameter");
+					if (!(ws[2] >> xmax)) Complain("invalid xmax parameter");
+					if (!(ws[3] >> xsteps)) Complain("invalid nx parameter; must be integral number of steps");
+					if (!(ws[4] >> ymin)) Complain("invalid ymin parameter");
+					if (!(ws[5] >> ymax)) Complain("invalid ymax parameter");
+					if (!(ws[6] >> ysteps)) Complain("invalid ny parameter; must be integral number of steps");
+				}
+				string outfile = "shearfield.dat";
+				if ((nwords==8) and (terminal==TEXT)) outfile = words[7];
+				plot_shear_field(xmin,xmax,xsteps,ymin,ymax,ysteps,outfile);
+				if (nwords==8) {
+					if (terminal != TEXT) {
+						if (show_cc) run_plotter("shearfield",words[7],"");
+						else run_plotter("shearfield_nocc",words[7],"");
+					}
+				} else {
+					if (show_cc) run_plotter("shearfield");
+					else run_plotter("shearfield_nocc");
+				}
+			} else Complain("plotshear requires either 0 or at least 6 arguments: xmin, xmax, nx, ymin, ymax, ny, [filename]");
 		}
 		else if (words[0]=="plotmass")
 		{
@@ -6951,7 +7036,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[6] >> ysteps)) Complain("invalid ysteps parameter; must be integral number of steps");
 				string outfile;
 				if (nwords==8) outfile = words[7];
-				else if (nwords > 8) { Complain("too many parameters in mksrctab"); }
+				else if (nwords > 8) Complain("too many parameters in mksrctab");
 				else outfile = "sourcexy.in";
 				make_source_rectangle(xmin,xmax,xsteps,ymin,ymax,ysteps,outfile);
 			} else Complain("mksrctab requires at least 6 parameters: xmin, xmax, xpoints, ymin, ymax, ypoints");
@@ -9532,7 +9617,7 @@ void Lens::process_commands(bool read_file)
 			//double chisq0;
 			//calculate_chisq0_from_srcgrid(chisq0, true);
 
-			plot_weak_lensing_shear_field();
+			//plot_weak_lensing_shear_data(true);
 			//if (add_dparams_to_chain()==false) Complain("could not process chain data");
 			//fitmodel_custom_prior();
 			//if (lens_list[0]->update_specific_parameter("theta",60)==false) Complain("could not find specified parameter");
@@ -9548,7 +9633,7 @@ void Lens::process_commands(bool read_file)
 			//double rmax,menc;
 			//calculate_critical_curve_deformation_radius(nlens-1,true,rmax,menc);
 			//calculate_critical_curve_deformation_radius_numerical(nlens-1);
-			//plot_shear_field(-3,3,50,-3,3,50);
+			plot_shear_field(-10,10,50,-10,10,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
 		}
 		else if (words[0]=="plotmc") {

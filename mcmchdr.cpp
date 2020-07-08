@@ -2388,10 +2388,10 @@ class Points : public Group
 			}
 		}
 		
-		static void *f(void *ptr)
-		{
-			PointInput *in = (PointInput *)ptr;
-		}
+		//static void *f(void *ptr)
+		//{
+			//PointInput *in = (PointInput *)ptr;
+		//}
 		
 		bool IsMin()
 		{
