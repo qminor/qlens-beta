@@ -13,23 +13,25 @@ public:
 
     Lens_Wrap() : Lens() {}
 
-    void batch_add_lenses(py::list list) {
-        try {
-            for (auto arr : list){
-                std::tuple<LensProfile*, double, double> curr = py::cast<std::tuple<LensProfile*, double, double>>(arr);
-                double zl = (std::get<1>(curr)) ? std::get<1>(curr) : 0.5;
-                double zs = (std::get<2>(curr)) ? std::get<2>(curr) : 1.0;
-                add_lens(std::get<0>(curr), zl, zs);
+    void batch_add_lenses_tuple(py::list list) {
+        double zl, zs;
+        LensProfile* curr;
+        for (auto arr : list){
+            try {
+                std::tuple<LensProfile*, double, double> extracted = py::cast<std::tuple<LensProfile*, double, double>>(arr);
+                zl = std::get<1>(extracted);
+                zs = std::get<2>(extracted);
+                curr = std::get<0>(extracted);
+            } catch(std::runtime_error) {
+                zl = 0.5;
+                zs = 1.0;
+                curr = py::cast<LensProfile*>(arr);
+            } catch (...) {
+                throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
             }
-        } catch(...) {
-            throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
+            add_lens(curr, zl, zs);
         }
     }
-
-    void update_one(py::list list) {
-
-    }
-
 
     std::string imgdata_load_file(const std::string &name_) { 
         if (load_image_data(name_)==false) throw runtime_error("Unable to read data");

@@ -200,7 +200,7 @@ PYBIND11_MODULE(qlens, m) {
         .def("lens_clear", &Lens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
-        .def("add_lenses", &Lens_Wrap::batch_add_lenses, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
+        .def("add_lenses", &Lens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
         .def("findimg", &Lens_Wrap::output_images_single_source,
                 py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
                 py::arg("flux")=-1, py::arg("show_labels")=false
