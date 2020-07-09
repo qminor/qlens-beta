@@ -293,12 +293,13 @@ void LensProfile::update_parameters(const double* params)
 #ifdef USE_PYBIND
 
 bool LensProfile::update_from_python(py::dict dict) {
+	
 	// assign_paramnames();
-	return update_specific_parameter("theta", 60);
-	// for(auto item : dict) {
-	// 	if(!update_specific_parameter("theta", py::cast<double>(item.second)))
-	// 		return false;
-	// }
+	for(auto item : dict) {
+		if(!update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
+			return false;
+	}
+	return true;
 }
 
 #endif

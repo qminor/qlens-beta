@@ -1,15 +1,34 @@
 #include "qlens.h"
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <vector>
+#include "profile.h"
 
 namespace py = pybind11;
+
+
 
 class Lens_Wrap: public Lens {
 public:
 
+    Lens_Wrap() : Lens() {}
+
     void batch_add_lenses(py::list list) {
-        for (auto item : list)
-            add_lens(py::cast<LensProfile*>(item));
+        try {
+            for (auto arr : list){
+                std::tuple<LensProfile*, double, double> curr = py::cast<std::tuple<LensProfile*, double, double>>(arr);
+                // std::cout << std::get<1>(curr) << std::endl;
+                add_lens(std::get<0>(curr), std::get<1>(curr), std::get<2>(curr));
+            }
+        } catch(...) {
+            throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
+        }
     }
+
+    void update_one(py::list list) {
+
+    }
+
 
     std::string imgdata_load_file(const std::string &name_) { 
         if (load_image_data(name_)==false) throw runtime_error("Unable to read data");

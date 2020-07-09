@@ -20,13 +20,24 @@ PYBIND11_MODULE(qlens, m) {
         .def("set_center", &LensProfile::set_center)
         .def("get_model_name", &LensProfile::get_model_name);
 
-    py::class_<Alpha, LensProfile>(m, "Alpha", py::dynamic_attr())
+    py::class_<Alpha, LensProfile>(m, "Alpha")
         .def(py::init<>([](){return new Alpha();}))
         .def(py::init<const Alpha*>())
         .def(py::init([](const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in) {
                                 return new Alpha(zlens_in, zsrc_in, b_in, alpha_in, s_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, lens_in);
-                        }));
+                        }))
+        .def("initialize", [](Alpha &current, py::dict dict){
+                double mass_parameter = py::cast<double>(dict["mass_parameter"]);
+                double scale1 = py::cast<double>(dict["scale1"]);
+                double scale2 = py::cast<double>(dict["scale2"]);
+                double eparam = py::cast<double>(dict["eparam"]);
+                double theta = py::cast<double>(dict["theta"]);
+                double xc = py::cast<double>(dict["xc"]);
+                double yc = py::cast<double>(dict["yc"]);
+                current.initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
+        })
+        ;
 
     py::class_<Shear, LensProfile>(m, "Shear")
         .def(py::init<>())
@@ -153,7 +164,7 @@ PYBIND11_MODULE(qlens, m) {
     }));
 
     py::class_<Lens_Wrap>(m, "Lens")
-        .def(py::init<>())
+        .def(py::init<>([](){return new Lens_Wrap();}))
         .def("imgdata_display", &Lens_Wrap::imgdata_display)
         .def("imgdata_add", &Lens_Wrap::imgdata_add, 
                 py::arg("x") = -1.0, py::arg("y") = -1.0)
@@ -164,6 +175,7 @@ PYBIND11_MODULE(qlens, m) {
         .def("lens_clear", &Lens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
-        .def("add_lenses", &Lens_Wrap::batch_add_lenses)
+        .def("add_lenses", &Lens_Wrap::batch_add_lenses, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values.")
+        // .def("update", ) // #TODO: //update each function
         ;
 }
