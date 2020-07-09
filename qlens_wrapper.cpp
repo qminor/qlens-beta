@@ -17,8 +17,9 @@ public:
         try {
             for (auto arr : list){
                 std::tuple<LensProfile*, double, double> curr = py::cast<std::tuple<LensProfile*, double, double>>(arr);
-                // std::cout << std::get<1>(curr) << std::endl;
-                add_lens(std::get<0>(curr), std::get<1>(curr), std::get<2>(curr));
+                double zl = (std::get<1>(curr)) ? std::get<1>(curr) : 0.5;
+                double zs = (std::get<2>(curr)) ? std::get<2>(curr) : 1.0;
+                add_lens(std::get<0>(curr), zl, zs);
             }
         } catch(...) {
             throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
