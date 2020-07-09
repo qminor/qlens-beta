@@ -189,6 +189,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		setup_lens_properties();
 		set_default_base_settings(20,5e-3); // is this really necessary? check...
 		zfac = 1.0;
+		zlens = zlens_current = 0;
 	}
 	LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens*);
 	LensProfile(const LensProfile* lens_in);
@@ -642,6 +643,10 @@ class Shear : public LensProfile
 	}
 	Shear(const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Lens*);
 	Shear(const Shear* lens_in);
+	void initialize_parameters(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in);
+	Shear(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in) : Shear() {
+		initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
+	}
 	static bool use_shear_component_params; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
 
 	void assign_paramnames();
