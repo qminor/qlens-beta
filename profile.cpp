@@ -12,11 +12,11 @@
 
 using namespace std;
 
-IntegrationMethod LensProfile::integral_method;
-bool LensProfile::orient_major_axis_north;
-bool LensProfile::use_ellipticity_components;
-int LensProfile::default_ellipticity_mode;
-bool LensProfile::output_integration_errors;
+IntegrationMethod LensProfile::integral_method = Gauss_Patterson_Quadrature;
+bool LensProfile::orient_major_axis_north = true;
+bool LensProfile::use_ellipticity_components = false;
+int LensProfile::default_ellipticity_mode = 1;
+bool LensProfile::output_integration_errors = true;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Lens* lens_in)
 {

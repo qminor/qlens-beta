@@ -879,17 +879,7 @@ Lens::Lens() : UCMC()
 	grid = NULL;
 	Gauss_NN = 20;
 	integral_tolerance = 5e-3;
-	LensProfile::integral_method = Gauss_Patterson_Quadrature;
-	LensProfile::orient_major_axis_north = true;
-	LensProfile::use_ellipticity_components = false;
-	LensProfile::output_integration_errors = true;
-	LensProfile::default_ellipticity_mode = 1;
-	SB_Profile::use_sb_ellipticity_components = false;
-	SB_Profile::use_fmode_scaled_amplitudes = false; // if set to true, uses a_m = m*A_m and b_m = m*B_m as parameters instead of true amplitudes
-	SB_Profile::zoom_split_factor = 2;
-	SB_Profile::zoom_scale = 4;
 	default_parameter_mode = 0;
-	Shear::use_shear_component_params = false;
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
