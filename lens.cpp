@@ -1609,6 +1609,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
 
 	Alpha* alphaptr;
+	Shear* shearptr;
 	switch (name) {
 		case PTMASS:
 			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
@@ -1627,7 +1628,11 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 			new_lens = alphaptr;
 			break;
 		case SHEAR:
-			new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
+			shearptr = new Shear();
+			shearptr->initialize_parameters(eparam,theta,xc,yc);
+			new_lens = shearptr;
+			break;
+			//new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
 		case nfw:
 			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;

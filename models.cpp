@@ -1991,7 +1991,11 @@ Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1
 {
 	setup_lens_properties();
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
+}
 
+void Shear::initialize_parameters(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in)
+{
 	if (use_shear_component_params) {
 		shear1 = shear_p1_in;
 		shear2 = shear_p2_in;
