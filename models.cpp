@@ -10,7 +10,7 @@
 #include <complex>
 using namespace std;
 
-bool Shear::use_shear_component_params;
+bool Shear::use_shear_component_params = false;
 const double CoreCusp::nstep = 0.2;
 const double CoreCusp::digamma_three_halves = 0.036489973978435;
 const double Alpha::euler_mascheroni = 0.57721566490153286060;

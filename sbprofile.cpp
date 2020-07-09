@@ -8,11 +8,11 @@
 #include <iomanip>
 using namespace std;
 
-bool SB_Profile::orient_major_axis_north;
-bool SB_Profile::use_sb_ellipticity_components;
-bool SB_Profile::use_fmode_scaled_amplitudes;
-double SB_Profile::zoom_split_factor;
-double SB_Profile::zoom_scale;
+bool SB_Profile::orient_major_axis_north = true;
+bool SB_Profile::use_sb_ellipticity_components = false;
+bool SB_Profile::use_fmode_scaled_amplitudes = false;
+double SB_Profile::zoom_split_factor = 2;
+double SB_Profile::zoom_scale = 4;
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in)
