@@ -21,19 +21,26 @@ const double Alpha::def_tolerance = 1e-16;
 Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
-	lens = cosmo_in;
+	setup_lens_properties();
+	set_default_base_settings(nn,acc);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in);
+}
+
+void Alpha::setup_lens_properties(const int parameter_mode, const int subclass)
+{
 	lenstype = ALPHA;
 	model_name = "alpha";
 	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
 	setup_base_lens(8,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
+}
 
+void Alpha::initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in)
+{
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-
 	b = bb;
 	s = ss;
 	alpha = aa;
@@ -375,14 +382,8 @@ bool Alpha::output_cosmology_info(const int lens_number)
 
 PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = PJAFFE;
-	model_name = "pjaffe";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
-	analytic_3d_density = true;
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -402,6 +403,15 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 	}
 
 	update_meta_parameters_and_pointers();
+}
+
+void PseudoJaffe::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = PJAFFE;
+	model_name = "pjaffe";
+	special_parameter_command = "";
+	setup_base_lens(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 PseudoJaffe::PseudoJaffe(const PseudoJaffe* lens_in)
@@ -696,16 +706,11 @@ double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
 
 NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = nfw;
-	model_name = "nfw";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(7,true,parameter_mode_in); // number of parameters = 6, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
+
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	analytic_3d_density = true;
 
 	if (parameter_mode==2) {
 		m200 = p1_in;
@@ -719,6 +724,15 @@ NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const
 	}
 
 	update_meta_parameters_and_pointers();
+}
+
+void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = nfw;
+	model_name = "nfw";
+	special_parameter_command = "";
+	setup_base_lens(7,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 NFW::NFW(const NFW* lens_in)
@@ -969,21 +983,11 @@ bool NFW::output_cosmology_info(const int lens_number)
 
 Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = TRUNCATED_nfw;
-	model_name = "tnfw";
-	subclass_label = "t";
-	stringstream tstr;
-	string tstring;
-	tstr << truncation_mode_in;
-	tstr >> tstring;
-	special_parameter_command = "tmode=" + tstring;
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true,parameter_mode_in,truncation_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in,truncation_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
+
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	analytic_3d_density = true;
 
 	if (parameter_mode==4) {
 		m200 = p1_in;
@@ -1008,6 +1012,21 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 	}
 
 	update_meta_parameters_and_pointers();
+}
+
+void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	// here "subclass" gives the truncation mode
+	lenstype = TRUNCATED_nfw;
+	model_name = "tnfw";
+	subclass_label = "t";
+	stringstream tstr;
+	string tstring;
+	tstr << subclass;
+	tstr >> tstring;
+	special_parameter_command = "tmode=" + tstring;
+	setup_base_lens(8,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
@@ -1324,16 +1343,11 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = CORED_nfw;
-	model_name = "cnfw";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
+
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	analytic_3d_density = true;
 
 	if (parameter_mode==3) {
 		m200 = p1_in;
@@ -1354,6 +1368,15 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 	}
 
 	update_meta_parameters_and_pointers();
+}
+
+void Cored_NFW::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = CORED_nfw;
+	model_name = "cnfw";
+	special_parameter_command = "";
+	setup_base_lens(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
@@ -1751,21 +1774,25 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = HERNQUIST;
-	model_name = "hern";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_lens_properties();
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
+
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	analytic_3d_density = true;
 
 	ks = ks_in;
 	rs = rs_in;
 
 	update_meta_parameters_and_pointers();
+}
+
+void Hernquist::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = HERNQUIST;
+	model_name = "hern";
+	special_parameter_command = "";
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 Hernquist::Hernquist(const Hernquist* lens_in)
@@ -1863,20 +1890,24 @@ double Hernquist::rho3d_r_integrand_analytic(const double r)
 ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = EXPDISK;
-	model_name = "expdisk";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_lens_properties();
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
+
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	k0 = k0_in;
 	R_d = R_d_in;
 
 	update_meta_parameters_and_pointers();
+}
+
+void ExpDisk::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = EXPDISK;
+	model_name = "expdisk";
+	special_parameter_command = "";
+	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
@@ -1958,13 +1989,8 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 
 Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = SHEAR;
-	model_name = "shear";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(5,false); // number of parameters = 4, is_elliptical_lens = false
+	setup_lens_properties();
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	if (use_shear_component_params) {
 		shear1 = shear_p1_in;
@@ -1976,6 +2002,14 @@ Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1
 	x_center = xc_in;
 	y_center = yc_in;
 	update_meta_parameters();
+}
+
+void Shear::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = SHEAR;
+	model_name = "shear";
+	special_parameter_command = "";
+	setup_base_lens(5,false); // number of parameters = 4, is_elliptical_lens = false
 }
 
 Shear::Shear(const Shear* lens_in)
@@ -2126,23 +2160,18 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 
 Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, Lens* cosmo_in, const bool sine)
 {
-	lens = cosmo_in;
-	lenstype = MULTIPOLE;
-	model_name = (kap==true) ? "kmpole" : "mpole";
-	subclass_label = "m";
+	setup_lens_properties(0,m_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+
+	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
+	sine_term = sine;
+	string sine_command = (sine_term) ? "sin" : "cos";
 	stringstream mstr;
 	string mstring;
 	mstr << m_in;
 	mstr >> mstring;
-	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
-	sine_term = sine;
-	string sine_command = (sine_term) ? "sin" : "cos";
 	special_parameter_command = sine_command + " m=" + mstring;
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-
-	m = m_in; // m will be used when assigning the amplitude parameter name (A_m or B_m)
-	setup_base_lens(6,false,0,m); // number of parameters = 5, is_elliptical_lens = false
+	model_name = (kap==true) ? "kmpole" : "mpole"; // rename if necessary
 
 	n = n_in;
 	A_n = A_m_in;
@@ -2152,6 +2181,23 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 
 	update_meta_parameters();
 	set_model_specific_integration_pointers();
+}
+
+void Multipole::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = MULTIPOLE;
+	kappa_multipole = false; // default; specifies it is a multipole in the potential
+	sine_term = false; // default
+	string sine_command = "cos";
+	subclass_label = "m";
+	stringstream mstr;
+	string mstring;
+	mstr << subclass;
+	mstr >> mstring;
+	special_parameter_command = sine_command + " m=" + mstring;
+	model_name = "mpole";
+	m = subclass; // m will be used when assigning the amplitude parameter name (A_m or B_m)
+	setup_base_lens(6,false,0,m); // number of parameters = 5, is_elliptical_lens = false
 }
 
 Multipole::Multipole(const Multipole* lens_in)
@@ -2472,13 +2518,8 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 
 PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &p_in, const double &xc_in, const double &yc_in, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = PTMASS;
-	model_name = "ptmass";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(4,false,parameter_mode_in); // number of parameters = 3, is_elliptical_lens = false
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	if (parameter_mode==1) {
 		mtot = p_in;
 	} else {
@@ -2488,6 +2529,14 @@ PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &
 	y_center = yc_in;
 	update_meta_parameters();
 	set_model_specific_integration_pointers();
+}
+
+void PointMass::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = PTMASS;
+	model_name = "ptmass";
+	special_parameter_command = "";
+	setup_base_lens(4,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
 }
 
 PointMass::PointMass(const PointMass* lens_in)
@@ -2636,16 +2685,10 @@ double PointMass::kappa_avg_r(const double r)
 
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = CORECUSP;
-	model_name = "corecusp";
-	special_parameter_command = ((parameter_mode_in==1) ? "re_param" : "");
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(10,true,parameter_mode_in); // number of parameters = 9, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	analytic_3d_density = true;
 
 	gamma = gamma_in;
 	n = n_in;
@@ -2666,6 +2709,15 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 	//cout << "s=" << s << " " << "a=" << a << " " << gamma << " " << k0 << endl;
 
 	update_meta_parameters_and_pointers();
+}
+
+void CoreCusp::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = CORECUSP;
+	model_name = "corecusp";
+	special_parameter_command = ((parameter_mode==1) ? "re_param" : "");
+	setup_base_lens(10,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
+	analytic_3d_density = true;
 }
 
 CoreCusp::CoreCusp(const CoreCusp* lens_in)
@@ -2967,13 +3019,8 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 
 SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = SERSIC_LENS;
-	model_name = "sersic";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(8,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -2988,6 +3035,14 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	re = Re_in;
 
 	update_meta_parameters_and_pointers();
+}
+
+void SersicLens::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = SERSIC_LENS;
+	model_name = "sersic";
+	special_parameter_command = "";
+	setup_base_lens(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 SersicLens::SersicLens(const SersicLens* lens_in)
@@ -3092,13 +3147,8 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 
 Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = CORED_SERSIC_LENS;
-	model_name = "csersic";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(9,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
+	setup_lens_properties(parameter_mode_in);
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_default_base_settings(nn,acc);
@@ -3114,6 +3164,14 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 	rc = rc_in;
 
 	update_meta_parameters_and_pointers();
+}
+
+void Cored_SersicLens::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = CORED_SERSIC_LENS;
+	model_name = "csersic";
+	special_parameter_command = "";
+	setup_base_lens(9,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
@@ -3226,18 +3284,21 @@ double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
 
 MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = SHEET;
-	model_name = "sheet";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_lens_properties();
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kext = kext_in;
 	x_center = xc_in;
 	y_center = yc_in;
 	update_meta_parameters_and_pointers();
+}
+
+void MassSheet::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = SHEET;
+	model_name = "sheet";
+	special_parameter_command = "";
+	setup_base_lens(4,false); // number of parameters = 3, is_elliptical_lens = false
 }
 
 MassSheet::MassSheet(const MassSheet* lens_in)
@@ -3343,19 +3404,22 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 
 Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Lens* cosmo_in)
 {
-	lens = cosmo_in;
-	lenstype = DEFLECTION;
-	model_name = "deflection";
-	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
-	setup_base_lens(3,false); // number of parameters = 2, is_elliptical_lens = false
-	center_defined = false;
+	setup_lens_properties();
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	def_x = defx_in;
 	def_y = defy_in;
 	x_center = 0; y_center = 0; // will not be used anyway
 	update_meta_parameters_and_pointers();
+}
+
+void Deflection::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = DEFLECTION;
+	model_name = "deflection";
+	special_parameter_command = "";
+	setup_base_lens(3,false); // number of parameters = 2, is_elliptical_lens = false
+	center_defined = false;
 }
 
 Deflection::Deflection(const Deflection* lens_in)
@@ -3442,13 +3506,11 @@ void Deflection::potential_derivatives(double x, double y, lensvector& def, lens
 
 Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, Lens* cosmo_in)
 {
-	lens = cosmo_in;
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
 	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
 	rscale = rscale0 = rscale_in;
@@ -3581,10 +3643,10 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 
 Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, Lens* cosmo_in)
 {
-	lens = cosmo_in;
 	lenstype = TABULATED;
 	special_parameter_command = "";
 	setup_base_lens(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -4092,13 +4154,11 @@ Tabulated_Model::~Tabulated_Model() {
 /***************************** Tabulated Model that interpolates in q *****************************/
 QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N, Lens* cosmo_in)
 {
-	lens = cosmo_in;
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
 	setup_base_lens(7,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
 	// I wanted to allow q or e to be a parameter, but at present only q is allowed...fix this later
@@ -4267,10 +4327,10 @@ QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 
 QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, Lens* cosmo_in)
 {
-	lens = cosmo_in;
 	lenstype = QTABULATED;
 	special_parameter_command = "";
 	setup_base_lens(7,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -4788,11 +4848,8 @@ QTabulated_Model::~QTabulated_Model() {
 
 TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
-	lenstype = TESTMODEL;
-	model_name = "test";
+	setup_lens_properties();
 	special_parameter_command = "";
-	zlens = zlens_in;
-	zsrc_ref = zsrc_in;
 	//setup_base_lens(X,false); // number of parameters = X, is_elliptical_lens = false
 	set_default_base_settings(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -4814,6 +4871,12 @@ void TestModel::hessian(double x, double y, lensmatrix& hess)
 	hess[0][1] = 0;
 }
 */
+
+void TestModel::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = TESTMODEL;
+	model_name = "test";
+}
 
 double TestModel::kappa_rsq(const double rsq)
 {
