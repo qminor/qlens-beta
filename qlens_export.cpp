@@ -14,7 +14,13 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<>([](const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens* lens_in){
                 return new LensProfile(splinefile, zlens_in, zsrc_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, qx_in, f_in, lens_in);
         }))
-        .def("update", &LensProfile::update_from_python)
+        .def("update", [](LensProfile &current, py::dict dict){
+                for(auto item : dict) {
+                        if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
+                                return false;
+                }
+                return true;
+        })
         .def("print_parameters", &LensProfile::print_parameters)
         .def("print_vary_parameters", &LensProfile::print_vary_parameters)
         .def("set_center", &LensProfile::set_center)
@@ -176,6 +182,5 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
         .def("add_lenses", &Lens_Wrap::batch_add_lenses, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values.")
-        // .def("update", ) // #TODO: //update each function
         ;
 }

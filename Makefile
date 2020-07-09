@@ -15,12 +15,12 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3 -fPIC -g
+OPTS = -Wno-write-strings -O3 -fPIC
 OPTS_NO_OPT = -Wno-write-strings -fPIC
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-FLAGS = -DUSE_READLINE -DUSE_PYBIND 
+FLAGS = -DUSE_READLINE 
 # OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  -lm -lreadline 
 # OTHERLIBS =  -lm 
@@ -33,7 +33,7 @@ LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB) `python3-config --ldfl
 #OPTS_NO_OPT = -Wno-write-strings -fopenmp
 #FLAGS = -DUSE_OPENMP -DUSE_MUMPS -DUSE_FITS -DUSE_UMFPACK
 #CMUMPS = $(INCS) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src
-INC = `python3 -m pybind11 --includes`
+# INC = `python3 -m pybind11 --includes`
 #MUMPSLIBS = $(LIBDMUMPS) $(LORDERINGS) $(LIBS) $(LIBBLAS) $(LIBOTHERS) -lgfortran
 #OTHERLIBS =  -lm -lreadline -lcfitsio -ltcmalloc
 ##OTHERLIBS =  -lm -lreadline -lcfitsio
@@ -66,7 +66,7 @@ qlens_wrapper.o: $(objects)
 
 qlens-wrap: $(wrapper_objects) 
 #	$(CL) $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -Wall -shared -fPIC `python3 -m pybind11 --includes` qlens_export.cpp -o qlens`python3-config --extension-suffix`
-	$(CL) -o qlens`python3-config --extension-suffix` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
+	$(CL) -o qlens`python3-config --extension-suffix` `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp $(wrapper_objects) $(LINKLIBS)
 
 mkdist: $(mkdist_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm

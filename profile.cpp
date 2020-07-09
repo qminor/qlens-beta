@@ -10,11 +10,6 @@
 #include <fstream>
 #include <iomanip>
 
-#ifdef USE_PYBIND
-#include <pybind11/pybind11.h>
-namespace py = pybind11;
-#endif
-
 using namespace std;
 
 IntegrationMethod LensProfile::integral_method;
@@ -289,20 +284,6 @@ void LensProfile::update_parameters(const double* params)
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
-
-#ifdef USE_PYBIND
-
-bool LensProfile::update_from_python(py::dict dict) {
-	
-	// assign_paramnames();
-	for(auto item : dict) {
-		if(!update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
-			return false;
-	}
-	return true;
-}
-
-#endif
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
 {
