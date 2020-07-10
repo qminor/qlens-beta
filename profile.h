@@ -216,6 +216,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void delete_center_anchor();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
+	bool set_vary_flags(boolvector &vary_flags);
 	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);

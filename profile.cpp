@@ -187,6 +187,14 @@ void LensProfile::delete_special_parameter_anchor()
 	if (anchor_special_parameter) anchor_special_parameter = false;
 }
 
+bool LensProfile::set_vary_flags(boolvector &vary_flags)
+{
+	// This function is a bit of a hack to allow you to call this from within the LensProfile
+	// object. Clean this up later so it doesn't just call the original Lens function!
+	if (lens == NULL) return false;
+	return lens->set_lens_vary_parameters(lens_number, vary_flags);
+}
+
 bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
 	if (vary_params_in.size() != n_params) {
