@@ -2655,7 +2655,7 @@ void Lens::process_commands(bool read_file)
 					update_specific_parameters = true;
 					for (int i=0; i < n_updates; i++)
 						if (lens_list[lens_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in lens " << lens_number);
-					update_anchored_parameters_and_redshift_data();
+					//update_anchored_parameters_and_redshift_data();
 					reset();
 				}
 			}
@@ -2840,7 +2840,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -2936,7 +2936,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3057,7 +3057,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3165,7 +3165,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3309,7 +3309,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3417,7 +3417,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3500,7 +3500,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3585,7 +3585,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3664,7 +3664,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3777,7 +3777,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3859,7 +3859,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -3946,7 +3946,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4035,7 +4035,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4109,7 +4109,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4159,7 +4159,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4229,7 +4229,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4331,7 +4331,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
@@ -4438,7 +4438,7 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							update_anchored_parameters_and_redshift_data();
+							//update_anchored_parameters_and_redshift_data();
 							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
