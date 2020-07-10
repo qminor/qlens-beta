@@ -69,6 +69,7 @@ void LensProfile::setup_cosmology(Lens* lens_in, const double zlens_in, const do
 	zsrc_ref = zsrc_in;
 	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
 	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
+	update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)
@@ -282,6 +283,7 @@ void LensProfile::update_parameters(const double* params)
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
+	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
 }
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
@@ -299,6 +301,7 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 	if (found_match) update_parameters(newparams);
 	delete[] newparams;
 	return found_match;
+	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
 }
 
 void LensProfile::update_ellipticity_parameter(const double eparam)

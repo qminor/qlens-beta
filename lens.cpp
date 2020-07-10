@@ -1600,6 +1600,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 
 	Alpha* alphaptr;
 	Shear* shearptr;
+	Truncated_NFW* tnfwptr;
 	switch (name) {
 		case PTMASS:
 			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
@@ -1627,7 +1628,11 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 		case nfw:
 			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TRUNCATED_nfw:
-			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
+			tnfwptr = new Truncated_NFW(pmode,special_param1);
+			tnfwptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
+			new_lens = tnfwptr;
+			break;
+			//new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
 		case CORED_nfw:
 			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case PJAFFE:
@@ -12078,13 +12083,17 @@ void Lens::test_lens_functions()
 {
 	clear_lenses();
 
-	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.85,30,0.0152892,-0.00558392);
-	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,60,0.0152892,-0.00558392);
-	lens_list[1]->anchor_center_to_lens(lens_list,0);
+	Alpha *A = new Alpha();
+	A->initialize_parameters(10,1,0,0.7,30,0.3,0.7);
+	add_lens(A,0.5,2);
+
+	//create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.85,30,0.0152892,-0.00558392);
+	//add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,60,0.0152892,-0.00558392);
+	//lens_list[1]->anchor_center_to_lens(lens_list,0);
 	print_lens_list(false);
-	lens_list[0]->update_specific_parameter("b",1.4);
-	lens_list[0]->update_specific_parameter("theta",45);
-	lens_list[0]->update_specific_parameter("xc",0.03);
-	update_anchored_parameters_and_redshift_data();
-	print_lens_list(false);
+	//lens_list[0]->update_specific_parameter("b",1.4);
+	//lens_list[0]->update_specific_parameter("theta",45);
+	//lens_list[0]->update_specific_parameter("xc",0.03);
+	//update_anchored_parameters_and_redshift_data();
+	//print_lens_list(false);
 }
