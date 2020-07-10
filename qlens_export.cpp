@@ -2,6 +2,7 @@
 #include "qlens_wrapper.cpp"
 #include "profile.h"
 #include "qlens.h"
+#include <vector>
 
 namespace py = pybind11;
 
@@ -48,7 +49,14 @@ PYBIND11_MODULE(qlens, m) {
                 }
                 
         })
-        .def("initialize", [](Alpha &current){
+        .def("set_vary_flags", [](Alpha &current, py::list list){ 
+                if(list.size()!=8) throw std::runtime_error("Specify array of boolean for 8 parameters: b, alpha, s, q, theta, xc, yc, redshift.");
+                boolvector val(8);
+                int iter = 0;
+                for (auto item : list) {
+                        val[iter] = py::cast<bool>(item); iter++;
+                }
+                current.set_vary_flags(val);
         })
         ;
 
@@ -68,6 +76,15 @@ PYBIND11_MODULE(qlens, m) {
                 } catch(...) {
                         throw std::runtime_error("Required parameters: shear, theta, xc, yc.");
                 }
+        })
+        .def("set_vary_flags", [](Shear &current, py::list list){ 
+                if(list.size()!=5) throw std::runtime_error("Specify array of boolean for 5 parameters: shear, theta, xc, yc, redshift.");
+                boolvector val(5);
+                int iter = 0;
+                for (auto item : list) {
+                        val[iter] = py::cast<bool>(item); iter++;
+                }
+                current.set_vary_flags(val);
         })
         ;;
 
@@ -201,6 +218,9 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
         .def("add_lenses", &Lens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
+        .def("add_lenses", [](Lens_Wrap &self){
+                return "Pass in an array of lenses \n\tEx: [Lens1, Lens2, Lens3] \nor an array of tuples. Each tuple must contain the lens, the zl and zs values for each corresponding lens. \n\tEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]";
+        })
         .def("findimg", &Lens_Wrap::output_images_single_source,
                 py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
                 py::arg("flux")=-1, py::arg("show_labels")=false
