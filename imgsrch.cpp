@@ -11,7 +11,7 @@ using namespace std;
 
 int Grid::nthreads = 0;
 double Grid::image_pos_accuracy = 1e-6; // default
-const int Grid::max_images = 10;
+const int Grid::max_images = 50;
 const int Grid::max_level = 10;
 double Grid::theta_offset = 0; // slight offset in the initial angle for creating the grid; obsolete, but keeping it here just in case
 double Grid::ccroot_t;
@@ -1786,23 +1786,21 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 	}
 	source[0] = x_source; source[1] = y_source;
 
-	if (use_scientific_notation==false) {
-		cout << setprecision(6);
-		cout << fixed;
-	}
 
 	find_images();
 
 	if (mpi_id==0) {
+		if (use_scientific_notation==false) {
+			cout << setprecision(6);
+			cout << fixed;
+		}
 		cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
 		if (flux != -1) cout << "\tsrc_flux";
 		cout << endl;
 		cout << source[0] << "\t" << source[1] << "\t" << Grid::nfound << "\t";
 		if (flux != -1) cout << "\t" << flux;
 		cout << endl << endl;
-	}
 
-	if (mpi_id==0) {
 		//cout << "# " << Grid::nfound << " images" << endl;
 		if (show_labels) {
 			cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
@@ -1821,12 +1819,12 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 				else cout << images_found[i].pos[0] << "\t" << images_found[i].pos[1] << "\t" << images_found[i].mag << "\t" << images_found[i].mag*flux << endl;
 			}
 		}
+
+		if (use_scientific_notation==false)
+			cout.unsetf(ios_base::floatfield);
+
+		cout << endl;
 	}
-
-	if (use_scientific_notation==false)
-		cout.unsetf(ios_base::floatfield);
-
-	if (mpi_id==0) cout << endl;
 }
 
 bool Lens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
@@ -1850,9 +1848,7 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 		cout << source[0] << "\t" << source[1] << "\t" << Grid::nfound << "\t";
 		if (flux != -1) cout << "\t" << flux;
 		cout << endl << endl;
-	}
 
-	if (mpi_id==0) {
 		srcfile << x_source << " " << y_source << endl;
 		//cout << "# " << Grid::nfound << " images" << endl;
 		if (show_labels) {
@@ -1897,6 +1893,23 @@ image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 	find_images();
 	n_images = Grid::nfound;
 	return images_found;
+}
+
+// this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
+bool Lens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
+{
+	if ((use_cc_spline) and (!cc_splined)) {
+		if (spline_critical_curves(verbal)==false) return false;
+	}
+	if (grid==NULL) {
+		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return false;
+	}
+	source[0] = src_x;
+	source[1] = src_y;
+
+	find_images();
+	image_set.copy_imageset(source,source_redshift,images_found,Grid::nfound);
+	return true;
 }
 
 bool Lens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)

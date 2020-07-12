@@ -4423,18 +4423,20 @@ bool Lens::plot_sorted_critical_curves(string critfile)
 	}
 	if (!sorted_critical_curves) sort_critical_curves();
 
-	ofstream crit;
-	open_output_file(crit,critfile);
-	if (use_scientific_notation) crit << setiosflags(ios::scientific);
-	int n_cc = sorted_critical_curve.size();
-	if (n_cc==0) return false;
-	for (int j=0; j < n_cc; j++) {
-		for (int k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
-			crit << sorted_critical_curve[j].cc_pts[k][0] << " " << sorted_critical_curve[j].cc_pts[k][1] << " " << sorted_critical_curve[j].caustic_pts[k][0] << " " << sorted_critical_curve[j].caustic_pts[k][1] << " " << sorted_critical_curve[j].length_of_cell[k] << endl;
+	if (critfile != "") {
+		ofstream crit;
+		open_output_file(crit,critfile);
+		if (use_scientific_notation) crit << setiosflags(ios::scientific);
+		int n_cc = sorted_critical_curve.size();
+		if (n_cc==0) return false;
+		for (int j=0; j < n_cc; j++) {
+			for (int k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
+				crit << sorted_critical_curve[j].cc_pts[k][0] << " " << sorted_critical_curve[j].cc_pts[k][1] << " " << sorted_critical_curve[j].caustic_pts[k][0] << " " << sorted_critical_curve[j].caustic_pts[k][1] << " " << sorted_critical_curve[j].length_of_cell[k] << endl;
+			}
+			// connect the first and last points to make a closed curve
+			crit << sorted_critical_curve[j].cc_pts[0][0] << " " << sorted_critical_curve[j].cc_pts[0][1] << " " << sorted_critical_curve[j].caustic_pts[0][0] << " " << sorted_critical_curve[j].caustic_pts[0][1] << " " << sorted_critical_curve[j].length_of_cell[0] << endl;
+			if (j < n_cc-1) crit << endl; // separates the critical curves in the plot
 		}
-		// connect the first and last points to make a closed curve
-		crit << sorted_critical_curve[j].cc_pts[0][0] << " " << sorted_critical_curve[j].cc_pts[0][1] << " " << sorted_critical_curve[j].caustic_pts[0][0] << " " << sorted_critical_curve[j].caustic_pts[0][1] << " " << sorted_critical_curve[j].length_of_cell[0] << endl;
-		if (j < n_cc-1) crit << endl; // separates the critical curves in the plot
 	}
 	return true;
 }
@@ -12084,16 +12086,40 @@ void Lens::test_lens_functions()
 	clear_lenses();
 
 	Alpha *A = new Alpha();
-	A->initialize_parameters(10,1,0,0.7,30,0.3,0.7);
+	A->initialize_parameters(10,1,0.3,0.7,30,0.3,0.7);
 	add_lens(A,0.5,2);
 
-	//create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.85,30,0.0152892,-0.00558392);
-	//add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,60,0.0152892,-0.00558392);
-	//lens_list[1]->anchor_center_to_lens(lens_list,0);
 	print_lens_list(false);
-	//lens_list[0]->update_specific_parameter("b",1.4);
-	//lens_list[0]->update_specific_parameter("theta",45);
-	//lens_list[0]->update_specific_parameter("xc",0.03);
-	//update_anchored_parameters_and_redshift_data();
-	//print_lens_list(false);
+
+	ImageSet imgset;
+	get_imageset(0.5,0.1,imgset); // finds the images and stores the image data in the "imgset" object
+
+	// The following shows how to access the image data in the "imgset" object
+	cout << endl;
+	cout << "Number of images: " << imgset.n_images << endl;
+	cout << "Source:  " << imgset.src[0] << " " << imgset.src[1] << endl;
+	for (int i=0; i < imgset.n_images; i++) cout << "Image" << i << ": " << imgset.images[i].pos[0] << " " << imgset.images[i].pos[1] << " " << imgset.images[i].mag << endl;
+	cout << endl;
+
+	//OR...you can print similar information by calling the following function:
+	imgset.print();
+
+	cout << "Generating critical curves/caustics and plotting to files 'crit.dat' and 'caust.dat'..." << endl;
+	plot_sorted_critical_curves(); // generates critical curves/caustics and stores them
+	// The following shows how the critical curves/caustics are accessed using "sorted_critical_curve", which is a std::vector of
+	// "critical_curve" objects (in qlens.h you can see what the critical_curve structure looks like). The length of sorted_critical_curve vector
+	// tells you how many distinct critical curves there are (sometimes there is one, or two, or more...it depends on the lens).
+	ofstream ccfile("crit.dat");
+	ofstream caustic_file("caust.dat");
+	int i,j;
+	for (i=0; i < sorted_critical_curve.size(); i++ ) {
+		for (j=0; j < sorted_critical_curve[i].cc_pts.size(); j++) {
+			ccfile << sorted_critical_curve[i].cc_pts[j][0] << " " << sorted_critical_curve[i].cc_pts[j][1] << endl; // printing x- and y-values for critical curves
+			caustic_file << sorted_critical_curve[i].caustic_pts[j][0] << " " << sorted_critical_curve[i].caustic_pts[j][1] << endl; // same for caustics
+		}
+		ccfile << endl;
+		caustic_file << endl;
+	}
+
+	delete A;
 }
