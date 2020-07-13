@@ -78,6 +78,73 @@ struct image {
 	int parity;
 };
 
+struct ImageSet {
+	lensvector src;
+	double zsrc, srcflux;
+	int n_images;
+	image *images;
+
+	ImageSet() { n_images = 0; images = NULL; }
+	ImageSet(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
+		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
+	}
+	void copy_imageset(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
+		n_images = nimg;
+		zsrc = zsrc_in;
+		srcflux = srcflux_in;
+		src[0] = src_in[0];
+		src[1] = src_in[1];
+		if (images != NULL) delete[] images;
+		images = new image[n_images];
+		for (int i=0; i < n_images; i++) {
+			images[i].pos = images_in[i].pos;
+			images[i].mag = images_in[i].mag;
+			images[i].td = images_in[i].td;
+			images[i].parity = images_in[i].parity;
+		}
+	}
+	void print(bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL) {
+		cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
+		if (srcflux != -1) cout << "\tsrc_flux";
+		cout << endl;
+		cout << src[0] << "\t" << src[1] << "\t" << n_images << "\t";
+		if (srcflux != -1) cout << "\t" << srcflux;
+		cout << endl << endl;
+
+		if (srcfile != NULL) (*srcfile) << src[0] << " " << src[1] << endl;
+		//cout << "# " << n_images << " images" << endl;
+		if (show_labels) {
+			cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
+			if (srcflux != -1.0) cout << "\tflux\t";
+			if (include_time_delays) cout << "\ttime_delay (days)";
+			cout << endl;
+		}
+		if (include_time_delays) {
+			for (int i = 0; i < n_images; i++) {
+				if (srcflux == -1.0) cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << endl;
+				else cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << "\t" << images[i].td << endl;
+				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << endl;
+			}
+		} else {
+			for (int i = 0; i < n_images; i++) {
+				if (srcflux == -1.0) cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << endl;
+				else cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << endl;
+				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << endl;
+			}
+		}
+
+		cout << endl;
+	}
+	void reset() {
+		if (n_images != 0) delete[] images;
+		images = NULL;
+		n_images = 0;
+	}
+	~ImageSet() {
+		if (n_images != 0) delete[] images;
+	}
+};
+
 struct jl_pair {
 	int j,l;
 };
@@ -811,6 +878,7 @@ public:
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
+	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
@@ -939,8 +1007,8 @@ public:
 	bool spline_critical_curves(bool verbal);
 	bool spline_critical_curves() { return spline_critical_curves(true); }
 	void automatically_determine_ccspline_mode();
-	bool plot_splined_critical_curves(string filename);
-	bool plot_sorted_critical_curves(string filename);
+	bool plot_splined_critical_curves(string filename = "");
+	bool plot_sorted_critical_curves(string filename = "");
 	bool (Lens::*plot_critical_curves)(string filename);
 	bool plotcrit(string filename) { return (this->*plot_critical_curves)(filename); }
 	void plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename);

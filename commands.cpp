@@ -5540,7 +5540,7 @@ void Lens::process_commands(bool read_file)
 								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
-							output_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, srcflux[i], true);
+							output_images_single_source(srcpts[i][0], srcpts[i][1], true, srcflux[i], true);
 						}
 						if (different_zsrc) {
 							reset();
@@ -5551,7 +5551,7 @@ void Lens::process_commands(bool read_file)
 							reset();
 							create_grid(false,zfactors[dataset],beta_factors[dataset]);
 						}
-						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, srcflux[dataset], true);
+						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], true, srcflux[dataset], true);
 						if (source_redshifts[dataset] != source_redshift) {
 							reset();
 							//create_grid(false);
@@ -6837,7 +6837,7 @@ void Lens::process_commands(bool read_file)
 				double xsource_in, ysource_in;
 				if (!(ws[1] >> xsource_in)) Complain("invalid source x-position");
 				if (!(ws[2] >> ysource_in)) Complain("invalid source y-position");
-				output_images_single_source(xsource_in, ysource_in, verbal_mode);
+				output_images_single_source(xsource_in, ysource_in, true);
 			} else Complain("must specify two arguments that give source position (e.g. 'findimg 3.0 1.2')");
 		}
 		else if (words[0]=="plotimg")
