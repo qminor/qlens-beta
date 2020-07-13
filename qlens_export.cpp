@@ -25,7 +25,17 @@ PYBIND11_MODULE(qlens, m) {
         .def("print_parameters", &LensProfile::print_parameters)
         .def("print_vary_parameters", &LensProfile::print_vary_parameters)
         .def("set_center", &LensProfile::set_center)
-        .def("get_model_name", &LensProfile::get_model_name);
+        .def("get_model_name", &LensProfile::get_model_name)
+        .def("set_vary_flags", [](LensProfile &current, py::list list){ 
+                std::vector<double> lst = py::cast<std::vector<double>>(list);
+                boolvector val(lst.size());
+                int iter = 0;
+                for (auto item : list) {
+                        val[iter] = py::cast<bool>(item); iter++;
+                }
+                current.set_vary_flags(val);
+        })
+        ;
 
     py::class_<Alpha, LensProfile, std::unique_ptr<Alpha, py::nodelete>>(m, "Alpha")
         .def(py::init<>([](){return new Alpha();}))
@@ -33,6 +43,17 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init([](const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const int &nn, const double &acc, Lens* lens_in) {
                                 return new Alpha(zlens_in, zsrc_in, b_in, alpha_in, s_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, lens_in);
+                        }))
+        .def(py::init([](py::dict dict) {
+                                return new Alpha(
+                                        py::cast<double>(dict["b"]),
+                                        py::cast<double>(dict["alpha"]),
+                                        py::cast<double>(dict["s"]),
+                                        py::cast<double>(dict["q"]),
+                                        py::cast<double>(dict["theta"]),
+                                        py::cast<double>(dict["xc"]),
+                                        py::cast<double>(dict["yc"])
+                                );
                         }))
         .def("initialize", [](Alpha &current, py::dict dict){
                 try {
@@ -49,15 +70,6 @@ PYBIND11_MODULE(qlens, m) {
                 }
                 
         })
-        .def("set_vary_flags", [](Alpha &current, py::list list){ 
-                if(list.size()!=8) throw std::runtime_error("Specify array of boolean for 8 parameters: b, alpha, s, q, theta, xc, yc, redshift.");
-                boolvector val(8);
-                int iter = 0;
-                for (auto item : list) {
-                        val[iter] = py::cast<bool>(item); iter++;
-                }
-                current.set_vary_flags(val);
-        })
         ;
 
     py::class_<Shear, LensProfile, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
@@ -65,6 +77,14 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<const Shear*>())
         .def(py::init([](const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Lens* lens) {
                 return new Shear(zlens_in, zsrc_in, shear_in, theta_degrees, xc_in, yc_in, lens);
+        }))
+        .def(py::init([](py::dict dict) {
+                return new Shear(
+                        py::cast<double>(dict["shear"]),
+                        py::cast<double>(dict["theta"]),
+                        py::cast<double>(dict["xc"]),
+                        py::cast<double>(dict["yc"])
+                );
         }))
         .def("initialize", [](Shear &current, py::dict dict){
                 try {
@@ -76,15 +96,6 @@ PYBIND11_MODULE(qlens, m) {
                 } catch(...) {
                         throw std::runtime_error("Required parameters: shear, theta, xc, yc.");
                 }
-        })
-        .def("set_vary_flags", [](Shear &current, py::list list){ 
-                if(list.size()!=5) throw std::runtime_error("Specify array of boolean for 5 parameters: shear, theta, xc, yc, redshift.");
-                boolvector val(5);
-                int iter = 0;
-                for (auto item : list) {
-                        val[iter] = py::cast<bool>(item); iter++;
-                }
-                current.set_vary_flags(val);
         })
         ;;
 
