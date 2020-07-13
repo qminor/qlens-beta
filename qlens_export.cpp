@@ -224,7 +224,7 @@ PYBIND11_MODULE(qlens, m) {
         .def("imgdata_write", &Lens_Wrap::imgdata_write_file)
         .def("imgdata_clear", &Lens_Wrap::imgdata_clear, 
                 py::arg("lower") = -1, py::arg("upper") = -1)
-        .def("imgdata_load", &Lens_Wrap::imgdata_load_file)
+        .def("imgdata_read", &Lens_Wrap::imgdata_load_file)
         .def("lens_clear", &Lens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
         .def("lens_display", &Lens_Wrap::lens_display)
@@ -236,5 +236,38 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
                 py::arg("flux")=-1, py::arg("show_labels")=false
                 )
+        .def("get_imageset", &Lens_Wrap::get_imageset)
+        .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
+                if(param=="simplex") {
+                        curr.chi_square_fit_simplex();
+                } else if (param=="powell") {
+                        curr.chi_square_fit_powell();
+                } else if (param=="twalk") {
+                        curr.chi_square_twalk();
+                } else {
+                        throw std::runtime_error("Available parameters: simplex (default), powell, twalk");
+                }
+        })
+        .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
+        ;
+
+    py::class_<image>(m, "image")
+        .def_readonly("pos", &image::pos)
+        .def_readonly("mag", &image::mag)
+        .def_readonly("td", &image::td)
+        .def_readonly("parity", &image::parity)
+        ;
+    
+
+    py::class_<lensvector>(m, "lensvector")
+        .def(py::init([](){ return new lensvector(); }));
+
+    py::class_<ImageSet>(m, "ImageSet")
+        .def(py::init<>([](){ return new ImageSet(); }))
+        // .def()
+        // .def("print", &ImageSet::print)
+        .def_readonly("n_images", &ImageSet::n_images)
+        .def_readonly("src", &ImageSet::src)
+        .def_readwrite("images", &ImageSet::images)
         ;
 }
