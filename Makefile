@@ -15,8 +15,8 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3
-OPTS_NO_OPT = -Wno-write-strings
+OPTS = -Wno-write-strings -O3 -std=c++11
+OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
