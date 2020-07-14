@@ -1063,6 +1063,10 @@ public:
 	void set_integral_tolerance(const double& acc);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
+	void set_analytic_bestfit_src(bool setting) {
+		use_analytic_bestfit_src = setting;
+		update_parameter_list();
+	}
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }
