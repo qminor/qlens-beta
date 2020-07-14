@@ -193,6 +193,12 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	// This function is a bit of a hack to allow you to call this from within the LensProfile
 	// object. Clean this up later so it doesn't just call the original Lens function!
 	if (lens == NULL) return false;
+	boolvector new_vary_flags(n_params);
+	if (vary_flags.size() < n_params-1) return false;
+	for (int i=0; i < n_params; i++) vary_flags[i] = new_vary_flags[i];
+	if (vary_flags.size() == n_params) new_vary_flags[n_params-1] = vary_flags[n_params-1];
+	else new_vary_flags[n_params-1] = false; // if no vary flag is given for redshift, then assume it's not being varied
+	
 	return lens->set_lens_vary_parameters(lens_number, vary_flags);
 }
 

@@ -1,5 +1,5 @@
 import qlens
-q = qlens.Lens()
+q = qlens.QLens()
 
 def test_img_load():
     q.imgdata_load("alphafit.dat") # Should succeed

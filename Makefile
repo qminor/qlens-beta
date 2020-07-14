@@ -15,15 +15,14 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3 -fPIC
-OPTS_NO_OPT = -Wno-write-strings -fPIC
+OPTS = -Wno-write-strings -O3 -std=c++11 -fPIC
+OPTS_NO_OPT = -Wno-write-strings -std=c++11 -fPIC
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-FLAGS = -DUSE_READLINE 
-# OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  -lm -lreadline 
-# OTHERLIBS =  -lm 
+FLAGS = -DUSE_READLINE
+#OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
+OTHERLIBS =  -lm -lreadline
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB) `python3-config --ldflags`
 
 # Version with MUMPS

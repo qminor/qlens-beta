@@ -1,5 +1,5 @@
 from qlens import *
-q = Lens()
+q = QLens()
 
 def test_lens_clear():
     q.lens_clear()

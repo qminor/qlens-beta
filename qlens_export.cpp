@@ -97,7 +97,7 @@ PYBIND11_MODULE(qlens, m) {
                         throw std::runtime_error("Required parameters: shear, theta, xc, yc.");
                 }
         })
-        ;;
+        ;
 
     py::class_<PseudoJaffe, LensProfile, std::unique_ptr<PseudoJaffe, py::nodelete>>(m, "PseudoJaffe")
         .def(py::init<>([](){return new PseudoJaffe();}))
@@ -238,6 +238,7 @@ PYBIND11_MODULE(qlens, m) {
                 )
         .def("get_imageset", &Lens_Wrap::get_imageset)
         .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
+                curr.set_analytic_bestfit_src(true);
                 if(param=="simplex") {
                         curr.chi_square_fit_simplex();
                 } else if (param=="powell") {
@@ -249,6 +250,7 @@ PYBIND11_MODULE(qlens, m) {
                 }
         })
         .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
+        .def("test_lens", &Lens_Wrap::test_lens_functions)
         ;
 
     py::class_<image>(m, "image")
