@@ -2655,8 +2655,7 @@ void Lens::process_commands(bool read_file)
 					update_specific_parameters = true;
 					for (int i=0; i < n_updates; i++)
 						if (lens_list[lens_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in lens " << lens_number);
-					//update_anchored_parameters_and_redshift_data();
-					reset();
+					reset_grid();
 				}
 			}
 			else if (words[1]=="changevary")
@@ -2840,8 +2839,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
@@ -2936,8 +2933,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
@@ -3057,8 +3052,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
@@ -3165,8 +3158,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
@@ -3309,8 +3300,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
@@ -3417,8 +3406,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
@@ -3500,8 +3487,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
@@ -3585,8 +3570,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
@@ -3664,8 +3647,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
@@ -3777,8 +3758,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
@@ -3859,8 +3838,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
@@ -3946,8 +3923,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
@@ -4035,8 +4010,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
@@ -4109,8 +4082,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
@@ -4159,8 +4130,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
@@ -4229,8 +4198,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
@@ -4331,8 +4298,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							if (tabulate_existing_lens) {
@@ -4438,8 +4403,6 @@ void Lens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							//update_anchored_parameters_and_redshift_data();
-							reset();
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							if (qtabulate_existing_lens) {
@@ -5543,17 +5506,17 @@ void Lens::process_commands(bool read_file)
 							output_images_single_source(srcpts[i][0], srcpts[i][1], true, srcflux[i], true);
 						}
 						if (different_zsrc) {
-							reset();
+							reset_grid();
 							//create_grid(false);
 						}
 					} else {
 						if (source_redshifts[dataset] != source_redshift) {
-							reset();
+							reset_grid();
 							create_grid(false,zfactors[dataset],beta_factors[dataset]);
 						}
 						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], true, srcflux[dataset], true);
 						if (source_redshifts[dataset] != source_redshift) {
-							reset();
+							reset_grid();
 							//create_grid(false);
 						}
 					}
@@ -5642,10 +5605,10 @@ void Lens::process_commands(bool read_file)
 						else show_multiple = true;
 					}
 					if (show_multiple) {
-						reset();
+						reset_grid();
 						create_grid(false,reference_zfactors,default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					} else {
-						reset();
+						reset_grid();
 						create_grid(false,zfactors[dataset],default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					}
 					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves and caustics");
@@ -5714,7 +5677,7 @@ void Lens::process_commands(bool read_file)
 						if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcptfits");
 						else run_plotter("srcptfit");
 					}
-					reset();
+					reset_grid();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
@@ -5774,7 +5737,7 @@ void Lens::process_commands(bool read_file)
 					// If showing multiple sources, plot critical curves using zsrc
 					if ((show_multiple) and (show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if (!show_multiple) {
-						reset();
+						reset_grid();
 						int zgroup = -1;
 						for (int k=0; k < source_redshift_groups.size()-1; k++) { if ((dataset >= source_redshift_groups[k]) and (dataset < source_redshift_groups[k+1])) zgroup = k; }
 						create_grid(false,zfactors[dataset],beta_factors[dataset],zgroup);
@@ -5782,7 +5745,7 @@ void Lens::process_commands(bool read_file)
 						// Plot critical curves corresponding to the particular source redshift being plotted
 						if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
-						reset();
+						reset_grid();
 						create_grid(false,zfactors[min_dataset],beta_factors[min_dataset]);
 					}
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
@@ -5832,7 +5795,7 @@ void Lens::process_commands(bool read_file)
 							}
 						}
 					} else {
-						reset();
+						reset_grid();
 						for (int i=min_dataset; i <= max_dataset; i++) {
 							if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
 								create_grid(false,zfactors[i],beta_factors[i]);
@@ -5877,7 +5840,7 @@ void Lens::process_commands(bool read_file)
 						}
 					}
 					show_imgsrch_grid = false;
-					reset();
+					reset_grid();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
@@ -7820,7 +7783,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'recursive_lensing' command; must specify 'on' or 'off'");
 				set_switch(include_recursive_lensing,setword);
 				recalculate_beta_factors();
-				reset();
+				reset_grid();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="show_cc")
@@ -8393,7 +8356,7 @@ void Lens::process_commands(bool read_file)
 				if (!(ws[1] >> zsource)) Complain("invalid zsrc setting");
 				set_source_redshift(zsource);
 				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
-				reset();
+				reset_grid();
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "source redshift = " << source_redshift << endl;
 			} else Complain("must specify either zero or one argument (redshift of source object)");
@@ -8408,7 +8371,7 @@ void Lens::process_commands(bool read_file)
 				reference_source_redshift = zrsource;
 				if (auto_zsource_scaling==true) auto_zsource_scaling = false;
 				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
-				reset();
+				reset_grid();
 				if (n_sourcepts_fit > 0) {
 					for (i=0; i < n_sourcepts_fit; i++) {
 						for (j=0; j < n_lens_redshifts; j++) {

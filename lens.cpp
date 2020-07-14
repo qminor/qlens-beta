@@ -1708,7 +1708,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
@@ -1724,7 +1724,7 @@ void Lens::create_and_add_lens(const char *splinefile, const int emode, const do
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
@@ -1750,7 +1750,7 @@ void Lens::add_multipole_lens(const double zl, const double zs, int m, const dou
 	lens_list[nlens-1] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this, sine_term);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
@@ -1779,7 +1779,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
@@ -1809,7 +1809,7 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
@@ -1851,7 +1851,7 @@ bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this);
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	return true;
 }
@@ -1900,7 +1900,7 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this);
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	return true;
 }
@@ -1915,7 +1915,7 @@ void Lens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 	lens_list[nlens-1] = new_lens;
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
@@ -2402,7 +2402,7 @@ void Lens::remove_lens(int lensnumber)
 	if (nlens > 0) lens_redshift_idx = new_lens_redshift_idx;
 	else lens_redshift_idx = NULL;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset();
+	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 
 	param_settings->remove_params(pi,pf);
@@ -2475,7 +2475,7 @@ void Lens::clear_lenses()
 
 		n_lens_redshifts = 0;
 
-		reset();
+		reset_grid();
 		get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 		clear_derived_params();
 	}
@@ -6303,6 +6303,7 @@ void Lens::update_anchored_parameters_and_redshift_data()
 		if (sb_list[i]->center_anchored) sb_list[i]->update_anchor_center();
 	}
 	update_lens_redshift_data();
+	reset_grid();
 }
 
 bool Lens::update_fitmodel(const double* params)
@@ -11426,7 +11427,7 @@ void Lens::find_equiv_mvir(const double newc)
 	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << " mvir=" << newm << endl;
 
 	if (lens_list[2]->update_specific_parameter("mvir",newm)==false) die("could not find parameter");
-	reset();
+	reset_grid();
 }
 
 double Lens::mroot_eq(const double logm)
@@ -11911,13 +11912,6 @@ void Lens::open_output_file(ofstream &outfile, string filename_in)
 	if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
 	string filename = fit_output_dir + "/" + filename_in;
 	outfile.open(filename.c_str());
-}
-
-void Lens::reset()
-{
-	reset_grid();
-	cc_rmin = default_autogrid_rmin;
-	cc_rmax = default_autogrid_rmax;
 }
 
 void Lens::reset_grid()

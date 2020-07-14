@@ -939,7 +939,6 @@ public:
 	void find_automatic_grid_position_and_size(double *zfacs);
 	void clear_lenses();
 	void clear();
-	void reset();
 	void reset_grid();
 	void remove_lens(int lensnumber);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
