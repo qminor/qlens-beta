@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
 	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
-	Lens::allocate_multithreaded_variables(n_omp_threads);
+	QLens::allocate_multithreaded_variables(n_omp_threads);
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	Lens lens;
+	QLens lens;
 #ifdef USE_OPENMP
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-		cout << "QLens by Quinn Minor (2018)\n";
+		cout << "QLens by Quinn Minor (2020)\n";
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
@@ -252,11 +252,11 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef USE_MUMPS
-	Lens::delete_mumps();
+	QLens::delete_mumps();
 #endif
 	Grid::deallocate_multithreaded_variables();
 	SourcePixelGrid::deallocate_multithreaded_variables();
-	Lens::deallocate_multithreaded_variables();
+	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI
 	MPI_Finalize();

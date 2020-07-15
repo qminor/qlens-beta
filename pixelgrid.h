@@ -20,13 +20,13 @@ struct InterpolationCells {
 
 class SourcePixelGrid
 {
-	friend class Lens;
+	friend class QLens;
 	friend class ImagePixelGrid;
 	// this constructor is only used by the top-level SourcePixelGrid, so it's private
-	SourcePixelGrid(Lens* lens_in, lensvector** xij, const int& i, const int& j, const int& level_in, SourcePixelGrid* parent_ptr);
+	SourcePixelGrid(QLens* lens_in, lensvector** xij, const int& i, const int& j, const int& level_in, SourcePixelGrid* parent_ptr);
 
 	SourcePixelGrid ***cell;
-	Lens *lens;
+	QLens *lens;
 	static ImagePixelGrid *image_pixel_grid;
 	static TriRectangleOverlap *trirec;
 	static int nthreads;
@@ -97,9 +97,9 @@ class SourcePixelGrid
 	void print_indices();
 
 	public:
-	SourcePixelGrid(Lens* lens_in, double x_min, double x_max, double y_min, double y_max);
-	SourcePixelGrid(Lens* lens_in, SourcePixelGrid* input_pixel_grid);
-	SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, const double& minarea_in);
+	SourcePixelGrid(QLens* lens_in, double x_min, double x_max, double y_min, double y_max);
+	SourcePixelGrid(QLens* lens_in, SourcePixelGrid* input_pixel_grid);
+	SourcePixelGrid(QLens* lens_in, string pixel_data_fileroot, const double& minarea_in);
 	static void set_splitting(int rs0, int ts0, double min_cs);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
@@ -172,10 +172,10 @@ class SourcePixelGrid
 class ImagePixelGrid : public Sort
 {
 	// the image pixel grid is simpler because its cells will never be split. So there is no recursion in this grid
-	friend class Lens;
+	friend class QLens;
 	friend class SourcePixelGrid;
 	friend class ImagePixelData;
-	Lens *lens;
+	QLens *lens;
 	SourcePixelGrid *source_pixel_grid;
 	lensvector **corner_pts;
 	lensvector **corner_sourcepts;
@@ -208,11 +208,11 @@ class ImagePixelGrid : public Sort
 	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
-	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
-	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
-	ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
 
-	ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
+	ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
@@ -227,7 +227,7 @@ class ImagePixelGrid : public Sort
 	void find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax);
 	void fill_surface_brightness_vector();
 	void plot_grid(string filename, bool show_inactive_pixels);
-	void set_lens(Lens* lensptr) { lens = lensptr; }
+	void set_lens(QLens* lensptr) { lens = lensptr; }
 	void set_source_pixel_grid(SourcePixelGrid* source_pixel_ptr) { source_pixel_grid = source_pixel_ptr; }
 	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
@@ -244,8 +244,8 @@ class ImagePixelGrid : public Sort
 
 struct ImagePixelData
 {
-	friend class Lens;
-	Lens *lens;
+	friend class QLens;
+	QLens *lens;
 	int npixels_x, npixels_y;
 	int n_required_pixels;
 	double **surface_brightness;
@@ -289,7 +289,7 @@ struct ImagePixelData
 	void set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
 	bool test_if_in_fit_region(const double& x, const double& y);
-	void set_lens(Lens* lensptr) { lens = lensptr; }
+	void set_lens(QLens* lensptr) { lens = lensptr; }
 
 	void estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb);
 	void add_point_image_from_centroid(ImageData* point_image_data, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double sb_threshold, const double pixel_error);

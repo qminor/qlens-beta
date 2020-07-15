@@ -14,7 +14,7 @@ enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORED_SERSIC, TOPHAT, SB_MULT
 
 class SB_Profile
 {
-	friend class Lens;
+	friend class QLens;
 	private:
 	Spline sb_spline;
 	double sb_splint(double);

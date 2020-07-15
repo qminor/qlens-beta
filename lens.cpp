@@ -31,30 +31,30 @@ using namespace std;
 #include "interfaces.hpp"
 #endif
 
-const int Lens::nmax_lens_planes = 100;
-const double Lens::default_autogrid_initial_step = 1.0e-3;
-const double Lens::default_autogrid_rmin = 1.0e-5;
-const double Lens::default_autogrid_rmax = 1.0e5;
-const double Lens::default_autogrid_frac = 2.1; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
-const int Lens::max_cc_search_iterations = 8;
-double Lens::galsubgrid_radius_fraction; // radius of perturber subgridding in terms of fraction of Einstein radius
-double Lens::galsubgrid_min_cellsize_fraction; // minimum cell size for perturber subgridding in terms of fraction of Einstein radius
-int Lens::galsubgrid_cc_splittings;
-bool Lens::auto_store_cc_points;
-const double Lens::perturber_einstein_radius_fraction = 0.2;
-const double Lens::default_rmin_frac = 1e-4;
-bool Lens::warnings;
-bool Lens::newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
-bool Lens::use_scientific_notation;
-double Lens::rmin_frac;
-bool Lens::respline_at_end; // for creating deflection spline
-int Lens::resplinesteps; // for creating deflection spline
-string Lens::fit_output_filename;
+const int QLens::nmax_lens_planes = 100;
+const double QLens::default_autogrid_initial_step = 1.0e-3;
+const double QLens::default_autogrid_rmin = 1.0e-5;
+const double QLens::default_autogrid_rmax = 1.0e5;
+const double QLens::default_autogrid_frac = 2.1; // ****** NOTE: it might be better to make this depend on the axis ratio, since for q=1 you may need larger rfrac
+const int QLens::max_cc_search_iterations = 8;
+double QLens::galsubgrid_radius_fraction; // radius of perturber subgridding in terms of fraction of Einstein radius
+double QLens::galsubgrid_min_cellsize_fraction; // minimum cell size for perturber subgridding in terms of fraction of Einstein radius
+int QLens::galsubgrid_cc_splittings;
+bool QLens::auto_store_cc_points;
+const double QLens::perturber_einstein_radius_fraction = 0.2;
+const double QLens::default_rmin_frac = 1e-4;
+bool QLens::warnings;
+bool QLens::newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
+bool QLens::use_scientific_notation;
+double QLens::rmin_frac;
+bool QLens::respline_at_end; // for creating deflection spline
+int QLens::resplinesteps; // for creating deflection spline
+string QLens::fit_output_filename;
 
-int Lens::nthreads = 0;
-lensvector *Lens::defs = NULL, **Lens::defs_subtot = NULL, *Lens::defs_i = NULL, *Lens::xvals_i = NULL;
-lensmatrix *Lens::jacs = NULL, *Lens::hesses = NULL, **Lens::hesses_subtot = NULL, *Lens::hesses_i = NULL, *Lens::Amats_i = NULL;
-int *Lens::indxs = NULL;
+int QLens::nthreads = 0;
+lensvector *QLens::defs = NULL, **QLens::defs_subtot = NULL, *QLens::defs_i = NULL, *QLens::xvals_i = NULL;
+lensmatrix *QLens::jacs = NULL, *QLens::hesses = NULL, **QLens::hesses_subtot = NULL, *QLens::hesses_i = NULL, *QLens::Amats_i = NULL;
+int *QLens::indxs = NULL;
 
 // The ParamSettings stuff should go in a separate cpp file!! Doesn't belong in lens.cpp
 void ParamSettings::update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
@@ -460,7 +460,7 @@ void ParamSettings::print_penalty_limits()
 }
 
 
-void Lens::allocate_multithreaded_variables(const int& threads, const bool reallocate)
+void QLens::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
 	if (xvals_i != NULL) {
 		if (!reallocate) return;
@@ -483,7 +483,7 @@ void Lens::allocate_multithreaded_variables(const int& threads, const bool reall
 	}
 }
 
-void Lens::deallocate_multithreaded_variables()
+void QLens::deallocate_multithreaded_variables()
 {
 	if (xvals_i != NULL) {
 		delete[] xvals_i;
@@ -513,16 +513,16 @@ void Lens::deallocate_multithreaded_variables()
 }
 
 #ifdef USE_MUMPS
-DMUMPS_STRUC_C *Lens::mumps_solver;
+DMUMPS_STRUC_C *QLens::mumps_solver;
 
-void Lens::setup_mumps()
+void QLens::setup_mumps()
 {
 	mumps_solver = new DMUMPS_STRUC_C;
 	mumps_solver->par = 1; // this tells MUMPS that the host machine participates in calculation
 }
 #endif
 
-void Lens::delete_mumps()
+void QLens::delete_mumps()
 {
 #ifdef USE_MUMPS
 	delete mumps_solver;
@@ -530,7 +530,7 @@ void Lens::delete_mumps()
 }
 
 #ifdef USE_MPI
-void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm)
+void QLens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm)
 {
 	mpi_id = mpi_id_in;
 	mpi_np = mpi_np_in;
@@ -550,7 +550,7 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int&
 }
 #endif
 
-void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
+void QLens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 {
 	// This assumes only one 'group', so all MPI processes will work together for each likelihood evaluation
 	mpi_id = mpi_id_in;
@@ -570,7 +570,7 @@ void Lens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 #endif
 }
 
-Lens::Lens() : UCMC()
+QLens::QLens() : UCMC()
 {
 	lens_parent = NULL; // this is only set if creating from another lens
 	mpi_id = 0;
@@ -826,7 +826,7 @@ Lens::Lens() : UCMC()
 
 	use_cc_spline = false;
 	auto_ccspline = false;
-	plot_critical_curves = &Lens::plot_sorted_critical_curves;
+	plot_critical_curves = &QLens::plot_sorted_critical_curves;
 	cc_rmin = default_autogrid_rmin;
 	cc_rmax = default_autogrid_rmax;
 	source_plane_rscale = 0; // this must be found by the autogrid
@@ -882,10 +882,10 @@ Lens::Lens() : UCMC()
 	default_parameter_mode = 0;
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
-	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&Lens::fitmodel_calculate_derived_params);
+	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&QLens::fitmodel_calculate_derived_params);
 }
 
-Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
+QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
 {
 	lens_parent = lens_in;
 	verbal_mode = lens_in->verbal_mode;
@@ -1004,7 +1004,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	grid_xcenter = lens_in->grid_xcenter;
 	grid_ycenter = lens_in->grid_ycenter;
 
-	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&Lens::fitmodel_loglike_point_source); // unnecessary, but just in case
+	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&QLens::fitmodel_loglike_point_source); // unnecessary, but just in case
 	source_fit_mode = lens_in->source_fit_mode;
 	running_fit = lens_in->running_fit;
 	chisq_tolerance = lens_in->chisq_tolerance;
@@ -1136,7 +1136,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 
 	use_cc_spline = lens_in->use_cc_spline;
 	auto_ccspline = lens_in->auto_ccspline;
-	plot_critical_curves = &Lens::plot_sorted_critical_curves;
+	plot_critical_curves = &QLens::plot_sorted_critical_curves;
 	cc_rmin = lens_in->cc_rmin;
 	cc_rmax = lens_in->cc_rmax;
 	source_plane_rscale = lens_in->source_plane_rscale;
@@ -1193,7 +1193,7 @@ Lens::Lens(Lens *lens_in) : UCMC() // creates lens object with same settings as 
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 }
 
-void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
+void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
 	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
 	double x = xvec[0], y = xvec[1];
@@ -1404,7 +1404,7 @@ void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt,
 	//cout << "Finished def calc for real; invmag = " << invmag << ", srcpt0=" << srcpt[0] << " srcpt1=" << srcpt[1] << " kap=" << kap_tot << " " << endl << flush;
 }
 
-void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
+void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
 {
 	double x = xvec[0], y = xvec[1];
 	lensvector *def_tot = &defs[thread];
@@ -1587,7 +1587,7 @@ void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatr
 	jac_tot[1][0] = -jac_tot[1][0];
 }
 
-void Lens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	
@@ -1658,7 +1658,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 }
 
 /*
-void Lens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	
@@ -1714,7 +1714,7 @@ void Lens::create_and_add_lens(LensProfileName name, const int emode, const doub
 }
 */
 
-void Lens::create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
+void QLens::create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
 	add_new_lens_entry(zl);
 
@@ -1728,22 +1728,22 @@ void Lens::create_and_add_lens(const char *splinefile, const int emode, const do
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
+void QLens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
 {
 	create_and_add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
-void Lens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode)
+void QLens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode)
 {
 	create_and_add_lens(PTMASS,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc,0,0,pmode);
 }
 
-void Lens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
+void QLens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
 {
 	create_and_add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
 }
 
-void Lens::add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
+void QLens::add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
 {
 	add_new_lens_entry(zl);
 
@@ -1754,7 +1754,7 @@ void Lens::add_multipole_lens(const double zl, const double zs, int m, const dou
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
+void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
 {
 	// automatically set gridsize if the appropriate settings are turned on
 	if (autogrid_before_grid_creation) autogrid();
@@ -1783,7 +1783,7 @@ void Lens::add_tabulated_lens(const double zl, const double zs, int lnum, const 
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
+void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
 {
 	// automatically set gridsize if the appropriate settings are turned on
 	if (autogrid_before_grid_creation) autogrid();
@@ -1813,7 +1813,7 @@ void Lens::add_qtabulated_lens(const double zl, const double zs, int lnum, const
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
-bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
+bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
 {
 	string tabfilename;
 	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
@@ -1856,7 +1856,7 @@ bool Lens::add_tabulated_lens_from_file(const double zl, const double zs, const 
 	return true;
 }
 
-bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot)
+bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot)
 {
 	string tabfilename;
 	if (tabfileroot.find(".tab")==string::npos) tabfilename = tabfileroot + ".tab";
@@ -1905,22 +1905,23 @@ bool Lens::add_qtabulated_lens_from_file(const double zl, const double zs, const
 	return true;
 }
 
-void Lens::add_lens(LensProfile *new_lens, const double zl, const double zs)
+void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 {
-	new_lens->set_default_base_settings(Gauss_NN, integral_tolerance);
+	new_lens->set_integration_parameters(Gauss_NN, integral_tolerance);
 	new_lens->setup_cosmology(this,zl,zs);
 
 	add_new_lens_entry(new_lens->zlens);
 
+	new_lens->lens_number = nlens-1;
 	lens_list[nlens-1] = new_lens;
+	lens_list[nlens-1]->register_vary_flags();
 
-	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 
-void Lens::add_new_lens_entry(const double zl)
+void QLens::add_new_lens_entry(const double zl)
 {
 	LensProfile** newlist = new LensProfile*[nlens+1];
 	int* new_lens_redshift_idx = new int[nlens+1];
@@ -1949,7 +1950,7 @@ void Lens::add_new_lens_entry(const double zl)
 	//}
 }
 
-void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx)
+void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx)
 {
 	int i, j, k, znum;
 	bool new_redshift = true;
@@ -2088,7 +2089,7 @@ void Lens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_i
 	}
 }
 
-void Lens::update_lens_redshift_data()
+void QLens::update_lens_redshift_data()
 {
 	for (int i=0; i < nlens; i++) {
 		if (lens_redshifts[lens_redshift_idx[i]] != lens_list[i]->zlens) {
@@ -2100,7 +2101,7 @@ void Lens::update_lens_redshift_data()
 	}
 }
 
-void Lens::remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens)
+void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens)
 {
 	int i, j, k, nlenses_with_znum=0, idx=-1;
 	for (i=0; i < nlens; i++) {
@@ -2250,7 +2251,7 @@ void Lens::remove_old_lens_redshift(const int znum, const int lens_i, const bool
 
 }
 
-void Lens::print_beta_matrices()
+void QLens::print_beta_matrices()
 {
 	int i,j,k;
 	for (i=0; i < nlens; i++) cout << "Lens " << i << " redshift index: " << lens_redshift_idx[i] << endl;
@@ -2282,7 +2283,7 @@ void Lens::print_beta_matrices()
 	//cout << "map to lens plane 1: " << y[0] << " " << y[1] << endl;
 }
 
-bool Lens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
+bool QLens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 {
 	int pos;
 	string tabfilename = tabfileroot;
@@ -2301,12 +2302,18 @@ bool Lens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 	return true;
 }
 
-bool Lens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags)
+bool QLens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags)
 {
-	int pi, pf, nparams;
+	int pi, pf;
 	get_lens_parameter_numbers(lensnumber,pi,pf);
 	if (lens_list[lensnumber]->vary_parameters(vary_flags)==false) return false;
 	if (pf > pi) param_settings->remove_params(pi,pf);
+	return register_lens_vary_parameters(lensnumber);
+}
+
+bool QLens::register_lens_vary_parameters(const int lensnumber)
+{
+	int pi, pf, nparams;
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
 	get_parameter_names();
@@ -2328,7 +2335,7 @@ bool Lens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags
 	return true;
 }
 
-bool Lens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
+bool QLens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 {
 	int pi, pf, nparams;
 	get_sb_parameter_numbers(sbnumber,pi,pf);
@@ -2350,7 +2357,7 @@ bool Lens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 	return true;
 }
 
-void Lens::update_parameter_list()
+void QLens::update_parameter_list()
 {
 	// One slight issue that should be fixed: for the "extra" parameters like regularization, hubble constant, etc., the stepsizes
 	// and plimits are not preserved if one of the extra parameters is removed and it's not the last one on the list. There should
@@ -2366,7 +2373,7 @@ void Lens::update_parameter_list()
 	}
 }
 
-void Lens::remove_lens(int lensnumber)
+void QLens::remove_lens(int lensnumber)
 {
 	int pi, pf;
 	get_lens_parameter_numbers(lensnumber,pi,pf);
@@ -2416,7 +2423,7 @@ void Lens::remove_lens(int lensnumber)
 	}
 }
 
-void Lens::clear_lenses()
+void QLens::clear_lenses()
 {
 	if (nlens > 0) {
 		int pi, pf, pi_min=1000, pf_max=0;
@@ -2481,7 +2488,7 @@ void Lens::clear_lenses()
 	}
 }
 
-void Lens::set_source_redshift(const double zsrc)
+void QLens::set_source_redshift(const double zsrc)
 {
 	source_redshift = zsrc;
 	int i,j;
@@ -2499,7 +2506,7 @@ void Lens::set_source_redshift(const double zsrc)
 	recalculate_beta_factors();
 }
 
-void Lens::recalculate_beta_factors()
+void QLens::recalculate_beta_factors()
 {
 	int i,j;
 	if (n_lens_redshifts > 1) {
@@ -2513,7 +2520,7 @@ void Lens::recalculate_beta_factors()
 	}
 }
 
-void Lens::toggle_major_axis_along_y(bool major_axis_along_y)
+void QLens::toggle_major_axis_along_y(bool major_axis_along_y)
 {
 	if (LensProfile::orient_major_axis_north != major_axis_along_y) {
 		LensProfile::orient_major_axis_north = major_axis_along_y;
@@ -2527,7 +2534,7 @@ void Lens::toggle_major_axis_along_y(bool major_axis_along_y)
 	}
 }
 
-void Lens::automatically_determine_ccspline_mode()
+void QLens::automatically_determine_ccspline_mode()
 {
 	// this feature should be made obsolete. It's really not necessary to spline the critical curves anymore
 	bool kappa_present = false;
@@ -2540,7 +2547,7 @@ void Lens::automatically_determine_ccspline_mode()
 	else set_ccspline_mode(false);
 }
 
-bool Lens::test_for_elliptical_symmetry()
+bool QLens::test_for_elliptical_symmetry()
 {
 	bool elliptical_symmetry_present = true;
 	if (nlens > 0) {
@@ -2554,7 +2561,7 @@ bool Lens::test_for_elliptical_symmetry()
 	return elliptical_symmetry_present;
 }
 
-bool Lens::test_for_singularity()
+bool QLens::test_for_singularity()
 {
 	// if kappa goes like r^n near the origin where n <= -1, then a radial critical curve will not form
 	// (this is because the deflection, which goes like r^(n+1), must increase as you go outward in order
@@ -2572,7 +2579,7 @@ bool Lens::test_for_singularity()
 	return singular;
 }
 
-void Lens::record_singular_points(double *zfacs)
+void QLens::record_singular_points(double *zfacs)
 {
 	// if kappa goes like r^n near the origin where n <= -1, then a radial critical curve will not form
 	// (this is because the deflection, which goes like r^(n+1), must increase as you go outward in order
@@ -2600,7 +2607,7 @@ void Lens::record_singular_points(double *zfacs)
 	n_singular_points = singular_pts.size();
 }
 
-void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc)
+void QLens::add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2626,7 +2633,7 @@ void Lens::add_source_object(SB_ProfileName name, double sb_norm, double scale, 
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
-void Lens::add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
+void QLens::add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2641,7 +2648,7 @@ void Lens::add_multipole_source(int m, const double a_m, const double n, const d
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
-void Lens::add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc)
+void QLens::add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2656,7 +2663,7 @@ void Lens::add_source_object(const char *splinefile, double q, double theta, dou
 }
 
 /*
-void Lens::remove_source_object(int sb_number)
+void QLens::remove_source_object(int sb_number)
 {
 	if ((sb_number >= n_sb) or (n_sb == 0)) { warn(warnings,"Specified source object does not exist"); return; }
 	SB_Profile** newlist = new SB_Profile*[n_sb-1];
@@ -2671,7 +2678,7 @@ void Lens::remove_source_object(int sb_number)
 }
 */
 
-void Lens::remove_source_object(int sb_number)
+void QLens::remove_source_object(int sb_number)
 {
 	int pi, pf;
 	get_sb_parameter_numbers(sb_number,pi,pf);
@@ -2697,7 +2704,7 @@ void Lens::remove_source_object(int sb_number)
 	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 }
 
-void Lens::clear_source_objects()
+void QLens::clear_source_objects()
 {
 	if (n_sb > 0) {
 		int pi, pf, pi_min=1000, pf_max=0;
@@ -2718,7 +2725,7 @@ void Lens::clear_source_objects()
 	}
 }
 
-void Lens::print_source_list(bool show_vary_params)
+void QLens::print_source_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
 	if (n_sb > 0) {
@@ -2734,7 +2741,7 @@ void Lens::print_source_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2)
+void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2)
 {
 	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
 	if (n_derived_params > 0) {
@@ -2749,7 +2756,7 @@ void Lens::add_derived_param(DerivedParamType type_in, double param, int lensnum
 	param_settings->add_dparam(dparam_list[n_derived_params-1]->name);
 }
 
-void Lens::remove_derived_param(int dparam_number)
+void QLens::remove_derived_param(int dparam_number)
 {
 	if ((dparam_number >= n_derived_params) or (n_derived_params == 0)) { warn(warnings,"Specified derived parameter does not exist"); return; }
 	DerivedParam** newlist = new DerivedParam*[n_derived_params-1];
@@ -2764,14 +2771,14 @@ void Lens::remove_derived_param(int dparam_number)
 	param_settings->remove_dparam(dparam_number);
 }
 
-void Lens::rename_derived_param(int dparam_number, string newname, string new_latex_name)
+void QLens::rename_derived_param(int dparam_number, string newname, string new_latex_name)
 {
 	if (dparam_number >= n_derived_params) die("Specified derived parameter does not exist");
 	dparam_list[dparam_number]->rename(words[4],words[5]);
 	param_settings->rename_dparam(dparam_number,newname);
 }
 
-void Lens::clear_derived_params()
+void QLens::clear_derived_params()
 {
 	if (n_derived_params > 0) {
 		for (int i=0; i < n_derived_params; i++)
@@ -2782,7 +2789,7 @@ void Lens::clear_derived_params()
 	param_settings->clear_dparams();
 }
 
-void Lens::print_derived_param_list()
+void QLens::print_derived_param_list()
 {
 	if (mpi_id==0) {
 		if (n_derived_params > 0) {
@@ -2795,14 +2802,14 @@ void Lens::print_derived_param_list()
 	}
 }
 
-void Lens::set_gridcenter(double xc, double yc)
+void QLens::set_gridcenter(double xc, double yc)
 {
 	grid_xcenter=xc;
 	grid_ycenter=yc;
 	if (autocenter) autocenter = false;
 }
 
-void Lens::set_gridsize(double xl, double yl)
+void QLens::set_gridsize(double xl, double yl)
 {
 	grid_xlength = xl;
 	grid_ylength = yl;
@@ -2812,7 +2819,7 @@ void Lens::set_gridsize(double xl, double yl)
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 }
 
-void Lens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
+void QLens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 {
 	grid_xcenter = 0.5*(xmax+xmin);
 	grid_ycenter = 0.5*(ymax+ymin);
@@ -2824,7 +2831,7 @@ void Lens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 }
 
-void Lens::autogrid(double rmin, double rmax, double frac)
+void QLens::autogrid(double rmin, double rmax, double frac)
 {
 	cc_rmin = rmin;
 	cc_rmax = rmax;
@@ -2835,7 +2842,7 @@ void Lens::autogrid(double rmin, double rmax, double frac)
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-void Lens::autogrid(double rmin, double rmax)
+void QLens::autogrid(double rmin, double rmax)
 {
 	cc_rmin = rmin;
 	cc_rmax = rmax;
@@ -2846,7 +2853,7 @@ void Lens::autogrid(double rmin, double rmax)
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-void Lens::autogrid() {
+void QLens::autogrid() {
 	cc_rmin = default_autogrid_rmin;
 	cc_rmax = default_autogrid_rmax;
 	autogrid_frac = default_autogrid_frac;
@@ -2856,7 +2863,7 @@ void Lens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }
 	double mytime0, mytime;
@@ -2928,7 +2935,7 @@ bool Lens::create_grid(bool verbal, double *zfacs, double **betafacs, const int 
 	return true;
 }
 
-void Lens::find_automatic_grid_position_and_size(double *zfacs)
+void QLens::find_automatic_grid_position_and_size(double *zfacs)
 {
 	if (autogrid_before_grid_creation) autogrid();
 	else {
@@ -2948,7 +2955,7 @@ void Lens::find_automatic_grid_position_and_size(double *zfacs)
 	}
 }
 
-void Lens::set_primary_lens()
+void QLens::set_primary_lens()
 {
 	double re, re_avg, largest_einstein_radius = 0;
 	int i;
@@ -2963,7 +2970,7 @@ void Lens::set_primary_lens()
 	}
 }
 
-void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal)
+void QLens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal)
 {
 	double zlprim, zlsub, re_avg;
 	double largest_einstein_radius = 0;
@@ -3000,7 +3007,7 @@ void Lens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, d
 	}
 }
 
-void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einstein_radii, const int ihost, double *zfacs, double **betafacs, const int redshift_index)
+void QLens::subgrid_around_perturber_galaxies(lensvector *centers, double *einstein_radii, const int ihost, double *zfacs, double **betafacs, const int redshift_index)
 {
 	if (grid==NULL) {
 		if (create_grid(false,zfacs,betafacs)==false) die("Could not create recursive grid");
@@ -3161,7 +3168,7 @@ void Lens::subgrid_around_perturber_galaxies(lensvector *centers, double *einste
 	delete[] min_galsubgrid_cellsize;
 }
 
-bool Lens::calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs)
+bool QLens::calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs)
 {
 	perturber_lens_number = lens_number;
 	linked_perturber_list = perturber_list;
@@ -3183,7 +3190,7 @@ bool Lens::calculate_perturber_subgridding_scale(int lens_number, bool* perturbe
 	theta_shear -= M_PI/2.0;
 
 	double (Brent::*dthetac_eq)(const double);
-	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::galaxy_subgridding_scale_equation);
+	dthetac_eq = static_cast<double (Brent::*)(const double)> (&QLens::galaxy_subgridding_scale_equation);
 	static const double rmin = 1e-6;
 	double rmax_precision = 0.3*sqrt(min_cell_area);
 	double bound = 0.4*b;
@@ -3234,7 +3241,7 @@ bool Lens::calculate_perturber_subgridding_scale(int lens_number, bool* perturbe
 	return true;
 }
 
-double Lens::galaxy_subgridding_scale_equation(const double r)
+double QLens::galaxy_subgridding_scale_equation(const double r)
 {
 	double kappa0, shear0, lambda0, shear_angle, perturber_avg_kappa;
 	lensvector x;
@@ -3303,7 +3310,7 @@ double Lens::galaxy_subgridding_scale_equation(const double r)
 	return (lambda0 - perturber_avg_kappa);
 }
 
-void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny, const string filename)
+void QLens::plot_shear_field(double xmin, double xmax, int nx, double ymin, double ymax, int ny, const string filename)
 {
 	int i, j, k;
 	double x, y;
@@ -3336,7 +3343,7 @@ void Lens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doubl
 	sout.close();
 }
 
-void Lens::plot_weak_lensing_shear_data(const bool include_model_shear, const string filename)
+void QLens::plot_weak_lensing_shear_data(const bool include_model_shear, const string filename)
 {
 	double *zfacs = new double[n_lens_redshifts];
 	int i, j, k;
@@ -3430,7 +3437,7 @@ void Lens::plot_weak_lensing_shear_data(const bool include_model_shear, const st
 /*
 // The following function uses the series expansions derived in Minor et al. 2017, but it's better to simply use a root finder, so
 // this approach is deprecated
-void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed)
+void QLens::calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed)
 {
 	// the analytic formulas require a Pseudo-Jaffe or isothermal profile, and they only work for subhalos in the plane of the lens
 	// if one of these conditions isn't satisfied, just use the numerical root-finding version instead
@@ -3569,7 +3576,7 @@ void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool ve
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
-	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
+	dthetac_eq = static_cast<double (Brent::*)(const double)> (&QLens::subhalo_perturbation_radius_equation);
 	double bound = 2*sqrt(b*bs);
 	rmax_numerical = abs(BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5));
 	double avg_kappa = reference_zfactors[lens_redshift_idx[perturber_lens_number]]*lens_list[perturber_lens_number]->kappa_avg_r(rmax_numerical);
@@ -3606,7 +3613,7 @@ void Lens::calculate_critical_curve_perturbation_radius(int lens_number, bool ve
 }
 */
 
-bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs)
+bool QLens::find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs)
 {
 	double zlsub;
 	zlsub = lens_list[lens_number]->zlens;
@@ -3657,7 +3664,7 @@ bool Lens::find_lensed_position_of_background_perturber(bool verbal, int lens_nu
 	return true;
 }
 
-bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbal, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
+bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbal, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
 {
 	perturber_lens_number = lens_number;
 	bool *perturber_list = new bool[nlens];
@@ -3719,7 +3726,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
-	dthetac_eq = static_cast<double (Brent::*)(const double)> (&Lens::subhalo_perturbation_radius_equation);
+	dthetac_eq = static_cast<double (Brent::*)(const double)> (&QLens::subhalo_perturbation_radius_equation);
 	double bound = 0.6*b;
 	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbal);
 	if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
@@ -3804,7 +3811,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	double rmax_relative = rmax_numerical;
 	if ((subtract_unperturbed) or (verbal)) {
 		double (Brent::*dthetac_eq_nosub)(const double);
-		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&Lens::perturbation_radius_equation_nosub);
+		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&QLens::perturbation_radius_equation_nosub);
 		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbal);
 		rmax_relative = abs(rmax_numerical-rmax_unperturbed);
 		if (subtract_unperturbed) rmax_numerical = rmax_relative;
@@ -3832,7 +3839,7 @@ bool Lens::calculate_critical_curve_perturbation_radius_numerical(int lens_numbe
 	return true;
 }
 
-double Lens::subhalo_perturbation_radius_equation(const double r)
+double QLens::subhalo_perturbation_radius_equation(const double r)
 {
 	double kappa0, shear0, shear_angle, subhalo_avg_kappa;
 	lensvector x;
@@ -3894,7 +3901,7 @@ double Lens::subhalo_perturbation_radius_equation(const double r)
 	return (1 - kappa0 - shear0 - subhalo_avg_kappa);
 }
 
-double Lens::perturbation_radius_equation_nosub(const double r)
+double QLens::perturbation_radius_equation_nosub(const double r)
 {
 	double kappa0, shear0, shear_angle;
 	lensvector x;
@@ -3905,14 +3912,14 @@ double Lens::perturbation_radius_equation_nosub(const double r)
 	return (1 - kappa0 - shear0);
 }
 
-bool Lens::get_einstein_radius(int lens_number, double& re_major_axis, double& re_average)
+bool QLens::get_einstein_radius(int lens_number, double& re_major_axis, double& re_average)
 {
 	if (lens_number >= nlens) { warn("lens %i has not been created",lens_number); return false; }
 	lens_list[lens_number]->get_einstein_radius(re_major_axis,re_average,reference_zfactors[lens_redshift_idx[lens_number]]);
 	return true;
 }
 
-double Lens::inverse_magnification_r(const double r)
+double QLens::inverse_magnification_r(const double r)
 {
 	lensmatrix jac;
 	hessian(grid_xcenter + r*cos(theta_crit), grid_ycenter + r*sin(theta_crit), jac, 0, reference_zfactors, default_zsrc_beta_factors);
@@ -3923,7 +3930,7 @@ double Lens::inverse_magnification_r(const double r)
 	return determinant(jac);
 }
 
-double Lens::source_plane_r(const double r)
+double QLens::source_plane_r(const double r)
 {
 	lensvector x,def;
 	x[0] = grid_xcenter + r*cos(theta_crit);
@@ -3934,12 +3941,12 @@ double Lens::source_plane_r(const double r)
 	return def.norm();
 }
 
-void Lens::create_deflection_spline(int steps)
+void QLens::create_deflection_spline(int steps)
 {
 	spline_deflection(0.5*grid_xlength*spline_frac, 0.5*grid_ylength*spline_frac, steps);
 }
 
-void Lens::spline_deflection(double xl, double yl, int steps)
+void QLens::spline_deflection(double xl, double yl, int steps)
 {
 	dvector xtable(steps+1);
 	dvector ytable(steps+1);
@@ -3982,7 +3989,7 @@ void Lens::spline_deflection(double xl, double yl, int steps)
 	defspline->axy.input(xtable, ytable, defxymatrix);
 }
 
-bool Lens::get_deflection_spline_info(double &xmax, double &ymax, int &nsteps)
+bool QLens::get_deflection_spline_info(double &xmax, double &ymax, int &nsteps)
 {
 	if (!defspline) return false;
 	xmax = defspline->xmax();
@@ -3991,7 +3998,7 @@ bool Lens::get_deflection_spline_info(double &xmax, double &ymax, int &nsteps)
 	return true;
 }
 
-bool Lens::unspline_deflection()
+bool QLens::unspline_deflection()
 {
 	if (!defspline) return false;
 	delete defspline;
@@ -3999,10 +4006,10 @@ bool Lens::unspline_deflection()
 	return true;
 }
 
-bool Lens::autospline_deflection(int steps)
+bool QLens::autospline_deflection(int steps)
 {
 	double (Brent::*mag_r)(const double);
-	mag_r = static_cast<double (Brent::*)(const double)> (&Lens::inverse_magnification_r);
+	mag_r = static_cast<double (Brent::*)(const double)> (&QLens::inverse_magnification_r);
 
 	double mag0, mag1, root0, root1x, root1y;
 	bool found_first_root;
@@ -4060,14 +4067,14 @@ bool Lens::autospline_deflection(int steps)
 	return true;
 }
 
-Vector<dvector> Lens::find_critical_curves(bool &check)
+Vector<dvector> QLens::find_critical_curves(bool &check)
 {
 	Vector<dvector> rcrit(2);
 	rcrit[0].input(cc_thetasteps+1);
 	rcrit[1].input(cc_thetasteps+1);
 
 	double (Brent::*mag_r)(const double);
-	mag_r = static_cast<double (Brent::*)(const double)> (&Lens::inverse_magnification_r);
+	mag_r = static_cast<double (Brent::*)(const double)> (&QLens::inverse_magnification_r);
 
 	respline_at_end = false;
 	resplinesteps = 0;
@@ -4156,7 +4163,7 @@ Vector<dvector> Lens::find_critical_curves(bool &check)
 	return rcrit;
 }
 
-bool Lens::spline_critical_curves(bool verbal)
+bool QLens::spline_critical_curves(bool verbal)
 {
 	respline_at_end = false;	// this is for deflection spline; will become true if def. needs to be resplined
 	if (cc_splined==true) {
@@ -4237,7 +4244,7 @@ bool Lens::spline_critical_curves(bool verbal)
 	return check;
 }
 
-bool Lens::plot_splined_critical_curves(string critfile)
+bool QLens::plot_splined_critical_curves(string critfile)
 {
 	if (!use_cc_spline) { warn("Cannot plot critical curves from spline, spline option is disabled"); return false; }
 	if (!cc_splined) {
@@ -4267,14 +4274,14 @@ bool Lens::plot_splined_critical_curves(string critfile)
 	return true;
 }
 
-double Lens::caust0_interpolate(double theta)
+double QLens::caust0_interpolate(double theta)
 {
 	// sometimes caustic starts at some small angle, so make sure theta is in range
 	if ((theta < caustic[0].xmin()) and (theta+2*M_PI < caustic[0].xmax()))
 		theta += 2*M_PI;
 	return caustic[0].splint(theta);
 }
-double Lens::caust1_interpolate(double theta)
+double QLens::caust1_interpolate(double theta)
 {
 	// sometimes caustic starts at some small angle, so make sure theta is in range
 	if (effectively_spherical) return 0.0;
@@ -4283,7 +4290,7 @@ double Lens::caust1_interpolate(double theta)
 	return caustic[1].splint(theta);
 }
 
-bool Lens::find_optimal_gridsize()
+bool QLens::find_optimal_gridsize()
 {
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -4291,7 +4298,7 @@ bool Lens::find_optimal_gridsize()
 	}
 
 	double (Brent::*mag_r)(const double);
-	mag_r = static_cast<double (Brent::*)(const double)> (&Lens::inverse_magnification_r);
+	mag_r = static_cast<double (Brent::*)(const double)> (&QLens::inverse_magnification_r);
 
 	double mag0, mag1;
 	bool found_first_root;
@@ -4344,7 +4351,7 @@ bool Lens::find_optimal_gridsize()
 	return true;
 }
 
-void Lens::sort_critical_curves()
+void QLens::sort_critical_curves()
 {
 	sorted_critical_curve.clear();
 	int n_cc_pts = critical_curve_pts.size();
@@ -4416,7 +4423,7 @@ void Lens::sort_critical_curves()
 	sorted_critical_curves = true;
 }
 
-bool Lens::plot_sorted_critical_curves(string critfile)
+bool QLens::plot_sorted_critical_curves(string critfile)
 {
 	if (grid==NULL) {
 		if (create_grid(false,reference_zfactors,default_zsrc_beta_factors)==false) { warn("Could not create recursive grid"); return false; }
@@ -4441,7 +4448,7 @@ bool Lens::plot_sorted_critical_curves(string critfile)
 	return true;
 }
 
-double Lens::einstein_radius_of_primary_lens(const double zfac)
+double QLens::einstein_radius_of_primary_lens(const double zfac)
 {
 	// this calculates the Einstein radius of the "macro" lens model (treating the lens as spherical), ignoring any lens components that are not centered on the primary lens
 	double rmin_einstein_radius = 1e-6;
@@ -4485,7 +4492,7 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	}
 	double reav;
 	double (Brent::*bptr)(const double);
-	bptr = static_cast<double (Brent::*)(const double)> (&Lens::einstein_radius_root);
+	bptr = static_cast<double (Brent::*)(const double)> (&QLens::einstein_radius_root);
 	reav = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
 	double fprim, fprim_max = -1e30;
 	for (int j=0; j < nlens; j++) {
@@ -4499,7 +4506,7 @@ double Lens::einstein_radius_of_primary_lens(const double zfac)
 	return re_maj_approx;
 }
 
-double Lens::einstein_radius_root(const double r)
+double QLens::einstein_radius_root(const double r)
 {
 	double kapavg=0;
 	for (int j=0; j < nlens; j++) {
@@ -4508,7 +4515,7 @@ double Lens::einstein_radius_root(const double r)
 	return (kapavg-1);
 }
 
-void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname)
+void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname)
 {
 	double r, rstep, total_kappa, total_dkappa;
 	rstep = pow(rmax/rmin, 1.0/steps);
@@ -4576,7 +4583,7 @@ void Lens::plot_total_kappa(double rmin, double rmax, int steps, const char *kna
 	*/
 }
 
-double Lens::einstein_radius_single_lens(const double src_redshift, const int lensnum)
+double QLens::einstein_radius_single_lens(const double src_redshift, const int lensnum)
 {
 	double re_avg,re_major,zfac;
 	zfac = kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
@@ -4584,7 +4591,7 @@ double Lens::einstein_radius_single_lens(const double src_redshift, const int le
 	return re_avg;
 }
 
-double Lens::total_kappa(const double r, const int lensnum)
+double QLens::total_kappa(const double r, const int lensnum)
 {
 	double total_kappa;
 	int j;
@@ -4613,7 +4620,7 @@ double Lens::total_kappa(const double r, const int lensnum)
 	return total_kappa;
 }
 
-double Lens::total_dkappa(const double r, const int lensnum)
+double QLens::total_dkappa(const double r, const int lensnum)
 {
 	double total_dkappa;
 	int j;
@@ -4649,7 +4656,7 @@ double Lens::total_dkappa(const double r, const int lensnum)
 	return total_dkappa;
 }
 
-void Lens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
+void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
 {
 	double r, rstep, kavg;
 	rstep = pow(rmax/rmin, 1.0/(rpts-1));
@@ -4668,13 +4675,13 @@ void Lens::plot_mass_profile(double rmin, double rmax, int rpts, const char *mas
 	}
 }
 
-void Lens::plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname)
+void QLens::plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname)
 {
 	if (l >= nlens) { warn("lens %i does not exist", l); return; }
 	lens_list[l]->plot_kappa_profile(rmin,rmax,steps,kname,kdname);
 }
 
-bool Lens::isspherical()
+bool QLens::isspherical()
 {
 	bool all_spherical = true;
 	for (int i=0; i < nlens; i++)
@@ -4682,7 +4689,7 @@ bool Lens::isspherical()
 	return all_spherical;
 }
 
-void Lens::print_lensing_info_at_point(const double x, const double y)
+void QLens::print_lensing_info_at_point(const double x, const double y)
 {
 	lensvector point, alpha, beta;
 	double sheartot, shear_angle;
@@ -4716,7 +4723,7 @@ void Lens::print_lensing_info_at_point(const double x, const double y)
 }
 
 
-bool Lens::make_random_sources(int nsources, const char *outfilename)
+bool QLens::make_random_sources(int nsources, const char *outfilename)
 {
 	if (!use_cc_spline) { warn(warnings,"Random sources is only supported in critical curve spline mode (ccspline)"); return false; }
 	ofstream outfile(outfilename);
@@ -4744,7 +4751,7 @@ bool Lens::make_random_sources(int nsources, const char *outfilename)
 	return true;
 }
 
-void Lens::make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
+void QLens::make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
 {
 	ofstream sourcetab(source_filename.c_str());
 	int i,j;
@@ -4756,7 +4763,7 @@ void Lens::make_source_rectangle(const double xmin, const double xmax, const int
 			sourcetab << x << " " << y << endl;
 }
 
-void Lens::make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle_degrees, const int n_subellipses, const int points_per_ellipse, string source_filename)
+void QLens::make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle_degrees, const int n_subellipses, const int points_per_ellipse, string source_filename)
 {
 	ofstream source_file; open_output_file(source_file,source_filename);
 
@@ -4779,7 +4786,7 @@ void Lens::make_source_ellipse(const double xcenter, const double ycenter, const
 	}
 }
 
-void Lens::raytrace_image_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
+void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
 {
 	ofstream sourcetab(source_filename.c_str());
 	int i,j;
@@ -4798,25 +4805,25 @@ void Lens::raytrace_image_rectangle(const double xmin, const double xmax, const 
 	}
 }
 
-bool Lens::total_cross_section(double &area)
+bool QLens::total_cross_section(double &area)
 {
 	if (!use_cc_spline) { warn(warnings,"Determining total cross section is only supported when ccspline mode is on"); return false; }
 	if (!cc_splined)
 		if (spline_critical_curves()==false) return false;	// in case critical curves could not be found
 	double (Romberg::*csptr)(const double);
-	csptr = static_cast<double (Romberg::*)(const double)> (&Lens::total_cross_section_integrand);
+	csptr = static_cast<double (Romberg::*)(const double)> (&QLens::total_cross_section_integrand);
 	area = romberg(csptr, 0, 2*M_PI,1e-6,5);
 
 	return true;
 }
 
-double Lens::total_cross_section_integrand(const double theta)
+double QLens::total_cross_section_integrand(const double theta)
 {
 	return (0.5 * SQR(dmax(caust0_interpolate(theta), caust1_interpolate(theta))));
 }
 
 /*
-double Lens::make_perturber_population(const double number_density, const double rmax, const double b, const double a)
+double QLens::make_perturber_population(const double number_density, const double rmax, const double b, const double a)
 {
 	int N = (int) (number_density*M_PI*rmax*rmax);
 	int realizations = 3000;
@@ -4846,7 +4853,7 @@ double Lens::make_perturber_population(const double number_density, const double
 	return mean_defsqr;
 }
 
-void Lens::plot_perturber_deflection_vs_area()
+void QLens::plot_perturber_deflection_vs_area()
 {
 	int i,nn = 30;
 	double r,rmin,rmax,rstep,logrstep,defsqr_avg;
@@ -4863,7 +4870,7 @@ void Lens::plot_perturber_deflection_vs_area()
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
-bool Lens::add_simulated_image_data(const lensvector &sourcept)
+bool QLens::add_simulated_image_data(const lensvector &sourcept)
 {
 	int i,j,k,n_images;
 	if (nlens==0) { warn("no lens model has been created"); return false; }
@@ -4975,7 +4982,7 @@ bool Lens::add_simulated_image_data(const lensvector &sourcept)
 	return true;
 }
 
-void Lens::write_image_data(string filename)
+void QLens::write_image_data(string filename)
 {
 	ofstream outfile(filename.c_str());
 	if (use_scientific_notation==true) outfile << setiosflags(ios::scientific);
@@ -4992,7 +4999,7 @@ void Lens::write_image_data(string filename)
 	}
 }
 
-bool Lens::load_image_data(string filename)
+bool QLens::load_image_data(string filename)
 {
 	int i,j,k;
 	ifstream data_infile(filename.c_str());
@@ -5212,7 +5219,7 @@ bool Lens::load_image_data(string filename)
 	return true;
 }
 
-void Lens::sort_image_data_into_redshift_groups()
+void QLens::sort_image_data_into_redshift_groups()
 {
 	// Reorganize, if necessary, so that image sets with the same source redshift are listed together. This makes it easy to assign image sets with
 	// different source planes to different MPI processes in the image plane chi-square.
@@ -5308,7 +5315,7 @@ void Lens::sort_image_data_into_redshift_groups()
 	}
 }
 
-void Lens::remove_image_data(int image_set)
+void QLens::remove_image_data(int image_set)
 {
 	if (image_set >= n_sourcepts_fit) { warn(warnings,"Specified image dataset has not been loaded"); return; }
 	if (n_sourcepts_fit==1) { clear_image_data(); return; }
@@ -5367,7 +5374,7 @@ void Lens::remove_image_data(int image_set)
 	sort_image_data_into_redshift_groups(); // this updates redshift_groups, in case there are no other image sets that shared the redshift of the one being deleted
 }
 
-bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux)
+bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
@@ -5434,7 +5441,7 @@ bool Lens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, co
 	return true;
 }
 
-bool Lens::load_weak_lensing_data(string filename)
+bool QLens::load_weak_lensing_data(string filename)
 {
 	int i,j,k;
 	ifstream data_infile(filename.c_str());
@@ -5521,7 +5528,7 @@ bool Lens::load_weak_lensing_data(string filename)
 	return true;
 }
 
-void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc)
+void QLens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc)
 {
 	double *zfacs = new double[n_lens_redshifts];
 
@@ -5537,7 +5544,7 @@ void Lens::add_simulated_weak_lensing_data(const string id, lensvector &sourcept
 	delete[] zfacs;
 }
 
-void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude)
+void QLens::add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude)
 {
 	int wl_index = weak_lensing_data.n_sources;
 	lensvector src;
@@ -5559,7 +5566,7 @@ void Lens::add_weak_lensing_data_from_random_sources(const int num_sources, cons
 	}
 }
 
-bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
+bool QLens::read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords)
 {
 	static const int n_characters = 512;
 	int pos;
@@ -5590,7 +5597,7 @@ bool Lens::read_data_line(ifstream& data_infile, vector<string>& datawords, int 
 	return true;
 }
 
-void Lens::remove_comments(string& instring)
+void QLens::remove_comments(string& instring)
 {
 	string instring_copy(instring);
 	instring.clear();
@@ -5600,7 +5607,7 @@ void Lens::remove_comments(string& instring)
 	} else instring = instring_copy;
 }
 
-void Lens::remove_equal_sign_datafile(vector<string>& datawords, int &n_datawords)
+void QLens::remove_equal_sign_datafile(vector<string>& datawords, int &n_datawords)
 {
 	int pos;
 	if ((pos = datawords[0].find('=')) != string::npos) {
@@ -5623,7 +5630,7 @@ void Lens::remove_equal_sign_datafile(vector<string>& datawords, int &n_dataword
 	}
 }
 
-bool Lens::datastring_convert(const string& instring, int& outvar)
+bool QLens::datastring_convert(const string& instring, int& outvar)
 {
 	datastream.clear(); // resets the error flags
 	datastream.str(string()); // clears the stringstream
@@ -5632,7 +5639,7 @@ bool Lens::datastring_convert(const string& instring, int& outvar)
 	else return false;
 }
 
-bool Lens::datastring_convert(const string& instring, double& outvar)
+bool QLens::datastring_convert(const string& instring, double& outvar)
 {
 	datastream.clear(); // resets the error flags
 	datastream.str(string()); // clears the stringstream
@@ -5641,7 +5648,7 @@ bool Lens::datastring_convert(const string& instring, double& outvar)
 	else return false;
 }
 
-void Lens::clear_image_data()
+void QLens::clear_image_data()
 {
 	int i,j;
 	if (image_data != NULL) {
@@ -5688,7 +5695,7 @@ void Lens::clear_image_data()
 	n_sourcepts_fit = 0;
 }
 
-void Lens::print_image_data(bool include_errors)
+void QLens::print_image_data(bool include_errors)
 {
 	if (mpi_id==0) {
 		for (int i=0; i < n_sourcepts_fit; i++) {
@@ -6069,7 +6076,7 @@ void WeakLensingData::clear()
 
 /******************************************** Functions for lens model fitting ******************************************/
 
-bool Lens::initialize_fitmodel(const bool running_fit_in)
+bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
 		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit==NULL) or (image_data==NULL))) {
@@ -6083,7 +6090,7 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return false; }
 	}
 	if (fitmodel != NULL) delete fitmodel;
-	fitmodel = new Lens(this);
+	fitmodel = new QLens(this);
 	fitmodel->running_fit = running_fit_in;
 	fitmodel->auto_ccspline = false;
 	//fitmodel->set_gridcenter(grid_xcenter,grid_ycenter);
@@ -6292,7 +6299,7 @@ bool Lens::initialize_fitmodel(const bool running_fit_in)
 	return true;
 }
 
-void Lens::update_anchored_parameters_and_redshift_data()
+void QLens::update_anchored_parameters_and_redshift_data()
 {
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
@@ -6306,7 +6313,7 @@ void Lens::update_anchored_parameters_and_redshift_data()
 	reset_grid();
 }
 
-bool Lens::update_fitmodel(const double* params)
+bool QLens::update_fitmodel(const double* params)
 {
 	bool status = true;
 	int i, index=0;
@@ -6355,7 +6362,7 @@ bool Lens::update_fitmodel(const double* params)
 	return status;
 }
 
-void Lens::output_analytic_srcpos(lensvector *beta_i)
+void QLens::output_analytic_srcpos(lensvector *beta_i)
 {
 	// Note: beta_i needs to have the same size as the number of image sets being fit, or else a segmentation fault will occur
 	int i,j;
@@ -6404,7 +6411,7 @@ void Lens::output_analytic_srcpos(lensvector *beta_i)
 	return;
 }
 
-double Lens::chisq_pos_source_plane()
+double QLens::chisq_pos_source_plane()
 {
 	int i,j;
 	double chisq=0;
@@ -6502,7 +6509,7 @@ double Lens::chisq_pos_source_plane()
 	return chisq;
 }
 
-double Lens::chisq_pos_image_plane()
+double QLens::chisq_pos_image_plane()
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -6641,8 +6648,8 @@ double Lens::chisq_pos_image_plane()
 	return chisq;
 }
 
-double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
-//double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
+double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
+//double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -6887,7 +6894,7 @@ double Lens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool out
 	return chisq;
 }
 
-void Lens::output_imgplane_chisq_vals()
+void QLens::output_imgplane_chisq_vals()
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -7019,7 +7026,7 @@ void Lens::output_imgplane_chisq_vals()
 	return;
 }
 
-void Lens::output_model_source_flux(double *bestfit_flux)
+void QLens::output_model_source_flux(double *bestfit_flux)
 {
 	double chisq=0;
 	int n_total_images=0;
@@ -7053,7 +7060,7 @@ void Lens::output_model_source_flux(double *bestfit_flux)
 	}
 }
 
-double Lens::chisq_flux()
+double QLens::chisq_flux()
 {
 	double chisq=0;
 	int n_images_hi=0;
@@ -7112,7 +7119,7 @@ double Lens::chisq_flux()
 	return chisq;
 }
 
-double Lens::chisq_time_delays()
+double QLens::chisq_time_delays()
 {
 	double chisq=0;
 	int n_images_hi=0;
@@ -7161,7 +7168,7 @@ double Lens::chisq_time_delays()
 	return chisq;
 }
 
-double Lens::chisq_weak_lensing()
+double QLens::chisq_weak_lensing()
 {
 	int i,j,nsrc = weak_lensing_data.n_sources;
 	if (nsrc==0) return 0;
@@ -7195,7 +7202,7 @@ double Lens::chisq_weak_lensing()
 	return chisq;
 }
 
-void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
+void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 {
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
@@ -7247,7 +7254,7 @@ void Lens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
 
-void Lens::set_default_plimits()
+void QLens::set_default_plimits()
 {
 	get_n_fit_parameters(n_fit_parameters);
 	boolvector use_penalty_limits(n_fit_parameters);
@@ -7285,7 +7292,7 @@ void Lens::set_default_plimits()
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
 
-void Lens::get_n_fit_parameters(int &nparams)
+void QLens::get_n_fit_parameters(int &nparams)
 {
 	lensmodel_fit_parameters = 0;
 	srcmodel_fit_parameters = 0;
@@ -7316,7 +7323,7 @@ void Lens::get_n_fit_parameters(int &nparams)
 	if (vary_wl_shear_factor_parameter) nparams++;
 }
 
-bool Lens::setup_fit_parameters(bool include_limits)
+bool QLens::setup_fit_parameters(bool include_limits)
 {
 	//if (source_fit_mode==Point_Source) {
 		//if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
@@ -7367,7 +7374,7 @@ bool Lens::setup_fit_parameters(bool include_limits)
 	return true;
 }
 
-bool Lens::setup_limits()
+bool QLens::setup_limits()
 {
 	upper_limits.input(n_fit_parameters);
 	lower_limits.input(n_fit_parameters);
@@ -7492,7 +7499,7 @@ bool Lens::setup_limits()
 	return true;
 }
 
-void Lens::get_parameter_names()
+void QLens::get_parameter_names()
 {
 	get_n_fit_parameters(n_fit_parameters);
 	fit_parameter_names.clear();
@@ -7643,7 +7650,7 @@ void Lens::get_parameter_names()
 	}
 }
 
-bool Lens::lookup_parameter_value(const string pname, double& pval)
+bool QLens::lookup_parameter_value(const string pname, double& pval)
 {
 	bool found_param = false;
 	setup_fit_parameters(false);
@@ -7665,7 +7672,7 @@ bool Lens::lookup_parameter_value(const string pname, double& pval)
 	return found_param;
 }
 
-void Lens::create_parameter_value_string(string &pvals)
+void QLens::create_parameter_value_string(string &pvals)
 {
 	pvals = "";
 	setup_fit_parameters(false);
@@ -7690,7 +7697,7 @@ void Lens::create_parameter_value_string(string &pvals)
 	}
 }
 
-bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
+bool QLens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 {
 	if (lens_i >= nlens) { pf=pi=0; return false; }
 	get_n_fit_parameters(n_fit_parameters);
@@ -7706,7 +7713,7 @@ bool Lens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 	return true;
 }
 
-bool Lens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
+bool QLens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
 {
 	if (sb_i >= n_sb) { pf=pi=0; return false; }
 	get_n_fit_parameters(n_fit_parameters);
@@ -7724,7 +7731,7 @@ bool Lens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
 	return true;
 }
 
-void Lens::fit_set_optimizations()
+void QLens::fit_set_optimizations()
 {
 	temp_auto_ccspline = auto_ccspline;
 	temp_auto_store_cc_points = auto_store_cc_points;
@@ -7739,7 +7746,7 @@ void Lens::fit_set_optimizations()
 	fisher_inverse.erase(); // reset parameter covariance matrix in case it was used in a previous fit
 }
 
-void Lens::fit_restore_defaults()
+void QLens::fit_restore_defaults()
 {
 	auto_ccspline = temp_auto_ccspline;
 	auto_store_cc_points = temp_auto_store_cc_points;
@@ -7748,7 +7755,7 @@ void Lens::fit_restore_defaults()
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
+void QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -7760,13 +7767,13 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	}
 	//fitmodel->param_settings->print_penalty_limits();
 
-	double (Lens::*loglikeptr)(double*);
+	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	display_chisq_status = true;
@@ -7807,7 +7814,7 @@ void Lens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	fitmodel = NULL;
 }
 
-void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
+void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -7820,13 +7827,13 @@ void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const
 	if (param1 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param1,n_fit_parameters); return; }
 	if (param2 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param2,n_fit_parameters); return; }
 
-	double (Lens::*loglikeptr)(double*);
+	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	double step1 = (f1-i1)/n1;
@@ -7884,7 +7891,7 @@ void Lens::plot_chisq_2d(const int param1, const int param2, const int n1, const
 	fit_restore_defaults();
 }
 
-void Lens::plot_chisq_1d(const int param, const int n, const double ip, const double fp, string filename)
+void QLens::plot_chisq_1d(const int param, const int n, const double ip, const double fp, string filename)
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -7896,13 +7903,13 @@ void Lens::plot_chisq_1d(const int param, const int n, const double ip, const do
 
 	if (param >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param,n_fit_parameters); return; }
 
-	double (Lens::*loglikeptr)(double*);
+	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	double step = (fp-ip)/n;
@@ -7928,7 +7935,7 @@ void Lens::plot_chisq_1d(const int param, const int n, const double ip, const do
 	fit_restore_defaults();
 }
 
-double Lens::chi_square_fit_simplex()
+double QLens::chi_square_fit_simplex()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
@@ -7939,11 +7946,11 @@ double Lens::chi_square_fit_simplex()
 
 	double (Simplex::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Simplex::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (Simplex::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Simplex::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (Simplex::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Simplex::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (Simplex::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	dvector stepsizes(param_settings->stepsizes,n_fit_parameters);
@@ -8115,7 +8122,7 @@ double Lens::chi_square_fit_simplex()
 	return chisq_bestfit;
 }
 
-double Lens::chi_square_fit_powell()
+double QLens::chi_square_fit_powell()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
@@ -8126,11 +8133,11 @@ double Lens::chi_square_fit_powell()
 
 	double (Powell::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Powell::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (Powell::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Powell::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (Powell::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Powell::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (Powell::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	initialize_powell(loglikeptr,chisq_tolerance);
@@ -8273,7 +8280,7 @@ double Lens::chi_square_fit_powell()
 	return chisq_bestfit;
 }
 
-void Lens::nested_sampling()
+void QLens::nested_sampling()
 {
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
@@ -8294,11 +8301,11 @@ void Lens::nested_sampling()
 	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	if (mpi_id==0) {
@@ -8402,7 +8409,7 @@ void Lens::nested_sampling()
 	fitmodel = NULL;
 }
 
-void Lens::multinest(const bool resume_previous, const bool skip_run)
+void QLens::multinest(const bool resume_previous, const bool skip_run)
 {
 #ifdef USE_MULTINEST
 	if (setup_fit_parameters(true)==false) return;
@@ -8421,11 +8428,11 @@ void Lens::multinest(const bool resume_previous, const bool skip_run)
 	}
 
 	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	if (mpi_id==0) {
@@ -8674,7 +8681,7 @@ void Lens::multinest(const bool resume_previous, const bool skip_run)
 #endif
 }
 
-void Lens::polychord(const bool resume_previous, const bool skip_run)
+void QLens::polychord(const bool resume_previous, const bool skip_run)
 {
 #ifdef USE_POLYCHORD
 	if (setup_fit_parameters(true)==false) return;
@@ -8700,11 +8707,11 @@ void Lens::polychord(const bool resume_previous, const bool skip_run)
 	}
 
 	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	if (mpi_id==0) {
@@ -8920,14 +8927,14 @@ void Lens::polychord(const bool resume_previous, const bool skip_run)
 #endif
 }
 
-bool Lens::add_dparams_to_chain()
+bool QLens::add_dparams_to_chain()
 {
 	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	int i, nparams, n_dparams_old;
@@ -9090,7 +9097,7 @@ bool Lens::add_dparams_to_chain()
 	return true;
 }
 
-bool Lens::adopt_point_from_chain(const unsigned long line_num)
+bool QLens::adopt_point_from_chain(const unsigned long line_num)
 {
 
 	int i, nparams, n_dparams_old;
@@ -9137,7 +9144,7 @@ bool Lens::adopt_point_from_chain(const unsigned long line_num)
 	return true;
 }
 
-bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename)
+bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename)
 {
 	double zl = lens_list[lensnum]->get_redshift();
 	double r, rstep = pow(rmax/rmin, 1.0/(nbins-1));
@@ -9280,7 +9287,7 @@ bool Lens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, d
 	return true;
 }
 
-double Lens::find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights)
+double QLens::find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights)
 {
 	double totsofar = 0;
 	for (int j = 0; j < npoints; j++)
@@ -9294,7 +9301,7 @@ double Lens::find_percentile(const unsigned long npoints, const double pct, cons
 	return 0.0;
 }
 
-void Lens::test_fitmodel_invert()
+void QLens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
 	fit_set_optimizations();
@@ -9311,7 +9318,7 @@ void Lens::test_fitmodel_invert()
 	fitmodel = NULL;
 }
 
-void Lens::chi_square_twalk()
+void QLens::chi_square_twalk()
 {
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
@@ -9329,11 +9336,11 @@ void Lens::chi_square_twalk()
 	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
 	if (mpi_id==0) {
@@ -9405,7 +9412,7 @@ void Lens::chi_square_twalk()
 	fitmodel = NULL;
 }
 
-bool Lens::adopt_model(dvector &fitparams)
+bool QLens::adopt_model(dvector &fitparams)
 {
 	if (nlens == 0) { if (mpi_id==0) warn(warnings,"No fit model has been specified"); return false; }
 	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
@@ -9479,7 +9486,7 @@ void fisher_quitproc(int sig)
 	exit(0);
 }
 
-bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsizes)
+bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsizes)
 {
 	// this function calculates the marginalized error using the Gaussian approximation
 	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
@@ -9540,7 +9547,7 @@ bool Lens::calculate_fisher_matrix(const dvector &params, const dvector &stepsiz
 	return true;
 }
 
-double Lens::loglike_deriv(const dvector &params, const int index, const double step)
+double QLens::loglike_deriv(const dvector &params, const int index, const double step)
 {
 	static const double increment = 1e-5;
 	dvector xhi(params);
@@ -9551,18 +9558,18 @@ double Lens::loglike_deriv(const dvector &params, const int index, const double 
 	xlo[index] -= increment*step;
 	if ((param_settings->use_penalty_limits[index]==true) and (xlo[index] < param_settings->penalty_limits_lo[index])) xlo[index] = x0;
 	dif = xhi[index] - xlo[index];
-	double (Lens::*loglikeptr)(double*);
+	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_point_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	} else if (source_fit_mode==Parameterized_Source) {
-		loglikeptr = static_cast<double (Lens::*)(double*)> (&Lens::fitmodel_loglike_extended_source);
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 	return (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
 }
 
-void Lens::output_bestfit_model()
+void QLens::output_bestfit_model()
 {
 	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
 	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
@@ -9641,7 +9648,7 @@ void Lens::output_bestfit_model()
 	}
 	scriptfile.close();
 
-	Lens* model;
+	QLens* model;
 	if (fitmodel != NULL) model = fitmodel;
 	else model = this;
 	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object (if available);
@@ -9662,7 +9669,7 @@ void Lens::output_bestfit_model()
 	}
 }
 
-double Lens::fitmodel_loglike_point_source(double* params)
+double QLens::fitmodel_loglike_point_source(double* params)
 {
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
 	double transformed_params[n_fit_parameters];
@@ -9813,7 +9820,7 @@ double Lens::fitmodel_loglike_point_source(double* params)
 	return loglike;
 }
 
-double Lens::fitmodel_loglike_extended_source(double* params)
+double QLens::fitmodel_loglike_extended_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
@@ -9862,7 +9869,7 @@ double Lens::fitmodel_loglike_extended_source(double* params)
 	return loglike;
 }
 
-double Lens::loglike_point_source(double* params)
+double QLens::loglike_point_source(double* params)
 {
 	// can use this version for testing purposes in case there is any doubt about whether the fitmodel version is faithfully reproducing the original
 	double transformed_params[n_fit_parameters];
@@ -9926,7 +9933,7 @@ double Lens::loglike_point_source(double* params)
 	return loglike;
 }
 
-double Lens::fitmodel_loglike_extended_source_test(double* params)
+double QLens::fitmodel_loglike_extended_source_test(double* params)
 {
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
@@ -9953,7 +9960,7 @@ double Lens::fitmodel_loglike_extended_source_test(double* params)
 	return loglike;
 }
 
-void Lens::fitmodel_calculate_derived_params(double* params, double* derived_params)
+void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
@@ -9961,7 +9968,7 @@ void Lens::fitmodel_calculate_derived_params(double* params, double* derived_par
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
 }
 
-double Lens::get_lens_parameter_using_default_pmode(const int paramnum, const int lensnum)
+double QLens::get_lens_parameter_using_default_pmode(const int paramnum, const int lensnum)
 {
 	if (lensnum >= nlens) die("lensnum exceeds number of lenses");
 	int lens_nparams = lens_list[lensnum]->get_n_params();
@@ -9974,7 +9981,7 @@ double Lens::get_lens_parameter_using_default_pmode(const int paramnum, const in
 	return lensparam;
 }
 
-double Lens::fitmodel_custom_prior()
+double QLens::fitmodel_custom_prior()
 {
 	//static const double rcore_threshold = 3.0;
 	double cnfw_params[8];
@@ -9993,7 +10000,7 @@ double Lens::fitmodel_custom_prior()
 	else return 1e30+rc;
 }
 
-void Lens::set_Gauss_NN(const int& nn)
+void QLens::set_Gauss_NN(const int& nn)
 {
 	Gauss_NN = nn;
 	if (nlens > 0) {
@@ -10003,7 +10010,7 @@ void Lens::set_Gauss_NN(const int& nn)
 	}
 }
 
-void Lens::set_integral_tolerance(const double& acc)
+void QLens::set_integral_tolerance(const double& acc)
 {
 	integral_tolerance = acc;
 	if (nlens > 0) {
@@ -10013,7 +10020,7 @@ void Lens::set_integral_tolerance(const double& acc)
 	}
 }
 
-void Lens::reassign_lensparam_pointers_and_names()
+void QLens::reassign_lensparam_pointers_and_names()
 {
 	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
 	if (nlens > 0) {
@@ -10028,7 +10035,7 @@ void Lens::reassign_lensparam_pointers_and_names()
 	}
 }
 
-void Lens::reassign_sb_param_pointers_and_names()
+void QLens::reassign_sb_param_pointers_and_names()
 {
 	// parameter pointers should be reassigned if the parameterization mode has been changed
 	if (n_sb > 0) {
@@ -10043,7 +10050,7 @@ void Lens::reassign_sb_param_pointers_and_names()
 	}
 }
 
-void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
+void QLens::print_lens_cosmology_info(const int lmin, const int lmax)
 {
 	if (lmax >= nlens) return;
 	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
@@ -10069,7 +10076,7 @@ void Lens::print_lens_cosmology_info(const int lmin, const int lmax)
 	else cout << "No lens models have been specified" << endl << endl;
 }
 
-bool Lens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
+bool QLens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 {
 	if (lensnum >= nlens) return false;
 	double zlens, sigma_cr, kpc_to_arcsec, r_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
@@ -10099,7 +10106,7 @@ bool Lens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 	return true;
 }
 
-double Lens::mass2d_r(const double r_arcsec, const int lensnum)
+double QLens::mass2d_r(const double r_arcsec, const int lensnum)
 {
 	double sigma_cr, mass_r_2d, zlens;
 	zlens = lens_list[lensnum]->zlens;
@@ -10108,7 +10115,7 @@ double Lens::mass2d_r(const double r_arcsec, const int lensnum)
 	return mass_r_2d;
 }
 
-double Lens::mass3d_r(const double r_arcsec, const int lensnum)
+double QLens::mass3d_r(const double r_arcsec, const int lensnum)
 {
 	double sigma_cr, mass_r_3d, zlens;
 	zlens = lens_list[lensnum]->zlens;
@@ -10117,12 +10124,12 @@ double Lens::mass3d_r(const double r_arcsec, const int lensnum)
 	return mass_r_3d;
 }
 
-double Lens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax)
+double QLens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax)
 {
 	return lens_list[lensnum]->average_log_slope(rmin,rmax);
 }
 
-void Lens::print_lens_list(bool show_vary_params)
+void QLens::print_lens_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
 	if (nlens > 0) {
@@ -10139,7 +10146,7 @@ void Lens::print_lens_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void Lens::output_lens_commands(string filename, const bool print_limits)
+void QLens::output_lens_commands(string filename, const bool print_limits)
 {
 	ofstream scriptfile(filename.c_str());
 	if (print_limits) scriptfile << "#limits included" << endl;
@@ -10214,7 +10221,7 @@ void Lens::output_lens_commands(string filename, const bool print_limits)
 	}
 }
 
-void Lens::print_fit_model()
+void QLens::print_fit_model()
 {
 	print_lens_list(true);
 	if (source_fit_mode == Point_Source) {
@@ -10324,7 +10331,7 @@ void Lens::print_fit_model()
 	}
 }
 
-void Lens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename)
+void QLens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename)
 {
 
 	lensvector **corner_pts = new lensvector*[x_N];
@@ -10364,7 +10371,7 @@ void Lens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double y
 	delete[] corner_sourcepts;
 }
 
-void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename, const bool ignore_mask)
+void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filename, const bool ignore_mask)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -10412,7 +10419,7 @@ void Lens::plot_logkappa_map(const int x_N, const int y_N, const string filename
 	if (negkap==true) warn("kappa has negative values in some locations; plotting abs(kappa)");
 }
 
-void Lens::plot_logpot_map(const int x_N, const int y_N, const string filename)
+void QLens::plot_logpot_map(const int x_N, const int y_N, const string filename)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -10450,7 +10457,7 @@ void Lens::plot_logpot_map(const int x_N, const int y_N, const string filename)
 	}
 }
 
-void Lens::plot_logmag_map(const int x_N, const int y_N, const string filename)
+void QLens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 {
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -10488,7 +10495,7 @@ void Lens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 	}
 }
 
-void Lens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
+void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 {
 	if (fit_output_dir != ".") create_output_directory();
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
@@ -10572,7 +10579,7 @@ void Lens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 
 // Pixel grid functions
 
-void Lens::find_optimal_sourcegrid_for_analytic_source()
+void QLens::find_optimal_sourcegrid_for_analytic_source()
 {
 	if (n_sb==0) { warn("no source objects have been specified"); return; }
 	sb_list[0]->window_params(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
@@ -10601,7 +10608,7 @@ void Lens::find_optimal_sourcegrid_for_analytic_source()
 	}
 }
 
-bool Lens::create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists)
+bool QLens::create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists)
 {
 	bool use_image_pixelgrid = false;
 	if ((adaptive_grid) and (nlens==0)) { cerr << "Error: cannot ray trace source for adaptive grid; no lens model has been specified\n"; return false; }
@@ -10688,13 +10695,13 @@ bool Lens::create_source_surface_brightness_grid(bool verbal, bool image_grid_al
 	return true;
 }
 
-void Lens::load_source_surface_brightness_grid(string source_inputfile)
+void QLens::load_source_surface_brightness_grid(string source_inputfile)
 {
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	source_pixel_grid = new SourcePixelGrid(this,source_inputfile,1e-6);
 }
 
-bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
+bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 {
 	bool first_data_img = false;
 	if (image_pixel_data==NULL) {
@@ -10750,7 +10757,7 @@ bool Lens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool verbose)
 {
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	if ((source_fit_mode==Parameterized_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
@@ -10858,7 +10865,7 @@ bool Lens::plot_lensed_surface_brightness(string imagefile, const int reduce_fac
 	return true;
 }
 
-double Lens::image_pixel_chi_square()
+double QLens::image_pixel_chi_square()
 {
 	if (image_pixel_grid==NULL) { warn("No image surface brightness map has been generated"); return -1e30; }
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
@@ -10875,7 +10882,7 @@ double Lens::image_pixel_chi_square()
 	return chisq;
 }
 
-void Lens::load_pixel_grid_from_data()
+void QLens::load_pixel_grid_from_data()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
@@ -10883,7 +10890,7 @@ void Lens::load_pixel_grid_from_data()
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 }
 
-void Lens::plot_image_pixel_grid()
+void QLens::plot_image_pixel_grid()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
@@ -10892,7 +10899,7 @@ void Lens::plot_image_pixel_grid()
 	image_pixel_grid->plot_grid("map",false);
 }
 
-double Lens::invert_surface_brightness_map_from_data(bool verbal)
+double QLens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
@@ -10907,7 +10914,7 @@ double Lens::invert_surface_brightness_map_from_data(bool verbal)
 	return chisq;
 }
 
-double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
+double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
@@ -11279,7 +11286,7 @@ double Lens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	return chisq;
 }
 
-double Lens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
+double QLens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 {
 
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
@@ -11344,7 +11351,7 @@ double Lens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 
 int croot_lensnumber;
 
-void Lens::plot_mc_curve(const int lensnumber, const string filename)
+void QLens::plot_mc_curve(const int lensnumber, const string filename)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first
 	/*
@@ -11372,7 +11379,7 @@ void Lens::plot_mc_curve(const int lensnumber, const string filename)
 	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
 
 	double (Brent::*mc_eq)(const double);
-	mc_eq = static_cast<double (Brent::*)(const double)> (&Lens::croot_eq);
+	mc_eq = static_cast<double (Brent::*)(const double)> (&QLens::croot_eq);
 
 	double mvir, c, logm, logm_min=9.7, logm_max=11, logm_step;
 	int i,n_logm = 100;
@@ -11388,13 +11395,13 @@ void Lens::plot_mc_curve(const int lensnumber, const string filename)
 	}
 }
 
-double Lens::croot_eq(const double c)
+double QLens::croot_eq(const double c)
 {
 	if (lens_list[croot_lensnumber]->update_specific_parameter("c",c)==false) die("could not find parameter");
 	return (mass2d_r(rmax_true_mc,croot_lensnumber) - menc_true_mc);
 }
 
-void Lens::find_equiv_mvir(const double newc)
+void QLens::find_equiv_mvir(const double newc)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first
 	/*
@@ -11419,7 +11426,7 @@ void Lens::find_equiv_mvir(const double newc)
 	menc_true_mc = menc_true; // for root finder
 
 	double (Brent::*mc_eq)(const double);
-	mc_eq = static_cast<double (Brent::*)(const double)> (&Lens::mroot_eq);
+	mc_eq = static_cast<double (Brent::*)(const double)> (&QLens::mroot_eq);
 
 	if (lens_list[2]->update_specific_parameter("c",newc)==false) die("could not find parameter");
 	double lognewm = BrentsMethod(mc_eq, 6, 12, 1e-5);
@@ -11430,7 +11437,7 @@ void Lens::find_equiv_mvir(const double newc)
 	reset_grid();
 }
 
-double Lens::mroot_eq(const double logm)
+double QLens::mroot_eq(const double logm)
 {
 	double m = pow(10,logm);
 	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
@@ -11438,7 +11445,7 @@ double Lens::mroot_eq(const double logm)
 }
 
 /*
-double Lens::set_required_data_pixel_window(bool verbal)
+double QLens::set_required_data_pixel_window(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
@@ -11451,7 +11458,7 @@ double Lens::set_required_data_pixel_window(bool verbal)
 */
 
 /*
-void Lens::generate_solution_chain_sdp81()
+void QLens::generate_solution_chain_sdp81()
 {
 	double b_true, q_true, theta_true, xc_true, yc_true;
 	double shear_x_true, shear_y_true;
@@ -11889,7 +11896,7 @@ void Lens::generate_solution_chain_sdp81()
 }
 */
 
-void Lens::create_output_directory()
+void QLens::create_output_directory()
 {
 	if (mpi_id==0) {
 		struct stat sb;
@@ -11899,7 +11906,7 @@ void Lens::create_output_directory()
 	}
 }
 
-void Lens::open_output_file(ofstream &outfile, char* filechar_in)
+void QLens::open_output_file(ofstream &outfile, char* filechar_in)
 {
 	string filename_in(filechar_in);
 	if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
@@ -11907,14 +11914,14 @@ void Lens::open_output_file(ofstream &outfile, char* filechar_in)
 	outfile.open(filename.c_str());
 }
 
-void Lens::open_output_file(ofstream &outfile, string filename_in)
+void QLens::open_output_file(ofstream &outfile, string filename_in)
 {
 	if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
 	string filename = fit_output_dir + "/" + filename_in;
 	outfile.open(filename.c_str());
 }
 
-void Lens::reset_grid()
+void QLens::reset_grid()
 {
 	if (defspline != NULL) {
 		delete defspline;
@@ -11937,7 +11944,7 @@ void Lens::reset_grid()
 	}
 }
 
-void Lens::delete_ccspline()
+void QLens::delete_ccspline()
 {
 	if (cc_splined==true) {
 		delete[] ccspline;
@@ -11946,7 +11953,7 @@ void Lens::delete_ccspline()
 	}
 }
 
-Lens::~Lens()
+QLens::~QLens()
 {
 	int i,j;
 	if (nlens > 0) {
@@ -12020,8 +12027,8 @@ Lens::~Lens()
 
 // POLYCHORD FUNCTIONS
 
-Lens* lensptr;
-double mcsampler_set_lensptr(Lens* lens_in)
+QLens* lensptr;
+double mcsampler_set_lensptr(QLens* lens_in)
 {
 	lensptr = lens_in;
 	return 0.0;
@@ -12075,16 +12082,39 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 			pLivePts[j][i] = physLive[0][i * nlive + j];
 }
 
-void Lens::test_lens_functions()
+void QLens::test_lens_functions()
 {
 	clear_lenses();
 
 	Alpha *A = new Alpha();
-	A->initialize_parameters(10,1,0.3,0.7,30,0.3,0.7);
+	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
+	boolvector flags(7);
+	flags[0] = true;
+	flags[1] = false;
+	flags[2] = false;
+	flags[3] = true;
+	flags[4] = true;
+	flags[5] = true;
+	flags[6] = true;
+	//flags[7] = true;
+	//param_settings->print_penalty_limits();
+	A->set_vary_flags(flags);
+	Shear *S = new Shear();
+	S->initialize_parameters(0.02,10,0,0);
+	boolvector flag2(4);
+	flag2[0] = true;
+	flag2[1] = true;
+	flag2[2] = false;
+	flag2[3] = false;
+	S->set_vary_flags(flag2);
 	add_lens(A,0.5,2);
+	add_lens(S,0.5,2);
+	//set_lens_vary_parameters(0);
 
-	print_lens_list(false);
+	//print_lens_list(true);
+	//param_settings->print_penalty_limits();
 
+	/*
 	ImageSet imgset;
 	get_imageset(0.5,0.1,imgset); // finds the images and stores the image data in the "imgset" object
 
@@ -12114,6 +12144,7 @@ void Lens::test_lens_functions()
 		ccfile << endl;
 		caustic_file << endl;
 	}
+	*/
 
-	delete A;
+	//delete A;
 }

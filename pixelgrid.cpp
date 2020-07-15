@@ -140,7 +140,7 @@ void SourcePixelGrid::deallocate_multithreaded_variables()
 	}
 }
 
-SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, double y_min, double y_max) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
+SourcePixelGrid::SourcePixelGrid(QLens* lens_in, double x_min, double x_max, double y_min, double y_max) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
 	int threads = 1;
 #ifdef USE_OPENMP
@@ -209,7 +209,7 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, double x_min, double x_max, doub
 	delete[] firstlevel_xvals;
 }
 
-SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, const double& minarea_in) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
+SourcePixelGrid::SourcePixelGrid(QLens* lens_in, string pixel_data_fileroot, const double& minarea_in) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
 	int threads = 1;
 #ifdef USE_OPENMP
@@ -291,7 +291,7 @@ SourcePixelGrid::SourcePixelGrid(Lens* lens_in, string pixel_data_fileroot, cons
 // ***NOTE: the following constructor should NOT be used because there are static variables (e.g. levels), so more than one source grid
 // is a bad idea. To make this work, you need to make those variables non-static and contained in the zeroth-level grid (and give subcells
 // a pointer to the zeroth-level grid).
-SourcePixelGrid::SourcePixelGrid(Lens* lens_in, SourcePixelGrid* input_pixel_grid) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
+SourcePixelGrid::SourcePixelGrid(QLens* lens_in, SourcePixelGrid* input_pixel_grid) : lens(lens_in)	// use for top-level cell only; subcells use constructor below
 {
 	int threads = 1;
 #ifdef USE_OPENMP
@@ -401,7 +401,7 @@ void SourcePixelGrid::copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid)
 	}
 }
 
-SourcePixelGrid::SourcePixelGrid(Lens* lens_in, lensvector** xij, const int& i, const int& j, const int& level_in, SourcePixelGrid* parent_ptr)
+SourcePixelGrid::SourcePixelGrid(QLens* lens_in, lensvector** xij, const int& i, const int& j, const int& level_in, SourcePixelGrid* parent_ptr)
 {
 	u_N = 1;
 	w_N = 1;
@@ -854,7 +854,7 @@ void SourcePixelGrid::unsplit()
 
 ofstream SourcePixelGrid::xgrid;
 
-void Lens::plot_source_pixel_grid(const char filename[])
+void QLens::plot_source_pixel_grid(const char filename[])
 {
 	if (source_pixel_grid==NULL) { warn("No source surface brightness map has been generated"); return; }
 	SourcePixelGrid::xgrid.open(filename, ifstream::out);
@@ -2334,7 +2334,7 @@ void SourcePixelGrid::generate_hmatrices()
 	}
 }
 
-void Lens::generate_Rmatrix_from_hmatrices()
+void QLens::generate_Rmatrix_from_hmatrices()
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2497,7 +2497,7 @@ void Lens::generate_Rmatrix_from_hmatrices()
 	}
 }
 
-void Lens::generate_Rmatrix_from_gmatrices()
+void QLens::generate_Rmatrix_from_gmatrices()
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -3212,7 +3212,7 @@ bool ImagePixelData::save_mask_fits(string fits_filename)
 #endif
 }
 
-bool Lens::load_psf_fits(string fits_filename, const bool verbal)
+bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -3901,7 +3901,7 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 
 /***************************************** Functions in class ImagePixelGrid ****************************************/
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
 {
 	source_fit_mode = mode;
 	ray_tracing_method = method;
@@ -4062,7 +4062,7 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 	return false;
 }
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
 {
 	source_fit_mode = mode;
 	ray_tracing_method = method;
@@ -4221,7 +4221,7 @@ ImagePixelGrid::ImagePixelGrid(Lens* lens_in, SourceFitMode mode, RayTracingMeth
 	fit_to_data = NULL;
 }
 
-ImagePixelGrid::ImagePixelGrid(Lens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data)
 {
 	lens = lens_in;
 	source_fit_mode = mode;
@@ -5403,7 +5403,7 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 #endif
 }
 
-double Lens::find_surface_brightness(lensvector &pt)
+double QLens::find_surface_brightness(lensvector &pt)
 {
 	//double xl=0.01, yl=0.01;
 	//lensvector pt1,pt2,pt3,pt4;
@@ -5487,9 +5487,9 @@ ImagePixelGrid::~ImagePixelGrid()
 	}
 }
 
-/************************** Functions in class Lens that pertain to pixel mapping and inversion ****************************/
+/************************** Functions in class QLens that pertain to pixel mapping and inversion ****************************/
 
-bool Lens::assign_pixel_mappings(bool verbal)
+bool QLens::assign_pixel_mappings(bool verbal)
 {
 
 #ifdef USE_OPENMP
@@ -5546,7 +5546,7 @@ bool Lens::assign_pixel_mappings(bool verbal)
 	return true;
 }
 
-void Lens::initialize_pixel_matrices(bool verbal)
+void QLens::initialize_pixel_matrices(bool verbal)
 {
 	if (Lmatrix != NULL) die("Lmatrix already initialized");
 	if (source_surface_brightness != NULL) die("source surface brightness vector already initialized");
@@ -5569,7 +5569,7 @@ void Lens::initialize_pixel_matrices(bool verbal)
 	assign_Lmatrix(verbal);
 }
 
-void Lens::clear_pixel_matrices()
+void QLens::clear_pixel_matrices()
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
 	if (foreground_surface_brightness != NULL) delete[] foreground_surface_brightness;
@@ -5600,7 +5600,7 @@ void Lens::clear_pixel_matrices()
 	}
 }
 
-void Lens::assign_Lmatrix(bool verbal)
+void QLens::assign_Lmatrix(bool verbal)
 {
 	int img_index;
 	int index;
@@ -5808,7 +5808,7 @@ void Lens::assign_Lmatrix(bool verbal)
 	delete[] Lmatrix_index_rows;
 }
 
-void Lens::PSF_convolution_Lmatrix(bool verbal)
+void QLens::PSF_convolution_Lmatrix(bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -5973,7 +5973,7 @@ void Lens::PSF_convolution_Lmatrix(bool verbal)
 #endif
 }
 
-void Lens::PSF_convolution_image_pixel_vector(bool verbal)
+void QLens::PSF_convolution_image_pixel_vector(bool verbal)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -6032,7 +6032,7 @@ void Lens::PSF_convolution_image_pixel_vector(bool verbal)
 	image_surface_brightness = new_image_surface_brightness;
 }
 
-void Lens::PSF_convolution_foreground_pixel_vector(bool verbal)
+void QLens::PSF_convolution_foreground_pixel_vector(bool verbal)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -6092,7 +6092,7 @@ void Lens::PSF_convolution_foreground_pixel_vector(bool verbal)
 	foreground_surface_brightness = new_foreground_surface_brightness;
 }
 
-bool Lens::generate_PSF_matrix()
+bool QLens::generate_PSF_matrix()
 {
 	//static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
 	double sigma_fraction = sqrt(-2*log(psf_threshold));
@@ -6136,7 +6136,7 @@ bool Lens::generate_PSF_matrix()
 	return true;
 }
 
-void Lens::generate_Rmatrix_from_image_plane_curvature()
+void QLens::generate_Rmatrix_from_image_plane_curvature()
 {
 	cout << "Generating Rmatrix from image plane curvature...\n";
 	int i,j,k,l,m,n,indx;
@@ -6342,7 +6342,7 @@ void Lens::generate_Rmatrix_from_image_plane_curvature()
 #endif
 }
 
-void Lens::generate_Rmatrix_norm()
+void QLens::generate_Rmatrix_norm()
 {
 	int i,j;
 	Rmatrix_diags = new double[source_npixels];
@@ -6380,7 +6380,7 @@ void Lens::generate_Rmatrix_norm()
 	delete[] Rmatrix_index_rows;
 }
 
-void Lens::create_regularization_matrix()
+void QLens::create_regularization_matrix()
 {
 	if (Rmatrix != NULL) delete[] Rmatrix;
 	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
@@ -6401,7 +6401,7 @@ void Lens::create_regularization_matrix()
 	}
 }
 
-void Lens::create_lensing_matrices_from_Lmatrix(bool verbal)
+void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -6641,7 +6641,7 @@ void Lens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	delete[] Fmatrix_row_nn;
 }
 
-void Lens::invert_lens_mapping_CG_method(bool verbal)
+void QLens::invert_lens_mapping_CG_method(bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -6738,7 +6738,7 @@ void Lens::invert_lens_mapping_CG_method(bool verbal)
 #endif
 }
 
-void Lens::invert_lens_mapping_UMFPACK(bool verbal)
+void QLens::invert_lens_mapping_UMFPACK(bool verbal)
 {
 #ifndef USE_UMFPACK
 	die("QLens requires compilation with UMFPACK for factorization");
@@ -7080,7 +7080,7 @@ void Lens::invert_lens_mapping_UMFPACK(bool verbal)
 #endif
 }
 
-void Lens::invert_lens_mapping_MUMPS(bool verbal)
+void QLens::invert_lens_mapping_MUMPS(bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -7302,7 +7302,7 @@ void Lens::invert_lens_mapping_MUMPS(bool verbal)
 }
 
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
-void Lens::indexx(int* arr, int* indx, int nn)
+void QLens::indexx(int* arr, int* indx, int nn)
 {
 	const int M=7, NSTACK=50;
 	int i,indxt,ir,j,k,jstack=-1,l=0;
@@ -7365,7 +7365,7 @@ void Lens::indexx(int* arr, int* indx, int nn)
 }
 #undef SWAP
 
-void Lens::clear_lensing_matrices()
+void QLens::clear_lensing_matrices()
 {
 	if (Dvector != NULL) delete[] Dvector;
 	if (Fmatrix != NULL) delete[] Fmatrix;
@@ -7379,7 +7379,7 @@ void Lens::clear_lensing_matrices()
 	Rmatrix_index = NULL;
 }
 
-void Lens::calculate_image_pixel_surface_brightness()
+void QLens::calculate_image_pixel_surface_brightness()
 {
 	int img_index_j;
 	int i,j,k;
@@ -7406,7 +7406,7 @@ void Lens::calculate_image_pixel_surface_brightness()
 
 }
 
-void Lens::calculate_foreground_pixel_surface_brightness()
+void QLens::calculate_foreground_pixel_surface_brightness()
 {
 	bool subgridded;
 	int img_index;
@@ -7467,14 +7467,14 @@ void Lens::calculate_foreground_pixel_surface_brightness()
 	PSF_convolution_foreground_pixel_vector(false);
 }
 
-void Lens::add_foreground_to_image_pixel_vector()
+void QLens::add_foreground_to_image_pixel_vector()
 {
 	for (int img_index=0; img_index < image_npixels; img_index++) {
 		image_surface_brightness[img_index] += foreground_surface_brightness[img_index];
 	}
 }
 
-void Lens::store_image_pixel_surface_brightness()
+void QLens::store_image_pixel_surface_brightness()
 {
 	int i,j;
 	for (i=0; i < image_pixel_grid->x_N; i++)
@@ -7488,7 +7488,7 @@ void Lens::store_image_pixel_surface_brightness()
 	}
 }
 
-void Lens::vectorize_image_pixel_surface_brightness()
+void QLens::vectorize_image_pixel_surface_brightness()
 {
 	int i,j,k=0;
 	if (active_image_pixel_i == NULL) {
@@ -7515,7 +7515,7 @@ void Lens::vectorize_image_pixel_surface_brightness()
 	}
 }
 
-void Lens::plot_image_pixel_surface_brightness(string outfile_root)
+void QLens::plot_image_pixel_surface_brightness(string outfile_root)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";

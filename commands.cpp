@@ -25,7 +25,7 @@ using namespace std;
 #define set_switch(setting,setword) do { if ((setword)=="on") setting = true; else if ((setword)=="off") setting = false; else Complain("invalid argument; must specify 'on' or 'off'"); } while (false)
 #define LENS_AXIS_DIR ((LensProfile::orient_major_axis_north==true) ? "y-axis" : "x-axis")
 
-void Lens::process_commands(bool read_file)
+void QLens::process_commands(bool read_file)
 {
 	bool show_cc = true; // if true, plots critical curves along with image positions (via plotlens script)
 	bool plot_srcplane = true;
@@ -9636,7 +9636,7 @@ void Lens::process_commands(bool read_file)
 #endif
 }
 
-bool Lens::read_command(bool show_prompt)
+bool QLens::read_command(bool show_prompt)
 {
 	if (read_from_file) {
 		if (infile->eof()) {
@@ -9704,7 +9704,7 @@ bool Lens::read_command(bool show_prompt)
 	return true;
 }
 
-bool Lens::check_vary_z()
+bool QLens::check_vary_z()
 {
 	int pos, varyz = 0;
 	for (int i=0; i < nwords; i++) {
@@ -9721,7 +9721,7 @@ bool Lens::check_vary_z()
 	else return true;
 }
 
-bool Lens::open_command_file(char *filename)
+bool QLens::open_command_file(char *filename)
 {
 	if (infile->is_open()) {
 		if (n_infiles==10) {
@@ -9736,7 +9736,7 @@ bool Lens::open_command_file(char *filename)
 	return (infile->is_open()) ? true : false;
 }
 
-void Lens::remove_equal_sign(void)
+void QLens::remove_equal_sign(void)
 {
 	int pos;
 	if ((pos = words[0].find('=')) != string::npos) {
@@ -9765,7 +9765,7 @@ void Lens::remove_equal_sign(void)
 	}
 }
 
-void Lens::remove_word(int n_remove)
+void QLens::remove_word(int n_remove)
 {
 	if (n_remove >= nwords) die("word number to remove is greater than number of words in command");
 	string *word_temp = new string[nwords-1];
@@ -9783,7 +9783,7 @@ void Lens::remove_word(int n_remove)
 	delete[] word_temp;
 }
 
-void Lens::extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word)
+void QLens::extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word)
 {
 	if (starting_word >= nwords) { extracted_word = ""; return; }
 	int end;
@@ -9797,7 +9797,7 @@ void Lens::extract_word_starts_with(const char initial_character, int starting_w
 	else remove_word(nremove);
 }
 
-bool Lens::extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words)
+bool QLens::extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words)
 {
 	bool extracted = false;
 	if (starting_word >= nwords) return false;
@@ -9812,7 +9812,7 @@ bool Lens::extract_word_starts_with(const char initial_character, int starting_w
 	return extracted;
 }
 
-void Lens::run_plotter(string plotcommand, string extra_command)
+void QLens::run_plotter(string plotcommand, string extra_command)
 {
 	if (suppress_plots) return;
 	if (mpi_id==0) {
@@ -9846,7 +9846,7 @@ void Lens::run_plotter(string plotcommand, string extra_command)
 	}
 }
 
-void Lens::run_plotter_file(string plotcommand, string filename)
+void QLens::run_plotter_file(string plotcommand, string filename)
 {
 	if (suppress_plots) return;
 	if (mpi_id==0) {
@@ -9882,7 +9882,7 @@ void Lens::run_plotter_file(string plotcommand, string filename)
 	}
 }
 
-void Lens::run_plotter_range(string plotcommand, string range)
+void QLens::run_plotter_range(string plotcommand, string range)
 {
 	if (suppress_plots) return;
 	if (mpi_id==0) {
@@ -9916,7 +9916,7 @@ void Lens::run_plotter_range(string plotcommand, string range)
 	}
 }
 
-void Lens::run_plotter(string plotcommand, string filename, string extra_command)
+void QLens::run_plotter(string plotcommand, string filename, string extra_command)
 {
 	if (suppress_plots) return;
 	if (mpi_id==0) {
@@ -9952,7 +9952,7 @@ void Lens::run_plotter(string plotcommand, string filename, string extra_command
 	}
 }
 
-void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists)
+void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists)
 {
 	if (mpi_id==0) {
 		string filename = fit_output_filename;
@@ -10052,7 +10052,7 @@ void Lens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbin
 #endif
 }
 
-int Lens::sample_add(const int i, const int j) {
+int QLens::sample_add(const int i, const int j) {
 	return i+j;
 }
 
