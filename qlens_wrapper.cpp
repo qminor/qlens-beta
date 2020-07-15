@@ -8,10 +8,10 @@ namespace py = pybind11;
 
 
 
-class Lens_Wrap: public Lens {
+class Lens_Wrap: public QLens {
 public:
 
-    Lens_Wrap() : Lens() {}
+    Lens_Wrap() : QLens() {}
 
     void batch_add_lenses_tuple(py::list list) {
         double zl, zs;
