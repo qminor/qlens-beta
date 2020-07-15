@@ -62,7 +62,7 @@ enum DerivedParamType {
 };
 
 
-class Lens;			// Defined after class Grid
+class QLens;			// Defined after class Grid
 class SourcePixelGrid;
 class ImagePixelGrid;
 class Defspline;	// ...
@@ -156,7 +156,7 @@ class Grid : public Brent
 	Grid(lensvector** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
 
 	Grid*** cell;
-	static Lens* lens;
+	static QLens* lens;
 	static int nthreads;
 	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
 	Grid* parent_cell;
@@ -274,7 +274,7 @@ public:
 	static int nfound;
 	static double image_pos_accuracy;
 	image* tree_search();
-	static void set_lens(Lens* lensptr) { lens = lensptr; }
+	static void set_lens(QLens* lensptr) { lens = lensptr; }
 	void subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
 	void subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting, bool *subgrid);
 
@@ -312,16 +312,16 @@ struct WeakLensingData
 	~WeakLensingData();
 };
 
-double mcsampler_set_lensptr(Lens* lens_in);
+double mcsampler_set_lensptr(QLens* lens_in);
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
 void polychord_prior (double cube[], double theta[], int nDims);
 void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,double* logweights,double logZ, double logZerr);
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
 
-// There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the Lens
+// There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class Lens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
+class QLens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -424,8 +424,8 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	int usplit_initial, wsplit_initial;
 	int splitlevels, cc_splitlevels;
 
-	Lens *fitmodel;
-	Lens *lens_parent;
+	QLens *fitmodel;
+	QLens *lens_parent;
 	dvector fitparams, upper_limits, lower_limits, upper_limits_initial, lower_limits_initial, bestfitparams;
 	dmatrix bestfit_fisher_inverse;
 	dmatrix fisher_inverse;
@@ -445,7 +445,7 @@ class Lens : public Cosmology, public Sort, public Powell, public Simplex, publi
 	bool vary_regularization_parameter;
 	static string fit_output_filename;
 	bool auto_save_bestfit;
-	bool borrowed_image_data; // tells whether image_data is pointing to that of another Lens object (e.g. fitmodel pointing to initial lens object)
+	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
 	ImageData *image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
@@ -746,11 +746,11 @@ public:
 	friend struct DerivedParam;
 	friend class LensProfile;
 	friend class SB_Profile;
-	Lens();
-	Lens(Lens *lens_in);
+	QLens();
+	QLens(QLens *lens_in);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
-	~Lens();
+	~QLens();
 #ifdef USE_MPI
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm);
 #endif
@@ -906,6 +906,7 @@ public:
 
 	void create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
+	bool register_lens_vary_parameters(const int lensnumber);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
@@ -939,7 +940,6 @@ public:
 	void find_automatic_grid_position_and_size(double *zfacs);
 	void clear_lenses();
 	void clear();
-	void reset();
 	void reset_grid();
 	void remove_lens(int lensnumber);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
@@ -1009,7 +1009,7 @@ public:
 	void automatically_determine_ccspline_mode();
 	bool plot_splined_critical_curves(string filename = "");
 	bool plot_sorted_critical_curves(string filename = "");
-	bool (Lens::*plot_critical_curves)(string filename);
+	bool (QLens::*plot_critical_curves)(string filename);
 	bool plotcrit(string filename) { return (this->*plot_critical_curves)(filename); }
 	void plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename);
 
@@ -1072,7 +1072,7 @@ public:
 	void get_warnings(bool &setting) { setting = warnings; }
 	void set_newton_warnings(bool setting) { newton_warnings = setting; }
 	void get_newton_warnings(bool &setting) { setting = newton_warnings; }
-	void set_ccspline_mode(bool setting) { use_cc_spline = setting; plot_critical_curves = (setting==true) ? &Lens::plot_splined_critical_curves : &Lens::plot_sorted_critical_curves; }
+	void set_ccspline_mode(bool setting) { use_cc_spline = setting; plot_critical_curves = (setting==true) ? &QLens::plot_splined_critical_curves : &QLens::plot_sorted_critical_curves; }
 	void get_ccspline_mode(bool &setting) { setting = use_cc_spline; }
 	void set_auto_ccspline_mode(bool setting) { auto_ccspline = setting; }
 	void get_auto_ccspline_mode(bool &setting) { setting = auto_ccspline; }
@@ -1310,7 +1310,7 @@ struct DerivedParam
 			}
 		}
 	}
-	double get_derived_param(Lens* lens_in)
+	double get_derived_param(QLens* lens_in)
 	{
 		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param);
 		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
@@ -1345,7 +1345,7 @@ struct DerivedParam
 			double chisq_out;
 			if (lens_in->raw_chisq==-1e30) {
 				if (lens_in->lens_parent != NULL) {
-					// this means we're running it from the "fitmodel" Lens object, so the likelihood needs to be run from the parent Lens object
+					// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
 					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
 				} else {
 					lens_in->chisq_single_evaluation(false,false);
@@ -1358,7 +1358,7 @@ struct DerivedParam
 		else die("no user defined function yet");
 		return 0.0;
 	}
-	void print_param_description(Lens* lens_in)
+	void print_param_description(QLens* lens_in)
 	{
 		double dpar = get_derived_param(lens_in);
 		//cout << name << ": ";
@@ -1916,7 +1916,7 @@ class Defspline
 	Spline2D axx, ayy, axy;
 
 	public:
-	friend void Lens::spline_deflection(double,double,int);
+	friend void QLens::spline_deflection(double,double,int);
 	int nsteps() { return (ax.xlength()-1); }
 	double xmax() { return ax.xmax(); }
 	double ymax() { return ax.ymax(); }
@@ -1940,7 +1940,7 @@ class Defspline
 	}
 };
 
-inline double Lens::kappa(const double& x, const double& y, double* zfacs, double** betafacs)
+inline double QLens::kappa(const double& x, const double& y, double* zfacs, double** betafacs)
 {
 	double kappa;
 	if (n_lens_redshifts==1) {
@@ -1960,7 +1960,7 @@ inline double Lens::kappa(const double& x, const double& y, double* zfacs, doubl
 }
 
 /*
-inline double Lens::kappa_weak(const double& x, const double& y, double* zfacs)
+inline double QLens::kappa_weak(const double& x, const double& y, double* zfacs)
 {
 	double kappa;
 	int j;
@@ -1974,7 +1974,7 @@ inline double Lens::kappa_weak(const double& x, const double& y, double* zfacs)
 }
 */
 
-inline double Lens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
+inline double QLens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
 {
 	double pot=0, pot_subtot;
 	// This is not really sensical for multiplane lensing, and time delays need to be treated as in Schneider's textbook. Fix later
@@ -1989,7 +1989,7 @@ inline double Lens::potential(const double& x, const double& y, double* zfacs, d
 	return pot;
 }
 
-inline void Lens::deflection(const double& x, const double& y, lensvector& def_tot, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::deflection(const double& x, const double& y, lensvector& def_tot, const int &thread, double* zfacs, double** betafacs)
 {
 	if (!defspline)
 	{
@@ -2030,7 +2030,7 @@ inline void Lens::deflection(const double& x, const double& y, lensvector& def_t
 	}
 }
 
-inline void Lens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
 {
 	if (!defspline)
 	{
@@ -2071,7 +2071,7 @@ inline void Lens::deflection(const double& x, const double& y, double& def_tot_x
 	}
 }
 
-inline void Lens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs)
 {
 	if (redshift_i >= n_lens_redshifts) die("lens redshift index does not exist");
 	lensvector *x_i = &xvals_i[thread];
@@ -2104,7 +2104,7 @@ inline void Lens::map_to_lens_plane(const int& redshift_i, const double& x, cons
 	xi[1] = (*x_i)[1];
 }
 
-inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
+inline void QLens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
 {
 	if (!defspline)
 	{
@@ -2200,7 +2200,7 @@ inline void Lens::hessian(const double& x, const double& y, lensmatrix& hess_tot
 	}
 }
 
-inline void Lens::hessian_weak(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
+inline void QLens::hessian_weak(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
 {
 	if (!defspline)
 	{
@@ -2228,7 +2228,7 @@ inline void Lens::hessian_weak(const double& x, const double& y, lensmatrix& hes
 }
 
 /*
-inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
 	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
 	double x = xvec[0], y = xvec[1];
@@ -2398,7 +2398,7 @@ inline void Lens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector&
 	invmag = determinant((*jac));
 }
 
-inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
 {
 	double x = xvec[0], y = xvec[1];
 	lensvector *def_tot = &defs[thread];
@@ -2557,21 +2557,21 @@ inline void Lens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, l
 }
 */
 
-inline void Lens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, double* zfacs, double** betafacs)
 {
 	deflection(x[0],x[1],srcpt,thread,zfacs,betafacs);
 	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
 	srcpt[1] = x[1] - srcpt[1];
 }
 
-inline void Lens::find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs)
 {
 	deflection(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
 	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
 	srcpt_y = x[1] - srcpt_y;
 }
 
-inline double Lens::inverse_magnification(const lensvector& x, const int &thread, double* zfacs, double** betafacs)
+inline double QLens::inverse_magnification(const lensvector& x, const int &thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
@@ -2582,7 +2582,7 @@ inline double Lens::inverse_magnification(const lensvector& x, const int &thread
 	return determinant((*jac));
 }
 
-inline double Lens::magnification(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
+inline double QLens::magnification(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
@@ -2593,7 +2593,7 @@ inline double Lens::magnification(const lensvector &x, const int &thread, double
 	return 1.0/determinant((*jac));
 }
 
-inline double Lens::shear(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
+inline double QLens::shear(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *hess = &hesses[thread];
 	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
@@ -2603,7 +2603,7 @@ inline double Lens::shear(const lensvector &x, const int &thread, double* zfacs,
 	return sqrt(shear1*shear1+shear2*shear2);
 }
 
-inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs)
+inline void QLens::shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *hess = &hesses[thread];
 	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
@@ -2628,7 +2628,7 @@ inline void Lens::shear(const lensvector &x, double& shear_tot, double& angle, c
 	angle = 0.5*radians_to_degrees(angle);
 }
 
-inline void Lens::reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs)
+inline void QLens::reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs)
 {
 	lensmatrix *hess = &hesses[thread];
 	hessian_weak(x[0],x[1],(*hess),thread,zfacs);
@@ -2640,7 +2640,7 @@ inline void Lens::reduced_shear_components(const lensvector &x, double& g1, doub
 // the following functions find the shear, kappa and magnification at the position where a perturber is placed;
 // this information is used to determine the optimal subgrid size and resolution
 
-inline void Lens::hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
 {
 	bool skip_lens_plane = false;
 	int skip_i = -1;
@@ -2754,7 +2754,7 @@ inline void Lens::hessian_exclude(const double& x, const double& y, bool* exclud
 	}
 }
 
-inline double Lens::magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+inline double QLens::magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
@@ -2766,7 +2766,7 @@ inline double Lens::magnification_exclude(const lensvector &x, bool* exclude, co
 	return 1.0/determinant((*jac));
 }
 
-inline double Lens::shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+inline double QLens::shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
@@ -2780,7 +2780,7 @@ inline double Lens::shear_exclude(const lensvector &x, bool* exclude, const int&
 	return sqrt(shear1*shear1+shear2*shear2);
 }
 
-inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
@@ -2809,7 +2809,7 @@ inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angl
 	angle = 0.5*radians_to_degrees(angle);
 }
 
-inline double Lens::kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs)
+inline double QLens::kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs)
 {
 
 	double kappa;
@@ -2838,7 +2838,7 @@ inline double Lens::kappa_exclude(const lensvector &x, bool* exclude, double* zf
 
 /*
 
-inline void Lens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
 {
 	bool skip_lens_plane = false;
 	int skip_i = -1;
@@ -2951,7 +2951,7 @@ inline void Lens::hessian_exclude(const double& x, const double& y, const int& e
 	}
 }
 
-inline double Lens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
+inline double QLens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
@@ -2963,7 +2963,7 @@ inline double Lens::magnification_exclude(const lensvector &x, const int& exclud
 	return 1.0/determinant((*jac));
 }
 
-inline double Lens::shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
+inline double QLens::shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
@@ -2977,7 +2977,7 @@ inline double Lens::shear_exclude(const lensvector &x, const int& exclude_i, con
 	return sqrt(shear1*shear1+shear2*shear2);
 }
 
-inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
+inline void QLens::shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
 {
 	lensmatrix *jac = &jacs[thread];
 	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
@@ -3006,7 +3006,7 @@ inline void Lens::shear_exclude(const lensvector &x, double &shear, double &angl
 	angle = 0.5*radians_to_degrees(angle);
 }
 
-inline double Lens::kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs)
+inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs)
 {
 
 	double kappa;

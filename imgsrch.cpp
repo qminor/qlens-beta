@@ -46,7 +46,7 @@ int Grid::corner_positive_mag[4], Grid::corner_negative_mag[4];
 lensvector Grid::ccsearch_initial_pt, Grid::ccsearch_interval;
 
 image Grid::images[Grid::max_images];
-Lens* Grid::lens = NULL;
+QLens* Grid::lens = NULL;
 
 void Grid::set_splitting(int rs0, int ts0, int sl, int ccsl, double min_cs, bool neighbor_split)
 {
@@ -1114,7 +1114,7 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 
 ofstream Grid::xgrid;
 
-bool Lens::plot_recursive_grid(const char filename[])
+bool QLens::plot_recursive_grid(const char filename[])
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
 	(this->*plot_critical_curves)("crit.dat");
@@ -1746,7 +1746,7 @@ inline bool Grid::redundancy(const lensvector& xroot, double &sep)
 	return redundancy;
 }
 
-void Lens::find_images()
+void QLens::find_images()
 {
 	// called by plot_images(...)
 	if (use_cc_spline) {
@@ -1776,7 +1776,7 @@ void Lens::find_images()
 	}
 }
 
-void Lens::output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux, const bool show_labels)
+void QLens::output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux, const bool show_labels)
 {
 	if ((use_cc_spline) and (!cc_splined)) {
 		if (spline_critical_curves()==false) return;
@@ -1827,7 +1827,7 @@ void Lens::output_images_single_source(const double &x_source, const double &y_s
 	}
 }
 
-bool Lens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
+bool QLens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
@@ -1879,7 +1879,7 @@ bool Lens::plot_images_single_source(const double &x_source, const double &y_sou
 	return true;
 }
 
-image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
+image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 {
 	if ((use_cc_spline) and (!cc_splined)) {
 		if (spline_critical_curves(verbal)==false) return NULL;
@@ -1896,7 +1896,7 @@ image* Lens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 }
 
 // this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
-bool Lens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
+bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
 {
 	if ((use_cc_spline) and (!cc_splined)) {
 		if (spline_critical_curves(verbal)==false) return false;
@@ -1912,7 +1912,7 @@ bool Lens::get_imageset(const double src_x, const double src_y, ImageSet& image_
 	return true;
 }
 
-bool Lens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
+bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) warn(warnings,"could not spline critical curves");
 	if ((this->*plot_critical_curves)("crit.dat")==false) warn(warnings,"no critical curves found");
@@ -2062,7 +2062,7 @@ inline void Grid::SolveLinearEqs(lensmatrix& a, lensvector& b)
 	b[0] = temp;
 }
 
-inline void Lens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
+inline void QLens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
 {
 	deflection(x[0],x[1],f,thread,zfacs,betafacs);
 	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
@@ -2152,7 +2152,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 			images[nfound].mag = lens->magnification(xroot,0,grid_zfactors,grid_betafactors);
 			if (lens->include_time_delays) {
 				double potential = lens->potential(xroot,grid_zfactors,grid_betafactors);
-				images[nfound].td = 0.5*(SQR(xroot[0]-lens->source[0])+SQR(xroot[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the Lens class
+				images[nfound].td = 0.5*(SQR(xroot[0]-lens->source[0])+SQR(xroot[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 			} else {
 				images[nfound].td = 0;
 			}

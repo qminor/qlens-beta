@@ -18,11 +18,11 @@ bool LensProfile::use_ellipticity_components = false;
 int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::output_integration_errors = true;
 
-LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Lens* lens_in)
+LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
 {
 	setup_lens_properties();
 	setup_cosmology(lens_in,zlens_in,zsrc_in);
-	set_default_base_settings(nn,acc);
+	set_integration_parameters(nn,acc);
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	qx_parameter = qx_in;
@@ -38,10 +38,10 @@ void LensProfile::setup_lens_properties(const int parameter_mode, const int subc
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	special_parameter_command = "";
-	setup_base_lens(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
-void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
+void LensProfile::setup_base_lens_properties(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
 	center_defined = true;
 	parameter_mode = pmode_in;
@@ -60,9 +60,13 @@ void LensProfile::setup_base_lens(const int np, const bool is_elliptical_lens, c
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
 	assign_paramnames();
+
+	include_limits = false;
+	rmin_einstein_radius = 1e-5;
+	rmax_einstein_radius = 1e4;
 }
 
-void LensProfile::setup_cosmology(Lens* lens_in, const double zlens_in, const double zsrc_in)
+void LensProfile::setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in)
 {
 	lens = lens_in;
 	zlens = zlens_in;
@@ -118,7 +122,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	set_auto_penalty_limits.input(lens_in->set_auto_penalty_limits);
 	penalty_lower_limits.input(lens_in->penalty_lower_limits);
 	penalty_upper_limits.input(lens_in->penalty_upper_limits);
-	set_default_base_settings(lens_in->numberOfPoints,lens_in->integral_tolerance);
+	set_integration_parameters(lens_in->numberOfPoints,lens_in->integral_tolerance);
 
 	if (ellipticity_mode != -1) {
 		q = lens_in->q;
@@ -191,15 +195,23 @@ void LensProfile::delete_special_parameter_anchor()
 bool LensProfile::set_vary_flags(boolvector &vary_flags)
 {
 	// This function is a bit of a hack to allow you to call this from within the LensProfile
-	// object. Clean this up later so it doesn't just call the original Lens function!
-	if (lens == NULL) return false;
+	// object. Clean this up later so it doesn't just call the original QLens function!
 	boolvector new_vary_flags(n_params);
 	if (vary_flags.size() < n_params-1) return false;
-	for (int i=0; i < n_params; i++) vary_flags[i] = new_vary_flags[i];
+	for (int i=0; i < n_params; i++) new_vary_flags[i] = vary_flags[i];
 	if (vary_flags.size() == n_params) new_vary_flags[n_params-1] = vary_flags[n_params-1];
 	else new_vary_flags[n_params-1] = false; // if no vary flag is given for redshift, then assume it's not being varied
+	if (vary_parameters(new_vary_flags)==false) return false;
 	
-	return lens->set_lens_vary_parameters(lens_number, vary_flags);
+	if (lens != NULL)
+		return lens->register_lens_vary_parameters(lens_number);
+}
+
+bool LensProfile::register_vary_flags()
+{
+	// This function is called if there are already vary flags that have been set before adding the lens to the list
+	if ((n_vary_params > 0) and (lens != NULL))
+		return lens->register_lens_vary_parameters(lens_number);
 }
 
 bool LensProfile::vary_parameters(const boolvector& vary_params_in)
@@ -1149,10 +1161,8 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	set_angle_radians(angle);
 }
 
-void LensProfile::set_default_base_settings(const int &nn, const double &acc)
+void LensProfile::set_integration_parameters(const int &nn, const double &acc)
 {
-	include_limits = false;
-	rmin_einstein_radius = 1e-5; rmax_einstein_radius = 1e4;
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
 	SetGaussPatterson(acc,true);
