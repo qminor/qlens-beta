@@ -82,9 +82,9 @@ struct ImageSet {
 	lensvector src;
 	double zsrc, srcflux;
 	int n_images;
-	image *images;
+	vector<image> images;
 
-	ImageSet() { n_images = 0; images = NULL; }
+	ImageSet() { }
 	ImageSet(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
 		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
 	}
@@ -94,8 +94,9 @@ struct ImageSet {
 		srcflux = srcflux_in;
 		src[0] = src_in[0];
 		src[1] = src_in[1];
-		if (images != NULL) delete[] images;
-		images = new image[n_images];
+		//if (images != NULL) delete[] images;
+		images.clear();
+		images.resize(n_images);
 		for (int i=0; i < n_images; i++) {
 			images[i].pos = images_in[i].pos;
 			images[i].mag = images_in[i].mag;
@@ -136,13 +137,13 @@ struct ImageSet {
 		cout << endl;
 	}
 	void reset() {
-		if (n_images != 0) delete[] images;
-		images = NULL;
+		//if (n_images != 0) delete[] images;
+		//images = NULL;
 		n_images = 0;
 	}
-	~ImageSet() {
-		if (n_images != 0) delete[] images;
-	}
+	//~ImageSet() {
+		//if (n_images != 0) delete[] images;
+	//}
 };
 
 struct jl_pair {
