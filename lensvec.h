@@ -6,9 +6,9 @@
 
 class lensvector
 {
-	double *v;
 
 public:
+	double *v;
 	lensvector() : v(new double[2]) {}
 	lensvector(const double z) : v(new double[2]) { v[0] = v[1] = z; }
 	lensvector(const double &x, const double &y) : v(new double[2]) { v[0] = x; v[1] = y; }
