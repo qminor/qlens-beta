@@ -201,6 +201,8 @@ PYBIND11_MODULE(qlens, m) {
         })
         .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
         .def("test_lens", &Lens_Wrap::test_lens_functions)
+        .def("include_flux_chisq", [](Lens_Wrap &curr, bool val){ curr.include_flux_chisq = val; })
+        .def("use_image_plane_chisq", [](Lens_Wrap &curr, bool val){ curr.use_image_plane_chisq = val; })
         ;
 
     py::class_<image>(m, "image")

@@ -24,6 +24,8 @@ A.set_vary_flags([1,0,0,1,1,1,1])
 S.set_vary_flags([1,1,0,0])
 
 L.add_lenses([A, S])
+L.include_flux_chisq(True)
+L.use_image_plane_chisq(True)
 # L.add_lenses([(A, 0.5, 1), (S, 0.5, 1)]) # Same command as above, default args zl=0.5, zs=1
 
 L.run_fit("simplex")
