@@ -12114,7 +12114,6 @@ void QLens::test_lens_functions()
 	//print_lens_list(true);
 	//param_settings->print_penalty_limits();
 
-	/*
 	ImageSet imgset;
 	get_imageset(0.5,0.1,imgset); // finds the images and stores the image data in the "imgset" object
 
@@ -12144,7 +12143,6 @@ void QLens::test_lens_functions()
 		ccfile << endl;
 		caustic_file << endl;
 	}
-	*/
 
 	//delete A;
 }
