@@ -333,9 +333,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int chisq_it;
 	bool chisq_diagnostic;
 	ofstream logfile;
-	bool show_wtime;
 
-	protected:
+	public:
 	int mpi_id, mpi_np, mpi_ngroups, group_id, group_num, group_np;
 	int *group_leader;
 #ifdef USE_MPI
@@ -736,8 +735,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Swap(double& a, double& b) { temp_double = a; a = b; b = temp_double; }
 
 	double wtime0, wtime; // for calculating wall time in parallel calculations
-
-public:
+	bool show_wtime;
 
 	friend class Grid;
 	friend class SourcePixelGrid;

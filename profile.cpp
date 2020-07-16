@@ -66,9 +66,9 @@ void LensProfile::setup_base_lens_properties(const int np, const bool is_ellipti
 	rmax_einstein_radius = 1e4;
 }
 
-void LensProfile::setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in)
+void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const double zsrc_in)
 {
-	lens = lens_in;
+	lens = qlens_in;
 	zlens = zlens_in;
 	zlens_current = zlens_in;
 	zsrc_ref = zsrc_in;
