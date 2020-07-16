@@ -11,9 +11,9 @@ template <class T>
 class Vector
 {
 	int nn;
-	T *v;
 
 	public:
+	T *v;
 	Vector() : nn(0), v(0) {}
 	explicit Vector(const int &n) : v(0) { input(n); }
 	Vector(T *v_in, const int &n) : v(0) { input(v_in, n); }
