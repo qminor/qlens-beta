@@ -186,7 +186,10 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
                 py::arg("flux")=-1, py::arg("show_labels")=false
                 )
-        .def("get_imageset", &Lens_Wrap::get_imageset)
+        // .def("get_imageset", &Lens_Wrap::get_imageset)
+        .def("get_imageset", [](Lens_Wrap &curr, ImageSet &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false){
+                curr.get_imageset(src_x, src_y, imgset, verbal);
+        },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)
         .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
                 curr.set_analytic_bestfit_src(true);
                 if(param=="simplex") {
@@ -214,7 +217,9 @@ PYBIND11_MODULE(qlens, m) {
     
 
     py::class_<lensvector>(m, "lensvector")
-        .def(py::init([](){ return new lensvector(); }));
+        .def(py::init([](){ return new lensvector(); }))
+        .def("src", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
+        ;
 
     py::class_<ImageSet>(m, "ImageSet")
         .def(py::init<>([](){ return new ImageSet(); }))
@@ -222,6 +227,6 @@ PYBIND11_MODULE(qlens, m) {
         // .def("print", &ImageSet::print)
         .def_readonly("n_images", &ImageSet::n_images)
         .def_readonly("src", &ImageSet::src)
-        .def_readwrite("images", &ImageSet::images)
+        .def_readonly("images", &ImageSet::images)
         ;
 }
