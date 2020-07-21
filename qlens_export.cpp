@@ -71,9 +71,6 @@ PYBIND11_MODULE(qlens, m) {
     py::class_<Shear, LensProfile, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
         .def(py::init<>([](){return new Shear();}))
         .def(py::init<const Shear*>())
-        // .def(py::init([](const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Lens* lens) {
-        //         return new Shear(zlens_in, zsrc_in, shear_in, theta_degrees, xc_in, yc_in, lens);
-        // }))
         .def(py::init([](py::dict dict) {
                 return new Shear(
                         py::cast<double>(dict["shear"]),
@@ -206,8 +203,15 @@ PYBIND11_MODULE(qlens, m) {
         .def("test_lens", &Lens_Wrap::test_lens_functions)
         .def("include_flux_chisq", [](Lens_Wrap &curr, bool val){ curr.include_flux_chisq = val; })
         .def("use_image_plane_chisq", [](Lens_Wrap &curr, bool val){ curr.use_image_plane_chisq = val; })
+        .def("plot_sorted_critical_curves", [](Lens_Wrap &curr, std::string filename){ curr.plot_sorted_critical_curves(filename); })
+        .def_readonly("sorted_critical_curve", &Lens_Wrap::sorted_critical_curve)
         ;
 
+    py::class_<Lens_Wrap::critical_curve>(m, "critical_curve")
+        .def_readonly("cc_pts", &Lens_Wrap::critical_curve::cc_pts)
+        .def_readonly("caustic_pts", &Lens_Wrap::critical_curve::caustic_pts)
+        .def_readonly("length_of_cell", &Lens_Wrap::critical_curve::length_of_cell);
+        
     py::class_<image>(m, "image")
         .def_readonly("pos", &image::pos)
         .def_readonly("mag", &image::mag)
