@@ -878,6 +878,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
+	bool get_fit_imagesets(vector<ImageSet>& image_sets, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
@@ -1038,7 +1039,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_flux();
 	double chisq_time_delays();
 	double chisq_weak_lensing();
-	void output_imgplane_chisq_vals();
+	bool output_weak_lensing_chivals(string filename);
+	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
 	void output_analytic_srcpos(lensvector *beta_i);
 
@@ -1141,7 +1143,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double croot_eq(const double c);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
-	int sample_add(const int i, const int j);
 	void test_lens_functions();
 };
 

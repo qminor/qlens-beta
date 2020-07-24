@@ -694,7 +694,9 @@ void QLens::process_commands(bool read_file)
 							"fit priors ...\n"
 							"fit transform ...\n"
 							"fit vary_sourcept ...\n"
-							"fit regularization <method>\n\n"
+							"fit regularization <method>\n"
+							"fit output_img_chivals (WRITE HELP DOCS)\n"
+							"fit output_wl_chivals  (WRITE HELP DOCS)\n\n"
 							"Commands needed to fit lens models. If the 'fit' command is entered with no arguments, the\n"
 							"current fit model (including lens and source) is listed along with the free parameters.\n"
 							"For help with the specific fit commands, type 'help fit <command>'. To run the chi-square fit,\n"
@@ -1609,9 +1611,8 @@ void QLens::process_commands(bool read_file)
 						"Plots the radial kappa profile and its (optional) derivative to <kappa_file> and [dkappa_file]\n"
 						"respectively. If the 'lens=#' argument is not given, the total kappa profile (averaged over all\n"
 						"angles) is plotted, with r=0 chosen to be at the center of the primary lens (which is set by\n"
-						"'primary_lens'). Any lens models which are not centered on the origin are ignored. In addition\n"
-						"to the kappa, the radius in kpc and density in solar masses per kpc^2 are given in the third and\n"
-						"fourth columns, i.e. the output file has the following format:\n\n"
+						"'primary_lens'). In addition to the kappa, the radius in kpc and density in solar masses per kpc^2\n"
+						"are given in the third and fourth columns, i.e. the output file has the following format:\n\n"
 						"r(arcsec) kappa r(kpc) Sigma(M_sun/kpc^2)\n\n"
 						"If a specific lens is chosen by the 'lens=#' argument, the following is plotted for that lens:\n\n"
 						"r(arcsec) kappa kappa_average deflection enclosed_mass r(kpc) Sigma(M_sun/kpc^2) rho3d(M_sun/kpc^3)\n\n"
@@ -5984,9 +5985,9 @@ void QLens::process_commands(bool read_file)
 					chisq_single_evaluation(showdiag,true);
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
-				else if (words[1]=="output_chivals") {
-					string filename = "fit_chivals.dat";
-					if (nwords > 3) Complain("only one argument to 'fit output_imgpos_chivals' allowed (output filename)");
+				else if (words[1]=="output_img_chivals") {
+					string filename = "img_chivals.dat";
+					if (nwords > 3) Complain("only one argument to 'fit output_img_chivals' allowed (output filename)");
 					if (nwords == 3) {
 						filename.assign(words[2]);
 					}
@@ -5994,6 +5995,16 @@ void QLens::process_commands(bool read_file)
 						double rms_err;
 						int nmatched;
 						chisq_pos_image_plane_diagnostic(false,true,rms_err,nmatched,filename);
+					}
+				}
+				else if (words[1]=="output_wl_chivals") {
+					string filename = "wl_chivals.dat";
+					if (nwords > 3) Complain("only one argument to 'fit output_wl_chivals' allowed (output filename)");
+					if (nwords == 3) {
+						filename.assign(words[2]);
+					}
+					if (group_num==0) {
+						output_weak_lensing_chivals(filename);
 					}
 				}
 				else if (words[1]=="label")
@@ -10050,9 +10061,5 @@ void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbi
 #ifdef USE_MPI
 	MPI_Barrier(MPI_COMM_WORLD);
 #endif
-}
-
-int QLens::sample_add(const int i, const int j) {
-	return i+j;
 }
 

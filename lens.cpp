@@ -6894,6 +6894,8 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 	return chisq;
 }
 
+/*
+// what was this function for? I can't remember
 void QLens::output_imgplane_chisq_vals()
 {
 	int n_redshift_groups = source_redshift_groups.size()-1;
@@ -7025,6 +7027,7 @@ void QLens::output_imgplane_chisq_vals()
 	n_visible_images = n_tot_images; // save the total number of visible images produced
 	return;
 }
+*/
 
 void QLens::output_model_source_flux(double *bestfit_flux)
 {
@@ -7200,6 +7203,31 @@ double QLens::chisq_weak_lensing()
 	for (i=0; i < nsrc; i++) delete[] zfacs[i];
 	delete[] zfacs;
 	return chisq;
+}
+
+bool QLens::output_weak_lensing_chivals(string filename)
+{
+	int i,j,nsrc = weak_lensing_data.n_sources;
+	if (nsrc==0) return false;
+	ofstream chifile(filename.c_str());
+	double chi1, chi2;
+	double g1,g2;
+	double **zfacs = new double*[nsrc];
+	for (i=0; i < nsrc; i++) {
+		zfacs[i] = new double[n_lens_redshifts];
+	}
+	for (i=0; i < nsrc; i++) {
+		for (j=0; j < n_lens_redshifts; j++) {
+			zfacs[i][j] = kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+		}
+		reduced_shear_components(weak_lensing_data.pos[i],g1,g2,0,zfacs[i]);
+		chi1 = (wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i];
+		chi2 = (wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i];
+		chifile << chi1 << " " << chi2 << endl;
+	}
+	for (i=0; i < nsrc; i++) delete[] zfacs[i];
+	delete[] zfacs;
+	return true;
 }
 
 void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
@@ -12085,6 +12113,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 void QLens::test_lens_functions()
 {
 	clear_lenses();
+	load_image_data("doublesrc.dat");
 
 	Alpha *A = new Alpha();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
@@ -12109,24 +12138,25 @@ void QLens::test_lens_functions()
 	S->set_vary_flags(flag2);
 	add_lens(A,0.5,2);
 	add_lens(S,0.5,2);
-	//set_lens_vary_parameters(0);
+	use_analytic_bestfit_src = true;
 
-	//print_lens_list(true);
-	//param_settings->print_penalty_limits();
-
-	ImageSet imgset;
-	get_imageset(0.5,0.1,imgset); // finds the images and stores the image data in the "imgset" object
+	vector<ImageSet> imgsets;
+	get_fit_imagesets(imgsets);
 
 	// The following shows how to access the image data in the "imgset" object
 	cout << endl;
-	cout << "Number of images: " << imgset.n_images << endl;
-	cout << "Source:  " << imgset.src[0] << " " << imgset.src[1] << endl;
-	for (int i=0; i < imgset.n_images; i++) cout << "Image" << i << ": " << imgset.images[i].pos[0] << " " << imgset.images[i].pos[1] << " " << imgset.images[i].mag << endl;
-	cout << endl;
+	for (int j=0; j < imgsets.size(); j++) {
+		cout << "Source " << j << ": redshift = " << imgsets[j].zsrc << endl;
+		cout << "Number of images: " << imgsets[j].n_images << endl;
+		cout << "Source:  " << imgsets[j].src[0] << " " << imgsets[j].src[1] << endl;
+		for (int i=0; i < imgsets[j].n_images; i++) cout << "Image" << i << ": " << imgsets[j].images[i].pos[0] << " " << imgsets[j].images[i].pos[1] << " " << imgsets[j].images[i].mag << endl;
+		cout << endl;
+	}
 
 	//OR...you can print similar information by calling the following function:
-	imgset.print();
+	//imgset.print();
 
+	/*
 	cout << "Generating critical curves/caustics and plotting to files 'crit.dat' and 'caust.dat'..." << endl;
 	plot_sorted_critical_curves(); // generates critical curves/caustics and stores them
 	// The following shows how the critical curves/caustics are accessed using "sorted_critical_curve", which is a std::vector of
@@ -12143,6 +12173,7 @@ void QLens::test_lens_functions()
 		ccfile << endl;
 		caustic_file << endl;
 	}
+	*/
 
 	//delete A;
 }
