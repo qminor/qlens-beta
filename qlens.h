@@ -78,6 +78,15 @@ struct image {
 	int parity;
 };
 
+struct image_data : public image
+{
+	double flux;
+	double sigma_pos;
+	double sigma_flux;
+	double sigma_td;
+};
+
+// Used for the Python wrapper
 struct ImageSet {
 	lensvector src;
 	double zsrc, srcflux;
@@ -104,6 +113,7 @@ struct ImageSet {
 			images[i].parity = images_in[i].parity;
 		}
 	}
+	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL) {
 		cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
 		if (srcflux != -1) cout << "\tsrc_flux";
@@ -145,6 +155,20 @@ struct ImageSet {
 		//if (n_images != 0) delete[] images;
 	//}
 };
+
+struct ImageDataSet {
+	double zsrc;
+	int n_images;
+	vector<image_data> images;
+
+	void set_n_images(const int nimg) {
+		n_images = nimg;
+		images.clear();
+		images.resize(n_images);
+	}
+
+};
+
 
 struct jl_pair {
 	int j,l;
@@ -483,6 +507,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void sort_image_data_into_redshift_groups();
 	bool plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	void remove_image_data(int image_set);
+	vector<ImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
 
 	bool load_weak_lensing_data(string filename);
 	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
@@ -878,7 +903,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
-	bool get_fit_imagesets(vector<ImageSet>& image_sets, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
+	vector<ImageSet> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
