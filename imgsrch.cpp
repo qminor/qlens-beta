@@ -1911,7 +1911,46 @@ bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image
 	image_set.copy_imageset(source,source_redshift,images_found,Grid::nfound);
 	return true;
 }
+bool QLens::get_fit_imagesets(vector<ImageSet>& image_sets, int min_dataset, int max_dataset, bool verbal)
+{
+	if (n_sourcepts_fit==0) return false;
+	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
+	if ((min_dataset < 0) or (min_dataset > max_dataset)) return false;
+	if ((use_cc_spline) and (!cc_splined)) {
+		if (spline_critical_curves(verbal)==false) return false;
+	}
+	image_sets.clear();
+	image_sets.resize(n_sourcepts_fit);
 
+	double* srcflux = new double[n_sourcepts_fit];
+	lensvector *srcpts = new lensvector[n_sourcepts_fit];
+	//if (include_flux_chisq) {
+		//output_model_source_flux(srcflux);
+	//} else {
+		//for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
+	//}
+
+	//if (fix_source_flux) srcflux[0] = source_flux;
+	if (use_analytic_bestfit_src) {
+		output_analytic_srcpos(srcpts);
+	} else {
+		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
+	}
+
+	for (int i=min_dataset; i <= max_dataset; i++) {
+		if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
+			create_grid(false,zfactors[i],beta_factors[i]);
+
+		source[0] = srcpts[i][0];
+		source[1] = srcpts[i][1];
+
+		find_images();
+		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound);
+	}
+	delete[] srcpts;
+	delete[] srcflux;
+	return true;
+}
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
 	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) warn(warnings,"could not spline critical curves");
