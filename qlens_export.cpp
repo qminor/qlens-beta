@@ -230,7 +230,9 @@ PYBIND11_MODULE(qlens, m) {
         // .def()
         // .def("print", &ImageSet::print)
         .def_readonly("n_images", &ImageSet::n_images)
-        .def_readonly("src", &ImageSet::src)
+        .def_readonly("zsrc", &ImageSet::zsrc)
+        .def_readonly("srcflux", &ImageSet::srcflux)
+        .def_readonly("caustic", &ImageSet::src)
         .def_readonly("images", &ImageSet::images)
         ;
 }
