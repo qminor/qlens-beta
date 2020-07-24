@@ -5441,6 +5441,28 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	return true;
 }
 
+vector<ImageDataSet> QLens::export_to_ImageDataSet()
+{
+	vector<ImageDataSet> image_data_sets;
+	image_data_sets.clear();
+	image_data_sets.resize(n_sourcepts_fit);
+	int i,j;
+	for (i=0; i < n_sourcepts_fit; i++) {
+		image_data_sets[i].set_n_images(image_data[i].n_images);
+		image_data_sets[i].zsrc = source_redshifts[i];
+		for (j=0; j < image_data[i].n_images; j++) {
+			image_data_sets[i].images[j].pos[0] = image_data[i].pos[j][0];
+			image_data_sets[i].images[j].pos[1] = image_data[i].pos[j][1];
+			image_data_sets[i].images[j].flux = image_data[i].flux[j];
+			image_data_sets[i].images[j].td = image_data[i].time_delays[j];
+			image_data_sets[i].images[j].sigma_pos = image_data[i].sigma_pos[j];
+			image_data_sets[i].images[j].sigma_flux = image_data[i].sigma_f[j];
+			image_data_sets[i].images[j].sigma_td = image_data[i].sigma_t[j];
+		}
+	}
+	return image_data_sets;
+}
+
 bool QLens::load_weak_lensing_data(string filename)
 {
 	int i,j,k;
@@ -12139,9 +12161,10 @@ void QLens::test_lens_functions()
 	add_lens(A,0.5,2);
 	add_lens(S,0.5,2);
 	use_analytic_bestfit_src = true;
+	include_flux_chisq = true;
 
-	vector<ImageSet> imgsets;
-	get_fit_imagesets(imgsets);
+	bool status;
+	vector<ImageSet> imgsets = get_fit_imagesets(status);
 
 	// The following shows how to access the image data in the "imgset" object
 	cout << endl;
@@ -12149,9 +12172,20 @@ void QLens::test_lens_functions()
 		cout << "Source " << j << ": redshift = " << imgsets[j].zsrc << endl;
 		cout << "Number of images: " << imgsets[j].n_images << endl;
 		cout << "Source:  " << imgsets[j].src[0] << " " << imgsets[j].src[1] << endl;
-		for (int i=0; i < imgsets[j].n_images; i++) cout << "Image" << i << ": " << imgsets[j].images[i].pos[0] << " " << imgsets[j].images[i].pos[1] << " " << imgsets[j].images[i].mag << endl;
+		for (int i=0; i < imgsets[j].n_images; i++) cout << "Image" << i << ": " << imgsets[j].images[i].pos[0] << " " << imgsets[j].images[i].pos[1] << " " << imgsets[j].images[i].mag << " " << imgsets[j].imgflux(i) << endl; 
 		cout << endl;
 	}
+
+	vector<ImageDataSet> imgdatasets = export_to_ImageDataSet();
+	cout << "Image Data:" << endl;
+	for (int j=0; j < imgdatasets.size(); j++) {
+		cout << "Source " << j << ": redshift = " << imgdatasets[j].zsrc << endl;
+		cout << "Number of images: " << imgdatasets[j].n_images << endl;
+		for (int i=0; i < imgdatasets[j].n_images; i++) cout << "Image" << i << ": " << imgdatasets[j].images[i].pos[0] << " " << imgdatasets[j].images[i].pos[1] << " " << imgdatasets[j].images[i].flux << endl; 
+		cout << endl;
+	}
+
+
 
 	//OR...you can print similar information by calling the following function:
 	//imgset.print();

@@ -1911,26 +1911,30 @@ bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image
 	image_set.copy_imageset(source,source_redshift,images_found,Grid::nfound);
 	return true;
 }
-bool QLens::get_fit_imagesets(vector<ImageSet>& image_sets, int min_dataset, int max_dataset, bool verbal)
+
+vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
 {
-	if (n_sourcepts_fit==0) return false;
+	status = true;
+	if (n_sourcepts_fit==0) status = false;
 	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
-	if ((min_dataset < 0) or (min_dataset > max_dataset)) return false;
+	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
 	if ((use_cc_spline) and (!cc_splined)) {
-		if (spline_critical_curves(verbal)==false) return false;
+		if (spline_critical_curves(verbal)==false) status = false;
 	}
+	vector<ImageSet> image_sets;
 	image_sets.clear();
+	if (!status) return image_sets;
 	image_sets.resize(n_sourcepts_fit);
 
 	double* srcflux = new double[n_sourcepts_fit];
 	lensvector *srcpts = new lensvector[n_sourcepts_fit];
-	//if (include_flux_chisq) {
-		//output_model_source_flux(srcflux);
-	//} else {
-		//for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-	//}
+	if (include_flux_chisq) {
+		output_model_source_flux(srcflux);
+	} else {
+		for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
+	}
 
-	//if (fix_source_flux) srcflux[0] = source_flux;
+	if (fix_source_flux) srcflux[0] = source_flux;
 	if (use_analytic_bestfit_src) {
 		output_analytic_srcpos(srcpts);
 	} else {
@@ -1945,11 +1949,11 @@ bool QLens::get_fit_imagesets(vector<ImageSet>& image_sets, int min_dataset, int
 		source[1] = srcpts[i][1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound);
+		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound,srcflux[i]);
 	}
 	delete[] srcpts;
 	delete[] srcflux;
-	return true;
+	return image_sets;
 }
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
