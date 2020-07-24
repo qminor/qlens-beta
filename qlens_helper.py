@@ -1,0 +1,83 @@
+from qlens import *
+import matplotlib.pyplot as plt
+
+def plot_crit_and_caustic(L, I):
+
+    images_x = []
+    images_y = []
+
+    for i in I:
+        images_x.append(i.caustic.src()[0])
+        images_y.append(i.caustic.src()[1])
+
+    L.plot_sorted_critical_curves("sample.a")
+
+    fig=plt.figure()
+    fig.suptitle("Critical Curve")
+    ax=fig.add_axes([0,0,1,1], label='Inline label')
+    ## Plotting the critical curves
+    
+    for i in L.sorted_critical_curve:
+        sources_x = []
+        sources_y = []
+
+        for j in i.cc_pts:
+            sources_x.append(j.src()[0]) # x coordinate
+            sources_y.append(j.src()[1]) # y coordinate
+
+        # Required to connect the curve continously
+
+        sources_x.append(sources_x[0])
+        sources_y.append(sources_y[0]) 
+
+        # ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
+        ax.plot(sources_x, sources_y, color='k', label='Critical Curve')
+        ax.plot(images_x, images_y, 'o', color='b', label='Images')
+        plt.legend(loc="upper left")
+
+        ax.set_xlabel('X Coordinates')
+        ax.set_ylabel('Y Coordinates')
+        ax.set_title('Critical Curve Points')
+        sources_x = []
+        sources_y = []
+
+        plt.grid(True)
+
+
+    fig=plt.figure()
+    fig.suptitle("Caustic Curve")
+    ax=fig.add_axes([0,0,1,1])
+
+    ## Plotting the caustic curves
+    for i in L.sorted_critical_curve:
+        sources_x = []
+        sources_y = []
+
+        for j in i.caustic_pts:
+            sources_x.append(j.src()[0]) # x coordinate
+            sources_y.append(j.src()[1]) # y coordinate
+
+        # Required to connect the curve continously
+
+        sources_x.append(sources_x[0])
+        sources_y.append(sources_y[0]) 
+
+        ax.plot(sources_x, sources_y, color='k', label='Caustic Curve')
+        
+    caustic_x = []
+    caustic_y = []
+    for i in I:
+        caustic_x.append(i.caustic.src()[0])
+        caustic_y.append(i.caustic.src()[1])
+    ax.plot(caustic_x, caustic_y, 'o', color='b', label='Source')
+    plt.legend(loc="upper left")
+
+    ax.set_xlabel('X Coordinates')
+    ax.set_ylabel('Y Coordinates')
+    ax.set_title('Caustic Points')
+    sources_x = []
+    sources_y = []
+
+    plt.grid(True)
+
+    plt.show()

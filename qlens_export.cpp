@@ -186,7 +186,10 @@ PYBIND11_MODULE(qlens, m) {
         // .def("get_imageset", &Lens_Wrap::get_imageset)
         .def("get_imageset", [](Lens_Wrap &curr, ImageSet &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false){
                 curr.get_imageset(src_x, src_y, imgset, verbal);
-        },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)
+        },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)        
+        .def("get_fit_imagesets", &Lens_Wrap::get_fit_imagesets, 
+                py::arg("status"), py::arg("min_dataset") = 1, py::arg("max_dataset") = -1, 
+                py::arg("verbal") = false) 
         .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
                 curr.set_analytic_bestfit_src(true);
                 if(param=="simplex") {
