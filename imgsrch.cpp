@@ -1950,6 +1950,7 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 
 		find_images();
 		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].print();
 	}
 	delete[] srcpts;
 	delete[] srcflux;
