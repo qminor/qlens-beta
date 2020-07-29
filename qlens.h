@@ -1020,6 +1020,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
 	bool adopt_model(dvector &fitparams);
+	bool use_bestfit() { return adopt_model(bestfitparams); }
 
 	bool include_central_image;
 	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;
