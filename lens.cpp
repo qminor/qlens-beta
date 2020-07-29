@@ -12135,7 +12135,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 void QLens::test_lens_functions()
 {
 	clear_lenses();
-	load_image_data("doublesrc.dat");
+	load_image_data("alphafit.dat");
 
 	Alpha *A = new Alpha();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
@@ -12163,10 +12163,14 @@ void QLens::test_lens_functions()
 	use_analytic_bestfit_src = true;
 	include_flux_chisq = true;
 
+	chi_square_fit_simplex();
+	use_bestfit();
+
 	bool status;
 	vector<ImageSet> imgsets = get_fit_imagesets(status);
 
 	// The following shows how to access the image data in the "imgset" object
+	/*
 	cout << endl;
 	for (int j=0; j < imgsets.size(); j++) {
 		cout << "Source " << j << ": redshift = " << imgsets[j].zsrc << endl;
@@ -12184,6 +12188,7 @@ void QLens::test_lens_functions()
 		for (int i=0; i < imgdatasets[j].n_images; i++) cout << "Image" << i << ": " << imgdatasets[j].images[i].pos[0] << " " << imgdatasets[j].images[i].pos[1] << " " << imgdatasets[j].images[i].flux << endl; 
 		cout << endl;
 	}
+	*/
 
 
 
