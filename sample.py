@@ -11,8 +11,8 @@ S = Shear({ # A way to initialize lens object
 })
 # I = ImageSet()
 
-L.imgdata_read("doublesrc.dat")
-# L.imgdata_read("alphafit.dat")
+# L.imgdata_read("doublesrc.dat")
+L.imgdata_read("alphafit.dat")
 
 A.initialize({ # Another way to initialize the values
     "b": 4.5,
@@ -32,8 +32,8 @@ L.include_flux_chisq(True)
 L.use_image_plane_chisq(True)
 
 L.run_fit("simplex")
+L.use_bestfit()
 
 success = None
 I = L.get_fit_imagesets(success)
-
 plot_crit_and_caustic(L, I)

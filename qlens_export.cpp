@@ -188,7 +188,7 @@ PYBIND11_MODULE(qlens, m) {
                 curr.get_imageset(src_x, src_y, imgset, verbal);
         },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)        
         .def("get_fit_imagesets", &Lens_Wrap::get_fit_imagesets, 
-                py::arg("status"), py::arg("min_dataset") = 1, py::arg("max_dataset") = -1, 
+                py::arg("status"), py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, 
                 py::arg("verbal") = false) 
         .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
                 curr.set_analytic_bestfit_src(true);
@@ -202,6 +202,7 @@ PYBIND11_MODULE(qlens, m) {
                         throw std::runtime_error("Available parameters: simplex (default), powell, twalk");
                 }
         })
+        .def("use_bestfit", &Lens_Wrap::use_bestfit)
         .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
         .def("test_lens", &Lens_Wrap::test_lens_functions)
         .def("include_flux_chisq", [](Lens_Wrap &curr, bool val){ curr.include_flux_chisq = val; })
@@ -225,17 +226,22 @@ PYBIND11_MODULE(qlens, m) {
 
     py::class_<lensvector>(m, "lensvector")
         .def(py::init([](){ return new lensvector(); }))
-        .def("src", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
+        .def("pos", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
         ;
 
     py::class_<ImageSet>(m, "ImageSet")
         .def(py::init<>([](){ return new ImageSet(); }))
         // .def()
         // .def("print", &ImageSet::print)
+        // .def("print_s", [](&ImageSet curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
+        //         curr.print(include_time_delays, show_labels, srcfile, imgfile);
+        // }, 
+        //         py::arg("include_time_delays") = false, py::arg("include_time_delays") = true,
+        //         py::arg("srcfile") = NULL, py::arg("imgfile") = NULL)
         .def_readonly("n_images", &ImageSet::n_images)
         .def_readonly("zsrc", &ImageSet::zsrc)
         .def_readonly("srcflux", &ImageSet::srcflux)
-        .def_readonly("caustic", &ImageSet::src)
+        .def_readonly("src", &ImageSet::src)
         .def_readonly("images", &ImageSet::images)
         ;
 }

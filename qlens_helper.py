@@ -1,14 +1,20 @@
 from qlens import *
 import matplotlib.pyplot as plt
 
-def plot_crit_and_caustic(L, I):
+def plot_crit_and_caustic(QLens_Object, ImageSet_Object):
+    if(QLens_Object is None or ImageSet_Object is None):
+        raise RuntimeError("This function requires the first input to be a QLens object and the second input to be an ImageSet object.")
 
-    images_x = []
-    images_y = []
+    L = QLens_Object
+    I = ImageSet_Object
+
+    sources_x = []
+    sources_y = []
 
     for i in I:
-        images_x.append(i.caustic.src()[0])
-        images_y.append(i.caustic.src()[1])
+        # print(i.n_images)
+        sources_x.append(i.src.pos()[0])
+        sources_y.append(i.src.pos()[1])
 
     L.plot_sorted_critical_curves("sample.a")
 
@@ -18,28 +24,28 @@ def plot_crit_and_caustic(L, I):
     ## Plotting the critical curves
     
     for i in L.sorted_critical_curve:
-        sources_x = []
-        sources_y = []
+        cc_x = []
+        cc_y = []
 
         for j in i.cc_pts:
-            sources_x.append(j.src()[0]) # x coordinate
-            sources_y.append(j.src()[1]) # y coordinate
+            cc_x.append(j.src()[0]) # x coordinate
+            cc_y.append(j.src()[1]) # y coordinate
 
         # Required to connect the curve continously
 
-        sources_x.append(sources_x[0])
-        sources_y.append(sources_y[0]) 
+        cc_x.append(sources_x[0])
+        cc_y.append(sources_y[0]) 
 
         # ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
-        ax.plot(sources_x, sources_y, color='k', label='Critical Curve')
+        ax.plot(cc_x, cc_y, color='k', label='Critical Curve')
         ax.plot(images_x, images_y, 'o', color='b', label='Images')
         plt.legend(loc="upper left")
 
         ax.set_xlabel('X Coordinates')
         ax.set_ylabel('Y Coordinates')
         ax.set_title('Critical Curve Points')
-        sources_x = []
-        sources_y = []
+        cc_x = []
+        cc_y = []
 
         plt.grid(True)
 
@@ -67,8 +73,8 @@ def plot_crit_and_caustic(L, I):
     caustic_x = []
     caustic_y = []
     for i in I:
-        caustic_x.append(i.caustic.src()[0])
-        caustic_y.append(i.caustic.src()[1])
+        caustic_x.append(i.src.pos()[0])
+        caustic_y.append(i.src.pos()[1])
     ax.plot(caustic_x, caustic_y, 'o', color='b', label='Source')
     plt.legend(loc="upper left")
 
