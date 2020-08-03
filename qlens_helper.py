@@ -28,8 +28,8 @@ def plot_crit_and_caustic(QLens_Object, ImageSet_Object):
         cc_y = []
 
         for j in i.cc_pts:
-            cc_x.append(j.src()[0]) # x coordinate
-            cc_y.append(j.src()[1]) # y coordinate
+            cc_x.append(j.pos()[0]) # x coordinate
+            cc_y.append(j.pos()[1]) # y coordinate
 
         # Required to connect the curve continously
 
@@ -38,7 +38,7 @@ def plot_crit_and_caustic(QLens_Object, ImageSet_Object):
 
         # ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
         ax.plot(cc_x, cc_y, color='k', label='Critical Curve')
-        ax.plot(images_x, images_y, 'o', color='b', label='Images')
+        ax.plot(sources_x, sources_y, 'o', color='b', label='Images')
         plt.legend(loc="upper left")
 
         ax.set_xlabel('X Coordinates')
@@ -60,8 +60,8 @@ def plot_crit_and_caustic(QLens_Object, ImageSet_Object):
         sources_y = []
 
         for j in i.caustic_pts:
-            sources_x.append(j.src()[0]) # x coordinate
-            sources_y.append(j.src()[1]) # y coordinate
+            sources_x.append(j.pos()[0]) # x coordinate
+            sources_y.append(j.pos()[1]) # y coordinate
 
         # Required to connect the curve continously
 
