@@ -1006,7 +1006,7 @@ class Tabulated_Model : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void print_lens_command(ofstream& scriptout);
+	void print_lens_command(ofstream& scriptout, const bool use_limits);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);

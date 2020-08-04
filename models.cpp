@@ -4143,7 +4143,7 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void Tabulated_Model::print_lens_command(ofstream& scriptout)
+void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_limits)
 {
 	scriptout << setprecision(16);
 	if (loaded_from_file) {
@@ -4183,7 +4183,7 @@ void Tabulated_Model::print_lens_command(ofstream& scriptout)
 		else scriptout << "0 ";
 	}
 	scriptout << endl;
-	if (include_limits) {
+	if ((use_limits) and (include_limits)) {
 		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
 		else {
 			for (int i=0; i < n_vary_params; i++) {

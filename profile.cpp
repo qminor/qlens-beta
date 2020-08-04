@@ -204,6 +204,7 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	
 	if (lens != NULL)
 		return lens->register_lens_vary_parameters(lens_number);
+	else return false;
 }
 
 bool LensProfile::register_vary_flags()
@@ -211,6 +212,7 @@ bool LensProfile::register_vary_flags()
 	// This function is called if there are already vary flags that have been set before adding the lens to the list
 	if ((n_vary_params > 0) and (lens != NULL))
 		return lens->register_lens_vary_parameters(lens_number);
+	else return false;
 }
 
 bool LensProfile::vary_parameters(const boolvector& vary_params_in)

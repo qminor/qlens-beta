@@ -41,9 +41,9 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = qlens.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
-				profile.o models.o sbprofile.o errors.o brent.o sort.o gauss.o \
-				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+objects = profile.o sbprofile.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
+				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
+				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
 mkdist_objects = mkdist.o

@@ -882,6 +882,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void remove_equal_sign_datafile(vector<string>& datawords, int& n_datawords);
 
 	void extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word);
+	void extract_word_starts_with(const char initial_character, int starting_word, string& extracted_word) { extract_word_starts_with(initial_character,starting_word,1000,extracted_word); }
 	bool extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words);
 	void set_quit_after_error(bool arg) { quit_after_error = arg; }
 

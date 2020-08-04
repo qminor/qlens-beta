@@ -596,7 +596,7 @@ Matrix<T> Matrix<T>::operator~ (void)    // Takes the inverse of a matrix
 
 	int *indxc,*indxr,*ipiv;
 	int i,icol,irow,j,k,l,ll;
-	T big,dum,pivinv,temp;
+	T big,dum,pivinv;
 
 	indxc = new int[n];
 	indxr = new int[n];

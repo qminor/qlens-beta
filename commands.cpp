@@ -5691,6 +5691,11 @@ void QLens::process_commands(bool read_file)
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					string range1, range2;
+					extract_word_starts_with('[',2,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
+					extract_word_starts_with('[',2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
+					if (range1.empty()) { range1 = range2; range2 = ""; } // range is for image plane if only one range argument specified
+
 					int dataset;
 					bool show_multiple = false;
 					bool show_grid = false;
@@ -5820,24 +5825,24 @@ void QLens::process_commands(bool read_file)
 					if (nwords==4) {
 						if (terminal != TEXT) {
 							if (show_cc) {
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],"");
-								else run_plotter("imgfit",words[3],"");
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",words[3],range1);
+								else run_plotter("imgfit",words[3],range1);
 							}
-							else run_plotter("imgfit_nocc",words[3],"");
+							else run_plotter("imgfit_nocc",words[3],range1);
 							if (plot_srcplane) {
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],"");
-								else run_plotter("srcfit",words[2],"");
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",words[2],range2);
+								else run_plotter("srcfit",words[2],range2);
 							}
 						}
 					} else {
 						if (show_cc) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits");
-							else run_plotter("imgfit");
+							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",range1);
+							else run_plotter("imgfit",range1);
 						}
-						else run_plotter("imgfit_nocc");
+						else run_plotter("imgfit_nocc",range1);
 						if (plot_srcplane) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits");
-							else run_plotter("srcfit");
+							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
+							else run_plotter("srcfit",range2);
 						}
 					}
 					show_imgsrch_grid = false;
@@ -5849,18 +5854,20 @@ void QLens::process_commands(bool read_file)
 				else if (words[1]=="plotshear")
 				{
 					if (weak_lensing_data.n_sources==0) Complain("no weak lensing data has been loaded");
+					string range;
+					extract_word_starts_with('[',2,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotshear' requires either zero or one arguments (shear_filename)");
 					string filename = "shear.dat";
 					if ((terminal==TEXT) and (nwords==3)) filename = words[2];
 					plot_weak_lensing_shear_data(true,filename);
 					if (nwords==3) {
 						if (terminal != TEXT) {
-							if (show_cc) run_plotter("shearfits",words[2],"");
-							else run_plotter("shearfits_nocc",words[2],"");
+							if (show_cc) run_plotter("shearfits",words[2],range);
+							else run_plotter("shearfits_nocc",words[2],range);
 						}
 					} else {
-						if (show_cc) run_plotter("shearfits");
-						else run_plotter("shearfits_nocc");
+						if (show_cc) run_plotter("shearfits",range);
+						else run_plotter("shearfits_nocc",range);
 					}
 				}
 				else if (words[1]=="plot_chisq1d")
@@ -6818,9 +6825,10 @@ void QLens::process_commands(bool read_file)
 		{
 			if (!islens()) Complain("must specify lens model first");
 			string range1, range2;
-			extract_word_starts_with('[',4,4,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			extract_word_starts_with('[',5,5,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
+			extract_word_starts_with('[',3,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
+			extract_word_starts_with('[',3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
+			cout << "RANGE1:" << range1 << " RANGE2:" << range2 << endl;
+			if (range1.empty()) { range1 = range2; range2 = ""; } // range is for image plane if only one range argument specified
 			bool show_grid = false;
 			if (words[nwords-1]=="grid") {
 				show_grid = true;
@@ -6864,14 +6872,14 @@ void QLens::process_commands(bool read_file)
 					} else {
 						// only graphical plotting allowed if filenames not specified
 						if (show_cc) {
-							if (show_grid) run_plotter("image_grid");
-							else run_plotter("image");
+							if (show_grid) run_plotter("image_grid",range1);
+							else run_plotter("image",range1);
 						}
 						else {
-							if (show_grid) run_plotter("image_nocc_grid");
-							else run_plotter("image_nocc");
+							if (show_grid) run_plotter("image_nocc_grid",range1);
+							else run_plotter("image_nocc",range1);
 						}
-						if (plot_srcplane) run_plotter("source");
+						if (plot_srcplane) run_plotter("source",range2);
 					}
 				}
 			} else Complain("must specify source position (e.g. 'plotimg 3.0 1.2')");
