@@ -2093,7 +2093,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (show_fit_settings) {
 					cout << "\033[4mChi-square function settings\033[0m\n";
-					cout << "imgplane_chisq: " << display_switch(use_image_plane_chisq) << endl;
+					cout << "imgplane_chisq: " << display_switch(imgplane_chisq) << endl;
 					cout << "chisqmag: " << display_switch(use_magnification_in_chisq) << endl;
 					cout << "chisqpos: " << display_switch(include_imgpos_chisq) << endl;
 					cout << "chisqflux: " << display_switch(include_flux_chisq) << endl;
@@ -8165,10 +8165,10 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="imgplane_chisq")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use image plane chi-square function: " << display_switch(use_image_plane_chisq) << endl;
+				if (mpi_id==0) cout << "Use image plane chi-square function: " << display_switch(imgplane_chisq) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'imgplane_chisq' command; must specify 'on' or 'off'");
-				set_switch(use_image_plane_chisq,setword);
+				set_switch(imgplane_chisq,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if (nlens > 0) get_n_fit_parameters(n_fit_parameters); // update number of fit parameters, since source parameters might not have been included for source plane chi-square
 		}

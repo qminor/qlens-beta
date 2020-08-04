@@ -482,7 +482,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_magnification_in_chisq;
 	bool use_magnification_in_chisq_during_repeats;
 	bool include_parity_in_chisq;
-	bool use_image_plane_chisq;
+	bool imgplane_chisq;
 	bool calculate_parameter_errors;
 	bool adaptive_grid;
 	bool use_average_magnification_for_subgridding;

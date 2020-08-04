@@ -717,7 +717,7 @@ QLens::QLens() : UCMC()
 	chisq_imgplane_substitute_threshold = -1; // if > 0, will evaluate the source plane chi-square and if above the threshold, use instead of image plane chi-square (if imgplane_chisq is on)
 	n_repeats = 1;
 	calculate_parameter_errors = true;
-	use_image_plane_chisq = false;
+	imgplane_chisq = false;
 	use_magnification_in_chisq = true;
 	use_magnification_in_chisq_during_repeats = true;
 	include_central_image = true;
@@ -1013,7 +1013,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	chisq_imgplane_substitute_threshold = lens_in->chisq_imgplane_substitute_threshold;
 	n_repeats = lens_in->n_repeats;
 	calculate_parameter_errors = lens_in->calculate_parameter_errors;
-	use_image_plane_chisq = lens_in->use_image_plane_chisq;
+	imgplane_chisq = lens_in->imgplane_chisq;
 	use_magnification_in_chisq = lens_in->use_magnification_in_chisq;
 	use_magnification_in_chisq_during_repeats = lens_in->use_magnification_in_chisq_during_repeats;
 	include_central_image = lens_in->include_central_image;
@@ -8041,7 +8041,7 @@ double QLens::chi_square_fit_simplex()
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
-		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq)) {
+		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!imgplane_chisq)) {
 			turned_on_chisqmag = true;
 			use_magnification_in_chisq = true;
 			fitmodel->use_magnification_in_chisq = true;
@@ -8217,7 +8217,7 @@ double QLens::chi_square_fit_powell()
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
-		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!use_image_plane_chisq)) {
+		if ((source_fit_mode==Point_Source) and (!use_magnification_in_chisq) and (use_magnification_in_chisq_during_repeats) and (!imgplane_chisq)) {
 			turned_on_chisqmag = true;
 			use_magnification_in_chisq = true;
 			fitmodel->use_magnification_in_chisq = true;
@@ -9541,7 +9541,7 @@ bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsi
 	// this function calculates the marginalized error using the Gaussian approximation
 	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
 	static const double increment2 = 1e-4;
-	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!use_image_plane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
+	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!imgplane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
 
 	dmatrix fisher(n_fit_parameters,n_fit_parameters);
 	fisher_inverse.erase();
@@ -9749,7 +9749,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
 		double rms_err;
 		int n_matched_imgs;
-		if (use_image_plane_chisq) {
+		if (imgplane_chisq) {
 			used_imgplane_chisq = true;
 			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 			else chisq = fitmodel->chisq_pos_image_plane();
@@ -9767,7 +9767,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 			if (running_fit) cout << "\033[2A" << flush;
 			if (include_imgpos_chisq) {
 				if (used_imgplane_chisq) {
-					if (!use_image_plane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
+					if (!imgplane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
 					int tot_data_images = 0;
 					for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
 					cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
@@ -9938,7 +9938,7 @@ double QLens::loglike_point_source(double* params)
 	}
 
 	double loglike, chisq_total=0, chisq;
-	if (use_image_plane_chisq) {
+	if (imgplane_chisq) {
 		chisq = chisq_pos_image_plane();
 		if ((display_chisq_status) and (mpi_id==0)) {
 			int tot_data_images = 0;
