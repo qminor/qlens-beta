@@ -700,11 +700,11 @@ QLens::QLens() : UCMC()
 	data_pixel_size = -1; // used for setting a pixel scale for FITS images (only if initialized to a positive number)
 	n_fit_parameters = 0;
 	n_sourcepts_fit = 0;
-	sourcepts_fit = NULL;
-	sourcepts_lower_limit = NULL;
-	sourcepts_upper_limit = NULL;
-	vary_sourcepts_x = NULL;
-	vary_sourcepts_y = NULL;
+	//sourcepts_fit = NULL;
+	//sourcepts_lower_limit = NULL;
+	//sourcepts_upper_limit = NULL;
+	//vary_sourcepts_x = NULL;
+	//vary_sourcepts_y = NULL;
 	borrowed_image_data = false;
 	image_data = NULL;
 	defspline = NULL;
@@ -928,8 +928,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	user_changed_zsource = lens_in->user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = lens_in->auto_zsource_scaling;
 	reference_source_redshift = lens_in->reference_source_redshift; // this is the source redshift with respect to which the lens models are defined
-	// Pointer arrays like the ones below should probably just be replaced with container classes, as long as they don't slow down the code significantly (check!)
-	// It would make the code less bug-prone
+	// Dynamically allocated arrays like the ones below should probably just be replaced with container classes, as long as they don't slow
+	// down the code significantly (check!)  It would make the code less bug-prone. On the other hand, if no one ever has to look at or mess with the code, then who cares?
 	reference_zfactors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	default_zsrc_beta_factors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	source_redshifts = NULL;
@@ -1037,11 +1037,11 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	data_pixel_size = lens_in->data_pixel_size;
 	n_fit_parameters = 0;
 	n_sourcepts_fit = 0;
-	sourcepts_fit = NULL;
-	sourcepts_lower_limit = NULL;
-	sourcepts_upper_limit = NULL;
-	vary_sourcepts_x = NULL;
-	vary_sourcepts_y = NULL;
+	//sourcepts_fit = NULL;
+	//sourcepts_lower_limit = NULL;
+	//sourcepts_upper_limit = NULL;
+	//vary_sourcepts_x = NULL;
+	//vary_sourcepts_y = NULL;
 	borrowed_image_data = false;
 	image_data = NULL;
 	weak_lensing_data.input(lens_in->weak_lensing_data);
@@ -4877,30 +4877,30 @@ bool QLens::add_simulated_image_data(const lensvector &sourcept)
 	image *imgs = get_images(sourcept, n_images, false);
 	if (n_images==0) { warn("could not find any images; no data added"); return false; }
 
-	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit+1];
-	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit+1];
-	lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit+1];
+	//bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit+1];
+	//bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit+1];
+	//lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit+1];
 	ImageData *new_image_data = new ImageData[n_sourcepts_fit+1];
-	lensvector* new_sourcepts_lower_limit;
-	lensvector* new_sourcepts_upper_limit;
-	if (sourcepts_upper_limit != NULL) {
-		new_sourcepts_lower_limit = new lensvector[n_sourcepts_fit+1];
-		new_sourcepts_upper_limit = new lensvector[n_sourcepts_fit+1];
-	}
+	//lensvector* new_sourcepts_lower_limit;
+	//lensvector* new_sourcepts_upper_limit;
+	//if (sourcepts_upper_limit != NULL) {
+		//new_sourcepts_lower_limit = new lensvector[n_sourcepts_fit+1];
+		//new_sourcepts_upper_limit = new lensvector[n_sourcepts_fit+1];
+	//}
 	double *new_redshifts, **new_zfactors, ***new_beta_factors;
 	new_redshifts = new double[n_sourcepts_fit+1];
 	if (n_lens_redshifts > 0) new_zfactors = new double*[n_sourcepts_fit+1];
 	new_beta_factors = new double**[n_sourcepts_fit+1];
 	for (i=0; i < n_sourcepts_fit; i++) {
 		new_redshifts[i] = source_redshifts[i];
-		new_sourcepts_fit[i] = sourcepts_fit[i];
-		new_vary_sourcepts_x[i] = vary_sourcepts_x[i];
-		new_vary_sourcepts_y[i] = vary_sourcepts_y[i];
+		//new_sourcepts_fit[i] = sourcepts_fit[i];
+		//new_vary_sourcepts_x[i] = vary_sourcepts_x[i];
+		//new_vary_sourcepts_y[i] = vary_sourcepts_y[i];
 		new_image_data[i].input(image_data[i]);
-		if (sourcepts_upper_limit != NULL) {
-			new_sourcepts_upper_limit[i] = sourcepts_upper_limit[i];
-			new_sourcepts_lower_limit[i] = sourcepts_lower_limit[i];
-		}
+		//if (sourcepts_upper_limit != NULL) {
+			//new_sourcepts_upper_limit[i] = sourcepts_upper_limit[i];
+			//new_sourcepts_lower_limit[i] = sourcepts_lower_limit[i];
+		//}
 		if (n_lens_redshifts > 0) new_zfactors[i] = zfactors[i];
 		if (n_lens_redshifts > 1) new_beta_factors[i] = beta_factors[i];
 	}
@@ -4924,9 +4924,9 @@ bool QLens::add_simulated_image_data(const lensvector &sourcept)
 	} else new_beta_factors[n_sourcepts_fit] = NULL;
 	if (n_sourcepts_fit > 0) {
 		delete[] image_data;
-		delete[] sourcepts_fit;
-		delete[] vary_sourcepts_x;
-		delete[] vary_sourcepts_y;
+		//delete[] sourcepts_fit;
+		//delete[] vary_sourcepts_x;
+		//delete[] vary_sourcepts_y;
 	}
 	if (source_redshifts != NULL) delete[] source_redshifts;
 	if (zfactors != NULL) delete[] zfactors;
@@ -4957,26 +4957,34 @@ bool QLens::add_simulated_image_data(const lensvector &sourcept)
 			imgs[i].td -= min_td;
 		}
 	}
-	new_sourcepts_fit[n_sourcepts_fit] = sourcept;
-	new_vary_sourcepts_x[n_sourcepts_fit] = true;
-	new_vary_sourcepts_y[n_sourcepts_fit] = true;
+	sourcepts_fit.push_back(sourcept);
+	vary_sourcepts_x.push_back(true);
+	vary_sourcepts_y.push_back(true);
+	//new_sourcepts_fit[n_sourcepts_fit] = sourcept;
+	//new_vary_sourcepts_x[n_sourcepts_fit] = true;
+	//new_vary_sourcepts_y[n_sourcepts_fit] = true;
 	new_image_data[n_sourcepts_fit].input(n_images,imgs,sim_err_pos,sim_err_flux,sim_err_td,include_image,include_time_delays);
 	n_sourcepts_fit++;
 	image_data = new_image_data;
-	sourcepts_fit = new_sourcepts_fit;
-	vary_sourcepts_x = new_vary_sourcepts_x;
-	vary_sourcepts_y = new_vary_sourcepts_y;
+	//sourcepts_fit = new_sourcepts_fit;
+	//vary_sourcepts_x = new_vary_sourcepts_x;
+	//vary_sourcepts_y = new_vary_sourcepts_y;
 
-	if (sourcepts_upper_limit != NULL) {
-		delete[] sourcepts_upper_limit;
-		delete[] sourcepts_lower_limit;
-		new_sourcepts_lower_limit[n_sourcepts_fit-1][0] = -1e30;
-		new_sourcepts_lower_limit[n_sourcepts_fit-1][1] = -1e30;
-		new_sourcepts_upper_limit[n_sourcepts_fit-1][0] = 1e30;
-		new_sourcepts_upper_limit[n_sourcepts_fit-1][1] = 1e30;
-		sourcepts_upper_limit = new_sourcepts_upper_limit;
-		sourcepts_lower_limit = new_sourcepts_lower_limit;
-	}
+	//if (sourcepts_upper_limit != NULL) {
+		//delete[] sourcepts_upper_limit;
+		//delete[] sourcepts_lower_limit;
+		lensvector lower; lower[0] = -1e30; lower[1] = -1e30;
+		lensvector upper; upper[0] = 1e30; upper[1] = 1e30;
+		sourcepts_lower_limit.push_back(lower);
+		sourcepts_upper_limit.push_back(upper);
+
+		//new_sourcepts_lower_limit[n_sourcepts_fit-1][0] = -1e30;
+		//new_sourcepts_lower_limit[n_sourcepts_fit-1][1] = -1e30;
+		//new_sourcepts_upper_limit[n_sourcepts_fit-1][0] = 1e30;
+		//new_sourcepts_upper_limit[n_sourcepts_fit-1][1] = 1e30;
+		//sourcepts_upper_limit = new_sourcepts_upper_limit;
+		//sourcepts_lower_limit = new_sourcepts_lower_limit;
+	//}
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
 	return true;
@@ -5022,11 +5030,11 @@ bool QLens::load_image_data(string filename)
 	if (nsrcfit <= 0) { warn("number of source points must be greater than zero"); return false; }
 	n_sourcepts_fit = nsrcfit;
 
-	if (sourcepts_fit != NULL) {
-		delete[] sourcepts_fit;
-		delete[] vary_sourcepts_x;
-		delete[] vary_sourcepts_y;
-	}
+	//if (sourcepts_fit != NULL) {
+		//delete[] sourcepts_fit;
+		//delete[] vary_sourcepts_x;
+		//delete[] vary_sourcepts_y;
+	//}
 	if (source_redshifts != NULL) delete[] source_redshifts;
 	if (zfactors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
@@ -5042,17 +5050,19 @@ bool QLens::load_image_data(string filename)
 		delete[] beta_factors;
 	}
 
-	sourcepts_fit = new lensvector[n_sourcepts_fit];
-	vary_sourcepts_x = new bool[n_sourcepts_fit];
-	vary_sourcepts_y = new bool[n_sourcepts_fit];
+	//sourcepts_fit = new lensvector[n_sourcepts_fit];
+	//vary_sourcepts_x = new bool[n_sourcepts_fit];
+	//vary_sourcepts_y = new bool[n_sourcepts_fit];
 	source_redshifts = new double[n_sourcepts_fit];
 	if (n_lens_redshifts > 0) {
 		zfactors = new double*[n_sourcepts_fit];
 		beta_factors = new double**[n_sourcepts_fit];
 	}
+	lensvector zero; zero[0]=0; zero[1]=0;
 	for (i=0; i < n_sourcepts_fit; i++) {
-		vary_sourcepts_x[i] = true;
-		vary_sourcepts_y[i] = true;
+		sourcepts_fit.push_back(zero);
+		vary_sourcepts_x.push_back(true);
+		vary_sourcepts_y.push_back(true);
 		source_redshifts[i] = source_redshift;
 		if (n_lens_redshifts > 0) {
 			zfactors[i] = new double[n_lens_redshifts];
@@ -5061,11 +5071,10 @@ bool QLens::load_image_data(string filename)
 		}
 	}
 	if ((fitmethod != POWELL) and (fitmethod != SIMPLEX)) {
-		// You should replace the pointers here with a container class like Vector. This is too bug-prone!
-		if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
-		sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
-		if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
-		sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+		//if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
+		sourcepts_lower_limit.resize(n_sourcepts_fit);
+		//if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
+		sourcepts_upper_limit.resize(n_sourcepts_fit);
 	}
 
 	if (image_data != NULL) delete[] image_data;
@@ -5242,7 +5251,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
 	lensvector *sorted_sourcepts_upper_limit;
 	lensvector *sorted_sourcepts_lower_limit;
-	if (sourcepts_upper_limit != NULL) {
+	if (!sourcepts_upper_limit.empty()) {
 		sort_sourcept_limits = true;
 		sorted_sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
 		sorted_sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
@@ -5296,8 +5305,12 @@ void QLens::sort_image_data_into_redshift_groups()
 		delete[] zfactors;
 	}
 	if (n_lens_redshifts > 0) delete[] beta_factors;
-	delete[] vary_sourcepts_x;
-	delete[] vary_sourcepts_y;
+	for (int i=0; i < n_sourcepts_fit; i++) {
+		vary_sourcepts_x[i] = sorted_vary_sourcepts_x[i];
+		vary_sourcepts_y[i] = sorted_vary_sourcepts_y[i];
+	}
+	delete[] sorted_vary_sourcepts_x;
+	delete[] sorted_vary_sourcepts_y;
 	delete[] assigned;
 	image_data = sorted_image_data;
 	source_redshifts = sorted_redshifts;
@@ -5305,23 +5318,31 @@ void QLens::sort_image_data_into_redshift_groups()
 		zfactors = sorted_zfactors;
 		beta_factors = sorted_beta_factors;
 	}
-	vary_sourcepts_x = sorted_vary_sourcepts_x;
-	vary_sourcepts_y = sorted_vary_sourcepts_y;
+	//vary_sourcepts_x = sorted_vary_sourcepts_x;
+	//vary_sourcepts_y = sorted_vary_sourcepts_y;
 	if (sort_sourcept_limits) {
-		delete[] sourcepts_upper_limit;
-		delete[] sourcepts_lower_limit;
-		sourcepts_upper_limit = sorted_sourcepts_upper_limit;
-		sourcepts_lower_limit = sorted_sourcepts_lower_limit;
+		for (int i=0; i < n_sourcepts_fit; i++) {
+			sourcepts_upper_limit[i] = sorted_sourcepts_upper_limit[i];
+			sourcepts_lower_limit[i] = sorted_sourcepts_lower_limit[i];
+		}
+		delete[] sorted_sourcepts_upper_limit;
+		delete[] sorted_sourcepts_lower_limit;
+		//sourcepts_upper_limit = sorted_sourcepts_upper_limit;
+		//sourcepts_lower_limit = sorted_sourcepts_lower_limit;
 	}
 }
 
 void QLens::remove_image_data(int image_set)
 {
+	//what about upper/lower limits (if they exist)? CHECK THIS
 	if (image_set >= n_sourcepts_fit) { warn(warnings,"Specified image dataset has not been loaded"); return; }
 	if (n_sourcepts_fit==1) { clear_image_data(); return; }
-	bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit-1];
-	bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit-1];
-	lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit-1];
+	//bool *new_vary_sourcepts_x = new bool[n_sourcepts_fit-1];
+	//bool *new_vary_sourcepts_y = new bool[n_sourcepts_fit-1];
+	//lensvector *new_sourcepts_fit = new lensvector[n_sourcepts_fit-1];
+	sourcepts_fit.erase(sourcepts_fit.begin()+image_set);
+	vary_sourcepts_x.erase(vary_sourcepts_x.begin()+image_set);
+	vary_sourcepts_y.erase(vary_sourcepts_y.begin()+image_set);
 	ImageData *new_image_data = new ImageData[n_sourcepts_fit-1];
 	int i,j,k;
 	double *new_redshifts, **new_zfactors, ***new_beta_factors;
@@ -5333,10 +5354,10 @@ void QLens::remove_image_data(int image_set)
 	for (i=0,j=0; i < n_sourcepts_fit; i++) {
 		if (i != image_set) {
 			new_image_data[j].input(image_data[i]);
-			new_sourcepts_fit[j] = sourcepts_fit[i];
+			//new_sourcepts_fit[j] = sourcepts_fit[i];
 			new_redshifts[j] = source_redshifts[i];
-			new_vary_sourcepts_x[j] = vary_sourcepts_x[i];
-			new_vary_sourcepts_y[j] = vary_sourcepts_y[i];
+			//new_vary_sourcepts_x[j] = vary_sourcepts_x[i];
+			//new_vary_sourcepts_y[j] = vary_sourcepts_y[i];
 			if (n_lens_redshifts > 0) {
 				new_zfactors[j] = zfactors[i];
 				new_beta_factors[j] = beta_factors[i];
@@ -5354,13 +5375,13 @@ void QLens::remove_image_data(int image_set)
 	}
 	delete[] source_redshifts;
 	delete[] image_data;
-	delete[] sourcepts_fit;
-	delete[] vary_sourcepts_x;
-	delete[] vary_sourcepts_y;
+	//delete[] sourcepts_fit;
+	//delete[] vary_sourcepts_x;
+	//delete[] vary_sourcepts_y;
 
 	n_sourcepts_fit--;
 	image_data = new_image_data;
-	sourcepts_fit = new_sourcepts_fit;
+	//sourcepts_fit = new_sourcepts_fit;
 	source_redshifts = new_redshifts;
 	if (n_lens_redshifts > 0) {
 		delete[] zfactors;
@@ -5368,8 +5389,8 @@ void QLens::remove_image_data(int image_set)
 		zfactors = new_zfactors;
 		beta_factors = new_beta_factors;
 	}
-	vary_sourcepts_x = new_vary_sourcepts_x;
-	vary_sourcepts_y = new_vary_sourcepts_y;
+	//vary_sourcepts_x = new_vary_sourcepts_x;
+	//vary_sourcepts_y = new_vary_sourcepts_y;
 
 	sort_image_data_into_redshift_groups(); // this updates redshift_groups, in case there are no other image sets that shared the redshift of the one being deleted
 }
@@ -5677,20 +5698,25 @@ void QLens::clear_image_data()
 		delete[] image_data;
 		image_data = NULL;
 	}
-	if (sourcepts_fit != NULL) {
-		delete[] sourcepts_fit;
-		delete[] vary_sourcepts_x;
-		delete[] vary_sourcepts_y;
-		sourcepts_fit = NULL;
-	}
-	if (sourcepts_lower_limit != NULL) {
-		delete[] sourcepts_lower_limit;
-		sourcepts_lower_limit = NULL;
-	}
-	if (sourcepts_upper_limit != NULL) {
-		delete[] sourcepts_upper_limit;
-		sourcepts_upper_limit = NULL;
-	}
+	sourcepts_fit.clear();
+	vary_sourcepts_x.clear();
+	vary_sourcepts_y.clear();
+	sourcepts_lower_limit.clear();
+	sourcepts_upper_limit.clear();
+	//if (sourcepts_fit != NULL) {
+		//delete[] sourcepts_fit;
+		//delete[] vary_sourcepts_x;
+		//delete[] vary_sourcepts_y;
+		//sourcepts_fit = NULL;
+	//}
+	//if (sourcepts_lower_limit != NULL) {
+		//delete[] sourcepts_lower_limit;
+		//sourcepts_lower_limit = NULL;
+	//}
+	//if (sourcepts_upper_limit != NULL) {
+		//delete[] sourcepts_upper_limit;
+		//sourcepts_upper_limit = NULL;
+	//}
 	if (zfactors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) delete[] zfactors[i];
 		delete[] zfactors;
@@ -6101,7 +6127,7 @@ void WeakLensingData::clear()
 bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
-		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit==NULL) or (image_data==NULL))) {
+		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit.empty()) or (image_data==NULL))) {
 			warn("cannot do fit; image data points have not been defined");
 			return false;
 		}
@@ -6148,26 +6174,31 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if (source_fit_mode == Point_Source) {
 		fitmodel->image_data = image_data;
 		fitmodel->n_sourcepts_fit = n_sourcepts_fit;
-		fitmodel->sourcepts_fit = new lensvector[n_sourcepts_fit];
-		if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
-			fitmodel->sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
-			fitmodel->sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
-		}
-		fitmodel->vary_sourcepts_x = new bool[n_sourcepts_fit];
-		fitmodel->vary_sourcepts_y = new bool[n_sourcepts_fit];
+		fitmodel->sourcepts_fit = sourcepts_fit;
+		fitmodel->vary_sourcepts_x = vary_sourcepts_x;
+		fitmodel->vary_sourcepts_y = vary_sourcepts_y;
+		fitmodel->sourcepts_lower_limit = sourcepts_lower_limit;
+		fitmodel->sourcepts_upper_limit = sourcepts_upper_limit;
+		//fitmodel->sourcepts_fit = new lensvector[n_sourcepts_fit];
+		//if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
+			//fitmodel->sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
+			//fitmodel->sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+		//}
+		//fitmodel->vary_sourcepts_x = new bool[n_sourcepts_fit];
+		//fitmodel->vary_sourcepts_y = new bool[n_sourcepts_fit];
 		fitmodel->source_redshifts = new double[n_sourcepts_fit];
 		fitmodel->zfactors = new double*[n_sourcepts_fit];
 		fitmodel->beta_factors = new double**[n_sourcepts_fit];
 		for (i=0; i < n_sourcepts_fit; i++) {
 			//cout << "source " << i << " beta matrix:\n";
-			fitmodel->vary_sourcepts_x[i] = vary_sourcepts_x[i];
-			fitmodel->vary_sourcepts_y[i] = vary_sourcepts_y[i];
-			fitmodel->sourcepts_fit[i][0] = sourcepts_fit[i][0];
-			fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
-			if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
-				fitmodel->sourcepts_lower_limit[i][0] = sourcepts_lower_limit[i][0];
-				fitmodel->sourcepts_upper_limit[i][0] = sourcepts_upper_limit[i][0];
-			}
+			//fitmodel->vary_sourcepts_x[i] = vary_sourcepts_x[i];
+			//fitmodel->vary_sourcepts_y[i] = vary_sourcepts_y[i];
+			//fitmodel->sourcepts_fit[i][0] = sourcepts_fit[i][0];
+			//fitmodel->sourcepts_fit[i][1] = sourcepts_fit[i][1];
+			//if ((sourcepts_lower_limit != NULL) and (sourcepts_upper_limit != NULL)) {
+				//fitmodel->sourcepts_lower_limit[i][0] = sourcepts_lower_limit[i][0];
+				//fitmodel->sourcepts_upper_limit[i][0] = sourcepts_upper_limit[i][0];
+			//}
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			fitmodel->zfactors[i] = new double[n_lens_redshifts];
 			fitmodel->beta_factors[i] = new double*[n_lens_redshifts-1];
@@ -6180,9 +6211,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			}
 			//cout << endl;
 		}
-		for (i=0; i < source_redshift_groups.size(); i++) {
-			fitmodel->source_redshift_groups.push_back(source_redshift_groups[i]);
-		}
+		fitmodel->source_redshift_groups = source_redshift_groups;
 	} else if ((source_fit_mode == Pixellated_Source) or (source_fit_mode == Parameterized_Source)) {
 		fitmodel->image_pixel_data = image_pixel_data;
 		fitmodel->load_pixel_grid_from_data();
@@ -9485,7 +9514,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (source_fit_mode == Point_Source) {
 		if (use_analytic_bestfit_src) {
-			output_analytic_srcpos(sourcepts_fit);
+			output_analytic_srcpos(sourcepts_fit.data());
 		} else {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = transformed_params[index++];
@@ -10205,7 +10234,7 @@ void QLens::output_lens_commands(string filename, const bool print_limits)
 		lens_list[i]->print_lens_command(scriptfile,print_limits);
 	}
 	if (source_fit_mode == Point_Source) {
-		if (sourcepts_fit != NULL) {
+		if (!sourcepts_fit.empty()) {
 			if (!use_analytic_bestfit_src) {
 				scriptfile << "fit sourcept\n";
 				if (!print_limits) {
@@ -10275,7 +10304,7 @@ void QLens::print_fit_model()
 {
 	print_lens_list(true);
 	if (source_fit_mode == Point_Source) {
-		if (sourcepts_fit != NULL) {
+		if (!sourcepts_fit.empty()) {
 			if (!use_analytic_bestfit_src) {
 				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 					cout << "Initial fit coordinates for source points:\n";
@@ -12026,9 +12055,9 @@ QLens::~QLens()
 	delete param_settings;
 	if (defspline != NULL) delete defspline;
 	if (fitmodel != NULL) delete fitmodel;
-	if (sourcepts_fit != NULL) delete[] sourcepts_fit;
-	if (vary_sourcepts_x != NULL) delete[] vary_sourcepts_x;
-	if (vary_sourcepts_y != NULL) delete[] vary_sourcepts_y;
+	//if (sourcepts_fit != NULL) delete[] sourcepts_fit;
+	//if (vary_sourcepts_x != NULL) delete[] vary_sourcepts_x;
+	//if (vary_sourcepts_y != NULL) delete[] vary_sourcepts_y;
 	if (psf_matrix != NULL) {
 		for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 		delete[] psf_matrix;
@@ -12049,8 +12078,8 @@ QLens::~QLens()
 		}
 		delete[] beta_factors;
 	}
-	if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
-	if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
+	//if (sourcepts_upper_limit != NULL) delete[] sourcepts_upper_limit;
+	//if (sourcepts_lower_limit != NULL) delete[] sourcepts_lower_limit;
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
 	if ((image_pixel_data != NULL) and (borrowed_image_data==false)) delete image_pixel_data;
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;

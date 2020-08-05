@@ -5466,7 +5466,7 @@ void QLens::process_commands(bool read_file)
 					bool show_all = true;
 					int dataset = 0;
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
 					if (nwords==3) {
 						// if using the "src=#" notation (as in 'fit plotimg'), remove the "src=" part
 						if (words[2].find("src=") == 0) {
@@ -5537,7 +5537,7 @@ void QLens::process_commands(bool read_file)
 				{
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
 					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
 					double* srcflux = new double[n_sourcepts_fit];
@@ -5565,7 +5565,7 @@ void QLens::process_commands(bool read_file)
 				{
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
 					int dataset;
 					bool show_multiple = false;
 					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
@@ -5690,7 +5690,7 @@ void QLens::process_commands(bool read_file)
 					// also, you should put this entire thing in a function -- also true for many commands in this file! Critical before public release.
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit==NULL) Complain("No initial source point has been specified");
+					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
 					string range1, range2;
 					extract_word_starts_with('[',2,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					extract_word_starts_with('[',2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -6493,11 +6493,10 @@ void QLens::process_commands(bool read_file)
 					if (image_data==NULL) {
 						if (n_sourcepts_fit != 0) die("number of source points should be zero if image_data has not been allocated");
 						n_sourcepts_fit = 1;
-						sourcepts_fit = new lensvector[1];
-						vary_sourcepts_x = new bool[1];
-						vary_sourcepts_y = new bool[1];
-						vary_sourcepts_x[0] = true;
-						vary_sourcepts_x[1] = true;
+						lensvector zero; zero[0]=0; zero[1]=0;
+						sourcepts_fit.push_back(zero);
+						vary_sourcepts_x.push_back(true);
+						vary_sourcepts_y.push_back(true);
 						image_data = new ImageData[1];
 						update_parameter_list();
 					}

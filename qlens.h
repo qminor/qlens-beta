@@ -460,11 +460,16 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int lensmodel_fit_parameters, srcmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	vector<string> fit_parameter_names, transformed_parameter_names;
 	vector<string> latex_parameter_names, transformed_latex_parameter_names;
-	lensvector *sourcepts_fit;
-	bool *vary_sourcepts_x;
-	bool *vary_sourcepts_y;
-	lensvector *sourcepts_lower_limit;
-	lensvector *sourcepts_upper_limit;
+	//lensvector *sourcepts_fit;
+	//bool *vary_sourcepts_x;
+	//bool *vary_sourcepts_y;
+	//lensvector *sourcepts_lower_limit;
+	//lensvector *sourcepts_upper_limit;
+	vector<lensvector> sourcepts_fit;
+	vector<lensvector> sourcepts_lower_limit;
+	vector<lensvector> sourcepts_upper_limit;
+	vector<bool> vary_sourcepts_x;
+	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	bool vary_regularization_parameter;
 	static string fit_output_filename;
@@ -1138,8 +1143,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(true);
 		}
 		if ((n_sourcepts_fit > 0) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
-			if (sourcepts_lower_limit==NULL) sourcepts_lower_limit = new lensvector[n_sourcepts_fit];
-			if (sourcepts_upper_limit==NULL) sourcepts_upper_limit = new lensvector[n_sourcepts_fit];
+			if (sourcepts_lower_limit.empty()) sourcepts_lower_limit.resize(n_sourcepts_fit);
+			if (sourcepts_upper_limit.empty()) sourcepts_upper_limit.resize(n_sourcepts_fit);
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
 		}
 	}
