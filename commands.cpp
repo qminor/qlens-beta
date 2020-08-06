@@ -8381,23 +8381,11 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="zsrc_ref")
 		{
-			double zrsource;
+			double zsrc_ref;
 			if (nwords == 2) {
 				if (nlens > 0) Complain("zsrc_ref cannot be changed if any lenses have already been created");
-				int i,j;
-				if (!(ws[1] >> zrsource)) Complain("invalid zrsource_ref setting");
-				reference_source_redshift = zrsource;
-				if (auto_zsource_scaling==true) auto_zsource_scaling = false;
-				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
-				reset_grid();
-				if (n_sourcepts_fit > 0) {
-					for (i=0; i < n_sourcepts_fit; i++) {
-						for (j=0; j < n_lens_redshifts; j++) {
-							zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
-						}
-					}
-				}
-
+				if (!(ws[1] >> zsrc_ref)) Complain("invalid zsrc_ref setting");
+				set_reference_source_redshift(zsrc_ref);
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "reference source redshift = " << reference_source_redshift << endl;
 			} else Complain("must specify either zero or one argument (reference source redshift)");

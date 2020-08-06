@@ -2504,6 +2504,24 @@ void QLens::set_source_redshift(const double zsrc)
 		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	}
 	recalculate_beta_factors();
+	reset_grid();
+}
+
+void QLens::set_reference_source_redshift(const double zsrc)
+{
+	if (nlens > 0) { warn("zsrc_ref cannot be changed if any lenses have already been created"); return; }
+	int i,j;
+	reference_source_redshift = zsrc;
+	if (auto_zsource_scaling==true) auto_zsource_scaling = false; // Now that zsrc_ref has been set explicitly, don't automatically change it if zsrc is changed
+	for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+	reset_grid();
+	if (n_sourcepts_fit > 0) {
+		for (i=0; i < n_sourcepts_fit; i++) {
+			for (j=0; j < n_lens_redshifts; j++) {
+				zfactors[i][j] = kappa_ratio(lens_redshifts[j],source_redshifts[i],reference_source_redshift);
+			}
+		}
+	}
 }
 
 void QLens::recalculate_beta_factors()
@@ -4353,6 +4371,9 @@ bool QLens::find_optimal_gridsize()
 
 void QLens::sort_critical_curves()
 {
+	if (grid==NULL) {
+		if (create_grid(false,reference_zfactors,default_zsrc_beta_factors)==false) { warn("Could not create recursive grid"); return; }
+	}
 	sorted_critical_curve.clear();
 	int n_cc_pts = critical_curve_pts.size();
 	if (n_cc_pts == 0) return;
@@ -4425,9 +4446,6 @@ void QLens::sort_critical_curves()
 
 bool QLens::plot_sorted_critical_curves(string critfile)
 {
-	if (grid==NULL) {
-		if (create_grid(false,reference_zfactors,default_zsrc_beta_factors)==false) { warn("Could not create recursive grid"); return false; }
-	}
 	if (!sorted_critical_curves) sort_critical_curves();
 
 	if (critfile != "") {

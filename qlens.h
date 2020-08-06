@@ -926,6 +926,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void set_primary_lens();
 	void print_beta_matrices();
 	void set_source_redshift(const double zsrc);
+	double get_source_redshift() { return source_redshift; }
+	void set_reference_source_redshift(const double zsrc);
+	double get_reference_source_redshift() { return reference_source_redshift; }
 	void recalculate_beta_factors();
 
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
@@ -944,6 +947,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void reassign_lensparam_pointers_and_names();
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
+	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
 	void output_lens_commands(string filename, const bool use_limits);
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
