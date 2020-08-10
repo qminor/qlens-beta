@@ -42,7 +42,7 @@ class QLens;
 
 class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
 {
-	friend class LensIntegral;
+	friend struct LensIntegral;
 	friend class QLens;
 	friend class SB_Profile;
 
@@ -212,7 +212,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double (LensProfile::*potptr)(const double, const double); // numerical: &LensProfile::potential_numerical
 	void (LensProfile::*def_and_hess_ptr)(const double, const double, lensvector& def, lensmatrix &hess); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
 
-	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
+	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
@@ -252,6 +252,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void copy_parameter_anchors(const LensProfile* lens_in);
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void print_parameters();
+	string mkstring_doub(const double db);
+	string mkstring_int(const int i);
+	string get_parameters_string();
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
 	virtual void print_lens_command(ofstream& scriptout, const bool use_limits);

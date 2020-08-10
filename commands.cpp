@@ -2754,13 +2754,13 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="anchor")
 			{
 				if (nwords != 4) Complain("must specify two arguments for 'lens anchor': lens1 --> lens2");
-				int lens1, lens2;
-				if (!(ws[2] >> lens1)) Complain("invalid lens number for lens to be anchored");
-				if (!(ws[3] >> lens2)) Complain("invalid lens number for lens to anchor to");
-				if (lens1 >= nlens) Complain("lens1 number does not exist");
-				if (lens2 >= nlens) Complain("lens2 number does not exist");
-				if (lens1 == lens2) Complain("lens1, lens2 must be different");
-				lens_list[lens1]->anchor_center_to_lens(lens_list,lens2);
+				int lens_num1, lens_num2;
+				if (!(ws[2] >> lens_num1)) Complain("invalid lens number for lens to be anchored");
+				if (!(ws[3] >> lens_num2)) Complain("invalid lens number for lens to anchor to");
+				if (lens_num1 >= nlens) Complain("lens1 number does not exist");
+				if (lens_num2 >= nlens) Complain("lens2 number does not exist");
+				if (lens_num1 == lens_num2) Complain("lens1, lens2 must be different");
+				lens_list[lens_num1]->anchor_center_to_lens(lens_num2);
 			}
 			else if (words[1]=="savetab")
 			{
@@ -2843,7 +2843,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -2937,7 +2937,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
@@ -3056,7 +3056,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) {
 								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							}
@@ -3162,7 +3162,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
@@ -3304,7 +3304,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
@@ -3410,7 +3410,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1,true);
@@ -3491,7 +3491,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3574,7 +3574,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3651,7 +3651,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3762,7 +3762,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
@@ -3842,7 +3842,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3927,7 +3927,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -4014,7 +4014,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -4086,7 +4086,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
@@ -4134,7 +4134,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
@@ -4202,7 +4202,7 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
@@ -4306,7 +4306,7 @@ void QLens::process_commands(bool read_file)
 							} else {
 								if (!add_tabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 							}
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (tabulate_existing_lens) remove_lens(lnum);
@@ -4411,7 +4411,7 @@ void QLens::process_commands(bool read_file)
 							} else {
 								if (!add_qtabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, q, theta, xc, yc, filename)) Complain("input file for qtabulated model either does not exist, or is in incorrect format");
 							}
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(lens_list,anchornum);
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (qtabulate_existing_lens) remove_lens(lnum);
@@ -4487,7 +4487,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (add_shear) {
 					add_shear_lens(zl_in, reference_source_redshift, shear_param_vals[0], shear_param_vals[1], 0, 0);
-					lens_list[nlens-1]->anchor_center_to_lens(lens_list,nlens-2);
+					lens_list[nlens-1]->anchor_center_to_lens(nlens-2);
 					if (vary_parameters) {
 						boolvector shear_vary_flags_extended; // extra field for redshift, which we don't vary by default for external shear
 						shear_vary_flags_extended.input(3);
@@ -5275,6 +5275,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="fit")
 		{
 			// Note: the "fit lens" command is handled along with the "lens" command above (not here), since the two commands overlap extensively
+			//       same is true for the "fit source" command
 			if (nwords == 1) {
 				if (mpi_id==0) print_fit_model();
 			} else {
@@ -5339,13 +5340,7 @@ void QLens::process_commands(bool read_file)
 					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
 					if ((nwords==3) and (words[2]=="auto")) {
 						if (nlens==0) Complain("No lens model has been defined; cannot determine optimal source point");
-						lensvector *srcpts = new lensvector[n_sourcepts_fit];
-						output_analytic_srcpos(srcpts);
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							sourcepts_fit[i][0] = srcpts[i][0];
-							sourcepts_fit[i][1] = srcpts[i][1];
-						}
-						delete[] srcpts;
+						set_analytic_sourcepts();
 					}
 					else if (nwords==4)
 					{
@@ -8374,7 +8369,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> zsource)) Complain("invalid zsrc setting");
 				set_source_redshift(zsource);
 				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
-				reset_grid();
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "source redshift = " << source_redshift << endl;
 			} else Complain("must specify either zero or one argument (redshift of source object)");

@@ -46,6 +46,7 @@ const double QLens::default_rmin_frac = 1e-4;
 bool QLens::warnings;
 bool QLens::newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 bool QLens::use_scientific_notation;
+bool QLens::use_ansi_output_during_fit;
 double QLens::rmin_frac;
 bool QLens::respline_at_end; // for creating deflection spline
 int QLens::resplinesteps; // for creating deflection spline
@@ -577,6 +578,9 @@ QLens::QLens() : UCMC()
 	mpi_np = 1;
 	group_np = 1;
 	group_id = 0;
+	group_num = 0;
+	mpi_ngroups = 1;
+	group_leader = NULL;
 #ifdef USE_MPI
 	mpi_group = NULL;
 #endif
@@ -710,7 +714,7 @@ QLens::QLens() : UCMC()
 	defspline = NULL;
 
 	source_fit_mode = Point_Source;
-	running_fit = false;
+	use_ansi_characters = false;
 	chisq_tolerance = 1e-3;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
@@ -862,6 +866,7 @@ QLens::QLens() : UCMC()
 	warnings = true;
 	newton_warnings = false;
 	use_scientific_notation = true;
+	use_ansi_output_during_fit = true;
 	include_time_delays = false;
 	autocenter = true; // this option tells qlens to center the grid on a particular lens (given by primary_lens_number)
 	auto_gridsize_from_einstein_radius = true; // this option tells qlens to set the grid size based on the Einstein radius of a particular lens (given by primary_lens_number)
@@ -1006,7 +1011,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	LogLikePtr = static_cast<double (UCMC::*)(double *)> (&QLens::fitmodel_loglike_point_source); // unnecessary, but just in case
 	source_fit_mode = lens_in->source_fit_mode;
-	running_fit = lens_in->running_fit;
+	use_ansi_characters = lens_in->use_ansi_characters;
 	chisq_tolerance = lens_in->chisq_tolerance;
 	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
@@ -1723,6 +1728,8 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f, this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
 	if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -1748,6 +1755,7 @@ void QLens::add_multipole_lens(const double zl, const double zs, int m, const do
 	add_new_lens_entry(zl);
 
 	lens_list[nlens-1] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this, sine_term);
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1777,6 +1785,7 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 	add_new_lens_entry(zl);
 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this);
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1807,6 +1816,7 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 	add_new_lens_entry(zl);
 
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this);
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1849,6 +1859,7 @@ bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const
 	add_new_lens_entry(zl);
 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this);
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1898,6 +1909,7 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 	add_new_lens_entry(zl);
 
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this);
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1914,6 +1926,7 @@ void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 
 	new_lens->lens_number = nlens-1;
 	lens_list[nlens-1] = new_lens;
+	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 	lens_list[nlens-1]->register_vary_flags();
 
 	reset_grid();
@@ -2404,6 +2417,7 @@ void QLens::remove_lens(int lensnumber)
 	delete[] lens_list;
 	delete[] lens_redshift_idx;
 	nlens--;
+	lens_list_vec.erase(lens_list_vec.begin()+lensnumber); // Used for Python wrapper
 
 	lens_list = newlist;
 	if (nlens > 0) lens_redshift_idx = new_lens_redshift_idx;
@@ -2426,6 +2440,7 @@ void QLens::remove_lens(int lensnumber)
 void QLens::clear_lenses()
 {
 	if (nlens > 0) {
+		lens_list_vec.clear(); // Used for Python wrapper
 		int pi, pf, pi_min=1000, pf_max=0;
 		// since all the lens parameters are blocked together in the param_settings list, we just need to find the initial and final parameters to remove
 		for (int i=0; i < nlens; i++) {
@@ -6157,7 +6172,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	}
 	if (fitmodel != NULL) delete fitmodel;
 	fitmodel = new QLens(this);
-	fitmodel->running_fit = running_fit_in;
+	fitmodel->use_ansi_characters = running_fit_in;
 	fitmodel->auto_ccspline = false;
 	//fitmodel->set_gridcenter(grid_xcenter,grid_ycenter);
 
@@ -6288,7 +6303,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	for (i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
 		// lens in fitmodel (the lens whose parameters will be varied)
-		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(fitmodel->lens_list, lens_list[i]->get_center_anchor_number());
+		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(lens_list[i]->get_center_anchor_number());
 		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
 			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
 			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1,false);
@@ -6364,7 +6379,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	//cout << "FITMODEL:" << endl;
 	//fitmodel->param_settings->print_penalty_limits();
 	fitmodel->update_parameter_list();
-	cout << endl;
+	//cout << endl;
 	return true;
 }
 
@@ -6478,6 +6493,17 @@ void QLens::output_analytic_srcpos(lensvector *beta_i)
 		}
 	}
 	return;
+}
+
+void QLens::set_analytic_sourcepts()
+{
+	lensvector *srcpts = new lensvector[n_sourcepts_fit];
+	output_analytic_srcpos(srcpts);
+	for (int i=0; i < n_sourcepts_fit; i++) {
+		sourcepts_fit[i][0] = srcpts[i][0];
+		sourcepts_fit[i][1] = srcpts[i][1];
+	}
+	delete[] srcpts;
 }
 
 double QLens::chisq_pos_source_plane()
@@ -6595,15 +6621,7 @@ double QLens::chisq_pos_image_plane()
 		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
 	}
 
-	if (use_analytic_bestfit_src) {
-		lensvector *srcpts = new lensvector[n_sourcepts_fit];
-		output_analytic_srcpos(srcpts);
-		for (int i=0; i < n_sourcepts_fit; i++) {
-			sourcepts_fit[i][0] = srcpts[i][0];
-			sourcepts_fit[i][1] = srcpts[i][1];
-		}
-		delete[] srcpts;
-	}
+	if (use_analytic_bestfit_src) set_analytic_sourcepts();
 
 	double chisq=0, chisq_part=0;
 
@@ -6734,15 +6752,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
 	}
 
-	if (use_analytic_bestfit_src) {
-		lensvector *srcpts = new lensvector[n_sourcepts_fit];
-		output_analytic_srcpos(srcpts);
-		for (int i=0; i < n_sourcepts_fit; i++) {
-			sourcepts_fit[i][0] = srcpts[i][0];
-			sourcepts_fit[i][1] = srcpts[i][1];
-		}
-		delete[] srcpts;
-	}
+	if (use_analytic_bestfit_src) set_analytic_sourcepts();
 
 	double chisq=0, chisq_part=0, rms_part=0;
 	int n_images, n_tot_images=0, n_tot_images_part=0, n_matched_images_part=0;
@@ -7902,11 +7912,7 @@ void QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	display_chisq_status = false;
 	if (show_diagnostics) chisq_diagnostic = false;
 
-	auto_ccspline = temp_auto_ccspline;
-	auto_store_cc_points = temp_auto_store_cc_points;
-	include_time_delays = temp_include_time_delays;
-	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
-
+	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
 }
@@ -8036,7 +8042,7 @@ double QLens::chi_square_fit_simplex()
 {
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
-	if (!initialize_fitmodel(true)) {
+	if (!initialize_fitmodel(false)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return 1e30;
 	}
@@ -8075,7 +8081,8 @@ double QLens::chi_square_fit_simplex()
 	fitmodel->chisq_it = 0;
 	bool verbal = (mpi_id==0) ? true : false;
 	//if (simplex_show_bestfit) cout << endl; // since we'll need an extra line to display best-fit parameters during annealing
-	running_fit = true;
+	if (use_ansi_output_during_fit) use_ansi_characters = true;
+	else use_ansi_characters = false;
 	n_iterations = downhill_simplex_anneal(verbal);
 	simplex_minval(fitparams.array(),chisq_bestfit);
 	chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
@@ -8084,7 +8091,7 @@ double QLens::chi_square_fit_simplex()
 		(this->*loglikeptr)(fitparams.array());
 		if (mpi_id==0) cout << endl << endl;
 	}
-	//running_fit = false;
+	//use_ansi_characters = false;
 
 	bool turned_on_chisqmag = false;
 	if (n_repeats > 0) {
@@ -8098,9 +8105,9 @@ double QLens::chi_square_fit_simplex()
 		set_annealing_schedule_parameters(0,simplex_temp_final,simplex_cooling_factor,simplex_nmax_anneal,simplex_nmax); // repeats have zero temperature (just minimization)
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")                                                  \n\n\n" << flush;
-			//running_fit = true;
+			//use_ansi_characters = true;
 			n_iterations = downhill_simplex_anneal(verbal);
-			//running_fit = false;
+			//use_ansi_characters = false;
 			simplex_minval(fitparams.array(),chisq_bestfit);
 			chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
 			if (display_chisq_status) {
@@ -8110,7 +8117,7 @@ double QLens::chi_square_fit_simplex()
 			}
 		}
 	}
-	running_fit = false;
+	use_ansi_characters = false;
 	bestfitparams.input(fitparams);
 
 	display_chisq_status = false;
@@ -8252,9 +8259,10 @@ double QLens::chi_square_fit_powell()
 	display_chisq_status = true;
 
 	fitmodel->chisq_it = 0;
-	running_fit = true;
+	if (use_ansi_output_during_fit) use_ansi_characters = true;
+	else use_ansi_characters = false;
 	powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
-	running_fit = false;
+	use_ansi_characters = false;
 	chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
 	if (display_chisq_status) {
 		fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
@@ -8272,9 +8280,9 @@ double QLens::chi_square_fit_powell()
 		}
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")\n";
-			running_fit = true;
+			use_ansi_characters = true;
 			powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
-			running_fit = false;
+			use_ansi_characters = false;
 			chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
 			if (display_chisq_status) {
 				fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
@@ -8450,9 +8458,9 @@ void QLens::nested_sampling()
 	display_chisq_status = false; // just in case it was turned on
 	double lnZ;
 
-	running_fit = true;
+	use_ansi_characters = true;
 	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile,NULL,chain_info,data_info);
-	running_fit = false;
+	use_ansi_characters = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
 
@@ -8610,7 +8618,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	for (int i = 0; i < n_fit_parameters; i++) pWrap[i] = 0;
 	//MPI_Fint fortran_comm = MPI_Comm_c2f((*group_comm));
 
-	running_fit = true;
+	use_ansi_characters = true;
 
 	if (!skip_run) {
 #ifdef MULTINEST_MOD
@@ -8637,7 +8645,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 	bestfitparams.input(n_fit_parameters);
 
-	running_fit = false;
+	use_ansi_characters = false;
 
 	//if (display_chisq_status) {
 		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
@@ -8852,7 +8860,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 #endif
 	display_chisq_status = false; // just in case it was turned on
 
-	running_fit = true;
+	use_ansi_characters = true;
 
 	mcsampler_set_lensptr(this);
 	Settings settings(n_fit_parameters,n_derived_params);
@@ -8886,7 +8894,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		run_polychord(polychord_loglikelihood,polychord_prior,polychord_dumper,settings);
 	}
 
-	running_fit = false;
+	use_ansi_characters = false;
 
 	//if (display_chisq_status) {
 		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
@@ -9483,9 +9491,9 @@ void QLens::chi_square_twalk()
 
 	display_chisq_status = false; // just in case it was turned on
 
-	running_fit = true;
+	use_ansi_characters = true;
 	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info,data_info);
-	running_fit = false;
+	use_ansi_characters = false;
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
@@ -9811,14 +9819,15 @@ double QLens::fitmodel_loglike_point_source(double* params)
 			}
 		}
 		if ((display_chisq_status) and (mpi_id==0)) {
-			if (running_fit) cout << "\033[2A" << flush;
+			if (use_ansi_characters) cout << "\033[2A" << flush;
 			if (include_imgpos_chisq) {
 				if (used_imgplane_chisq) {
 					if (!imgplane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
 					int tot_data_images = 0;
 					for (int i=0; i < n_sourcepts_fit; i++) tot_data_images += image_data[i].n_images;
-					cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
+					if (use_ansi_characters) cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
 					if (fitmodel->chisq_it % chisq_display_frequency == 0) {
+						if (!use_ansi_characters) cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
 						cout << ", chisq_pos=" << chisq;
 						if (syserr_pos != 0.0) {
 							double signormfac, chisq_sys = chisq;
@@ -9855,7 +9864,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		}
 	} else {
 		if ((display_chisq_status) and (mpi_id==0)) {
-			if (running_fit) cout << "\033[2A" << flush;
+			if (use_ansi_characters) cout << "\033[2A" << flush;
 			if ((fitmodel->chisq_it % chisq_display_frequency == 0) and (include_imgpos_chisq)) {
 				cout << "chisq_pos=0";
 				showed_first_chisq = true;
@@ -9907,9 +9916,9 @@ double QLens::fitmodel_loglike_point_source(double* params)
 			if (chisq_total != (2*loglike)) cout << ", chisq_tot=" << chisq_total;
 			cout << ", 2*loglike=" << 2*loglike;
 			cout << "                ";
+			if (!use_ansi_characters) cout << endl;
 		}
-		cout << endl;
-		if (running_fit) cout << endl;
+		if (use_ansi_characters) cout << endl << endl;
 	}
 
 
@@ -9952,14 +9961,14 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		if (use_custom_prior) loglike = fitmodel_custom_prior();
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
-		if (running_fit) cout << "\033[2A" << flush;
+		if (use_ansi_characters) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0;
 		if (chisq != (2*loglike)) cout << ", chisq=" << chisq;
 		cout << ", 2*loglike=" << 2*loglike;
 		cout << "                " << endl;
 
 		//cout << "\033[1A";
-		if (running_fit) cout << endl;
+		if (use_ansi_characters) cout << endl;
 	}
 
 
@@ -10233,6 +10242,8 @@ void QLens::print_lens_list(bool show_vary_params)
 		for (int i=0; i < nlens; i++) {
 			cout << i << ". ";
 			lens_list[i]->print_parameters();
+			//string lline = lens_list[i]->get_parameters_string();
+			//cout << lline << endl;
 			if (show_vary_params)
 				lens_list[i]->print_vary_parameters();
 		}
@@ -10335,6 +10346,7 @@ void QLens::print_fit_model()
 						cout << "y" << i << ": [" << sourcepts_lower_limit[i][1] << ":" << sourcepts_upper_limit[i][1] << "]\n";
 					}
 				}
+				cout << endl;
 			}
 		} else if (n_sourcepts_fit > 0) cout << "Initial source point parameters not chosen\n";
 	}

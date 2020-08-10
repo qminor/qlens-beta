@@ -1950,8 +1950,8 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 
 		find_images();
 		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound,srcflux[i]);
-		image_sets[i].print();
 	}
+	reset_grid();
 	delete[] srcpts;
 	delete[] srcflux;
 	return image_sets;
@@ -2159,7 +2159,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 		if (lens->reject_himag_images) {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
 				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
-				if (lens->running_fit) {
+				if (lens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
 				}
@@ -2168,7 +2168,7 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 		} else {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
 				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << lens->source[0] << "," << lens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
-				if (lens->running_fit) {
+				if (lens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
 				}

@@ -170,12 +170,14 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 	}
 }
 
-void LensProfile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
+bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
 {
+	if (lens == NULL) return false;
 	if (!center_anchored) center_anchored = true;
-	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
+	center_anchor_lens = lens->lens_list[center_anchor_lens_number];
 	x_center = center_anchor_lens->x_center;
 	y_center = center_anchor_lens->y_center;
+	return true;
 }
 
 void LensProfile::delete_center_anchor()
@@ -193,18 +195,22 @@ void LensProfile::delete_special_parameter_anchor()
 
 bool LensProfile::set_vary_flags(boolvector &vary_flags)
 {
-	// This function is a bit of a hack to allow you to call this from within the LensProfile
-	// object. Clean this up later so it doesn't just call the original QLens function!
+	bool omitted_center = false;
+	if ((center_anchored) and vary_flags.size() == n_params-3) omitted_center = true;
 	boolvector new_vary_flags(n_params);
-	if (vary_flags.size() < n_params-1) return false;
-	for (int i=0; i < n_params; i++) new_vary_flags[i] = vary_flags[i];
+	if ((vary_flags.size() != n_params-1) and (vary_flags.size() != n_params) and (!omitted_center)) return false;
+	for (int i=0; i < vary_flags.size(); i++) new_vary_flags[i] = vary_flags[i];
+	if (omitted_center) {
+		new_vary_flags[n_params-3] = false;
+		new_vary_flags[n_params-2] = false;
+	}
 	if (vary_flags.size() == n_params) new_vary_flags[n_params-1] = vary_flags[n_params-1];
 	else new_vary_flags[n_params-1] = false; // if no vary flag is given for redshift, then assume it's not being varied
 	if (vary_parameters(new_vary_flags)==false) return false;
 	
 	if (lens != NULL)
-		return lens->register_lens_vary_parameters(lens_number);
-	else return false;
+		return lens->register_lens_vary_parameters(lens_number); // The problem here is that returning 'false' might mean different errors. Hmmm
+	return true;
 }
 
 bool LensProfile::register_vary_flags()
@@ -667,6 +673,60 @@ void LensProfile::print_parameters()
 	get_auxiliary_parameter(aux_paramname,aux_param);
 	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
 	cout << endl;
+}
+
+string LensProfile::mkstring_doub(const double db)
+{
+	stringstream dstr;
+	string dstring;
+	dstr << db;
+	dstr >> dstring;
+	return dstring;
+}
+
+string LensProfile::mkstring_int(const int i)
+{
+	stringstream istr;
+	string istring;
+	istr << i;
+	istr >> istring;
+	return istring;
+}
+
+string LensProfile::get_parameters_string()
+{
+	string paramstring = "";
+	paramstring += mkstring_int(lens_number) + ". ";
+	if (ellipticity_mode==3) paramstring += "pseudo-";
+	paramstring += model_name + "(";
+	if (lens_subclass != -1) paramstring += subclass_label + "=" + mkstring_int(lens_subclass) + ",";
+	paramstring += "z=" + mkstring_doub(zlens) + "): ";
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+			paramstring += paramnames[i] + "=";
+			if (i==angle_paramnum) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
+			else paramstring += mkstring_doub(*(param[i]));
+			paramstring += ", ";
+		}
+		paramstring += "xc=" + mkstring_doub(x_center) + ", yc=" + mkstring_doub(y_center);
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+			paramstring += paramnames[i] + "=";
+			if (i==angle_paramnum) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
+			else paramstring += *(param[i]);
+			if (i != n_params-2) paramstring += ", ";
+		}
+	}
+	if (center_anchored) paramstring += " (center_anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
+	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+		paramstring += " (ellipticity mode = " + mkstring_doub(ellipticity_mode) + ")"; // emode=3 is indicated by "pseudo-" name, not here
+	}
+	double aux_param;
+	string aux_paramname;
+	get_auxiliary_parameter(aux_paramname,aux_param);
+	if (aux_paramname != "") paramstring += " (" + aux_paramname + "=" + mkstring_doub(aux_param) + ")";
+	return paramstring;
 }
 
 void LensProfile::print_vary_parameters()
@@ -1852,7 +1912,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 					if (i != n_params-1) cout << ", ";
 				}
 				cout << "     " << endl;
-				if (lens->running_fit) {
+				if (lens->use_ansi_characters) {
 					cout << "\033[2A";
 				}
 			}

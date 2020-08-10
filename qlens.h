@@ -114,7 +114,8 @@ struct ImageSet {
 		}
 	}
 	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
-	void print(bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL) {
+	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
+	void print_to_file(bool include_time_delays, bool show_labels, ofstream* srcfile, ofstream* imgfile) {
 		cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
 		if (srcflux != -1) cout << "\tsrc_flux";
 		cout << endl;
@@ -398,6 +399,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	int nlens;
 	LensProfile** lens_list;
+	vector<LensProfile*> lens_list_vec;
 
 	int n_sb;
 	SB_Profile** sb_list;
@@ -456,7 +458,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double bestfit_flux;
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
-	bool running_fit;
+	bool use_ansi_characters;
 	int lensmodel_fit_parameters, srcmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	vector<string> fit_parameter_names, transformed_parameter_names;
 	vector<string> latex_parameter_names, transformed_latex_parameter_names;
@@ -539,6 +541,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_time_delays;
 	static bool warnings, newton_warnings; // newton_warnings: when true, displays warnings when Newton's method fails or returns anomalous results
 	static bool use_scientific_notation;
+	static bool use_ansi_output_during_fit;
 	string plot_title, post_title;
 	bool suppress_plots;
 	string data_info; // Allows for a description of data to be saved in chains_* directory and in FITS file header
@@ -1079,6 +1082,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
 	void output_analytic_srcpos(lensvector *beta_i);
+	void set_analytic_sourcepts();
 
 	static bool respline_at_end;
 	static int resplinesteps;
@@ -1104,6 +1108,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 		use_analytic_bestfit_src = setting;
 		update_parameter_list();
 	}
+	bool get_analytic_bestfit_src() { return use_analytic_bestfit_src; }
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }
