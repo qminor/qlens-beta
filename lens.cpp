@@ -865,7 +865,7 @@ QLens::QLens() : UCMC()
 
 	warnings = true;
 	newton_warnings = false;
-	use_scientific_notation = true;
+	set_sci_notation(true);
 	use_ansi_output_during_fit = true;
 	include_time_delays = false;
 	autocenter = true; // this option tells qlens to center the grid on a particular lens (given by primary_lens_number)
@@ -2774,7 +2774,7 @@ void QLens::print_source_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2)
+void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
 {
 	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
 	if (n_derived_params > 0) {
@@ -2782,8 +2782,8 @@ void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnu
 			newlist[i] = dparam_list[i];
 		delete[] dparam_list;
 	}
-	if (param2 == -1e30) newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum);
-	else newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,param2);
+	if (param2 == -1e30) newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,-1,use_kpc);
+	else newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,param2,use_kpc);
 	n_derived_params++;
 	dparam_list = newlist;
 	param_settings->add_dparam(dparam_list[n_derived_params-1]->name);
@@ -4624,7 +4624,7 @@ double QLens::einstein_radius_single_lens(const double src_redshift, const int l
 	return re_avg;
 }
 
-double QLens::total_kappa(const double r, const int lensnum)
+double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
 	double total_kappa;
 	int j;
@@ -4633,6 +4633,10 @@ double QLens::total_kappa(const double r, const int lensnum)
 	int thetasteps = 200;
 	thetastep = 2*M_PI/thetasteps;
 	double x, y;
+	double z, r_arcsec = r;
+	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
+	else z = lens_list[lensnum]->get_redshift();
+	if (use_kpc) r_arcsec *= 206.264806/angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -4642,8 +4646,8 @@ double QLens::total_kappa(const double r, const int lensnum)
 	double *onezfac = new double[n_lens_redshifts];
 	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0; // this ensures that the reference source redshift is used, which is appropriate to each lens
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
-		x = grid_xcenter + r*cos(theta);
-		y = grid_ycenter + r*sin(theta);
+		x = grid_xcenter + r_arcsec*cos(theta);
+		y = grid_ycenter + r_arcsec*sin(theta);
 		if (lensnum==-1) kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
 		else kap = lens_list[lensnum]->kappa(x,y);
 		total_kappa += kap;
@@ -4653,7 +4657,7 @@ double QLens::total_kappa(const double r, const int lensnum)
 	return total_kappa;
 }
 
-double QLens::total_dkappa(const double r, const int lensnum)
+double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc)
 {
 	double total_dkappa;
 	int j;
@@ -4663,6 +4667,10 @@ double QLens::total_dkappa(const double r, const int lensnum)
 	thetastep = 2*M_PI/thetasteps;
 	double x, y, x2, y2, dr;
 	dr = 1e-5;
+	double z, r_arcsec = r;
+	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
+	else z = lens_list[lensnum]->get_redshift();
+	if (use_kpc) r_arcsec *= 206.264806/angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -4672,10 +4680,10 @@ double QLens::total_dkappa(const double r, const int lensnum)
 	double *onezfac = new double[n_lens_redshifts];
 	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0;
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
-		x = grid_xcenter + r*cos(theta);
-		y = grid_ycenter + r*sin(theta);
-		x2 = (r+dr)*cos(theta);
-		y2 = (r+dr)*sin(theta);
+		x = grid_xcenter + r_arcsec*cos(theta);
+		y = grid_ycenter + r_arcsec*sin(theta);
+		x2 = (r_arcsec+dr)*cos(theta);
+		y2 = (r_arcsec+dr)*sin(theta);
 		if (lensnum==-1) {
 			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
 			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
@@ -8322,7 +8330,9 @@ double QLens::chi_square_fit_powell()
 
 		cout << "\nBest-fit model: 2*loglike = " << chisq_bestfit << endl;
 		update_fitmodel(fitparams.array());
-		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
+		for (int i=0; i < nlens; i++) {
+			fitmodel->lens_list[i]->reset_angle_modulo_2pi();
+		}
 		fitmodel->print_lens_list(false);
 
 		if (source_fit_mode == Point_Source) {
@@ -10212,27 +10222,37 @@ bool QLens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 	return true;
 }
 
-double QLens::mass2d_r(const double r_arcsec, const int lensnum)
+double QLens::mass2d_r(const double r, const int lensnum, const bool use_kpc)
 {
-	double sigma_cr, mass_r_2d, zlens;
-	zlens = lens_list[lensnum]->zlens;
-	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
+	double sigma_cr, mass_r_2d, z;
+	z = lens_list[lensnum]->zlens;
+	double r_arcsec = (use_kpc) ? r*206.264806/angular_diameter_distance(z) : r;
+
+	sigma_cr = sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	return mass_r_2d;
 }
 
-double QLens::mass3d_r(const double r_arcsec, const int lensnum)
+double QLens::mass3d_r(const double r, const int lensnum, const bool use_kpc)
 {
-	double sigma_cr, mass_r_3d, zlens;
-	zlens = lens_list[lensnum]->zlens;
-	sigma_cr = sigma_crit_arcsec(zlens,reference_source_redshift);
+	double sigma_cr, mass_r_3d, z;
+	z = lens_list[lensnum]->zlens;
+	double r_arcsec = (use_kpc) ? r*206.264806/angular_diameter_distance(z) : r;
+	sigma_cr = sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;
 }
 
-double QLens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax)
+double QLens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc)
 {
-	return lens_list[lensnum]->average_log_slope(rmin,rmax);
+	double z = lens_list[lensnum]->zlens;
+	double kpc_to_arcsec = 206.264806/angular_diameter_distance(z);
+	double rmin_arcsec = rmin, rmax_arcsec = rmax;
+	if (use_kpc) {
+		rmin_arcsec *= kpc_to_arcsec;
+		rmax_arcsec *= kpc_to_arcsec;
+	}
+	return lens_list[lensnum]->average_log_slope(rmin_arcsec,rmax_arcsec);
 }
 
 void QLens::print_lens_list(bool show_vary_params)
@@ -11476,7 +11496,7 @@ void QLens::plot_mc_curve(const int lensnumber, const string filename)
 	croot_lensnumber = lensnumber;
 	double rmax,rmax_true,avgsig,menc,menc_true;
 	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
-	menc_true = mass2d_r(rmax_true,lensnumber);
+	menc_true = mass2d_r(rmax_true,lensnumber,false);
 
 	// overriding the above
 	//rmax_true = 0.07;
@@ -11507,7 +11527,7 @@ void QLens::plot_mc_curve(const int lensnumber, const string filename)
 double QLens::croot_eq(const double c)
 {
 	if (lens_list[croot_lensnumber]->update_specific_parameter("c",c)==false) die("could not find parameter");
-	return (mass2d_r(rmax_true_mc,croot_lensnumber) - menc_true_mc);
+	return (mass2d_r(rmax_true_mc,croot_lensnumber,false) - menc_true_mc);
 }
 
 void QLens::find_equiv_mvir(const double newc)
@@ -11525,7 +11545,7 @@ void QLens::find_equiv_mvir(const double newc)
 	*/
 	double rmax,rmax_true,avgsig,menc,menc_true;
 	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
-	menc_true = mass2d_r(rmax_true,2);
+	menc_true = mass2d_r(rmax_true,2,false);
 
 	// overriding the above
 	//rmax_true = 0.07;
@@ -11550,7 +11570,7 @@ double QLens::mroot_eq(const double logm)
 {
 	double m = pow(10,logm);
 	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
-	return (mass2d_r(rmax_true_mc,2) - menc_true_mc);
+	return (mass2d_r(rmax_true_mc,2,false) - menc_true_mc);
 }
 
 /*

@@ -234,7 +234,7 @@ PYBIND11_MODULE(qlens, m) {
 		  .def_readwrite("chisqtol", &Lens_Wrap::chisq_tolerance)
 		  .def_readwrite("central_image", &Lens_Wrap::include_central_image)
 		  .def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
-		  .def_readwrite_static("sci_notation", &Lens_Wrap::use_scientific_notation)
+		  .def_property("sci_notation", &Lens_Wrap::get_sci_notation, &Lens_Wrap::set_sci_notation)
 		  .def_readwrite_static("ansi_output", &Lens_Wrap::use_ansi_output_during_fit)
         ;
 

@@ -1000,7 +1000,7 @@ void QLens::process_commands(bool read_file)
 							"              (e.g., 'fit transform # gaussian 0.2 0.5' will be Gaussian with mean 0.2 and dispersion 0.5)\n\n";
 					else if (words[2]=="dparams")
 						cout << "fit dparams\n"
-							"fit dparams add <param_type> [param_args...] [lens#]     (lens# and/or param_arg are optional for some dparams)\n"
+							"fit dparams add <param_type> [param_args...] [lens#] [-kpc] (lens#, param_arg are optional for some dparams)\n"
 							"fit dparams rename <param_type> <text_name> <latex_name>\n"
 							"fit dparams clear [param_num]\n\n"
 							"Define derived parameters whose values will be output along with the primary parameters after running\n"
@@ -1008,6 +1008,7 @@ void QLens::process_commands(bool read_file)
 							"'fit dparams clear' to remove one or all of the derived parameters from the list, and 'fit dparams add'\n"
 							"to add a new derived parameter. All derived parameters are defined by a type and (usually) an argument;\n"
 							"in the list below, the parameter argument is denoted in brackets <...>, otherwise no argument is required.\n"
+							"If the '-kpc' argument is added, distances entered will be in kpc rather than arcseconds.\n"
 							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
 							"raw_chisq -- The chi-square value (not including priors; no arguments required)\n"
 							"kappa_r  -- *The kappa at radius <r>, averaged over all angles (where <r> in arcseconds)\n"
@@ -6185,6 +6186,15 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="dparams")
 				{
+					bool use_kpc = false;
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-kpc") use_kpc = true;
+							else Complain("argument '" << args[i] << "' not recognized");
+						}
+					}
 					if (nwords==2) { if (mpi_id==0) print_derived_param_list(); }
 					else {
 						if (words[2]=="clear") {
@@ -6206,7 +6216,7 @@ void QLens::process_commands(bool read_file)
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 									if (lensnum >= nlens) Complain("specified lens number does not exist");
 								} else lensnum = -1;
-								add_derived_param(KappaR,dparam_arg,lensnum);
+								add_derived_param(KappaR,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="dkappa_r") {
 								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dkappa_r' (param_arg)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
@@ -6214,7 +6224,7 @@ void QLens::process_commands(bool read_file)
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 									if (lensnum >= nlens) Complain("specified lens number does not exist");
 								} else lensnum = -1;
-								add_derived_param(DKappaR,dparam_arg,lensnum);
+								add_derived_param(DKappaR,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="logslope") {
 								if (nwords != 7) Complain("derived parameter logslope requires three arguments (rmin,rmax,lens_number)");
 								double dparam_arg2;
@@ -6222,65 +6232,65 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[5] >> dparam_arg2)) Complain("invalid derived parameter argument");
 								if (!(ws[6] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(AvgLogSlope,dparam_arg,lensnum,dparam_arg2);
+								add_derived_param(AvgLogSlope,dparam_arg,lensnum,dparam_arg2,use_kpc);
 							} else if (words[3]=="mass2d_r") {
 								if (nwords != 6) Complain("derived parameter mass2d_r requires two arguments (r_arcsec,lens_number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(Mass2dR,dparam_arg,lensnum);
+								add_derived_param(Mass2dR,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="mass3d_r") {
 								if (nwords != 6) Complain("derived parameter mass3d_r requires two arguments (r_arcsec,lens_number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(Mass3dR,dparam_arg,lensnum);
+								add_derived_param(Mass3dR,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="re_zsrc") {
 								if (nwords != 6) Complain("derived parameter re_zsrc requires two arguments (zsrc,lens_number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(Einstein,dparam_arg,lensnum);
+								add_derived_param(Einstein,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="mass_re") {
 								if (nwords != 6) Complain("derived parameter mass_re requires two arguments (zsrc,lens_number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(Einstein_Mass,dparam_arg,lensnum);
+								add_derived_param(Einstein_Mass,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="lensparam") {
 								int paramnum;
 								if (nwords != 6) Complain("derived parameter lensparam requires two arguments (paramnum,lens_number)");
 								if (!(ws[4] >> paramnum)) Complain("invalid derived parameter argument--must be integer (parameter number)");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-								add_derived_param(LensParam,paramnum,lensnum);
+								add_derived_param(LensParam,paramnum,lensnum,-1,use_kpc);
 							} else if (words[3]=="r_perturb") {
 								if (nwords != 5) Complain("derived parameter r_perturb requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
-								add_derived_param(Perturbation_Radius,0.0,lensnum);
+								add_derived_param(Perturbation_Radius,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="r_perturb_rel") {
 								if (nwords != 5) Complain("derived parameter r_perturb_rel requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
-								add_derived_param(Relative_Perturbation_Radius,0.0,lensnum);
+								add_derived_param(Relative_Perturbation_Radius,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="mass_perturb") {
 								if (nwords != 5) Complain("derived parameter mass_perturb requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
-								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum);
+								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="sigma_perturb") {
 								if (nwords != 5) Complain("derived parameter sigma_perturb requires only one arguments (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
-								add_derived_param(Robust_Perturbation_Density,0.0,lensnum);
+								add_derived_param(Robust_Perturbation_Density,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="raw_chisq") {
 								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
-								add_derived_param(Chi_Square,0.0,-1);
+								add_derived_param(Chi_Square,0.0,-1,-1,use_kpc);
 							} else Complain("derived parameter type not recognized");
 						}
 						else if (words[2]=="rename") {
@@ -6356,6 +6366,7 @@ void QLens::process_commands(bool read_file)
 							if (n_infiles==10) Complain("cannot open more than 10 files at once");
 							infile++;
 						}
+						cout << scriptfile_str << endl;
 						infile->open(scriptfile_str.c_str());
 						if (infile->is_open()) {
 							if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
@@ -7238,6 +7249,7 @@ void QLens::process_commands(bool read_file)
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->load_mask_fits(filename);
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="savemask")
 			{
@@ -7430,9 +7442,11 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
 					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 					image_pixel_data->estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb);
-					cout << "Mean surface brightness: " << mean_sb << endl;
-					cout << "Dispersion of surface brightness: " << sig_sb << endl;
-					cout << endl;
+					if (mpi_id==0) {
+						cout << "Mean surface brightness: " << mean_sb << endl;
+						cout << "Dispersion of surface brightness: " << sig_sb << endl;
+						cout << endl;
+					}
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap find_noise'");
 			}
 			else if (words[1]=="plotimg")
@@ -9628,6 +9642,17 @@ void QLens::process_commands(bool read_file)
 			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 			//plot_shear_field(xmin,xmax,100,ymin,ymax,100);
+		}
+		else if (words[0]=="echo") {
+			bool add_endl = true;
+			for (int i=1; i < nwords; i++) {
+				if (words[i]=="-noendl") {
+					remove_word(i);
+					add_endl = false;
+				}
+			}
+			for (int i=1; i < nwords; i++) cout << words[i] << " ";
+			if (add_endl) cout << endl;
 		}
 		else if (mpi_id==0) Complain("command not recognized");
 	}

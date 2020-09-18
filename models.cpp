@@ -2199,6 +2199,7 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, QLens* cosmo_in, const bool sine)
 {
 	setup_lens_properties(0,m_in);
+	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
 
@@ -2591,7 +2592,7 @@ PointMass::PointMass(const PointMass* lens_in)
 	copy_base_lensdata(lens_in);
 	b = lens_in->b;
 	if (parameter_mode==1) mtot = lens_in->mtot;
-	// the base class copies q and theta, which are useless here, but it's simpler to just call it
+	update_meta_parameters();
 }
 
 void PointMass::assign_paramnames()

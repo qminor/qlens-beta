@@ -933,6 +933,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void set_reference_source_redshift(const double zsrc);
 	double get_reference_source_redshift() { return reference_source_redshift; }
 	void recalculate_beta_factors();
+	void set_sci_notation(const bool scinot) {
+		use_scientific_notation = scinot;
+		if (use_scientific_notation) cout << setiosflags(ios::scientific);
+		else {
+			cout << resetiosflags(ios::scientific);
+			cout.unsetf(ios_base::floatfield);
+		}
+	}
+	bool get_sci_notation() { return use_scientific_notation; }
 
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
 	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
@@ -955,9 +964,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
-	double mass2d_r(const double r_arcsec, const int lensnum);
-	double mass3d_r(const double r_arcsec, const int lensnum);
-	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax);
+	double mass2d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
+	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
+	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
@@ -967,7 +976,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);
 
-	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30);
+	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
 	void rename_derived_param(int dparam_number, string newname, string new_latex_name);
 	void clear_derived_params();
@@ -1058,8 +1067,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
-	double total_kappa(const double r, const int lensnum);
-	double total_dkappa(const double r, const int lensnum);
+	double total_kappa(const double r, const int lensnum, const bool use_kpc);
+	double total_dkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac);
@@ -1290,14 +1299,16 @@ struct DerivedParam
 	DerivedParamType derived_param_type;
 	double funcparam; // if funcparam == -1, then there is no parameter required
 	double funcparam2;
+	bool use_kpc_units;
 	int lensnum_param;
 	string name, latex_name;
-	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1) // if lensnum == -1, then it uses *all* the lenses (if possible)
+	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1, bool usekpc = false) // if lensnum == -1, then it uses *all* the lenses (if possible)
 	{
 		derived_param_type = type_in;
 		funcparam = param;
 		funcparam2 = param2;
 		lensnum_param = lensnum;
+		use_kpc_units = usekpc;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == DKappaR) {
@@ -1353,14 +1364,15 @@ struct DerivedParam
 	}
 	double get_derived_param(QLens* lens_in)
 	{
-		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param);
-		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param);
-		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param);
-		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param);
+		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param,use_kpc_units);
+		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param,use_kpc_units);
+		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param,use_kpc_units);
+		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param,use_kpc_units);
 		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
+		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(lensnum_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
-			return lens_in->mass2d_r(re,lensnum_param);
+			return lens_in->mass2d_r(re,lensnum_param,false);
 		} else if (derived_param_type == LensParam) {
 			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
 		}
@@ -1368,8 +1380,6 @@ struct DerivedParam
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,true);
 			return rmax;
-		} else if (derived_param_type == AvgLogSlope) {
-			return lens_in->calculate_average_log_slope(lensnum_param,funcparam,funcparam2);
 		} else if (derived_param_type == Perturbation_Radius) {
 			double rmax,avgsig,menc;
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
@@ -1401,18 +1411,19 @@ struct DerivedParam
 	}
 	void print_param_description(QLens* lens_in)
 	{
+		string unitstring = (use_kpc_units) ? " kpc" : " arcsec";
 		double dpar = get_derived_param(lens_in);
 		//cout << name << ": ";
 		if (derived_param_type == KappaR) {
-			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << " arcsec" << endl;
-			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
+			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << unitstring << endl;
+			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == DKappaR) {
-			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << " arcsec" << endl;
-			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << " arcsec" << endl;
+			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << unitstring << endl;
+			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == Mass2dR) {
-			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
+			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == Mass3dR) {
-			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << " arcsec" << endl;
+			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == Einstein) {
 			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == Einstein_Mass) {

@@ -128,8 +128,9 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 		epsilon = lens_in->epsilon;
 		epsilon2 = lens_in->epsilon2;
 	}
+
 	f_major_axis = lens_in->f_major_axis;
-	set_angle_radians(lens_in->theta);
+	if (angle_paramnum != -1) set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
 	include_limits = lens_in->include_limits;
@@ -1446,21 +1447,27 @@ void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const d
 void LensProfile::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
-	theta += M_HALFPI;
-	while (theta > M_PI) theta -= M_PI;
+	if (angle_paramnum != -1) { // if angle_paramnum==-1, there is no angle parameter so we don't need to mess with theta
+		theta += M_HALFPI;
+		while (theta > M_PI) theta -= M_PI;
+	}
 }
 
 void LensProfile::shift_angle_minus_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
-	theta -= M_HALFPI;
-	while (theta <= -M_PI) theta += M_PI;
+	if (angle_paramnum != -1) { // if angle_paramnum==-1, there is no angle parameter so we don't need to mess with theta
+		theta -= M_HALFPI;
+		while (theta <= -M_PI) theta += M_PI;
+	}
 }
 
 void LensProfile::reset_angle_modulo_2pi()
 {
-	while (theta < -M_PI/2) theta += 2*M_PI;
-	while (theta > 2*M_PI) theta -= 2*M_PI;
+	if (angle_paramnum != -1) { // if angle_paramnum==-1, there is no angle parameter so we don't need to mess with theta
+		while (theta < -M_PI/2) theta += 2*M_PI;
+		while (theta > 2*M_PI) theta -= 2*M_PI;
+	}
 }
 
 void LensProfile::set_angle(const double &theta_degrees)

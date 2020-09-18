@@ -3132,6 +3132,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 	long naxes[2] = {1,1};
 	double *pixels;
 	double x, y, xstep, ystep;
+	int n_maskpixels = 0;
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
@@ -3152,7 +3153,11 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 
 					for (i=0; i < naxes[0]; i++) {
 						if (pixels[i] == 0.0) require_fit[i][j] = false;
-						else require_fit[i][j] = true;
+						else {
+							require_fit[i][j] = true;
+							n_maskpixels++;
+						//cout << pixels[i] << endl;
+						}
 					}
 				}
 				delete[] pixels;
@@ -3163,6 +3168,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 	} 
 
 	if (status) fits_report_error(stderr, status); // print any error message
+	if (image_load_status) n_required_pixels = n_maskpixels;
 	return image_load_status;
 #endif
 }
