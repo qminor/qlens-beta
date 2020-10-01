@@ -208,6 +208,7 @@ void QLens::process_commands(bool read_file)
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
 						"outside_sb_noise_threshold -- max s.b. allowed beyond mask by outside_sb_prior (times pixel noise)\n"
+						"extended_mask_n_neighbors -- expand mask by set # of pixel neighbors during outside_sb_prior eval.\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
@@ -2078,6 +2079,9 @@ void QLens::process_commands(bool read_file)
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
 					cout << "outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
+					if (extended_mask_n_neighbors==-1) cout << "extended_mask_n_neighbors = all" << endl;
+					else cout << "extended_mask_n_neighbors = " << extended_mask_n_neighbors << endl;
+
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
 					cout << "nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
@@ -6970,14 +6974,17 @@ void QLens::process_commands(bool read_file)
 		{
 			if (!islens()) Complain("must specify lens model first");
 			if (nwords==1) {
-				double re, re_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
-				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]]);
+				double re, reav, re_kpc, reav_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
+				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],reav);
 				arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
 				re_kpc = re*arcsec_to_kpc;
+				reav_kpc = reav*arcsec_to_kpc;
 				sigma_cr_kpc = sigma_crit_kpc(lens_redshift, source_redshift);
-				m_ein = sigma_cr_kpc*M_PI*SQR(re_kpc);
-				cout << "Einstein radius of primary lens (+ co-centered lenses): r_E = " << re << " arcsec, " << re_kpc << " kpc\n";
-				cout << "Mass within Einstein radius: " << m_ein << " solar masses\n";
+				m_ein = sigma_cr_kpc*M_PI*SQR(reav_kpc);
+				cout << "Einstein radius of primary (+ co-centered and/or secondary) lens:\n";
+				cout << "r_E_major = " << re << " arcsec, " << re_kpc << " kpc\n";
+				cout << "r_E_avg = " << reav << " arcsec, " << reav_kpc << " kpc\n";
+				cout << "Mass within average Einstein radius: " << m_ein << " solar masses\n";
 			} else if (nwords==2) {
 				if (mpi_id==0) {
 					int lens_number;
@@ -7345,12 +7352,18 @@ void QLens::process_commands(bool read_file)
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_all_required_data_pixels();
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="set_neighbor_pixels")
 			{
-				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_neighbor_pixels'");
+				int ntimes = 1;
+				if (nwords > 3) Complain("only one argument allowed for command 'sbmap set_neighbor_pixels'");
+				if (nwords == 3) {
+					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
+				}
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_nearest_neighbor_pixels();
+				for (int i=0; i < ntimes; i++) image_pixel_data->set_nearest_neighbor_pixels();
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="unset_low_sn_pixels")
 			{
@@ -7359,6 +7372,7 @@ void QLens::process_commands(bool read_file)
 				double sbthresh;
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
 				image_pixel_data->unset_low_signal_pixels(sbthresh,false);
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="trim_mask_windows")
 			{
@@ -7367,6 +7381,7 @@ void QLens::process_commands(bool read_file)
 				double noise_threshold;
 				if (!(ws[2] >> noise_threshold)) Complain("invalid noise threshold for keeping mask windows");
 				image_pixel_data->assign_mask_windows(noise_threshold);
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="set_data_annulus")
 			{
@@ -7387,6 +7402,7 @@ void QLens::process_commands(bool read_file)
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch);
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="unset_data_annulus")
 			{
@@ -7407,6 +7423,7 @@ void QLens::process_commands(bool read_file)
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true); // the 'true' says to deactivate the pixels, instead of activating them
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="set_data_window")
 			{
@@ -7417,8 +7434,9 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
 					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-					image_pixel_data->set_required_data_pixels(xmin,xmax,ymin,ymax);
+					image_pixel_data->set_required_data_window(xmin,xmax,ymin,ymax);
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="unset_data_window")
 			{
@@ -7429,8 +7447,9 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
 					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-					image_pixel_data->set_required_data_pixels(xmin,xmax,ymin,ymax,true); // the 'true' says to deactivate the pixels, instead of activating them
+					image_pixel_data->set_required_data_window(xmin,xmax,ymin,ymax,true); // the 'true' says to deactivate the pixels, instead of activating them
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
+				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="find_noise")
 			{
@@ -9312,19 +9331,20 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << outside_sb_prior_threshold << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
-		else if (words[0]=="outside_sb_n_neighbors")
+		else if (words[0]=="extended_mask_n_neighbors")
 		{
-			double sb_n;
+			double emask_n;
 			if (nwords == 2) {
-				if (words[1]=="all") sb_n = -1;
-				else if (!(ws[1] >> sb_n)) Complain("invalid number of neighbor pixels to search for outside_sb_prior");
-				outside_sb_prior_n_neighbors = sb_n;
+				if (words[1]=="all") emask_n = -1;
+				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels to search for outside_sb_prior");
+				extended_mask_n_neighbors = emask_n;
+				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors);
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					if (outside_sb_prior_n_neighbors==-1) cout << "number of neighbor pixels to search: outside_sb_n_neighbors = all" << endl;
-					else cout << "number of neighbor pixels to search: outside_sb_n_neighbors = " << outside_sb_prior_n_neighbors << endl;
+					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels to search: extended_mask_n_neighbors = all" << endl;
+					else cout << "number of neighbor pixels to search: extended_mask_n_neighbors = " << extended_mask_n_neighbors << endl;
 				}
-			} else Complain("must specify either zero or one argument for outside_sb_n_neighbors");
+			} else Complain("must specify either zero or one argument for extended_mask_n_neighbors");
 		}
 		else if (words[0]=="nimg_sb_threshold")
 		{
@@ -9335,6 +9355,26 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "surface brightness fraction threshold for nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
 			} else Complain("must specify either zero or one argument for nimg_sb_threshold");
+		}
+		else if (words[0]=="Re_threshold_low")
+		{
+			double re_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> re_thresh)) Complain("invalid Einstein radius prior threshold");
+				einstein_radius_low_threshold = re_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Einstein radius low threshold = " << einstein_radius_low_threshold << endl;
+			} else Complain("must specify either zero or one argument for Re_threshold_low");
+		}
+		else if (words[0]=="Re_threshold_high")
+		{
+			double re_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> re_thresh)) Complain("invalid Einstein radius prior threshold");
+				einstein_radius_high_threshold = re_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Einstein radius high threshold = " << einstein_radius_high_threshold << endl;
+			} else Complain("must specify either zero or one argument for Re_threshold_high");
 		}
 		else if (words[0]=="adaptive_grid")
 		{
@@ -9380,6 +9420,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'outside_sb_prior' command; must specify 'on' or 'off'");
 				set_switch(outside_sb_prior,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="Re_prior")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Set prior on minimum Einstein radius allowed for primary (+ optional secondary) lens: " << display_switch(einstein_radius_prior) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'einstein_radius_prior' command; must specify 'on' or 'off'");
+				set_switch(einstein_radius_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="subhalo_prior")

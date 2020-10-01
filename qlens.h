@@ -390,7 +390,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double outside_sb_prior_threshold;
-	int outside_sb_prior_n_neighbors;
+	bool einstein_radius_prior;
+	double einstein_radius_low_threshold;
+	double einstein_radius_high_threshold;
+	int extended_mask_n_neighbors;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -1071,8 +1074,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double total_dkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	bool *centered;
-	double einstein_radius_of_primary_lens(const double zfac);
+	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);
+	double get_einstein_radius_prior(const bool verbal);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
 	void print_lensing_info_at_point(const double x, const double y);
 	bool make_random_sources(int nsources, const char *outfile);

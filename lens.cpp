@@ -672,10 +672,13 @@ QLens::QLens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	outside_sb_prior = true;
-	outside_sb_prior_noise_frac = 4; // surface brightness threshold is given as multiple of data pixel noise
+	outside_sb_prior = false;
+	outside_sb_prior_noise_frac = 0; // surface brightness threshold is given as multiple of data pixel noise (zero by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
-	outside_sb_prior_n_neighbors = -1;
+	einstein_radius_prior = false;
+	einstein_radius_low_threshold = 0;
+	einstein_radius_high_threshold = 1000;
+	extended_mask_n_neighbors = -1;
 	high_sn_frac = 0.5; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -991,7 +994,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	outside_sb_prior = lens_in->outside_sb_prior;
 	outside_sb_prior_noise_frac = lens_in->outside_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	outside_sb_prior_threshold = lens_in->outside_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
-	outside_sb_prior_n_neighbors = lens_in->outside_sb_prior_n_neighbors;
+	einstein_radius_prior = lens_in->einstein_radius_prior;
+	einstein_radius_low_threshold = lens_in->einstein_radius_low_threshold;
+	einstein_radius_high_threshold = lens_in->einstein_radius_high_threshold;
+	extended_mask_n_neighbors = lens_in->extended_mask_n_neighbors;
 
 	high_sn_frac = lens_in->high_sn_frac; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	subhalo_prior = lens_in->subhalo_prior;
@@ -1771,8 +1777,8 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
-			double re_major;
-			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]]);
+			double re_major, reav;
+			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]],reav);
 			if (re_major > 0.0) {
 				double rmax = autogrid_frac*re_major;
 				grid_xlength = 2*rmax;
@@ -1801,8 +1807,8 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
-			double re_major;
-			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]]);
+			double re_major, reav;
+			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]],reav);
 
 			if (re_major != 0.0) {
 				double rmax = autogrid_frac*re_major;
@@ -2976,8 +2982,8 @@ void QLens::find_automatic_grid_position_and_size(double *zfacs)
 			lens_list[primary_lens_number]->get_center_coords(grid_xcenter,grid_ycenter);
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
-			double re_major;
-			re_major = einstein_radius_of_primary_lens(zfacs[lens_redshift_idx[primary_lens_number]]);
+			double re_major, reav;
+			re_major = einstein_radius_of_primary_lens(zfacs[lens_redshift_idx[primary_lens_number]],reav);
 			if (re_major != 0.0) {
 				double rmax = autogrid_frac*re_major;
 				grid_xlength = 2*rmax;
@@ -4481,8 +4487,13 @@ bool QLens::plot_sorted_critical_curves(string critfile)
 	return true;
 }
 
-double QLens::einstein_radius_of_primary_lens(const double zfac)
+double QLens::einstein_radius_of_primary_lens(const double zfac, double &reav)
 {
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
 	// this calculates the Einstein radius of the "macro" lens model (treating the lens as spherical), ignoring any lens components that are not centered on the primary lens
 	double rmin_einstein_radius = 1e-6;
 	double rmax_einstein_radius = 1e4;
@@ -4513,7 +4524,7 @@ double QLens::einstein_radius_of_primary_lens(const double zfac)
 	}
 	if (multiple_lenses==false) {
 		delete[] centered;
-		double re, reav;
+		double re;
 		lens_list[primary_lens_number]->get_einstein_radius(re,reav,zfac);
 		return re;
 	}
@@ -4523,7 +4534,6 @@ double QLens::einstein_radius_of_primary_lens(const double zfac)
 		delete[] centered;
 		return 0;
 	}
-	double reav;
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&QLens::einstein_radius_root);
 	reav = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-3);
@@ -4535,6 +4545,12 @@ double QLens::einstein_radius_of_primary_lens(const double zfac)
 		}
 	}
 	double re_maj_approx = fprim_max*reav;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating Einstein radius: " << wtime << endl;
+	}
+#endif
 	delete[] centered;
 	return re_maj_approx;
 }
@@ -7905,6 +7921,7 @@ void QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
 	if (!show_status) display_chisq_status = default_display_status;
 	//if ((mpi_id==0) and (show_status)) {
 		//if (display_chisq_status) cout << endl;
@@ -9784,6 +9801,22 @@ void QLens::output_bestfit_model()
 	}
 }
 
+double QLens::get_einstein_radius_prior(const bool verbal)
+{
+	double re, loglike_penalty = 0;
+	einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],re);
+	//loglike_penalty = SQR((re-einstein_radius_threshold)/0.1);
+	if (re < einstein_radius_low_threshold) {
+		loglike_penalty = pow(1-re+einstein_radius_low_threshold,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+		if ((mpi_id==0) and (verbal)) cout << "*NOTE: Einstein radius is below the low prior threshold (" << re << " vs. " << einstein_radius_low_threshold << "), resulting in penalty prior (loglike_penalty=" << loglike_penalty << ")" << endl;
+	}
+	else if (re > einstein_radius_high_threshold) {
+		loglike_penalty = pow(1+re-einstein_radius_high_threshold,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+		if ((mpi_id==0) and (verbal)) cout << "*NOTE: Einstein radius is above the high prior threshold (" << re << " vs. " << einstein_radius_high_threshold << "), resulting in penalty prior (loglike_penalty=" << loglike_penalty << ")" << endl;
+	}
+	return loglike_penalty;
+}
+
 double QLens::fitmodel_loglike_point_source(double* params)
 {
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
@@ -9921,6 +9954,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
+	if (einstein_radius_prior) loglike += fitmodel->get_einstein_radius_prior(false);
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (fitmodel->chisq_it % chisq_display_frequency == 0) {
 			if (chisq_total != (2*loglike)) cout << ", chisq_tot=" << chisq_total;
@@ -9970,6 +10004,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike = fitmodel_custom_prior();
 	}
+	if (einstein_radius_prior) loglike += fitmodel->get_einstein_radius_prior(false);
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (use_ansi_characters) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0;
@@ -9980,7 +10015,6 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		//cout << "\033[1A";
 		if (use_ansi_characters) cout << endl;
 	}
-
 
 	return loglike;
 }
@@ -11336,8 +11370,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (source_fit_mode==Pixellated_Source) {
 			clear_lensing_matrices();
 			clear_pixel_matrices();
-			if (outside_sb_prior_n_neighbors == -1) image_pixel_grid->include_all_pixels();
-			else image_pixel_grid->set_neighbor_pixels(outside_sb_prior_n_neighbors); 
+			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+			else {
+				image_pixel_grid->activate_extended_mask(); 
+			}
 			assign_pixel_mappings(verbal);
 			initialize_pixel_matrices(verbal);
 			PSF_convolution_Lmatrix(verbal);
@@ -11350,8 +11386,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				default_imgpixel_nsplit = 2; // it's waaaay too slow if many splittings
 				image_pixel_grid->reset_nsplit();
 			}
-			if (outside_sb_prior_n_neighbors == -1) image_pixel_grid->include_all_pixels();
-			else image_pixel_grid->set_neighbor_pixels(outside_sb_prior_n_neighbors); 
+			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+			else {
+				image_pixel_grid->activate_extended_mask(); 
+			}
 			image_pixel_grid->find_surface_brightness();
 			vectorize_image_pixel_surface_brightness();
 			PSF_convolution_image_pixel_vector(verbal);
@@ -11364,7 +11402,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double max_external_sb = -1e30, max_sb = -1e30;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+				if ((image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
 					if (image_surface_brightness[img_index] > max_sb) {
 						 max_sb = image_surface_brightness[img_index];
@@ -11373,10 +11411,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 		}
 		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*data_pixel_noise,outside_sb_prior_threshold*max_sb);
+		if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((!image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
+				if ((!image_pixel_data->require_fit[i][j]) and ((image_pixel_data->extended_mask[i][j])) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
+					//cout << image_surface_brightness[img_index] << endl;
 					if (abs(image_surface_brightness[img_index]) >= outside_sb_threshold) {
 						if (image_surface_brightness[img_index] > max_external_sb) {
 							 max_external_sb = image_surface_brightness[img_index];
@@ -11385,6 +11425,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				}
 			}
 		}
+		//cout << "WTF? " << max_sb << " " << max_external_sb << endl;
 		if (max_external_sb > 0) {
 			double chisq_penalty;
 			sb_outside_window = true;

@@ -216,7 +216,7 @@ class ImagePixelGrid : public Sort
 	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
-	void set_neighbor_pixels(const int n_neighbors);
+	void activate_extended_mask();
 	void reset_nsplit();
 
 	~ImagePixelGrid();
@@ -251,6 +251,7 @@ struct ImagePixelData
 	double **surface_brightness;
 	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	bool **require_fit;
+	bool **extended_mask;
 	double *xvals, *yvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
@@ -261,6 +262,7 @@ struct ImagePixelData
 		surface_brightness = NULL;
 		high_sn_pixel = NULL;
 		require_fit = NULL;
+		extended_mask = NULL;
 		xvals = NULL;
 		yvals = NULL;
 		lens = NULL;
@@ -286,8 +288,9 @@ struct ImagePixelData
 	void assign_mask_windows(const double sb_noise_threshold);
 	void unset_low_signal_pixels(const double sb_threshold, const bool use_fit);
 	void set_nearest_neighbor_pixels();
-	void set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
+	void set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
+	void set_extended_mask(const int n_neighbors);
 	bool test_if_in_fit_region(const double& x, const double& y);
 	void set_lens(QLens* lensptr) { lens = lensptr; }
 

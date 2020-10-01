@@ -1081,7 +1081,29 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	int src_raytrace_i, src_raytrace_j;
 	int img_i, img_j;
 
-	int ntot = image_pixel_grid->x_N * image_pixel_grid->y_N;
+	//int ntot = image_pixel_grid->x_N * image_pixel_grid->y_N;
+
+	long int ntot = 0;
+	for (i=0; i < image_pixel_grid->x_N; i++) {
+		for (j=0; j < image_pixel_grid->y_N; j++) {
+			if (lens->image_pixel_data->extended_mask[i][j]) ntot++;
+		}
+	}
+	int *extended_mask_i = new int[ntot];
+	int *extended_mask_j = new int[ntot];
+	int n_cell=0;
+	// you shouldn't have to calculate this again...this was already calculated in redo_lensing_calculations. Save extended_mask_i arrays?
+	for (j=0; j < image_pixel_grid->y_N; j++) {
+		for (i=0; i < image_pixel_grid->x_N; i++) {
+			if (lens->image_pixel_data->extended_mask[i][j]) {
+				extended_mask_i[n_cell] = i;
+				extended_mask_j[n_cell] = j;
+				n_cell++;
+			}
+		}
+	}
+
+
 	int *overlap_matrix_row_nn = new int[ntot];
 	vector<double> *overlap_matrix_rows = new vector<double>[ntot];
 	vector<int> *overlap_matrix_index_rows = new vector<int>[ntot];
@@ -1109,12 +1131,17 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 #else
 		thread = 0;
 #endif
+		//int img_i2,img_j2;
+					//cout << "TRYING HERE..." << endl;
 		#pragma omp for private(i,j,nsrc,overlap_area,weighted_overlap,triangle1_overlap,triangle2_overlap,triangle1_weight,triangle2_weight,inside) schedule(dynamic) reduction(+:overlap_matrix_nn_part)
 		for (n=mpi_start; n < mpi_end; n++)
 		{
 			overlap_matrix_row_nn[n] = 0;
-			img_j = n / image_pixel_grid->x_N;
-			img_i = n % image_pixel_grid->x_N;
+			//img_j = n / image_pixel_grid->x_N;
+			//img_i = n % image_pixel_grid->x_N;
+			img_j = extended_mask_j[n];
+			img_i = extended_mask_i[n];
+			//cout << "WOAH " << img_i << " " << img_j << " " << img_i2 << " " << img_j2 << endl;
 
 			corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
 			corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
@@ -1135,6 +1162,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 				if (corner_raytrace_j < min_j) min_j = corner_raytrace_j;
 				if (corner_raytrace_j > max_j) max_j = corner_raytrace_j;
 			}
+			//cout << "BLERGH " << min_i << " " << max_i << " " << min_j << " " << max_j << endl;
 			if ((min_i < 0) or (min_i >= u_N)) continue;
 			if ((min_j < 0) or (min_j >= w_N)) continue;
 			if ((max_i < 0) or (max_i >= u_N)) continue;
@@ -1168,6 +1196,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 						}
 						if ((triangle1_overlap != 0) or (triangle2_overlap != 0)) {
 							weighted_overlap = triangle1_weight + triangle2_weight;
+							cout << "WEIGHT: " << weighted_overlap << endl;
 							overlap_matrix_rows[n].push_back(weighted_overlap);
 							overlap_matrix_index_rows[n].push_back(nsrc);
 							overlap_matrix_row_nn[n]++;
@@ -1236,8 +1265,10 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 #endif
 
 	for (n=0; n < ntot; n++) {
-		img_j = n / image_pixel_grid->x_N;
-		img_i = n % image_pixel_grid->x_N;
+		//img_j = n / image_pixel_grid->x_N;
+		//img_i = n % image_pixel_grid->x_N;
+		img_j = extended_mask_j[n];
+		img_i = extended_mask_i[n];
 		for (l=image_pixel_location_overlap[n]; l < image_pixel_location_overlap[n+1]; l++) {
 			nsrc = overlap_matrix_index[l];
 			j = nsrc / u_N;
@@ -1284,6 +1315,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	delete[] overlap_area_matrix_rows;
 	delete[] area_matrix;
 	delete[] high_sn_area_matrix;
+	delete[] extended_mask_i;
+	delete[] extended_mask_j;
 }
 
 double SourcePixelGrid::get_lowest_mag_sourcept(double &xsrc, double &ysrc)
@@ -2832,6 +2865,10 @@ void ImagePixelData::load_data(string root)
 		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
 		delete[] require_fit;
 	}
+	if (extended_mask != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] extended_mask[i];
+		delete[] extended_mask;
+	}
 
 	ifstream xfile(xfilename.c_str());
 	i=0;
@@ -2858,12 +2895,15 @@ void ImagePixelData::load_data(string root)
 	surface_brightness = new double*[npixels_x];
 	high_sn_pixel = new bool*[npixels_x];
 	require_fit = new bool*[npixels_x];
+	extended_mask = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) {
 		surface_brightness[i] = new double[npixels_y];
 		high_sn_pixel[i] = new bool[npixels_y];
 		require_fit[i] = new bool[npixels_y];
+		extended_mask[i] = new bool[npixels_y];
 		for (j=0; j < npixels_y; j++) {
 			require_fit[i][j] = true;
+			extended_mask[i][j] = true;
 			high_sn_pixel[i][j] = true;
 			sbfile >> surface_brightness[i][j];
 		}
@@ -2888,6 +2928,10 @@ void ImagePixelData::load_from_image_grid()
 		for (i=0; i < npixels_x; i++) delete[] require_fit[i];
 		delete[] require_fit;
 	}
+	if (extended_mask != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] extended_mask[i];
+		delete[] extended_mask;
+	}
 
 	npixels_x = lens->image_pixel_grid->x_N;
 	npixels_y = lens->image_pixel_grid->y_N;
@@ -2902,12 +2946,15 @@ void ImagePixelData::load_from_image_grid()
 	surface_brightness = new double*[npixels_x];
 	high_sn_pixel = new bool*[npixels_x];
 	require_fit = new bool*[npixels_x];
+	extended_mask = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) {
 		surface_brightness[i] = new double[npixels_y];
 		high_sn_pixel[i] = new bool[npixels_y];
 		require_fit[i] = new bool[npixels_y];
+		extended_mask[i] = new bool[npixels_y];
 		for (j=0; j < npixels_y; j++) {
 			require_fit[i][j] = true;
+			extended_mask[i][j] = true;
 			high_sn_pixel[i][j] = true;
 			surface_brightness[i][j] = lens->image_pixel_grid->surface_brightness[i][j];
 		}
@@ -2948,6 +2995,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 		if (require_fit != NULL) {
 			for (i=0; i < npixels_x; i++) delete[] require_fit[i];
 			delete[] require_fit;
+		}
+		if (extended_mask != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] extended_mask[i];
+			delete[] extended_mask;
 		}
 
 		int nkeys;
@@ -3051,12 +3102,15 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				surface_brightness = new double*[npixels_x];
 				high_sn_pixel = new bool*[npixels_x];
 				require_fit = new bool*[npixels_x];
+				extended_mask = new bool*[npixels_x];
 				for (i=0; i < npixels_x; i++) {
 					surface_brightness[i] = new double[npixels_y];
 					high_sn_pixel[i] = new bool[npixels_y];
 					require_fit[i] = new bool[npixels_y];
+					extended_mask[i] = new bool[npixels_y];
 					for (j=0; j < npixels_y; j++) {
 						require_fit[i][j] = true;
+						extended_mask[i][j] = true;
 						high_sn_pixel[i][j] = true;
 					}
 				}
@@ -3169,6 +3223,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 
 	if (status) fits_report_error(stderr, status); // print any error message
 	if (image_load_status) n_required_pixels = n_maskpixels;
+	set_extended_mask(lens->extended_mask_n_neighbors);
 	return image_load_status;
 #endif
 }
@@ -3347,6 +3402,10 @@ ImagePixelData::~ImagePixelData()
 		for (int i=0; i < npixels_x; i++) delete[] require_fit[i];
 		delete[] require_fit;
 	}
+	if (extended_mask != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] extended_mask[i];
+		delete[] extended_mask;
+	}
 }
 
 void ImagePixelData::set_no_required_data_pixels()
@@ -3355,6 +3414,7 @@ void ImagePixelData::set_no_required_data_pixels()
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			require_fit[i][j] = false;
+			extended_mask[i][j] = false;
 		}
 	}
 	n_required_pixels = 0;
@@ -3366,6 +3426,7 @@ void ImagePixelData::set_all_required_data_pixels()
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			require_fit[i][j] = true;
+			extended_mask[i][j] = true;
 		}
 	}
 	n_required_pixels = npixels_x*npixels_y;
@@ -3510,6 +3571,7 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 	}
 	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
 	delete[] mask_window_id;
+	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit)
@@ -3568,6 +3630,7 @@ void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bo
 	}
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
+	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::set_nearest_neighbor_pixels()
@@ -3635,9 +3698,10 @@ void ImagePixelData::set_nearest_neighbor_pixels()
 	}
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
+	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
-void ImagePixelData::set_required_data_pixels(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset)
+void ImagePixelData::set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset)
 {
 	int i,j;
 	for (i=0; i < npixels_x; i++) {
@@ -3657,6 +3721,7 @@ void ImagePixelData::set_required_data_pixels(const double xmin, const double xm
 			}
 		}
 	}
+	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
@@ -3706,6 +3771,82 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 			}
 		}
 	}
+	set_extended_mask(lens->extended_mask_n_neighbors);
+}
+
+void ImagePixelData::set_extended_mask(const int n_neighbors)
+{
+	// This is very similar to the set_neighbor_pixels() function in ImagePixelData; used here for the outside_sb_prior feature
+	int i,j,k;
+	//bool **req = new bool*[npixels_x];
+	//for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
+	if (n_neighbors < 0) {
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				extended_mask[i][j] = true;
+			}
+		}
+		return;
+	}
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			extended_mask[i][j] = require_fit[i][j];
+		}
+	}
+	for (k=0; k < n_neighbors; k++) {
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				if (require_fit[i][j]) {
+					if ((i < npixels_x-1) and (!require_fit[i+1][j])) {
+						if (!extended_mask[i+1][j]) {
+							extended_mask[i+1][j] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((i > 0) and (!require_fit[i-1][j])) {
+						if (!extended_mask[i-1][j]) {
+							extended_mask[i-1][j] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((j < npixels_y-1) and (!require_fit[i][j+1])) {
+						if (!extended_mask[i][j+1]) {
+							extended_mask[i][j+1] = true;
+							//n_required_pixels++;
+						}
+					}
+					if ((j > 0) and (!require_fit[i][j-1])) {
+						if (!extended_mask[i][j-1]) {
+							extended_mask[i][j-1] = true;
+							//n_required_pixels++;
+						}
+					}
+				}
+			}
+		}
+		/*
+		// check for any lingering "holes" in the mask and activate them
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				if (!require_fit[i][j]) {
+					if (((i < npixels_x-1) and (require_fit[i+1][j])) and ((i > 0) and (require_fit[i-1][j])) and ((j < npixels_y-1) and (require_fit[i][j+1])) and ((j > 0) and (require_fit[i][j-1]))) {
+						if (!extended_mask[i][j]) {
+							extended_mask[i][j] = true;
+							//n_required_pixels++;
+						}
+					}
+				}
+			}
+		}
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				require_fit[i][j] = extended_mask[i][j];
+			}
+		}
+		*/
+	}
+	//for (i=0; i < npixels_x; i++) delete[] req[i];
+	//delete[] req;
 }
 
 void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb)
@@ -4459,77 +4600,16 @@ void ImagePixelGrid::include_all_pixels()
 	}
 }
 
-void ImagePixelGrid::set_neighbor_pixels(const int n_neighbors)
+void ImagePixelGrid::activate_extended_mask()
 {
-	// This is very similar to the set_neighbor_pixels() function in ImagePixelData; used here for the outside_sb_prior feature
-	int i,j,k;
-	bool **req = new bool*[x_N];
-	for (i=0; i < x_N; i++) req[i] = new bool[y_N];
+	int i,j;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			req[i][j] = fit_to_data[i][j];
+			fit_to_data[i][j] = lens->image_pixel_data->extended_mask[i][j];
 		}
 	}
-	for (k=0; k < n_neighbors; k++) {
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				if (fit_to_data[i][j]) {
-					if ((i < x_N-1) and (!fit_to_data[i+1][j])) {
-						if (!req[i+1][j]) {
-							req[i+1][j] = true;
-							//n_required_pixels++;
-						}
-					}
-					if ((i > 0) and (!fit_to_data[i-1][j])) {
-						if (!req[i-1][j]) {
-							req[i-1][j] = true;
-							//n_required_pixels++;
-						}
-					}
-					if ((j < y_N-1) and (!fit_to_data[i][j+1])) {
-						if (!req[i][j+1]) {
-							req[i][j+1] = true;
-							//n_required_pixels++;
-						}
-					}
-					if ((j > 0) and (!fit_to_data[i][j-1])) {
-						if (!req[i][j-1]) {
-							req[i][j-1] = true;
-							//n_required_pixels++;
-						}
-					}
-				}
-			}
-		}
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				fit_to_data[i][j] = req[i][j];
-			}
-		}
-		/*
-		// check for any lingering "holes" in the mask and activate them
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				if (!fit_to_data[i][j]) {
-					if (((i < x_N-1) and (fit_to_data[i+1][j])) and ((i > 0) and (fit_to_data[i-1][j])) and ((j < y_N-1) and (fit_to_data[i][j+1])) and ((j > 0) and (fit_to_data[i][j-1]))) {
-						if (!req[i][j]) {
-							req[i][j] = true;
-							//n_required_pixels++;
-						}
-					}
-				}
-			}
-		}
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				fit_to_data[i][j] = req[i][j];
-			}
-		}
-		*/
-	}
-	for (i=0; i < x_N; i++) delete[] req[i];
-	delete[] req;
 }
+
 
 void ImagePixelGrid::reset_nsplit()
 {
@@ -4559,7 +4639,77 @@ void ImagePixelGrid::redo_lensing_calculations()
 #endif
 	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
 
-	int i,j,n,n_cell,n_yp;
+	int i,j,n,n_cell,n_corner,n_yp;
+
+	long int ntot_cells = 0;
+	long int ntot_corners = 0;
+	for (i=0; i < x_N+1; i++) {
+		for (j=0; j < y_N+1; j++) {
+			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				ntot_corners++;
+			}
+		}
+	}
+
+	//cout << ntot_corners << " " << ntot_cells << endl;
+	int *extended_mask_i = new int[ntot_cells];
+	int *extended_mask_j = new int[ntot_cells];
+	int *extended_mask_corner_i = new int[ntot_corners];
+	int *extended_mask_corner_j = new int[ntot_corners];
+	int *extended_mask_corner = new int[ntot_cells];
+	int *extended_mask_corner_up = new int[ntot_cells];
+	int **nvals = new int*[x_N];
+	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
+	int **ncvals = new int*[x_N+1];
+	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
+	
+	n_cell=0;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			if (lens->image_pixel_data->extended_mask[i][j]) {
+				extended_mask_i[n_cell] = i;
+				extended_mask_j[n_cell] = j;
+				nvals[i][j] = n_cell;
+				n_cell++;
+			} else {
+				nvals[i][j] = -1;
+			}
+		}
+	}
+
+	//cout << "HI1" << endl;
+	n_corner=0;
+	for (j=0; j < y_N+1; j++) {
+		for (i=0; i < x_N+1; i++) {
+			ncvals[i][j] = -1;
+			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (lens->image_pixel_data->extended_mask[i][j-1])) or (lens->image_pixel_data->extended_mask[i-1][j-1])) {
+				extended_mask_corner_i[n_corner] = i;
+				extended_mask_corner_j[n_corner] = j;
+				if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
+				if (j > (y_N+1)) die("FUCK! corner j is huge from the get-go");
+				//if ((i < x_N) and (j < y_N)) extended_mask_corner[nvals[i][j]] = n_corner;
+				ncvals[i][j] = n_corner;
+				n_corner++;
+			}
+		}
+	}
+	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
+	//cout << "HI2" << endl;
+	for (int n=0; n < ntot_cells; n++) {
+		i = extended_mask_i[n];
+		j = extended_mask_j[n];
+		extended_mask_corner[n] = ncvals[i][j];
+		extended_mask_corner_up[n] = ncvals[i][j+1];
+	}
+	for (int n=0; n < ntot_corners; n++) {
+		i = extended_mask_corner_i[n];
+		j = extended_mask_corner_j[n];
+		if (i > (x_N+1)) die("FUCK! corner i is huge");
+		if (j > (y_N+1)) die("FUCK! corner j is huge");
+	}
+
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
@@ -4567,8 +4717,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 			else nsplits[i][j] = 1;
 		}
 	}
-	long int ntot_corners = (x_N+1)*(y_N+1);
-	long int ntot_cells = x_N*y_N;
+	//cout << "cells: " << ntot_cells << " tot: " << (x_N*y_N) << endl;
+	//cout << "corners: " << ntot_corners << " tot: " << ((x_N+1)*(y_N+1)) << endl;
+	//ntot_corners = (x_N+1)*(y_N+1);
+	//ntot_cells = x_N*y_N;
 	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
 	double *twistx, *twisty;
 	int *twiststat;
@@ -4594,6 +4746,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	if (lens->group_id == lens->group_np-1) mpi_chunk2 += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 	mpi_end2 = mpi_start2 + mpi_chunk2;
 
+	//cout << "HI3" << endl;
 	#pragma omp parallel
 	{
 		int thread;
@@ -4603,11 +4756,17 @@ void ImagePixelGrid::redo_lensing_calculations()
 		thread = 0;
 #endif
 		lensvector d1,d2,d3,d4;
+		//int ii,jj;
 		#pragma omp for private(n,i,j) schedule(dynamic)
 		for (n=mpi_start; n < mpi_end; n++) {
-			j = n / (x_N+1);
-			i = n % (x_N+1);
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+			//j = n / (x_N+1);
+			//i = n % (x_N+1);
+			j = extended_mask_corner_j[n];
+			i = extended_mask_corner_i[n];
+			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
+			if (i > x_N+1) die("FUCK! i is huge");
+			if (j > y_N+1) die("FUCK! j is huge");
+			//lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 #ifdef USE_MPI
 		#pragma omp master
@@ -4623,14 +4782,22 @@ void ImagePixelGrid::redo_lensing_calculations()
 		}
 		#pragma omp barrier
 #endif
+		int nn, nn_yp;
+	//cout << "HI4" << endl;
 		#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
 		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
-			j = n_cell / x_N;
-			i = n_cell % x_N;
+			//j = n_cell / x_N;
+			//i = n_cell % x_N;
+			j = extended_mask_j[n_cell];
+			i = extended_mask_i[n_cell];
+			//cout << "TEST: " << i << " " << j << " " << ii << "  " << jj << endl;
 			lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
 
-			n = j*(x_N+1)+i;
-			n_yp = (j+1)*(x_N+1)+i;
+			//n = j*(x_N+1)+i;
+			//n_yp = (j+1)*(x_N+1)+i;
+			n = extended_mask_corner[n_cell];
+			n_yp = extended_mask_corner_up[n_cell];
+			//cout << "TEST2: " << n << " " << n_yp << " " << nn << " " << nn_yp << endl;
 			d1[0] = defx_corners[n] - defx_corners[n+1];
 			d1[1] = defy_corners[n] - defy_corners[n+1];
 			d2[0] = defx_corners[n_yp] - defx_corners[n];
@@ -4678,6 +4845,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
 		}
 	}
+	//cout << "HI5" << endl;
 #ifdef USE_MPI
 	int id, chunk, start;
 	for (id=0; id < lens->group_np; id++) {
@@ -4695,12 +4863,16 @@ void ImagePixelGrid::redo_lensing_calculations()
 	MPI_Comm_free(&sub_comm);
 #endif
 	for (n=0; n < ntot_corners; n++) {
-		j = n / (x_N+1);
-		i = n % (x_N+1);
+		//j = n / (x_N+1);
+		//i = n % (x_N+1);
+		j = extended_mask_corner_j[n];
+		i = extended_mask_corner_i[n];
 		corner_sourcepts[i][j][0] = defx_corners[n];
 		corner_sourcepts[i][j][1] = defy_corners[n];
 		if ((i < x_N) and (j < y_N)) {
-			n_cell = j*x_N+i;
+			//n_cell = j*x_N+i;
+			n_cell = nvals[i][j];
+			//cout << "BLA: " << n_cell << " " << n_cell2 << endl;
 			source_plane_triangle1_area[i][j] = area_tri1[n_cell];
 			source_plane_triangle2_area[i][j] = area_tri2[n_cell];
 			center_sourcepts[i][j][0] = defx_centers[n_cell];
@@ -4711,6 +4883,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 		}
 	}
 
+	//cout << "HI6" << endl;
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -4726,6 +4899,18 @@ void ImagePixelGrid::redo_lensing_calculations()
 	delete[] twistx;
 	delete[] twisty;
 	delete[] twiststat;
+
+	delete[] extended_mask_i;
+	delete[] extended_mask_j;
+	delete[] extended_mask_corner_i;
+	delete[] extended_mask_corner_j;
+	delete[] extended_mask_corner;
+	delete[] extended_mask_corner_up;
+	for (i=0; i < x_N; i++) delete[] nvals[i];
+	delete[] nvals;
+	for (i=0; i < x_N+1; i++) delete[] ncvals[i];
+	delete[] ncvals;
+	
 }
 
 void ImagePixelGrid::redo_lensing_calculations_corners()
@@ -5257,12 +5442,14 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						surface_brightness[i][j] = 0;
-						if (!plot_foreground_only) surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
-						if (at_least_one_foreground_src) {
-							for (int k=0; k < lens->n_sb; k++) {
-								if (!lens->sb_list[k]->is_lensed) {
-									if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-									else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
+						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
+							if (!plot_foreground_only) surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
+							if (at_least_one_foreground_src) {
+								for (int k=0; k < lens->n_sb; k++) {
+									if (!lens->sb_list[k]->is_lensed) {
+										if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+										else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
+									}
 								}
 							}
 						}
