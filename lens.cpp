@@ -10792,7 +10792,7 @@ bool QLens::create_source_surface_brightness_grid(bool verbal, bool image_grid_a
 		int n_imgpixels;
 		if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 		if (auto_srcgrid_npixels) {
-			if (auto_srcgrid_set_pixel_size)
+			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
 				image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
 			else
 				image_pixel_grid->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
@@ -11371,9 +11371,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			clear_lensing_matrices();
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
-			else {
-				image_pixel_grid->activate_extended_mask(); 
-			}
+			else image_pixel_grid->activate_extended_mask(); 
 			assign_pixel_mappings(verbal);
 			initialize_pixel_matrices(verbal);
 			PSF_convolution_Lmatrix(verbal);
@@ -11387,9 +11385,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				image_pixel_grid->reset_nsplit();
 			}
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
-			else {
-				image_pixel_grid->activate_extended_mask(); 
-			}
+			else image_pixel_grid->activate_extended_mask(); 
 			image_pixel_grid->find_surface_brightness();
 			vectorize_image_pixel_surface_brightness();
 			PSF_convolution_image_pixel_vector(verbal);

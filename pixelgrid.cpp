@@ -1147,6 +1147,16 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 			corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
 			corners_threads[thread][3] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j+1];
+			//for (int l=0; l < 4; l++) if ((*corners_threads[thread][l])[0]==-5000) {
+				//cout << "WHOOPS! " << l << " " << img_i << " " << img_j << " " << endl;
+				//if (!lens->image_pixel_data->extended_mask[img_i][img_j]) cout << "NOT IN EXTENDED MASK" << endl;
+				//cout << "checking corner 0: " << image_pixel_grid->corner_sourcepts[img_i][img_j][0] << " " << image_pixel_grid->corner_sourcepts[img_i][img_j][1] << endl;
+				//cout << "checking corner 1: " << image_pixel_grid->corner_sourcepts[img_i][img_j+1][0] << " " << image_pixel_grid->corner_sourcepts[img_i][img_j+1][1] << endl;
+				//cout << "checking corner 2: " << image_pixel_grid->corner_sourcepts[img_i+1][img_j][0] << " " << image_pixel_grid->corner_sourcepts[img_i+1][img_j][1] << endl;
+				//cout << "checking corner 3: " << image_pixel_grid->corner_sourcepts[img_i+1][img_j+1][0] << " " << image_pixel_grid->corner_sourcepts[img_i+1][img_j+1][1] << endl;
+				//cout << "checking center: " << image_pixel_grid->center_sourcepts[img_i][img_j][0] << " " << image_pixel_grid->center_sourcepts[img_i][img_j][1] << endl;
+				////die("OOPSY DOOPSIES!");
+			//}
 			twistpts_threads[thread] = &image_pixel_grid->twist_pts[img_i][img_j];
 			twist_status_threads[thread] = &image_pixel_grid->twist_status[img_i][img_j];
 
@@ -1196,7 +1206,7 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 						}
 						if ((triangle1_overlap != 0) or (triangle2_overlap != 0)) {
 							weighted_overlap = triangle1_weight + triangle2_weight;
-							cout << "WEIGHT: " << weighted_overlap << endl;
+							//cout << "WEIGHT: " << weighted_overlap << endl;
 							overlap_matrix_rows[n].push_back(weighted_overlap);
 							overlap_matrix_index_rows[n].push_back(nsrc);
 							overlap_matrix_row_nn[n]++;
@@ -3902,7 +3912,6 @@ void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, 
 	double sigthreshold = 3.0;
 	double sqrthreshold = SQR(sigthreshold)*sqrnoise;
 	noise = sqrt(sqrnoise);
-	cout << "noise=" << noise << endl;
 	int nclip=0, prev_nclip;
 	double difsqr;
 	do {
@@ -3928,9 +3937,7 @@ void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, 
 		sqrthreshold = SQR(sigthreshold)*sqrnoise;
 		noise = sqrt(sqrnoise);
 		mean_sb = total_flux / np;
-		cout << "noise=" << noise << ", mean=" << mean_sb << ", nclip=" << nclip << endl;
 	} while (nclip > prev_nclip);
-
 }
 
 void ImagePixelData::add_point_image_from_centroid(ImageData* point_image_data, const double xmin, const double xmax, const double ymin, const double ymax, const double sb_threshold, const double pixel_error)
@@ -4641,6 +4648,25 @@ void ImagePixelGrid::redo_lensing_calculations()
 
 	int i,j,n,n_cell,n_corner,n_yp;
 
+	// for debugging, set to -5000 beforehand
+	/*
+	for (i=0; i < x_N+1; i++) {
+		for (j=0; j < y_N+1; j++) {
+			corner_sourcepts[i][j][0] = -5000;
+			corner_sourcepts[i][j][1] = -5000;
+			if ((i < x_N) and (j < y_N)) {
+				source_plane_triangle1_area[i][j] = -5000;
+				source_plane_triangle2_area[i][j] = -5000;
+				center_sourcepts[i][j][0] = -5000;
+				center_sourcepts[i][j][1] = -5000;
+				twist_pts[i][j][0] = -5000;
+				twist_pts[i][j][1] = -5000;
+				twist_status[i][j] = -5000;
+			}
+		}
+	}
+	*/
+
 	long int ntot_cells = 0;
 	long int ntot_corners = 0;
 	for (i=0; i < x_N+1; i++) {
@@ -4766,7 +4792,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
 			if (i > x_N+1) die("FUCK! i is huge");
 			if (j > y_N+1) die("FUCK! j is huge");
-			//lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 #ifdef USE_MPI
 		#pragma omp master
@@ -4869,19 +4895,24 @@ void ImagePixelGrid::redo_lensing_calculations()
 		i = extended_mask_corner_i[n];
 		corner_sourcepts[i][j][0] = defx_corners[n];
 		corner_sourcepts[i][j][1] = defy_corners[n];
-		if ((i < x_N) and (j < y_N)) {
-			//n_cell = j*x_N+i;
-			n_cell = nvals[i][j];
-			//cout << "BLA: " << n_cell << " " << n_cell2 << endl;
-			source_plane_triangle1_area[i][j] = area_tri1[n_cell];
-			source_plane_triangle2_area[i][j] = area_tri2[n_cell];
-			center_sourcepts[i][j][0] = defx_centers[n_cell];
-			center_sourcepts[i][j][1] = defy_centers[n_cell];
-			twist_pts[i][j][0] = twistx[n_cell];
-			twist_pts[i][j][1] = twisty[n_cell];
-			twist_status[i][j] = twiststat[n_cell];
-		}
+		//cout << "corner: " << defx_corners[n] << " " << defy_corners[n] << " " << endl;
 	}
+	for (n=0; n < ntot_cells; n++) {
+		//n_cell = j*x_N+i;
+		j = extended_mask_j[n];
+		i = extended_mask_i[n];
+		//cout << "BLA: " << n_cell << " " << n_cell2 << endl;
+		//if (!lens->image_pixel_data->extended_mask[i][j]) die("FUCK ME!!!");
+		source_plane_triangle1_area[i][j] = area_tri1[n];
+		source_plane_triangle2_area[i][j] = area_tri2[n];
+		center_sourcepts[i][j][0] = defx_centers[n];
+		center_sourcepts[i][j][1] = defy_centers[n];
+		//cout << "center: " << defx_centers[n] << " " << defy_centers[n] << " " << endl;
+		twist_pts[i][j][0] = twistx[n];
+		twist_pts[i][j][1] = twisty[n];
+		twist_status[i][j] = twiststat[n];
+	}
+	//die();
 
 	//cout << "HI6" << endl;
 #ifdef USE_OPENMP
@@ -5068,6 +5099,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (fit_to_data[i][j]) {
+				if (!lens->image_pixel_data->extended_mask[i][j]) die("fuck me");
 				resize_grid = true;
 				if (use_noise_threshold) {
 					sbavg=0;
@@ -7595,6 +7627,8 @@ void QLens::calculate_image_pixel_surface_brightness()
 	if (at_least_one_foreground_src) {
 		calculate_foreground_pixel_surface_brightness();
 		add_foreground_to_image_pixel_vector();
+	} else {
+		for (int img_index=0; img_index < image_npixels; img_index++) foreground_surface_brightness[img_index] = 0;
 	}
 
 }

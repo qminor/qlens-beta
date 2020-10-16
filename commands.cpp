@@ -6981,10 +6981,12 @@ void QLens::process_commands(bool read_file)
 				reav_kpc = reav*arcsec_to_kpc;
 				sigma_cr_kpc = sigma_crit_kpc(lens_redshift, source_redshift);
 				m_ein = sigma_cr_kpc*M_PI*SQR(reav_kpc);
-				cout << "Einstein radius of primary (+ co-centered and/or secondary) lens:\n";
-				cout << "r_E_major = " << re << " arcsec, " << re_kpc << " kpc\n";
-				cout << "r_E_avg = " << reav << " arcsec, " << reav_kpc << " kpc\n";
-				cout << "Mass within average Einstein radius: " << m_ein << " solar masses\n";
+				if (mpi_id==0) {
+					cout << "Einstein radius of primary (+ co-centered and/or secondary) lens:\n";
+					cout << "r_E_major = " << re << " arcsec, " << re_kpc << " kpc\n";
+					cout << "r_E_avg = " << reav << " arcsec, " << reav_kpc << " kpc\n";
+					cout << "Mass within average Einstein radius: " << m_ein << " solar masses\n";
+				}
 			} else if (nwords==2) {
 				if (mpi_id==0) {
 					int lens_number;
