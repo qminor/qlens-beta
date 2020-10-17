@@ -291,6 +291,7 @@ struct ImagePixelData
 	void set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
 	void set_extended_mask(const int n_neighbors);
+	long int get_size_of_extended_mask();
 	bool test_if_in_fit_region(const double& x, const double& y);
 	void set_lens(QLens* lensptr) { lens = lensptr; }
 
@@ -310,7 +311,7 @@ struct ImagePixelData
 		ymax=ymax_in;
 	}
 	void set_pixel_size(const double size) { pixel_size = size; }
-	void plot_surface_brightness(string outfile_root, bool show_only_mask);
+	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false);
 };
 
 

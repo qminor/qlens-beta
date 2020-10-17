@@ -7310,12 +7310,14 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="plotdata")
 			{
 				bool show_mask_only = true;
+				bool show_extended_mask = false;
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-nomask") show_mask_only = false;
+						if (args[i]=="-emask") show_extended_mask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -7331,14 +7333,14 @@ void QLens::process_commands(bool read_file)
 					range = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
 				}
 				if (nwords == 2) {
-					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only);
+					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask);
 					run_plotter_range("datapixel",range);
 				} else if (nwords == 3) {
 					if (terminal==TEXT) {
-						image_pixel_data->plot_surface_brightness(words[2],show_mask_only);
+						image_pixel_data->plot_surface_brightness(words[2],show_mask_only,show_extended_mask);
 					}
 					else {
-						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only);
+						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask);
 						run_plotter("datapixel",words[2],range);
 					}
 				}
@@ -9341,10 +9343,16 @@ void QLens::process_commands(bool read_file)
 				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels to search for outside_sb_prior");
 				extended_mask_n_neighbors = emask_n;
 				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors);
+				int npix;
+				if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
+				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
 					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels to search: extended_mask_n_neighbors = all" << endl;
 					else cout << "number of neighbor pixels to search: extended_mask_n_neighbors = " << extended_mask_n_neighbors << endl;
+					int npix;
+					if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
+					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for extended_mask_n_neighbors");
 		}
@@ -9632,9 +9640,10 @@ void QLens::process_commands(bool read_file)
 		}
 		else if ((words[0]=="continue") or (words[0]=="c"))
 		{
-			if (read_from_file) Complain("script file is already being read");
-			if (!infile->is_open()) Complain("no script file is currently loaded");
-			read_from_file = true;
+			if (!read_from_file) {
+				if (!infile->is_open()) Complain("no script file is currently loaded");
+				read_from_file = true;
+			}
 		}
 		else if (words[0]=="sleep")
 		{

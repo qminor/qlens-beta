@@ -3788,8 +3788,6 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 {
 	// This is very similar to the set_neighbor_pixels() function in ImagePixelData; used here for the outside_sb_prior feature
 	int i,j,k;
-	//bool **req = new bool*[npixels_x];
-	//for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
 	if (n_neighbors < 0) {
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
@@ -3798,48 +3796,54 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 		}
 		return;
 	}
+	bool **req = new bool*[npixels_x];
+	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			extended_mask[i][j] = require_fit[i][j];
+			req[i][j] = require_fit[i][j];
 		}
 	}
 	for (k=0; k < n_neighbors; k++) {
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
-				if (require_fit[i][j]) {
-					if ((i < npixels_x-1) and (!require_fit[i+1][j])) {
+				if (req[i][j]) {
+					if ((i < npixels_x-1) and (!req[i+1][j])) {
 						if (!extended_mask[i+1][j]) {
+							//cout << "NEW PIX!" << endl;
 							extended_mask[i+1][j] = true;
 							//n_required_pixels++;
 						}
 					}
-					if ((i > 0) and (!require_fit[i-1][j])) {
+					if ((i > 0) and (!req[i-1][j])) {
 						if (!extended_mask[i-1][j]) {
+							//cout << "NEW PIX!" << endl;
 							extended_mask[i-1][j] = true;
 							//n_required_pixels++;
 						}
 					}
-					if ((j < npixels_y-1) and (!require_fit[i][j+1])) {
+					if ((j < npixels_y-1) and (!req[i][j+1])) {
 						if (!extended_mask[i][j+1]) {
+							//cout << "NEW PIX!" << endl;
 							extended_mask[i][j+1] = true;
 							//n_required_pixels++;
 						}
 					}
-					if ((j > 0) and (!require_fit[i][j-1])) {
+					if ((j > 0) and (!req[i][j-1])) {
 						if (!extended_mask[i][j-1]) {
 							extended_mask[i][j-1] = true;
+							//cout << "NEW PIX!" << endl;
 							//n_required_pixels++;
 						}
 					}
 				}
 			}
 		}
-		/*
 		// check for any lingering "holes" in the mask and activate them
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
-				if (!require_fit[i][j]) {
-					if (((i < npixels_x-1) and (require_fit[i+1][j])) and ((i > 0) and (require_fit[i-1][j])) and ((j < npixels_y-1) and (require_fit[i][j+1])) and ((j > 0) and (require_fit[i][j-1]))) {
+				if (!extended_mask[i][j]) {
+					if (((i < npixels_x-1) and (extended_mask[i+1][j])) and ((i > 0) and (extended_mask[i-1][j])) and ((j < npixels_y-1) and (extended_mask[i][j+1])) and ((j > 0) and (extended_mask[i][j-1]))) {
 						if (!extended_mask[i][j]) {
 							extended_mask[i][j] = true;
 							//n_required_pixels++;
@@ -3850,14 +3854,34 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 		}
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
-				require_fit[i][j] = extended_mask[i][j];
+				req[i][j] = extended_mask[i][j];
 			}
 		}
-		*/
+		//long int npix = 0;
+		//for (i=0; i < npixels_x; i++) {
+			//for (j=0; j < npixels_y; j++) {
+				//if (extended_mask[i][j]) npix++;
+			//}
+		//}
+		//cout << "iteration " << k << ": npix=" << npix << endl;
 	}
-	//for (i=0; i < npixels_x; i++) delete[] req[i];
-	//delete[] req;
+	for (i=0; i < npixels_x; i++) delete[] req[i];
+	delete[] req;
 }
+
+long int ImagePixelData::get_size_of_extended_mask()
+{
+	int i,j;
+	long int npix = 0;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (extended_mask[i][j]) npix++;
+		}
+	}
+	return npix;
+}
+
+
 
 void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb)
 {
@@ -4023,7 +4047,7 @@ void ImagePixelData::add_point_image_from_centroid(ImageData* point_image_data, 
 	point_image_data->add_image(pos,centroid_err,total_flux,flux_err,0,0);
 }
 
-void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only_mask)
+void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -4040,16 +4064,30 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 	for (int j=0; j <= npixels_y; j++) {
 		pixel_yvals << yvals[j] << endl;
 	}	
-	for (j=0; j < npixels_y; j++) {
-		for (i=0; i < npixels_x; i++) {
-			if ((!show_only_mask) or (require_fit == NULL) or (require_fit[i][j])) {
-				pixel_image_file << surface_brightness[i][j];
-			} else {
-				pixel_image_file << "NaN";
+	if (show_extended_mask) {
+		for (j=0; j < npixels_y; j++) {
+			for (i=0; i < npixels_x; i++) {
+				if ((!show_only_mask) or (extended_mask == NULL) or (extended_mask[i][j])) {
+					pixel_image_file << surface_brightness[i][j];
+				} else {
+					pixel_image_file << "NaN";
+				}
+				if (i < npixels_x-1) pixel_image_file << " ";
 			}
-			if (i < npixels_x-1) pixel_image_file << " ";
+			pixel_image_file << endl;
 		}
-		pixel_image_file << endl;
+	} else {
+		for (j=0; j < npixels_y; j++) {
+			for (i=0; i < npixels_x; i++) {
+				if ((!show_only_mask) or (require_fit == NULL) or (require_fit[i][j])) {
+					pixel_image_file << surface_brightness[i][j];
+				} else {
+					pixel_image_file << "NaN";
+				}
+				if (i < npixels_x-1) pixel_image_file << " ";
+			}
+			pixel_image_file << endl;
+		}
 	}
 }
 
@@ -4377,6 +4415,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 
 ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data)
 {
+	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
 	lens = lens_in;
 	source_fit_mode = mode;
 	ray_tracing_method = method;
@@ -4616,7 +4655,6 @@ void ImagePixelGrid::activate_extended_mask()
 		}
 	}
 }
-
 
 void ImagePixelGrid::reset_nsplit()
 {
@@ -4944,7 +4982,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	
 }
 
-void ImagePixelGrid::redo_lensing_calculations_corners()
+void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming
 {
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
