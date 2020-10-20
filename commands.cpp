@@ -917,7 +917,7 @@ void QLens::process_commands(bool read_file)
 							"Loads a chain that has already been created, and adds any derived parameters defined using 'fit dparams'.\n"
 							"The fit label should match that of the chain, and the lens model should be the same as in the chain\n"
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
-							"chain will still be included.\n";
+							"chain will still be included. The new chain data will be safed to the file '<fit_label>.new'.\n";
 					else if (words[2]=="mkposts")
 						cout << "fit mkposts <dirname> [-n#] [-N#] [-no2d] [-nohist] [-subonly]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"

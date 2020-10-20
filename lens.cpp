@@ -9061,6 +9061,9 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 bool QLens::add_dparams_to_chain()
 {
+	// Should have an option to specify the extension to the filename for the new chain (which defaults to '.new' if nothing is specified). ADD THIS IN!!!!!!!!!!!!!
+	// Should check whether any new derived parameters have the same name as one of the old derived parameters--this can happen if one accidently adds the
+	// same derived parameters they had before (in addition to some new ones). Have it print an error if this is the case. ADD THIS FEATURE!!!!!!
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else if (source_fit_mode==Pixellated_Source) {

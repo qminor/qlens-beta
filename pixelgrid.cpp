@@ -4116,6 +4116,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
+
 	int i,j,k;
 	for (i=0; i <= x_N; i++) {
 		corner_pts[i] = new lensvector[y_N+1];
@@ -4244,7 +4245,45 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
 	}
 #endif
+	setup_ray_tracing_arrays();
 	fit_to_data = NULL;
+}
+
+void ImagePixelGrid::setup_ray_tracing_arrays()
+{
+	ntot_cells = 0;
+	ntot_corners = 0;
+	int i, j;
+	for (i=0; i < x_N+1; i++) {
+		for (j=0; j < y_N+1; j++) {
+			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				ntot_corners++;
+			}
+		}
+	}
+
+	// The following is used for the ray tracing
+	defx_corners = new double[ntot_corners];
+	defy_corners = new double[ntot_corners];
+	defx_centers = new double[ntot_cells];
+	defy_centers = new double[ntot_cells];
+	area_tri1 = new double[ntot_cells];
+	area_tri2 = new double[ntot_cells];
+	twistx = new double[ntot_cells];
+	twisty = new double[ntot_cells];
+	twiststat = new int[ntot_cells];
+
+	extended_mask_i = new int[ntot_cells];
+	extended_mask_j = new int[ntot_cells];
+	extended_mask_corner_i = new int[ntot_corners];
+	extended_mask_corner_j = new int[ntot_corners];
+	extended_mask_corner = new int[ntot_cells];
+	extended_mask_corner_up = new int[ntot_cells];
+	nvals = new int*[x_N];
+	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
+	ncvals = new int*[x_N+1];
+	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
 }
 
 inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
@@ -4410,6 +4449,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		}
 	}
 
+	setup_ray_tracing_arrays();
 	fit_to_data = NULL;
 }
 
@@ -4495,6 +4535,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 			corner_pts[i][j][1] = y;
 		}
 	}
+	setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask)
@@ -4705,18 +4746,21 @@ void ImagePixelGrid::redo_lensing_calculations()
 	}
 	*/
 
-	long int ntot_cells = 0;
-	long int ntot_corners = 0;
+	long int ntot_cells_check = 0;
+	long int ntot_corners_check = 0;
 	for (i=0; i < x_N+1; i++) {
 		for (j=0; j < y_N+1; j++) {
-			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_check++;
 			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
-				ntot_corners++;
+				ntot_corners_check++;
 			}
 		}
 	}
+	if (ntot_cells_check != ntot_cells) die("ntot_cells does not equal the value assigned when image grid created");
+	if (ntot_corners_check != ntot_corners) die("ntot_corners does not equal the value assigned when image grid created");
 
 	//cout << ntot_corners << " " << ntot_cells << endl;
+	/*
 	int *extended_mask_i = new int[ntot_cells];
 	int *extended_mask_j = new int[ntot_cells];
 	int *extended_mask_corner_i = new int[ntot_corners];
@@ -4727,6 +4771,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
 	int **ncvals = new int*[x_N+1];
 	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
+	*/
 	
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
@@ -4785,9 +4830,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	//cout << "corners: " << ntot_corners << " tot: " << ((x_N+1)*(y_N+1)) << endl;
 	//ntot_corners = (x_N+1)*(y_N+1);
 	//ntot_cells = x_N*y_N;
-	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
-	double *twistx, *twisty;
-	int *twiststat;
+	/*
 	defx_corners = new double[ntot_corners];
 	defy_corners = new double[ntot_corners];
 	defx_centers = new double[ntot_cells];
@@ -4797,6 +4840,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	twistx = new double[ntot_cells];
 	twisty = new double[ntot_cells];
 	twiststat = new int[ntot_cells];
+	*/
 
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = ntot_corners / lens->group_np;
@@ -4959,6 +5003,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
 	}
 #endif
+}
+
+void ImagePixelGrid::delete_ray_tracing_arrays()
+{
 	delete[] defx_corners;
 	delete[] defy_corners;
 	delete[] defx_centers;
@@ -4975,15 +5023,16 @@ void ImagePixelGrid::redo_lensing_calculations()
 	delete[] extended_mask_corner_j;
 	delete[] extended_mask_corner;
 	delete[] extended_mask_corner_up;
+	int i;
 	for (i=0; i < x_N; i++) delete[] nvals[i];
 	delete[] nvals;
 	for (i=0; i < x_N+1; i++) delete[] ncvals[i];
 	delete[] ncvals;
-	
 }
 
 void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming
 {
+	// Update this so it uses the extended mask!! DO THIS!!!!!!!!
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
 #ifdef USE_MPI
@@ -5748,6 +5797,7 @@ ImagePixelGrid::~ImagePixelGrid()
 		for (int i=0; i < x_N; i++) delete[] fit_to_data[i];
 		delete[] fit_to_data;
 	}
+	delete_ray_tracing_arrays();
 }
 
 /************************** Functions in class QLens that pertain to pixel mapping and inversion ****************************/

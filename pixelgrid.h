@@ -194,6 +194,14 @@ class ImagePixelGrid : public Sort
 	int **pixel_index;
 	int **twist_status;
 	lensvector **twist_pts;
+	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
+	double *twistx, *twisty;
+	int *twiststat;
+	int *extended_mask_i, *extended_mask_j, *extended_mask_corner_i, *extended_mask_corner_j, *extended_mask_corner, *extended_mask_corner_up;
+	int **nvals, **ncvals;
+
+	long int ntot_corners, ntot_cells;
+
 	vector<SourcePixelGrid*> **mapped_source_pixels;
 	RayTracingMethod ray_tracing_method;
 	SourceFitMode source_fit_mode;
@@ -217,6 +225,8 @@ class ImagePixelGrid : public Sort
 	void set_fit_window(ImagePixelData& pixel_data);
 	void include_all_pixels();
 	void activate_extended_mask();
+	void setup_ray_tracing_arrays();
+	void delete_ray_tracing_arrays();
 	void reset_nsplit();
 
 	~ImagePixelGrid();
