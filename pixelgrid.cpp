@@ -4251,9 +4251,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 
 void ImagePixelGrid::setup_ray_tracing_arrays()
 {
+	int i,j,n,n_cell,n_corner;
+
 	ntot_cells = 0;
 	ntot_corners = 0;
-	int i, j;
 	for (i=0; i < x_N+1; i++) {
 		for (j=0; j < y_N+1; j++) {
 			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
@@ -4284,6 +4285,61 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
 	ncvals = new int*[x_N+1];
 	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
+
+	
+	n_cell=0;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			if (lens->image_pixel_data->extended_mask[i][j]) {
+				extended_mask_i[n_cell] = i;
+				extended_mask_j[n_cell] = j;
+				nvals[i][j] = n_cell;
+				n_cell++;
+			} else {
+				nvals[i][j] = -1;
+			}
+		}
+	}
+
+	//cout << "HI1" << endl;
+	n_corner=0;
+	for (j=0; j < y_N+1; j++) {
+		for (i=0; i < x_N+1; i++) {
+			ncvals[i][j] = -1;
+			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (lens->image_pixel_data->extended_mask[i][j-1])) or (lens->image_pixel_data->extended_mask[i-1][j-1])) {
+				extended_mask_corner_i[n_corner] = i;
+				extended_mask_corner_j[n_corner] = j;
+				if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
+				if (j > (y_N+1)) die("FUCK! corner j is huge from the get-go");
+				//if ((i < x_N) and (j < y_N)) extended_mask_corner[nvals[i][j]] = n_corner;
+				ncvals[i][j] = n_corner;
+				n_corner++;
+			}
+		}
+	}
+	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
+	//cout << "HI2" << endl;
+	for (int n=0; n < ntot_cells; n++) {
+		i = extended_mask_i[n];
+		j = extended_mask_j[n];
+		extended_mask_corner[n] = ncvals[i][j];
+		extended_mask_corner_up[n] = ncvals[i][j+1];
+	}
+	for (int n=0; n < ntot_corners; n++) {
+		i = extended_mask_corner_i[n];
+		j = extended_mask_corner_j[n];
+		if (i > (x_N+1)) die("FUCK! corner i is huge");
+		if (j > (y_N+1)) die("FUCK! corner j is huge");
+	}
+
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			mapped_source_pixels[i][j].clear();
+			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+			else nsplits[i][j] = 1;
+		}
+	}
 }
 
 inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
@@ -4773,6 +4829,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
 	*/
 	
+	/*
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
@@ -4826,6 +4883,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 			else nsplits[i][j] = 1;
 		}
 	}
+	*/
 	//cout << "cells: " << ntot_cells << " tot: " << (x_N*y_N) << endl;
 	//cout << "corners: " << ntot_corners << " tot: " << ((x_N+1)*(y_N+1)) << endl;
 	//ntot_corners = (x_N+1)*(y_N+1);
