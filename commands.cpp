@@ -208,7 +208,7 @@ void QLens::process_commands(bool read_file)
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
 						"outside_sb_noise_threshold -- max s.b. allowed beyond mask by outside_sb_prior (times pixel noise)\n"
-						"extended_mask_n_neighbors -- expand mask by set # of pixel neighbors during outside_sb_prior eval.\n"
+						"emask_n_neighbors -- expand mask by set # of pixel neighbors during outside_sb_prior eval.\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
@@ -1243,7 +1243,7 @@ void QLens::process_commands(bool read_file)
 								"  [-residual] plots residual image by subtracting from the data image\n"
 								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
-								"  [-emask] plot image (or residuals) using extended mask defined by 'extended_mask_n_neighbors'\n"
+								"  [-emask] plot image (or residuals) using extended mask defined by 'emask_n_neighbors'\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
 								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
@@ -1293,7 +1293,7 @@ void QLens::process_commands(bool read_file)
 								"to the screen (the output file conventions are the same as in 'sbmap plotimg').\n\n"
 								"Optional arguments:\n"
 								"  [-nomask] plot data using all pixels, including those outside the chosen mask\n"
-								"  [-emask] plot data using extended mask defined by 'extended_mask_n_neighbors'\n\n"
+								"  [-emask] plot data using extended mask defined by 'emask_n_neighbors'\n\n"
 								"OPTIONAL: arguments to 'sbmap plotdata' can be followed with terms in brackets [#:#][#:#]\n"
 								"specifying the plotting range for the x and y axes, respectively. A range is allowed\n"
 								"for both the source and image plots. An example in postscript mode:\n\n"
@@ -2081,8 +2081,8 @@ void QLens::process_commands(bool read_file)
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
 					cout << "outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
-					if (extended_mask_n_neighbors==-1) cout << "extended_mask_n_neighbors = all" << endl;
-					else cout << "extended_mask_n_neighbors = " << extended_mask_n_neighbors << endl;
+					if (extended_mask_n_neighbors==-1) cout << "emask_n_neighbors = all" << endl;
+					else cout << "emask_n_neighbors = " << extended_mask_n_neighbors << endl;
 
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
@@ -9339,7 +9339,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << outside_sb_prior_threshold << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
-		else if (words[0]=="extended_mask_n_neighbors")
+		else if ((words[0]=="emask_n_neighbors") or (words[0]=="emask_n_neighbors"))
 		{
 			double emask_n;
 			if (nwords == 2) {
@@ -9352,13 +9352,13 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels to search: extended_mask_n_neighbors = all" << endl;
-					else cout << "number of neighbor pixels to search: extended_mask_n_neighbors = " << extended_mask_n_neighbors << endl;
+					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels to search: emask_n_neighbors = all" << endl;
+					else cout << "number of neighbor pixels to search: emask_n_neighbors = " << extended_mask_n_neighbors << endl;
 					int npix;
 					if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
 					cout << "number of pixels in extended mask: " << npix << endl;
 				}
-			} else Complain("must specify either zero or one argument for extended_mask_n_neighbors");
+			} else Complain("must specify either zero or one argument for emask_n_neighbors");
 		}
 		else if (words[0]=="nimg_sb_threshold")
 		{
