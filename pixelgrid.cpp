@@ -4375,7 +4375,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	source_plane_triangle2_area = new double*[x_N];
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
 	nsplits = new int*[x_N];
-	subpixel_maps_to_srcpixel = new bool**[x_N];
+	if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel = new bool**[x_N];
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -4393,7 +4393,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+		if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		nsplits[i] = new int[y_N];
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
@@ -4401,8 +4401,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 			maps_to_source_pixel[i][j] = true;
 			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			else nsplits[i][j] = 1;
-			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
+			if (lens_in->split_imgpixels) {
+				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
+				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
+			}
 		}
 	}
 	//if ((lens->active_image_pixel_i != NULL) and (lens->active_image_pixel_j != NULL)) {
