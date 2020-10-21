@@ -4111,8 +4111,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	nsplits = new int*[x_N];
-	if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel = new bool**[x_N];
+	if (lens_in->split_imgpixels) {
+		nsplits = new int*[x_N];
+		subpixel_maps_to_srcpixel = new bool**[x_N];
+	}
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -4131,16 +4133,17 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-		nsplits[i] = new int[y_N];
+		if (lens_in->split_imgpixels) {
+			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+			nsplits[i] = new int[y_N];
+		}
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
 			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
-			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 			if (lens_in->split_imgpixels) {
+				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 			}
@@ -4339,7 +4342,6 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
 			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 		}
 	}
 }
@@ -4374,8 +4376,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	nsplits = new int*[x_N];
-	if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel = new bool**[x_N];
+	if (lens_in->split_imgpixels) {
+		nsplits = new int*[x_N];
+		subpixel_maps_to_srcpixel = new bool**[x_N];
+	}
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -4393,15 +4397,16 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-		nsplits[i] = new int[y_N];
+		if (lens_in->split_imgpixels) {
+			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+			nsplits[i] = new int[y_N];
+		}
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			maps_to_source_pixel[i][j] = true;
-			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 			if (lens_in->split_imgpixels) {
+				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 			}
@@ -4537,8 +4542,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	nsplits = new int*[x_N];
-	if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel = new bool**[x_N];
+	if (lens_in->split_imgpixels) {
+		nsplits = new int*[x_N];
+		subpixel_maps_to_srcpixel = new bool**[x_N];
+	}
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -4557,16 +4564,17 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-		nsplits[i] = new int[y_N];
+		if (lens_in->split_imgpixels) {
+			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+			nsplits[i] = new int[y_N];
+		}
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
 			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
-			if (lens_in->split_imgpixels) nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 			if (lens_in->split_imgpixels) {
+				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 			}
@@ -4600,7 +4608,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 	setup_ray_tracing_arrays();
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask)
+void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_extended_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -4623,7 +4631,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j])) {
+			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j]) or ((show_extended_mask) and (lens->image_pixel_data->extended_mask[i][j]))) {
 				if (!plot_residual) pixel_image_file << surface_brightness[i][j];
 				else {
 					residual = lens->image_pixel_data->surface_brightness[i][j] - surface_brightness[i][j];
@@ -4633,7 +4641,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 				}
 			} else {
 				if (plot_residual) {
-					if (show_only_mask) pixel_image_file << "NaN";
+					if ((show_only_mask) or (show_extended_mask)) pixel_image_file << "NaN";
 					else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
 				} else {
 					pixel_image_file << "NaN";
@@ -4765,7 +4773,6 @@ void ImagePixelGrid::reset_nsplit()
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 		}
 	}
 }
@@ -4886,7 +4893,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
 			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 		}
 	}
 	*/
@@ -5058,9 +5064,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
 	}
-	//die();
 
-	//cout << "HI6" << endl;
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -5115,7 +5119,6 @@ void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for ana
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-			else nsplits[i][j] = 1;
 		}
 	}
 	long int ntot_corners = (x_N+1)*(y_N+1);
@@ -5855,10 +5858,10 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] surface_brightness[i];
 		delete[] source_plane_triangle1_area[i];
 		delete[] source_plane_triangle2_area[i];
-		delete[] nsplits[i];
 		delete[] twist_status[i];
 		delete[] twist_pts[i];
 		if (lens->split_imgpixels) {
+			delete[] nsplits[i];
 			for (int j=0; j < y_N; j++) delete[] subpixel_maps_to_srcpixel[i][j];
 			delete[] subpixel_maps_to_srcpixel[i];
 		}
@@ -5871,8 +5874,10 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] surface_brightness;
 	delete[] source_plane_triangle1_area;
 	delete[] source_plane_triangle2_area;
-	if (lens->split_imgpixels) delete[] subpixel_maps_to_srcpixel;
-	delete[] nsplits;
+	if (lens->split_imgpixels) {
+		delete[] subpixel_maps_to_srcpixel;
+		delete[] nsplits;
+	}
 	delete[] twist_status;
 	delete[] twist_pts;
 	if (fit_to_data != NULL) {
@@ -7839,7 +7844,8 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 		int ii,jj,nsplit;
 		double u0, w0, sb;
 		sb = 0;
-		nsplit = image_pixel_grid->nsplits[i][j];
+		if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
+		else nsplit = 1;
 		lensvector corner1, corner2, corner3, corner4;
 		double subpixel_xlength, subpixel_ylength;
 		subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;

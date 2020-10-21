@@ -10923,7 +10923,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool show_extended_mask, bool verbose)
 {
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	if ((source_fit_mode==Parameterized_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
@@ -10991,7 +10991,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	}
 
 	if (output_fits==false) {
-		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only);
+		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only,show_extended_mask);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}

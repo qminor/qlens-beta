@@ -1243,6 +1243,7 @@ void QLens::process_commands(bool read_file)
 								"  [-residual] plots residual image by subtracting from the data image\n"
 								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
+								"  [-emask] plot image (or residuals) using extended mask defined by 'extended_mask_n_neighbors'\n"
 								"  [-nosrc] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
 								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
@@ -1291,7 +1292,8 @@ void QLens::process_commands(bool read_file)
 								"file argument is given, uses file label 'img_pixel' for plotting, and the result is plotted\n"
 								"to the screen (the output file conventions are the same as in 'sbmap plotimg').\n\n"
 								"Optional arguments:\n"
-								"  [-nomask] show all pixels, including those outside the chosen mask\n\n"
+								"  [-nomask] plot data using all pixels, including those outside the chosen mask\n"
+								"  [-emask] plot data using extended mask defined by 'extended_mask_n_neighbors'\n\n"
 								"OPTIONAL: arguments to 'sbmap plotdata' can be followed with terms in brackets [#:#][#:#]\n"
 								"specifying the plotting range for the x and y axes, respectively. A range is allowed\n"
 								"for both the source and image plots. An example in postscript mode:\n\n"
@@ -7478,6 +7480,7 @@ void QLens::process_commands(bool read_file)
 				bool plot_residual = false;
 				bool plot_foreground_only = false;
 				bool show_mask_only = true;
+				bool show_extended_mask = false;
 				bool plot_fits = false;
 				bool omit_source = false;
 				int reduce_factor = 1;
@@ -7492,6 +7495,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-residual") plot_residual = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
 						else if (args[i]=="-nomask") { show_mask_only = false; }
+						else if (args[i]=="-emask") { show_extended_mask = true; }
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
@@ -7530,7 +7534,7 @@ void QLens::process_commands(bool read_file)
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask)==true)) {
 							if (!offload_to_data) {
 								if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 								if (show_cc) {
@@ -7544,9 +7548,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask)==true)) {
 							if (show_cc) {
 								run_plotter("imgpixel",words[2],range1);
 							} else {
@@ -7556,11 +7560,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask);
 								if ((source_pixel_grid != NULL) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask)==true)) {
 							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								run_plotter("imgpixel",words[3],range2);
