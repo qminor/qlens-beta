@@ -885,7 +885,7 @@ QLens::QLens() : UCMC()
 	tabulate_phi_N = 200;
 	tabulate_q_N = 10;
 	grid = NULL;
-	Gauss_NN = 20;
+	Gauss_NN = 1024;
 	integral_tolerance = 5e-3;
 	default_parameter_mode = 0;
 	include_recursive_lensing = true;

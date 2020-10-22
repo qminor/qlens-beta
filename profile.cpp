@@ -1910,7 +1910,9 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 	if ((!converged) and (output_integration_errors)) {
 		if (integral_method==Gauss_Patterson_Quadrature) {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
-				cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << "); switched to 1023-pt. Gauss-Legendre                  " << endl;
+				cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
+				if (numberOfPoints >= 1023) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+				else cout << endl;
 				cout << "Lens: " << model_name << ", Params: ";
 				for (int i=0; i < n_params; i++) {
 					cout << paramnames[i] << "=";
@@ -2111,6 +2113,8 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 		istart = istep - 1;
 		istep *= 2;
 		result = 0;
+		// Note, the pat_funcs[i] is not a problem for multiple OpenMP threads because a separate LensIntegral object was
+		// created for each thread
 		for (j=0, i=istart; j < order; j += 2, i += istep) {
 			pat_funcs[i] = (this->*func)(absum + abdif*pat_points[i]);
 			result += weightptr[j]*pat_funcs[i];
@@ -2122,43 +2126,16 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 	} while (++level < 9);
 
 	if (level == 9) {
-		profile->SetGaussLegendre(1023);
-		gausspoints = profile->points;
-		gaussweights = profile->weights;
+		// If Gauss-Legendre is set up with at least 1023 points, then switch to this to get a (hopefully) more accurate value
+		if (profile->numberOfPoints >= 1023) {
+			gausspoints = profile->points;
+			gaussweights = profile->weights;
 
-		result = 0;
-		for (int i = 0; i < profile->numberOfPoints; i++)
-			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
-
+			result = 0;
+			for (int i = 0; i < profile->numberOfPoints; i++)
+				result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
+		}
 		converged = false;
-
-		/*
-		cerr << "level=" << level-1 << ", order=" << profile->pat_orders[level-1] << ", old_dif=" << abs((result-result_old)/result) << " (s=" << result << "), ";
-		profile->SetGaussLegendre(profile->pat_orders[level-1]);
-		gausspoints = profile->points;
-		gaussweights = profile->weights;
-
-		result_old = result;
-		result = 0;
-
-		for (int i = 0; i < profile->numberOfPoints; i++)
-			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
-
-		//if (abs(result-result_old) > profile->pat_tolerance*abs(result)) converged = false;
-		cerr << "new_dif=" << abs((result-result_old)/result) << " (s=" << result << "), ";
-		profile->SetGaussLegendre(2*profile->pat_orders[level-1]);
-		gausspoints = profile->points;
-		gaussweights = profile->weights;
-
-		result_old = result;
-		result = 0;
-
-		for (int i = 0; i < profile->numberOfPoints; i++)
-			result += gaussweights[i]*(this->*func)(absum + abdif*gausspoints[i]);
-
-		//if (abs(result-result_old) > profile->pat_tolerance*abs(result)) converged = false;
-		cerr << "new_dif2=" << abs((result-result_old)/result) << " (s=" << result << ")" << endl;
-		*/
 	}
 
 	return abdif*result;

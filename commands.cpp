@@ -208,7 +208,7 @@ void QLens::process_commands(bool read_file)
 						"vary_regparam -- vary the regularization as a free parameter during a fit (on/off)\n"
 						"outside_sb_prior -- impose penalty if model produces large surface brightness beyond pixel mask\n"
 						"outside_sb_noise_threshold -- max s.b. allowed beyond mask by outside_sb_prior (times pixel noise)\n"
-						"emask_n_neighbors -- expand mask by set # of pixel neighbors during outside_sb_prior eval.\n"
+						"emask_n_neighbors -- expand mask by set # of pixel neighbors for outside_sb_prior, nimg_prior eval.\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
@@ -9339,12 +9339,12 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << outside_sb_prior_threshold << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_threshold");
 		}
-		else if ((words[0]=="emask_n_neighbors") or (words[0]=="emask_n_neighbors"))
+		else if (words[0]=="emask_n_neighbors")
 		{
 			double emask_n;
 			if (nwords == 2) {
 				if (words[1]=="all") emask_n = -1;
-				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels to search for outside_sb_prior");
+				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
 				extended_mask_n_neighbors = emask_n;
 				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors);
 				int npix;
@@ -9352,8 +9352,8 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels to search: emask_n_neighbors = all" << endl;
-					else cout << "number of neighbor pixels to search: emask_n_neighbors = " << extended_mask_n_neighbors << endl;
+					if (extended_mask_n_neighbors==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
+					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << extended_mask_n_neighbors << endl;
 					int npix;
 					if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
 					cout << "number of pixels in extended mask: " << npix << endl;

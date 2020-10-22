@@ -3568,7 +3568,6 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 			mask_window_sizes[smallest_window_id] = 0;
 			n_windows_eff--;
 		}
-		//cout << "HI " << n_windows_eff << endl;
 	}
 	while (n_windows_eff < old_n_windows);
 	if (lens->mpi_id == 0) cout << "Trimmed " << n_mask_windows << " windows down to " << n_windows_eff << " windows" << endl;
@@ -4306,7 +4305,6 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		}
 	}
 
-	//cout << "HI1" << endl;
 	n_corner=0;
 	for (j=0; j < y_N+1; j++) {
 		for (i=0; i < x_N+1; i++) {
@@ -4324,7 +4322,6 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		}
 	}
 	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
-	//cout << "HI2" << endl;
 	for (int n=0; n < ntot_cells; n++) {
 		i = extended_mask_i[n];
 		j = extended_mask_j[n];
@@ -4857,7 +4854,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 		}
 	}
 
-	//cout << "HI1" << endl;
 	n_corner=0;
 	for (j=0; j < y_N+1; j++) {
 		for (i=0; i < x_N+1; i++) {
@@ -4875,7 +4871,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 		}
 	}
 	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
-	//cout << "HI2" << endl;
 	for (int n=0; n < ntot_cells; n++) {
 		i = extended_mask_i[n];
 		j = extended_mask_j[n];
@@ -4924,7 +4919,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 	if (lens->group_id == lens->group_np-1) mpi_chunk2 += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 	mpi_end2 = mpi_start2 + mpi_chunk2;
 
-	//cout << "HI3" << endl;
 	#pragma omp parallel
 	{
 		int thread;
@@ -4942,26 +4936,24 @@ void ImagePixelGrid::redo_lensing_calculations()
 			j = extended_mask_corner_j[n];
 			i = extended_mask_corner_i[n];
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
-			if (i > x_N+1) die("FUCK! i is huge");
-			if (j > y_N+1) die("FUCK! j is huge");
 			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 #ifdef USE_MPI
 		#pragma omp master
 		{
-			int id, chunk, start;
-			for (id=0; id < lens->group_np; id++) {
-				chunk = ntot_corners / lens->group_np;
-				start = id*chunk;
-				if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-				MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+			if (lens->group_np > 1) {
+				int id, chunk, start;
+				for (id=0; id < lens->group_np; id++) {
+					chunk = ntot_corners / lens->group_np;
+					start = id*chunk;
+					if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+					MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+					MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+				}
 			}
 		}
 		#pragma omp barrier
 #endif
-		int nn, nn_yp;
-	//cout << "HI4" << endl;
 		#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
 		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
 			//j = n_cell / x_N;
@@ -4975,7 +4967,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 			//n_yp = (j+1)*(x_N+1)+i;
 			n = extended_mask_corner[n_cell];
 			n_yp = extended_mask_corner_up[n_cell];
-			//cout << "TEST2: " << n << " " << n_yp << " " << nn << " " << nn_yp << endl;
 			d1[0] = defx_corners[n] - defx_corners[n+1];
 			d1[1] = defy_corners[n] - defy_corners[n+1];
 			d2[0] = defx_corners[n_yp] - defx_corners[n];
@@ -5023,20 +5014,21 @@ void ImagePixelGrid::redo_lensing_calculations()
 			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
 		}
 	}
-	//cout << "HI5" << endl;
 #ifdef USE_MPI
-	int id, chunk, start;
-	for (id=0; id < lens->group_np; id++) {
-		chunk = ntot_cells / lens->group_np;
-		start = id*chunk;
-		if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-		MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
+	if (lens->group_np > 1) {
+		int id, chunk, start;
+		for (id=0; id < lens->group_np; id++) {
+			chunk = ntot_cells / lens->group_np;
+			start = id*chunk;
+			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
+			MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
+		}
 	}
 	MPI_Comm_free(&sub_comm);
 #endif
@@ -5047,19 +5039,15 @@ void ImagePixelGrid::redo_lensing_calculations()
 		i = extended_mask_corner_i[n];
 		corner_sourcepts[i][j][0] = defx_corners[n];
 		corner_sourcepts[i][j][1] = defy_corners[n];
-		//cout << "corner: " << defx_corners[n] << " " << defy_corners[n] << " " << endl;
 	}
 	for (n=0; n < ntot_cells; n++) {
 		//n_cell = j*x_N+i;
 		j = extended_mask_j[n];
 		i = extended_mask_i[n];
-		//cout << "BLA: " << n_cell << " " << n_cell2 << endl;
-		//if (!lens->image_pixel_data->extended_mask[i][j]) die("FUCK ME!!!");
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
 		center_sourcepts[i][j][0] = defx_centers[n];
 		center_sourcepts[i][j][1] = defy_centers[n];
-		//cout << "center: " << defx_centers[n] << " " << defy_centers[n] << " " << endl;
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
