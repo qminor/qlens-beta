@@ -8616,7 +8616,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 	IS = 0;					// do Nested Importance Sampling (bad idea)
 	mmodal = 0;					// do mode separation?
-	ceff = 0;					// run in constant efficiency mode? (VERY bad idea)
+	ceff = 0;					// run in constant efficiency mode? (usually a VERY bad idea)
 	efr = 0.8;				// set the required efficiency
 	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
@@ -8688,15 +8688,18 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 #endif
 
 	// Now convert the MultiNest output to a form that mkdist can read
-	double lnZ;
+	double lnZ = -1e30;
 	double *xparams;
 	double *params;
 	double *covs;
 	double *avgs;
 	double minchisq = 1e30;
+	int cont = 1;
 	if (mpi_id==0) {
+		cout << endl;
 		string stats_filename = filename + "stats.dat";
 		ifstream stats_in(stats_filename.c_str());
+		if (!(stats_in.is_open())) warn("MultiNest output file %sstats.dat could not be found; evidence undetermined",filename.c_str());
 		string dum;
 		for (int i=0; i < 5; i++) {
 			stats_in >> dum;
@@ -8712,59 +8715,68 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 		string mnin_filename = filename + ".txt";
 		ifstream mnin(mnin_filename.c_str());
-		ofstream mnout(filename.c_str());
-		if (data_info != "") mnout << "# DATA_INFO: " << data_info << endl;
-		if (chain_info != "") mnout << "# CHAIN_INFO: " << chain_info << endl;
-		mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
-		mnout << "# lnZ = " << lnZ << endl;
-		if (calculate_bayes_factor) {
-			if (reference_lnZ==-1e30) reference_lnZ = lnZ; // first model being fit, so Bayes factor doesn't get calculated yet
-			else {
-				double log_bayes_factor = lnZ - reference_lnZ;
-				mnout << "# Bayes factor: ln(Z/Z_ref) = " << log_bayes_factor << " Z/Z_ref = " << exp(log_bayes_factor) << " (lnZ_ref=" << reference_lnZ << ")" << endl;
-				reference_lnZ = lnZ;
+		if (!(stats_in.is_open())) {
+			warn("MultiNest output file %s.txt could not be found; chain cannot be processed",mnin_filename.c_str());
+			cont = 0;
+		} else {
+			ofstream mnout(filename.c_str());
+			if (data_info != "") mnout << "# DATA_INFO: " << data_info << endl;
+			if (chain_info != "") mnout << "# CHAIN_INFO: " << chain_info << endl;
+			mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
+			mnout << "# lnZ = " << lnZ << endl;
+			if (calculate_bayes_factor) {
+				if (reference_lnZ==-1e30) reference_lnZ = lnZ; // first model being fit, so Bayes factor doesn't get calculated yet
+				else {
+					double log_bayes_factor = lnZ - reference_lnZ;
+					mnout << "# Bayes factor: ln(Z/Z_ref) = " << log_bayes_factor << " Z/Z_ref = " << exp(log_bayes_factor) << " (lnZ_ref=" << reference_lnZ << ")" << endl;
+					reference_lnZ = lnZ;
+				}
 			}
-		}
 
-		double weight, chi2;
-		int n_tot_params = n_fit_parameters + n_derived_params;
-		xparams = new double[n_tot_params];
-		params = new double[n_tot_params];
-		covs = new double[n_tot_params];
-		avgs = new double[n_tot_params];
-		int i;
-		double weighttot = 0;
-		for (int i=0; i < n_tot_params; i++) {
-			covs[i] = 0;
-			avgs[i] = 0;
-		}
-		while ((mnin.getline(line,n_characters)) and (!mnin.eof())) {
-			istringstream instream(line);
-			instream >> weight;
-			instream >> chi2;
-			for (i=0; i < n_tot_params; i++) instream >> xparams[i];
-			transform_cube(params,xparams);
-			mnout << weight << "   ";
-			for (i=0; i < n_fit_parameters; i++) mnout << params[i] << "   ";
-			for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
-			mnout << chi2 << endl;
-			if (chi2 < minchisq) {
-				minchisq = chi2;
-				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+			double weight, chi2;
+			int n_tot_params = n_fit_parameters + n_derived_params;
+			xparams = new double[n_tot_params];
+			params = new double[n_tot_params];
+			covs = new double[n_tot_params];
+			avgs = new double[n_tot_params];
+			int i;
+			double weighttot = 0;
+			for (int i=0; i < n_tot_params; i++) {
+				covs[i] = 0;
+				avgs[i] = 0;
 			}
+			while ((mnin.getline(line,n_characters)) and (!mnin.eof())) {
+				istringstream instream(line);
+				instream >> weight;
+				instream >> chi2;
+				for (i=0; i < n_tot_params; i++) instream >> xparams[i];
+				transform_cube(params,xparams);
+				mnout << weight << "   ";
+				for (i=0; i < n_fit_parameters; i++) mnout << params[i] << "   ";
+				for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
+				mnout << chi2 << endl;
+				if (chi2 < minchisq) {
+					minchisq = chi2;
+					for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+				}
+				for (i=0; i < n_tot_params; i++) {
+					avgs[i] += weight*params[i];
+					covs[i] += weight*params[i]*params[i];
+				}
+				weighttot += weight;
+			}
+			mnin.close();
 			for (i=0; i < n_tot_params; i++) {
-				avgs[i] += weight*params[i];
-				covs[i] += weight*params[i]*params[i];
+				avgs[i] /= weighttot;
+				covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 			}
-			weighttot += weight;
-		}
-		mnin.close();
-		for (i=0; i < n_tot_params; i++) {
-			avgs[i] /= weighttot;
-			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
 	}
 
+#ifdef USE_MPI
+		MPI_Bcast(&cont,1,MPI_INT,0,MPI_COMM_WORLD);
+#endif
+	if (cont == 0) return;
 #ifdef USE_MPI
 		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
 #endif
@@ -8773,7 +8785,6 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	}
 
 	if (mpi_id==0) {
-		cout << endl;
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
 			double *bestfit_flux;
