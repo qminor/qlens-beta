@@ -7606,6 +7606,11 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
 					} else {
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
+						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
+							run_plotter("srcpixel",words[2],range1);
+						} else {
+							run_plotter("srcpixel_nocc",words[2],range1);
+						}
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
 			}

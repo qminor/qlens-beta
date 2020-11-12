@@ -1172,7 +1172,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 				if (corner_raytrace_j < min_j) min_j = corner_raytrace_j;
 				if (corner_raytrace_j > max_j) max_j = corner_raytrace_j;
 			}
-			//cout << "BLERGH " << min_i << " " << max_i << " " << min_j << " " << max_j << endl;
 			if ((min_i < 0) or (min_i >= u_N)) continue;
 			if ((min_j < 0) or (min_j >= w_N)) continue;
 			if ((max_i < 0) or (max_i >= u_N)) continue;
