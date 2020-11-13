@@ -8715,8 +8715,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 		string mnin_filename = filename + ".txt";
 		ifstream mnin(mnin_filename.c_str());
-		if (!(stats_in.is_open())) {
-			warn("MultiNest output file %s.txt could not be found; chain cannot be processed",mnin_filename.c_str());
+		if (!(mnin.is_open())) {
+			warn("MultiNest output file %s could not be found; chain cannot be processed",mnin_filename.c_str());
 			cont = 0;
 		} else {
 			ofstream mnout(filename.c_str());

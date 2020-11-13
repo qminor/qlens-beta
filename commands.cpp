@@ -7283,7 +7283,6 @@ void QLens::process_commands(bool read_file)
 			{
 				string filename;
 				if (nwords != 2) Complain("no arguments are required for 'sbmap unloadpsf'");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!use_input_psf_matrix) Complain("no psf has been loaded from FITS file");
 				use_input_psf_matrix = false;
 				if (psf_matrix != NULL) {
