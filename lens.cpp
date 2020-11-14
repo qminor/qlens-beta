@@ -673,7 +673,7 @@ QLens::QLens() : UCMC()
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	outside_sb_prior = false;
-	outside_sb_prior_noise_frac = 0; // surface brightness threshold is given as multiple of data pixel noise (zero by default so it's effectively not used)
+	outside_sb_prior_noise_frac = 1e10; // surface brightness threshold is given as multiple of data pixel noise (1e10 by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
 	einstein_radius_prior = false;
 	einstein_radius_low_threshold = 0;
@@ -11420,7 +11420,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				}
 			}
 		}
-		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*data_pixel_noise,outside_sb_prior_threshold*max_sb);
+		double outside_sb_threshold = dmin(outside_sb_prior_noise_frac*data_pixel_noise,outside_sb_prior_threshold*max_sb);
 		if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
