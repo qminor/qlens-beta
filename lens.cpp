@@ -8700,6 +8700,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	double *avgs;
 	double minchisq = 1e30;
 	int cont = 1;
+	bool using_livepts_file = false;
 	if (mpi_id==0) {
 		cout << endl;
 		string stats_filename = filename + "stats.dat";
@@ -8726,6 +8727,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 			}
 			mnin_filename = filename + "live.points";
 			mnin.open(mnin_filename.c_str());
+			using_livepts_file = true;
 		}
 		if (!(mnin.is_open())) {
 			warn("MultiNest output file %s could not be found; chain cannot be processed",mnin_filename.c_str());
@@ -8759,13 +8761,22 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 			}
 			while ((mnin.getline(line,n_characters)) and (!mnin.eof())) {
 				istringstream instream(line);
-				instream >> weight;
-				instream >> chi2;
+				if (!using_livepts_file) {
+					instream >> weight;
+					instream >> chi2;
+				} else {
+					weight = 0.0;
+				}
 				for (i=0; i < n_tot_params; i++) instream >> xparams[i];
 				transform_cube(params,xparams);
 				mnout << weight << "   ";
 				for (i=0; i < n_fit_parameters; i++) mnout << params[i] << "   ";
 				for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
+				if (using_livepts_file) {
+					double negloglike;
+					instream >> negloglike;
+					chi2 = -2*negloglike;
+				}
 				mnout << chi2 << endl;
 				if (chi2 < minchisq) {
 					minchisq = chi2;
@@ -8779,8 +8790,13 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 			}
 			mnin.close();
 			for (i=0; i < n_tot_params; i++) {
-				avgs[i] /= weighttot;
-				covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
+				if (weighttot==0.0) {
+					avgs[i] = 0;
+					covs[i] = 0;
+				} else {
+					avgs[i] /= weighttot;
+					covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
+				}
 			}
 		}
 	}
@@ -8820,8 +8836,14 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 		cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
 		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):    (chisq=" << minchisq << ")\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+		if (using_livepts_file) {
+			for (int i=0; i < n_fit_parameters; i++) {
+				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
+			}
+		} else {
+			for (int i=0; i < n_fit_parameters; i++) {
+				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+			}
 		}
 		cout << endl;
 		output_bestfit_model();
