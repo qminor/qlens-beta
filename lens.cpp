@@ -3711,7 +3711,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	perturber_list[lens_number] = true;
 	linked_perturber_list = perturber_list;
 	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
-	double xc, yc, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p, eta;
+	double xc, yc, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p;
 
 	double zlsub, zlprim;
 	zlsub = lens_list[perturber_lens_number]->zlens;
@@ -3741,17 +3741,11 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		phi = -phi;
 	}
 
-	lens_list[0]->get_einstein_radius(dum,b,reference_zfactors[lens_redshift_idx[0]]);
-	double host_params[10];
-	lens_list[0]->get_parameters(host_params);
-	alpha = host_params[1];
-
 	if (lens_list[1]->get_lenstype()==SHEAR) lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
 	else { shear_ext = 0; phi_p=0; }
 	if (LensProfile::orient_major_axis_north==true) {
 		phi_p += M_HALFPI;
 	}
-	eta = (1-shear_ext*shear_ext)/(1 + shear_ext*cos(2*(phi-phi_p))); // isothermal
 
 	double shear_angle, shear_tot;
 	shear_exclude(perturber_center,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
@@ -3762,6 +3756,9 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		delete[] perturber_list;
 		return false;
 	}
+
+	lens_list[primary_lens_number]->get_einstein_radius(dum,b,reference_zfactors[lens_redshift_idx[0]]);
+
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
 	double (Brent::*dthetac_eq)(const double);
@@ -3792,6 +3789,14 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	} else rmax_perturber_lensplane = abs(rmax_numerical);
 
 	double avg_kappa = reference_zfactors[lens_redshift_idx[perturber_lens_number]]*lens_list[perturber_lens_number]->kappa_avg_r(rmax_perturber_lensplane);
+
+	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+		double host_params[10];
+		lens_list[primary_lens_number]->get_parameters(host_params);
+		alpha = host_params[1];
+	} else {
+		alpha = 1.0;
+	}
 
 	double kpc_to_arcsec_sub = 206.264806/angular_diameter_distance(zlsub);
 	// the following quantities are scaled by 1/alpha

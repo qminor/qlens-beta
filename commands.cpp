@@ -211,7 +211,7 @@ void QLens::process_commands(bool read_file)
 						"emask_n_neighbors -- expand mask by set # of pixel neighbors for outside_sb_prior, nimg_prior eval.\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
-						"nimg_sb_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
+						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
 						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
@@ -2086,7 +2086,7 @@ void QLens::process_commands(bool read_file)
 
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
-					cout << "nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
+					cout << "nimg_sb_frac_threshold = " << n_image_prior_sb_frac << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
 					cout << "activate_unmapped_srcpixels: " << display_switch(activate_unmapped_source_pixels) << endl;
 					cout << "exclude_srcpixels_outside_mask: " << display_switch(exclude_source_pixels_beyond_fit_window) << endl;
@@ -9333,15 +9333,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
 			} else Complain("must specify either zero or one argument for outside_sb_noise_threshold");
 		}
-		else if (words[0]=="outside_sb_threshold")
+		else if (words[0]=="outside_sb_frac_threshold")
 		{
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as fraction of max s.b.)");
 				outside_sb_prior_threshold = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_threshold = " << outside_sb_prior_threshold << endl;
-			} else Complain("must specify either zero or one argument for outside_sb_threshold");
+				if (mpi_id==0) cout << "surface brightness fraction threshold for outside_sb_frac_threshold = " << outside_sb_prior_threshold << endl;
+			} else Complain("must specify either zero or one argument for outside_sb_frac_threshold");
 		}
 		else if (words[0]=="emask_n_neighbors")
 		{
@@ -9364,15 +9364,15 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
 		}
-		else if (words[0]=="nimg_sb_threshold")
+		else if (words[0]=="nimg_sb_frac_threshold")
 		{
 			double sb_thresh;
 			if (nwords == 2) {
 				if (!(ws[1] >> sb_thresh)) Complain("invalid surface brightness noise threshold (should be as multiple of data noise)");
 				n_image_prior_sb_frac = sb_thresh;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "surface brightness fraction threshold for nimg_sb_threshold = " << n_image_prior_sb_frac << endl;
-			} else Complain("must specify either zero or one argument for nimg_sb_threshold");
+				if (mpi_id==0) cout << "surface brightness fraction threshold for nimg_sb_frac_threshold = " << n_image_prior_sb_frac << endl;
+			} else Complain("must specify either zero or one argument for nimg_sb_frac_threshold");
 		}
 		else if (words[0]=="Re_threshold_low")
 		{
