@@ -1344,9 +1344,9 @@ void QLens::process_commands(bool read_file)
 								"brightness greater than <threshold>*pixel_noise. Typically, thresholds of 4 or 5 are sufficient\n"
 								"assuming Gaussian noise.\n\n";
 						else if (words[2]=="set_neighbor_pixels")
-							cout << "sbmap set_neighbor_pixels\n\n"
-								"Activate all pixels that neighbor a pixel already included within the mask. This effectively enlarges\n"
-								"the pixel mask outward by one pixel length.\n\n";
+							cout << "sbmap set_neighbor_pixels [n_neighbors]\n\n"
+								"Activate all pixels that neighbor a pixel already included within the mask, and repeat the procedure\n"
+								"[n_neighbors] times (default=1). This effectively enlarges the pixel mask outward by N pixel lengths.\n\n";
 						else if (words[2]=="find_noise")
 							cout << "sbmap find_noise <xmin> <xmax> <ymin> <ymax>\n\n"
 								"Calculates the mean and dispersion of the surface brightness values for pixels within the specified\n"
