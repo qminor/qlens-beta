@@ -8721,6 +8721,13 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		string mnin_filename = filename + ".txt";
 		ifstream mnin(mnin_filename.c_str());
 		if (!(mnin.is_open())) {
+			if (!(mnin.is_open())) {
+				warn("MultiNest output file %s could not be found; will look for live points log file",mnin_filename.c_str());
+			}
+			mnin_filename = filename + "live.points";
+			mnin.open(mnin_filename.c_str());
+		}
+		if (!(mnin.is_open())) {
 			warn("MultiNest output file %s could not be found; chain cannot be processed",mnin_filename.c_str());
 			cont = 0;
 		} else {
@@ -10027,7 +10034,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (use_ansi_characters) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0;
-		if (chisq != (2*loglike)) cout << ", chisq=" << chisq;
+		cout << ", chisq_pix=" << chisq;
 		cout << ", 2*loglike=" << 2*loglike;
 		cout << "                " << endl;
 
