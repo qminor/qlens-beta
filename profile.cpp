@@ -312,7 +312,11 @@ void LensProfile::get_parameters_pmode(const int pmode_in, double* params)
 {
 	// overload this function for models that have different parameter modes; allows
 	// flexibility in obtaining parameters from different pmodes
-	return get_parameters(params);
+	get_parameters(params);
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
+	}
 }
 
 void LensProfile::update_parameters(const double* params)

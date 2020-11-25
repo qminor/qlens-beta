@@ -543,6 +543,14 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
+	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
+	}
 }
 
 void PseudoJaffe::set_auto_stepsizes()
@@ -817,6 +825,10 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 	for (int i=2; i < n_params; i++) {
 		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
+	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
 	}
 }
 
@@ -1159,6 +1171,14 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
+	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
+	}
 }
 
 void Truncated_NFW::update_meta_parameters()
@@ -1492,6 +1512,10 @@ void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 	for (int i=3; i < n_params; i++) {
 		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
+	}
+	if (lensed_center_coords) {
+		params[n_params-3] = x_center;
+		params[n_params-2] = y_center;
 	}
 }
 
