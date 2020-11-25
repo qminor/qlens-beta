@@ -53,6 +53,7 @@ void LensProfile::setup_base_lens_properties(const int np, const bool is_ellipti
 		f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 		ellipticity_mode = -1; // indicates not an elliptical lens
 	}
+	lensed_center_coords = false;
 	analytic_3d_density = false; // this will be changed to 'true' for certain models (e.g. NFW)
 	perturber = false; // default
 
@@ -109,6 +110,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	subclass_label = lens_in->subclass_label;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	perturber = lens_in->perturber;
+	lensed_center_coords = lens_in->lensed_center_coords;
 	analytic_3d_density = lens_in->analytic_3d_density;
 	paramnames = lens_in->paramnames;
 	latex_paramnames = lens_in->latex_paramnames;
@@ -133,6 +135,10 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in)
 	if (angle_paramnum != -1) set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
+	if (lensed_center_coords) {
+		x_center_lensed = lens_in->x_center_lensed;
+		y_center_lensed = lens_in->y_center_lensed;
+	}
 	include_limits = lens_in->include_limits;
 	if (include_limits) {
 		lower_limits.input(lens_in->lower_limits);
@@ -591,8 +597,18 @@ void LensProfile::set_geometric_paramnames(int qi)
 		paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = ""; qi++;
 	}
 	if (!center_anchored) {
-		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c"; qi++;
-		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c"; qi++;
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c";
+		if (lensed_center_coords) {
+			paramnames[qi] += "_l";
+			latex_param_subscripts[qi] += ",l";
+		}
+		qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c";
+		if (lensed_center_coords) {
+			paramnames[qi] += "_l";
+			latex_param_subscripts[qi] += ",l";
+		}
+		qi++;
 	}
 	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
@@ -622,8 +638,13 @@ void LensProfile::set_geometric_param_pointers(int qi)
 		angle_paramnum = qi++;
 	}
 	if (!center_anchored) {
-		param[qi++] = &x_center;
-		param[qi++] = &y_center;
+		if (!lensed_center_coords) {
+			param[qi++] = &x_center;
+			param[qi++] = &y_center;
+		} else {
+			param[qi++] = &x_center_lensed;
+			param[qi++] = &y_center_lensed;
+		}
 	}
 	param[qi++] = &zlens;
 }
@@ -637,9 +658,26 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 		set_ellipticity_parameter(q1_in);
 		theta = degrees_to_radians(q2_in);
 	}
-	x_center = xc_in;
-	y_center = yc_in;
+	if (!lensed_center_coords) {
+		x_center = xc_in;
+		y_center = yc_in;
+	} else {
+		x_center_lensed = xc_in;
+		y_center_lensed = yc_in;
+		set_center_if_lensed_coords();
+	}
 	update_ellipticity_meta_parameters();
+}
+
+void LensProfile::set_center_if_lensed_coords()
+{
+	if (lensed_center_coords) {
+		if (lens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+		lensvector xl;
+		lens->map_to_lens_plane(lens->lens_redshift_idx[lens_number],x_center_lensed,y_center_lensed,xl,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+		x_center = xl[0];
+		y_center = xl[1];
+	}
 }
 
 void LensProfile::print_parameters()
@@ -655,7 +693,8 @@ void LensProfile::print_parameters()
 			else cout << *(param[i]);
 			cout << ", ";
 		}
-		cout << "xc=" << x_center << ", yc=" << y_center;
+		if (!lensed_center_coords) cout << "xc=" << x_center << ", yc=" << y_center;
+		else cout << "xc_l=" << x_center_lensed << ", yc_l=" << y_center_lensed << " (xc=" << x_center << ",yc=" << y_center << ")";
 	} else {
 		for (int i=0; i < n_params-1; i++) {
 			cout << paramnames[i] << "=";
@@ -694,6 +733,7 @@ string LensProfile::mkstring_int(const int i)
 	return istring;
 }
 
+// Not sure if this function is even being used any more...check!!
 string LensProfile::get_parameters_string()
 {
 	string paramstring = "";
@@ -709,7 +749,8 @@ string LensProfile::get_parameters_string()
 			else paramstring += mkstring_doub(*(param[i]));
 			paramstring += ", ";
 		}
-		paramstring += "xc=" + mkstring_doub(x_center) + ", yc=" + mkstring_doub(y_center);
+		if (!lensed_center_coords) paramstring += "xc=" + mkstring_doub(x_center) + ", yc=" + mkstring_doub(y_center);
+		else paramstring += "xc_l=" + mkstring_doub(x_center_lensed) + ", yc_l=" + mkstring_doub(y_center_lensed);
 	} else {
 		for (int i=0; i < n_params-1; i++) {
 			paramstring += paramnames[i] + "=";
@@ -820,7 +861,10 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 			}
 		}
 		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-		else scriptout << x_center << " " << y_center << " z=" << zlens << endl;
+		else {
+			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
+			else scriptout << x_center_lensed << " " << y_center_lensed << " z=" << zlens << " -lensed_center" << endl;
+		}
 	} else {
 		for (int i=0; i < n_params-1; i++) {
 			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";

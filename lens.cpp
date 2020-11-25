@@ -1778,7 +1778,7 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major, reav;
-			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]],reav);
+			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],reav);
 			if (re_major > 0.0) {
 				double rmax = autogrid_frac*re_major;
 				grid_xlength = 2*rmax;
@@ -1808,7 +1808,7 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 		}
 		if (auto_gridsize_from_einstein_radius==true) {
 			double re_major, reav;
-			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[0]],reav);
+			re_major = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],reav);
 
 			if (re_major != 0.0) {
 				double rmax = autogrid_frac*re_major;
@@ -2025,7 +2025,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			for (i=1; i < n_lens_redshifts+1; i++) {
 				new_default_zsrc_beta_factors[i-1] = new double[i];
 				if (include_recursive_lensing) {
-					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
 				} else {
 					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 				}
@@ -2059,7 +2059,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]); // from cosmo.cpp
 						} else {
 							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 						}
@@ -2117,6 +2117,7 @@ void QLens::update_lens_redshift_data()
 			remove_old_lens_redshift(lens_redshift_idx[i],i,false); // this will only remove the redshift if there are no other lenses with the old redshift
 			add_new_lens_redshift(new_zlens,i,lens_redshift_idx); // this will only add a new redshift if there are no other lenses with new redshift
 		}
+		if (n_lens_redshifts > 1) lens_list[i]->set_center_if_lensed_coords();
 	}
 }
 
@@ -2175,7 +2176,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 				for (i=1; i < n_lens_redshifts-1; i++) {
 					new_default_zsrc_beta_factors[i-1] = new double[i];
 					if (include_recursive_lensing) {
-						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
 					} else {
 						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 					}
@@ -2226,7 +2227,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]); // from cosmo.cpp
 							} else {
 								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 							}
@@ -2525,7 +2526,7 @@ void QLens::set_source_redshift(const double zsrc)
 		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	}
 	recalculate_beta_factors();
-	reset_grid();
+	//reset_grid();
 }
 
 void QLens::set_reference_source_redshift(const double zsrc)
@@ -3276,6 +3277,7 @@ bool QLens::calculate_perturber_subgridding_scale(int lens_number, bool* perturb
 
 	rmax_numerical = dmax(rmax_neg,rmax_pos);
 	if (zlsub > zlprim) rmax_numerical *= 1.1; // in this regime, rmax is often a bit underestimated, so this helps counteract that
+		//cout << "RMAX: " << rmax_numerical << endl;
 	//if (rmax_numerical==0.0) warn("could not find rmax");
 	return true;
 }
@@ -3307,8 +3309,10 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 			lensvector xp, xpc;
 			lens_list[perturber_lens_number]->get_center_coords(xpc[0],xpc[1]);
 			double zsrc0 = source_redshift;
+			//cout << "ZLSUB ZSRC: " << zlsub << " " << zsrc0 << endl;
 			set_source_redshift(zlsub);
 			lensvector alpha;
+			// BUG!!!!!!! subgridding_zfacs is not updated by set_source_redshift
 			deflection(x,alpha,subgridding_zfacs,subgridding_betafacs);
 			set_source_redshift(zsrc0);
 			xp[0] = x[0] - alpha[0];
@@ -3323,7 +3327,7 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 		if (subgridding_parity_at_center > 0) {
 			if (zlsub < zlprim) {
 				int i1,i2;
-				i1 = lens_redshift_idx[0];
+				i1 = lens_redshift_idx[primary_lens_number];
 				i2 = lens_redshift_idx[perturber_lens_number];
 				double beta = subgridding_betafacs[i1-1][i2];
 				double dr = 1e-5;
@@ -3338,7 +3342,7 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 				perturber_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
 			} else if (zlsub > zlprim) {
 				int i1,i2;
-				i1 = lens_redshift_idx[0];
+				i1 = lens_redshift_idx[primary_lens_number];
 				i2 = lens_redshift_idx[perturber_lens_number];
 				double beta = subgridding_betafacs[i2-1][i1];
 				perturber_avg_kappa *= 1 - beta*(kappa0 + shear0);
@@ -3757,7 +3761,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		return false;
 	}
 
-	lens_list[primary_lens_number]->get_einstein_radius(dum,b,reference_zfactors[lens_redshift_idx[0]]);
+	lens_list[primary_lens_number]->get_einstein_radius(dum,b,reference_zfactors[lens_redshift_idx[primary_lens_number]]);
 
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
@@ -3814,7 +3818,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 
 		int i1,i2;
-		i1 = lens_redshift_idx[0];
+		i1 = lens_redshift_idx[primary_lens_number];
 		i2 = lens_redshift_idx[perturber_lens_number];
 		double beta = default_zsrc_beta_factors[i1-1][i2];
 		double dr = 1e-5;
@@ -3845,7 +3849,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		int i1,i2;
-		i1 = lens_redshift_idx[0];
+		i1 = lens_redshift_idx[primary_lens_number];
 		i2 = lens_redshift_idx[perturber_lens_number];
 		double beta = default_zsrc_beta_factors[i2-1][i1];
 		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
@@ -3917,7 +3921,7 @@ double QLens::subhalo_perturbation_radius_equation(const double r)
 	}
 	if (zlsub < zlprim) {
 		int i1,i2;
-		i1 = lens_redshift_idx[0];
+		i1 = lens_redshift_idx[primary_lens_number];
 		i2 = lens_redshift_idx[perturber_lens_number];
 		double beta = default_zsrc_beta_factors[i1-1][i2];
 		double dr = 1e-5;
@@ -3937,7 +3941,7 @@ double QLens::subhalo_perturbation_radius_equation(const double r)
 		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
 	} else if (zlsub > zlprim) {
 		int i1,i2;
-		i1 = lens_redshift_idx[0];
+		i1 = lens_redshift_idx[primary_lens_number];
 		i2 = lens_redshift_idx[perturber_lens_number];
 		double beta = default_zsrc_beta_factors[i2-1][i1];
 		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0);
@@ -5251,7 +5255,7 @@ bool QLens::load_image_data(string filename)
 			for (j=1; j < n_lens_redshifts; j++) {
 				beta_factors[i][j-1] = new double[j];
 				if (include_recursive_lensing) {
-					for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+					for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]); // from cosmo.cpp
 				} else {
 					for (k=0; k < j; k++) beta_factors[i][j-1][k] = 0;
 				}
@@ -5621,7 +5625,7 @@ bool QLens::load_weak_lensing_data(string filename)
 			//for (j=1; j < n_lens_redshifts; j++) {
 				//beta_factors[i][j-1] = new double[j];
 				//if (include_recursive_lensing) {
-					//for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]);
+					//for (k=0; k < j; k++) beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],source_redshifts[i]); // from cosmo.cpp
 				//} else {
 					//for (k=0; k < j; k++) beta_factors[i][j-1][k] = 0;
 				//}

@@ -56,17 +56,19 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	protected:
 	LensProfileName lenstype;
 	bool center_defined;
+	bool lensed_center_coords; // option for line-of-sight perturber that makes the lensed position of the perturber the free parameters
 	double zlens, zsrc_ref;
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	double sigma_cr, kpc_to_arcsec;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
+	double x_center_lensed, y_center_lensed; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
 	double costheta, sintheta;
 	double integral_tolerance;
 	double theta_eff; // used for intermediate calculations if ellipticity components are being used
 	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
-	bool perturber;
+	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
@@ -98,6 +100,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	void set_center_if_lensed_coords();
 	void set_integration_parameters(const int &nn, const double &acc);
 	void set_integration_pointers();
 	virtual void set_model_specific_integration_pointers();
@@ -308,6 +311,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_include_limits(bool inc) { include_limits = inc; }
 	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc,true); }
 	void set_perturber(bool ispert) { perturber = ispert; }
+	void set_lensed_center(bool lensed_xcyc) {
+		lensed_center_coords = lensed_xcyc;
+		x_center_lensed = x_center;
+		y_center_lensed = y_center;
+		set_center_if_lensed_coords();
+		assign_paramnames();
+		assign_param_pointers();
+	}
 };
 
 struct LensIntegral : public Romberg

@@ -1376,7 +1376,7 @@ Sersic::Sersic(const Sersic* sb_in)
 
 void Sersic::update_meta_parameters()
 {
-	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
 	k = b*pow(sqrt(q)/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();

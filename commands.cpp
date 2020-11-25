@@ -1364,7 +1364,8 @@ void QLens::process_commands(bool read_file)
 							"Creates a source object from specified source surface brightness profile model and parameters.\n"
 							"If other sources are present, the new source will be superimposed with the others. If no arguments\n"
 							"are given, a numbered list of the current source models being used is printed along with their\n"
-							"parameter values. To remove a source or delete the entire configuration, use 'source clear'.\n\n"
+							"parameter values. To remove a source or delete the entire configuration, use 'source clear'.\n"
+							"NOTE: in all source models except sersic, the elliptical radius is R --> sqrt(x^2 + (y/q)^2).\n\n"
 							"Available source models:    (type 'help source '<sourcemodel>' for usage information)\n\n"
 							"gaussian -- Gaussian with dispersion <sig> and q*<sig> along major/minor axes respectively\n"
 							"sersic -- Sersic profile S = S0 * exp(-b*(R/R_eff)^(1/n))\n"
@@ -1389,16 +1390,19 @@ void QLens::process_commands(bool read_file)
 						cout << "source gaussian <sbtot> <sigma> <q> [theta] [x-center] [y-center]\n\n"
 							"where <sbtot> is the total surface brightness (not the peak), <sigma> is the dispersion of\n"
 							"the surface brightness along the major axis of the profile, <q> is the axis ratio (so that\n"
-							"the dispersion along the minor axis is q*max_sb), and [theta] is the angle of rotation\n"
+							"the dispersion along the minor axis is q*sigma), and [theta] is the angle of rotation\n"
 							"(counterclockwise, in degrees) about the center (defaults=0). Note that for theta=0, the\n"
 							"major axis of the source is along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for\n"
 							"theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="sersic")
 						cout << "source sersic <s0> <R_eff> <n> <q> [theta] [x-center] [y-center]\n\n"
 							"The sersic profile is defined by S = S0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
-							"determined from the value for n (enforces the half-light radius Re). For an elliptical model, we make\n"
+							"determined from the value for n (enforces the half-light radius Re). For the elliptical model, we make\n"
 							"the replacement R --> sqrt(q*x^2 + (y^2/q)), analogous to the elliptical radius defined in the lens\n"
-							"models. Here, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
+							"models. (Note that if n=0.5, this is equivalent to a Gaussian with sigma=R_eff/(1.1774*sqrt(q)), and\n"
+							"sbtot = sbmax*2*pi*sigma^2*q. The latter factor of q is because the other source models in qlens,\n"
+							"including the Gaussian model, use R --> sqrt(x^2 + (y^2/q^2)) which is different from Sersic here.)\n\n"
+							"Note, in the above, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="sbmpole")
@@ -2407,6 +2411,7 @@ void QLens::process_commands(bool read_file)
 			bool anchor_lens_center = false;
 			bool add_shear = false;
 			int emode = -1; // if set, then specifies the ellipticity mode for the lens being created
+			bool lensed_center_coords = false;
 			boolvector vary_flags, shear_vary_flags;
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
@@ -2420,6 +2425,14 @@ void QLens::process_commands(bool read_file)
 			bool vary_zl = false;
 			int pmode = default_parameter_mode;
 			bool is_perturber = false;
+
+			for (int i=nwords-1; i > 1; i--) {
+				if (words[i]=="-lensed_center") {
+					lensed_center_coords = true;
+					remove_word(i);
+				}
+			}
+
 
 			struct ParamAnchor {
 				bool anchor_param;
@@ -2854,6 +2867,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -2952,6 +2966,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3177,6 +3192,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3319,6 +3335,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3425,6 +3442,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3502,6 +3520,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3585,6 +3604,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3662,6 +3682,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3777,6 +3798,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3852,6 +3874,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3938,6 +3961,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -4025,6 +4049,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -4446,6 +4471,7 @@ void QLens::process_commands(bool read_file)
 						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
 						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+						if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 						if (auto_set_primary_lens) set_primary_lens();
 					}
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
@@ -4957,7 +4983,7 @@ void QLens::process_commands(bool read_file)
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
-				else Complain("gaussian requires at least 3 parameters (max_sb, sig, q)");
+				else Complain("gaussian requires at least 3 parameters (sbtot, sig, q)");
 			}
 			else if (words[1]=="sersic")
 			{
@@ -5022,7 +5048,7 @@ void QLens::process_commands(bool read_file)
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
-				else Complain("sersic requires at least 4 parameters (max_sb, k, n, q)");
+				else Complain("sersic requires at least 4 parameters (max_sb, Reff, n, q)");
 			}
 			else if (words[1]=="csersic")
 			{
@@ -8413,6 +8439,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> zsource)) Complain("invalid zsrc setting");
 				set_source_redshift(zsource);
+				reset_grid();
 				user_changed_zsource = true; // keeps track of whether redshift has been manually changed; if so, then qlens won't automatically change it to redshift from data
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "source redshift = " << source_redshift << endl;

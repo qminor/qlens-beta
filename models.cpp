@@ -2070,6 +2070,10 @@ void Shear::assign_paramnames()
 	}
 	paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
 	paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
+	if (lensed_center_coords) {
+		paramnames[2] += "_l"; latex_param_subscripts[2] += ",l";
+		paramnames[3] += "_l"; latex_param_subscripts[3] += ",l";
+	}
 }
 
 void Shear::assign_param_pointers()
@@ -2083,8 +2087,13 @@ void Shear::assign_param_pointers()
 		param[0] = &shear; // here, shear is actually the shear magnitude
 		param[1] = &theta; angle_paramnum = 1;
 	}
-	param[2] = &x_center;
-	param[3] = &y_center;
+	if (!lensed_center_coords) {
+		param[2] = &x_center;
+		param[3] = &y_center;
+	} else {
+		param[2] = &x_center_lensed;
+		param[3] = &y_center_lensed;
+	}
 	param[4] = &zlens;
 }
 
@@ -2275,6 +2284,10 @@ void Multipole::assign_paramnames()
 	paramnames[2] = "theta"; latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
 	paramnames[3] = "xc";    latex_paramnames[3] = "x";       latex_param_subscripts[3] = "c";
 	paramnames[4] = "yc";    latex_paramnames[4] = "y";       latex_param_subscripts[4] = "c";
+	if (lensed_center_coords) {
+		paramnames[3] += "_l"; latex_param_subscripts[3] += ",l";
+		paramnames[4] += "_l"; latex_param_subscripts[4] += ",l";
+	}
 }
 
 void Multipole::assign_param_pointers()
@@ -2283,8 +2296,13 @@ void Multipole::assign_param_pointers()
 	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &n;
 	param[2] = &theta; angle_paramnum = 2;
-	param[3] = &x_center;
-	param[4] = &y_center;
+	if (!lensed_center_coords) {
+		param[3] = &x_center;
+		param[4] = &y_center;
+	} else {
+		param[3] = &x_center_lensed;
+		param[4] = &y_center_lensed;
+	}
 	param[5] = &zlens;
 }
 
@@ -2604,6 +2622,11 @@ void PointMass::assign_paramnames()
 	}
 	paramnames[1] = "xc"; latex_paramnames[1] = "x"; latex_param_subscripts[1] = "c";
 	paramnames[2] = "yc"; latex_paramnames[2] = "y"; latex_param_subscripts[2] = "c";
+	if (lensed_center_coords) {
+		paramnames[1] += "_l"; latex_param_subscripts[1] += ",l";
+		paramnames[2] += "_l"; latex_param_subscripts[2] += ",l";
+	}
+
 	paramnames[3] = "z"; latex_paramnames[3] = "z"; latex_param_subscripts[3] = "l";
 }
 
@@ -2614,8 +2637,13 @@ void PointMass::assign_param_pointers()
 	} else {
 		param[0] = &b;
 	}
-	param[1] = &x_center;
-	param[2] = &y_center;
+	if (!lensed_center_coords) {
+		param[1] = &x_center;
+		param[2] = &y_center;
+	} else {
+		param[1] = &x_center_lensed;
+		param[2] = &y_center_lensed;
+	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
@@ -3147,7 +3175,7 @@ void SersicLens::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
 	if (parameter_mode==1) {
 		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
@@ -3381,13 +3409,22 @@ void MassSheet::assign_paramnames()
 	paramnames[1] = "xc";   latex_paramnames[1] = "x";       latex_param_subscripts[1] = "c";
 	paramnames[2] = "yc";   latex_paramnames[2] = "y";       latex_param_subscripts[2] = "c";
 	paramnames[3] = "z";   latex_paramnames[3] = "z";       latex_param_subscripts[3] = "l";
+	if (lensed_center_coords) {
+		paramnames[1] += "_l"; latex_param_subscripts[1] += ",l";
+		paramnames[2] += "_l"; latex_param_subscripts[2] += ",l";
+	}
 }
 
 void MassSheet::assign_param_pointers()
 {
 	param[0] = &kext;
-	param[1] = &x_center;
-	param[2] = &y_center;
+	if (!lensed_center_coords) {
+		param[1] = &x_center;
+		param[2] = &y_center;
+	} else {
+		param[1] = &x_center_lensed;
+		param[2] = &y_center_lensed;
+	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	angle_paramnum = -1; // since there is no angle parameter
@@ -3801,6 +3838,10 @@ void Tabulated_Model::assign_paramnames()
 	paramnames[2] = "theta";  latex_paramnames[2] = "\\theta"; latex_param_subscripts[2] = "";
 	paramnames[3] = "xc";     latex_paramnames[3] = "x";       latex_param_subscripts[3] = "c";
 	paramnames[4] = "yc";     latex_paramnames[4] = "y";       latex_param_subscripts[4] = "c";
+	if (lensed_center_coords) {
+		paramnames[3] += "_l"; latex_param_subscripts[3] += ",l";
+		paramnames[4] += "_l"; latex_param_subscripts[4] += ",l";
+	}
 }
 
 void Tabulated_Model::assign_param_pointers()
@@ -3809,8 +3850,13 @@ void Tabulated_Model::assign_param_pointers()
 	param[0] = &kscale;
 	param[1] = &rscale;
 	param[2] = &theta; angle_paramnum = 2;
-	param[3] = &x_center;
-	param[4] = &y_center;
+	if (!lensed_center_coords) {
+		param[3] = &x_center;
+		param[4] = &y_center;
+	} else {
+		param[3] = &x_center_lensed;
+		param[4] = &y_center_lensed;
+	}
 }
 
 void Tabulated_Model::update_meta_parameters()
@@ -4507,6 +4553,10 @@ void QTabulated_Model::assign_paramnames()
 	paramnames[3] = "theta";  latex_paramnames[3] = "\\theta"; latex_param_subscripts[3] = "";
 	paramnames[4] = "xc";     latex_paramnames[4] = "x";       latex_param_subscripts[4] = "c";
 	paramnames[5] = "yc";     latex_paramnames[5] = "y";       latex_param_subscripts[5] = "c";
+	if (lensed_center_coords) {
+		paramnames[4] += "_l"; latex_param_subscripts[4] += ",l";
+		paramnames[5] += "_l"; latex_param_subscripts[5] += ",l";
+	}
 }
 
 void QTabulated_Model::assign_param_pointers()
@@ -4515,8 +4565,13 @@ void QTabulated_Model::assign_param_pointers()
 	param[1] = &rscale;
 	param[2] = &q;
 	param[3] = &theta; angle_paramnum = 3;
-	param[4] = &x_center;
-	param[5] = &y_center;
+	if (!lensed_center_coords) {
+		param[4] = &x_center;
+		param[5] = &y_center;
+	} else {
+		param[4] = &x_center_lensed;
+		param[5] = &y_center_lensed;
+	}
 }
 
 void QTabulated_Model::update_meta_parameters()
