@@ -24,6 +24,6 @@ plotimgs
 img_npixels 300 300
 src_npixels 50 50
 source gaussian 1 1 0.7 0 -1.4 -0.7
-adaptive_grid on
+#adaptive_grid on
 sbmap makesrc
 sbmap plotimg

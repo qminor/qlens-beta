@@ -2117,7 +2117,7 @@ void QLens::update_lens_redshift_data()
 			remove_old_lens_redshift(lens_redshift_idx[i],i,false); // this will only remove the redshift if there are no other lenses with the old redshift
 			add_new_lens_redshift(new_zlens,i,lens_redshift_idx); // this will only add a new redshift if there are no other lenses with new redshift
 		}
-		if (n_lens_redshifts > 1) lens_list[i]->set_center_if_lensed_coords();
+		if (n_lens_redshifts > 1) lens_list[i]->set_center_if_lensed_coords(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
 	}
 }
 
@@ -9035,11 +9035,21 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 			covs[i] = 0;
 			avgs[i] = 0;
 		}
+		istringstream linestream;
+		int ncols = n_tot_params + 2;
+		stringstream *colstr = new stringstream[ncols];
+		string *colstring = new string[ncols];
 		while ((polyin.getline(line,n_characters)) and (!polyin.eof())) {
-			istringstream instream(line);
-			instream >> weight;
-			instream >> chi2;
-			for (i=0; i < n_tot_params; i++) instream >> params[i];
+			linestream.clear();
+			linestream.str(line);
+			for (i=0; i < ncols; i++) linestream >> colstring[i];
+			for (i=0; i < ncols; i++) {
+				colstr[i].clear();
+				colstr[i].str(colstring[i]);
+			}
+			colstr[0] >> weight;
+			colstr[1] >> chi2;
+			for (i=0; i < n_tot_params; i++) colstr[i+2] >> params[i];
 			polyout << weight << "   ";
 			for (i=0; i < n_tot_params; i++) polyout << params[i] << "   ";
 			polyout << chi2 << endl;
@@ -9058,6 +9068,8 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 			avgs[i] /= weighttot;
 			covs[i] = covs[i]/weighttot - avgs[i]*avgs[i];
 		}
+		delete[] colstr;
+		delete[] colstring;
 	}
 
 #ifdef USE_MPI

@@ -44,8 +44,6 @@ fit lens alpha 4.5 1 0 0.7 90 0.9 0.3 shear=0.0 0.1  # For the parameters we wil
 analytic_bestfit_src on   # This tells qlens to solve for the best-fit source coordinates analytically during the fit, so they will not
                           # be varied as free parameters (makes it converge faster, however you won't be able to infer the uncertainties
                           # in the source position if you do this).
-fit dparams add mass2d_r 5 0
-fit dparams
 pause
 
 # The following is only necessary if analytic_bestfit_src is off, since then the source coordinates are free parameters
@@ -63,7 +61,7 @@ chisq_time_delays off   # Don't use time delays (this is the default; time delay
 n_livepts = 200       # This determines how well the nested sampler explores the parameter space;
                         #    bigger value --> better sampling, but takes longer to converge
 
-fit run  # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
+fit run # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
 #fit run -resume   # you can use this instead of the above line if a previous run got interrupted; it will continue where it left off
 
 fit use_bestfit

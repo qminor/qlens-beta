@@ -131,7 +131,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		string str;
 		do {
 			getline(inlen, str);
-			if (str.find("#") != string::npos) chain_info.push_back(str);
+			if (str.find("#") != string::npos) chain_header.push_back(str);
 		} while (str.find("#") != string::npos);
 		if (include_log_evidence) getline(inlen, str);
 		istringstream iss(str);
@@ -374,10 +374,10 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	FindMinChisq();
 }
 
-void McmcEval::OutputChainInfo()
+void McmcEval::OutputChainHeader()
 {
-	if (chain_info.size() > 0) {
-		for (int i=0; i < chain_info.size(); i++) cout << chain_info[i] << endl;
+	if (chain_header.size() > 0) {
+		for (int i=0; i < chain_header.size(); i++) cout << chain_header[i] << endl;
 		cout << endl;
 	}
 }
