@@ -606,7 +606,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static int galsubgrid_cc_splittings;
 	void subgrid_around_perturber_galaxies(lensvector* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
 	//void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
-	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed = false);
+	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed,  double &rmax_perturber_lensplane, double &mass_enclosed_lensing, bool subtract_unperturbed = false);
+	void get_perturber_avgkappa_scaled(int lens_number, const double r0, double &avgkap_scaled, double &menc_scaled);
 	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
 	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
 	bool calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
@@ -1193,8 +1194,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
 	double rmax_true_mc, menc_true_mc;
-	void plot_mc_curve(const int lensnumber, const string filename);
+	void plot_mc_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename);
 	double croot_eq(const double c);
+	double rmax_true_mz, menc_true_mz, rmax_z_true_mz, avgkap_scaled_true_mz;
+	void plot_mz_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename);
+	double zroot_eq(const double z);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
 	void test_lens_functions();
@@ -1381,20 +1385,20 @@ struct DerivedParam
 			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
 		}
 		else if (derived_param_type == Relative_Perturbation_Radius) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,true);
+			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled,true);
 			return rmax;
 		} else if (derived_param_type == Perturbation_Radius) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return rmax;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return menc;
 		} else if (derived_param_type == Robust_Perturbation_Density) {
-			double rmax,avgsig,menc;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc);
+			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return avgsig;
 		} else if (derived_param_type == Chi_Square) {
 			double chisq_out;

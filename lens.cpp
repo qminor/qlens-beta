@@ -2117,7 +2117,9 @@ void QLens::update_lens_redshift_data()
 			remove_old_lens_redshift(lens_redshift_idx[i],i,false); // this will only remove the redshift if there are no other lenses with the old redshift
 			add_new_lens_redshift(new_zlens,i,lens_redshift_idx); // this will only add a new redshift if there are no other lenses with new redshift
 		}
-		if (n_lens_redshifts > 1) lens_list[i]->set_center_if_lensed_coords(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
+	}
+	for (int i=0; i < nlens; i++) {
+		if (lens_list[i]->lensed_center_coords) lens_list[i]->set_center_if_lensed_coords(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
 	}
 }
 
@@ -3707,19 +3709,18 @@ bool QLens::find_lensed_position_of_background_perturber(bool verbal, int lens_n
 	return true;
 }
 
-bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbal, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, bool subtract_unperturbed)
+bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbal, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed, double& rmax_perturber_z, double &avgkap_scaled_to_primary_lensplane, bool subtract_unperturbed)
 {
 	perturber_lens_number = lens_number;
 	bool *perturber_list = new bool[nlens];
 	for (int i=0; i < nlens; i++) perturber_list[i] = false;
 	perturber_list[lens_number] = true;
 	linked_perturber_list = perturber_list;
-	//this assumes the host halo is lens number 0 (and is centered at the origin), and corresponding external shear (if present) is lens number 1
 	double xc, yc, host_xc, host_yc, b, dum, alpha, shear_ext, phi, phi_p;
 
 	double zlsub, zlprim;
 	zlsub = lens_list[perturber_lens_number]->zlens;
-	zlprim = lens_list[0]->zlens;
+	zlprim = lens_list[primary_lens_number]->zlens;
 
 	double reference_zfactor = reference_zfactors[lens_redshift_idx[perturber_lens_number]];
 	lens_list[perturber_lens_number]->get_center_coords(xc,yc);
@@ -3734,7 +3735,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		if ((mpi_id==0) and (verbal)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
 	}
 
-	lens_list[0]->get_center_coords(host_xc,host_yc);
+	lens_list[primary_lens_number]->get_center_coords(host_xc,host_yc);
 	phi = atan(abs((yc-host_yc)/(xc-host_xc)));
 	if ((xc-host_xc) < 0) {
 		if ((yc-host_yc) < 0)
@@ -3745,7 +3746,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		phi = -phi;
 	}
 
-	if (lens_list[1]->get_lenstype()==SHEAR) lens_list[1]->get_q_theta(shear_ext,phi_p); // assumes the host galaxy is lens 0, external shear is lens 1
+	if ((primary_lens_number < (nlens-1)) and (lens_list[primary_lens_number+1]->get_lenstype()==SHEAR)) lens_list[primary_lens_number+1]->get_q_theta(shear_ext,phi_p); // assumes that if there is external shear present, it comes after the primary lens in the lens list
 	else { shear_ext = 0; phi_p=0; }
 	if (LensProfile::orient_major_axis_north==true) {
 		phi_p += M_HALFPI;
@@ -3775,7 +3776,6 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		delete[] perturber_list;
 		return true;
 	}
-	double rmax_perturber_lensplane;
 	if (zlsub > zlprim) {
 		lensvector x;
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
@@ -3789,10 +3789,10 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		set_source_redshift(zsrc0);
 		xp[0] = x[0] - defp[0];
 		xp[1] = x[1] - defp[1];
-		rmax_perturber_lensplane = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
-	} else rmax_perturber_lensplane = abs(rmax_numerical);
+		rmax_perturber_z = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
+	} else rmax_perturber_z = abs(rmax_numerical);
 
-	double avg_kappa = reference_zfactors[lens_redshift_idx[perturber_lens_number]]*lens_list[perturber_lens_number]->kappa_avg_r(rmax_perturber_lensplane);
+	double avg_kappa = reference_zfactors[lens_redshift_idx[perturber_lens_number]]*lens_list[perturber_lens_number]->kappa_avg_r(rmax_perturber_z);
 
 	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
 		double host_params[10];
@@ -3807,8 +3807,8 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	avg_sigma_enclosed = avg_kappa*sigma_crit_kpc(zlsub,reference_source_redshift) / alpha;
 	mass_enclosed = avg_sigma_enclosed*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub);
 
-	double menc_z = 0;
-	double avgkap_z = 0;
+	double menc_scaled_to_primary_lensplane = 0;
+	avgkap_scaled_to_primary_lensplane = 0;
 	if (zlsub < zlprim) {
 		double kappa0, shear_tot, shear_angle;
 		lensvector x;
@@ -3835,12 +3835,12 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_lensplane)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
 		//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
-		menc_z = mass_enclosed*mass_scale_factor;
-		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
+		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
+		avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
 	} else if (zlsub > zlprim) {
 		double kappa0, shear_tot, shear_angle;
 		lensvector x;
@@ -3853,9 +3853,13 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		i2 = lens_redshift_idx[perturber_lens_number];
 		double beta = default_zsrc_beta_factors[i2-1][i1];
 		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
-		menc_z = mass_enclosed*mass_scale_factor;
-		avgkap_z = avg_kappa*(1-beta*(kappa0+shear_tot));
+		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
+		avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot));
 	}
+
+	double avgkap_check,menc_check;
+	get_perturber_avgkappa_scaled(lens_number,rmax_numerical,avgkap_check,menc_check);
+
 	double rmax_relative = rmax_numerical;
 	if ((subtract_unperturbed) or (verbal)) {
 		double (Brent::*dthetac_eq_nosub)(const double);
@@ -3875,17 +3879,103 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		cout << "rmax_numerical = " << abs(rmax_numerical) << " (rmax_kpc=" << abs(rmax_kpc) << ")" << endl;
 		cout << "rmax_relative = " << abs(rmax_relative) << endl;
 		cout << "rmax location: (" << x[0] << "," << x[1] << ")\n";
-		if (zlsub > zlprim) cout << "rmax_perturber_lensplane = " << rmax_perturber_lensplane << endl;
+		if (zlsub > zlprim) cout << "rmax_perturber_z = " << rmax_perturber_z << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
-		if (avgkap_z != 0) cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_z/alpha << endl;
+		if (avgkap_scaled_to_primary_lensplane != 0) cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_scaled_to_primary_lensplane/alpha << endl;
 		cout << "avg_sigma_enclosed/alpha = " << avg_sigma_enclosed << endl;
 		cout << "mass_enclosed/alpha = " << mass_enclosed << endl;
-		if (menc_z != 0) cout << "mass(primary_lens_plane) = " << menc_z << endl;
+		if (menc_scaled_to_primary_lensplane != 0) cout << "mass(primary_lens_plane) = " << menc_scaled_to_primary_lensplane << endl;
 	}
 	rmax_numerical = abs(rmax_numerical);
 	delete[] perturber_list;
 	return true;
 }
+
+void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, double &avgkap_scaled, double &menc_scaled)
+{
+	bool *perturber_list = new bool[nlens];
+	for (int i=0; i < nlens; i++) perturber_list[i] = false;
+	perturber_list[lens_number] = true;
+
+	double zlsub, zlprim;
+	zlsub = lens_list[lens_number]->zlens;
+	zlprim = lens_list[primary_lens_number]->zlens;
+
+	double r;
+	if (zlsub > zlprim) {
+		lensvector x;
+		x[0] = perturber_center[0] + r0*cos(theta_shear);
+		x[1] = perturber_center[1] + r0*sin(theta_shear);
+		lensvector xp, xpc;
+		lens_list[lens_number]->get_center_coords(xpc[0],xpc[1]);
+		double zsrc0 = source_redshift;
+		set_source_redshift(zlsub);
+		lensvector defp;
+		deflection(x,defp,reference_zfactors,default_zsrc_beta_factors);
+		set_source_redshift(zsrc0);
+		xp[0] = x[0] - defp[0];
+		xp[1] = x[1] - defp[1];
+		r = sqrt(SQR(xp[0]-xpc[0])+SQR(xp[1]-xpc[1]));
+	} else r = abs(r0);
+
+	double avg_kappa = reference_zfactors[lens_redshift_idx[lens_number]]*lens_list[lens_number]->kappa_avg_r(r);
+
+	double avg_sigma_enclosed = avg_kappa*sigma_crit_arcsec(zlsub,reference_source_redshift);
+	double mass_enclosed = avg_sigma_enclosed*M_PI*SQR(r0);
+
+	menc_scaled = 0;
+	avgkap_scaled = 0;
+	if (zlsub < zlprim) {
+		double kappa0, shear_tot, shear_angle;
+		lensvector x;
+		x[0] = perturber_center[0] + r0*cos(theta_shear);
+		x[1] = perturber_center[1] + r0*sin(theta_shear);
+		kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+
+		int i1,i2;
+		i1 = lens_redshift_idx[primary_lens_number];
+		i2 = lens_redshift_idx[lens_number];
+		double beta = default_zsrc_beta_factors[i1-1][i2];
+		double dr = 1e-5;
+		double kappa0_p, shear_tot_p;
+		lensvector xp;
+		xp[0] = perturber_center[0] + (r0+dr)*cos(theta_shear);
+		xp[1] = perturber_center[1] + (r0+dr)*sin(theta_shear);
+		kappa0_p = kappa_exclude(xp,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xp,shear_tot_p,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		double kappa0_m, shear_tot_m;
+		lensvector xm;
+		xm[0] = perturber_center[0] + (r0-dr)*cos(theta_shear);
+		xm[1] = perturber_center[1] + (r0-dr)*sin(theta_shear);
+		kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+		//double fac2 = (1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+		menc_scaled = mass_enclosed*mass_scale_factor;
+		avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot+abs(r0)*k0deriv));
+	} else if (zlsub > zlprim) {
+		double kappa0, shear_tot, shear_angle;
+		lensvector x;
+		x[0] = perturber_center[0] + r0*cos(theta_shear);
+		x[1] = perturber_center[1] + r0*sin(theta_shear);
+		kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		int i1,i2;
+		i1 = lens_redshift_idx[primary_lens_number];
+		i2 = lens_redshift_idx[lens_number];
+		double beta = default_zsrc_beta_factors[i2-1][i1];
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+		menc_scaled = mass_enclosed*mass_scale_factor;
+		avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot));
+	}
+
+	delete[] perturber_list;
+}
+
 
 double QLens::subhalo_perturbation_radius_equation(const double r)
 {
@@ -11581,7 +11671,7 @@ double QLens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 
 int croot_lensnumber;
 
-void QLens::plot_mc_curve(const int lensnumber, const string filename)
+void QLens::plot_mc_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first
 	/*
@@ -11594,9 +11684,13 @@ void QLens::plot_mc_curve(const int lensnumber, const string filename)
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
 	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
+	double mvir0,c0; // just to save original values
+	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("c",c0)==false) die("could not find c parameter");
+
 	croot_lensnumber = lensnumber;
-	double rmax,rmax_true,avgsig,menc,menc_true;
-	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
+	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled;
+	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z,avgkap_scaled)) die("could not calculate critical curve perturbation radius");
 	menc_true = mass2d_r(rmax_true,lensnumber,false);
 
 	// overriding the above
@@ -11611,24 +11705,37 @@ void QLens::plot_mc_curve(const int lensnumber, const string filename)
 	double (Brent::*mc_eq)(const double);
 	mc_eq = static_cast<double (Brent::*)(const double)> (&QLens::croot_eq);
 
-	double mvir, c, logm, logm_min=9.7, logm_max=11, logm_step;
+	double mvir, c, logm, logm_step;
 	int i,n_logm = 100;
 	logm_step = (logm_max-logm_min)/(n_logm-1);
-	//ofstream mcout("mc_m2_c1_fit.dat");
+	double lowc, hic, lowf, hif;
+	lowc = 1;
+	hic = 1000000;
 	ofstream mcout(filename.c_str());
 	for (i=0, logm=logm_min; i < n_logm; i++, logm += logm_step) {
 		mvir = pow(10,logm);
 		if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-		c = BrentsMethod(mc_eq, 1, 1000000, 1e-5);
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc);
+		lowf = (this->*mc_eq)(lowc);
+		hif = (this->*mc_eq)(hic);
+		if ((lowf*hif) > 0.0) {
+			warn("Root not bracketed for logm=%g\n",logm);
+			break;
+		}
+		c = BrentsMethod(mc_eq, lowc, hic, 1e-5);
+		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 		mcout << logm << " " << c << " " << rmax << endl;
 	}
+	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
+	if (lens_list[lensnumber]->update_specific_parameter("c",c0)==false) die("could not find parameter");
 }
 
 double QLens::croot_eq(const double c)
 {
 	if (lens_list[croot_lensnumber]->update_specific_parameter("c",c)==false) die("could not find parameter");
-	return (mass2d_r(rmax_true_mc,croot_lensnumber,false) - menc_true_mc);
+	double avgsig, menc, rmax, avgkap_scaled, rmax_z;
+	calculate_critical_curve_perturbation_radius_numerical(croot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+	return (rmax - rmax_true_mc);
+	//return (mass2d_r(rmax_true_mc,croot_lensnumber,false) - menc_true_mc);
 }
 
 void QLens::find_equiv_mvir(const double newc)
@@ -11644,8 +11751,8 @@ void QLens::find_equiv_mvir(const double newc)
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
 	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
-	double rmax,rmax_true,avgsig,menc,menc_true;
-	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true)) die("could not calculate critical curve perturbation radius");
+	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled;
+	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true,rmax_z,avgkap_scaled)) die("could not calculate critical curve perturbation radius");
 	menc_true = mass2d_r(rmax_true,2,false);
 
 	// overriding the above
@@ -11672,6 +11779,84 @@ double QLens::mroot_eq(const double logm)
 	double m = pow(10,logm);
 	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
 	return (mass2d_r(rmax_true_mc,2,false) - menc_true_mc);
+}
+
+int zroot_lensnumber;
+
+void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double zmax, const string filename)
+{
+	// Uncomment below if you don't want to load lens configuration from a script first
+	/*
+	clear_lenses();
+	LensProfile::use_ellipticity_components = true;
+	Shear::use_shear_component_params = true;
+
+	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
+	lens_list[1]->anchor_center_to_lens(lens_list,0);
+	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
+	*/
+
+	double mvir0,z0; // just to save original values
+	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
+
+	zroot_lensnumber = lensnumber;
+	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled,rmax_z_true,avgkap_scaled_true;
+	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z_true,avgkap_scaled_true)) die("could not calculate critical curve perturbation radius");
+	cout << "avgkap_scaled_true = " << avgkap_scaled_true << endl;
+	get_perturber_avgkappa_scaled(lensnumber,rmax_true,avgkap_scaled,menc);
+	cout << "avgkap_scaled_check = " << avgkap_scaled << endl;
+	menc_true = mass2d_r(rmax_true,lensnumber,false);
+
+	// overriding the above
+	//rmax_true = 0.07;
+	//menc_true = mass2d_r(rmax_true,lensnumber);
+
+	rmax_true_mz = rmax_true; // for root finder
+	menc_true_mz = menc_true; // for root finder
+	rmax_z_true_mz = rmax_z_true; // for root finder
+	avgkap_scaled_true_mz = avgkap_scaled_true; // for root finder
+
+	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
+
+	double (Brent::*mz_eq)(const double);
+	mz_eq = static_cast<double (Brent::*)(const double)> (&QLens::zroot_eq);
+
+	double mvir, z, logm, zstep;
+	int i,nz = 600;
+	zstep = (zmax-zmin)/(nz-1);
+	ofstream mzout(filename.c_str());
+	double lowlm, hilm, lowf, hif;
+	lowlm = 7.0;
+	hilm = 14.0;
+	for (i=0, z=zmin; i < nz; i++, z += zstep) {
+		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
+		lowf = (this->*mz_eq)(lowlm);
+		hif = (this->*mz_eq)(hilm);
+		if ((lowf*hif) > 0.0) {
+			warn("Root not bracketed for z=%g\n",z);
+			break;
+		}
+		logm = BrentsMethod(mz_eq, lowlm, hilm, 1e-5);
+		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+		mzout << z << " " << logm << " " << rmax << endl;
+	}
+	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
+	if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
+}
+
+double QLens::zroot_eq(const double logm)
+{
+	double mvir = pow(10,logm);
+	if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+	double avgkap_scaled, menc_scaled;
+	get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled,menc_scaled);
+	return (avgkap_scaled - avgkap_scaled_true_mz);
+	//return (mass2d_r(rmax_true_mz,zroot_lensnumber,false) - menc_true_mz);
+	//double avgsig, menc, rmax, rmax_z, avgkap_scaled;
+	//calculate_critical_curve_perturbation_radius_numerical(zroot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+	//return (rmax - rmax_true_mz);
 }
 
 /*

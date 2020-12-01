@@ -2865,9 +2865,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -2964,9 +2964,9 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3190,9 +3190,9 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3333,9 +3333,9 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3440,9 +3440,9 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3518,9 +3518,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3602,9 +3602,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3680,9 +3680,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3796,9 +3796,9 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3873,8 +3873,8 @@ void QLens::process_commands(bool read_file)
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -3959,9 +3959,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -4047,9 +4047,9 @@ void QLens::process_commands(bool read_file)
 							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -4469,9 +4469,9 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
+						if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
 						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
-						if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 						if (auto_set_primary_lens) set_primary_lens();
 					}
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
@@ -6864,7 +6864,6 @@ void QLens::process_commands(bool read_file)
 			string range1, range2;
 			extract_word_starts_with('[',3,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
-			cout << "RANGE1:" << range1 << " RANGE2:" << range2 << endl;
 			if (range1.empty()) { range1 = range2; range2 = ""; } // range is for image plane if only one range argument specified
 			bool show_grid = false;
 			if (words[nwords-1]=="grid") {
@@ -8782,9 +8781,9 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> lens_number)) Complain("invalid lens number");
 				if (lens_number >= nlens) Complain("specified lens number for subhalo does not exist");
 				if (lens_number == 0) Complain("perturber cannot be the primary lens (lens 0)");
-				double rmax,menc,avgsig;
+				double rmax,menc,avgsig,rmax_z,menc_z;
 				if (nlens==1) Complain("perturber lens has not been defined");
-				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc)) Complain("could not calculate critical curve perturbation radius");
+				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc,rmax_z,menc_z)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
 		else if (words[0]=="subhalo_rmax2")
@@ -8794,9 +8793,9 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> lens_number)) Complain("invalid lens number");
 				if (lens_number >= nlens) Complain("specified lens number for subhalo does not exist");
 				if (lens_number == 0) Complain("perturber cannot be the primary lens (lens 0)");
-				double rmax,menc,avgsig;
+				double rmax,menc,avgsig,rmax_z,menc_z;
 				if (nlens==1) Complain("perturber lens has not been defined");
-				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc,true)) Complain("could not calculate critical curve perturbation radius");
+				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc,rmax_z,menc_z,true)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
 		else if (words[0]=="print_betavals")
@@ -9718,11 +9717,32 @@ void QLens::process_commands(bool read_file)
 			// Implement this later!
 			if (nwords==1) Complain("must specify which subhalo lens number to plot mc relation for");
 			int lensnumber = 0;
-			if (!(ws[1] >> lensnumber)) Complain("invalid lens number)");
+			double logmmin, logmmax;
+			if (!(ws[1] >> lensnumber)) Complain("invalid lens number");
+			if (!(ws[2] >> logmmin)) Complain("invalid min log(m200)");
+			if (!(ws[3] >> logmmax)) Complain("invalid max log(m200)");
 			string filename;
-			if (nwords > 2) filename = words[2];
+			if (nwords == 5) filename = words[4];
 			else filename = "mcplot.dat";
-			plot_mc_curve(lensnumber,filename);
+			plot_mc_curve(lensnumber,logmmin,logmmax,filename);
+			//double xmin,xmax,ymin,ymax;
+			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+			//plot_shear_field(xmin,xmax,100,ymin,ymax,100);
+		}
+		else if (words[0]=="plotmz") {
+			// You should have two extra arguments that specify logm_min and logm_max, and maybe even a third arg for number of points
+			// Implement this later!
+			if (nwords<4) Complain("must specify which subhalo lens number to plot mz relation for");
+			int lensnumber = 0;
+			double logmmin, logmmax;
+			if (!(ws[1] >> lensnumber)) Complain("invalid lens number");
+			if (!(ws[2] >> logmmin)) Complain("invalid min log(m200)");
+			if (!(ws[3] >> logmmax)) Complain("invalid max log(m200)");
+			string filename;
+			if (nwords == 5) filename = words[4];
+			else filename = "mzplot.dat";
+			plot_mz_curve(lensnumber,logmmin,logmmax,filename);
 			//double xmin,xmax,ymin,ymax;
 			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;

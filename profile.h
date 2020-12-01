@@ -239,6 +239,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
+	bool get_specific_parameter(const string name_in, double& value);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);

@@ -308,6 +308,19 @@ void LensProfile::get_parameters(double* params)
 	}
 }
 
+bool LensProfile::get_specific_parameter(const string name_in, double& value)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			value = *(param)[i];
+			break;
+		}
+	}
+	return found_match;
+}
+
 void LensProfile::get_parameters_pmode(const int pmode_in, double* params)
 {
 	// overload this function for models that have different parameter modes; allows
