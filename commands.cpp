@@ -1451,11 +1451,13 @@ void QLens::process_commands(bool read_file)
 						"Displays the total kappa, deflection, potential, magnification, shear magnitude/direction, and\n"
 						"corresponding source position for the point (x,y).\n";
 				else if (words[1]=="plotlensinfo")
-					cout << "plotlensinfo [file_root]\n\n"
+					cout << "plotlensinfo [file_root] [residual_lensnumber\n\n"
 						"Plot a pixel map of the kappa, magnification, shear, and potential at each pixel, which are output to\n"
 						"'<file_root>.kappa', '<file_root>.mag', and so on (if no file label is specified, <file_root> defaults\n"
 						"to 'lensmap'). The number of pixels set using the 'img_npixels' command, and grid dimensions are defined\n"
-						" by the 'grid' command. All files are output to the directory set by the 'set_output_dir' command.\n";
+						" by the 'grid' command. All files are output to the directory set by the 'set_output_dir' command.\n"
+						"To plot the residual values for a perturbed model (perturbed - smooth), set [residual_lensnumber] to the\n"
+						"lens number for the perturber.\n";
 				else if (words[1]=="plotcrit")
 					cout << "plotcrit\n"
 						"plotcrit <file>                      (text mode)\n"
@@ -6422,6 +6424,14 @@ void QLens::process_commands(bool read_file)
 					if (nwords != 3) Complain("one argument required for command 'fit adopt_chain_point' (line_number)");
 					if (!(ws[2] >> pnum)) Complain("incorrect format for argument to 'fit adopt_chain_point' (line number should be integer)");
 					if (adopt_point_from_chain(pnum)==false) Complain("could not load point from chain");
+				} else if (words[1]=="adopt_point_prange") {
+					int paramnum;
+					double minval, maxval;
+					if (nwords != 5) Complain("one argument required for command 'fit adopt_chain_point' (line_number)");
+					if (!(ws[2] >> paramnum)) Complain("incorrect format for argument to 'fit adopt_chain_point' (param number should be integer)");
+					if (!(ws[3] >> minval)) Complain("incorrect format for argument to 'fit adopt_chain_point' (min param val should be real number)");
+					if (!(ws[4] >> maxval)) Complain("incorrect format for argument to 'fit adopt_chain_point' (max param val should be real number)");
+					if (adopt_point_from_chain_paramrange(paramnum,minval,maxval)==false) Complain("could not load point from chain");
 				} else Complain("unknown fit command");
 			}
 		}
@@ -7665,16 +7675,21 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plotlensinfo")
 		{
+			int pert_resid = -1; // if set to a positive number, then the residuals are plotted after subtracting perturbed - smooth model
 			if (!islens()) Complain("must specify lens model first");
 			string file_root;
 			if (nwords == 1) {
  				// if the fit label hasn't been set, probably we're not doing a fit anyway, so pick a more generic name
 				if (fit_output_filename == "fit") file_root = "lensmap";
 				else file_root = fit_output_filename;
-			} else if (nwords == 2) {
+			} else if (nwords >= 2) {
 				file_root = words[1];
+				if (nwords==3) {
+					if (!(ws[2] >> pert_resid)) Complain("invalid residual perturber number");
+					if (pert_resid >= nlens) Complain("perturber lens number does not exist");
+				}
 			} else Complain("only one argument (file label) allowed for 'sbmap plotlensinfo'");
-			plot_lensinfo_maps(file_root,n_image_pixels_x,n_image_pixels_y);
+			plot_lensinfo_maps(file_root,n_image_pixels_x,n_image_pixels_y,pert_resid);
 		}
 		else if ((words[0]=="ptsize") or (words[0]=="ps"))
 		{
@@ -9688,7 +9703,8 @@ void QLens::process_commands(bool read_file)
 			usleep(time_sec*1e6);
 		}
 		else if (words[0]=="test") {
-			test_lens_functions();
+			fit_los_despali();
+			//test_lens_functions();
 			//double chisq0;
 			//calculate_chisq0_from_srcgrid(chisq0, true);
 
@@ -9711,8 +9727,7 @@ void QLens::process_commands(bool read_file)
 			//plot_shear_field(-10,10,50,-10,10,50);
 			//plot_shear_field(1e-3,2,300,1e-3,2,300);
 			//lens_list[0]->tryupdate();
-		}
-		else if (words[0]=="plotmc") {
+		} else if (words[0]=="plotmc") {
 			// You should have two extra arguments that specify logm_min and logm_max, and maybe even a third arg for number of points
 			// Implement this later!
 			if (nwords==1) Complain("must specify which subhalo lens number to plot mc relation for");
@@ -9741,7 +9756,7 @@ void QLens::process_commands(bool read_file)
 			if (!(ws[3] >> logmmax)) Complain("invalid max log(m200)");
 			string filename;
 			if (nwords == 5) filename = words[4];
-			else filename = "mzplot.dat";
+			else filename = fit_output_filename;
 			plot_mz_curve(lensnumber,logmmin,logmmax,filename);
 			//double xmin,xmax,ymin,ymax;
 			//xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;

@@ -197,7 +197,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	}
 
 	 spline_comoving_distance();
-	 //rms_tophat_spline();
+	 rms_tophat_spline();
 
 	 return qwarn;
 }
@@ -585,12 +585,71 @@ double Cosmology::calculate_beta_factor(double zl1, double zl2, double zs) // fo
 	//if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
 	da_12 = (dc_l2-dc_l1) / (1 + zl2);
 	da_l2 = dc_l2 / (1 + zl2);
+
+	//double da_l1 = dc_l1 / (1 + zl1); // test only!! THIS IS WRONG!!!
+	//da_12 = da_l2 - da_l1; // test only!! DELETE AFTTER!!!!! IS WRONG!!!
+
 	da_s = dc_s / (1 + zs);
 	da_l1s = (dc_s - dc_l1) / (1 + zs);
 	//double betafac = ((da_12/da_l2) * (da_s/da_l1s));
 	//cout << "BETA: " << betafac << endl;
 	return ((da_12/da_l2) * (da_s/da_l1s));
 }
+
+double Cosmology::calculate_sigpert_scale_factor(double zl1, double zl2, double zs, double rp, double al, double tp) // for multi-plane lensing perturbations
+{
+	// NOTE: here, zl2 is the perturber's redshift, z1 is the primary lens redshift
+	double dc_l1, dc_l2, dc_s;
+	double da_l2, da_l1, da_l1s, da_l2s;
+	dc_l1 = comoving_distance_spline.splint(zl1);
+	dc_l2 = comoving_distance_spline.splint(zl2);
+	dc_s = comoving_distance_spline.splint(zs);
+	//if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
+	if (dc_l1 >= dc_s) return 0.0;
+	//if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
+	da_l1 = dc_l1 / (1 + zl1);
+	da_l2 = dc_l2 / (1 + zl2);
+	da_l1s = (dc_s - dc_l1) / (1 + zs);
+	da_l2s = (dc_s - dc_l2) / (1 + zs);
+	double fac = da_l1*da_l1s / (da_l2*da_l2s);
+	double zfore, zback, beta;
+	zfore = dmin(zl1,zl2);
+	zback = dmax(zl1,zl2);
+	beta = calculate_beta_factor(zfore,zback,zs);
+	double term = al*rp/(tp+rp);
+	if (zl2 < zl1) term *= 2;
+	//cout << "BETA=" << beta << " FAC=" << fac << endl;
+	return (fac / (1 - beta*(1-term)));
+}
+
+double Cosmology::calculate_menc_scale_factor(double zl1, double zl2, double zs, double rp, double al, double tp) // for multi-plane lensing perturbations
+{
+	double dc_l1, dc_l2, dc_s;
+	double da_l2, da_l1, da_l1s, da_l2s;
+	dc_l1 = comoving_distance_spline.splint(zl1);
+	dc_l2 = comoving_distance_spline.splint(zl2);
+	dc_s = comoving_distance_spline.splint(zs);
+	//if (dc_l1 >= dc_s) die("source must be further away than lens 1 (zlens1 = %f, zsource = %f)", zl1, zs);
+	if (dc_l1 >= dc_s) return 0.0;
+	//if (dc_l2 >= dc_s) die("source must be further away than lens 2 (zlens2 = %f, zsource = %f)", zl2, zs);
+	da_l1 = dc_l1 / (1 + zl1);
+	da_l2 = dc_l2 / (1 + zl2);
+	da_l1s = (dc_s - dc_l1) / (1 + zs);
+	da_l2s = (dc_s - dc_l2) / (1 + zs);
+	//double fac = da_l1*da_l1s / (da_l2*da_l2s);
+	double fac = da_l2*da_l1s / (da_l1*da_l2s); // this is the mass scale factor
+	double zfore, zback, beta;
+	zfore = dmin(zl1,zl2);
+	zback = dmax(zl1,zl2);
+	beta = calculate_beta_factor(zfore,zback,zs);
+	//cout << "BETA=" << beta << " FAC=" << fac << endl;
+	double term = al*rp/(tp+rp);
+	if (zl2 < zl1) term *= 2;
+	//cout << "BETA=" << beta << " FAC=" << fac << endl;
+	return (fac / (1 - beta*(1-term)));
+}
+
+
 
 double Cosmology::sigma_crit_arcsec(double zl, double zs) // for lensing
 {
@@ -701,7 +760,10 @@ double Cosmology::median_concentration_dutton(const double mass, const double z)
 	double a, b, logc;
 	a = 0.52 + (0.901 - 0.520)*exp(-0.617*pow(z,1.21));
 	b = -0.101 + 0.026*z;
+	//double logccheck = 2.148 - 0.11*log(mass)/ln10;
+
 	logc = a + b*log(mass*hubble*1e-12)/ln10;
+	//cout << "LOGC: " << logc << " " << logccheck << endl;
 	return pow(10,logc);
 }
 
@@ -767,8 +829,8 @@ double Cosmology::mass_function_ST(const double mass, const double z)
 	der = (rms_lsig(rad+h) - rms_lsig(rad-h)) / (2*h);
 	dsigma_dlogm = (mass/sig)*dr_dm*der;
 
-	nu = (SQR(delta_z(z)) * .707) / (sig*sig);
-	ans = ((matter_density/(mass*mass)) * .322 * dsigma_dlogm * sqrt(2*nu/M_PI) * (1 + pow(nu,-0.3)) * exp(-nu/2));
+	nu = (SQR(delta_z(z)) * 0.707) / (sig*sig);
+	ans = ((matter_density/(mass*mass)) * 0.322 * dsigma_dlogm * sqrt(2*nu/M_PI) * (1 + pow(nu,-0.3)) * exp(-nu/2));
 	return ans;
 }
 

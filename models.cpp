@@ -368,6 +368,12 @@ bool Alpha::output_cosmology_info(const int lens_number)
 	if (alpha != 1.0) return false;
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
 	double kpc_to_km = 3.086e16;
 	double Rs_sun_km = 2.953; // Schwarzchild radius of the Sun in km
 	double c = 2.998e5;
@@ -676,6 +682,13 @@ void PseudoJaffe::set_abs_params_from_mtot()
 bool PseudoJaffe::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
 	double sigma, r_tidal, r_core, mtot, rhalf;
 	sigma = 2.07386213e-3*sqrt(b*(1-s/a)*kpc_to_arcsec*sigma_cr); // this is = c*sqrt(b*(1-s/a)*D_s/D_ls/M_4PI), expressed in terms of kpc_to_arcsec and sigma_cr
 	if ((parameter_mode==0) or (parameter_mode==2)) {
@@ -687,7 +700,7 @@ bool PseudoJaffe::output_cosmology_info(const int lens_number)
 	calculate_total_scaled_mass(mtot);
 	bool rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
 	mtot *= sigma_cr;
-	cout << "total mass = " << mtot << " M_sol" << endl;
+	cout << "total mass = " << mtot << " M_sun" << endl;
 	if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 
 	r_tidal = a / kpc_to_arcsec;
@@ -974,6 +987,13 @@ bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
 	double ds, r200;
 	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 	ds = ks * sigma_cr_kpc / rs_kpc;
@@ -984,19 +1004,19 @@ bool NFW::output_cosmology_info(const int lens_number)
 		c200 = r200/rs_kpc;
 	}
 
-	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
-	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "rho_s = " << ds << " M_sun/kpc^3  (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (" << (rs_kpc*kpc_to_arcsec) << " arcsec)" << endl;
 	cout << "c = " << c200 << endl;
 	if (parameter_mode > 0) {
 		cout << "ks = " << ks << endl;
 		cout << "r_200 = " << r200 << " kpc\n";
 	} else {
-		cout << "M_200 = " << m200 << " M_sol\n";
+		cout << "M_200 = " << m200 << " M_sun\n";
 		cout << "r_200 = " << r200 << " kpc\n";
 	}
 	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//c200 = r200/rs_kpc;
-	//cout << "M_200(z=5) = " << m200 << " M_sol\n";
+	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
 	//cout << "c(z=5) = " << c200 << endl;
 
@@ -1338,6 +1358,13 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
 	double ds, r200;
 	if ((parameter_mode != 3) and (parameter_mode != 4)) rs_kpc = rs / kpc_to_arcsec;
 	if (parameter_mode == 0) rt_kpc = rt / kpc_to_arcsec;
@@ -1351,15 +1378,15 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		c200 = r200/rs_kpc;
 	}
 
-	cout << "rho_s = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
-	cout << "r_s = " << rs_kpc << " kpc  (scale radius)" << endl;
+	cout << "rho_s = " << ds << " M_sun/kpc^3  (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (" << (rs_kpc*kpc_to_arcsec) << " arcsec)" << endl;
 	cout << "r_t = " << rt_kpc << " kpc  (truncation radius)" << endl;
 	cout << "c = " << c200 << endl;
 	if (parameter_mode > 0) {
 		cout << "ks = " << ks << endl;
 		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
 	} else {
-		cout << "M_200 = " << m200 << " M_sol (ignores truncation)\n";
+		cout << "M_200 = " << m200 << " M_sun (ignores truncation)\n";
 		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
 	}
 
@@ -1368,7 +1395,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	//update_zlens_meta_parameters();
 	//c200 = r200/rs_kpc;
 	//set_ks_rs_from_m200_c200();
-	//cout << "M_200(z=5) = " << m200 << " M_sol\n";
+	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
 	//cout << "c(z=5) = " << c200 << endl;
 
@@ -1793,6 +1820,13 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
 	double ds, r200;
 	if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 	if (parameter_mode != 3) rc_kpc = beta * rs_kpc;
@@ -1804,15 +1838,15 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 		c200 = r200/rs_kpc;
 	}
 
-	cout << "rho_s = " << ds << " M_sol/kpc^3 (density at scale radius)" << endl;
-	cout << "r_s = " << rs_kpc << " kpc (scale radius)" << endl;
+	cout << "rho_s = " << ds << " M_sun/kpc^3 (density at scale radius)" << endl;
+	cout << "r_s = " << rs_kpc << " kpc  (" << (rs_kpc*kpc_to_arcsec) << " arcsec)" << endl;
 	cout << "r_c = " << rc_kpc << " kpc (core radius)" << endl;
 	cout << "c = " << c200 << endl;
 	if (parameter_mode > 0) {
 		cout << "ks = " << ks << endl;
 		cout << "r_200 = " << r200 << " kpc\n";
 	} else {
-		cout << "M_200 = " << m200 << " M_sol\n";
+		cout << "M_200 = " << m200 << " M_sun\n";
 		cout << "r_200 = " << r200 << " kpc\n";
 	}
 	cout << endl;
@@ -3091,6 +3125,13 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
 	double rs_kpc, ds, m200, r200, r200_arcsec;
 	rs_kpc = a / kpc_to_arcsec;
 	ds = k0 * sigma_cr_kpc / rs_kpc;
@@ -3101,9 +3142,9 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 	m200 = sigma_cr*calculate_scaled_mass_3d_from_analytic_rho3d(r200_arcsec);
 	r200 = r200_arcsec/kpc_to_arcsec;
 
-	cout << "rho_0 = " << ds << " M_sol/kpc^3  (density at scale radius)" << endl;
+	cout << "rho_0 = " << ds << " M_sun/kpc^3  (density at scale radius)" << endl;
 	cout << "a = " << rs_kpc << " kpc  (scale radius)" << endl;
-	cout << "M_200 = " << m200 << " M_sol\n";
+	cout << "M_200 = " << m200 << " M_sun\n";
 	cout << "r_200 = " << r200 << " kpc\n";
 	cout << endl;
 	return true;

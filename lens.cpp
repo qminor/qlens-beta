@@ -3723,8 +3723,6 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	zlprim = lens_list[primary_lens_number]->zlens;
 
 	double reference_zfactor = reference_zfactors[lens_redshift_idx[perturber_lens_number]];
-	lens_list[perturber_lens_number]->get_center_coords(xc,yc);
-	perturber_center[0]=xc; perturber_center[1]=yc;
 	if (zlsub > zlprim) {
 		if (find_lensed_position_of_background_perturber(verbal,lens_number,perturber_center,reference_zfactors,default_zsrc_beta_factors)==false) {
 			delete[] perturber_list;
@@ -3733,6 +3731,9 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		xc = perturber_center[0];
 		yc = perturber_center[1];
 		if ((mpi_id==0) and (verbal)) cout << "Perturber located at (" << xc << "," << yc << ") in primary lens plane\n";
+	} else {
+		lens_list[perturber_lens_number]->get_center_coords(xc,yc);
+		perturber_center[0]=xc; perturber_center[1]=yc;
 	}
 
 	lens_list[primary_lens_number]->get_center_coords(host_xc,host_yc);
@@ -3802,73 +3803,106 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		alpha = 1.0;
 	}
 
+	double subhalo_rc = sqrt(SQR(perturber_center[0]-host_xc)+SQR(perturber_center[1]-host_yc));
+
+	double theta_c_unperturbed, rmax_relative = rmax_numerical;
+	if ((subtract_unperturbed) or (verbal)) {
+		double (Brent::*dthetac_eq_nosub)(const double);
+		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&QLens::perturbation_radius_equation_nosub);
+		theta_c_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbal);
+		rmax_relative = abs(rmax_numerical-theta_c_unperturbed);
+		if (subtract_unperturbed) rmax_numerical = rmax_relative;
+		theta_c_unperturbed += subhalo_rc; // now it's actually theta_c relative to the primary lens center
+	}
+	//double delta_s_over_thetac = subhalo_rc/theta_c_unperturbed - 1;
+	//double r_over_rc = abs(rmax_numerical)/(subhalo_rc + abs(rmax_numerical));
+	//double ktilde_approx = 1 - alpha*(delta_s_over_thetac + r_over_rc);
+	//double ktilde_approx2 = 1 - alpha*(r_over_rc);
+		//double blergh2_approx = 1 - alpha*(delta_s_over_thetac + 2*r_over_rc);
+
 	double kpc_to_arcsec_sub = 206.264806/angular_diameter_distance(zlsub);
 	// the following quantities are scaled by 1/alpha
-	avg_sigma_enclosed = avg_kappa*sigma_crit_kpc(zlsub,reference_source_redshift) / alpha;
+	avg_sigma_enclosed = avg_kappa*sigma_crit_kpc(zlsub,reference_source_redshift);
 	mass_enclosed = avg_sigma_enclosed*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub);
 
 	double menc_scaled_to_primary_lensplane = 0;
 	avgkap_scaled_to_primary_lensplane = 0;
-	if (zlsub < zlprim) {
-		double kappa0, shear_tot, shear_angle;
-		lensvector x;
-		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
-		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
-		kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	double k0deriv=0;
+	//double avgkap_scaled2 = 0;
+	double kappa0;
+	if (include_recursive_lensing) {
+		if (zlsub < zlprim) {
+			//double kappa0, shear_tot, shear_angle;
+			lensvector x;
+			x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
+			x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
+			kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[perturber_lens_number];
-		double beta = default_zsrc_beta_factors[i1-1][i2];
-		double dr = 1e-5;
-		double kappa0_p, shear_tot_p;
-		lensvector xp;
-		xp[0] = perturber_center[0] + (rmax_numerical+dr)*cos(theta_shear);
-		xp[1] = perturber_center[1] + (rmax_numerical+dr)*sin(theta_shear);
-		kappa0_p = kappa_exclude(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xp,shear_tot_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		double kappa0_m, shear_tot_m;
-		lensvector xm;
-		xm[0] = perturber_center[0] + (rmax_numerical-dr)*cos(theta_shear);
-		xm[1] = perturber_center[1] + (rmax_numerical-dr)*sin(theta_shear);
-		kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
-		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
-		//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
-		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+			int i1,i2;
+			i1 = lens_redshift_idx[primary_lens_number];
+			i2 = lens_redshift_idx[perturber_lens_number];
+			double beta = default_zsrc_beta_factors[i1-1][i2];
+			double dr = 1e-5;
+			double kappa0_p, shear_tot_p;
+			lensvector xp;
+			xp[0] = perturber_center[0] + (rmax_numerical+dr)*cos(theta_shear);
+			xp[1] = perturber_center[1] + (rmax_numerical+dr)*sin(theta_shear);
+			kappa0_p = kappa_exclude(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(xp,shear_tot_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			double kappa0_m, shear_tot_m;
+			lensvector xm;
+			xm[0] = perturber_center[0] + (rmax_numerical-dr)*cos(theta_shear);
+			xm[1] = perturber_center[1] + (rmax_numerical-dr)*sin(theta_shear);
+			kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
+			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+			//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+			//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
+			avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
+
+			//double ktilde = kappa0+shear_tot;
+			//double blergh = abs(rmax_numerical)*k0deriv;
+			//double blergh2 = ktilde + blergh;
+			//double blergh2_approx0 = 1 - alpha*(delta_s_over_thetac + 2*r_over_rc);
+			//double blergh2_approx = 1 - alpha*(2*r_over_rc);
+			//avgkap_scaled2 = avg_kappa*(1-beta*blergh2_approx);
+			//cout << "r*k0deriv=" << blergh << endl;
+			//cout << "blergh=" << blergh2 << " approx=" << blergh2_approx << " better_approx=" << blergh2_approx0 << endl;
+		} else if (zlsub > zlprim) {
+			//double kappa0, shear_tot, shear_angle;
+			lensvector x;
+			x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
+			x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
+			kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			int i1,i2;
+			i1 = lens_redshift_idx[primary_lens_number];
+			i2 = lens_redshift_idx[perturber_lens_number];
+			double beta = default_zsrc_beta_factors[i2-1][i1];
+			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
+			avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot));
+
+			//double ktilde = kappa0+shear_tot;
+			//double blergh2 = ktilde;
+			//double blergh2_approx = 1 - alpha*(r_over_rc);
+			//double blergh2_approx0 = 1 - alpha*(delta_s_over_thetac + r_over_rc);
+			//avgkap_scaled2 = avg_kappa*(1-beta*blergh2_approx);
+			//cout << "blergh=" << blergh2 << " approx=" << blergh2_approx << " better_approx=" << blergh2_approx0 << endl;
+		}
+	} else {
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z);
 		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
-		avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot+abs(rmax_numerical)*k0deriv));
-	} else if (zlsub > zlprim) {
-		double kappa0, shear_tot, shear_angle;
-		lensvector x;
-		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
-		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
-		kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[perturber_lens_number];
-		double beta = default_zsrc_beta_factors[i2-1][i1];
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
-		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
-		avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot));
+		avgkap_scaled_to_primary_lensplane = avg_kappa;
 	}
+	//if (mpi_id==0) cout << "CHECK0: " << rmax_numerical << " " << rmax_perturber_z << " " << avg_kappa << " " << avgkap_scaled_to_primary_lensplane << " ... " << kappa0 << " " << shear_tot << " " << k0deriv << endl;
 
-	double avgkap_check,menc_check;
-	get_perturber_avgkappa_scaled(lens_number,rmax_numerical,avgkap_check,menc_check);
-
-	double rmax_relative = rmax_numerical;
-	if ((subtract_unperturbed) or (verbal)) {
-		double (Brent::*dthetac_eq_nosub)(const double);
-		dthetac_eq_nosub = static_cast<double (Brent::*)(const double)> (&QLens::perturbation_radius_equation_nosub);
-		double rmax_unperturbed = BrentsMethod_Inclusive(dthetac_eq_nosub,-bound,bound,1e-5,verbal);
-		rmax_relative = abs(rmax_numerical-rmax_unperturbed);
-		if (subtract_unperturbed) rmax_numerical = rmax_relative;
-	}
-
+	//double avgkap_check,menc_check;
+	//get_perturber_avgkappa_scaled(lens_number,rmax_numerical,avgkap_check,menc_check);
 	double rmax_kpc = rmax_numerical/kpc_to_arcsec_sub;
 
 	if ((mpi_id==0) and (verbal)) {
@@ -3876,33 +3910,50 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
 		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
-		cout << "rmax_numerical = " << abs(rmax_numerical) << " (rmax_kpc=" << abs(rmax_kpc) << ")" << endl;
-		cout << "rmax_relative = " << abs(rmax_relative) << endl;
+		cout << "rmax_numerical = " << rmax_numerical << " (rmax_kpc=" << rmax_kpc << ")" << endl;
+		cout << "rmax_relative = " << rmax_relative << endl;
+		cout << "subhalo_rc = " << subhalo_rc << endl;
+		cout << "thetac = " << theta_c_unperturbed << endl;
+		//cout << "delta: " << delta_s_over_thetac << endl;
+		//cout << "r_over_rc: " << r_over_rc << endl;
+		//cout << "ktilde: " << ktilde << endl;
 		cout << "rmax location: (" << x[0] << "," << x[1] << ")\n";
 		if (zlsub > zlprim) cout << "rmax_perturber_z = " << rmax_perturber_z << endl;
 		cout << "avg_kappa/alpha = " << avg_kappa/alpha << endl;
-		if (avgkap_scaled_to_primary_lensplane != 0) cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_scaled_to_primary_lensplane/alpha << endl;
-		cout << "avg_sigma_enclosed/alpha = " << avg_sigma_enclosed << endl;
-		cout << "mass_enclosed/alpha = " << mass_enclosed << endl;
+		if (avgkap_scaled_to_primary_lensplane != 0) {
+			//double avgkaperr = (avgkap_scaled_to_primary_lensplane-avgkap_scaled2)/avgkap_scaled_to_primary_lensplane;
+			cout << "avg_kappa(primary_lens_plane)/alpha = " << avgkap_scaled_to_primary_lensplane/alpha << endl;
+			//cout << "avg_kappa_approx(primary_lens_plane)/alpha = " << avgkap_scaled2/alpha << " (err=" << avgkaperr << ")" << endl;
+		}
+		cout << "avg_sigma_enclosed = " << avg_sigma_enclosed << endl;
+		cout << "mass_enclosed = " << mass_enclosed << endl;
 		if (menc_scaled_to_primary_lensplane != 0) cout << "mass(primary_lens_plane) = " << menc_scaled_to_primary_lensplane << endl;
 	}
-	rmax_numerical = abs(rmax_numerical);
+	//rmax_numerical = abs(rmax_numerical);
 	delete[] perturber_list;
 	return true;
 }
 
-void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, double &avgkap_scaled, double &menc_scaled)
+void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, double &avgkap_scaled, double &menc_scaled, double &avgkap0, bool verbal)
 {
 	bool *perturber_list = new bool[nlens];
 	for (int i=0; i < nlens; i++) perturber_list[i] = false;
 	perturber_list[lens_number] = true;
+
+	double kappa0, shear_tot, shear_angle;
+	lensvector x;
+	x[0] = perturber_center[0] + r0*cos(theta_shear);
+	x[1] = perturber_center[1] + r0*sin(theta_shear);
+	kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	avgkap0 = 1 - kappa0 - shear_tot;
 
 	double zlsub, zlprim;
 	zlsub = lens_list[lens_number]->zlens;
 	zlprim = lens_list[primary_lens_number]->zlens;
 
 	double r;
-	if (zlsub > zlprim) {
+	if ((zlsub > zlprim) and (include_recursive_lensing)) {
 		lensvector x;
 		x[0] = perturber_center[0] + r0*cos(theta_shear);
 		x[1] = perturber_center[1] + r0*sin(theta_shear);
@@ -3925,53 +3976,61 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 
 	menc_scaled = 0;
 	avgkap_scaled = 0;
-	if (zlsub < zlprim) {
-		double kappa0, shear_tot, shear_angle;
-		lensvector x;
-		x[0] = perturber_center[0] + r0*cos(theta_shear);
-		x[1] = perturber_center[1] + r0*sin(theta_shear);
-		kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	double k0deriv=0;
+	if (include_recursive_lensing) {
+		if (zlsub < zlprim) {
+			//double kappa0, shear_tot, shear_angle;
+			//lensvector x;
+			//x[0] = perturber_center[0] + r0*cos(theta_shear);
+			//x[1] = perturber_center[1] + r0*sin(theta_shear);
+			//kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			//shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[lens_number];
-		double beta = default_zsrc_beta_factors[i1-1][i2];
-		double dr = 1e-5;
-		double kappa0_p, shear_tot_p;
-		lensvector xp;
-		xp[0] = perturber_center[0] + (r0+dr)*cos(theta_shear);
-		xp[1] = perturber_center[1] + (r0+dr)*sin(theta_shear);
-		kappa0_p = kappa_exclude(xp,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xp,shear_tot_p,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		double kappa0_m, shear_tot_m;
-		lensvector xm;
-		xm[0] = perturber_center[0] + (r0-dr)*cos(theta_shear);
-		xm[1] = perturber_center[1] + (r0-dr)*sin(theta_shear);
-		kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		double k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
-		//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
-		//double fac2 = (1 - beta*(kappa0 + shear_tot + r0*k0deriv));
-		//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+			int i1,i2;
+			i1 = lens_redshift_idx[primary_lens_number];
+			i2 = lens_redshift_idx[lens_number];
+			double beta = default_zsrc_beta_factors[i1-1][i2];
+			double dr = 1e-5;
+			double kappa0_p, shear_tot_p;
+			lensvector xp;
+			xp[0] = perturber_center[0] + (r0+dr)*cos(theta_shear);
+			xp[1] = perturber_center[1] + (r0+dr)*sin(theta_shear);
+			kappa0_p = kappa_exclude(xp,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(xp,shear_tot_p,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			double kappa0_m, shear_tot_m;
+			lensvector xm;
+			xm[0] = perturber_center[0] + (r0-dr)*cos(theta_shear);
+			xm[1] = perturber_center[1] + (r0-dr)*sin(theta_shear);
+			kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
+			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+			//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+			//double fac2 = (1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
+			menc_scaled = mass_enclosed*mass_scale_factor;
+			avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot+abs(r0)*k0deriv));
+		} else if (zlsub > zlprim) {
+			//double kappa0, shear_tot, shear_angle;
+			//lensvector x;
+			//x[0] = perturber_center[0] + r0*cos(theta_shear);
+			//x[1] = perturber_center[1] + r0*sin(theta_shear);
+			//kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			//shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			int i1,i2;
+			i1 = lens_redshift_idx[primary_lens_number];
+			i2 = lens_redshift_idx[lens_number];
+			double beta = default_zsrc_beta_factors[i2-1][i1];
+			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			menc_scaled = mass_enclosed*mass_scale_factor;
+			avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot));
+		}
+	} else {
+		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
 		menc_scaled = mass_enclosed*mass_scale_factor;
-		avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot+abs(r0)*k0deriv));
-	} else if (zlsub > zlprim) {
-		double kappa0, shear_tot, shear_angle;
-		lensvector x;
-		x[0] = perturber_center[0] + r0*cos(theta_shear);
-		x[1] = perturber_center[1] + r0*sin(theta_shear);
-		kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[lens_number];
-		double beta = default_zsrc_beta_factors[i2-1][i1];
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
-		menc_scaled = mass_enclosed*mass_scale_factor;
-		avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot));
+		avgkap_scaled = avg_kappa;
 	}
+	if ((verbal) and (mpi_id==0)) cout << "CHECK: " << r0 << " " << r << " " << avg_kappa << " " << avgkap_scaled << " ... " << kappa0 << " " << shear_tot << " " << k0deriv << endl;
 
 	delete[] perturber_list;
 }
@@ -4851,26 +4910,37 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 	double sheartot, shear_angle;
 	point[0] = x; point[1] = y;
 	deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+	//lensvector alpha2;
+	//custom_deflection(point[0],point[1],alpha2);
 	shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 	beta[0] = point[0] - alpha[0];
 	beta[1] = point[1] - alpha[1];
 	double kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
 	cout << "kappa = " << kappaval << endl;
 	cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
+	//cout << "custom deflection = (" << alpha2[0] << "," << alpha2[1] << ")\n";
 	cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
 	cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
 	cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
 	cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
 	cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
 
+	/*
 	if (n_lens_redshifts > 1) {
 		lensvector xl;
 		for (int i=1; i < n_lens_redshifts; i++) {
 			map_to_lens_plane(i,x,y,xl,0,reference_zfactors,default_zsrc_beta_factors);
 			cout << "x(z=" << lens_redshifts[i] << "): (" << xl[0] << "," << xl[1] << ")" << endl;
 		}
+
+		int i,j;
+		for (i=1; i < n_lens_redshifts; i++) {
+			for (j=0; j < i; j++) cout << "beta(" << i << "," << j << "): " << default_zsrc_beta_factors[i-1][j] << endl;
+		}
+		for (i=0; i < n_lens_redshifts; i++) cout << "zfac(" << i << "): " << reference_zfactors[i] << endl;
 	}
-	if (n_sb > 1) {
+	*/
+	if (n_sb > 0) {
 		double sb = find_surface_brightness(point);
 		cout << "surface brightness = " << sb << endl;
 	}
@@ -7985,15 +8055,15 @@ void QLens::fit_restore_defaults()
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-void QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
+double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 {
-	if (setup_fit_parameters(false)==false) return;
+	if (setup_fit_parameters(false)==false) return -1e30;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
 	if (!initialize_fitmodel(false)) {
 		raw_chisq = 1e30;
 		if ((mpi_id==0) and (show_status)) warn(warnings,"Warning: could not evaluate chi-square function");
-		return;
+		return -1e30;
 	}
 	//fitmodel->param_settings->print_penalty_limits();
 
@@ -8036,9 +8106,11 @@ void QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	display_chisq_status = false;
 	if (show_diagnostics) chisq_diagnostic = false;
 
+	double rawchisqval = raw_chisq;
 	fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
+	return rawchisqval;
 }
 
 void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
@@ -9430,6 +9502,72 @@ bool QLens::adopt_point_from_chain(const unsigned long line_num)
 	return true;
 }
 
+bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval)
+{
+	int i, nparams, n_dparams, n_tot_parameters, ndparam;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams >> n_dparams;
+	n_tot_parameters = nparams + n_dparams;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	if (paramnum >= n_tot_parameters) { warn("parameter number is less than number of fit+derived parameters in chain"); return false; }
+	pnumfile.close();
+	if (paramnum >= n_fit_parameters) {
+		ndparam = paramnum - n_fit_parameters;
+		if (mpi_id==0) cout << "The parameter selected is derived parameter no. " << ndparam << endl;
+	}
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[n_tot_parameters];
+
+	string chain_str = fit_output_dir + "/" + fit_output_filename;
+	ifstream chain_file(chain_str.c_str());
+
+	unsigned long nline=0, line_num;
+	double weight, max_weight = -1e30;
+	double chisq, minchisq = 1e30;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		//if (dataline[0]=='#') cout << string(dataline) << endl;
+		istringstream datastream(dataline);
+		datastream >> weight;
+		for (i=0; i < n_tot_parameters; i++) {
+			datastream >> params[i];
+		}
+		datastream >> chisq;
+		//cout << params[paramnum] << endl;
+		if ((params[paramnum] > minval) and (params[paramnum] < maxval) and (chisq < minchisq)) {
+			//max_weight = weight;
+			minchisq = chisq;
+			line_num = nline;
+		}
+
+		nline++;
+	}
+	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines)" << endl;
+	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
+	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
+
+	chain_file.close();
+	chain_file.open(chain_str.c_str());
+	for (i=0; i <= line_num; i++) {
+		chain_file.getline(dataline,n_characters);
+	}
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	istringstream datastream(dataline);
+	datastream >> weight;
+	for (i=0; i < n_fit_parameters; i++) {
+		datastream >> params[i];
+	}
+	dvector chain_params(params,n_fit_parameters);
+	adopt_model(chain_params);
+
+	delete[] params;
+	return true;
+}
+
 bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename)
 {
 	double zl = lens_list[lensnum]->get_redshift();
@@ -9693,7 +9831,7 @@ void QLens::chi_square_twalk()
 		output_bestfit_model();
 	}
 
-	fit_restore_defaults();
+fit_restore_defaults();
 	delete fitmodel;
 	fitmodel = NULL;
 }
@@ -10812,7 +10950,7 @@ void QLens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 	}
 }
 
-void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
+void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N, const int pert_residual)
 {
 	if (fit_output_dir != ".") create_output_directory();
 	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
@@ -10856,6 +10994,14 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 	ofstream logmagout(logmagname.c_str());
 	ofstream logshearout(logshearname.c_str());
 
+	bool *exclude = new bool[nlens];
+	for (int i=0; i < nlens; i++) exclude[i] = false;
+	if (pert_residual >= 0) {
+		for (int i=0; i < nlens; i++) {
+			if (i==pert_residual) exclude[i] = true;
+		}
+	}
+
 	double kap, mag, invmag, shearval, pot;
 	lensvector alpha;
 	lensvector pos;
@@ -10869,6 +11015,17 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 			shearval = shear(pos,0,reference_zfactors,default_zsrc_beta_factors);
 			//pot = lens->potential(pos);
 			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
+			if (pert_residual >= 0) {
+				kap -= kappa_exclude(pos,exclude,reference_zfactors,default_zsrc_beta_factors);
+				mag -= magnification_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				invmag -= inverse_magnification_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				shearval -= shear_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				//pot = lens->potential(pos);
+				lensvector alpha_r;
+				deflection_exclude(pos,exclude,alpha_r,reference_zfactors,default_zsrc_beta_factors);
+				alpha[0] -= alpha_r[0];
+				alpha[1] -= alpha_r[1];
+			}
 
 			kapout << kap << " ";
 			magout << mag << " ";
@@ -10877,10 +11034,12 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 			//potout << pot << " ";
 			defxout << alpha[0] << " ";
 			defyout << alpha[1] << " ";
-			logkapout << log(kap)/log(10) << " ";
-			logmagout << log(abs(mag))/log(10) << " ";
-			logshearout << log(abs(shearval))/log(10) << " ";
-
+			if (kap==0) logkapout << "NaN ";
+			else logkapout << log(kap)/log(10) << " ";
+			if (mag==0) logmagout << "NaN ";
+			else logmagout << log(abs(mag))/log(10) << " ";
+			if (shearval==0) logshearout << "NaN ";
+			else logshearout << log(abs(shearval))/log(10) << " ";
 		}
 		kapout << endl;
 		invmagout << endl;
@@ -10892,9 +11051,130 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N)
 		logmagout << endl;
 		logshearout << endl;
 	}
+	delete[] exclude;
 }
 
 // Pixel grid functions
+
+void QLens::fit_los_despali()
+{
+	double mvir, z, logm, zstep;
+	int i,nz = 10;
+	double zmin = 0.05, zmax = 1.0;
+	zstep = (zmax-zmin)/nz;
+	//ofstream mzout("despali.dat");
+	double lm, lowlm, hilm, defresid;
+	double c;
+	lowlm = 5.0;
+	hilm = 10.0;
+	int nlm = 140;
+	int nx=512, ny=512;
+	double lmstep = (hilm-lowlm)/(nlm-1);
+	ofstream desout("despali_lm.dat");
+	int j;
+	double min_defresid;
+	double lm_mindef;
+	for (i=0, z=zmin; i < nz; i++, z += zstep) {
+		min_defresid = 1e30;
+		for (j=0, lm=lowlm; j < nlm; j++, lm += lmstep) {
+			mvir = pow(10.0,lm);
+			defresid = average_def_residual(nx,ny,nlens-1,z,mvir);
+			if (defresid < min_defresid) {
+				min_defresid = defresid;
+				lm_mindef = lm;
+			}
+		}
+		desout << z << " " << lm_mindef << " " << min_defresid << endl;
+	}
+}
+
+double QLens::average_def_residual(const int x_N, const int y_N, const int perturber_lensnum, double z, double mvir)
+{
+	double mvir0,z0; // just to save original values
+	if (lens_list[perturber_lensnum]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
+	if (lens_list[perturber_lensnum]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
+
+	double xc,yc,xl,yl;
+	if (lens_list[perturber_lensnum]->get_specific_parameter("xc_l",xc)==false) die("could not find xc_l parameter");
+	if (lens_list[perturber_lensnum]->get_specific_parameter("yc_l",yc)==false) die("could not find yc_l parameter");
+	xl = sqrt(5);
+	yl = sqrt(5);
+	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
+	xmin = xc-0.5*xl; xmax = xc+0.5*xl;
+	ymin = yc-0.5*yl; ymax = yc+0.5*yl;
+	xstep = (xmax-xmin)/x_N;
+	ystep = (ymax-ymin)/y_N;
+	int i,j;
+
+	double **al_los_x = new double*[x_N];
+	double **al_los_y = new double*[x_N];
+	double **al_sub_x= new double*[x_N];
+	double **al_sub_y= new double*[x_N];
+	for (i=0; i < x_N; i++) {
+		al_los_x[i] = new double[y_N];
+		al_los_y[i] = new double[y_N];
+		al_sub_x[i] = new double[y_N];
+		al_sub_y[i] = new double[y_N];
+	}
+
+	bool *exclude = new bool[nlens];
+	for (int i=0; i < nlens; i++) exclude[i] = false;
+	for (int i=0; i < nlens; i++) {
+		if (i==perturber_lensnum) exclude[i] = true;
+	}
+
+	lensvector alpha, alpha_unperturbed;
+	lensvector pos;
+	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
+		pos[1] = y;
+		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
+			pos[0] = x;
+			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
+			//custom_deflection(pos[0],pos[1],alpha);
+			al_sub_x[i][j] = alpha[0];
+			al_sub_y[i][j] = alpha[1];
+		}
+	}
+	if (lens_list[perturber_lensnum]->update_specific_parameter("z",z)==false) die("could not find parameter");
+	if (lens_list[perturber_lensnum]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+
+	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
+		pos[1] = y;
+		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
+			pos[0] = x;
+			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
+			//custom_deflection(pos[0],pos[1],alpha);
+			al_los_x[i][j] = alpha[0];
+			al_los_y[i][j] = alpha[1];
+		}
+	}
+
+	double avg_def_resid = 0;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			//cout << al_los_x[i][j] << " " << al_sub_x[i][j] << endl;
+			avg_def_resid += SQR(al_los_x[i][j] - al_sub_x[i][j]) + SQR(al_los_y[i][j] - al_sub_y[i][j]);
+		}
+	}
+	avg_def_resid /= (x_N*y_N);
+	avg_def_resid = sqrt(avg_def_resid);
+
+	if (lens_list[perturber_lensnum]->update_specific_parameter("z",z0)==false) die("could not find parameter");
+	if (lens_list[perturber_lensnum]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
+
+	delete[] exclude;
+	for (i=0; i < x_N; i++) {
+		delete[] al_los_x[i];
+		delete[] al_los_y[i];
+		delete[] al_sub_x[i];
+		delete[] al_sub_y[i];
+	}
+	delete[] al_los_x;
+	delete[] al_los_y;
+	delete[] al_sub_x;
+	delete[] al_sub_y;
+	return avg_def_resid;
+}
 
 void QLens::find_optimal_sourcegrid_for_analytic_source()
 {
@@ -11783,6 +12063,24 @@ double QLens::mroot_eq(const double logm)
 
 int zroot_lensnumber;
 
+double QLens::NFW_def_function(const double x)
+{
+	double xsq = x*x;
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
+}
+
+//const double alpha_c = -0.105;
+//const double alpha_c = -0.063;
+//const double alpha_c = -0.046;
+//const double gamma_c = -0.06;
+const double alpha_c0 = -0.063;
+const double alpha_c = -0.05;
+const double gamma_c = -0.045;
+const double delta_c = 0.025;
+//const double alpha_c = 0;
+double muroot_kprime;
+double muroot_mvir0, muroot_rs0, muroot_rmax_p,muroot_z,muroot_x0,muroot_fzm,muroot_c0,muroot_z0,muroot_rs;
+
 void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double zmax, const string filename)
 {
 	// Uncomment below if you don't want to load lens configuration from a script first
@@ -11797,17 +12095,49 @@ void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double 
 	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
 	*/
 
-	double mvir0,z0; // just to save original values
+	double mvir0,z0,c0,ycl0; // just to save original values
 	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("yc_l",ycl0)==false) die("could not find ycl parameter");
 	if (lens_list[lensnumber]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("c",c0)==false) {
+		double rs0;
+		if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rs0)==false) die("could not find c or rs_kpc parameter");
+		double nfwparams[10];
+		lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
+		c0 = nfwparams[1];
+	}
+
+	double alpha, alpha0, b0, b;
+	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+		double host_params[10];
+		lens_list[primary_lens_number]->get_parameters(host_params);
+		alpha0 = host_params[1];
+		b0 = host_params[0];
+	} else {
+		alpha = 1.0;
+		b0 = 1.3; // this is bullshit...
+	}
+
+	double reference_zfactor = reference_zfactors[lens_redshift_idx[perturber_lens_number]];
+	if (lens_list[lensnumber]->get_specific_parameter("xc_l",perturber_center[0])==false) die("could not find xc_l parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("yc_l",perturber_center[1])==false) die("could not find yc_l parameter");
+
+	double host_xc, host_yc;
+	lens_list[primary_lens_number]->get_center_coords(host_xc,host_yc);
+	double subhalo_rc = sqrt(SQR(perturber_center[0]-host_xc)+SQR(perturber_center[1]-host_yc));
 
 	zroot_lensnumber = lensnumber;
-	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled,rmax_z_true,avgkap_scaled_true;
+	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled,avgkap0,rmax_z_true,avgkap_scaled_true,avgsig_true;
 	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z_true,avgkap_scaled_true)) die("could not calculate critical curve perturbation radius");
 	cout << "avgkap_scaled_true = " << avgkap_scaled_true << endl;
-	get_perturber_avgkappa_scaled(lensnumber,rmax_true,avgkap_scaled,menc);
-	cout << "avgkap_scaled_check = " << avgkap_scaled << endl;
+	get_perturber_avgkappa_scaled(lensnumber,rmax_true,avgkap_scaled,menc,avgkap0);
+	cout << "avgkap_scaled_check = " << avgkap_scaled << " " << avgkap0 << endl;
 	menc_true = mass2d_r(rmax_true,lensnumber,false);
+	avgsig_true = avgsig;
+
+	lensvector rmax_loc;
+	rmax_loc[0] = perturber_center[0] + rmax_true*cos(theta_shear);
+	rmax_loc[1] = perturber_center[1] + rmax_true*sin(theta_shear);
 
 	// overriding the above
 	//rmax_true = 0.07;
@@ -11823,13 +12153,336 @@ void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double 
 	double (Brent::*mz_eq)(const double);
 	mz_eq = static_cast<double (Brent::*)(const double)> (&QLens::zroot_eq);
 
+	double (Brent::*mu_eq)(const double);
+	mu_eq = static_cast<double (Brent::*)(const double)> (&QLens::muroot_eq);
+
+	double (Brent::*mr_eq)(const double);
+	mr_eq = static_cast<double (Brent::*)(const double)> (&QLens::mrroot_eq);
+
+	double (Brent::*mr_eq0)(const double);
+	mr_eq0 = static_cast<double (Brent::*)(const double)> (&QLens::mrroot_eq0);
+
+	double dp, dL = angular_diameter_distance(lens_redshift); // in Mpc
+
 	double mvir, z, logm, zstep;
-	int i,nz = 600;
+	int i,nz = 60;
 	zstep = (zmax-zmin)/(nz-1);
-	ofstream mzout(filename.c_str());
-	double lowlm, hilm, lowf, hif;
-	lowlm = 7.0;
+	string filename_mz = filename + ".mz";
+	string filename_zm = fit_output_dir + "/" + filename + ".zm";
+	ofstream mzout(filename_mz.c_str());
+	ofstream zmout(filename_zm.c_str());
+	double lowlm, hilm, lowf, hif, fz, fzm, fz0;
+	double c;
+	lowlm = log10(mvir0/2);
+	hilm = 14;
+	double nfwparams[10];
+	double rs, rs0, x0, mvir_ratio;
+	lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
+	rs0 = nfwparams[1];
+	cout << "rs_kpc=" << rs0 << endl;
+	x0 = (rmax_true*dL/206.264806)/rs0;
+	muroot_x0=x0;
+	muroot_c0=c0;
+	muroot_z0=z0;
+		//ofstream muout("facmu.dat");
+		ofstream kpout("kpout.dat");
+	double ycl, rmax_y;
+	double rmax_rel;
+	for (i=0, z=zmin; i < nz; i++, z += zstep) {
+		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
+		//ycl = 0; 
+		if (z >= 0.5) ycl = 0.4*(z-0.5) + ycl0;
+		else ycl = ycl0;
+		if (ycl > -1.45) ycl = -1.45;
+		//if (z >= 0.5) alpha = (z-0.5)*(1.15-1.27)/(0.75-0.5) + alpha0;
+		//else alpha = -(z-0.5)*(1.15-1.27)/(0.75-0.5) + alpha0;
+		//if (lens_list[0]->update_specific_parameter("alpha",alpha)==false) die("could not find b parameter");
+		if (lens_list[lensnumber]->update_specific_parameter("yc_l",ycl)==false) die("could not find parameter");
+		if (lens_list[lensnumber]->get_specific_parameter("xc_l",perturber_center[0])==false) die("could not find xc_l parameter");
+		if (lens_list[lensnumber]->get_specific_parameter("yc_l",perturber_center[1])==false) die("could not find yc_l parameter");
+		subhalo_rc = sqrt(SQR(perturber_center[0]-host_xc)+SQR(perturber_center[1]-host_yc));
+
+		rmax_true_mz = (rmax_loc[1] - perturber_center[1]) / (sin(theta_shear));
+		rmax_loc[0] = perturber_center[0] + rmax_true_mz*cos(theta_shear);
+		rmax_loc[1] = perturber_center[1] + rmax_true_mz*sin(theta_shear);
+
+		lowf = (this->*mz_eq)(lowlm);
+		hif = (this->*mz_eq)(hilm);
+		if ((lowf*hif) > 0.0) {
+			warn("Root not bracketed for z=%g\n",z);
+			break;
+		}
+		//if (z > 0.8) lowlm = 10.0;
+		logm = BrentsMethod(mz_eq, lowlm, hilm, 1e-10);
+		double mvir = pow(10,logm);
+		if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+
+		//calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_rel,avgsig,menc,rmax_z,avgkap_scaled,true);
+		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+
+		double avgkap_scaled_bla, menc_scaled_bla;
+		double avgkap_scaled_bla2, menc_scaled_bla2;
+		double avgkap0_rmax;
+		get_perturber_avgkappa_scaled(zroot_lensnumber,rmax,avgkap_scaled_bla2,menc_scaled_bla2,avgkap0_rmax,false);
+		get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled_bla,menc_scaled_bla,avgkap0);
+		cout << z << " " << logm << " " << b << " "<< rmax << " " << rmax_true_mz << " loc=(" << rmax_loc[0] << "," << rmax_loc[1] << ") ycl=" << ycl << " akap=" << avgkap_scaled_bla << " akap0=" << avgkap0 << " f=" << (this->*mz_eq)(logm) << endl;
+		//cout << avgkap_scaled_bla << " " << avgkap_scaled_true_mz << " " << avgkap_scaled << " " << avgkap_scaled_bla2 << " " << avgkap0 << endl;
+		kpout << z << " " << logm << " " << rmax << " " << rmax_true_mz << " " << avgkap_scaled_bla << " " << avgkap_scaled_true_mz << " " << ycl << endl;
+		fz = calculate_sigpert_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
+		fzm = calculate_menc_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
+		if (lens_list[lensnumber]->get_specific_parameter("c",c)==false) {
+			double rstry;
+			if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rstry)==false) die("could not find c or rs_kpc parameter");
+			double nfwparams[10];
+			lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
+			c = nfwparams[1];
+		}
+
+		lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
+		rs = nfwparams[1];
+
+		muroot_rs = rs;
+		dp = angular_diameter_distance(z); // in Mpc
+		double rmax_p = rmax_true*dp/206.264806;
+		muroot_fzm=fzm;
+		muroot_mvir0=mvir0;
+		muroot_rs0=rs0;
+		muroot_rmax_p=rmax_p;
+		muroot_z=z;
+/*
+
+		double mu;
+		double mui=0.1, muf = 1000;
+		int nmu = 30000;
+		double mustep = (muf-mui)/(nmu-1);
+		int i;
+		ofstream muout("facmu.dat");
+		//for (i=0, mu=mui; i < nmu; i++, mu += mustep) {
+		for (i=0, mu=mui; i < nmu; i++, mu += mustep) {
+			//mu = 1000;
+			//c = median_concentration_dutton(mu*mvir0,z);
+			//c0 = median_concentration_dutton(mvir0,z0);
+			//mu = mvir/mvir0;
+			//double fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
+			//double factest = pow(mu,alpha_c+gamma_c*(z-z0)+delta_c*SQR(z-z0));
+			double sfac2 = (log(mu/2) + NFW_def_function(mu));
+			double sfac3 = pow(mu,1-alpha_c0);
+			muout << mu << " " << sfac2 << " " << sfac3 << endl;
+			//muout << (z-z0) << " " << fac << " " << factest << endl;
+			//muout << mu << " " << z << " " << fac << " " << factest << endl;
+			//muout << mu << " " << (this->*mu_eq)(mu) << endl;
+		}
+		die();
+*/
+
+		muroot_kprime = fzm*pow(rmax_p/rs0,(-1+alpha_c0)/0.4333333)*(log(x0/2)+NFW_def_function(x0));
+		double mu_expected = rmax_p/rs0*pow(mvir/mvir0,-0.4333333);
+		double wtf = pow(mu_expected,(-1+alpha_c0)/0.43333333)*(log(mu_expected/2) + NFW_def_function(mu_expected)) - muroot_kprime;
+		//double wtf = (this->*mu_eq)(mu_expected);
+		//cout << "Trying for z=" << z << "... (expect mu=" << mu_expected << "; f(mu) = " << wtf << ") kprime=" << muroot_kprime << endl;
+		double mu = 0.55*pow(muroot_kprime,-1.333333333);
+
+		//double mu0 = BrentsMethod(mu_eq, 1e-3, 10, 1e-5);
+		//kpout << muroot_kprime << " " << mu << " " << mu0 << endl;
+		double mvir_root = mvir0*pow(mu*rs0/rmax_p,-1.0/0.43333333);
+		double logm_root = log(mvir_root)/log(10);
+		//cout << "m200=" << mvir_root << " actual=" << mvir << endl;
+	
+		//mu = BrentsMethod(mr_eq0, 1e-3, 1000000, 1e-9);
+		//double mvir_check = mu*mvir0;
+		//double logm_check = log(mvir_check)/log(10);
+
+		double x_desp = (z < lens_redshift) ? (z/lens_redshift - 1) : (z > lens_redshift) ? ((z - lens_redshift) / (source_redshift - lens_redshift)) : 0;
+		double logmvir_desp = (log(mvir0)/log(10)) + 0.41*x_desp + 0.57*SQR(x_desp) + 0.9 * CUBE(x_desp);
+		double mvir_desp = pow(10,logmvir_desp);
+		
+		//mu = BrentsMethod(mr_eq, 1e-3, 1000000, 1e-9);
+		//double mvir_root = mu*mvir0;
+		//double logm_root = log(mvir_root)/log(10);
+
+		//double c_check = median_concentration_dutton(mvir_root,z);
+		//rs_check = pow(3*mvir_root/(4*M_PI*200*1e-9*critical_density(z)),1.0/3.0)/c_check;
+		//x = (rmax_true*dp/206.264806)/rs_check;
+		////cout << "RS: " << rs << " " << rs_check << endl;
+		//double fac = (log(1+c_check) - c_check/(1+c_check)) / (log(1+c0) - c0/(1+c0));
+		//double x = muroot_rmax_p/rs_check;
+		//double sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
+		//double fch = mu - (muroot_fzm*fac/sfac);
+		//double testm = mvir0*fzm*((log(1+c_check)-c_check/(1+c_check))/(log(1+c0)-c0/(1+c0))) * ((log(x0/2)+NFW_def_function(x0))/(log(x/2)+NFW_def_function(x)));
+
+		//mu = mvir/mvir0;
+		//x = (rmax_true*dp/206.264806)/rs;
+		//fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
+		//x = rmax_p/rs;
+		//sfac = (log(x/2) + NFW_def_function(x)) / (log(x0/2) + NFW_def_function(x0));
+		//double fch2 = mu - ((menc/menc_true)*fac/sfac);
+		//double mvcheck = mvir0*(menc/menc_true)*fac/sfac;
+		//double mvcheck2 = mvir0*fzm*fac/sfac;
+
+		//cout << "MVIR: " << testm << " " << mvcheck << " " << mvcheck2 << " " << mvir << " " << fch << " " << fch2 << endl;
+
+		//double mvir = fz*pow(10,9.95018);
+		//lens_list[lensnumber]->get_parameters_pmode(0,nfwparams);
+		//double ks = nfwparams[0];
+		//double sigcrit = sigma_crit_kpc(z,source_redshift);
+		//double sigcrit0 = sigma_crit_kpc(lens_redshift,source_redshift);
+		double dl = comoving_distance(lens_redshift);
+		double dpert = comoving_distance(z);
+		int i1,i2;
+		i1 = lens_redshift_idx[primary_lens_number];
+		i2 = lens_redshift_idx[lensnumber];
+		double betafac;
+		if (z > lens_redshift) betafac = default_zsrc_beta_factors[i2-1][i1];
+		else betafac = 0;
+		double dpert_tilde = dpert*(1-betafac);
+		double dchidz = comoving_distance_derivative(z);
+		double dndm = mass_function_ST(mvir,z);
+		double dsigdlogm_dz = mvir*dndm*dpert*dpert_tilde*dchidz/SQR(206264.8);
+
+		double dndm_desp = mass_function_ST(mvir_desp,z);
+		double dsigdlogm_dz_desp = mvir_desp*dndm_desp*dpert*dpert_tilde*dchidz/SQR(206264.8);
+
+		double dndm_mconst = mass_function_ST(mvir0,z);
+		double dsigdlogm_dz_mconst = mvir0*dndm_mconst*dpert*dpert_tilde*dchidz/SQR(206264.8);
+
+		//double ffac = 1 - beta;
+		//double gfac = (z > lens_redshift) ? (1-beta) : 1;
+
+		//double sengul_logmvir = log10((sigcrit0/sigcrit)*mvir0);
+
+		//cout << "MVIR: " << mvir << " " << mvir_check << endl;
+		//cout << "CHECK: " << fzm << " " << (fz*SQR(dp/dL)) << endl;
+		//cout << "rs0=" << rs0 << " rs=" << rs << " rs2=" << rs_check << endl;
+		//mzout << z << " " << logm << " " << rmax << " " << fz << " " << fzm << " " << mvir_ratio << " " << (avgsig/avgsig_true) << " " << (menc/menc_true) << " " << (mvir/mvir0) << " " << logm_check << " " << logm_root << " " << logmvir_desp << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << endl;
+		mzout << z << " " << logm << " " << rmax << " " << fz << " " << fzm << " " << mvir_ratio << " " << (avgsig/avgsig_true) << " " << (menc/menc_true) << " " << (mvir/mvir0) << " " << logm_root << " " << logmvir_desp << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << " " << dsigdlogm_dz_mconst << endl;
+		zmout << logm << " " << z << endl;
+	}
+	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
+	if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
+	if (lens_list[lensnumber]->update_specific_parameter("yc_l",ycl0)==false) die("could not find parameter");
+}
+
+double QLens::mrroot_eq0(const double mu)
+{
+	double mvir, c, c0, fac, rs, x, sfac;
+	mvir = muroot_mvir0*mu;
+	c = median_concentration_dutton(mvir,muroot_z);
+	c0 = median_concentration_dutton(muroot_mvir0,muroot_z0);
+	fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
+	rs = pow(3*mvir/(4*M_PI*200*1e-9*critical_density(muroot_z)),1.0/3.0)/c;
+	x = muroot_rmax_p/rs;
+	sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
+	return mu - (muroot_fzm*fac/sfac);
+}
+
+double QLens::mrroot_eq(const double mu)
+{
+	double mvir, c, c0, fac, rs, x, sfac;
+	mvir = muroot_mvir0*mu;
+	c = median_concentration_dutton(mvir,muroot_z);
+	c0 = median_concentration_dutton(muroot_mvir0,muroot_z0);
+	fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
+	//fac = pow(mu,alpha_c+gamma_c*(muroot_z-muroot_z0)+delta_c*SQR(muroot_z-muroot_z0));
+	//fac = 1 - 0.062*log(mu);
+	//rs = pow(3*mvir/(4*M_PI*200*1e-9*critical_density(muroot_z)),1.0/3.0)/c;
+	//rs = muroot_rs0*pow(mu,0.45333333333);
+	//rs = muroot_rs0*pow(mu,0.433333333333);
+	rs = muroot_rs0*pow(mu,0.43433333-0.026*muroot_z0)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))));
+	//rs = muroot_rs0*pow(mu,0.43433333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))))*pow(hubble*1e-12,-0.026*(muroot_z-muroot_z0)) * pow(mvir,-0.026*muroot_z)*pow(muroot_mvir0,0.026*muroot_z0);
+	//rs = muroot_rs0*pow(mu,0.33333333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(mvir*hubble*1e-12,0.101-0.026*muroot_z)*pow(muroot_mvir0*hubble*1e-12,-0.101+0.026*muroot_z0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))));
+	//rs = muroot_rs0*pow(mu,0.33333333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*c0/c;
+	x = muroot_rmax_p/rs;
+	sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
+	return mu - (muroot_fzm*fac/sfac);
+}
+
+double QLens::muroot_eq(const double mu)
+{
+	return pow(mu,(-1+alpha_c0)/0.43333333)*(log(mu/2) + NFW_def_function(mu)) - muroot_kprime;
+	//return pow(mu,(-1+alpha_c)/0.43333333)*fac*(log(mu/2) + NFW_def_function(mu)) - muroot_kprime;
+	//return pow(mu,(-1+alpha_c)/0.43333333)*fac*(log(mu2/2) + NFW_def_function(mu2)) - muroot_kprime;
+}
+
+double QLens::zroot_eq(const double logm)
+{
+	double mvir = pow(10,logm);
+	if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
+	double avgkap_scaled, menc_scaled, avgkap0;
+	get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled,menc_scaled,avgkap0);
+	//cout << "WTF? " << avgkap_scaled << " " << avgkap0 << endl;
+	return (avgkap_scaled - avgkap0);
+	//return (avgkap_scaled - avgkap_scaled_true_mz);
+	//return (mass2d_r(rmax_true_mz,zroot_lensnumber,false) - menc_true_mz);
+	//double avgsig, menc, rmax, rmax_z, avgkap_scaled;
+	//calculate_critical_curve_perturbation_radius_numerical(zroot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+	//return (rmax - rmax_true_mz);
+}
+
+/*
+void QLens::find_perturber_surface_density(const int lensnumber, const double zmin, const double zmax)
+{
+
+	double mvir0,z0,c0; // just to save original values
+	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("c",c0)==false) {
+		double rs0;
+		if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rs0)==false) die("could not find c or rs_kpc parameter");
+		double nfwparams[10];
+		lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
+		c0 = nfwparams[1];
+	}
+
+	double alpha;
+	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+		double host_params[10];
+		lens_list[primary_lens_number]->get_parameters(host_params);
+		alpha = host_params[1];
+	} else {
+		alpha = 1.0;
+	}
+
+	double reference_zfactor = reference_zfactors[lens_redshift_idx[perturber_lens_number]];
+	if (lens_list[lensnumber]->get_specific_parameter("xc_l",perturber_center[0])==false) die("could not find xc_l parameter");
+	if (lens_list[lensnumber]->get_specific_parameter("yc_l",perturber_center[1])==false) die("could not find yc_l parameter");
+
+	zroot_lensnumber = lensnumber;
+	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled,rmax_z_true,avgkap_scaled_true,avgsig_true;
+	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z_true,avgkap_scaled_true)) die("could not calculate critical curve perturbation radius");
+	cout << "avgkap_scaled_true = " << avgkap_scaled_true << endl;
+	get_perturber_avgkappa_scaled(lensnumber,rmax_true,avgkap_scaled,menc);
+	cout << "avgkap_scaled_check = " << avgkap_scaled << endl;
+	menc_true = mass2d_r(rmax_true,lensnumber,false);
+	avgsig_true = avgsig;
+
+	rmax_true_mz = rmax_true; // for root finder
+	menc_true_mz = menc_true; // for root finder
+	rmax_z_true_mz = rmax_z_true; // for root finder
+	avgkap_scaled_true_mz = avgkap_scaled_true; // for root finder
+
+	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
+
+	double (Brent::*mz_eq)(const double);
+	mz_eq = static_cast<double (Brent::*)(const double)> (&QLens::zroot_eq);
+
+	double dp, dL = angular_diameter_distance(lens_redshift); // in Mpc
+
+	int i;
+	double lowlm, hilm, lowf, hif, fz, fzm, fz0;
+	double c;
+	lowlm = 6.0;
 	hilm = 14.0;
+	double nfwparams[10];
+	double rs, rs0, x0, mvir_ratio;
+	lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
+	rs0 = nfwparams[1];
+	cout << "rs_kpc=" << rs0 << endl;
+	x0 = (rmax_true*dL/206.264806)/rs0;
+	muroot_x0=x0;
+	muroot_c0=c0;
+	muroot_z0=z0;
+		//ofstream muout("facmu.dat");
+		ofstream kpout("kpout.dat");
 	for (i=0, z=zmin; i < nz; i++, z += zstep) {
 		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
 		lowf = (this->*mz_eq)(lowlm);
@@ -11839,25 +12492,103 @@ void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double 
 			break;
 		}
 		logm = BrentsMethod(mz_eq, lowlm, hilm, 1e-5);
+		double mvir = pow(10,logm);
 		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-		mzout << z << " " << logm << " " << rmax << endl;
+		fz = calculate_sigpert_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
+		fzm = calculate_menc_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
+		if (lens_list[lensnumber]->get_specific_parameter("c",c)==false) {
+			double rstry;
+			if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rstry)==false) die("could not find c or rs_kpc parameter");
+			double nfwparams[10];
+			lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
+			c = nfwparams[1];
+		}
+
+		lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
+		rs = nfwparams[1];
+
+		muroot_rs = rs;
+		dp = angular_diameter_distance(z); // in Mpc
+		double rmax_p = rmax_true*dp/206.264806;
+		muroot_fzm=fzm;
+		muroot_mvir0=mvir0;
+		muroot_rs0=rs0;
+		muroot_rmax_p=rmax_p;
+		muroot_z=z;
+
+		muroot_kprime = fzm*pow(rmax_p/rs0,(-1+alpha_c0)/0.4333333)*(log(x0/2)+NFW_def_function(x0));
+		double mu_expected = rmax_p/rs0*pow(mvir/mvir0,-0.4333333);
+		double wtf = pow(mu_expected,(-1+alpha_c0)/0.43333333)*(log(mu_expected/2) + NFW_def_function(mu_expected)) - muroot_kprime;
+		//double wtf = (this->*mu_eq)(mu_expected);
+		//cout << "Trying for z=" << z << "... (expect mu=" << mu_expected << "; f(mu) = " << wtf << ") kprime=" << muroot_kprime << endl;
+		double mu = 0.55*pow(muroot_kprime,-1.333333333);
+		double mu0 = BrentsMethod(mu_eq, 1e-3, 10, 1e-5);
+		kpout << muroot_kprime << " " << mu << " " << mu0 << endl;
+		double mvir_root = mvir0*pow(mu*rs0/rmax_p,-1.0/0.43333333);
+		double logm_root = log(mvir_root)/log(10);
+		//cout << "m200=" << mvir_root << " actual=" << mvir << endl;
+	
+		mu = BrentsMethod(mr_eq0, 1e-3, 1000000, 1e-9);
+		double mvir_check = mu*mvir0;
+		double logm_check = log(mvir_check)/log(10);
+		
+		//mu = BrentsMethod(mr_eq, 1e-3, 1000000, 1e-9);
+		//double mvir_root = mu*mvir0;
+		//double logm_root = log(mvir_root)/log(10);
+
+		//double c_check = median_concentration_dutton(mvir_root,z);
+		//rs_check = pow(3*mvir_root/(4*M_PI*200*1e-9*critical_density(z)),1.0/3.0)/c_check;
+		//x = (rmax_true*dp/206.264806)/rs_check;
+		////cout << "RS: " << rs << " " << rs_check << endl;
+		//double fac = (log(1+c_check) - c_check/(1+c_check)) / (log(1+c0) - c0/(1+c0));
+		//double x = muroot_rmax_p/rs_check;
+		//double sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
+		//double fch = mu - (muroot_fzm*fac/sfac);
+		//double testm = mvir0*fzm*((log(1+c_check)-c_check/(1+c_check))/(log(1+c0)-c0/(1+c0))) * ((log(x0/2)+NFW_def_function(x0))/(log(x/2)+NFW_def_function(x)));
+
+		//mu = mvir/mvir0;
+		//x = (rmax_true*dp/206.264806)/rs;
+		//fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
+		//x = rmax_p/rs;
+		//sfac = (log(x/2) + NFW_def_function(x)) / (log(x0/2) + NFW_def_function(x0));
+		//double fch2 = mu - ((menc/menc_true)*fac/sfac);
+		//double mvcheck = mvir0*(menc/menc_true)*fac/sfac;
+		//double mvcheck2 = mvir0*fzm*fac/sfac;
+
+		//cout << "MVIR: " << testm << " " << mvcheck << " " << mvcheck2 << " " << mvir << " " << fch << " " << fch2 << endl;
+
+		//double mvir = fz*pow(10,9.95018);
+		//lens_list[lensnumber]->get_parameters_pmode(0,nfwparams);
+		//double ks = nfwparams[0];
+		//double sigcrit = sigma_crit_kpc(z,source_redshift);
+		//double sigcrit0 = sigma_crit_kpc(lens_redshift,source_redshift);
+		double dl = angular_diameter_distance(lens_redshift);
+		double dpert = angular_diameter_distance(z);
+		int i1,i2;
+		i1 = lens_redshift_idx[primary_lens_number];
+		i2 = lens_redshift_idx[lensnumber];
+		double beta;
+		if (z < lens_redshift) beta = default_zsrc_beta_factors[i1-1][i2];
+		else if (z > lens_redshift) beta = default_zsrc_beta_factors[i2-1][i1];
+		else beta = 0;
+
+		//double ffac = 1 - beta;
+		//double gfac = (z > lens_redshift) ? (1-beta) : 1;
+
+		//double sengul_logmvir = log10((sigcrit0/sigcrit)*mvir0);
+
+		//cout << "MVIR: " << mvir << " " << mvir_check << endl;
+		//cout << "CHECK: " << fzm << " " << (fz*SQR(dp/dL)) << endl;
+		//cout << "rs0=" << rs0 << " rs=" << rs << " rs2=" << rs_check << endl;
+		mzout << z << " " << logm << " " << rmax << " " << fz << " " << fzm << " " << mvir_ratio << " " << (avgsig/avgsig_true) << " " << (menc/menc_true) << " " << (mvir/mvir0) << " " << logm_check << " " << logm_root << endl;
+		zmout << logm << " " << z << endl;
 	}
 	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
 	if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
 }
+*/
 
-double QLens::zroot_eq(const double logm)
-{
-	double mvir = pow(10,logm);
-	if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-	double avgkap_scaled, menc_scaled;
-	get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled,menc_scaled);
-	return (avgkap_scaled - avgkap_scaled_true_mz);
-	//return (mass2d_r(rmax_true_mz,zroot_lensnumber,false) - menc_true_mz);
-	//double avgsig, menc, rmax, rmax_z, avgkap_scaled;
-	//calculate_critical_curve_perturbation_radius_numerical(zroot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-	//return (rmax - rmax_true_mz);
-}
+
 
 /*
 double QLens::set_required_data_pixel_window(bool verbal)
