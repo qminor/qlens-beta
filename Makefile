@@ -55,7 +55,7 @@ cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
-mkdist: $(mkdist_objects)
+mkdist: $(mkdist_objects) $(mkdist_shared_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
 
 cosmocalc: $(cosmocalc_objects)

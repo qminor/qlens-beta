@@ -303,7 +303,9 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 				
 				for (k = 0; k < a; k++)
 				{
-					if (!(instream >> temp)) column_error = true;
+					if (!(instream >> temp)) {
+						column_error = true;
+					}
 					if (((lowLimit == NULL)||(temp > lowLimit[k]))&&((hiLimit == NULL)||(temp < hiLimit[k])))
 					{
 						points[j][m][k] = temp;
@@ -337,7 +339,6 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 				}
 				else if (column_error) {
 					cout << "Warning: missing column (or incorrect format) in file '" << name2 << "', line " << i << endl;
-					cout << chi2[j][m] << endl;
 					numOfPoints[j]--;
 					totPts--;
 					m--;

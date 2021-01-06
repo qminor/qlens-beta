@@ -3038,9 +3038,11 @@ void QLens::find_effective_lens_centers_and_einstein_radii(lensvector *centers, 
 		if (zfacs[lens_redshift_idx[i]] != 0.0) {
 			zlsub = lens_list[i]->zlens;
 			if ((zlsub > zlprim) and (include_recursive_lensing)) {
-				if (find_lensed_position_of_background_perturber(verbal,i,centers[i],zfacs,betafacs)==false) {
-					if (verbal) warn("cannot find lensed position of background perturber");
-					lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
+				if ((lens_list[i]->get_specific_parameter("xc_l",centers[i][0])==false) or (lens_list[i]->get_specific_parameter("yc_l",centers[i][1])==false)) {
+					if (find_lensed_position_of_background_perturber(verbal,i,centers[i],zfacs,betafacs)==false) {
+						if (verbal) warn("cannot find lensed position of background perturber");
+						lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
+					}
 				}
 			} else {
 				lens_list[i]->get_center_coords(centers[i][0],centers[i][1]);
@@ -3724,9 +3726,12 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 
 	double reference_zfactor = reference_zfactors[lens_redshift_idx[perturber_lens_number]];
 	if (zlsub > zlprim) {
-		if (find_lensed_position_of_background_perturber(verbal,lens_number,perturber_center,reference_zfactors,default_zsrc_beta_factors)==false) {
-			delete[] perturber_list;
-			return false;
+		if ((lens_list[lens_number]->get_specific_parameter("xc_l",perturber_center[0])==false) or (lens_list[lens_number]->get_specific_parameter("yc_l",perturber_center[1])==false)) {
+			if (find_lensed_position_of_background_perturber(verbal,lens_number,perturber_center,reference_zfactors,default_zsrc_beta_factors)==false) {
+				warn("could not find lensed position of background perturber");
+				delete[] perturber_list;
+				return false;
+			}
 		}
 		xc = perturber_center[0];
 		yc = perturber_center[1];
@@ -3771,12 +3776,12 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	dthetac_eq = static_cast<double (Brent::*)(const double)> (&QLens::subhalo_perturbation_radius_equation);
 	double bound = 0.6*b;
 	rmax_numerical = BrentsMethod_Inclusive(dthetac_eq,-bound,bound,1e-5,verbal);
-	if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
-		rmax_numerical = 0.0; // subhalo too far from critical curve to cause a meaningful "local" perturbation
-		mass_enclosed = 0.0;
-		delete[] perturber_list;
-		return true;
-	}
+	//if ((rmax_numerical==bound) or (rmax_numerical==-bound)) {
+		//rmax_numerical = 0.0; // subhalo too far from critical curve to cause a meaningful "local" perturbation
+		//mass_enclosed = 0.0;
+		//delete[] perturber_list;
+		//return true;
+	//}
 	if (zlsub > zlprim) {
 		lensvector x;
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
