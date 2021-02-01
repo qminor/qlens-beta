@@ -780,6 +780,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double invert_surface_brightness_map_from_data(bool verbal);
 	void plot_image_pixel_grid();
 	void find_shapelet_scaling_parameters(const bool verbal);
+	void update_source_amplitudes_from_shapelets();
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();

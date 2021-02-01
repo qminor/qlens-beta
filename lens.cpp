@@ -11424,6 +11424,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 	if (reduce_factor==1) PSF_convolution_image_pixel_vector(verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 	store_image_pixel_surface_brightness();
+
 	clear_pixel_matrices();
 
 	if (reduce_factor > 1) {
@@ -11518,6 +11519,19 @@ double QLens::image_pixel_chi_square()
 		}
 	}
 	return chisq;
+}
+
+void QLens::update_source_amplitudes_from_shapelets()
+{
+	if (source_pixel_vector == NULL) die("source pixel vector has not been created");
+	SB_Profile* shapelet;
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) {
+			shapelet = sb_list[i];
+			break; // currently only one shapelet source supported
+		}
+	}
+	shapelet->get_amplitudes(source_pixel_vector);
 }
 
 void QLens::find_shapelet_scaling_parameters(const bool verbal)
@@ -11946,10 +11960,17 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 			else image_pixel_grid->activate_extended_mask(); 
-			initialize_pixel_matrices_shapelets(verbal);
-			image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
-			PSF_convolution_Lmatrix_dense(verbal);
-			calculate_image_pixel_surface_brightness_dense();
+
+			image_pixel_grid->find_surface_brightness();
+			vectorize_image_pixel_surface_brightness();
+			PSF_convolution_image_pixel_vector(verbal);
+			image_pixel_grid->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grid (used for the inversion)
+
+			// The following works, but is slower...after awhile you can probably delete these lines
+			//initialize_pixel_matrices_shapelets(verbal);
+			//update_source_amplitudes_from_shapelets();
+			//PSF_convolution_Lmatrix_dense(verbal);
+			//calculate_image_pixel_surface_brightness_dense();
 		} else if (source_fit_mode==Parameterized_Source) {
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();

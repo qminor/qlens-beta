@@ -1150,6 +1150,11 @@ void SB_Profile::update_amplitudes(double *ampvec)
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+void SB_Profile::get_amplitudes(double *ampvec)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
 void SB_Profile::print_parameters()
 {
 	cout << model_name;
@@ -1556,8 +1561,9 @@ Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in
 		for (int j=0; j < n_shapelets; j++) {
 			amps[i][j] = 0;
 		}
+		amps[i][i] = amp00/(i+1); // just to start off
 	}
-	amps[0][0] = amp00; // just to start off
+	//amps[0][0] = amp00; // just to start off
 	truncate_at_3sigma = truncate_2sig;
 
 /*
@@ -1798,6 +1804,16 @@ void Shapelet::update_amplitudes(double *ampvec)
 	for (i=0; i < n_shapelets; i++) {
 		for (j=0; j < n_shapelets; j++) {
 			amps[i][j] = ampvec[k++];
+		}
+	}
+}
+
+void Shapelet::get_amplitudes(double *ampvec)
+{
+	int i,j,k=0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			ampvec[k++] = amps[i][j];
 		}
 	}
 }

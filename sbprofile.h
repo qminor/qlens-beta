@@ -156,6 +156,7 @@ class SB_Profile
 	virtual void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet);
 	virtual void update_amplitudes(double *ampvec); // used by Shapelet subclass
+	virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
 	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
@@ -277,6 +278,7 @@ class Shapelet : public SB_Profile
 	void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet);
 	void update_amplitudes(double *ampvec);
+	void get_amplitudes(double *ampvec);
 
 	double window_rmax();
 	double length_scale();

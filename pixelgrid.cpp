@@ -4622,6 +4622,17 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 	setup_ray_tracing_arrays();
 }
 
+void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
+{
+	max_sb = -1e30;
+	int i,j;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
+		}
+	}
+}
+
 void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_extended_mask, bool show_noise_thresh)
 {
 	string sb_filename = outfile_root + ".dat";
@@ -4783,6 +4794,21 @@ void ImagePixelGrid::activate_extended_mask()
 			fit_to_data[i][j] = lens->image_pixel_data->extended_mask[i][j];
 		}
 	}
+}
+
+void ImagePixelGrid::deactivate_extended_mask()
+{
+	int i,j;
+	//int n=0, m=0;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			fit_to_data[i][j] = lens->image_pixel_data->require_fit[i][j];
+			//if (fit_to_data[i][j]) n++;
+			//if (lens->image_pixel_data->extended_mask[i][j]) m++;
+		}
+	}
+	//cout << "NFIT: " << n << endl;
+	//cout << "NEXT: " << m << endl;
 }
 
 void ImagePixelGrid::reset_nsplit()
@@ -6059,7 +6085,7 @@ void QLens::initialize_pixel_matrices(bool verbal)
 
 void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 {
-	if (source_pixel_vector != NULL) die("source surface brightness vector already initialized");
+	//if (source_pixel_vector != NULL) die("source surface brightness vector already initialized");
 	vectorize_image_pixel_surface_brightness(true);
 	foreground_surface_brightness = new double[image_npixels];
 	for (int i=0; i < image_npixels; i++) foreground_surface_brightness[i] = 0;
