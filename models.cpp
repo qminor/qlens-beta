@@ -780,7 +780,7 @@ NFW::NFW(const NFW* lens_in)
 		c200 = lens_in->c200;
 	}
 
-	median_c_factor = lens_in->median_c_factor;
+	special_anchor_factor = lens_in->special_anchor_factor;
 	update_meta_parameters_and_pointers();
 }
 
@@ -862,8 +862,8 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
-	if (just_created) median_c_factor = factor;
-	c200 = median_c_factor*lens->median_concentration_dutton(m200,zlens);
+	if (just_created) special_anchor_factor = factor;
+	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
@@ -871,7 +871,7 @@ void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
 		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = median_c_factor * lens->median_concentration_dutton(m200,zlens);
+		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1009,11 +1009,10 @@ bool NFW::output_cosmology_info(const int lens_number)
 	cout << "c = " << c200 << endl;
 	if (parameter_mode > 0) {
 		cout << "ks = " << ks << endl;
-		cout << "r_200 = " << r200 << " kpc\n";
 	} else {
 		cout << "M_200 = " << m200 << " M_sun\n";
-		cout << "r_200 = " << r200 << " kpc\n";
 	}
+	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec)" << endl;
 	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//c200 = r200/rs_kpc;
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
@@ -1102,7 +1101,7 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 		rt_kpc = lens_in->rt_kpc;
 	}
 
-	median_c_factor = lens_in->median_c_factor;
+	special_anchor_factor = lens_in->special_anchor_factor;
 	update_meta_parameters_and_pointers();
 }
 
@@ -1218,8 +1217,8 @@ void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, con
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
-	if (just_created) median_c_factor = factor;
-	c200 = median_c_factor*lens->median_concentration_dutton(m200,zlens);
+	if (just_created) special_anchor_factor = factor;
+	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
@@ -1227,7 +1226,7 @@ void Truncated_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
 		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = median_c_factor * lens->median_concentration_dutton(m200,zlens);
+		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1384,11 +1383,10 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	cout << "c = " << c200 << endl;
 	if (parameter_mode > 0) {
 		cout << "ks = " << ks << endl;
-		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
 	} else {
 		cout << "M_200 = " << m200 << " M_sun (ignores truncation)\n";
-		cout << "r_200 = " << r200 << " kpc (ignores truncation)\n";
 	}
+	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec) (NOTE: ignores truncation)" << endl;
 
 	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//zlens = 5;
@@ -1469,7 +1467,7 @@ Cored_NFW::Cored_NFW(const Cored_NFW* lens_in)
 		c200 = lens_in->c200;
 	}
 
-	median_c_factor = lens_in->median_c_factor;
+	special_anchor_factor = lens_in->special_anchor_factor;
 	update_meta_parameters_and_pointers();
 }
 
@@ -1572,8 +1570,8 @@ void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const d
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	if (just_created) median_c_factor = factor;
-	c200 = median_c_factor*lens->median_concentration_bullock(m200,zlens);
+	if (just_created) special_anchor_factor = factor;
+	c200 = special_anchor_factor*lens->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 

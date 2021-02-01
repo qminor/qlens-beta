@@ -10,7 +10,7 @@
 #include <vector>
 using namespace std;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORED_SERSIC, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORED_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile
 {
@@ -90,6 +90,7 @@ class SB_Profile
 	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
 	bool center_anchored;
 	LensProfile* center_anchor_lens;
+	int *indxptr; // points to important integer values for subclasses that uses them (e.g. shapelets)
 
 	SB_Profile() : qx_parameter(1), param(0) {}
 	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in);
@@ -151,6 +152,10 @@ class SB_Profile
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double surface_brightness_r(const double r);
 	virtual double surface_brightness(double x, double y);
+	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
+	virtual void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight); // used by Shapelet subclass
+	virtual void calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet);
+	virtual void update_amplitudes(double *ampvec); // used by Shapelet subclass
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
 	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
@@ -234,6 +239,45 @@ class Cored_Sersic : public SB_Profile
 	void set_auto_ranges();
 
 	void print_parameters();
+	double window_rmax();
+	double length_scale();
+};
+
+class Shapelet : public SB_Profile
+{
+	private:
+	double sig; // sig is the average dispersion of the (0,0) shapelet which is Gaussian
+	double **amps; // shapelet amplitudes
+	int n_shapelets;
+	bool truncate_at_3sigma; // this truncates the shapelets at r = 2*sigma to eliminate edge effects
+
+	public:
+	Shapelet() : SB_Profile() { amps = NULL; }
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig);
+	Shapelet(const Shapelet* sb_in);
+	~Shapelet() {
+		if (amps != NULL) {
+			for (int i=0; i < n_shapelets; i++) delete[] amps[i];
+			delete[] amps;
+		}
+	}
+
+	double surface_brightness(double x, double y);
+	double hermite_polynomial(const double x, const int n);
+
+	//double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	//double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
+	void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight);
+	void calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet);
+	void update_amplitudes(double *ampvec);
+
 	double window_rmax();
 	double length_scale();
 };

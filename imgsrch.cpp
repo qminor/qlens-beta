@@ -1786,7 +1786,6 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 	}
 	source[0] = x_source; source[1] = y_source;
 
-
 	find_images();
 
 	if (mpi_id==0) {

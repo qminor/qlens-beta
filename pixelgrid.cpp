@@ -447,7 +447,7 @@ void SourcePixelGrid::update_surface_brightness(int& index)
 			if (cell[i][j]->cell != NULL) cell[i][j]->update_surface_brightness(index);
 			else {
 				if (cell[i][j]->active_pixel) {
-					cell[i][j]->surface_brightness = lens->source_surface_brightness[index++];
+					cell[i][j]->surface_brightness = lens->source_pixel_vector[index++];
 				} else {
 					cell[i][j]->surface_brightness = 0;
 				}
@@ -470,7 +470,7 @@ void SourcePixelGrid::fill_surface_brightness_vector_recursive(int& column_j)
 			if (cell[i][j]->cell != NULL) cell[i][j]->fill_surface_brightness_vector_recursive(column_j);
 			else {
 				if (cell[i][j]->active_pixel) {
-					lens->source_surface_brightness[column_j++] = cell[i][j]->surface_brightness;
+					lens->source_pixel_vector[column_j++] = cell[i][j]->surface_brightness;
 				}
 			}
 		}
@@ -4138,7 +4138,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
-			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
+			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			if (lens_in->split_imgpixels) {
 				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -4586,7 +4586,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
-			if (source_fit_mode==Parameterized_Source) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
+			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			if (lens_in->split_imgpixels) {
 				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
@@ -4622,7 +4622,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** beta
 	setup_ray_tracing_arrays();
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_extended_mask)
+void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_extended_mask, bool show_noise_thresh)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -4649,7 +4649,11 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 				if (!plot_residual) pixel_image_file << surface_brightness[i][j];
 				else {
 					residual = lens->image_pixel_data->surface_brightness[i][j] - surface_brightness[i][j];
-					pixel_image_file << residual;
+					if (show_noise_thresh) {
+						if (abs(residual) >= lens->data_pixel_noise) pixel_image_file << residual;
+						else pixel_image_file << "NaN";
+					}
+					else pixel_image_file << residual;
 					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
 					if (abs(residual) > 0.02) pixel_src_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << residual << endl;
 				}
@@ -5258,7 +5262,6 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (fit_to_data[i][j]) {
-				if (!lens->image_pixel_data->extended_mask[i][j]) die("fuck me");
 				resize_grid = true;
 				if (use_noise_threshold) {
 					sbavg=0;
@@ -5310,13 +5313,84 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
+void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, const bool verbal)
+{
+	double xcavg=0, ycavg=0;
+	double totsurf=0;
+	double area, min_area = 1e30;
+	double xcmin, ycmin;
+	int i,j;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				xcavg += area*surface_brightness[i][j]*center_sourcepts[i][j][0];
+				ycavg += area*surface_brightness[i][j]*center_sourcepts[i][j][1];
+				totsurf += area*surface_brightness[i][j];
+			}
+		}
+	}
+	xcavg /= totsurf;
+	ycavg /= totsurf;
+	double rsq, rsqavg=0;
+	// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
+				rsqavg += area*surface_brightness[i][j]*rsq;
+			}
+		}
+	}
+	rsqavg /= totsurf;
+	scale = sqrt(rsqavg);
+	xcenter = xcavg;
+	ycenter = ycavg;
+
+	int ii, jj, il, ih, jl, jh;
+	const double window_size_for_srcarea = 1;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+				il = i - window_size_for_srcarea;
+				ih = i + window_size_for_srcarea;
+				jl = j - window_size_for_srcarea;
+				jh = j + window_size_for_srcarea;
+				if (il<0) il=0;
+				if (ih>x_N-1) ih=x_N-1;
+				if (jl<0) jl=0;
+				if (jh>y_N-1) jh=y_N-1;
+				area=0;
+				for (ii=il; ii <= ih; ii++) {
+					for (jj=jl; jj <= jh; jj++) {
+						area += (source_plane_triangle1_area[ii][jj] + source_plane_triangle2_area[ii][jj]);
+					}
+				}
+				if (area < min_area) {
+					min_area = area;
+					xcmin = center_pts[i][j][0];
+					ycmin = center_pts[i][j][1];
+				}
+			}
+		}
+	}
+
+
+	int nn = lens->get_shapelet_nn();
+	double minscale_shapelet = scale/sqrt(nn);
+	double minscale_res = sqrt(min_area);
+	int recommended_nn = (int) ((SQR(scale / minscale_res))+1);
+	if ((lens->mpi_id==0) and (verbal)) cout << "minscale_shapelet=" << minscale_shapelet << " minscale_res=" << minscale_res << " (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << endl;
+}
+
 void ImagePixelGrid::fill_surface_brightness_vector()
 {
 	int column_j = 0;
 	int i,j;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (maps_to_source_pixel[i][j]) {
+			if ((maps_to_source_pixel[i][j]) and ((fit_to_data==NULL) or (fit_to_data[i][j]))) {
 				lens->image_surface_brightness[column_j++] = surface_brightness[i][j];
 			}
 		}
@@ -5788,7 +5862,10 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 								}
 							}
 							else {
-								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+								if (!lens->sb_list[k]->zoom_subgridding) {
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+									cout << "HELLO! " << i << " " << j << " " << surface_brightness[i][j] << endl;
+								}
 								else {
 									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
 
@@ -5959,11 +6036,12 @@ bool QLens::assign_pixel_mappings(bool verbal)
 void QLens::initialize_pixel_matrices(bool verbal)
 {
 	if (Lmatrix != NULL) die("Lmatrix already initialized");
-	if (source_surface_brightness != NULL) die("source surface brightness vector already initialized");
+	if (source_pixel_vector != NULL) die("source surface brightness vector already initialized");
 	if (image_surface_brightness != NULL) die("image surface brightness vector already initialized");
 	image_surface_brightness = new double[image_npixels];
 	foreground_surface_brightness = new double[image_npixels];
-	source_surface_brightness = new double[source_npixels];
+	for (int i=0; i < image_npixels; i++) foreground_surface_brightness[i] = 0;
+	source_pixel_vector = new double[source_npixels];
 	if (n_image_prior) {
 		source_pixel_n_images = new double[source_npixels];
 		source_pixel_grid->fill_n_image_vector();
@@ -5979,11 +6057,34 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	assign_Lmatrix(verbal);
 }
 
+void QLens::initialize_pixel_matrices_shapelets(bool verbal)
+{
+	if (source_pixel_vector != NULL) die("source surface brightness vector already initialized");
+	vectorize_image_pixel_surface_brightness(true);
+	foreground_surface_brightness = new double[image_npixels];
+	for (int i=0; i < image_npixels; i++) foreground_surface_brightness[i] = 0;
+	double nmax;
+	source_npixels = 0;
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) {
+			nmax = *(sb_list[i]->indxptr);
+			source_npixels += nmax*nmax;
+			break; // currently only one shapelet source supported
+		}
+	}
+	if (source_npixels==0) die("no shapelet amplitudes found");
+	source_pixel_vector = new double[source_npixels];
+	if ((mpi_id==0) and (verbal)) cout << "Creating shapelet Lmatrix...\n";
+	Lmatrix_dense.input(image_npixels,source_npixels);
+	Lmatrix_dense = 0;
+	assign_Lmatrix_shapelets(verbal);
+}
+
 void QLens::clear_pixel_matrices()
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
 	if (foreground_surface_brightness != NULL) delete[] foreground_surface_brightness;
-	if (source_surface_brightness != NULL) delete[] source_surface_brightness;
+	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
@@ -5992,7 +6093,7 @@ void QLens::clear_pixel_matrices()
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	image_surface_brightness = NULL;
 	foreground_surface_brightness = NULL;
-	source_surface_brightness = NULL;
+	source_pixel_vector = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
 	image_pixel_location_Lmatrix = NULL;
@@ -6009,6 +6110,22 @@ void QLens::clear_pixel_matrices()
 		source_pixel_n_images = NULL;
 	}
 }
+
+/*
+void QLens::clear_pixel_matrices_dense()
+{
+	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (foreground_surface_brightness != NULL) delete[] foreground_surface_brightness;
+	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
+	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
+	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
+	image_surface_brightness = NULL;
+	foreground_surface_brightness = NULL;
+	source_pixel_vector = NULL;
+	active_image_pixel_i = NULL;
+	active_image_pixel_j = NULL;
+}
+*/
 
 void QLens::assign_Lmatrix(bool verbal)
 {
@@ -6228,6 +6345,142 @@ void QLens::assign_Lmatrix(bool verbal)
 	delete[] Lmatrix_index_rows;
 }
 
+void QLens::assign_Lmatrix_shapelets(bool verbal)
+{
+	int img_index, src_index;
+	int index;
+	int i,j;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	SB_Profile* shapelet;
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) {
+			shapelet = sb_list[i];
+			break; // currently only one shapelet source supported
+		}
+	}
+
+	int max_nsplit = image_pixel_grid->max_nsplit;
+	lensvector ***corner_srcpts;
+	corner_srcpts = new lensvector**[max_nsplit+1];
+	for (i=0; i < max_nsplit+1; i++) {
+		corner_srcpts[i] = new lensvector*[max_nsplit+1];
+		for (j=0; j < max_nsplit+1; j++) {
+			corner_srcpts[i][j] = new lensvector[nthreads];
+		}
+	}
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		int ii,jj,nsplit;
+		double u0, w0, cell;
+
+		if (split_imgpixels) {
+			#pragma omp for private(img_index,src_index,i,j,ii,jj,nsplit,index,u0,w0,cell) schedule(dynamic)
+			for (img_index=0; img_index < image_npixels; img_index++) {
+				index=0;
+				i = active_image_pixel_i[img_index];
+				j = active_image_pixel_j[img_index];
+				//source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],thread);
+
+				nsplit = image_pixel_grid->nsplits[i][j];
+				cell = 1.0/nsplit;
+				lensvector center, center_srcpt, corner;
+
+				/*
+				for (ii=0; ii < nsplit; ii++) {
+					for (jj=0; jj < nsplit; jj++) {
+						u0 = ((double) ii)/nsplit;
+						w0 = ((double) jj)/nsplit;
+						corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
+						corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+						find_sourcept(corner,corner_srcpts[ii+1][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+
+						if (ii==0) {
+							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+							corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+							find_sourcept(corner,corner_srcpts[ii][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+						} else {
+							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+							corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
+							lensvector check;
+							find_sourcept(corner,check,thread,reference_zfactors,default_zsrc_beta_factors);
+						}
+						if (jj==0) {
+							corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
+							corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
+							find_sourcept(corner,corner_srcpts[ii+1][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+						}
+						if ((ii==0) and (jj==0)) {
+							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
+							corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
+							find_sourcept(corner,corner_srcpts[ii][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+						}
+					}
+				}
+				*/
+
+
+				for (ii=0; ii < nsplit; ii++) {
+					for (jj=0; jj < nsplit; jj++) {
+						u0 = ((double) (1+2*ii))*cell/2;
+						w0 = ((double) (1+2*jj))*cell/2;
+						center[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+						center[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+						find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+						//cout << center[0] << "," << center[1] << " " << image_pixel_grid->center_pts[i][j][0] << "," << image_pixel_grid->center_pts[i][j][1] << endl;
+						//cout << center_srcpt[0] << "," << center_srcpt[1] << " " << image_pixel_grid->center_sourcepts[i][j][0] << "," << image_pixel_grid->center_sourcepts[i][j][1] << endl;
+						shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatrix_dense.subarray(img_index),1.0/(nsplit*nsplit));
+						//for (src_index=0; src_index < source_npixels; src_index++) {
+							//Lmatrix_dense[img_index][src_index] += (shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index) / (nsplit*nsplit));
+						//}
+					}
+				}
+			}
+		} else {
+			lensvector center, center_srcpt;
+			#pragma omp for private(img_index,src_index,i,j,center_srcpt) schedule(dynamic)
+			for (img_index=0; img_index < image_npixels; img_index++) {
+				i = active_image_pixel_i[img_index];
+				j = active_image_pixel_j[img_index];
+				center_srcpt = image_pixel_grid->center_sourcepts[i][j];
+				//center = image_pixel_grid->center_pts[i][j];
+				shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatrix_dense.subarray(img_index),1.0);
+				//for (src_index=0; src_index < source_npixels; src_index++) {
+					//Lmatrix_dense[img_index][src_index] = shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index);
+					//double checksb = shapelet->surface_brightness(center_srcpt[0],center_srcpt[1])/0.094;
+					//cout << "CHECKING: " << Lmatrix_dense[img_index][src_index] << " " << checksb << endl;
+					//if ((img_index==60) and (src_index==2)) cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
+					//cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
+				//}
+			}
+		}
+	}
+	for (i=0; i < max_nsplit+1; i++) {
+		for (j=0; j < max_nsplit+1; j++) {
+			delete[] corner_srcpts[i][j];
+		}
+		delete[] corner_srcpts[i];
+	}
+	delete[] corner_srcpts;
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for constructing shapelet Lmatrix: " << wtime << endl;
+	}
+#endif
+}
+
 void QLens::PSF_convolution_Lmatrix(bool verbal)
 {
 #ifdef USE_MPI
@@ -6274,8 +6527,7 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 	bool new_entry;
 	int Lmatrix_psf_nn=0;
 	int Lmatrix_psf_nn_part=0;
-	int src_index1, src_index2;
-	#pragma omp parallel for private(m,k,l,i,j,img_index1,img_index2,src_index,src_index1,src_index2,col_index,psf_k,psf_l,index,new_entry) schedule(static) reduction(+:Lmatrix_psf_nn_part)
+	#pragma omp parallel for private(m,k,l,i,j,img_index1,img_index2,src_index,col_index,psf_k,psf_l,index,new_entry) schedule(static) reduction(+:Lmatrix_psf_nn_part)
 	for (img_index1=mpi_start; img_index1 < mpi_end; img_index1++)
 	{ // this loops over columns of the PSF blurring matrix
 		int col_i=0;
@@ -6393,6 +6645,112 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 #endif
 }
 
+void QLens::convert_Lmatrix_to_dense()
+{
+	int i,j;
+	Lmatrix_dense.input(image_npixels,source_npixels);
+	Lmatrix_dense = 0;
+	//double **wtf = new double*[image_npixels];
+	//for (i=0; i < image_npixels; i++) {
+		//wtf[i] = new double[source_npixels];
+		//for (j=0; j < source_npixels; j++) {
+			//wtf[i][j] = 0;
+		//}
+	//}
+	for (i=0; i < image_npixels; i++) {
+		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+			Lmatrix_dense[i][Lmatrix_index[j]] += Lmatrix[j];
+			//wtf[i][Lmatrix_index[j]] += Lmatrix[j];
+			//cout << "Element " << i << "," << Lmatrix_index[j] << ": " << Lmatrix[j] << " " << Lmatrix_dense[i][Lmatrix_index[j]] << " " << wtf[i][Lmatrix_index[j]] << endl;
+		}
+	}
+
+	//cout << "CHECKING LMATRIX:" << endl;
+	//for (i=0; i < image_npixels; i++) {
+		//for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+			////wtf[i][Lmatrix_index[j]] += Lmatrix[j];
+			//cout << "!Element " << i << "," << Lmatrix_index[j] << ": " << Lmatrix[j] << " " << Lmatrix_dense[i][Lmatrix_index[j]] << " " << wtf[i][Lmatrix_index[j]] << endl;
+		//}
+	//}
+}
+
+void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
+{
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	if (psf_convolution_mpi) {
+		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+	}
+#endif
+
+	if (use_input_psf_matrix) {
+		if (psf_matrix == NULL) return;
+	}
+	else if (generate_PSF_matrix()==false) return;
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+	double nx_half, ny_half;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+
+	double **Lmatrix_psf = new double*[image_npixels];
+	int i,j;
+	for (i=0; i < image_npixels; i++) {
+		Lmatrix_psf[i] = new double[source_npixels];
+		for (j=0; j < source_npixels; j++) Lmatrix_psf[i][j] = 0;
+	}
+
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	int k,l;
+	int psf_k, psf_l;
+	int img_index1, img_index2, src_index, col_index;
+	int index;
+	bool new_entry;
+	int Lmatrix_psf_nn=0;
+	int Lmatrix_psf_nn_part=0;
+	double *lmatptr, *lmatpsfptr, psfval;
+	#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,src_index,psf_k,psf_l,lmatptr,lmatpsfptr,psfval) schedule(static) reduction(+:Lmatrix_psf_nn_part)
+	for (img_index1=0; img_index1 < image_npixels; img_index1++)
+	{ // this loops over columns of the PSF blurring matrix
+		int col_i=0;
+		k = active_image_pixel_i[img_index1];
+		l = active_image_pixel_j[img_index1];
+		for (psf_k=0; psf_k < psf_npixels_y; psf_k++) {
+			i = k + ny_half - psf_k;
+			if ((i >= 0) and (i < image_pixel_grid->x_N)) {
+				for (psf_l=0; psf_l < psf_npixels_x; psf_l++) {
+					j = l + nx_half - psf_l;
+					psfval = psf_matrix[psf_l][psf_k];
+					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+						if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
+							img_index2 = image_pixel_grid->pixel_index[i][j];
+							lmatptr = Lmatrix_dense.subarray(img_index2);
+							lmatpsfptr = Lmatrix_psf[img_index1];
+							for (src_index=0; src_index < source_npixels; src_index++) {
+								(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	Lmatrix_dense.input(Lmatrix_psf);
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating dense PSF convolution of Lmatrix: " << wtime << endl;
+	}
+#endif
+}
+
 void QLens::PSF_convolution_image_pixel_vector(bool verbal)
 {
 #ifdef USE_OPENMP
@@ -6431,7 +6789,7 @@ void QLens::PSF_convolution_image_pixel_vector(bool verbal)
 				for (psf_l=0; psf_l < psf_npixels_x; psf_l++) {
 					j = l + nx_half - psf_l;
 					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
-						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+						if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
 							img_index2 = image_pixel_grid->pixel_index[i][j];
 							new_image_surface_brightness[img_index1] += psf_matrix[psf_l][psf_k]*image_surface_brightness[img_index2];
 						}
@@ -6491,7 +6849,7 @@ void QLens::PSF_convolution_foreground_pixel_vector(bool verbal)
 				for (psf_l=0; psf_l < psf_npixels_x; psf_l++) {
 					j = l + nx_half - psf_l;
 					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
-						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+						if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
 							img_index2 = image_pixel_grid->pixel_index[i][j];
 							new_foreground_surface_brightness[img_index1] += psf_matrix[psf_l][psf_k]*foreground_surface_brightness[img_index2];
 						}
@@ -6766,8 +7124,6 @@ void QLens::generate_Rmatrix_norm()
 {
 	int i,j;
 	Rmatrix_diags = new double[source_npixels];
-	Rmatrix_rows = new vector<double>[source_npixels];
-	Rmatrix_index_rows = new vector<int>[source_npixels];
 	Rmatrix_row_nn = new int[source_npixels];
 
 	Rmatrix_nn = source_npixels+1;
@@ -6784,20 +7140,8 @@ void QLens::generate_Rmatrix_norm()
 	for (i=0; i < source_npixels; i++)
 		Rmatrix_index[i+1] = Rmatrix_index[i] + Rmatrix_row_nn[i];
 
-	int indx;
-	for (i=0; i < source_npixels; i++) {
-		indx = Rmatrix_index[i];
-		for (j=0; j < Rmatrix_row_nn[i]; j++) {
-			Rmatrix[indx+j] = Rmatrix_rows[i][j];
-			Rmatrix_index[indx+j] = Rmatrix_index_rows[i][j];
-			if (Rmatrix_index[indx+j] <= i) die("off-diagonal indices should be greater than i! %i vs %i",i,Rmatrix_index[indx+j]);
-		}
-	}
-	
 	delete[] Rmatrix_row_nn;
 	delete[] Rmatrix_diags;
-	delete[] Rmatrix_rows;
-	delete[] Rmatrix_index_rows;
 }
 
 void QLens::create_regularization_matrix()
@@ -6820,6 +7164,44 @@ void QLens::create_regularization_matrix()
 			die("Regularization method not recognized");
 	}
 }
+
+void QLens::create_regularization_matrix_dense()
+{
+	Rmatrix_dense.input(source_npixels,source_npixels);
+	Rmatrix_dense = 0;
+	switch (regularization_method) {
+		case Norm:
+			generate_Rmatrix_norm_dense(); break;
+		case Gradient:
+			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_gradient();
+			else die("gradient regularization only implemented for Shapelet mode");
+			break;
+		default:
+			die("Regularization method not recognized for dense matrices");
+	}
+}
+
+void QLens::generate_Rmatrix_norm_dense()
+{
+	for (int i=0; i < source_npixels; i++) Rmatrix_dense[i][i] = 1;
+	Rmatrix_log_determinant = 0;
+}
+
+void QLens::generate_Rmatrix_shapelet_gradient()
+{
+	SB_Profile* shapelet = NULL;
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) {
+			shapelet = sb_list[i];
+			break; // currently only one shapelet source supported
+		}
+	}
+	if (shapelet==NULL) die("No shapelet profile has been created; cannot calculate regularization matrix");
+
+	shapelet->calculate_gradient_Rmatrix_elements(Rmatrix_dense.pointer(), Rmatrix_log_determinant);
+}
+
+
 
 void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 {
@@ -6869,6 +7251,12 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 			Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - foreground_surface_brightness[i])/covariance;
 		}
 	}
+
+	//cout << "Dvector (from sparse:)" << endl;
+	//for (j=0; j < source_npixels; j++) {
+		//cout << Dvector[j] << " ";
+	//}
+	//cout << endl;
 
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = source_npixels / group_np;
@@ -7050,6 +7438,14 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		double sparseness = ((double) Fmatrix_nn)/Fmatrix_ntot;
 		cout << "Fmatrix sparseness = " << sparseness << endl;
 	}
+	//cout << "FMATRIX (SPARSE):" << endl;
+	//for (i=0; i < source_npixels; i++) {
+		//cout << i << "," << i << ": " << Fmatrix[i] << endl;
+		//for (j=Fmatrix_index[i]; j < Fmatrix_index[i+1]; j++) {
+			//cout << i << "," << Fmatrix_index[j] << ": " << Fmatrix[j] << endl;
+		//}
+		//cout << endl;
+	//}
 
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
@@ -7060,6 +7456,262 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	delete[] Fmatrix_diags;
 	delete[] Fmatrix_row_nn;
 }
+
+void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
+{
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
+	double effective_reg_parameter = regularization_parameter;
+
+	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
+	else covariance = SQR(data_pixel_noise);
+
+	int i,j,k,l;
+
+	Fmatrix_dense.input(source_npixels,source_npixels);
+
+	bool new_entry;
+	Dvector = new double[source_npixels];
+	for (i=0; i < source_npixels; i++) Dvector[i] = 0;
+
+	int ntot = source_npixels*(source_npixels+1)/2;
+	double *i_n = new double[ntot];
+	double *j_n = new double[ntot];
+	double **Ltrans = new double*[source_npixels];
+	int n=0;
+	for (i=0; i < source_npixels; i++) {
+		Ltrans[i] = new double[image_npixels];
+		for (j=0; j < image_npixels; j++) {
+			Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - foreground_surface_brightness[j])/covariance;
+			Ltrans[i][j] = Lmatrix_dense[j][i];
+		}
+		for (j=i; j < source_npixels; j++) {
+			i_n[n] = i;
+			j_n[n] = j;
+			n++;
+		}
+	}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for initializing Fmatrix and Dvector: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	/*
+	double maxsb=-1e30;
+	double argh, maxargh=-1e30;
+	int argh_i, sb_i;
+	double arghcheck, checksb;
+	double checksb2;
+	int ii,jj;
+	lensvector center_srcpt;
+	for (i=0; i < image_npixels; i++) {
+		if (image_surface_brightness[i] > maxsb) { maxsb=image_surface_brightness[i]; sb_i = i; }
+		argh = Lmatrix_dense[i][0]*0.094;
+		ii = active_image_pixel_i[i];
+		jj = active_image_pixel_j[i];
+		center_srcpt = image_pixel_grid->center_sourcepts[ii][jj];
+		//center = image_pixel_grid->center_pts[i][j];
+		arghcheck = sb_list[0]->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],0)*0.094;
+		checksb = sb_list[0]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+		checksb2 = image_pixel_grid->surface_brightness[ii][jj];
+		if (argh > maxargh) { maxargh=argh; argh_i=i; }
+		//cout << "WTF? "  << i << " " << argh << " " << image_surface_brightness[i] << " " << checksb2 << " " << arghcheck << " " << checksb << endl;
+	}
+	cout << "MAX_SB_DATA=" << maxsb << " (i=" << sb_i << ")" << endl;
+	cout << "MAX_ARGH=" << maxargh << " (i=" << argh_i << ")" << endl;
+	*/
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		double *fmatptr, *lmatptr1, *lmatptr2;
+		#pragma omp for private(n,i,j,l,fmatptr,lmatptr1,lmatptr2) schedule(static)
+		for (n=0; n < ntot; n++) {
+			i = i_n[n];
+			j = j_n[n];
+			fmatptr = &Fmatrix_dense[i][j];
+			lmatptr1 = Ltrans[i];
+			lmatptr2 = Ltrans[j];
+			(*fmatptr) = 0;
+			for (l=0; l < image_npixels; l++) {
+				(*fmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
+			}
+			(*fmatptr) /= covariance;
+			if (regularization_method != None) {
+				(*fmatptr) += effective_reg_parameter*Rmatrix_dense[i][j];
+			}
+			//cout << i << "," << j << ": " << Fmatrix_dense[i][j] << endl;
+		}
+	}
+	//cout << "Dvector (from dense:)" << endl;
+	//for (j=0; j < source_npixels; j++) {
+		//cout << Dvector[j] << " ";
+	//}
+	//cout << endl;
+	//cout << "FMATRIX (DENSE):" << endl;
+	//for (i=0; i < source_npixels; i++) {
+		//for (j=0; j < source_npixels; j++) {
+			//cout << Fmatrix_dense[i][j] << " ";
+		//}
+		//cout << endl;
+	//}
+
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating Fmatrix dense elements: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	for (i=0; i < source_npixels; i++) delete[] Ltrans[i];
+	delete[] Ltrans;
+	delete[] i_n;
+	delete[] j_n;
+}
+
+void QLens::invert_lens_mapping_dense(bool verbal)
+{
+	bool calculate_determinant = false;
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	int i,j;
+
+	double *temp = new double[source_npixels];
+	for (i=0; i < source_npixels; i++) temp[i] = 0;
+
+	//for (int i=0; i < source_npixels; i++) {
+		//for (int j=0; j < source_npixels; j++) {
+			//if (j >= i) cout << Fmatrix_dense[i][j] << " ";
+			//else cout << Fmatrix_dense[j][i] << " ";
+		//}
+		//cout << endl;
+	//}
+
+
+	bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+	if (!status) die("Cholesky decomposition failed");
+	Cholesky_solve(Fmatrix_dense.pointer(),Dvector,temp,source_npixels);
+	//cout << "logdet: " << Fmatrix_log_determinant << endl;
+	//Fmatrix_dense.invert(); // VERY INEFFICIENT! Fix so there is no unnecessary copying
+	//for (i=0; i < source_npixels; i++) {
+		//for (j=0; j < source_npixels; j++) {
+			//cout << Fmatrix_dense[i][j] << " ";
+		//}
+		//cout << endl;
+	//}
+
+	//for (i=0; i < source_npixels; i++) {
+		//for (j=0; j < source_npixels; j++) {
+			//temp[i] += Fmatrix_dense[i][j]*Dvector[j];
+		//}
+	//}
+	for (int i=0; i < source_npixels; i++) {
+		source_pixel_vector[i] = temp[i];
+	}
+
+	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
+
+	delete[] temp;
+	int index=0;
+	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
+	else if (source_fit_mode==Shapelet_Source) {
+		SB_Profile* shapelet;
+		for (i=0; i < n_sb; i++) {
+			if (sb_list[i]->sbtype==SHAPELET) {
+				shapelet = sb_list[i];
+				break; // currently only one shapelet source supported
+			}
+		}
+		shapelet->update_amplitudes(source_pixel_vector);
+	}
+}
+
+bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
+{
+	int pid;
+	int ii,in,i,j,k;
+	int p_recv;
+
+	logdet = log(abs(a[0][0]));
+	a[0][0] = sqrt(a[0][0]);
+	for (j=1; j < n; j++) a[0][j] /= a[0][0];
+	//MPI_Barrier(MPI_COMM_WORLD);
+	//MPI_Bcast(a[0],n,MPI_DOUBLE,0,MPI_COMM_WORLD);
+
+	int np, ip, mod;
+	for (i=1; i < n; i++) {
+		np = (n-i)/group_np;
+		ip = i+group_id*np;
+		in = np;
+		if (group_id==group_np-1) {
+			mod = (n-i) % group_np;
+			if (mod != 0) in += mod;
+		}
+		#pragma omp parallel for private(j,k) schedule(static)
+		for (j=ip; j < ip + in; j++) {
+			for (k=0; k < i; k++) {
+				a[i][j] -= a[k][i]*a[k][j];
+			}
+		}
+#ifdef USE_MPI
+		MPI_Barrier(MPI_COMM_WORLD);
+#endif
+		for (pid=0; pid < group_np; pid++) {
+			ip = i+pid*np;
+			in = np;
+			if (pid==group_np-1) {
+				mod = (n-i) % group_np;
+				if (mod != 0) in += mod;
+			}
+#ifdef USE_MPI
+			MPI_Bcast(a[i]+ip,in,MPI_DOUBLE,pid,MPI_COMM_WORLD);
+#endif
+		}
+
+		if (a[i][i] < 0) { cerr << "Warning: matrix is not positive-definite (row " << i << ")\n"; }
+		logdet += log(abs(a[i][i]));
+		a[i][i] = sqrt(abs(a[i][i]));
+		for (j=i+1; j < n; j++) a[i][j] /= a[i][i];
+		//MPI_Barrier(MPI_COMM_WORLD);
+		//MPI_Bcast(a[i]+i,n-i,MPI_DOUBLE,0,MPI_COMM_WORLD);
+	}
+	
+	return true;
+}
+
+void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
+{
+	int i,k;
+	double sum;
+	for (i=0; i < n; i++) {
+		for (sum=b[i], k=i-1; k >= 0; k--) sum -= a[k][i]*x[k];
+		x[i] = sum / a[i][i];
+	}
+	for (i=n-1; i >= 0; i--) {
+		for (sum=x[i], k=i+1; k < n; k++) sum -= a[i][k]*x[k];
+		x[i] = sum / a[i][i];
+	}	 
+}
+
 
 void QLens::invert_lens_mapping_CG_method(bool verbal)
 {
@@ -7102,9 +7754,9 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
 			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
-			source_surface_brightness[i] = temp[i];
-			if (source_surface_brightness[i] > max_pixel_sb) {
-				max_pixel_sb = source_surface_brightness[i];
+			source_pixel_vector[i] = temp[i];
+			if (source_pixel_vector[i] > max_pixel_sb) {
+				max_pixel_sb = source_pixel_vector[i];
 				max_sb_i = i;
 			}
 		}
@@ -7113,9 +7765,9 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
-					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
-					sbtot += source_surface_brightness[i];
+				if (source_pixel_vector[i] >= max_pixel_sb*n_image_prior_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_pixel_vector[i];
+					sbtot += source_pixel_vector[i];
 				}
 			}
 			if (sbtot != 0) pixel_avg_n_image /= sbtot;
@@ -7123,7 +7775,7 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 	} else {
 		for (int i=0; i < source_npixels; i++) {
 			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
-			source_surface_brightness[i] = temp[i];
+			source_pixel_vector[i] = temp[i];
 		}
 	}
 
@@ -7315,9 +7967,9 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal)
 		max_pixel_sb=-1e30;
 		int max_sb_i;
 		for (int i=0; i < source_npixels; i++) {
-			source_surface_brightness[i] = temp[i];
-			if (source_surface_brightness[i] > max_pixel_sb) {
-				max_pixel_sb = source_surface_brightness[i];
+			source_pixel_vector[i] = temp[i];
+			if (source_pixel_vector[i] > max_pixel_sb) {
+				max_pixel_sb = source_pixel_vector[i];
 				max_sb_i = i;
 			}
 		}
@@ -7326,16 +7978,16 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
-					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
-					sbtot += source_surface_brightness[i];
+				if (source_pixel_vector[i] >= max_pixel_sb*n_image_prior_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_pixel_vector[i];
+					sbtot += source_pixel_vector[i];
 				}
 			}
 			if (sbtot != 0) pixel_avg_n_image /= sbtot;
 		}
 	} else {
 		for (int i=0; i < source_npixels; i++) {
-			source_surface_brightness[i] = temp[i];
+			source_pixel_vector[i] = temp[i];
 		}
 	}
 	if (calculate_determinant) {
@@ -7610,9 +8262,9 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal)
 		for (int i=0; i < source_npixels; i++) {
 			//if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
 			//if (temp[i] < -0.05) temp[i] = -0.05; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
-			source_surface_brightness[i] = temp[i];
-			if (source_surface_brightness[i] > max_pixel_sb) {
-				max_pixel_sb = source_surface_brightness[i];
+			source_pixel_vector[i] = temp[i];
+			if (source_pixel_vector[i] > max_pixel_sb) {
+				max_pixel_sb = source_pixel_vector[i];
 				max_sb_i = i;
 			}
 		}
@@ -7621,9 +8273,9 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal)
 			pixel_avg_n_image = 0;
 			double sbtot = 0;
 			for (int i=0; i < source_npixels; i++) {
-				if (source_surface_brightness[i] >= max_pixel_sb*n_image_prior_sb_frac) {
-					pixel_avg_n_image += source_pixel_n_images[i]*source_surface_brightness[i];
-					sbtot += source_surface_brightness[i];
+				if (source_pixel_vector[i] >= max_pixel_sb*n_image_prior_sb_frac) {
+					pixel_avg_n_image += source_pixel_n_images[i]*source_pixel_vector[i];
+					sbtot += source_pixel_vector[i];
 				}
 			}
 			if (sbtot != 0) pixel_avg_n_image /= sbtot;
@@ -7631,7 +8283,7 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal)
 	} else {
 		for (int i=0; i < source_npixels; i++) {
 			if ((data_pixel_noise==0) and (temp[i] < 0)) temp[i] = 0; // This might be a bad idea, but with zero noise there should be no negatives, and they annoy me when plotted
-			source_surface_brightness[i] = temp[i];
+			source_pixel_vector[i] = temp[i];
 		}
 	}
 
@@ -7804,12 +8456,54 @@ void QLens::calculate_image_pixel_surface_brightness()
 	int img_index_j;
 	int i,j,k;
 
+	//cout << "SPARSE SB:" << endl;
+	//for (j=0; j < source_npixels; j++) {
+		//cout << source_pixel_vector[j] << " ";
+	//}
+	//cout << endl;
+
+
 	for (int img_index=0; img_index < image_npixels; img_index++) {
 		image_surface_brightness[img_index] = 0;
 		for (img_index_j=image_pixel_location_Lmatrix[img_index]; img_index_j < image_pixel_location_Lmatrix[img_index+1]; img_index_j++) {
-			image_surface_brightness[img_index] += Lmatrix[img_index_j]*source_surface_brightness[Lmatrix_index[img_index_j]];
+			image_surface_brightness[img_index] += Lmatrix[img_index_j]*source_pixel_vector[Lmatrix_index[img_index_j]];
 		}
 		//if (image_surface_brightness[i] < 0) image_surface_brightness[i] = 0;
+	}
+
+	bool at_least_one_foreground_src = false;
+	for (k=0; k < n_sb; k++) {
+		if (!sb_list[k]->is_lensed) {
+			at_least_one_foreground_src = true;
+			break;
+		}
+	}
+	if (at_least_one_foreground_src) {
+		calculate_foreground_pixel_surface_brightness();
+		add_foreground_to_image_pixel_vector();
+	} else {
+		for (int img_index=0; img_index < image_npixels; img_index++) foreground_surface_brightness[img_index] = 0;
+	}
+
+}
+
+void QLens::calculate_image_pixel_surface_brightness_dense()
+{
+	int i,j,k;
+
+	//cout << "DENSE SB:" << endl;
+	//for (j=0; j < source_npixels; j++) {
+		//cout << source_pixel_vector[j] << " ";
+	//}
+	//cout << endl;
+	double maxsb = -1e30;
+	for (int i=0; i < image_npixels; i++) {
+		image_surface_brightness[i] = 0;
+		for (j=0; j < source_npixels; j++) {
+			image_surface_brightness[i] += Lmatrix_dense[i][j]*source_pixel_vector[j];
+		}
+		//if (image_surface_brightness[i] < 0) image_surface_brightness[i] = 0;
+			if (image_surface_brightness[i] > maxsb) maxsb=image_surface_brightness[i];
 	}
 
 	bool at_least_one_foreground_src = false;
@@ -7911,7 +8605,7 @@ void QLens::store_image_pixel_surface_brightness()
 	}
 }
 
-void QLens::vectorize_image_pixel_surface_brightness()
+void QLens::vectorize_image_pixel_surface_brightness(bool use_mask)
 {
 	// NOTE: if foreground light is being included, the code still only includes the pixels that map to the source grid, which
 	// may look a bit weird if one plots the image outside the mask (using "sbmap plotimg -emask" or "sbmap plotimg -nomask").
@@ -7920,14 +8614,26 @@ void QLens::vectorize_image_pixel_surface_brightness()
 	if (active_image_pixel_i == NULL) {
 		delete[] active_image_pixel_i;
 		if (active_image_pixel_j == NULL) delete[] active_image_pixel_j;
-		image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
+		if (use_mask) {
+			int n=0;
+			for (j=0; j < image_pixel_grid->y_N; j++) {
+				for (i=0; i < image_pixel_grid->x_N; i++) {
+					if ((image_pixel_grid->fit_to_data != NULL) and (image_pixel_grid->fit_to_data[i][j])) n++;
+				}
+			}
+			image_npixels = n;
+		} else {
+			image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
+		}
 		active_image_pixel_i = new int[image_npixels];
 		active_image_pixel_j = new int[image_npixels];
-		for (i=0; i < image_pixel_grid->x_N; i++) {
-			for (j=0; j < image_pixel_grid->y_N; j++) {
-				active_image_pixel_i[k] = i;
-				active_image_pixel_j[k] = j;
-				image_pixel_grid->pixel_index[i][j] = k++;
+		for (j=0; j < image_pixel_grid->y_N; j++) {
+			for (i=0; i < image_pixel_grid->x_N; i++) {
+				if ((!use_mask) or ((image_pixel_grid->fit_to_data != NULL) and (image_pixel_grid->fit_to_data[i][j]))) {
+					active_image_pixel_i[k] = i;
+					active_image_pixel_j[k] = j;
+					image_pixel_grid->pixel_index[i][j] = k++;
+				}
 			}
 		}
 	}
@@ -7962,7 +8668,7 @@ void QLens::plot_image_pixel_surface_brightness(string outfile_root)
 	index=0;
 	for (int j=0; j < image_pixel_grid->y_N; j++) {
 		for (int i=0; i < image_pixel_grid->x_N; i++) {
-			if (image_pixel_grid->maps_to_source_pixel[i][j])
+			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])))
 				surface_brightness_file << image_surface_brightness[index++] << " ";
 			else surface_brightness_file << "0 ";
 		}

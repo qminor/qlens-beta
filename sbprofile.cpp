@@ -1127,9 +1127,33 @@ double SB_Profile::surface_brightness_r(const double r)
 	return sb_rsq(r*r);
 }
 
+/*
+double SB_Profile::calculate_Lmatrix_element(double x, double y, const int amp_index)
+{
+	return 0.0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+*/
+
+void SB_Profile::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+void SB_Profile::calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+
+void SB_Profile::update_amplitudes(double *ampvec)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
 void SB_Profile::print_parameters()
 {
 	cout << model_name;
+	if (sbtype==SHAPELET) cout << "(n_shapelets=" << (*indxptr) << ")";
 	if (!is_lensed) cout << "(unlensed)";
 	if (zoom_subgridding) cout << "(zoom)";
 	cout << ": ";
@@ -1516,6 +1540,277 @@ double Cored_Sersic::window_rmax()
 double Cored_Sersic::length_scale()
 {
 	return Reff;
+}
+
+Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig)
+{
+	model_name = "shapelet";
+	sbtype = SHAPELET;
+	set_nparams(5);
+	sig = sig_in;
+	n_shapelets = nn;
+	indxptr = &n_shapelets;
+	amps = new double*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) amps[i] = new double[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			amps[i][j] = 0;
+		}
+	}
+	amps[0][0] = amp00; // just to start off
+	truncate_at_3sigma = truncate_2sig;
+
+/*
+	// testing stuff
+	if (n_shapelets == 1) {
+		amps[0][0] = amp00; 
+	} else if (n_shapelets == 2) {
+		//amps[0][1] = amp00;
+		amps[1][0] = amp00;
+	}
+	else if (n_shapelets == 3) {
+		//amps[0][2] = amp00;
+		amps[2][2] = amp00;
+	}
+	else if (n_shapelets == 4) {
+		//amps[0][3] = amp00;
+		//amps[0][0] = amp00;
+		amps[3][2] = amp00;
+	}
+	else if (n_shapelets == 5) {
+		amps[4][3] = amp00;
+	}
+	else if (n_shapelets == 9) {
+		amps[0][0] = amp00; 
+		amps[4][2] = 0.5*amp00;
+		amps[3][6] = 0.3*amp00;
+		amps[8][8] = 0.2*amp00;
+	}
+*/
+
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+	assign_param_pointers();
+	assign_paramnames();
+}
+
+Shapelet::Shapelet(const Shapelet* sb_in)
+{
+	n_shapelets = sb_in->n_shapelets;
+	indxptr = &n_shapelets;
+	sig = sb_in->sig;
+	amps = new double*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) amps[i] = new double[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			amps[i][j] = sb_in->amps[i][j];
+		}
+	}
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void Shapelet::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+}
+
+void Shapelet::assign_paramnames()
+{
+	paramnames[0] = "sigma"; latex_paramnames[0] = "\\sigma"; latex_param_subscripts[0] = "";
+	set_geometric_paramnames(1);
+}
+
+void Shapelet::assign_param_pointers()
+{
+	param[0] = &sig;
+	set_geometric_param_pointers(1);
+}
+
+void Shapelet::set_auto_stepsizes()
+{
+	stepsizes[0] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
+	set_auto_eparam_stepsizes(1,2);
+	stepsizes[3] = 0.1;
+	stepsizes[4] = 0.1;
+}
+
+void Shapelet::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_geometric_param_auto_ranges(1);
+}
+
+double Shapelet::surface_brightness(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 3*sig)) return 0;
+	if (theta != 0) rotate(x,y);
+
+	double gaussfactor, sb, xarg, yarg, fac, lastfac, sqrtq;
+	gaussfactor = (0.5641895835477563/(sig))*exp(-(q*x*x+y*y/q)/(2*sig*sig));
+	double *hermvals_x = new double[n_shapelets];
+	double *hermvals_y = new double[n_shapelets];
+	hermvals_x[0] = 1.0;
+	hermvals_y[0] = 1.0;
+	sqrtq = sqrt(q);
+	xarg = x*sqrtq/sig;
+	yarg = y/(sqrtq*sig);
+	if (n_shapelets > 1) {
+		hermvals_x[1] = 2*xarg/SQRT2;
+		hermvals_y[1] = 2*yarg/SQRT2;
+	}
+	lastfac = 1.0/SQRT2;
+	int i,j;
+	for (i=2; i < n_shapelets; i++) {
+		fac = 1.0/sqrt(2*i);
+		hermvals_x[i] = 2*(xarg*hermvals_x[i-1] - (i-1)*hermvals_x[i-2]*lastfac) * fac;
+		hermvals_y[i] = 2*(yarg*hermvals_y[i-1] - (i-1)*hermvals_y[i-2]*lastfac) * fac;
+		lastfac = fac;
+	}
+	sb = 0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			sb += amps[i][j]*hermvals_x[i]*hermvals_y[j];
+		}
+	}
+	sb *= gaussfactor;
+
+	delete[] hermvals_x;
+	delete[] hermvals_y;
+	return sb;
+}
+
+void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight)
+{
+	x -= x_center;
+	y -= y_center;
+	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 3*sig)) return;
+	if (theta != 0) rotate(x,y);
+
+	double gaussfactor, xarg, yarg, fac, lastfac, sqrtq;
+	gaussfactor = (0.5641895835477563/(sig))*exp(-(q*x*x+y*y/q)/(2*sig*sig));
+	double *hermvals_x = new double[n_shapelets];
+	double *hermvals_y = new double[n_shapelets];
+	hermvals_x[0] = 1.0;
+	hermvals_y[0] = 1.0;
+	sqrtq = sqrt(q);
+	xarg = x*sqrtq/sig;
+	yarg = y/(sqrtq*sig);
+	if (n_shapelets > 1) {
+		hermvals_x[1] = 2*xarg/SQRT2;
+		hermvals_y[1] = 2*yarg/SQRT2;
+	}
+	lastfac = 1.0/SQRT2;
+	int i,j;
+	for (i=2; i < n_shapelets; i++) {
+		fac = 1.0/sqrt(2*i);
+		hermvals_x[i] = 2*(xarg*hermvals_x[i-1] - (i-1)*hermvals_x[i-2]*lastfac) * fac;
+		hermvals_y[i] = 2*(yarg*hermvals_y[i-1] - (i-1)*hermvals_y[i-2]*lastfac) * fac;
+		lastfac = fac;
+	}
+	int n=0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+		}
+	}
+
+	delete[] hermvals_x;
+	delete[] hermvals_y;
+}
+
+void Shapelet::calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet)
+{
+	if (sig==0) die("sigma cannot be zero!!");
+	if ((q > 1) or (q <= 0)) die("q taking an absurd value");
+	int i,j,n=0;
+	logdet = 0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			Rmatrix_elements[n][n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
+			if (Rmatrix_elements[n][n] < 0) die("negative element!!!");
+			logdet += log(Rmatrix_elements[n][n]);
+			n++;
+		}
+	}
+}
+
+
+
+/*
+double Shapelet::calculate_Lmatrix_element(double x, double y, const int amp_index)
+{
+	x -= x_center;
+	y -= y_center;
+	//if ((x*x+y*y) > 2*sig) return 0;
+	if (theta != 0) rotate(x,y);
+
+	double gaussfactor, fac, lastfac, xarg, yarg, sqrtq;
+	double hermval_x, hermval_x_prev, hermval_x_prev2;
+	double hermval_y, hermval_y_prev, hermval_y_prev2;
+	gaussfactor = (0.5641895835477563/(sig))*exp(-(q*x*x+y*y/q)/(2*sig*sig));
+
+	int i,m,n;
+	m = amp_index / n_shapelets;
+	n = amp_index % n_shapelets;
+
+	if (m==0) hermval_x = 1.0;
+	if (n==0) hermval_y = 1.0;
+	sqrtq = sqrt(q);
+	xarg = x*sqrtq/sig;
+	yarg = y/(sqrtq*sig);
+	if (m > 0) {
+		hermval_x = 2*xarg/SQRT2;
+		hermval_x_prev = 1.0;
+	}
+	if (n > 0) {
+		hermval_y = 2*yarg/SQRT2;
+		hermval_y_prev = 1.0;
+	}
+	lastfac = 1.0/SQRT2;
+	// since we'll be getting all the Lmatrix elements, maybe save time by storing all the Hermite polynomials
+	// in a matrix? Would have to have a separate matrix for each thread, and each thread would have to iterate
+	// over all the source amplitudes before moving to the next image pixel (and starting a new matrix).
+	// Look into this later!
+	for (i=2; i <= dmax(m,n); i++) {
+		fac = 1.0/sqrt(2*i);
+		if (i <= m) {
+			hermval_x_prev2 = hermval_x_prev;
+			hermval_x_prev = hermval_x;
+			hermval_x = 2*(xarg*hermval_x_prev - (i-1)*hermval_x_prev2*lastfac) * fac;
+		}
+		if (i <= n) {
+			hermval_y_prev2 = hermval_y_prev;
+			hermval_y_prev = hermval_y;
+			hermval_y = 2*(yarg*hermval_y_prev - (i-1)*hermval_y_prev2*lastfac) * fac;
+		}
+		lastfac = fac;
+	}
+	return (gaussfactor * hermval_x * hermval_y);
+}
+*/
+
+void Shapelet::update_amplitudes(double *ampvec)
+{
+	int i,j,k=0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			amps[i][j] = ampvec[k++];
+		}
+	}
+}
+
+double Shapelet::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	if (truncate_at_3sigma) return 2.3*sig;
+	else return 1.7*sig*sqrt(n_shapelets+1);
+}
+
+double Shapelet::length_scale()
+{
+	return sig*sqrt(n_shapelets);
 }
 
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine)

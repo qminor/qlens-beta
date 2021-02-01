@@ -220,6 +220,12 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	return true;
 }
 
+void LensProfile::get_vary_flags(boolvector &vary_flags)
+{
+	vary_flags.input(n_params);
+	for (int i=0; i < n_params; i++) vary_flags[i] = vary_params[i];
+}
+
 bool LensProfile::register_vary_flags()
 {
 	// This function is called if there are already vary flags that have been set before adding the lens to the list
@@ -867,7 +873,9 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 	if (center_defined) {
 		for (int i=0; i < n_params-3; i++) {
 			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else {
+			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
+				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
+			} else {
 				if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
 				else {
 					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);

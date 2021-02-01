@@ -235,6 +235,7 @@ class ImagePixelGrid : public Sort
 	void assign_required_data_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
 
 	void find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax);
+	void find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, const bool verbal);
 	void fill_surface_brightness_vector();
 	void plot_grid(string filename, bool show_inactive_pixels);
 	void set_lens(QLens* lensptr) { lens = lensptr; }
@@ -242,7 +243,7 @@ class ImagePixelGrid : public Sort
 	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(bool plot_foreground_only = false);
-	void plot_surface_brightness(string outfile_root, bool plot_residual = false, bool show_only_mask = true, bool show_extended_mask = false);
+	void plot_surface_brightness(string outfile_root, bool plot_residual = false, bool show_only_mask = true, bool show_extended_mask = false, bool show_noise_thresh = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise(const double& pixel_noise_sig);

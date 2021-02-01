@@ -19,14 +19,15 @@ class Matrix
 public:
 	Matrix() : nrows(0), ncolumns(0) { a = NULL; }
 	Matrix(const int &n) { input(n,n); }
-	Matrix(const int &m, const int &n) { a = NULL; input(m,n); }
-	Matrix(const int &m, const int &n, const char filename[]) { a = NULL; input(m,n,filename); }
-	Matrix(T **inmatrix, const int &m, const int &n) { a = NULL; input(inmatrix, m, n); }
+	Matrix(const int &m, const int &n) { input(m,n); }
+	Matrix(const int &m, const int &n, const char filename[]) { input(m,n,filename); }
+	Matrix(T **inmatrix, const int &m, const int &n) { input(inmatrix, m, n); }
 	Matrix(const Matrix&); // copy-constructor
 	Matrix& operator = (const Matrix&);
 	Matrix& operator = (const T&);
 	void input(const int&, const int&);
 	void input(T**, const int&, const int&);
+	void input(T**); // this assumes the input dimensions are the same as already set
 	void input(const Matrix&);
 	void input(const int &m, const int &n, const char filename[]);
 	void output(const char filename[]);
@@ -34,6 +35,8 @@ public:
 	void erase();
 	void lu_decomposition(int* indx);
 	void lu_solve(int *indx, T* b);
+	double **pointer() { return a; }
+	double *subarray(const int i) { return a[i]; }
 	bool is_initialized() { return (a != NULL); }
 	double bicubic_interpolate(const double &t, const double &u); // can use if this is a 4x4 matrix with the coefficients (c_ij).
 	//Matrix<T>* inverse_ptr(void);
@@ -59,6 +62,7 @@ public:
 	inline Matrix& operator *= (const Matrix&);
 	Matrix operator ~ (void);     // inverse operator
 	inline Matrix inverse(void);         // same as ~ above
+	void invert (void);    // Takes the inverse of a matrix
 	Matrix operator / (const Matrix&);  // same as *~
 	void inverse(Matrix<T> &minv, bool &nonsingular_matrix);    // Takes the inverse of a matrix
 
@@ -155,6 +159,18 @@ void Matrix<T>::input(T **inmatrix, const int &m, const int &n)
 		}
 	}
 	return;
+}
+
+template <class T>
+void Matrix<T>::input(T **inmatrix)
+{
+	if (a != NULL) {
+		for (int i = 0; i < nrows; i++)
+			delete[] a[i];
+		delete[] a;
+	}
+
+	a = inmatrix; // NOTE: if nrows or ncolumns does not match the inmatrix, you'll get a seg fault!
 }
 
 template <class T>
@@ -648,6 +664,77 @@ Matrix<T> Matrix<T>::operator~ (void)    // Takes the inverse of a matrix
 	delete[] inv;
 
 	return minv;
+}
+
+template <class T>
+void Matrix<T>::invert (void)    // Takes the inverse of a matrix
+{
+	if (nrows != ncolumns) die("cannot take inverse of a non-square matrix (%ix%i)", nrows, ncolumns);
+	int n = nrows;
+
+	T **inv;
+	inv = new T*[n];
+	for (int i = 0; i < n; i++) {
+		inv[i] = new T[n];
+		for (int j = 0; j < n; j++)
+			inv[i][j] = a[i][j];
+	}
+
+	int *indxc,*indxr,*ipiv;
+	int i,icol,irow,j,k,l,ll;
+	T big,dum,pivinv;
+
+	indxc = new int[n];
+	indxr = new int[n];
+	ipiv = new int[n];
+	for (j=0;j<n;j++) ipiv[j]=0;
+	for (i=0;i<n;i++) {
+		big=0;
+		for (j=0;j<n;j++)
+			if (ipiv[j] != 1)
+				for (k=0;k<n;k++) {
+					if (ipiv[k] == 0) {
+						if (fabs(inv[j][k]) >= big) {
+							big=(T) fabs(inv[j][k]);
+							irow=j;
+							icol=k;
+						}
+					} else if (ipiv[k] > 1) die("Singular Matrix-1, could not take inverse");
+				}
+		++(ipiv[icol]);
+		if (irow != icol) {
+			for (l=0;l<n;l++) Swap(inv[irow][l],inv[icol][l]);
+		}
+		indxr[i]=irow;
+		indxc[i]=icol;
+		if (inv[icol][icol] == 0) die("Singular Matrix-2, could not take inverse");
+		pivinv=(T) 1.0/inv[icol][icol];
+		inv[icol][icol]=1;
+		for (l=0;l<n;l++) inv[icol][l] *= pivinv;
+		for (ll=0;ll<n;ll++)
+			if (ll != icol) {
+				dum=inv[ll][icol];
+				inv[ll][icol]=0;
+				for (l=0;l<n;l++) inv[ll][l] -= inv[icol][l]*dum;
+			}
+	}
+	for (l=n-1;l>=0;l--) {
+		if (indxr[l] != indxc[l])
+			for (k=0;k<n;k++)
+				Swap(inv[k][indxr[l]],inv[k][indxc[l]]);
+	}
+	delete[] ipiv;
+	delete[] indxr;
+	delete[] indxc;
+
+	for (int i = 0; i < n; i++) {
+		for (int j = 0; j < n; j++)
+			a[i][j] = inv[i][j];
+	}
+
+	for (int i = 0; i < n; i++)
+		delete[] inv[i];
+	delete[] inv;
 }
 
 template <class T>

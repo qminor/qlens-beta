@@ -37,7 +37,7 @@ using namespace std;
 enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
 enum inside_cell { Inside, Outside, Edge };
 enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
-enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source };
+enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
@@ -562,7 +562,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
-	enum InversionMethod { CG_Method, MUMPS, UMFPACK } inversion_method;
+	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool weight_interpolation_by_imgplane_area;
 	bool interpolate_sb_3pt;
@@ -665,7 +665,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_cc_spline; // critical curves can be splined when (approximate) elliptical symmetry is present
 	bool auto_ccspline;
 
-	bool auto_sourcegrid;
+	bool auto_sourcegrid, auto_shapelet_scaling;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
 
@@ -676,7 +676,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *active_image_pixel_j;
 	double *image_surface_brightness;
 	double *foreground_surface_brightness;
-	double *source_surface_brightness;
+	double *source_pixel_vector;
 	double *source_pixel_n_images;
 
 	int *image_pixel_location_Lmatrix;
@@ -701,6 +701,22 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 #ifdef USE_MUMPS
 	static DMUMPS_STRUC_C *mumps_solver;
 #endif
+
+	void convert_Lmatrix_to_dense();
+	void assign_Lmatrix_shapelets(bool verbal);
+	void PSF_convolution_Lmatrix_dense(bool verbal);
+	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
+	void invert_lens_mapping_dense(bool verbal);
+	void calculate_image_pixel_surface_brightness_dense();
+	void create_regularization_matrix_dense();
+	void generate_Rmatrix_norm_dense();
+	void generate_Rmatrix_shapelet_gradient();
+	bool Cholesky_dcmp(double** a, double &logdet, int n);
+	void Cholesky_solve(double** a, double* b, double* x, int n);
+
+	dmatrix Lmatrix_dense;
+	dmatrix Fmatrix_dense;
+	dmatrix Rmatrix_dense;
 
 	double *gmatrix[4];
 	int *gmatrix_index[4];
@@ -727,6 +743,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	void initialize_pixel_matrices(bool verbal);
+	void initialize_pixel_matrices_shapelets(bool verbal);
 	void clear_pixel_matrices();
 	void clear_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
@@ -754,7 +771,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void calculate_foreground_pixel_surface_brightness();
 	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness();
-	void vectorize_image_pixel_surface_brightness();
+	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root);
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
 	double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
@@ -762,13 +779,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(bool verbal);
 	void plot_image_pixel_grid();
+	void find_shapelet_scaling_parameters(const bool verbal);
+	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists = false);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -983,6 +1002,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
+	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate);
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
@@ -1072,6 +1092,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_sorted_critical_curves(string filename = "");
 	bool (QLens::*plot_critical_curves)(string filename);
 	bool plotcrit(string filename) { return (this->*plot_critical_curves)(filename); }
+	bool plotcrit_exclude_subhalo(string filename, int exclude_lensnum)
+	{
+		bool worked = false;
+		double mvir;
+		if (lens_list[exclude_lensnum]->get_specific_parameter("mvir",mvir)==true) {
+			lens_list[exclude_lensnum]->update_specific_parameter("mvir",1e-3);
+			worked = (this->*plot_critical_curves)(filename);
+			lens_list[exclude_lensnum]->update_specific_parameter("mvir",mvir);
+		}
+		return worked;
+	}
 	void plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename);
 
 	void make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);
@@ -1207,11 +1238,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double croot_eq(const double c);
 	double rmax_true_mz, menc_true_mz, rmax_z_true_mz, avgkap_scaled_true_mz;
 	double NFW_def_function(const double x);
-	void plot_mz_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename);
+	void plot_mz_curve(const int lensnumber, const double logm_min, const double logm_max, const double yslope_lowz, const double yslope_hiz, const bool keep_dr_const, const string filename);
 	double zroot_eq(const double z);
 	double muroot_eq(const double mu);
 	double mrroot_eq(const double mu);
 	double mrroot_eq0(const double mu);
+	void plot_mz_bestfit(const int lensnumber, const double zmin, const double zmax, const double zstep, string filename);
+	void find_bestfit_smooth_model(const int lensnumber);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
 	void test_lens_functions();

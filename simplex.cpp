@@ -235,7 +235,7 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 			else t *= tinc;
 			if (verbal) {
 				if (simplex_display_bestfit_point) {
-					cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
+					cout << "\033[1A" << "temperature=" << t << ", best(-2*loglike)=" << (2*yb) << "       " << endl;
 					cout << "best-fit point: (";
 					for (int i=0; i < ndim; i++) {
 						cout << pb[i];
@@ -244,7 +244,7 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 					cout << ")      " << endl;
 					cout << "\033[1A" << flush;
 				} else {
-					cout << "\033[1A" << "temperature=" << t << ", best_loglike=" << yb << "       " << endl;
+					cout << "\033[1A" << "temperature=" << t << ", best(-2*loglike)=" << yb << "       " << endl;
 				}
 			}
 		}

@@ -174,6 +174,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
+	double special_anchor_factor;
 
 	static IntegrationMethod integral_method;
 	static bool orient_major_axis_north;
@@ -221,6 +222,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void assign_paramnames();
 	bool register_vary_flags();
 	bool set_vary_flags(boolvector &vary_flags);
+	void get_vary_flags(boolvector &vary_flags);
 	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
@@ -468,7 +470,6 @@ class NFW : public LensProfile
 	private:
 	double ks, rs;
 	double m200, c200, rs_kpc; // alternate parametrizations
-	double median_c_factor; // used if concentration is set to factor*median value
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double);
@@ -511,7 +512,6 @@ class Truncated_NFW : public LensProfile
 	private:
 	double ks, rs, rt;
 	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
-	double median_c_factor; // used if concentration is set to factor*median value
 
 	double kappa_rsq(const double);
 	double lens_function_xsq(const double&);
@@ -550,7 +550,6 @@ class Cored_NFW : public LensProfile
 	private:
 	double ks, rs, rc;
 	double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
-	double median_c_factor;
 
 	double kappa_rsq(const double);
 	double kappa_rsq_deriv(const double rsq);
