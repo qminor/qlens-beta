@@ -7506,6 +7506,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	for (i=0; i < source_npixels; i++) Dvector[i] = 0;
 
 	int ntot = source_npixels*(source_npixels+1)/2;
+	//int ntot = source_npixels*source_npixels;
 	double *i_n = new double[ntot];
 	double *j_n = new double[ntot];
 	double **Ltrans = new double*[source_npixels];
@@ -7516,7 +7517,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 			Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - foreground_surface_brightness[j])/covariance;
 			Ltrans[i][j] = Lmatrix_dense[j][i];
 		}
-		for (j=i; j < source_npixels; j++) {
+		for (j=0; j <= i; j++) {
 			i_n[n] = i;
 			j_n[n] = j;
 			n++;
@@ -7634,6 +7635,14 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 
 	bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for inverting Fmatrix: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
 	if (!status) die("Cholesky decomposition failed");
 	Cholesky_solve(Fmatrix_dense.pointer(),Dvector,temp,source_npixels);
 	//cout << "logdet: " << Fmatrix_log_determinant << endl;
@@ -7673,52 +7682,23 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
 {
-	int pid;
-	int ii,in,i,j,k;
-	int p_recv;
+	int i,j,k;
 
 	logdet = log(abs(a[0][0]));
 	a[0][0] = sqrt(a[0][0]);
-	for (j=1; j < n; j++) a[0][j] /= a[0][0];
-	//MPI_Barrier(MPI_COMM_WORLD);
-	//MPI_Bcast(a[0],n,MPI_DOUBLE,0,MPI_COMM_WORLD);
+	for (j=1; j < n; j++) a[j][0] /= a[0][0];
 
-	int np, ip, mod;
 	for (i=1; i < n; i++) {
-		np = (n-i)/group_np;
-		ip = i+group_id*np;
-		in = np;
-		if (group_id==group_np-1) {
-			mod = (n-i) % group_np;
-			if (mod != 0) in += mod;
-		}
 		#pragma omp parallel for private(j,k) schedule(static)
-		for (j=ip; j < ip + in; j++) {
+		for (j=i; j < n; j++) {
 			for (k=0; k < i; k++) {
-				a[i][j] -= a[k][i]*a[k][j];
+				a[j][i] -= a[i][k]*a[j][k];
 			}
 		}
-#ifdef USE_MPI
-		MPI_Barrier(MPI_COMM_WORLD);
-#endif
-		for (pid=0; pid < group_np; pid++) {
-			ip = i+pid*np;
-			in = np;
-			if (pid==group_np-1) {
-				mod = (n-i) % group_np;
-				if (mod != 0) in += mod;
-			}
-#ifdef USE_MPI
-			MPI_Bcast(a[i]+ip,in,MPI_DOUBLE,pid,MPI_COMM_WORLD);
-#endif
-		}
-
 		if (a[i][i] < 0) { cerr << "Warning: matrix is not positive-definite (row " << i << ")\n"; }
 		logdet += log(abs(a[i][i]));
 		a[i][i] = sqrt(abs(a[i][i]));
-		for (j=i+1; j < n; j++) a[i][j] /= a[i][i];
-		//MPI_Barrier(MPI_COMM_WORLD);
-		//MPI_Bcast(a[i]+i,n-i,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		for (j=i+1; j < n; j++) a[j][i] /= a[i][i];
 	}
 	
 	return true;
@@ -7729,11 +7709,11 @@ void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 	int i,k;
 	double sum;
 	for (i=0; i < n; i++) {
-		for (sum=b[i], k=i-1; k >= 0; k--) sum -= a[k][i]*x[k];
+		for (sum=b[i], k=i-1; k >= 0; k--) sum -= a[i][k]*x[k];
 		x[i] = sum / a[i][i];
 	}
 	for (i=n-1; i >= 0; i--) {
-		for (sum=x[i], k=i+1; k < n; k++) sum -= a[i][k]*x[k];
+		for (sum=x[i], k=i+1; k < n; k++) sum -= a[k][i]*x[k];
 		x[i] = sum / a[i][i];
 	}	 
 }
