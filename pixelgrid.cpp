@@ -5374,40 +5374,58 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	xcenter = xcavg;
 	ycenter = ycavg;
 
-	int ii, jj, il, ih, jl, jh;
-	const double window_size_for_srcarea = 1;
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-				il = i - window_size_for_srcarea;
-				ih = i + window_size_for_srcarea;
-				jl = j - window_size_for_srcarea;
-				jh = j + window_size_for_srcarea;
-				if (il<0) il=0;
-				if (ih>x_N-1) ih=x_N-1;
-				if (jl<0) jl=0;
-				if (jh>y_N-1) jh=y_N-1;
-				area=0;
-				for (ii=il; ii <= ih; ii++) {
-					for (jj=jl; jj <= jh; jj++) {
-						area += (source_plane_triangle1_area[ii][jj] + source_plane_triangle2_area[ii][jj]);
+	if ((verbal) and (lens->mpi_id==0)) {
+		int ntot=0, nout=0;
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+					ntot++;
+					rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
+					if (sqrt(rsq) > 2*scale) {
+						nout++;
 					}
-				}
-				if (area < min_area) {
-					min_area = area;
-					xcmin = center_pts[i][j][0];
-					ycmin = center_pts[i][j][1];
 				}
 			}
 		}
+		double fout = nout / ((double) ntot);
+		cout << "Fraction of 2-sigma outliers for shapelets: " << fout << endl;
+
+		int ii, jj, il, ih, jl, jh;
+		const double window_size_for_srcarea = 1;
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+					il = i - window_size_for_srcarea;
+					ih = i + window_size_for_srcarea;
+					jl = j - window_size_for_srcarea;
+					jh = j + window_size_for_srcarea;
+					if (il<0) il=0;
+					if (ih>x_N-1) ih=x_N-1;
+					if (jl<0) jl=0;
+					if (jh>y_N-1) jh=y_N-1;
+					area=0;
+					for (ii=il; ii <= ih; ii++) {
+						for (jj=jl; jj <= jh; jj++) {
+							area += (source_plane_triangle1_area[ii][jj] + source_plane_triangle2_area[ii][jj]);
+						}
+					}
+					if (area < min_area) {
+						min_area = area;
+						xcmin = center_pts[i][j][0];
+						ycmin = center_pts[i][j][1];
+					}
+				}
+			}
+		}
+
+		int nn = lens->get_shapelet_nn();
+		double minscale_shapelet = scale/sqrt(nn);
+		double maxscale_shapelet = scale*sqrt(nn);
+		double minscale_res = sqrt(min_area);
+		int recommended_nn = (int) ((SQR(scale / minscale_res))+1);
+		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << endl;
+		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << endl;
 	}
-
-
-	int nn = lens->get_shapelet_nn();
-	double minscale_shapelet = scale/sqrt(nn);
-	double minscale_res = sqrt(min_area);
-	int recommended_nn = (int) ((SQR(scale / minscale_res))+1);
-	if ((lens->mpi_id==0) and (verbal)) cout << "minscale_shapelet=" << minscale_shapelet << " minscale_res=" << minscale_res << " (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << endl;
 }
 
 void ImagePixelGrid::fill_surface_brightness_vector()

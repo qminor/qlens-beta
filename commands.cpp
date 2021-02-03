@@ -5014,41 +5014,41 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="shapelet")
 			{
+				int nmax = -1;
 				bool truncate;
-				for (int i=nwords-1; i > 2; i--) {
-					if (words[i]=="-truncate") {
+				double amp00 = 0.1;
+				for (int j=nwords-1; j >= 2; j--) {
+					if (words[j]=="-truncate") {
 						truncate = true;
-						remove_word(i);
+						remove_word(j);
+					} else if (words[j].find("n=")==0) {
+						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
+						string nstr = words[j].substr(2);
+						stringstream nstream;
+						nstream << nstr;
+						if (!(nstream >> nmax)) Complain("invalid nmax value");
+						remove_word(j);
+					} else if (words[j].find("amp0=")==0) {
+						if (update_parameters) Complain("amp0=# argument cannot be specified when updating " << words[1]);
+						string astr = words[j].substr(5);
+						stringstream astream;
+						astream << astr;
+						if (!(astream >> amp00)) Complain("invalid shaplet m=0 amplitude value");
+						remove_word(j);
 					}
 				}
-				if (nwords > 9) Complain("more than 7 parameters not allowed for model shapelet");
-				int nmax = 0;
-				if ((nwords >= 3) and (words[2].find("n=")==0)) {
-					if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
-					string nstr = words[2].substr(2);
-					stringstream nstream;
-					nstream << nstr;
-					if (!(nstream >> nmax)) Complain("invalid nmax value");
-					stringstream* new_ws = new stringstream[nwords-1];
-					words.erase(words.begin()+2);
-					for (int i=0; i < nwords-1; i++) {
-						new_ws[i] << words[i];
-					}
-					delete[] ws;
-					ws = new_ws;
-					nwords--;
-				} else Complain("must specify nmax via 'n=#' argument");
+				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
+				if (nwords > 7) Complain("more than 7 parameters not allowed for model shapelet");
 				if (nmax <= 0) Complain("nmax cannot be negative");
 				if (nwords >= 5) {
-					double amp00, sig;
+					double sig;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> amp00)) Complain("invalid surface brightness normalization parameter for model shapelet");
-					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model shapelet");
-					if (!(ws[4] >> q)) Complain("invalid q parameter for model shapelet");
+					if (!(ws[2] >> sig)) Complain("invalid sigma parameter for model shapelet");
+					if (!(ws[3] >> q)) Complain("invalid q parameter for model shapelet");
 					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
-						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model shapelet");
-						if (nwords == 7) {
+						if (!(ws[4] >> theta)) Complain("invalid theta parameter for model shapelet");
+						if (nwords == 6) {
 							if (words[6].find("anchor_center=")==0) {
 								string anchorstr = words[6].substr(14);
 								stringstream anchorstream;
@@ -5057,9 +5057,9 @@ void QLens::process_commands(bool read_file)
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_source_center = true;
 							}
-						} else if (nwords == 8) {
-							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model shapelet");
-							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model shapelet");
+						} else if (nwords == 7) {
+							if (!(ws[5] >> xc)) Complain("invalid x-center parameter for model shapelet");
+							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model shapelet");
 						}
 					}
 					nparams_to_vary = 5;

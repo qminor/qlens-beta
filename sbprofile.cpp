@@ -1263,6 +1263,8 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 		}
 		scriptout << " ";
 	}
+	string extra_arg;
+	if (get_special_command_arg(extra_arg)) scriptout << extra_arg << " ";
 	scriptout << endl;
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) scriptout << "1 ";
@@ -1297,6 +1299,12 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 		}
 	}
 }
+
+bool SB_Profile::get_special_command_arg(string &arg)
+{
+	return false; // overloaded for certain source objects to givce special command args
+}
+
 
 inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
 {
@@ -1612,6 +1620,7 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 			amps[i][j] = sb_in->amps[i][j];
 		}
 	}
+	truncate_at_3sigma = sb_in->truncate_at_3sigma;
 	copy_base_source_data(sb_in);
 	update_meta_parameters();
 }
@@ -1821,13 +1830,28 @@ void Shapelet::get_amplitudes(double *ampvec)
 double Shapelet::window_rmax() // used to define the window size for pixellated surface brightness maps
 {
 	if (truncate_at_3sigma) return 2.3*sig;
-	else return 1.7*sig*sqrt(n_shapelets+1);
+	else return 2*sig*sqrt(n_shapelets);
 }
 
 double Shapelet::length_scale()
 {
+	if (truncate_at_3sigma) return sig;
 	return sig*sqrt(n_shapelets);
 }
+
+bool Shapelet::get_special_command_arg(string &arg)
+{
+	stringstream nstr;
+	string nstring;
+	nstr << n_shapelets;
+	nstr >> nstring;
+	arg = "n=" + nstring;
+	if (truncate_at_3sigma) {
+		arg += " -truncate";
+	}
+	return true;
+}
+
 
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine)
 {

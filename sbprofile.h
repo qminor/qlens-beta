@@ -142,6 +142,7 @@ class SB_Profile
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
 	virtual void print_source_command(ofstream& scriptout, const bool use_limits);
+	virtual bool get_special_command_arg(string &arg);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -279,6 +280,7 @@ class Shapelet : public SB_Profile
 	void calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet);
 	void update_amplitudes(double *ampvec);
 	void get_amplitudes(double *ampvec);
+	bool get_special_command_arg(string &arg);
 
 	double window_rmax();
 	double length_scale();
