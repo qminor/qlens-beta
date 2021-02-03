@@ -4953,9 +4953,9 @@ void QLens::process_commands(bool read_file)
 			{
 				if (nwords > 8) Complain("more than 7 parameters not allowed for model gaussian");
 				if (nwords >= 5) {
-					double sbnorm, sig;
+					double sbmax, sig;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> sbnorm)) Complain("invalid surface brightness normalization parameter for model gaussian");
+					if (!(ws[2] >> sbmax)) Complain("invalid max surface brightness parameter for model gaussian");
 					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model gaussian");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
 					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
@@ -4977,7 +4977,7 @@ void QLens::process_commands(bool read_file)
 					}
 					nparams_to_vary = 6;
 					param_vals.input(nparams_to_vary);
-					param_vals[0]=sbnorm; param_vals[1]=sig; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
+					param_vals[0]=sbmax; param_vals[1]=sig; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
@@ -4995,7 +4995,7 @@ void QLens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_source_object(GAUSSIAN, sbnorm, sig, 0, 0, q, theta, xc, yc);
+						add_source_object(GAUSSIAN, sbmax, sig, 0, 0, q, theta, xc, yc);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5015,7 +5015,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="shapelet")
 			{
 				int nmax = -1;
-				bool truncate;
+				bool truncate = false;
 				double amp00 = 0.1;
 				for (int j=nwords-1; j >= 2; j--) {
 					if (words[j]=="-truncate") {
@@ -9825,11 +9825,30 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="auto_shapelet_scale")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Automatically determine shapelet scale and center: " << display_switch(auto_shapelet_scaling) << endl;
+				if (mpi_id==0) cout << "Automatically determine shapelet scale: " << display_switch(auto_shapelet_scaling) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_shapelet_scale' command; must specify 'on' or 'off'");
 				set_switch(auto_shapelet_scaling,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="auto_shapelet_center")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Automatically determine shapelet center: " << display_switch(auto_shapelet_center) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_shapelet_center' command; must specify 'on' or 'off'");
+				set_switch(auto_shapelet_center,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="shapelet_scale_mode")
+		{
+			double mode;
+			if (nwords == 2) {
+				if (!(ws[1] >> mode)) Complain("invalid shapelet_scale_mode");
+				shapelet_scale_mode = mode;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "shapelet_scale_mode = " << shapelet_scale_mode << endl;
+			} else Complain("must specify either zero or one argument (shapelet_scale_mode)");
 		}
 		else if (words[0]=="autogrid_frac")
 		{

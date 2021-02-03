@@ -756,6 +756,8 @@ QLens::QLens() : UCMC()
 	sourcegrid_limit_ymax = 1e30;
 	auto_sourcegrid = true;
 	auto_shapelet_scaling = true;
+	auto_shapelet_center = true;
+	shapelet_scale_mode = 0;
 	ray_tracing_method = Interpolate;
 	weight_interpolation_by_imgplane_area = true;
 	interpolate_sb_3pt = true; // if false, will not use 3-point interpolation even when ray tracing method is set to "interpolate"
@@ -1072,6 +1074,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
+	auto_shapelet_center = lens_in->auto_shapelet_center;
+	shapelet_scale_mode = lens_in->shapelet_scale_mode;
 	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
 	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
 
@@ -11545,9 +11549,11 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 	}
 	double sig,xc,yc;
 	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,verbal);
-	shapelet->update_specific_parameter("sigma",sig);
-	shapelet->update_specific_parameter("xc",xc);
-	shapelet->update_specific_parameter("yc",yc);
+	if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
+	if (auto_shapelet_center) {
+		shapelet->update_specific_parameter("xc",xc);
+		shapelet->update_specific_parameter("yc",yc);
+	}
 	if ((mpi_id==0) and (verbal)) cout << "auto shapelet scaling: sig=" << sig << ", xc=" << xc << ", yc=" << yc << endl;
 }
 
@@ -11647,7 +11653,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 
-	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source)) image_pixel_grid->redo_lensing_calculations();
+	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations();
 	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners();
 
 	int i,j;
@@ -11818,7 +11824,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		store_image_pixel_surface_brightness();
 
 		if (n_image_prior) {
-			create_source_surface_brightness_grid(false,true);
+			create_source_surface_brightness_grid(true,true);
 			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 			source_pixel_grid->calculate_pixel_magnifications();
@@ -11826,7 +11832,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	} else {
 		// Shapelet source mode
-		if (auto_shapelet_scaling) find_shapelet_scaling_parameters(verbal);
+		if ((auto_shapelet_scaling) or (auto_shapelet_center)) find_shapelet_scaling_parameters(verbal);
 		initialize_pixel_matrices_shapelets(verbal);
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);

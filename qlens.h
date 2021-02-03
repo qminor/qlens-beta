@@ -665,7 +665,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_cc_spline; // critical curves can be splined when (approximate) elliptical symmetry is present
 	bool auto_ccspline;
 
-	bool auto_sourcegrid, auto_shapelet_scaling;
+	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
+	int shapelet_scale_mode;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
 

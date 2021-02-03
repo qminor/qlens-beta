@@ -5343,13 +5343,14 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 {
 	double xcavg=0, ycavg=0;
 	double totsurf=0;
-	double area, min_area = 1e30;
+	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin;
 	int i,j;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				area = 1;
 				xcavg += area*surface_brightness[i][j]*center_sourcepts[i][j][0];
 				ycavg += area*surface_brightness[i][j]*center_sourcepts[i][j][1];
 				totsurf += area*surface_brightness[i][j];
@@ -5363,14 +5364,21 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+				area = 1;
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
 				rsqavg += area*surface_brightness[i][j]*rsq;
 			}
 		}
 	}
 	rsqavg /= totsurf;
-	scale = sqrt(rsqavg);
+	int nn = lens->get_shapelet_nn();
+	const double window_scaling = 1.2;
+	double sig = sqrt(rsqavg);
+	if (lens->shapelet_scale_mode==0)
+		scale = sig;
+	else if (lens->shapelet_scale_mode==1)
+		scale = window_scaling*sig/sqrt(nn);
 	xcenter = xcavg;
 	ycenter = ycavg;
 
@@ -5381,7 +5389,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
 					ntot++;
 					rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
-					if (sqrt(rsq) > 2*scale) {
+					if (sqrt(rsq) > 2*sig) {
 						nout++;
 					}
 				}
@@ -5414,17 +5422,24 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 						xcmin = center_pts[i][j][0];
 						ycmin = center_pts[i][j][1];
 					}
+					if (area > max_area) {
+						max_area = area;
+					}
+
 				}
 			}
 		}
 
-		int nn = lens->get_shapelet_nn();
 		double minscale_shapelet = scale/sqrt(nn);
 		double maxscale_shapelet = scale*sqrt(nn);
 		double minscale_res = sqrt(min_area);
-		int recommended_nn = (int) ((SQR(scale / minscale_res))+1);
+		double recommended_nsplit = 2*sqrt(max_area*nn)/sig; // this is so the smallest source fluctuations get at least 2x2 ray tracing coverage
+		int recommended_nn;
+		if (lens->shapelet_scale_mode==0) recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
+		else recommended_nn = ((int) (sig/(window_scaling*minscale_res))) + 1;
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << endl;
 		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << endl;
+		cout << "number of splittings should be at least " << recommended_nsplit << " to capture all source fluctuations" << endl;
 	}
 }
 

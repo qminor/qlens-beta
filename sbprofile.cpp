@@ -1316,12 +1316,13 @@ inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scri
 
 /********************************* Specific SB_Profile models (derived classes) *********************************/
 
-Gaussian::Gaussian(const double &sbtot_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	model_name = "gaussian";
 	sbtype = GAUSSIAN;
 	set_nparams(6);
-	sbtot = sbtot_in; sig_x = sig_x_in;
+	max_sb = max_sb_in;
+	sig_x = sig_x_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
 	assign_param_pointers();
@@ -1330,36 +1331,37 @@ Gaussian::Gaussian(const double &sbtot_in, const double &sig_x_in, const double 
 
 Gaussian::Gaussian(const Gaussian* sb_in)
 {
-	sbtot = sb_in->sbtot;
-	sig_x = sb_in->sig_x;
 	max_sb = sb_in->max_sb;
+	sig_x = sb_in->sig_x;
+	sbtot = sb_in->sbtot;
 	copy_base_source_data(sb_in);
 	update_meta_parameters();
 }
 
 void Gaussian::update_meta_parameters()
 {
-	max_sb = sbtot/(M_2PI*q*sig_x*sig_x);
+	//max_sb = sbtot/(M_2PI*q*sig_x*sig_x);
+	sbtot = max_sb*(M_2PI*q*sig_x*sig_x);
 	update_ellipticity_meta_parameters();
 }
 
 void Gaussian::assign_paramnames()
 {
-	paramnames[0] = "sbtot";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "max";
+	paramnames[0] = "sbmax";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "max";
 	paramnames[1] = "sigma"; latex_paramnames[1] = "\\sigma"; latex_param_subscripts[1] = "";
 	set_geometric_paramnames(2);
 }
 
 void Gaussian::assign_param_pointers()
 {
-	param[0] = &sbtot;
+	param[0] = &max_sb;
 	param[1] = &sig_x;
 	set_geometric_param_pointers(2);
 }
 
 void Gaussian::set_auto_stepsizes()
 {
-	stepsizes[0] = (sbtot != 0) ? 0.1*sbtot : 0.1;
+	stepsizes[0] = (max_sb != 0) ? 0.1*max_sb : 0.1;
 	stepsizes[1] = (sig_x != 0) ? 0.1*sig_x : 0.1; // arbitrary
 	set_auto_eparam_stepsizes(2,3);
 	stepsizes[4] = 0.1;
@@ -1555,7 +1557,7 @@ double Cored_Sersic::length_scale()
 	return Reff;
 }
 
-Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig)
+Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
@@ -1569,10 +1571,10 @@ Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in
 		for (int j=0; j < n_shapelets; j++) {
 			amps[i][j] = 0;
 		}
-		amps[i][i] = amp00/(i+1); // just to start off
+		//amps[i][i] = amp00/(i+1); // just to start off
 	}
-	//amps[0][0] = amp00; // just to start off
-	truncate_at_3sigma = truncate_2sig;
+	amps[0][0] = amp00; // just to start off
+	truncate_at_3sigma = truncate;
 
 /*
 	// testing stuff
@@ -1660,7 +1662,7 @@ double Shapelet::surface_brightness(double x, double y)
 {
 	x -= x_center;
 	y -= y_center;
-	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 3*sig)) return 0;
+	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 2.3*sig)) return 0;
 	if (theta != 0) rotate(x,y);
 
 	double gaussfactor, sb, xarg, yarg, fac, lastfac, sqrtq;
@@ -1701,7 +1703,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_el
 {
 	x -= x_center;
 	y -= y_center;
-	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 3*sig)) return;
+	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 2.3*sig)) return;
 	if (theta != 0) rotate(x,y);
 
 	double gaussfactor, xarg, yarg, fac, lastfac, sqrtq;
