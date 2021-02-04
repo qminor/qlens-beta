@@ -5349,8 +5349,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-				//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				area = 1;
+				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				xcavg += area*surface_brightness[i][j]*center_sourcepts[i][j][0];
 				ycavg += area*surface_brightness[i][j]*center_sourcepts[i][j][1];
 				totsurf += area*surface_brightness[i][j];
@@ -5364,8 +5363,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-				//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				area = 1;
+				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
 				rsqavg += area*surface_brightness[i][j]*rsq;
 			}
@@ -5436,9 +5434,9 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		double recommended_nsplit = 2*sqrt(max_area*nn)/sig; // this is so the smallest source fluctuations get at least 2x2 ray tracing coverage
 		int recommended_nn;
 		if (lens->shapelet_scale_mode==0) recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
-		else recommended_nn = ((int) (sig/(window_scaling*minscale_res))) + 1;
+		else recommended_nn = (int) (window_scaling*sig/(minscale_res)) + 1;
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << endl;
-		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << endl;
+		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << " (at least)" << endl;
 		cout << "number of splittings should be at least " << recommended_nsplit << " to capture all source fluctuations" << endl;
 	}
 }
