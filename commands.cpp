@@ -9467,6 +9467,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
+				if ((setword=="on") and (optimize_regparam)) Complain("regparam cannot be varied freely if 'optimize_regparam' is set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Pixellated_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'pixel' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regularization_parameter,setword);
 				update_parameter_list();
@@ -9830,6 +9831,51 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_shapelet_scale' command; must specify 'on' or 'off'");
 				set_switch(auto_shapelet_scaling,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="optimize_regparam")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Automatically determine optimal regularization parameter: " << display_switch(optimize_regparam) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'optimize_regparam' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (source_fit_mode != Shapelet_Source)) Complain("optimize_regparam only available in Shapelet source mode ('fit source_mode shapelet')");
+				set_switch(optimize_regparam,setword);
+				if (vary_regularization_parameter) {
+					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam' to 'off' and updating parameters" << endl;
+					vary_regularization_parameter = false;
+					update_parameter_list();
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_tol")
+		{
+			double param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid regparam_tol");
+				optimize_regparam_tol = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_tol = " << optimize_regparam_tol << endl;
+			} else Complain("must specify either zero or one argument (regparam_tol)");
+		}
+		else if (words[0]=="regparam_minlog")
+		{
+			double param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid regparam_minlog");
+				optimize_regparam_minlog = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_minlog = " << optimize_regparam_minlog << endl;
+			} else Complain("must specify either zero or one argument (regparam_minlog)");
+		}
+		else if (words[0]=="regparam_maxlog")
+		{
+			double param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid regparam_maxlog");
+				optimize_regparam_maxlog = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_maxlog = " << optimize_regparam_maxlog << endl;
+			} else Complain("must specify either zero or one argument (regparam_maxlog)");
 		}
 		else if (words[0]=="auto_shapelet_center")
 		{

@@ -477,6 +477,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	bool vary_regularization_parameter;
+	bool optimize_regparam;
+	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
+
 	static string fit_output_filename;
 	bool auto_save_bestfit;
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
@@ -708,6 +711,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void PSF_convolution_Lmatrix_dense(bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
+	void optimize_regularization_parameter(const bool verbal);
+	double chisq_regparam(const double logreg);
+	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense();
 	void create_regularization_matrix_dense();
 	void generate_Rmatrix_norm_dense();
@@ -717,6 +723,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	dmatrix Lmatrix_dense;
 	dmatrix Fmatrix_dense;
+	dmatrix Fmatrix_copy; // used when optimizing the regularization parameter
+	dvector temp_src; // used when optimizing the regularization parameter
 	dmatrix Rmatrix_dense;
 
 	double *gmatrix[4];

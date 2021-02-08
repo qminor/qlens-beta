@@ -5,6 +5,7 @@
 #include "qlens.h"
 #include "mathexpr.h"
 #include "errors.h"
+#include "minimize.h"
 #include <stdio.h>
 
 #ifdef USE_UMFPACK
@@ -7609,7 +7610,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 				(*fmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
 			}
 			(*fmatptr) /= covariance;
-			if (regularization_method != None) {
+			if ((regularization_method != None) and (!optimize_regparam)) {
 				(*fmatptr) += effective_reg_parameter*Rmatrix_dense[i][j];
 			}
 			//cout << i << "," << j << ": " << Fmatrix_dense[i][j] << endl;
@@ -7642,10 +7643,144 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	delete[] j_n;
 }
 
+void QLens::optimize_regularization_parameter(const bool verbal)
+{
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	double logreg, logrmin = 0, logrmax = 3;
+	Fmatrix_copy.input(source_npixels,source_npixels);
+	temp_src.input(source_npixels);
+
+	double (QLens::*chisqreg)(const double) = &QLens::chisq_regparam;
+	double logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
+	regularization_parameter = pow(10,logreg_min);
+	if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing: " << regularization_parameter << endl;
+
+	for (int i=0; i < source_npixels; i++) {
+		Fmatrix_dense[i][i] += regularization_parameter*Rmatrix_dense[i][i];
+	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for optimizing regularization parameter: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+}
+
+double QLens::chisq_regparam(const double logreg)
+{
+	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
+	else covariance = SQR(data_pixel_noise);
+
+	regularization_parameter = pow(10,logreg);
+	int i,j;
+	for (i=0; i < source_npixels; i++) {
+		for (j=0; j <= i; j++) {
+			Fmatrix_copy[i][j] = Fmatrix_dense[i][j];
+		}
+		Fmatrix_copy[i][i] += regularization_parameter*Rmatrix_dense[i][i];
+	}
+
+	double Fmatrix_logdet;
+	bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
+	if (!status) die("Cholesky decomposition failed");
+	Cholesky_solve(Fmatrix_copy.pointer(),Dvector,temp_src.array(),source_npixels);
+
+	double temp_img, Ed_times_two=0,Es_times_two=0;
+	double *Lmatptr;
+	double *tempsrcptr = temp_src.array();
+
+	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
+	for (i=0; i < image_npixels; i++) {
+		temp_img = 0;
+		Lmatptr = (Lmatrix_dense.pointer())[i];
+		tempsrcptr = temp_src.array();
+		for (j=0; j < source_npixels; j++) {
+			temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
+		}
+		Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + foreground_surface_brightness[i])/covariance;
+	}
+	for (i=0; i < source_npixels; i++) {
+		Es_times_two += Rmatrix_dense[i][i] * SQR(temp_src[i]); // so far we just use normalization Rmatrix, which is just diagonal
+	}
+	return (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+}
+
+double QLens::brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal)
+{
+	double a,b,d=0.0,etemp,fu,fv,fw,fx;
+	double p,q,r,tol1,tol2,u,v,w,x,xm;
+	double e=0.0;
+
+	const int ITMAX = 100;
+	const double CGOLD = 0.3819660;
+	const double ZEPS = 1.0e-10;
+
+	a = ax;
+	b = ax;
+	x=w=v=bx;
+	fw=fv=fx=(this->*func)(x);
+	for (int iter=0; iter < ITMAX; iter++)
+	{
+		xm=0.5*(a+b);
+		tol2 = 2.0 * ((tol1=tol*abs(x)) + ZEPS);
+		if (abs(x-xm) <= (tol2-0.5*(b-a))) {
+			if ((verbal) and (mpi_id==0)) cout << "Number of regparam optimizing iterations: " << iter << endl;
+			return x;
+		}
+		if (abs(e) > tol1) {
+			r = (x-w)*(fx-fv);
+			q = (x-v)*(fx-fw);
+			p = (x-v)*q - (x-w)*r;
+			q = 2.0*(q-r);
+			if (q > 0.0) p = -p;
+			q = abs(q);
+			etemp = e;
+			e = d;
+			if (abs(p) >= abs(0.5*q*etemp) or p <= q*(a-x) or p >= q*(b-x))
+				d = CGOLD*(e=(x >= xm ? a-x : b-x));
+			else {
+				d = p/q;
+				u = x + d;
+				if (u-a < tol2 or b-u < tol2)
+					d = SIGN(tol1,xm-x);
+			}
+		} else {
+			d = CGOLD*(e=(x >= xm ? a-x : b-x));
+		}
+		u = (abs(d) >= tol1 ? x+d : x + SIGN(tol1,d));
+		fu = (this->*func)(u);
+		if (fu <= fx) {
+			if (u >= x) a=x; else b=x;
+			//shft3(v,w,x,u);
+			v=w; w=x; x=u;
+			//shft3(fv,fw,fx,fu);
+			fv = fw; fw = fx; fx=fu;
+		} else {
+			if (u < x) a=u; else b=u;
+			if (fu <= fw or w == x) {
+				v = w;
+				w = u;
+				fv = fw;
+				fw = fu;
+			} else if (fu <= fv or v == x or v == w) {
+				v = u;
+				fv = fu;
+			}
+		}
+	}
+	warn("Brent's Method reached maximum number of iterations for optimizing regparam");
+	return x;
+}
+
 void QLens::invert_lens_mapping_dense(bool verbal)
 {
-	bool calculate_determinant = false;
-
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -7676,25 +7811,9 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 	if (!status) die("Cholesky decomposition failed");
 	Cholesky_solve(Fmatrix_dense.pointer(),Dvector,temp,source_npixels);
-	//cout << "logdet: " << Fmatrix_log_determinant << endl;
-	//Fmatrix_dense.invert(); // VERY INEFFICIENT! Fix so there is no unnecessary copying
-	//for (i=0; i < source_npixels; i++) {
-		//for (j=0; j < source_npixels; j++) {
-			//cout << Fmatrix_dense[i][j] << " ";
-		//}
-		//cout << endl;
-	//}
-
-	//for (i=0; i < source_npixels; i++) {
-		//for (j=0; j < source_npixels; j++) {
-			//temp[i] += Fmatrix_dense[i][j]*Dvector[j];
-		//}
-	//}
 	for (int i=0; i < source_npixels; i++) {
 		source_pixel_vector[i] = temp[i];
 	}
-
-	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
 
 	delete[] temp;
 	int index=0;
@@ -7719,6 +7838,7 @@ bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
 	a[0][0] = sqrt(a[0][0]);
 	for (j=1; j < n; j++) a[j][0] /= a[0][0];
 
+	bool status = true;
 	for (i=1; i < n; i++) {
 		#pragma omp parallel for private(j,k) schedule(static)
 		for (j=i; j < n; j++) {
@@ -7726,13 +7846,16 @@ bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
 				a[j][i] -= a[i][k]*a[j][k];
 			}
 		}
-		if (a[i][i] < 0) { cerr << "Warning: matrix is not positive-definite (row " << i << ")\n"; }
+		if (a[i][i] < 0) {
+			warn("matrix is not positive-definite (row %i)",i);
+			status = false;
+		}
 		logdet += log(abs(a[i][i]));
 		a[i][i] = sqrt(abs(a[i][i]));
 		for (j=i+1; j < n; j++) a[j][i] /= a[i][i];
 	}
 	
-	return true;
+	return status;
 }
 
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)

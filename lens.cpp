@@ -777,6 +777,10 @@ QLens::QLens() : UCMC()
 	regularization_parameter_lower_limit = 1e30; // These must be specified by user
 	regularization_parameter_upper_limit = 1e30; // These must be specified by user
 	vary_regularization_parameter = false;
+	optimize_regparam = false;
+	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
+	optimize_regparam_minlog = -1;
+	optimize_regparam_maxlog = 5;
 	psf_width_x = 0;
 	psf_width_y = 0;
 	data_pixel_noise = 0;
@@ -1084,6 +1088,11 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	regularization_parameter_lower_limit = lens_in->regularization_parameter_lower_limit;
 	regularization_parameter_upper_limit = lens_in->regularization_parameter_upper_limit;
 	vary_regularization_parameter = lens_in->vary_regularization_parameter;
+	optimize_regparam = lens_in->optimize_regparam;
+	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
+	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
+	optimize_regparam_maxlog = lens_in->optimize_regparam_maxlog;
+
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;
 	parallel_mumps = lens_in->parallel_mumps;
@@ -11841,6 +11850,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (regularization_method != None) create_regularization_matrix_dense();
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		create_lensing_matrices_from_Lmatrix_dense(verbal);
+
+		int n_data_pixels=0;
+		for (i=0; i < image_pixel_data->npixels_x; i++) {
+			for (j=0; j < image_pixel_data->npixels_y; j++) {
+				if (image_pixel_data->require_fit[i][j]) {
+					n_data_pixels++;
+				}
+			}
+		}
+		if (optimize_regparam) optimize_regularization_parameter(verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -11895,6 +11914,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
+	double chisqreg;
 	if (source_fit_mode==Pixellated_Source) {
 		if ((regularization_method != None) and (vary_regularization_parameter)) {
 			// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
@@ -11910,6 +11930,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 			if (regularization_parameter != 0) {
+				chisqreg = chisq + regularization_parameter*Es;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 				//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			}
@@ -11926,12 +11947,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				Es += Rmatrix_dense[i][i] * SQR(source_pixel_vector[i]); // so far we just use normalization Rmatrix, which is just diagonal
 			}
 			if (regularization_parameter != 0) {
+				chisqreg = chisq + regularization_parameter*Es;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 			}
 			chisq += Fmatrix_log_determinant;
 		}
 		//cout << "Rmatrix_det=" << Rmatrix_log_determinant << " Fmatrix_det=" << Fmatrix_log_determinant << " Es=" << Es << " regparam=" << regularization_parameter << endl << endl << endl;
 	}
+	if ((mpi_id==0) and (verbal)) cout << "chisqreg=" << chisqreg << ", n_data_pixels=" << n_data_pixels << endl;
 	//chisq += n_data_pixels*log(M_2PI*covariance); // not critical because the data fit window and assumed pixel noise are not varied
 	// to normalize the evidence properly
 
