@@ -713,6 +713,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void invert_lens_mapping_dense(bool verbal);
 	void optimize_regularization_parameter(const bool verbal);
 	double chisq_regparam(const double logreg);
+	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense();
 	void create_regularization_matrix_dense();

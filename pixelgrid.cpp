@@ -5,7 +5,6 @@
 #include "qlens.h"
 #include "mathexpr.h"
 #include "errors.h"
-#include "minimize.h"
 #include <stdio.h>
 
 #ifdef USE_UMFPACK
@@ -7749,12 +7748,12 @@ double QLens::brents_min_method(double (QLens::*func)(const double), const doubl
 				d = p/q;
 				u = x + d;
 				if (u-a < tol2 or b-u < tol2)
-					d = SIGN(tol1,xm-x);
+					d = brent_sign(tol1,xm-x);
 			}
 		} else {
 			d = CGOLD*(e=(x >= xm ? a-x : b-x));
 		}
-		u = (abs(d) >= tol1 ? x+d : x + SIGN(tol1,d));
+		u = (abs(d) >= tol1 ? x+d : x + brent_sign(tol1,d));
 		fu = (this->*func)(u);
 		if (fu <= fx) {
 			if (u >= x) a=x; else b=x;
