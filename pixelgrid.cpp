@@ -2393,14 +2393,14 @@ void QLens::generate_Rmatrix_from_hmatrices()
 		lvals[i] = new vector<int>[source_npixels];
 	}
 
-	Rmatrix_diags = new double[source_npixels];
+	Rmatrix_diag_temp = new double[source_npixels];
 	Rmatrix_rows = new vector<double>[source_npixels];
 	Rmatrix_index_rows = new vector<int>[source_npixels];
 	Rmatrix_row_nn = new int[source_npixels];
 	Rmatrix_nn = 0;
 	int Rmatrix_nn_part = 0;
 	for (j=0; j < source_npixels; j++) {
-		Rmatrix_diags[j] = 0;
+		Rmatrix_diag_temp[j] = 0;
 		Rmatrix_row_nn[j] = 0;
 	}
 
@@ -2470,7 +2470,7 @@ void QLens::generate_Rmatrix_from_hmatrices()
 				src_index2 = hmatrix_index[k][l];
 				new_entry = true;
 				element = hmatrix[k][j]*hmatrix[k][l]; // generalize this to full covariance matrix later
-				if (src_index1==src_index2) Rmatrix_diags[src_index1] += element;
+				if (src_index1==src_index2) Rmatrix_diag_temp[src_index1] += element;
 				else {
 					m=0;
 					while ((m < Rmatrix_row_nn[src_index1]) and (new_entry==true)) {
@@ -2513,7 +2513,7 @@ void QLens::generate_Rmatrix_from_hmatrices()
 	Rmatrix_index = new int[Rmatrix_nn];
 
 	for (i=0; i < source_npixels; i++)
-		Rmatrix[i] = Rmatrix_diags[i];
+		Rmatrix[i] = Rmatrix_diag_temp[i];
 
 	Rmatrix_index[0] = source_npixels+1;
 	for (i=0; i < source_npixels; i++) {
@@ -2529,7 +2529,7 @@ void QLens::generate_Rmatrix_from_hmatrices()
 	}
 
 	delete[] Rmatrix_row_nn;
-	delete[] Rmatrix_diags;
+	delete[] Rmatrix_diag_temp;
 	delete[] Rmatrix_rows;
 	delete[] Rmatrix_index_rows;
 
@@ -2556,14 +2556,14 @@ void QLens::generate_Rmatrix_from_gmatrices()
 		lvals[i] = new vector<int>[source_npixels];
 	}
 
-	Rmatrix_diags = new double[source_npixels];
+	Rmatrix_diag_temp = new double[source_npixels];
 	Rmatrix_rows = new vector<double>[source_npixels];
 	Rmatrix_index_rows = new vector<int>[source_npixels];
 	Rmatrix_row_nn = new int[source_npixels];
 	Rmatrix_nn = 0;
 	int Rmatrix_nn_part = 0;
 	for (j=0; j < source_npixels; j++) {
-		Rmatrix_diags[j] = 0;
+		Rmatrix_diag_temp[j] = 0;
 		Rmatrix_row_nn[j] = 0;
 	}
 
@@ -2633,7 +2633,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 				src_index2 = gmatrix_index[k][l];
 				new_entry = true;
 				element = gmatrix[k][j]*gmatrix[k][l]; // generalize this to full covariance matrix later
-				if (src_index1==src_index2) Rmatrix_diags[src_index1] += element;
+				if (src_index1==src_index2) Rmatrix_diag_temp[src_index1] += element;
 				else {
 					m=0;
 					while ((m < Rmatrix_row_nn[src_index1]) and (new_entry==true)) {
@@ -2676,7 +2676,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	Rmatrix_index = new int[Rmatrix_nn];
 
 	for (i=0; i < source_npixels; i++)
-		Rmatrix[i] = Rmatrix_diags[i];
+		Rmatrix[i] = Rmatrix_diag_temp[i];
 
 	Rmatrix_index[0] = source_npixels+1;
 	for (i=0; i < source_npixels; i++) {
@@ -2692,7 +2692,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	}
 
 	delete[] Rmatrix_row_nn;
-	delete[] Rmatrix_diags;
+	delete[] Rmatrix_diag_temp;
 	delete[] Rmatrix_rows;
 	delete[] Rmatrix_index_rows;
 
@@ -7060,14 +7060,14 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 	vector<int> *jvals = new vector<int>[source_npixels];
 	vector<int> *lvals = new vector<int>[source_npixels];
 
-	Rmatrix_diags = new double[source_npixels];
+	Rmatrix_diag_temp = new double[source_npixels];
 	Rmatrix_rows = new vector<double>[source_npixels];
 	Rmatrix_index_rows = new vector<int>[source_npixels];
 	Rmatrix_row_nn = new int[source_npixels];
 	Rmatrix_nn = 0;
 	int Rmatrix_nn_part = 0;
 	for (j=0; j < source_npixels; j++) {
-		Rmatrix_diags[j] = 0;
+		Rmatrix_diag_temp[j] = 0;
 		Rmatrix_row_nn[j] = 0;
 	}
 
@@ -7102,7 +7102,7 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 			src_index2 = curvature_index[l];
 			new_entry = true;
 			element = curvature_matrix[j]*curvature_matrix[l]; // generalize this to full covariance matrix later
-			if (src_index1==src_index2) Rmatrix_diags[src_index1] += element;
+			if (src_index1==src_index2) Rmatrix_diag_temp[src_index1] += element;
 			else {
 				m=0;
 				while ((m < Rmatrix_row_nn[src_index1]) and (new_entry==true)) {
@@ -7142,7 +7142,7 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 	Rmatrix_index = new int[Rmatrix_nn];
 
 	for (i=0; i < source_npixels; i++)
-		Rmatrix[i] = Rmatrix_diags[i];
+		Rmatrix[i] = Rmatrix_diag_temp[i];
 
 	Rmatrix_index[0] = source_npixels+1;
 	for (i=0; i < source_npixels; i++) {
@@ -7158,7 +7158,7 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 	}
 
 	delete[] Rmatrix_row_nn;
-	delete[] Rmatrix_diags;
+	delete[] Rmatrix_diag_temp;
 	delete[] Rmatrix_rows;
 	delete[] Rmatrix_index_rows;
 
@@ -7180,25 +7180,25 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 void QLens::generate_Rmatrix_norm()
 {
 	int i,j;
-	Rmatrix_diags = new double[source_npixels];
+	Rmatrix_diag_temp = new double[source_npixels];
 	Rmatrix_row_nn = new int[source_npixels];
 
 	Rmatrix_nn = source_npixels+1;
 	for (i=0; i < source_npixels; i++) {
 		Rmatrix_row_nn[i] = 0;
-		Rmatrix_diags[i] = 1;
+		Rmatrix_diag_temp[i] = 1;
 	}
 
 	Rmatrix = new double[Rmatrix_nn];
 	Rmatrix_index = new int[Rmatrix_nn];
-	for (i=0; i < source_npixels; i++) Rmatrix[i] = Rmatrix_diags[i];
+	for (i=0; i < source_npixels; i++) Rmatrix[i] = Rmatrix_diag_temp[i];
 
 	Rmatrix_index[0] = source_npixels+1;
 	for (i=0; i < source_npixels; i++)
 		Rmatrix_index[i+1] = Rmatrix_index[i] + Rmatrix_row_nn[i];
 
 	delete[] Rmatrix_row_nn;
-	delete[] Rmatrix_diags;
+	delete[] Rmatrix_diag_temp;
 }
 
 void QLens::create_regularization_matrix()
@@ -7224,8 +7224,9 @@ void QLens::create_regularization_matrix()
 
 void QLens::create_regularization_matrix_dense()
 {
-	Rmatrix_dense.input(source_npixels,source_npixels);
-	Rmatrix_dense = 0;
+	//Rmatrix_dense.input(source_npixels,source_npixels);
+	//Rmatrix_dense = 0;
+	Rmatrix_diags.input(source_npixels);
 	switch (regularization_method) {
 		case Norm:
 			generate_Rmatrix_norm_dense(); break;
@@ -7240,7 +7241,8 @@ void QLens::create_regularization_matrix_dense()
 
 void QLens::generate_Rmatrix_norm_dense()
 {
-	for (int i=0; i < source_npixels; i++) Rmatrix_dense[i][i] = 1;
+	//for (int i=0; i < source_npixels; i++) Rmatrix_dense[i][i] = 1;
+	for (int i=0; i < source_npixels; i++) Rmatrix_diags[i] = 1;
 	Rmatrix_log_determinant = 0;
 }
 
@@ -7255,7 +7257,7 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 	}
 	if (shapelet==NULL) die("No shapelet profile has been created; cannot calculate regularization matrix");
 
-	shapelet->calculate_gradient_Rmatrix_elements(Rmatrix_dense.pointer(), Rmatrix_log_determinant);
+	shapelet->calculate_gradient_Rmatrix_elements(Rmatrix_diags.array(), Rmatrix_log_determinant);
 }
 
 
@@ -7530,14 +7532,15 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 
 	int i,j,k,l;
 
-	Fmatrix_dense.input(source_npixels,source_npixels);
+	//Fmatrix_dense.input(source_npixels,source_npixels);
 
 	bool new_entry;
 	Dvector = new double[source_npixels];
 	for (i=0; i < source_npixels; i++) Dvector[i] = 0;
 
 	int ntot = source_npixels*(source_npixels+1)/2;
-	//int ntot = source_npixels*source_npixels;
+	Fmatrix_packed.input(ntot);
+
 	double *i_n = new double[ntot];
 	double *j_n = new double[ntot];
 	double **Ltrans = new double*[source_npixels];
@@ -7596,22 +7599,26 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 #else
 		thread = 0;
 #endif
-		double *fmatptr, *lmatptr1, *lmatptr2;
-		#pragma omp for private(n,i,j,l,fmatptr,lmatptr1,lmatptr2) schedule(static)
+		//double *fmatptr;
+		double *fpmatptr;
+		double *lmatptr1, *lmatptr2;
+		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
 		for (n=0; n < ntot; n++) {
 			i = i_n[n];
 			j = j_n[n];
-			fmatptr = &Fmatrix_dense[i][j];
+			//fmatptr = &Fmatrix_dense[i][j];
+			fpmatptr = Fmatrix_packed.array()+n;
 			lmatptr1 = Ltrans[i];
 			lmatptr2 = Ltrans[j];
-			(*fmatptr) = 0;
+			(*fpmatptr) = 0;
 			for (l=0; l < image_npixels; l++) {
-				(*fmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
+				(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
 			}
-			(*fmatptr) /= covariance;
-			if ((regularization_method != None) and (!optimize_regparam)) {
-				(*fmatptr) += effective_reg_parameter*Rmatrix_dense[i][j];
+			(*fpmatptr) /= covariance;
+			if ((regularization_method != None) and (!optimize_regparam) and (i==j)) {
+				(*fpmatptr) += effective_reg_parameter*Rmatrix_diags[i]; // with Shapelets, the regularization matrix is diagonal due to orthogonality
 			}
+			//(*fmatptr) = (*fpmatptr);
 			//cout << i << "," << j << ": " << Fmatrix_dense[i][j] << endl;
 		}
 	}
@@ -7651,7 +7658,9 @@ void QLens::optimize_regularization_parameter(const bool verbal)
 #endif
 
 	double logreg, logrmin = 0, logrmax = 3;
-	Fmatrix_copy.input(source_npixels,source_npixels);
+	int ntot = source_npixels*(source_npixels+1)/2;
+	//Fmatrix_copy.input(source_npixels,source_npixels);
+	Fmatrix_packed_copy.input(ntot);
 	temp_src.input(source_npixels);
 
 	double (QLens::*chisqreg)(const double) = &QLens::chisq_regparam;
@@ -7659,8 +7668,11 @@ void QLens::optimize_regularization_parameter(const bool verbal)
 	regularization_parameter = pow(10,logreg_min);
 	if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing: " << regularization_parameter << endl;
 
+	int indx=0;
 	for (int i=0; i < source_npixels; i++) {
-		Fmatrix_dense[i][i] += regularization_parameter*Rmatrix_dense[i][i];
+		//Fmatrix_dense[i][i] += regularization_parameter*Rmatrix_dense[i][i];
+		Fmatrix_packed[indx] += regularization_parameter*Rmatrix_diags[i];
+		indx += i+2;
 	}
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -7679,17 +7691,30 @@ double QLens::chisq_regparam(const double logreg)
 
 	regularization_parameter = pow(10,logreg);
 	int i,j;
+	/*
 	for (i=0; i < source_npixels; i++) {
 		for (j=0; j <= i; j++) {
 			Fmatrix_copy[i][j] = Fmatrix_dense[i][j];
 		}
 		Fmatrix_copy[i][i] += regularization_parameter*Rmatrix_dense[i][i];
 	}
+	*/
+
+	for (i=0; i < Fmatrix_packed.size(); i++) {
+		Fmatrix_packed_copy[i] = Fmatrix_packed[i];
+	}
+	int indx=0;
+	for (i=0; i < source_npixels; i++) {
+		Fmatrix_packed_copy[indx] += regularization_parameter*Rmatrix_diags[i];
+		indx += i+2;
+	}
 
 	double Fmatrix_logdet;
-	bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
+	//bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
+	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_solve(Fmatrix_copy.pointer(),Dvector,temp_src.array(),source_npixels);
+	//Cholesky_solve(Fmatrix_copy.pointer(),Dvector,temp_src.array(),source_npixels);
+	Cholesky_solve_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
 	double *Lmatptr;
@@ -7706,7 +7731,7 @@ double QLens::chisq_regparam(const double logreg)
 		Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + foreground_surface_brightness[i])/covariance;
 	}
 	for (i=0; i < source_npixels; i++) {
-		Es_times_two += Rmatrix_dense[i][i] * SQR(temp_src[i]); // so far we just use normalization Rmatrix, which is just diagonal
+		Es_times_two += Rmatrix_diags[i] * SQR(temp_src[i]); // so far we just use normalization Rmatrix, which is just diagonal
 	}
 	return (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
 }
@@ -7787,9 +7812,6 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 #endif
 	int i,j;
 
-	double *temp = new double[source_npixels];
-	for (i=0; i < source_npixels; i++) temp[i] = 0;
-
 	//for (int i=0; i < source_npixels; i++) {
 		//for (int j=0; j < source_npixels; j++) {
 			//if (j >= i) cout << Fmatrix_dense[i][j] << " ";
@@ -7799,7 +7821,8 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	//}
 
 
-	bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+	//bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -7809,12 +7832,9 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 #endif
 
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_solve(Fmatrix_dense.pointer(),Dvector,temp,source_npixels);
-	for (int i=0; i < source_npixels; i++) {
-		source_pixel_vector[i] = temp[i];
-	}
+	//Cholesky_solve(Fmatrix_dense.pointer(),Dvector,source_pixel_vector,source_npixels);
+	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
 
-	delete[] temp;
 	int index=0;
 	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
 	else if (source_fit_mode==Shapelet_Source) {
@@ -7857,6 +7877,44 @@ bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
 	return status;
 }
 
+bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
+{
+	int i,j,k;
+
+	int *indx = new int[source_npixels];
+	indx[0] = 0;
+	for (j=0; j < source_npixels; j++) if (j > 0) indx[j] = indx[j-1] + j;
+
+	logdet = log(abs(a[0]));
+	a[0] = sqrt(a[0]);
+	for (j=1; j < n; j++) a[indx[j]] /= a[0];
+
+	bool status = true;
+	double *aptr1, *aptr2, *aptr3;
+	for (i=1; i < n; i++) {
+		#pragma omp parallel for private(j,k,aptr1,aptr2,aptr3) schedule(static)
+		for (j=i; j < n; j++) {
+			aptr1 = a+indx[i];
+			aptr2 = a+indx[j];
+			aptr3 = aptr2+i;
+			for (k=0; k < i; k++) {
+				*(aptr3) -= (*(aptr1++))*(*(aptr2++));
+			}
+		}
+		aptr1 = a+indx[i]+i;
+		if ((*aptr1) < 0) {
+			warn("matrix is not positive-definite (row %i)",i);
+			status = false;
+		}
+		logdet += log(abs((*aptr1)));
+		(*aptr1) = sqrt(abs((*aptr1)));
+		for (j=i+1; j < n; j++) a[indx[j]+i] /= (*aptr1);
+	}
+	delete[] indx;
+	
+	return status;
+}
+
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 {
 	int i,k;
@@ -7869,6 +7927,24 @@ void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 		for (sum=x[i], k=i+1; k < n; k++) sum -= a[k][i]*x[k];
 		x[i] = sum / a[i][i];
 	}	 
+}
+
+void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
+{
+	int i,k;
+	double sum;
+	int *indx = new int[source_npixels];
+	indx[0] = 0;
+	for (i=0; i < n; i++) {
+		if (i > 0) indx[i] = indx[i-1] + i;
+		for (sum=b[i], k=i-1; k >= 0; k--) sum -= a[indx[i]+k]*x[k];
+		x[i] = sum / a[indx[i]+i];
+	}
+	for (i=n-1; i >= 0; i--) {
+		for (sum=x[i], k=i+1; k < n; k++) sum -= a[indx[k]+i]*x[k];
+		x[i] = sum / a[indx[i]+i];
+	}	 
+	delete[] indx;
 }
 
 

@@ -11914,7 +11914,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
-	double chisqreg;
+	//double chisqreg;
 	if (source_fit_mode==Pixellated_Source) {
 		if ((regularization_method != None) and (vary_regularization_parameter)) {
 			// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
@@ -11930,7 +11930,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 			if (regularization_parameter != 0) {
-				chisqreg = chisq + regularization_parameter*Es;
+				//chisqreg = chisq + regularization_parameter*Es;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 				//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			}
@@ -11944,17 +11944,17 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double Es=0;
 		if (regularization_method != None) {
 			for (i=0; i < source_npixels; i++) {
-				Es += Rmatrix_dense[i][i] * SQR(source_pixel_vector[i]); // so far we just use normalization Rmatrix, which is just diagonal
+				Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
 			}
 			if (regularization_parameter != 0) {
-				chisqreg = chisq + regularization_parameter*Es;
+				//chisqreg = chisq + regularization_parameter*Es;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 			}
 			chisq += Fmatrix_log_determinant;
 		}
 		//cout << "Rmatrix_det=" << Rmatrix_log_determinant << " Fmatrix_det=" << Fmatrix_log_determinant << " Es=" << Es << " regparam=" << regularization_parameter << endl << endl << endl;
 	}
-	if ((mpi_id==0) and (verbal)) cout << "chisqreg=" << chisqreg << ", n_data_pixels=" << n_data_pixels << endl;
+	//if ((mpi_id==0) and (verbal)) cout << "chisqreg=" << chisqreg << ", n_data_pixels=" << n_data_pixels << endl;
 	//chisq += n_data_pixels*log(M_2PI*covariance); // not critical because the data fit window and assumed pixel noise are not varied
 	// to normalize the evidence properly
 

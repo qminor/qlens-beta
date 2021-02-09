@@ -1139,7 +1139,7 @@ void SB_Profile::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-void SB_Profile::calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet)
+void SB_Profile::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
@@ -1738,7 +1738,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_el
 	delete[] hermvals_y;
 }
 
-void Shapelet::calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, double &logdet)
+void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet)
 {
 	if (sig==0) die("sigma cannot be zero!!");
 	if ((q > 1) or (q <= 0)) die("q taking an absurd value");
@@ -1746,9 +1746,9 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double** Rmatrix_elements, do
 	logdet = 0;
 	for (i=0; i < n_shapelets; i++) {
 		for (j=0; j < n_shapelets; j++) {
-			Rmatrix_elements[n][n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
-			if (Rmatrix_elements[n][n] < 0) die("negative element!!!");
-			logdet += log(Rmatrix_elements[n][n]);
+			Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
+			if (Rmatrix_elements[n] < 0) die("negative element!!!");
+			logdet += log(Rmatrix_elements[n]);
 			n++;
 		}
 	}

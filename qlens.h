@@ -697,7 +697,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *Fmatrix_index;
 	double *Rmatrix;
 	int *Rmatrix_index;
-	double *Rmatrix_diags;
+	double *Rmatrix_diag_temp;
 	vector<double> *Rmatrix_rows;
 	vector<int> *Rmatrix_index_rows;
 	int *Rmatrix_row_nn;
@@ -720,13 +720,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_norm_dense();
 	void generate_Rmatrix_shapelet_gradient();
 	bool Cholesky_dcmp(double** a, double &logdet, int n);
+	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
+	void Cholesky_solve_packed(double* a, double* b, double* x, int n);
 
 	dmatrix Lmatrix_dense;
 	dmatrix Fmatrix_dense;
 	dmatrix Fmatrix_copy; // used when optimizing the regularization parameter
+	dvector Fmatrix_packed;
+	dvector Fmatrix_packed_copy;
+	dvector Rmatrix_diags;
 	dvector temp_src; // used when optimizing the regularization parameter
-	dmatrix Rmatrix_dense;
 
 	double *gmatrix[4];
 	int *gmatrix_index[4];
