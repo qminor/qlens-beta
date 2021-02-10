@@ -7681,11 +7681,11 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	for (i=0; i < source_npixels; i++) delete[] Ltrans[i];
 #ifdef USE_MKL
 	delete[] Ltrans_stacked;
 	delete[] Fmatrix_stacked;
 #else
+	for (i=0; i < source_npixels; i++) delete[] Ltrans[i];
 	delete[] Ltrans;
 	delete[] i_n;
 	delete[] j_n;
