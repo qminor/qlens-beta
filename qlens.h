@@ -732,6 +732,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	dvector Fmatrix_packed_copy;
 	dvector Rmatrix_diags;
 	dvector temp_src; // used when optimizing the regularization parameter
+	//
 
 	double *gmatrix[4];
 	int *gmatrix_index[4];
