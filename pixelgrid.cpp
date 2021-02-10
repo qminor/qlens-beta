@@ -7,6 +7,10 @@
 #include "errors.h"
 #include <stdio.h>
 
+#ifdef USE_MKL
+#include "mpi.h"
+#endif
+
 #ifdef USE_UMFPACK
 #include "umfpack.h"
 #endif
@@ -7547,10 +7551,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	int n=0;
 	for (i=0; i < source_npixels; i++) {
 		Ltrans[i] = new double[image_npixels];
-		for (j=0; j < image_npixels; j++) {
-			Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - foreground_surface_brightness[j])/covariance;
-			Ltrans[i][j] = Lmatrix_dense[j][i];
-		}
 		for (j=0; j <= i; j++) {
 			i_n[n] = i;
 			j_n[n] = j;
@@ -7558,15 +7558,34 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 		}
 	}
 
+	#pragma omp parallel
+	{
+		int thread;
 #ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for initializing Fmatrix and Dvector: " << wtime << endl;
-		wtime0 = omp_get_wtime();
-	}
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		#pragma omp for private(i,j) schedule(static)
+		for (i=0; i < source_npixels; i++) {
+			for (j=0; j < image_npixels; j++) {
+				Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - foreground_surface_brightness[j])/covariance;
+				Ltrans[i][j] = Lmatrix_dense[j][i];
+			}
+		}
+
+#ifdef USE_OPENMP
+		#pragma omp master
+		{
+			if (show_wtime) {
+				wtime = omp_get_wtime() - wtime0;
+				if (mpi_id==0) cout << "Wall time for initializing Fmatrix and Dvector: " << wtime << endl;
+				wtime0 = omp_get_wtime();
+			}
+		}
 #endif
 
-	/*
+		/*
 	double maxsb=-1e30;
 	double argh, maxargh=-1e30;
 	int argh_i, sb_i;
@@ -7591,14 +7610,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	cout << "MAX_ARGH=" << maxargh << " (i=" << argh_i << ")" << endl;
 	*/
 
-	#pragma omp parallel
-	{
-		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
-		thread = 0;
-#endif
 		//double *fmatptr;
 		double *fpmatptr;
 		double *lmatptr1, *lmatptr2;
@@ -7822,7 +7833,13 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 
 	//bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+#ifdef USE_MKL
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed.array());
+#else
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
+	if (!status) die("Cholesky decomposition failed");
+#endif
+	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -7831,7 +7848,6 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	}
 #endif
 
-	if (!status) die("Cholesky decomposition failed");
 	//Cholesky_solve(Fmatrix_dense.pointer(),Dvector,source_pixel_vector,source_npixels);
 	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
 
@@ -7881,11 +7897,10 @@ bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 {
 	int i,j,k;
 
-	int *indx = new int[source_npixels];
+	int *indx = new int[n];
 	indx[0] = 0;
-	for (j=0; j < source_npixels; j++) if (j > 0) indx[j] = indx[j-1] + j;
+	for (j=0; j < n; j++) if (j > 0) indx[j] = indx[j-1] + j;
 
-	logdet = log(abs(a[0]));
 	a[0] = sqrt(a[0]);
 	for (j=1; j < n; j++) a[indx[j]] /= a[0];
 
@@ -7906,13 +7921,23 @@ bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 			warn("matrix is not positive-definite (row %i)",i);
 			status = false;
 		}
-		logdet += log(abs((*aptr1)));
 		(*aptr1) = sqrt(abs((*aptr1)));
 		for (j=i+1; j < n; j++) a[indx[j]+i] /= (*aptr1);
 	}
 	delete[] indx;
 	
 	return status;
+}
+
+void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
+{
+	logdet = 0;
+	int indx = 0;
+	for (int i=0; i < n; i++) {
+		logdet += log(abs(*(a+indx)));
+		indx += i+2;
+	}
+	logdet *= 2;
 }
 
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)

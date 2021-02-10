@@ -723,6 +723,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_packed(double* a, double* b, double* x, int n);
+	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 
 	dmatrix Lmatrix_dense;
 	dmatrix Fmatrix_dense;
