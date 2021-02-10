@@ -7660,6 +7660,57 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	delete[] j_n;
 }
 
+void QLens::invert_lens_mapping_dense(bool verbal)
+{
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	int i,j;
+
+	//for (int i=0; i < source_npixels; i++) {
+		//for (int j=0; j < source_npixels; j++) {
+			//if (j >= i) cout << Fmatrix_dense[i][j] << " ";
+			//else cout << Fmatrix_dense[j][i] << " ";
+		//}
+		//cout << endl;
+	//}
+
+
+	//bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+#ifdef USE_MKL
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed.array());
+#else
+	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
+	if (!status) die("Cholesky decomposition failed");
+#endif
+	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for inverting Fmatrix: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	//Cholesky_solve(Fmatrix_dense.pointer(),Dvector,source_pixel_vector,source_npixels);
+	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
+
+	int index=0;
+	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
+	else if (source_fit_mode==Shapelet_Source) {
+		SB_Profile* shapelet;
+		for (i=0; i < n_sb; i++) {
+			if (sb_list[i]->sbtype==SHAPELET) {
+				shapelet = sb_list[i];
+				break; // currently only one shapelet source supported
+			}
+		}
+		shapelet->update_amplitudes(source_pixel_vector);
+	}
+}
+
 void QLens::optimize_regularization_parameter(const bool verbal)
 {
 #ifdef USE_OPENMP
@@ -7721,10 +7772,18 @@ double QLens::chisq_regparam(const double logreg)
 	}
 
 	double Fmatrix_logdet;
-	//bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
+
+#ifdef USE_MKL
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed_copy.array());
+#else
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
+#endif
+	Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
+
+	//bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
 	//Cholesky_solve(Fmatrix_copy.pointer(),Dvector,temp_src.array(),source_npixels);
+
 	Cholesky_solve_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
@@ -7812,57 +7871,6 @@ double QLens::brents_min_method(double (QLens::*func)(const double), const doubl
 	}
 	warn("Brent's Method reached maximum number of iterations for optimizing regparam");
 	return x;
-}
-
-void QLens::invert_lens_mapping_dense(bool verbal)
-{
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-	int i,j;
-
-	//for (int i=0; i < source_npixels; i++) {
-		//for (int j=0; j < source_npixels; j++) {
-			//if (j >= i) cout << Fmatrix_dense[i][j] << " ";
-			//else cout << Fmatrix_dense[j][i] << " ";
-		//}
-		//cout << endl;
-	//}
-
-
-	//bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
-#ifdef USE_MKL
-   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed.array());
-#else
-	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
-	if (!status) die("Cholesky decomposition failed");
-#endif
-	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for inverting Fmatrix: " << wtime << endl;
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
-	//Cholesky_solve(Fmatrix_dense.pointer(),Dvector,source_pixel_vector,source_npixels);
-	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
-
-	int index=0;
-	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
-	else if (source_fit_mode==Shapelet_Source) {
-		SB_Profile* shapelet;
-		for (i=0; i < n_sb; i++) {
-			if (sb_list[i]->sbtype==SHAPELET) {
-				shapelet = sb_list[i];
-				break; // currently only one shapelet source supported
-			}
-		}
-		shapelet->update_amplitudes(source_pixel_vector);
-	}
 }
 
 bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
