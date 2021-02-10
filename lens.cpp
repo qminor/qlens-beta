@@ -11876,7 +11876,19 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 		if (n_image_prior) {
+#ifdef USE_OPENMP
+			double srcgrid_wtime0, srcgrid_wtime;
+			if (show_wtime) {
+				srcgrid_wtime0 = omp_get_wtime();
+			}
+#endif
 			create_source_surface_brightness_grid(false,true);
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+			if (mpi_id==0) cout << "wall time for source grid creation: " << srcgrid_wtime << endl;
+		}
+#endif
 			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 			source_pixel_grid->calculate_pixel_magnifications();
@@ -11986,12 +11998,24 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			source_pixel_grid->fill_surface_brightness_vector();
 			calculate_image_pixel_surface_brightness();
 		} else if (source_fit_mode==Shapelet_Source) {
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 			else image_pixel_grid->activate_extended_mask(); 
 
 			image_pixel_grid->find_surface_brightness();
 			vectorize_image_pixel_surface_brightness();
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating SB outside mask: " << wtime << endl;
+	}
+#endif
+
 			PSF_convolution_image_pixel_vector(verbal);
 			image_pixel_grid->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grid (used for the inversion)
 
