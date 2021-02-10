@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #ifdef USE_MKL
-#include "mpi.h"
+#include "mkl.h"
 #endif
 
 #ifdef USE_UMFPACK
