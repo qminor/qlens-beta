@@ -7534,7 +7534,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
 
-	int i,j,k,l;
+	int i,j,l,n;
 
 	//Fmatrix_dense.input(source_npixels,source_npixels);
 
@@ -7545,10 +7545,14 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	int ntot = source_npixels*(source_npixels+1)/2;
 	Fmatrix_packed.input(ntot);
 
+#ifdef USE_MKL
+   double *Ltrans_stacked = new double[source_npixels*image_npixels];
+   double *Fmatrix_stacked = new double[source_npixels*source_npixels];
+#else
 	double *i_n = new double[ntot];
 	double *j_n = new double[ntot];
 	double **Ltrans = new double*[source_npixels];
-	int n=0;
+	n=0;
 	for (i=0; i < source_npixels; i++) {
 		Ltrans[i] = new double[image_npixels];
 		for (j=0; j <= i; j++) {
@@ -7557,6 +7561,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 			n++;
 		}
 	}
+#endif
 
 	#pragma omp parallel
 	{
@@ -7566,11 +7571,17 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 #else
 		thread = 0;
 #endif
-		#pragma omp for private(i,j) schedule(static)
+		int row;
+		#pragma omp for private(i,j,row) schedule(static)
 		for (i=0; i < source_npixels; i++) {
+			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
 				Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - foreground_surface_brightness[j])/covariance;
+#ifdef USE_MKL
+				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]/sqrt(covariance); // hack to get the covariance in there
+#else
 				Ltrans[i][j] = Lmatrix_dense[j][i];
+#endif
 			}
 		}
 
@@ -7611,6 +7622,8 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	*/
 
 		//double *fmatptr;
+#ifndef USE_MKL
+		// The following is not as fast as the Blas functin dsyrk (below), but it still gets the job done
 		double *fpmatptr;
 		double *lmatptr1, *lmatptr2;
 		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
@@ -7632,7 +7645,21 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 			//(*fmatptr) = (*fpmatptr);
 			//cout << i << "," << j << ": " << Fmatrix_dense[i][j] << endl;
 		}
+#endif
 	}
+
+#ifdef USE_MKL
+   cblas_dsyrk(CblasRowMajor,CblasLower,CblasNoTrans,source_npixels,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked,source_npixels);
+   LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_stacked,source_npixels,Fmatrix_packed.array());
+   int indx_diag=0;
+   if ((regularization_method != None) and (!optimize_regparam)) {
+      for (i=0; i < source_npixels; i++) {
+         Fmatrix_packed[indx_diag] += effective_reg_parameter*Rmatrix_diags[i];
+         indx_diag += i+2;
+      }
+   }
+#endif
+
 	//cout << "Dvector (from dense:)" << endl;
 	//for (j=0; j < source_npixels; j++) {
 		//cout << Dvector[j] << " ";
@@ -7655,9 +7682,14 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	}
 #endif
 	for (i=0; i < source_npixels; i++) delete[] Ltrans[i];
+#ifdef USE_MKL
+	delete[] Ltrans_stacked;
+	delete[] Fmatrix_stacked;
+#else
 	delete[] Ltrans;
 	delete[] i_n;
 	delete[] j_n;
+#endif
 }
 
 void QLens::invert_lens_mapping_dense(bool verbal)
