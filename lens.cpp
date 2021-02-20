@@ -11318,10 +11318,13 @@ bool QLens::create_source_surface_brightness_grid(bool verbal, bool image_grid_a
 		if (srcgrid_size_scale != 0) {
 			double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
 			double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
-			sourcegrid_xmin -= xwidth_adj/2;
-			sourcegrid_xmax += xwidth_adj/2;
-			sourcegrid_ymin -= ywidth_adj/2;
-			sourcegrid_ymax += ywidth_adj/2;
+			double srcgrid_xc, srcgrid_yc;
+			srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
+			srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
+			sourcegrid_xmin = srcgrid_xc - xwidth_adj/2;
+			sourcegrid_xmax = srcgrid_xc + xwidth_adj/2;
+			sourcegrid_ymin = srcgrid_yc - ywidth_adj/2;
+			sourcegrid_ymax = srcgrid_yc + ywidth_adj/2;
 		}
 	}
 
@@ -11701,10 +11704,13 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (srcgrid_size_scale != 0) {
 				double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
 				double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
-				sourcegrid_xmin -= xwidth_adj/2;
-				sourcegrid_xmax += xwidth_adj/2;
-				sourcegrid_ymin -= ywidth_adj/2;
-				sourcegrid_ymax += ywidth_adj/2;
+				double srcgrid_xc, srcgrid_yc;
+				srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
+				srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
+				sourcegrid_xmin = srcgrid_xc - xwidth_adj/2;
+				sourcegrid_xmax = srcgrid_xc + xwidth_adj/2;
+				sourcegrid_ymin = srcgrid_yc - ywidth_adj/2;
+				sourcegrid_ymax = srcgrid_yc + ywidth_adj/2;
 			}
 		}
 		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);

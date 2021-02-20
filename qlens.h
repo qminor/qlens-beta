@@ -726,11 +726,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 
 	dmatrix Lmatrix_dense;
-	dmatrix Fmatrix_dense;
-	dmatrix Fmatrix_copy; // used when optimizing the regularization parameter
-	dvector Fmatrix_packed;
-	dvector Fmatrix_packed_copy;
 	dvector Rmatrix_diags;
+	dvector Fmatrix_packed;
+	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
 	dvector temp_src; // used when optimizing the regularization parameter
 
 	double *gmatrix[4];
@@ -740,7 +738,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<int> *gmatrix_index_rows[4];
 	int *gmatrix_row_nn[4];
 	int gmatrix_nn[4];
-
 
 	double *hmatrix[2];
 	int *hmatrix_index[2];

@@ -7465,6 +7465,11 @@ void QLens::process_commands(bool read_file)
 			{
 				vector<string> args;
 				bool plot_source = false;
+				bool zoom_in = false;
+				double old_srcgrid_scale;
+				//bool changed_srcgrid = false;
+				//bool old_auto_srcgrid = false;
+				double zoomfactor = 2;
 				int set_npix = -1; // if negative, doesn't set npix; other wise, it's npix by npix grid
 				if (words[1]=="mkplotsrc") { plot_source = true; set_npix = 200; }
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
@@ -7474,8 +7479,14 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-100") set_npix = 100;
 						else if (args[i]=="-200") set_npix = 200;
 						else if (args[i]=="-300") set_npix = 300;
+						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
+						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
+				}
+				if (zoom_in) {
+					old_srcgrid_scale = srcgrid_size_scale;
+					srcgrid_size_scale = 1.0/zoomfactor;
 				}
 				if (nwords==2) {
 					if (set_npix > 0) {
@@ -7493,6 +7504,8 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
+				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
+				if (zoom_in) srcgrid_size_scale = old_srcgrid_scale;
 			}
 			else if (words[1]=="plotsrcgrid")
 			{
@@ -7820,8 +7833,23 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="invert")
 			{
+				bool regopt = false; // false means it uses whatever the actual setting is for optimize_regparam
+				bool old_regopt;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-regopt") regopt = true;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+				if (regopt) {
+					old_regopt = optimize_regparam;
+					optimize_regparam = true;
+				}
 				if (!islens()) Complain("must specify lens model first");
 				invert_surface_brightness_map_from_data(true);
+				if (regopt) optimize_regparam = old_regopt;
 
 				//test_fitmodel_invert(); // use this to make sure the fitmodel chi-square returns the same value as doing the inversion directly (runs chi-square twice just to make sure)
 			}
