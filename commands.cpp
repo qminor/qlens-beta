@@ -6542,10 +6542,10 @@ void QLens::process_commands(bool read_file)
 				} else if (words[1]=="adopt_point_prange") {
 					int paramnum;
 					double minval, maxval;
-					if (nwords != 5) Complain("one argument required for command 'fit adopt_chain_point' (line_number)");
-					if (!(ws[2] >> paramnum)) Complain("incorrect format for argument to 'fit adopt_chain_point' (param number should be integer)");
-					if (!(ws[3] >> minval)) Complain("incorrect format for argument to 'fit adopt_chain_point' (min param val should be real number)");
-					if (!(ws[4] >> maxval)) Complain("incorrect format for argument to 'fit adopt_chain_point' (max param val should be real number)");
+					if (nwords != 5) Complain("three arguments required for command 'fit adopt_point_prange' (param_number, min_value, max_value)");
+					if (!(ws[2] >> paramnum)) Complain("incorrect format for argument to 'fit adopt_point_prange' (param number should be integer)");
+					if (!(ws[3] >> minval)) Complain("incorrect format for argument to 'fit adopt_point_prange' (min param val should be real number)");
+					if (!(ws[4] >> maxval)) Complain("incorrect format for argument to 'fit adopt_point_prange' (max param val should be real number)");
 					if (adopt_point_from_chain_paramrange(paramnum,minval,maxval)==false) Complain("could not load point from chain");
 				} else Complain("unknown fit command");
 			}
