@@ -500,6 +500,21 @@ void SB_Profile::get_parameters(double* params)
 	}
 }
 
+bool SB_Profile::get_specific_parameter(const string name_in, double& value)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			value = *(param)[i];
+			break;
+		}
+	}
+	return found_match;
+}
+
+
+
 void SB_Profile::update_parameters(const double* params)
 {
 	for (int i=0; i < n_params; i++) {
@@ -522,6 +537,12 @@ bool SB_Profile::update_specific_parameter(const string name_in, const double& v
 		}
 	}
 	if (found_match) update_parameters(newparams);
+	else {
+		if ((sbtype==SHAPELET) and (name_in=="n")) {
+			update_indxptr(value);
+			found_match = true;
+		}
+	}
 	delete[] newparams;
 	return found_match;
 }
@@ -1150,10 +1171,23 @@ void SB_Profile::update_amplitudes(double *ampvec)
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+double SB_Profile::surface_brightness_zeroth_order(double x, double y)
+{
+	return 0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+
+void SB_Profile::update_indxptr(const int newval)
+{
+	return;
+}
+
+/*
 void SB_Profile::get_amplitudes(double *ampvec)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
+*/
 
 void SB_Profile::print_parameters()
 {
@@ -1557,11 +1591,13 @@ double Cored_Sersic::length_scale()
 	return Reff;
 }
 
-Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate)
+Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
-	set_nparams(5);
+	nonlinear_amp00 = nonlinear_amp00_in;
+	int npar = (nonlinear_amp00) ? 6 : 5;
+	set_nparams(npar);
 	sig = sig_in;
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
@@ -1571,9 +1607,8 @@ Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in
 		for (int j=0; j < n_shapelets; j++) {
 			amps[i][j] = 0;
 		}
-		//amps[i][i] = amp00/(i+1); // just to start off
 	}
-	amps[0][0] = amp00; // just to start off
+	amps[0][0] = amp00;
 	truncate_at_3sigma = truncate;
 
 /*
@@ -1622,6 +1657,7 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 			amps[i][j] = sb_in->amps[i][j];
 		}
 	}
+	nonlinear_amp00 = sb_in->nonlinear_amp00;
 	truncate_at_3sigma = sb_in->truncate_at_3sigma;
 	copy_base_source_data(sb_in);
 	update_meta_parameters();
@@ -1634,28 +1670,40 @@ void Shapelet::update_meta_parameters()
 
 void Shapelet::assign_paramnames()
 {
-	paramnames[0] = "sigma"; latex_paramnames[0] = "\\sigma"; latex_param_subscripts[0] = "";
-	set_geometric_paramnames(1);
+	int indx=0;
+	if (nonlinear_amp00) {
+		paramnames[indx] = "amp00"; latex_paramnames[indx] = "\\alpha"; latex_param_subscripts[indx] = "00"; indx++;
+	}
+	paramnames[indx] = "sigma"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = ""; indx++;
+	set_geometric_paramnames(indx);
 }
 
 void Shapelet::assign_param_pointers()
 {
-	param[0] = &sig;
-	set_geometric_param_pointers(1);
+	int indx=0;
+	if (nonlinear_amp00) param[indx++] = &amps[0][0];
+	param[indx++] = &sig;
+	set_geometric_param_pointers(indx);
 }
 
 void Shapelet::set_auto_stepsizes()
 {
-	stepsizes[0] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
-	set_auto_eparam_stepsizes(1,2);
-	stepsizes[3] = 0.1;
-	stepsizes[4] = 0.1;
+	int indx=0;
+	if (nonlinear_amp00) stepsizes[indx++] = 0.1;
+	stepsizes[indx++] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
+	set_auto_eparam_stepsizes(indx,indx+1);
+	stepsizes[indx+2] = 0.1;
+	stepsizes[indx+3] = 0.1;
 }
 
 void Shapelet::set_auto_ranges()
 {
-	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
-	set_geometric_param_auto_ranges(1);
+	int indx=0;
+	if (nonlinear_amp00) {
+		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
+	}
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
+	set_geometric_param_auto_ranges(indx);
 }
 
 double Shapelet::surface_brightness(double x, double y)
@@ -1693,10 +1741,22 @@ double Shapelet::surface_brightness(double x, double y)
 		}
 	}
 	sb *= gaussfactor;
+	//cout << "AMP00: " << amps[0][0] << endl;
 
 	delete[] hermvals_x;
 	delete[] hermvals_y;
 	return sb;
+}
+
+double Shapelet::surface_brightness_zeroth_order(double x, double y)
+{
+	x -= x_center;
+	y -= y_center;
+	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 2.3*sig)) return 0;
+	if (theta != 0) rotate(x,y);
+
+	double gaussfactor = (0.5641895835477563/sig)*exp(-(q*x*x+y*y/q)/(2*sig*sig));
+	return (amps[0][0]*gaussfactor);
 }
 
 void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight)
@@ -1728,9 +1788,18 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_el
 		lastfac = fac;
 	}
 	int n=0;
-	for (i=0; i < n_shapelets; i++) {
-		for (j=0; j < n_shapelets; j++) {
-			Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+	if (nonlinear_amp00) {
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				if ((i==0) and (j==0)) ;
+				else Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+			}
+		}
+	} else {
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+			}
 		}
 	}
 
@@ -1746,79 +1815,47 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, dou
 	logdet = 0;
 	for (i=0; i < n_shapelets; i++) {
 		for (j=0; j < n_shapelets; j++) {
-			Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
-			if (Rmatrix_elements[n] < 0) die("negative element!!!");
-			logdet += log(Rmatrix_elements[n]);
-			n++;
+			if ((nonlinear_amp00) and (i==0) and (j==0)) ;
+			else {
+			//if ((i==0) and (j==0)) {
+				//Rmatrix_elements[n] = 0;
+				//logdet += log(Rmatrix_elements[n]);
+			//}
+			//else {
+				//Rmatrix_elements[n] = 1.0;
+				Rmatrix_elements[n] = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
+				//Rmatrix_elements[n] = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig);
+				//Rmatrix_elements[n] = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig);
+				//Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
+				if (Rmatrix_elements[n] < 0) die("negative element!!!");
+				if (Rmatrix_elements[n] > 0) logdet += log(Rmatrix_elements[n]);
+				n++;
+			}
 		}
 	}
 }
-
-
-
-/*
-double Shapelet::calculate_Lmatrix_element(double x, double y, const int amp_index)
-{
-	x -= x_center;
-	y -= y_center;
-	//if ((x*x+y*y) > 2*sig) return 0;
-	if (theta != 0) rotate(x,y);
-
-	double gaussfactor, fac, lastfac, xarg, yarg, sqrtq;
-	double hermval_x, hermval_x_prev, hermval_x_prev2;
-	double hermval_y, hermval_y_prev, hermval_y_prev2;
-	gaussfactor = (0.5641895835477563/(sig))*exp(-(q*x*x+y*y/q)/(2*sig*sig));
-
-	int i,m,n;
-	m = amp_index / n_shapelets;
-	n = amp_index % n_shapelets;
-
-	if (m==0) hermval_x = 1.0;
-	if (n==0) hermval_y = 1.0;
-	sqrtq = sqrt(q);
-	xarg = x*sqrtq/sig;
-	yarg = y/(sqrtq*sig);
-	if (m > 0) {
-		hermval_x = 2*xarg/SQRT2;
-		hermval_x_prev = 1.0;
-	}
-	if (n > 0) {
-		hermval_y = 2*yarg/SQRT2;
-		hermval_y_prev = 1.0;
-	}
-	lastfac = 1.0/SQRT2;
-	// since we'll be getting all the Lmatrix elements, maybe save time by storing all the Hermite polynomials
-	// in a matrix? Would have to have a separate matrix for each thread, and each thread would have to iterate
-	// over all the source amplitudes before moving to the next image pixel (and starting a new matrix).
-	// Look into this later!
-	for (i=2; i <= dmax(m,n); i++) {
-		fac = 1.0/sqrt(2*i);
-		if (i <= m) {
-			hermval_x_prev2 = hermval_x_prev;
-			hermval_x_prev = hermval_x;
-			hermval_x = 2*(xarg*hermval_x_prev - (i-1)*hermval_x_prev2*lastfac) * fac;
-		}
-		if (i <= n) {
-			hermval_y_prev2 = hermval_y_prev;
-			hermval_y_prev = hermval_y;
-			hermval_y = 2*(yarg*hermval_y_prev - (i-1)*hermval_y_prev2*lastfac) * fac;
-		}
-		lastfac = fac;
-	}
-	return (gaussfactor * hermval_x * hermval_y);
-}
-*/
 
 void Shapelet::update_amplitudes(double *ampvec)
 {
 	int i,j,k=0;
-	for (i=0; i < n_shapelets; i++) {
-		for (j=0; j < n_shapelets; j++) {
-			amps[i][j] = ampvec[k++];
+	if (nonlinear_amp00) {
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				if ((i==0) and (j==0)) ;
+				else amps[i][j] = ampvec[k++];
+			}
+		}
+	} else {
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				amps[i][j] = ampvec[k++];
+			}
 		}
 	}
+
 }
 
+/*
 void Shapelet::get_amplitudes(double *ampvec)
 {
 	int i,j,k=0;
@@ -1827,6 +1864,26 @@ void Shapelet::get_amplitudes(double *ampvec)
 			ampvec[k++] = amps[i][j];
 		}
 	}
+}
+*/
+
+void Shapelet::update_indxptr(const int newval)
+{
+	// indxptr points to n_shapelets
+	int old_nn = n_shapelets;
+	n_shapelets = newval;
+	indxptr = &n_shapelets;
+	double **newamps = new double*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) newamps[i] = new double[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			if ((i < old_nn) and (j < old_nn)) newamps[i][j] = amps[i][j];
+			else newamps[i][j] = 0;
+		}
+	}
+	for (int i=0; i < old_nn; i++) delete[] amps[i];
+	delete[] amps;
+	amps = newamps;
 }
 
 double Shapelet::window_rmax() // used to define the window size for pixellated surface brightness maps

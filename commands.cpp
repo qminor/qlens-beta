@@ -2706,7 +2706,7 @@ void QLens::process_commands(bool read_file)
 					reset_grid();
 				}
 			}
-			else if (words[1]=="changevary")
+			else if ((nwords > 1) and (words[1]=="changevary"))
 			{
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
@@ -4845,8 +4845,7 @@ void QLens::process_commands(bool read_file)
 						if (sb_list[src_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in source " << src_number);
 				}
 			}
-
-			else if (words[1]=="changevary")
+			else if ((nwords > 1) and (words[1]=="changevary"))
 			{
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
@@ -5016,9 +5015,13 @@ void QLens::process_commands(bool read_file)
 			{
 				int nmax = -1;
 				bool truncate = false;
+				bool vary_amp00 = false;
 				double amp00 = 0.1;
 				for (int j=nwords-1; j >= 2; j--) {
-					if (words[j]=="-truncate") {
+					if (words[j]=="-vary_amp0") {
+						vary_amp00 = true;
+						remove_word(j);
+					} else if (words[j]=="-truncate") {
 						truncate = true;
 						remove_word(j);
 					} else if (words[j].find("n=")==0) {
@@ -5062,10 +5065,16 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model shapelet");
 						}
 					}
-					nparams_to_vary = 5;
+					nparams_to_vary = (vary_amp00) ? 6 : 5;
 					param_vals.input(nparams_to_vary);
 					//param_vals[0]=amp00; // currently cannot vary amp00 as a free parameter (it would have to be removed from the source amplitudes when inverting)
-					param_vals[0]=sig; param_vals[1]=q; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
+					int indx=0;
+					if (vary_amp00) param_vals[indx++] = amp00;
+					param_vals[indx++]=sig;
+					param_vals[indx++]=q;
+					param_vals[indx++]=theta;
+					param_vals[indx++]=xc;
+					param_vals[indx++]=yc;
 
 					if (vary_parameters) {
 						if (read_command(false)==false) return;
@@ -5076,10 +5085,11 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
+					nonlinear_shapelet_amp00 = vary_amp00;
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_shapelet_source(amp00, sig, q, theta, xc, yc, nmax, truncate);
+						add_shapelet_source(amp00, sig, q, theta, xc, yc, nmax, vary_amp00, truncate);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (vary_parameters) {
 							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model shapelet");
@@ -7466,6 +7476,7 @@ void QLens::process_commands(bool read_file)
 				vector<string> args;
 				bool plot_source = false;
 				bool zoom_in = false;
+				bool old_auto_srcgrid_npixels = auto_srcgrid_npixels;
 				double old_srcgrid_scale;
 				//bool changed_srcgrid = false;
 				//bool old_auto_srcgrid = false;
@@ -7506,6 +7517,7 @@ void QLens::process_commands(bool read_file)
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
 				if (zoom_in) srcgrid_size_scale = old_srcgrid_scale;
+				auto_srcgrid_npixels = old_auto_srcgrid_npixels;
 			}
 			else if (words[1]=="plotsrcgrid")
 			{
@@ -9589,6 +9601,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (words[1]=="all") emask_n = -1;
 				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
+				if ((emask_n != -1) and (adaptive_grid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
 				extended_mask_n_neighbors = emask_n;
 				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors);
 				int npix;
@@ -9640,6 +9653,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Adaptive source pixel grid (adaptive_grid): " << display_switch(adaptive_grid) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'adaptive_grid' command; must specify 'on' or 'off'");
+				if ((extended_mask_n_neighbors != -1) and (setword=="on")) Complain("adaptive grid cannot reliably be used unless emask_n_neighbors is set to 'all'");
 				set_switch(adaptive_grid,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

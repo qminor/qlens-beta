@@ -134,6 +134,7 @@ class SB_Profile
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
 	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
 	virtual void get_parameters(double* params);
+	bool get_specific_parameter(const string name_in, double& value);
 	bool update_specific_parameter(const string name_in, const double& value);
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -157,7 +158,9 @@ class SB_Profile
 	virtual void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet);
 	virtual void update_amplitudes(double *ampvec); // used by Shapelet subclass
-	virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
+	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
+	virtual void update_indxptr(const int newval);
+	virtual double surface_brightness_zeroth_order(double x, double y);
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
 	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
@@ -252,10 +255,11 @@ class Shapelet : public SB_Profile
 	double **amps; // shapelet amplitudes
 	int n_shapelets;
 	bool truncate_at_3sigma; // this truncates the shapelets at r = 2*sigma to eliminate edge effects
+	bool nonlinear_amp00;
 
 	public:
 	Shapelet() : SB_Profile() { amps = NULL; }
-	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig);
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (amps != NULL) {
@@ -278,8 +282,10 @@ class Shapelet : public SB_Profile
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet);
+	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double *ampvec);
-	void get_amplitudes(double *ampvec);
+	//void get_amplitudes(double *ampvec);
+	void update_indxptr(const int newval);
 	bool get_special_command_arg(string &arg);
 
 	double window_rmax();

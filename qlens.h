@@ -669,6 +669,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_ccspline;
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
+	bool nonlinear_shapelet_amp00;
 	int shapelet_scale_mode;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
@@ -679,7 +680,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
 	double *image_surface_brightness;
-	double *foreground_surface_brightness;
+	double *sbprofile_surface_brightness;
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
 
@@ -708,6 +709,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void convert_Lmatrix_to_dense();
 	void assign_Lmatrix_shapelets(bool verbal);
+	void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
 	void PSF_convolution_Lmatrix_dense(bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
@@ -761,8 +763,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double find_surface_brightness(lensvector &pt);
 	void assign_Lmatrix(bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
-	void PSF_convolution_image_pixel_vector(bool verbal = false);
-	void PSF_convolution_foreground_pixel_vector(bool verbal = false);
+	//void PSF_convolution_image_pixel_vector(bool verbal = false);
+	void PSF_convolution_pixel_vector(double *surface_brightness_vector, bool verbal = false);
 	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
@@ -1015,7 +1017,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
 	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate);
+	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate);
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
