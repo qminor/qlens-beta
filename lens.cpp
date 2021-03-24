@@ -11861,6 +11861,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 			if (regularization_parameter != 0) {
 				//chisqreg = chisq + regularization_parameter*Es;
+				//cout << "chisqreg=" << chisqreg << endl;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 				//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			}
@@ -11871,13 +11872,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 		}
 	} else if (source_fit_mode==Shapelet_Source) {
-		double Es=0;
+		double chisqreg, Es=0;
 		if (regularization_method != None) {
 			for (i=0; i < source_npixels; i++) {
 				Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
 			}
 			if (regularization_parameter != 0) {
-				//chisqreg = chisq + regularization_parameter*Es;
+				chisqreg = chisq + regularization_parameter*Es;
+				//cout << "chisqreg=" << chisqreg << endl;
 				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 			}
 			chisq += Fmatrix_log_determinant;
@@ -12000,7 +12002,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "-2*log(ev)=" << chisq << " (without priors)" << endl;
-			if ((vary_pixel_fraction) or (vary_regularization_parameter)) cout << " logdet=" << Fmatrix_log_determinant << endl;
+			if ((vary_pixel_fraction) or (regularization_method != None)) cout << " logdet=" << Fmatrix_log_determinant << endl;
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "number of image pixels included in chisq = " << count << endl;

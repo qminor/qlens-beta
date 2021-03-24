@@ -704,6 +704,8 @@ void QLens::process_commands(bool read_file)
 							"fit save_bestfit\n"
 							"fit load_bestfit ...\n"
 							"fit add_chain_dparams\n"
+							"fit adopt_chain_point ...\n"
+							"fit adopt_point_prange ...\n"
 							"fit mkposts ...\n"
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
@@ -936,6 +938,15 @@ void QLens::process_commands(bool read_file)
 							"The fit label should match that of the chain, and the lens model should be the same as in the chain\n"
 							"(to be safe, run 'fit load_bestfit' beforehand). Any derived parameters that were used in the original\n"
 							"chain will still be included. The new chain data will be safed to the file '<fit_label>.new'.\n";
+					else if (words[2]=="adopt_chain_point")
+						cout << "fit adopt_chain_point <line_number>\n\n"
+							"Loads a chain that has already been created, and adopts the model parameters from the point in the\n"
+							"on the specified line number of the chain file.\n";
+					else if (words[2]=="adopt_point_prange")
+						cout << "fit adopt_point_prange <param_number> <minval> <maxval>\n\n"
+							"Loads a chain that has already been created, and adopts the model parameters from the point with the\n"
+							"lowest chi-square value within the range (minval,maxval) of the parameter specified. The parameter\n"
+							"numbers can be listed using the command 'fit priors'.\n";
 					else if (words[2]=="mkposts")
 						cout << "fit mkposts <dirname> [-n#] [-N#] [-no2d] [-nohist] [-subonly]\n\n"
 							"After a chain has been generated using MCMC or nested sampling, 'fit mkposts' will run the mkdist tool\n"
@@ -5017,6 +5028,7 @@ void QLens::process_commands(bool read_file)
 				bool truncate = false;
 				bool vary_amp00 = false;
 				double amp00 = 0.1;
+				bool amp_specified = false;
 				for (int j=nwords-1; j >= 2; j--) {
 					if (words[j]=="-vary_amp0") {
 						vary_amp00 = true;
@@ -5033,6 +5045,7 @@ void QLens::process_commands(bool read_file)
 						remove_word(j);
 					} else if (words[j].find("amp0=")==0) {
 						if (update_parameters) Complain("amp0=# argument cannot be specified when updating " << words[1]);
+						amp_specified = true;
 						string astr = words[j].substr(5);
 						stringstream astream;
 						astream << astr;
@@ -5040,29 +5053,32 @@ void QLens::process_commands(bool read_file)
 						remove_word(j);
 					}
 				}
+				int pi = 2;
 				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
-				if (nwords > 7) Complain("more than 7 parameters not allowed for model shapelet");
+				if ((vary_amp00) and (nwords > 8)) Complain("more than 6 parameters not allowed for model shapelet (with -vary_amp0)");
+				else if ((!vary_amp00) and (nwords > 7)) Complain("more than 5 parameters not allowed for model shapelet");
 				if (nmax <= 0) Complain("nmax cannot be negative");
 				if (nwords >= 5) {
 					double sig;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> sig)) Complain("invalid sigma parameter for model shapelet");
-					if (!(ws[3] >> q)) Complain("invalid q parameter for model shapelet");
+					if ((vary_amp00) and (!amp_specified) and (!(ws[pi++] >> amp00))) Complain("invalid amp00 parameter for model shapelet");
+					if (!(ws[pi++] >> sig)) Complain("invalid sigma parameter for model shapelet");
+					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model shapelet");
 					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
-					if (nwords >= 6) {
-						if (!(ws[4] >> theta)) Complain("invalid theta parameter for model shapelet");
-						if (nwords == 6) {
-							if (words[6].find("anchor_center=")==0) {
-								string anchorstr = words[6].substr(14);
+					if (nwords >= (pi+1)) {
+						if (!(ws[pi++] >> theta)) Complain("invalid theta parameter for model shapelet");
+						if (nwords == (pi+1)) {
+							if (words[pi].find("anchor_center=")==0) {
+								string anchorstr = words[pi].substr(14);
 								stringstream anchorstream;
 								anchorstream << anchorstr;
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_source_center = true;
-							}
-						} else if (nwords == 7) {
-							if (!(ws[5] >> xc)) Complain("invalid x-center parameter for model shapelet");
-							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model shapelet");
+							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
+						} else if (nwords == (pi+2)) {
+							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model shapelet");
+							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model shapelet");
 						}
 					}
 					nparams_to_vary = (vary_amp00) ? 6 : 5;

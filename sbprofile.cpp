@@ -1842,7 +1842,10 @@ void Shapelet::update_amplitudes(double *ampvec)
 		for (i=0; i < n_shapelets; i++) {
 			for (j=0; j < n_shapelets; j++) {
 				if ((i==0) and (j==0)) ;
-				else amps[i][j] = ampvec[k++];
+				else {
+					amps[i][j] = ampvec[k++];
+					//cout << "AMP(" << i << "," << j << "): " << amps[i][j] << endl;
+				}
 			}
 		}
 	} else {
@@ -1905,9 +1908,8 @@ bool Shapelet::get_special_command_arg(string &arg)
 	nstr << n_shapelets;
 	nstr >> nstring;
 	arg = "n=" + nstring;
-	if (truncate_at_3sigma) {
-		arg += " -truncate";
-	}
+	if (truncate_at_3sigma) arg += " -truncate";
+	if (nonlinear_amp00) arg += " -vary_amp0";
 	return true;
 }
 
