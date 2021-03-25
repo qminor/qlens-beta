@@ -5049,7 +5049,7 @@ void QLens::process_commands(bool read_file)
 						string astr = words[j].substr(5);
 						stringstream astream;
 						astream << astr;
-						if (!(astream >> amp00)) Complain("invalid shaplet m=0 amplitude value");
+						if (!(astream >> amp00)) Complain("invalid shapelet m=0 amplitude value");
 						remove_word(j);
 					}
 				}
@@ -9776,9 +9776,15 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="imgpixel_nsplit")
 		{
 			if (nwords == 2) {
-				int nt;
-				if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
-				default_imgpixel_nsplit = nt;
+				if (words[1]=="-shapelet") {
+					if (source_fit_mode != Shapelet_Source) Complain("must be in shapelet mode to set pixel splitting from shapelets");
+					if (!set_shapelet_imgpixel_nsplit()) Complain("could not set pixel splitting from shapelets");
+					if (mpi_id==0) cout << "optimal imgpixel_nsplit from shapelets = " << default_imgpixel_nsplit << endl;
+				} else {
+					int nt;
+					if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
+					default_imgpixel_nsplit = nt;
+				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
 			} else Complain("must specify either zero or one argument (default number of image pixel splittings)");

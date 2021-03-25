@@ -11461,8 +11461,8 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 			break; // currently only one shapelet source supported
 		}
 	}
-	double sig,xc,yc;
-	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,verbal);
+	double sig,xc,yc,nsplit;
+	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,verbal);
 	if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
 	if (auto_shapelet_center) {
 		shapelet->update_specific_parameter("xc",xc);
@@ -11478,6 +11478,19 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << endl;
 	}
 
+}
+
+bool QLens::set_shapelet_imgpixel_nsplit()
+{
+	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return false; }
+	if (image_pixel_grid != NULL) delete image_pixel_grid;
+	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, source_fit_mode, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid->set_pixel_noise(data_pixel_noise);
+	image_pixel_grid->redo_lensing_calculations();
+	double sig,xc,yc,nsplit;
+	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,false);
+	default_imgpixel_nsplit = (((int) nsplit)+3);
+	return true;
 }
 
 int QLens::get_shapelet_nn()

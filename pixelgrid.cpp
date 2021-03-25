@@ -5347,7 +5347,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
-void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, const bool verbal)
+void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal)
 {
 	double xcavg=0, ycavg=0;
 	double totsurf=0;
@@ -5388,59 +5388,59 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	xcenter = xcavg;
 	ycenter = ycavg;
 
+	int ntot=0, nout=0;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+				ntot++;
+				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
+				if (sqrt(rsq) > 2*sig) {
+					nout++;
+				}
+			}
+		}
+	}
+	double fout = nout / ((double) ntot);
+	if ((verbal) and (lens->mpi_id==0)) cout << "Fraction of 2-sigma outliers for shapelets: " << fout << endl;
+
+	int ii, jj, il, ih, jl, jh;
+	const double window_size_for_srcarea = 1;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+				il = i - window_size_for_srcarea;
+				ih = i + window_size_for_srcarea;
+				jl = j - window_size_for_srcarea;
+				jh = j + window_size_for_srcarea;
+				if (il<0) il=0;
+				if (ih>x_N-1) ih=x_N-1;
+				if (jl<0) jl=0;
+				if (jh>y_N-1) jh=y_N-1;
+				area=0;
+				for (ii=il; ii <= ih; ii++) {
+					for (jj=jl; jj <= jh; jj++) {
+						area += (source_plane_triangle1_area[ii][jj] + source_plane_triangle2_area[ii][jj]);
+					}
+				}
+				if (area < min_area) {
+					min_area = area;
+					xcmin = center_pts[i][j][0];
+					ycmin = center_pts[i][j][1];
+				}
+				if (area > max_area) {
+					max_area = area;
+				}
+
+			}
+		}
+	}
+
+	double minscale_res = sqrt(min_area);
+	recommended_nsplit = 2*sqrt(max_area*nn)/sig; // this is so the smallest source fluctuations get at least 2x2 ray tracing coverage
+	int recommended_nn;
+	if (lens->shapelet_scale_mode==0) recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
+	else recommended_nn = (int) (window_scaling*sig/(minscale_res)) + 1;
 	if ((verbal) and (lens->mpi_id==0)) {
-		int ntot=0, nout=0;
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-					ntot++;
-					rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
-					if (sqrt(rsq) > 2*sig) {
-						nout++;
-					}
-				}
-			}
-		}
-		double fout = nout / ((double) ntot);
-		cout << "Fraction of 2-sigma outliers for shapelets: " << fout << endl;
-
-		int ii, jj, il, ih, jl, jh;
-		const double window_size_for_srcarea = 1;
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
-					il = i - window_size_for_srcarea;
-					ih = i + window_size_for_srcarea;
-					jl = j - window_size_for_srcarea;
-					jh = j + window_size_for_srcarea;
-					if (il<0) il=0;
-					if (ih>x_N-1) ih=x_N-1;
-					if (jl<0) jl=0;
-					if (jh>y_N-1) jh=y_N-1;
-					area=0;
-					for (ii=il; ii <= ih; ii++) {
-						for (jj=jl; jj <= jh; jj++) {
-							area += (source_plane_triangle1_area[ii][jj] + source_plane_triangle2_area[ii][jj]);
-						}
-					}
-					if (area < min_area) {
-						min_area = area;
-						xcmin = center_pts[i][j][0];
-						ycmin = center_pts[i][j][1];
-					}
-					if (area > max_area) {
-						max_area = area;
-					}
-
-				}
-			}
-		}
-
-		double minscale_res = sqrt(min_area);
-		double recommended_nsplit = 2*sqrt(max_area*nn)/sig; // this is so the smallest source fluctuations get at least 2x2 ray tracing coverage
-		int recommended_nn;
-		if (lens->shapelet_scale_mode==0) recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
-		else recommended_nn = (int) (window_scaling*sig/(minscale_res)) + 1;
 		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << " (at least)" << endl;
 		cout << "number of splittings should be at least " << recommended_nsplit << " to capture all source fluctuations" << endl;
 	}
