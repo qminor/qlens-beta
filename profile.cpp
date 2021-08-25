@@ -1297,6 +1297,7 @@ void LensProfile::set_integration_parameters(const int &nn, const double &acc)
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
 	SetGaussPatterson(acc,true);
+	SetClenshawCurtis(12,acc,false);
 }
 
 void LensProfile::update_meta_parameters_and_pointers()
@@ -1888,6 +1889,13 @@ double LensProfile::kappa_avg_spherical_integral(const double rsq)
 		bool converged;
 		ans = (2.0/rsq)*AdaptiveQuad(sptr,0,sqrt(rsq),converged);
 	}
+	else if (integral_method == Fejer_Quadrature)
+	{
+		double (ClenshawCurtis::*sptr)(double);
+		sptr = static_cast<double (ClenshawCurtis::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		bool converged;
+		ans = (2.0/rsq)*AdaptiveQuadCC(sptr,0,sqrt(rsq),converged);
+	}
 	else die("unknown integral method");
 	return ans;
 }
@@ -1977,10 +1985,14 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
 	if ((!converged) and (output_integration_errors)) {
-		if (integral_method==Gauss_Patterson_Quadrature) {
+		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
 			if ((lens->mpi_id==0) and (lens->warnings)) {
-				cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
-				if (numberOfPoints >= 1023) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+				if (integral_method==Gauss_Patterson_Quadrature) {
+					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
+					if (numberOfPoints >= 1023) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+				} else if (integral_method==Fejer_Quadrature) {
+					cout << "*WARNING*: Fejer quadrature did not converge (x=" << x << ",y=" << y << ")" << endl;
+				}
 				else cout << endl;
 				cout << "Lens: " << model_name << ", Params: ";
 				for (int i=0; i < n_params; i++) {
@@ -2043,6 +2055,11 @@ double LensIntegral::i_integral(bool &converged)
 		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
 		ans = PattersonIntegrate(iptr,0,1,converged);
 	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
+		ans = FejerIntegrate(iptr,0,1,converged);
+	}
 	else die("unknown integral method");
 	return ans;
 }
@@ -2066,39 +2083,11 @@ double LensIntegral::j_integral(bool &converged)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
 		ans = PattersonIntegrate(jptr,0,1,converged);
-		/*
-		if (!converged) {
-			//int i, nn=511;
-			//double w, wstep = 1.0/(nn-1);
-			////for (i=0, w=0; i < nn; i++, w += wstep) {
-			//for (i=0; i < nn; i++) {
-				//w = 0.5 + 0.5*profile->pat_points[i];
-				//cout << w << " " << j_integrand_prime(w) << endl;
-			//}
-			cout << endl << endl;
-			double w = 0.999999;
-			double u = w*w;
-			double qfac = 1 - one_minus_qsq*u;
-			double wtf2 = (2*w*profile->kappa_rsq(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
-
-			double wtf = 0.999999*((xsqval + ysqval/qfac)*fsqinv);
-			cout << xsqval << " " << ysqval << " " << wtf << " " << qfac << " " << one_minus_qsq << endl;
-			cout << endl;
-
-			//die();
-			int i, nn=1023;
-			double wstep = 1.0/(nn-1);
-			ofstream blargh("ctwtf.dat");
-
-			//for (i=0, w=0; i < nn; i++, w += wstep) {
-			for (i=0; i < nn; i++) {
-				w = 0.5 + 0.5*profile->points[i];
-				blargh << w << " " << j_integrand_prime(w) << endl;
-			}
-
-			//die();
-		}
-		*/
+	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
+		ans = FejerIntegrate(jptr,0,1,converged);
 	}
 	else die("unknown integral method");
 	return ans;
@@ -2123,6 +2112,11 @@ double LensIntegral::k_integral(bool &converged)
 	{
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
 		ans = PattersonIntegrate(kptr,0,1,converged);
+	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
+		ans = FejerIntegrate(kptr,0,1,converged);
 	}
 
 	else die("unknown integral method");
@@ -2186,6 +2180,7 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 		// created for each thread
 		for (j=0, i=istart; j < order; j += 2, i += istep) {
 			pat_funcs[i] = (this->*func)(absum + abdif*pat_points[i]);
+			//if (pat_funcs[i]*0.0 != 0.0) die("FUCK ME %g level=%i comp to %g",(absum+abdif*pat_points[i]),level,(absum+abdif*profile->points[0]));
 			result += weightptr[j]*pat_funcs[i];
 		}
 		for (j=1, i=istep-1; j < order; j += 2, i += istep) {
@@ -2195,6 +2190,7 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 	} while (++level < 9);
 
 	if (level == 9) {
+		if ((result*0.0 != 0.0) or (result > 1e100)) warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
 		// If Gauss-Legendre is set up with at least 1023 points, then switch to this to get a (hopefully) more accurate value
 		if (profile->numberOfPoints >= 1023) {
 			gausspoints = profile->points;
@@ -2207,6 +2203,70 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 		converged = false;
 	}
 
+	//cout << "INTEGRAL=" << (abdif*result) << endl;
 	return abdif*result;
 }
+
+double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged)
+{
+	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more
+	// points in case integrand doesn't converge easily
+	double result = 0, result_old;
+	int i, level = 0, istep, istart;
+	double abavg = (a+b)/2, abdif = (b-a)/2;
+	converged = true; // until proven otherwise
+	double *weightptr;
+	//if (!include_endpoints) {
+		level = 1;
+		cc_funcs[0] = 0;
+		cc_funcs[profile->cc_N-1] = (this->*func)(abavg);
+	//}
+
+	int lval, j;
+	do {
+		weightptr = cc_weights[level];
+		result_old = result;
+		lval = profile->cc_lvals[level];
+		istart = (profile->cc_N-1) / lval;
+		istep = istart*2;
+		result = 0;
+		//cout << "level=" << level << " lval=" << lval << " nlevs=" << profile->cc_nlevels << endl;
+		//if (level==0) {
+			//cc_funcs[0] = (this->*func)(abavg + abdif*cc_points[0]) + (this->*func)(abavg - abdif*cc_points[0]);
+			//cc_funcs[cc_N-1] = (this->*func)(abavg);
+			//result += cc_weights[0][1]*cc_funcs[cc_N-1];
+		//}
+		for (j=1, i=istart; j < lval; j += 2, i += istep) {
+			cc_funcs[i] = (this->*func)(abavg + abdif*cc_points[i]) + (this->*func)(abavg - abdif*cc_points[i]);
+			result += weightptr[j]*cc_funcs[i];
+			//cout << "WEIGHT: " << weightptr[j] << endl;
+		}
+		//if (include_endpoints) {
+			//for (j=0, i=0; j <= lval; j += 2, i += istep) {
+				//result += cc_weights[level][j]*cc_funcs[i];
+			//}
+		//} else {
+			for (j=2, i=istep; j <= lval; j += 2, i += istep) {
+				result += weightptr[j]*cc_funcs[i];
+			//cout << "WEIGHT: " << weightptr[j] << endl;
+			}
+		//}
+		if ((level > 1) and (abs(result-result_old) < profile->cc_tolerance*abs(result))) break;
+	} while (++level < profile->cc_nlevels);
+
+	if (level==profile->cc_nlevels) {
+		if ((result*0.0 != 0.0) or (result > 1e100)) warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		converged = false;
+		//cout << "result=" << result << endl;
+		int npoints = 2*profile->cc_lvals[profile->cc_nlevels-1] + 1;
+	}
+	//cout << "INTEGRAL=" << (abdif*result) << endl;
+	//else {
+	//int npoints = 2*cc_lvals[level] - 1;
+	//cout << "Final level: " << (level) << " npoints=" << npoints << endl;
+	//}
+
+	return abdif*result;
+}
+
 

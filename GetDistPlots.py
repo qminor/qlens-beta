@@ -71,12 +71,12 @@ class GetDistPlotSettings:
                 return path
         return self.plot_data[0] + os.sep + root
 
-    def setSubplotSize(self, size_inch, width_scale=1.0, marker_width_scale=1.0, fontsize=0):
+    def setSubplotSize(self, size_inch, width_scale=1.0, marker_width_scale=1.0, fontsize=0, axes_fontsize=0):
         self.subplot_size_inch = size_inch
         if fontsize==0: self.lab_fontsize = 7 + 8 * self.subplot_size_inch
         else: self.lab_fontsize = fontsize
-        if fontsize==0: self.axes_fontsize = 4 + 2.5 * self.subplot_size_inch
-        else: self.axes_fontsize = fontsize
+        if axes_fontsize==0: self.axes_fontsize = 4 + 2.5 * self.subplot_size_inch
+        else: self.axes_fontsize = axes_fontsize
         self.legend_fontsize = self.axes_fontsize
         self.font_size = self.lab_fontsize
         self.lw1 = self.subplot_size_inch * width_scale / 3.0

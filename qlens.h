@@ -2158,7 +2158,6 @@ inline void QLens::custom_deflection(const double& x, const double& y, lensvecto
 	lensvector def;
 	lensvector pos, pos_prime;
 
-	int i,j;
 	def_tot[0] = 0;
 	def_tot[1] = 0;
 	pos[0] = x;

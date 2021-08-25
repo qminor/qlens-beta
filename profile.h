@@ -13,7 +13,7 @@
 #include <complex>
 using namespace std;
 
-enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature };
+enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
 enum LensProfileName
 {
 	KSPLINE,
@@ -40,7 +40,7 @@ enum LensProfileName
 struct LensIntegral;
 class QLens;
 
-class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public Brent
+class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public ClenshawCurtis, public Brent
 {
 	friend struct LensIntegral;
 	friend class QLens;
@@ -312,7 +312,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_theta(double theta_in) { theta=theta_in; update_angle_meta_params(); }
 	void set_center(double xc_in, double yc_in) { x_center = xc_in; y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
-	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc,true); }
+	void set_integral_tolerance(const double acc) { integral_tolerance = acc; SetGaussPatterson(acc,true); SetClenshawCurtis(12,acc,false); }
 	void set_perturber(bool ispert) { perturber = ispert; }
 	void set_lensed_center(bool lensed_xcyc) {
 		lensed_center_coords = lensed_xcyc;
@@ -331,6 +331,8 @@ struct LensIntegral : public Romberg
 	double *gausspoints, *gaussweights;
 	double *pat_points, **pat_weights;
 	double pat_funcs[511];
+	double *cc_points, **cc_weights;
+	double *cc_funcs;
 	int n_gausspoints;
 
 	LensIntegral(LensProfile *profile_in, double xsqval_in, double ysqval_in, double q, int nval_in) : profile(profile_in), xsqval(xsqval_in), ysqval(ysqval_in)
@@ -344,9 +346,15 @@ struct LensIntegral : public Romberg
 		gaussweights = profile->weights;
 		pat_points = profile->pat_points;
 		pat_weights = profile->pat_weights;
+
+		cc_points = profile->cc_points;
+		cc_weights = profile->cc_weights;
+		cc_funcs = new double[profile->cc_N];
 	}
+	~LensIntegral() { delete[] cc_funcs; }
 	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
 	double PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
+	double FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
 
 	double i_integrand_prime(const double w);
 	double j_integrand_prime(const double w);

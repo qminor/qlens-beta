@@ -1155,18 +1155,18 @@ double SB_Profile::calculate_Lmatrix_element(double x, double y, const int amp_i
 }
 */
 
-void SB_Profile::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight)
+void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-void SB_Profile::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet)
+void SB_Profile::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
 
-void SB_Profile::update_amplitudes(double *ampvec)
+void SB_Profile::update_amplitudes(double*& ampvec)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
@@ -1759,7 +1759,7 @@ double Shapelet::surface_brightness_zeroth_order(double x, double y)
 	return (amps[0][0]*gaussfactor);
 }
 
-void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_elements, const double weight)
+void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
 {
 	x -= x_center;
 	y -= y_center;
@@ -1792,13 +1792,13 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_el
 		for (i=0; i < n_shapelets; i++) {
 			for (j=0; j < n_shapelets; j++) {
 				if ((i==0) and (j==0)) ;
-				else Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+				else *(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
 			}
 		}
 	} else {
 		for (i=0; i < n_shapelets; i++) {
 			for (j=0; j < n_shapelets; j++) {
-				Lmatrix_elements[n++] += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
+				*(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
 			}
 		}
 	}
@@ -1807,35 +1807,42 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double* Lmatrix_el
 	delete[] hermvals_y;
 }
 
-void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, double &logdet)
+void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
 {
-	if (sig==0) die("sigma cannot be zero!!");
-	if ((q > 1) or (q <= 0)) die("q taking an absurd value");
-	int i,j,n=0;
-	logdet = 0;
-	for (i=0; i < n_shapelets; i++) {
-		for (j=0; j < n_shapelets; j++) {
-			if ((nonlinear_amp00) and (i==0) and (j==0)) ;
-			else {
-			//if ((i==0) and (j==0)) {
-				//Rmatrix_elements[n] = 0;
-				//logdet += log(Rmatrix_elements[n]);
-			//}
-			//else {
-				//Rmatrix_elements[n] = 1.0;
-				Rmatrix_elements[n] = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
-				//Rmatrix_elements[n] = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig);
-				//Rmatrix_elements[n] = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig);
-				//Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
-				if (Rmatrix_elements[n] < 0) die("negative element!!!");
-				if (Rmatrix_elements[n] > 0) logdet += log(Rmatrix_elements[n]);
-				n++;
+	if (!is_lensed) {
+		int elements = n_shapelets*n_shapelets;
+		if (nonlinear_amp00) elements--;
+		for (int i=0; i < elements; i++) *(Rmatrix_elements++) = 0;
+		Rmatrix_elements += elements;
+	} else {
+		if (sig==0) die("sigma cannot be zero!!");
+		if ((q > 1) or (q <= 0)) die("q taking an absurd value");
+		int i,j,n=0;
+		logdet = 0;
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				if ((nonlinear_amp00) and (i==0) and (j==0)) ;
+				else {
+				//if ((i==0) and (j==0)) {
+					//Rmatrix_elements[n] = 0;
+					//logdet += log(Rmatrix_elements[n]);
+				//}
+				//else {
+					//Rmatrix_elements[n] = 1.0;
+					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
+					//Rmatrix_elements[n] = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig);
+					//Rmatrix_elements[n] = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig);
+					//Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
+					if (*Rmatrix_elements < 0) die("negative element!!!");
+					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
+					Rmatrix_elements++;
+				}
 			}
 		}
 	}
 }
 
-void Shapelet::update_amplitudes(double *ampvec)
+void Shapelet::update_amplitudes(double*& ampvec)
 {
 	int i,j,k=0;
 	if (nonlinear_amp00) {
@@ -1843,7 +1850,7 @@ void Shapelet::update_amplitudes(double *ampvec)
 			for (j=0; j < n_shapelets; j++) {
 				if ((i==0) and (j==0)) ;
 				else {
-					amps[i][j] = ampvec[k++];
+					amps[i][j] = *(ampvec++);
 					//cout << "AMP(" << i << "," << j << "): " << amps[i][j] << endl;
 				}
 			}
@@ -1851,7 +1858,7 @@ void Shapelet::update_amplitudes(double *ampvec)
 	} else {
 		for (i=0; i < n_shapelets; i++) {
 			for (j=0; j < n_shapelets; j++) {
-				amps[i][j] = ampvec[k++];
+				amps[i][j] = *(ampvec++);
 			}
 		}
 	}

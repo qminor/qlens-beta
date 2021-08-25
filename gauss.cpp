@@ -1,4 +1,6 @@
 #include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <cmath>
 #include "gauss.h"
 #include "errors.h"
@@ -323,22 +325,205 @@ double GaussianIntegral::Gamma(const double xx)
 	return exp(-tmp)*(2.5066282746310005*ser/x);
 }
 
+ClenshawCurtis::ClenshawCurtis()
+{
+	cc_points = NULL;
+	cc_weights = NULL;
+	cc_lvals = NULL;
+	cc_funcs = NULL;
+	cc_funcs2 = NULL;
+	SetClenshawCurtis(12,1e-6,true);
+}
+
+void ClenshawCurtis::SetClenshawCurtis(const int nlevels_in, const double tol_in, const bool include_endpoints_in, const bool show_warnings)
+{
+	// Computing weights is very fast for nlevels up to 12 or 13; beyond that, it gets dramatically slower as nlevels is increased
+	// If you really need nlevels > 13, the weights should be computed via the fast Fourier transform technique which is much faster.
+	// However I have never needed such a high number of levels, and if I did, it's not clear that Romberg integration wouldn't be
+	// just as good. But it's something to keep in mind down the road.
+	
+	cc_tolerance = tol_in;
+	cc_tolerance_outer = tol_in;
+	include_endpoints = include_endpoints_in;
+	show_convergence_warning = show_warnings;
+	if (cc_points != NULL) delete[] cc_points;
+	if (cc_funcs != NULL) delete[] cc_funcs;
+	if (cc_funcs2 != NULL) delete[] cc_funcs2; // useful if doing nested integrals (albeit an ugly solution)
+	if (cc_lvals != NULL) delete[] cc_lvals;
+	if (cc_weights != NULL) {
+		for (int i=0; i < cc_nlevels; i++) delete[] cc_weights[i];
+		delete[] cc_weights;
+	}
+	cc_nlevels = nlevels_in;
+	cc_N = pow(2,cc_nlevels-1)+1; // this gives the number of points for the max level (not counting the negative points here)
+	cc_lvals = new int [cc_nlevels];
+	cc_points = new double[cc_N];
+	cc_funcs = new double[cc_N];
+	cc_funcs2 = new double[cc_N];
+	cc_weights = new double*[cc_nlevels];
+	int i,j,k,l = 1;
+	for (int i=0; i < cc_nlevels; i++) {
+		cc_lvals[i] = l;
+		cc_weights[i] = new double[l+1];
+		l *= 2;
+	}
+	l=1;
+	int kterm;
+	if (include_endpoints) {
+		for (i=0; i < cc_nlevels; i++) {
+			cc_weights[i][0] = 1.0;
+			cc_weights[i][l] = 1.0;
+			for (j=1; j < l; j++) {
+				cc_weights[i][j] = 1.0;
+			}
+			for (k=1; k <= l; k++) {
+				kterm = 1 - 4*k*k;
+				if (k==l) kterm *= 2;
+				cc_weights[i][0] += 2.0/kterm;
+				if (k % 2 == 0) cc_weights[i][l] += 2.0/kterm;
+				else cc_weights[i][l] -= 2.0/kterm;
+				for (j=1; j < l; j++) {
+					cc_weights[i][j] += (2*cos((j*k*M_PI)/l))/kterm;
+				}
+			}
+			for (j=0; j <= l; j++) {
+				cc_weights[i][j] /= l;
+			}
+			cc_weights[i][0] /= 2; // for the endpoints, to avoid double-counting (as in trapezoid rule)
+			l *= 2;
+		}
+	} else {
+		// Here we use Fejer's rule type 2, which excludes endpoints
+		for (i=0; i < cc_nlevels; i++) {
+			cc_weights[i][0] = 0.0;
+			cc_weights[i][l] = 1.0;
+			for (j=1; j < l; j++) {
+				cc_weights[i][j] = 1.0;
+			}
+			for (k=1; k < l; k++) {
+				kterm = 1 - 4*k*k;
+				if (k % 2 == 0) cc_weights[i][l] += 2.0/kterm;
+				else cc_weights[i][l] -= 2.0/kterm;
+				for (j=1; j < l; j++) {
+					cc_weights[i][j] += (2*cos((j*k*M_PI)/l))/kterm;
+				}
+			}
+			double p;
+			for (j=1; j <= l; j++) {
+				p = 2*l-1;
+				if (j % 2 == 0) cc_weights[i][j] -= 1.0/p;
+				else cc_weights[i][j] += 1.0/p;
+				cc_weights[i][j] /= l;
+			}
+			l *= 2;
+		}
+	}
+
+	l = cc_N-1;
+	cc_points[0] = 1;
+	cc_points[l] = 0;
+	for (j=1; j < l; j++) {
+		cc_points[j] = cos(j*M_PI/(2*l));
+	}
+}
+
+ClenshawCurtis::~ClenshawCurtis()
+{
+	if (cc_points != NULL) delete[] cc_points;
+	if (cc_funcs != NULL) delete[] cc_funcs;
+	if (cc_funcs2 != NULL) delete[] cc_funcs2;
+	if (cc_lvals != NULL) delete[] cc_lvals;
+	if (cc_weights != NULL) {
+		for (int i=0; i < cc_nlevels; i++) delete[] cc_weights[i];
+		delete[] cc_weights;
+	}
+}
+
+void ClenshawCurtis::set_cc_tolerance(const double tol_in)
+{
+	cc_tolerance = tol_in;
+}
+
+void ClenshawCurtis::set_cc_tolerance_outer(const double tol_in)
+{
+	cc_tolerance_outer = tol_in;
+}
+
+double ClenshawCurtis::AdaptiveQuadCC(double (ClenshawCurtis::*func)(double), double a, double b, bool &converged, bool outer)
+{
+	double result = 0, result_old;
+	double tolerance = (outer) ? cc_tolerance_outer : cc_tolerance;
+	int i, level = 0, istep, istart;
+	double abavg = (a+b)/2, abdif = (b-a)/2;
+	converged = true; // until proven otherwise
+	double *funcptr = cc_funcs;
+	if (outer) funcptr = cc_funcs2;
+	if (!include_endpoints) {
+		level = 1;
+		funcptr[0] = 0;
+		funcptr[cc_N-1] = (this->*func)(abavg);
+	}
+
+	int lval, j;
+	do {
+		result_old = result;
+		lval = cc_lvals[level];
+		istart = (cc_N-1) / lval;
+		istep = istart*2;
+		result = 0;
+		if (level==0) {
+			funcptr[0] = (this->*func)(abavg + abdif*cc_points[0]) + (this->*func)(abavg - abdif*cc_points[0]);
+			funcptr[cc_N-1] = (this->*func)(abavg);
+			result += cc_weights[0][1]*funcptr[cc_N-1];
+		}
+		for (j=1, i=istart; j < lval; j += 2, i += istep) {
+			funcptr[i] = (this->*func)(abavg + abdif*cc_points[i]) + (this->*func)(abavg - abdif*cc_points[i]);
+			result += cc_weights[level][j]*funcptr[i];
+		}
+		if (include_endpoints) {
+			for (j=0, i=0; j <= lval; j += 2, i += istep) {
+				result += cc_weights[level][j]*funcptr[i];
+			}
+		} else {
+			for (j=2, i=istep; j <= lval; j += 2, i += istep) {
+				result += cc_weights[level][j]*funcptr[i];
+			}
+		}
+		if ((level > 1) and (abs(result-result_old) < tolerance*abs(result))) break;
+	} while (++level < cc_nlevels);
+
+	if (level==cc_nlevels) {
+		converged = false;
+		int npoints = 2*cc_lvals[cc_nlevels-1] + 1;
+		if (show_convergence_warning) warn("Clenshaw-Curtis quadrature did not achieve desired tolerance (%g) after NMAX=%i points",tolerance,npoints);
+	}
+	//else {
+	//int npoints = 2*cc_lvals[level] - 1;
+	//cout << "Final level: " << (level) << " npoints=" << npoints << endl;
+	//}
+
+	return abdif*result;
+}
+
 GaussPatterson::GaussPatterson()
 {
 	pat_points = NULL;
 	pat_weights = NULL;
 	pat_orders = NULL;
 	pat_funcs = NULL;
+	pat_funcs2 = NULL;
 	SetGaussPatterson(1e-6,true);
 }
 
 void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warnings)
 {
 	pat_tolerance = tol_in;
+	pat_tolerance_outer = tol_in;
 	show_convergence_warning = show_warnings;
 	pat_N = 511;
 	if (pat_points != NULL) delete[] pat_points;
 	if (pat_funcs != NULL) delete[] pat_funcs;
+	if (pat_funcs2 != NULL) delete[] pat_funcs2; // useful if doing nested integrals (albeit an ugly solution)
 	if (pat_orders != NULL) delete[] pat_orders;
 	if (pat_weights != NULL) {
 		for (int i=0; i < 9; i++) delete[] pat_weights[i];
@@ -347,6 +532,7 @@ void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warn
 	pat_orders = new int [9];
 	pat_points = new double[511];
 	pat_funcs = new double[511];
+	pat_funcs2 = new double[511];
 	pat_weights = new double*[9];
 	pat_weights[0] = new double[1];
 	pat_weights[1] = new double[3];
@@ -1903,24 +2089,43 @@ void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warn
     pat_weights[8][510] = 0.945715933950007048827E-06;
 }
 
+void GaussPatterson::set_pat_tolerance_inner(const double tol_in)
+{
+	pat_tolerance = tol_in;
+}
+
+void GaussPatterson::set_pat_tolerance_outer(const double tol_in)
+{
+	pat_tolerance_outer = tol_in;
+}
+
 GaussPatterson::~GaussPatterson()
 {
 	if (pat_points != NULL) delete[] pat_points;
 	if (pat_funcs != NULL) delete[] pat_funcs;
+	if (pat_funcs2 != NULL) delete[] pat_funcs2;
 	if (pat_orders != NULL) delete[] pat_orders;
 	if (pat_weights != NULL) {
-		for (int i=0; i < 9; i++) delete[] pat_weights[i];
+		for (int i=0; i < 9; i++) {
+			delete[] pat_weights[i];
+		}
 		delete[] pat_weights;
 	}
 }
 
-double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), double a, double b, bool &converged)
+double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), double a, double b, bool &converged, bool outer)
 {
-	double result = 0, result_old, dif;
-	int i, level = 0, istep, istart;
-	double absum = (a+b)/2, abdif = (b-a)/2;
-	converged = true; // until proven otherwise
+	// I tried using Wynn's epsilon algorithm to accelerate convergence but it just doesn't work well in general.
+	// Perhaps it is only useful when it is slow to converge, e.g. near singularities (in which case, maybe better to use
+	// Romberg integration). This doesn't seem worth implementing here.
 
+	double result = 0, result_old;
+	double tolerance = (outer) ? pat_tolerance_outer : pat_tolerance;
+	int i, level = 0, istep, istart;
+	double abavg = (a+b)/2, abdif = (b-a)/2;
+	converged = true; // until proven otherwise
+	double *funcptr = pat_funcs;
+	if (outer) funcptr = pat_funcs2;
 	int order, j;
 	do {
 		result_old = result;
@@ -1930,23 +2135,33 @@ double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), doub
 		istep *= 2;
 		result = 0;
 		for (j=0, i=istart; j < order; j += 2, i += istep) {
-			pat_funcs[i] = (this->*func)(absum + abdif*pat_points[i]);
-			result += pat_weights[level][j]*pat_funcs[i];
+			funcptr[i] = (this->*func)(abavg + abdif*pat_points[i]);
+			result += pat_weights[level][j]*funcptr[i];
 		}
 		istart = istep - 1;
 		for (j=1, i=istart; j < order; j += 2, i += istep) {
-			result += pat_weights[level][j]*pat_funcs[i];
+			result += pat_weights[level][j]*funcptr[i];
 		}
-		dif = result - result_old;
-		//cout << level << " " << result << " " << abs(dif/result) << " " << converged << endl;
-		if ((level > 1) and (abs(dif) < pat_tolerance*abs(result))) break;
+		if ((level > 1) and (abs(result-result_old) < tolerance*abs(result))) break;
 	} while (++level < 9);
+
+	/*
+	int npoints;
+	if (level==0) npoints=1;
+	else if (level==1) npoints=3;
+	else if (level==2) npoints=7;
+	else if (level==3) npoints=15;
+	else if (level==4) npoints=31;
+	else if (level==5) npoints=63;
+	else if (level==6) npoints=127;
+	else if (level==7) npoints=255;
+	else if (level==8) npoints=511;
+	*/
+
 	if (level==9) {
 		converged = false;
 		if (show_convergence_warning) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points");
 	}
-
 	return abdif*result;
 }
-
 

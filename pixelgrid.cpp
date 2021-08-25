@@ -5926,7 +5926,7 @@ void ImagePixelGrid::find_surface_brightness(bool plot_foreground_only)
 							else {
 								if (!lens->sb_list[k]->zoom_subgridding) {
 									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-									cout << "HELLO! " << i << " " << j << " " << surface_brightness[i][j] << endl;
+									//cout << "HELLO! " << i << " " << j << " " << surface_brightness[i][j] << endl;
 								}
 								else {
 									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
@@ -6132,14 +6132,15 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
 			nmax = *(sb_list[i]->indxptr);
-			if (nonlinear_shapelet_amp00)
-				source_npixels += nmax*nmax - 1;
-			else
-				source_npixels += nmax*nmax;
-			break; // currently only one shapelet source supported
 		}
+		if (nonlinear_shapelet_amp00)
+			source_npixels += nmax*nmax - 1;
+		else
+			source_npixels += nmax*nmax;
+
 	}
-	if (source_npixels==0) die("no shapelet amplitudes found");
+
+	if (source_npixels <= 0) die("no shapelet amplitudes found");
 	source_pixel_vector = new double[source_npixels];
 	if ((mpi_id==0) and (verbal)) cout << "Creating shapelet Lmatrix...\n";
 	Lmatrix_dense.input(image_npixels,source_npixels);
@@ -6416,21 +6417,26 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 {
 	int img_index;
 	int index;
-	int i,j;
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
 	}
 #endif
 
-	SB_Profile* shapelet;
-	for (int i=0; i < n_sb; i++) {
+	int i,j,k,n_shapelets = 0;
+	for (i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) n_shapelets++;
+	}
+
+	SB_Profile** shapelet;
+	shapelet = new SB_Profile*[n_shapelets];
+	for (i=0,j=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
-			shapelet = sb_list[i];
-			break; // currently only one shapelet source supported
+			shapelet[j++] = sb_list[i];
 		}
 	}
 
+	/*
 	int max_nsplit = image_pixel_grid->max_nsplit;
 	lensvector ***corner_srcpts;
 	corner_srcpts = new lensvector**[max_nsplit+1];
@@ -6440,6 +6446,8 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 			corner_srcpts[i][j] = new lensvector[nthreads];
 		}
 	}
+	*/
+
 	#pragma omp parallel
 	{
 		int thread;
@@ -6452,7 +6460,7 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 		double u0, w0, cell;
 
 		if (split_imgpixels) {
-			#pragma omp for private(img_index,i,j,ii,jj,nsplit,index,u0,w0,cell) schedule(dynamic)
+			#pragma omp for private(img_index,i,j,k,ii,jj,nsplit,index,u0,w0,cell) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
 				index=0;
 				i = active_image_pixel_i[img_index];
@@ -6503,10 +6511,17 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 						w0 = ((double) (1+2*jj))*cell/2;
 						center[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
 						center[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
-						find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
-						//cout << center[0] << "," << center[1] << " " << image_pixel_grid->center_pts[i][j][0] << "," << image_pixel_grid->center_pts[i][j][1] << endl;
-						//cout << center_srcpt[0] << "," << center_srcpt[1] << " " << image_pixel_grid->center_sourcepts[i][j][0] << "," << image_pixel_grid->center_sourcepts[i][j][1] << endl;
-						shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatrix_dense.subarray(img_index),1.0/(nsplit*nsplit));
+						double *Lmatptr = Lmatrix_dense.subarray(img_index);
+						for (k=0; k < n_shapelets; k++) {
+							if (shapelet[k]->is_lensed) {
+								find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+								//cout << center[0] << "," << center[1] << " " << image_pixel_grid->center_pts[i][j][0] << "," << image_pixel_grid->center_pts[i][j][1] << endl;
+								//cout << center_srcpt[0] << "," << center_srcpt[1] << " " << image_pixel_grid->center_sourcepts[i][j][0] << "," << image_pixel_grid->center_sourcepts[i][j][1] << endl;
+								shapelet[k]->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatptr,1.0/(nsplit*nsplit));
+							} else {
+								shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0/(nsplit*nsplit));
+							}
+						}
 						//for (src_index=0; src_index < source_npixels; src_index++) {
 							//Lmatrix_dense[img_index][src_index] += (shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index) / (nsplit*nsplit));
 						//}
@@ -6519,19 +6534,28 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 			for (img_index=0; img_index < image_npixels; img_index++) {
 				i = active_image_pixel_i[img_index];
 				j = active_image_pixel_j[img_index];
-				center_srcpt = image_pixel_grid->center_sourcepts[i][j];
-				//center = image_pixel_grid->center_pts[i][j];
-				shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatrix_dense.subarray(img_index),1.0);
-				//for (src_index=0; src_index < source_npixels; src_index++) {
-					//Lmatrix_dense[img_index][src_index] = shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index);
-					//double checksb = shapelet->surface_brightness(center_srcpt[0],center_srcpt[1])/0.094;
-					//cout << "CHECKING: " << Lmatrix_dense[img_index][src_index] << " " << checksb << endl;
-					//if ((img_index==60) and (src_index==2)) cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
-					//cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
-				//}
+
+				double *Lmatptr = Lmatrix_dense.subarray(img_index);
+				for (k=0; k < n_shapelets; k++) {
+					if (shapelet[k]->is_lensed) {
+						center_srcpt = image_pixel_grid->center_sourcepts[i][j];
+						shapelet[k]->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatptr,1.0);
+					} else {
+						center = image_pixel_grid->center_pts[i][j];
+						shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0);
+					}
+					//for (src_index=0; src_index < source_npixels; src_index++) {
+						//Lmatrix_dense[img_index][src_index] = shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index);
+						//double checksb = shapelet->surface_brightness(center_srcpt[0],center_srcpt[1])/0.094;
+						//cout << "CHECKING: " << Lmatrix_dense[img_index][src_index] << " " << checksb << endl;
+						//if ((img_index==60) and (src_index==2)) cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
+						//cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
+					//}
+				}
 			}
 		}
 	}
+	/*
 	for (i=0; i < max_nsplit+1; i++) {
 		for (j=0; j < max_nsplit+1; j++) {
 			delete[] corner_srcpts[i][j];
@@ -6539,6 +6563,7 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 		delete[] corner_srcpts[i];
 	}
 	delete[] corner_srcpts;
+	*/
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -6546,6 +6571,7 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 		if (mpi_id==0) cout << "Wall time for constructing shapelet Lmatrix: " << wtime << endl;
 	}
 #endif
+	delete[] shapelet;
 }
 
 void QLens::get_zeroth_order_shapelet_vector(bool verbal)
@@ -6615,10 +6641,11 @@ void QLens::get_zeroth_order_shapelet_vector(bool verbal)
 			lensvector center, center_srcpt;
 			#pragma omp for private(img_index,i,j,center_srcpt) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
+				double* lmatptr = Lmatrix_dense.subarray(img_index);
 				i = active_image_pixel_i[img_index];
 				j = active_image_pixel_j[img_index];
 				center_srcpt = image_pixel_grid->center_sourcepts[i][j];
-				shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatrix_dense.subarray(img_index),1.0);
+				shapelet->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],lmatptr,1.0);
 				sbprofile_surface_brightness[img_index] += shapelet->surface_brightness_zeroth_order(center_srcpt[0],center_srcpt[1]);
 			}
 		}
@@ -7351,19 +7378,16 @@ void QLens::generate_Rmatrix_norm_dense()
 
 void QLens::generate_Rmatrix_shapelet_gradient()
 {
-	SB_Profile* shapelet = NULL;
+	bool at_least_one_shapelet = false;
+	double *Rmatptr = Rmatrix_diags.array();
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
-			shapelet = sb_list[i];
-			break; // currently only one shapelet source supported
+			sb_list[i]->calculate_gradient_Rmatrix_elements(Rmatptr, Rmatrix_log_determinant);
+			at_least_one_shapelet = true;
 		}
 	}
-	if (shapelet==NULL) die("No shapelet profile has been created; cannot calculate regularization matrix");
-
-	shapelet->calculate_gradient_Rmatrix_elements(Rmatrix_diags.array(), Rmatrix_log_determinant);
+	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
 }
-
-
 
 void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 {
@@ -7831,14 +7855,12 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	int index=0;
 	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
 	else if (source_fit_mode==Shapelet_Source) {
-		SB_Profile* shapelet;
+		double* srcpix = source_pixel_vector;
 		for (i=0; i < n_sb; i++) {
 			if (sb_list[i]->sbtype==SHAPELET) {
-				shapelet = sb_list[i];
-				break; // currently only one shapelet source supported
+				sb_list[i]->update_amplitudes(srcpix);
 			}
 		}
-		shapelet->update_amplitudes(source_pixel_vector);
 	}
 }
 
@@ -8936,57 +8958,133 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 	int img_index;
 	int i,j,k;
 	bool at_least_one_foreground_src = false;
+	bool at_least_one_lensed_src = false;
+	bool at_least_one_zoom_lensed_src = false;
 	for (k=0; k < n_sb; k++) {
 		if (!sb_list[k]->is_lensed) {
 			at_least_one_foreground_src = true;
-			break;
+		} else {
+			at_least_one_lensed_src = true;
+			if (sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
 		}
 	}
-	if (!at_least_one_foreground_src) {
+	// here, we are adding together SB of foreground sources, but also lensed non-shapelet sources if we're in shapelet mode.
+	// If none of those conditions are true, then we skip everything.
+	if ((!at_least_one_foreground_src) and ((source_fit_mode != Shapelet_Source) or (!at_least_one_lensed_src))) {
 		for (img_index=0; img_index < image_npixels; img_index++) sbprofile_surface_brightness[img_index] = 0;
 		if ((source_fit_mode != Shapelet_Source) or (!nonlinear_shapelet_amp00)) return;
 	} else {
-		for (img_index=0; img_index < image_npixels; img_index++) {
-			sbprofile_surface_brightness[img_index] = 0;
-
-			i = active_image_pixel_i[img_index];
-			j = active_image_pixel_j[img_index];
+		#pragma omp parallel
+		{
+			int thread;
+#ifdef USE_OPENMP
+			thread = omp_get_thread_num();
+#else
+			thread = 0;
+#endif
 
 			int ii,jj,nsplit;
 			double u0, w0, sb;
-			sb = 0;
-			if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
-			else nsplit = 1;
+			double U0, W0, U1, W1;
+			lensvector center_pt, center_srcpt;
 			lensvector corner1, corner2, corner3, corner4;
+			lensvector corner1_src, corner2_src, corner3_src, corner4_src;
 			double subpixel_xlength, subpixel_ylength;
-			subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
-			subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
-			for (ii=0; ii < nsplit; ii++) {
-				for (jj=0; jj < nsplit; jj++) {
-					lensvector center_pt, center_srcpt;
-					u0 = ((double) (1+2*ii))/(2*nsplit);
-					w0 = ((double) (1+2*jj))/(2*nsplit);
-					center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
-					center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
-					for (int k=0; k < n_sb; k++) {
-						if (!sb_list[k]->is_lensed) {
-							if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
-							else {
-								corner1[0] = center_pt[0] - subpixel_xlength;
-								corner1[1] = center_pt[1] - subpixel_ylength;
-								corner2[0] = center_pt[0] + subpixel_xlength;
-								corner2[1] = center_pt[1] - subpixel_ylength;
-								corner3[0] = center_pt[0] - subpixel_xlength;
-								corner3[1] = center_pt[1] + subpixel_ylength;
-								corner4[0] = center_pt[0] + subpixel_xlength;
-								corner4[1] = center_pt[1] + subpixel_ylength;
-								sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+			#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,U0,W0,U1,W1,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src) schedule(dynamic)
+			for (img_index=0; img_index < image_npixels; img_index++) {
+				sbprofile_surface_brightness[img_index] = 0;
+
+				i = active_image_pixel_i[img_index];
+				j = active_image_pixel_j[img_index];
+
+				sb = 0;
+				if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
+				else nsplit = 1;
+				subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
+				subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
+				/*
+				for (ii=0; ii < nsplit; ii++) {
+					for (jj=0; jj < nsplit; jj++) {
+						lensvector center_pt, center_srcpt;
+						u0 = ((double) (1+2*ii))/(2*nsplit);
+						w0 = ((double) (1+2*jj))/(2*nsplit);
+						center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+						center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+						if ((fit_source_mode==Shapelet_Source) and (at_least_one_background_source)) {
+							find_sourcept(center_pt,center_srcpt,thread,imggrid_zfactors,imggrid_betafactors);
+						}
+						for (int k=0; k < n_sb; k++) {
+							if (!sb_list[k]->is_lensed) {
+								if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+								else {
+									corner1[0] = center_pt[0] - subpixel_xlength;
+									corner1[1] = center_pt[1] - subpixel_ylength;
+									corner2[0] = center_pt[0] + subpixel_xlength;
+									corner2[1] = center_pt[1] - subpixel_ylength;
+									corner3[0] = center_pt[0] - subpixel_xlength;
+									corner3[1] = center_pt[1] + subpixel_ylength;
+									corner4[0] = center_pt[0] + subpixel_xlength;
+									corner4[1] = center_pt[1] + subpixel_ylength;
+									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+								}
 							}
 						}
 					}
 				}
+				sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
+				*/
+
+				for (ii=0; ii < nsplit; ii++) {
+					u0 = ((double) (1+2*ii))/(2*nsplit);
+					center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+					for (jj=0; jj < nsplit; jj++) {
+						w0 = ((double) (1+2*jj))/(2*nsplit);
+						center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+						if (at_least_one_zoom_lensed_src) {
+							U0 = ((double) (2*ii))/(2*nsplit);
+							W0 = ((double) (2*jj))/(2*nsplit);
+							U1 = ((double) (2+2*ii))/(2*nsplit);
+							W1 = ((double) (2+2*jj))/(2*nsplit);
+
+							corner1_src[0] = (U1*image_pixel_grid->corner_sourcepts[i][j][0] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j][0])*W1 + (U1*image_pixel_grid->corner_sourcepts[i][j+1][0] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j+1][0])*(1-W1);
+							corner1_src[1] = (U1*image_pixel_grid->corner_sourcepts[i][j][1] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j][1])*W1 + (U1*image_pixel_grid->corner_sourcepts[i][j+1][1] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j+1][1])*(1-W1);
+							corner2_src[0] = (U0*image_pixel_grid->corner_sourcepts[i][j][0] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j][0])*W1 + (U0*image_pixel_grid->corner_sourcepts[i][j+1][0] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j+1][0])*(1-W1);
+							corner2_src[1] = (U0*image_pixel_grid->corner_sourcepts[i][j][1] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j][1])*W1 + (U0*image_pixel_grid->corner_sourcepts[i][j+1][1] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j+1][1])*(1-W1);
+							corner3_src[0] = (U1*image_pixel_grid->corner_sourcepts[i][j][0] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j][0])*W0 + (U1*image_pixel_grid->corner_sourcepts[i][j+1][0] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j+1][0])*(1-W0);
+							corner3_src[1] = (U1*image_pixel_grid->corner_sourcepts[i][j][1] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j][1])*W0 + (U1*image_pixel_grid->corner_sourcepts[i][j+1][1] + (1-U1)*image_pixel_grid->corner_sourcepts[i+1][j+1][1])*(1-W0);
+							corner4_src[0] = (U0*image_pixel_grid->corner_sourcepts[i][j][0] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j][0])*W0 + (U0*image_pixel_grid->corner_sourcepts[i][j+1][0] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j+1][0])*(1-W0);
+							corner4_src[1] = (U0*image_pixel_grid->corner_sourcepts[i][j][1] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j][1])*W0 + (U0*image_pixel_grid->corner_sourcepts[i][j+1][1] + (1-U0)*image_pixel_grid->corner_sourcepts[i+1][j+1][1])*(1-W0);
+
+						}
+						if ((source_fit_mode==Shapelet_Source) and (at_least_one_lensed_src)) {
+							find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+						}
+						for (int k=0; k < n_sb; k++) {
+							if ((sb_list[k]->is_lensed) and (source_fit_mode==Shapelet_Source) and (sb_list[k]->sbtype != SHAPELET)) {
+								if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+								else {
+									sb += sb_list[k]->surface_brightness_zoom(center_srcpt,corner1_src,corner2_src,corner3_src,corner4_src);
+								}
+							}
+							else if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+								if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+								else {
+									corner1[0] = center_pt[0] - subpixel_xlength/2;
+									corner1[1] = center_pt[1] - subpixel_ylength/2;
+									corner2[0] = center_pt[0] + subpixel_xlength/2;
+									corner2[1] = center_pt[1] - subpixel_ylength/2;
+									corner3[0] = center_pt[0] - subpixel_xlength/2;
+									corner3[1] = center_pt[1] + subpixel_ylength/2;
+									corner4[0] = center_pt[0] + subpixel_xlength/2;
+									corner4[1] = center_pt[1] + subpixel_ylength/2;
+									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
+								}
+							}
+						}
+					}
+				}
+				sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
 			}
-			sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
 		}
 	}
 	if ((source_fit_mode==Shapelet_Source) and (nonlinear_shapelet_amp00)) get_zeroth_order_shapelet_vector(false); // this will add zeroth order shapelet SB

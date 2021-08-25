@@ -1345,18 +1345,19 @@ void QLens::process_commands(bool read_file)
 								"set_data_window' commands. Also note that this command can only be used after 'sbmap loadimg ...' has\n"
 								"been used to load the image data.\n";
 						else if (words[2]=="set_data_annulus")
-							cout << "sbmap set_data_annulus <xcenter> <ycenter> <rmin> <rmax> [theta_min] [theta_max]\n\n"
+							cout << "sbmap set_data_annulus <xcenter> <ycenter> <rmin> <rmax> [theta_min] [theta_max] [xstretch] [ystretch]\n\n"
 								"Activates all pixels within the specified annulus. In addition to the center coordinates and min/max\n"
 								"radii, the user may also specify an angular range with the additional arguments theta_min, theta_max\n"
 								"(where the angles are in degrees and must be in the range 0 to 360). The defaults are theta_min=0,\n"
-								"theta_max=360 (in other words, a complete annulus). Also note that this command does not deactivate\n"
-								"pixels, so it is recommended to use 'sbmap unset_all_pixels' before running this command.\n\n";
+								"theta_max=360 (in other words, a complete annulus). In addition, one can stretch the annulus along\n"
+								"the x- or y- direction by factors [xstretch] and [ystretch]. Also note that this command does not\n"
+								"deactivate pixels, so it is recommended to use 'sbmap unset_all_pixels' before running this command.\n\n";
 						else if (words[2]=="set_data_window")
 							cout << "sbmap set_data_window <xmin> <xmax> <ymin> <ymax>\n\n"
 								"Activates all pixels within the specified rectangular window. Note that this command does not deactivate\n"
 								"pixels, so it is recommended to use 'sbmap unset_all_pixels' before running this command.\n\n";
 						else if (words[2]=="unset_data_annulus")
-							cout << "sbmap unset_data_annulus <xcenter> <ycenter> <rmin> <rmax> [theta_min] [theta_max]\n\n"
+							cout << "sbmap unset_data_annulus <xcenter> <ycenter> <rmin> <rmax> [theta_min] [theta_max] [xstretch] [ystretch]\n\n"
 								"This command is identical to 'set_data_annulus' except that it deactivates the pixels, rather than\n"
 								"activating them. See 'help sbmap set_data_annulus' for usage information.\n\n";
 						else if (words[2]=="unset_data_window")
@@ -2282,6 +2283,9 @@ void QLens::process_commands(bool read_file)
 				if (method_name=="patterson") {
 					if (nwords > 2) Complain("no arguments are allowed for 'integral_method patterson'");
 					method = Gauss_Patterson_Quadrature;
+				} else if (method_name=="fejer") {
+					if (nwords > 2) Complain("no arguments are allowed for 'integral_method fejer'");
+					method = Fejer_Quadrature;
 				} else if (method_name=="romberg") {
 					if (nwords > 2) Complain("no arguments are allowed for 'integral_method romberg'");
 					method = Romberg_Integration;
@@ -2300,6 +2304,7 @@ void QLens::process_commands(bool read_file)
 					method = LensProfile::integral_method;
 					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << integral_tolerance << endl;
 					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << integral_tolerance << endl;
+					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << integral_tolerance << endl;
 					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
 				}
 			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
@@ -7455,8 +7460,8 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->load_mask_fits(filename);
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
+				if (image_pixel_data->load_mask_fits(filename)==false) Complain("could not load mask file");
+				else if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="savemask")
 			{
@@ -7797,7 +7802,8 @@ void QLens::process_commands(bool read_file)
 						}
 						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
 							if (show_cc) {
-								run_plotter("imgpixel",words[2],range1);
+								if (subcomp) run_plotter("imgpixel_comp",words[2],range1);
+								else run_plotter("imgpixel",words[2],range1);
 							} else {
 								run_plotter("imgpixel_nocc",words[2],range1);
 							}
@@ -7812,7 +7818,8 @@ void QLens::process_commands(bool read_file)
 						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
 							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
-								run_plotter("imgpixel",words[3],range2);
+								if (subcomp) run_plotter("imgpixel_comp",words[3],range2);
+								else run_plotter("imgpixel",words[3],range2);
 								if ((plot_srcplane) and (source_pixel_grid != NULL)) run_plotter("srcpixel",words[2],range1);
 							} else {
 								run_plotter("imgpixel_nocc",words[3],range2);

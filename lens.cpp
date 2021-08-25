@@ -11469,7 +11469,8 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		shapelet->update_specific_parameter("yc",yc);
 	}
 	if ((mpi_id==0) and (verbal)) {
-		cout << "auto shapelet scaling: sig=" << sig << ", xc=" << xc << ", yc=" << yc << endl;
+		if (auto_shapelet_scaling) cout << "auto shapelet scaling: sig=" << sig << ", xc=" << xc << ", yc=" << yc << endl;
+		else if (auto_shapelet_center) cout << "auto shapelet center: xc=" << xc << ", yc=" << yc << endl;
 		double scale;
 		shapelet->get_specific_parameter("sigma",scale);
 		int nn = get_shapelet_nn();
