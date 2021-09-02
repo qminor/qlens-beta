@@ -1,0 +1,1 @@
+/usr/bin/c++ -rdynamic  -lpthread  CMakeFiles/mkdist.dir/src/mkdist.cpp.o CMakeFiles/mkdist.dir/src/GregsMathHdr.cpp.o CMakeFiles/mkdist.dir/src/errors.cpp.o CMakeFiles/mkdist.dir/src/mcmceval.cpp.o -o ../bin/mkdist  -lgomp -lpthread -lgomp -lpthread -lcfitsio -lreadline ../contrib/MultiNest/MultiNest_v3.12_CMake/multinest/lib/libmultinest.a -lopenblas -lpthread -lm -ldl 

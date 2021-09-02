@@ -3,7 +3,7 @@ from qlens_helper import *
 q = QLens()
 
 q.sci_notation = False
-q.imgdata_read("alphafit.dat")
+q.imgdata_read("../data/alphafit.dat")
 q.imgdata_display()
 q.add_lens(Alpha({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3}))
 q.lens[0].setvary([1,0,0,1,1,1,1])

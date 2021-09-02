@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
 	mode = Display_Distances; // default mode
 
 	char params_file[30] = "";
-	string cosmology_filename = "planck.csm";
+	string cosmology_filename = "../config/planck.csm";
 	double redshift=0;
 	double redshift_source = 2.0; // for lensing
 	double object_size=0;

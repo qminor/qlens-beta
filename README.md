@@ -1,11 +1,76 @@
 # QLens (beta version)
-QLens is a software package for modeling and simulating strong gravitational lens systems. Both pixel image modeling (using pixellated source reconstruction) and point image modeling (with option to include fluxes, time delays, and multiple sources at different redshifts) are supported. QLens includes 14 different analytic lens models to use for model fitting, including 10 different density profiles where ellipticity can be introduced into either the projected density or the lensing potential. Multiplane lensing (i.e. multiple lenses at different redshifts) is also supported in QLens. For lens models that require numerical integration, adaptive Gauss-Patterson quadrature (or alternatively, Romberg integration) is used to achieve the desired accuracy. For each model, there is also an option to speed up the computations by tabulating the lensing properties over a grid of polar coordinates and ellipticity so that interpolation can be used instead of integration. Chi-square optimization can be performed with the downhill simplex method (plus optional simulated annealing) or Powell's method; for Bayesian parameter estimation, nested sampling or an adaptive Metropolis-Hastings MCMC algorithm (T-Walk) can be used to infer the Bayesian evidence and posteriors. These calculations can be parallelized with MPI and OpenMP to run on a computing cluster. An additional tool, mkdist, generates 1D and 2D posterior plots in each parameter, or if an optimization was done, approximate posteriors can be plotted using the Fisher matrix. The QLens package includes an introductory tutorial [qlens\_tutorial.pdf](qlens_tutorial.pdf) that is meant to be readable for undergraduates and beginning graduate students with little or no experience with gravitational lensing concepts.
+QLens is a software package for modeling and simulating strong gravitational lens systems. Both pixel image modeling (using pixellated source reconstruction) and point image modeling (with option to include fluxes, time delays, and multiple sources at different redshifts) are supported. QLens includes 14 different analytic lens models to use for model fitting, including 10 different density profiles where ellipticity can be introduced into either the projected density or the lensing potential. Multiplane lensing (i.e. multiple lenses at different redshifts) is also supported in QLens. For lens models that require numerical integration, adaptive Gauss-Patterson quadrature (or alternatively, Romberg integration) is used to achieve the desired accuracy. For each model, there is also an option to speed up the computations by tabulating the lensing properties over a grid of polar coordinates and ellipticity so that interpolation can be used instead of integration. Chi-square optimization can be performed with the downhill simplex method (plus optional simulated annealing) or Powell's method; for Bayesian parameter estimation, nested sampling or an adaptive Metropolis-Hastings MCMC algorithm (T-Walk) can be used to infer the Bayesian evidence and posteriors. These calculations can be parallelized with MPI and OpenMP to run on a computing cluster. An additional tool, mkdist, generates 1D and 2D posterior plots in each parameter, or if an optimization was done, approximate posteriors can be plotted using the Fisher matrix. The QLens package includes an introductory tutorial [qlens\_tutorial.pdf](help/qlens_tutorial.pdf) that is meant to be readable for undergraduates and beginning graduate students with little or no experience with gravitational lensing concepts.
 
+## Table of Contents
+
+- [Installation](#install)
+  - [Building](#build)
+  - [Python Interface](#python)
+  - [Required Packages](#packages)
+  
+- [Change Log](#change)
+
+<a name="install"></a>
+## Installation
+
+<a name="build"></a>
+### Building 
+To build, run:
+```sh
+mkdir build
+cd build
+cmake ..
+make deps
+cmake ..
+make qlens-all
+```
+
+<a name="python"></a>
+### Python Interface 
+
+There's currently a python interface (the python module is located in the "python/" folder).
+To build:
+```sh
+mkdir build
+cd build
+cmake ..
+make deps
+make python
+```
+
+If you want to specify a specific python version, replace the above cmake command with:
+```sh
+cmake -DPYTHON_EXECUTABLE=full_path_to_my_executable ..
+```
+If you do this, you may need to supply the path to the python include files:
+```sh
+cmake -DPYTHON_EXECUTABLE=full_path_to_my_executable -DPYTHON_INCLUDE_DIR=full_path_to_python_include_directory ..
+```
+
+For example:
+```sh
+mkdir build
+cd build
+cmake -DPYTHON_EXECUTABLE=/usr/bin/python ..
+make deps
+make python
+```
+
+You can put the module in the python path by adding the following line to .bashrc:
+```sh
+export PYTHONPATH=$(PYTHONPATH):path_to_nstarorbits/python
+```
+
+Right now, the python interface excludes MUMPS or MPI from compiling.
+
+<a name="packages"></a>
+### Required Packages
 Required packages for basic, out-of-the-box configuration:
 * GNU Readline &mdash; for command-line interface
 * gnuplot &mdash; for generating and viewing plots from within QLens
 
 Optional packages:
+* PyBind11: A C++ to python interface.
 * OpenMP &mdash; used for multithreading likelihood evaluations, useful especially for lens models that require numerical integration for lensing calculations, or if source pixel reconstruction is being used.
 * MPI &mdash; for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling; a subset of MPI processes can also be used to parallelize the likelihood if source pixel reconstruction is used, or if multiple source points are being fit at different redshifts
 * CFITSIO library &mdash; for reading and writing FITS files
@@ -15,7 +80,26 @@ Optional packages:
 * MultiNest &mdash; for multimodal nested sampling, using a more advanced algorithm than the native nested sampler in QLens
 * PolyChord &mdash; for multimodal nested sampling, performs better for a large number of parameters
 
-# change log (Aug. 8, 2018)
+Right now, you can download and compile some of these packages with the following build commands:
+```sh
+make pybind11       # downloads PyBind11
+make mumps          # downloads and compiles MUMPS
+make multinest      # downloads and compiles MultiNest
+make make polychord # downloads and compiles PolyChord
+make deps           # downloads and compiles the above packages
+```
+And if something goes wrong with the installation, you can wipe it with:
+```sh
+make pybind11-distclean      
+make mumps-distclean        
+make multinest-distclean      
+make make polychord-distclean 
+make deps-distclean            
+```
+
+
+<a name="change"></a>
+## change log (Aug. 8, 2018)
 
 Upgrades since Jul. 15:
 
