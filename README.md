@@ -25,6 +25,12 @@ cmake ..
 make qlens-all
 ```
 
+And if you have any toubles, don't forget to save the `cmake` and `make` outputs:
+```sh
+cmake .. >& cmake_out
+make qlens-all >& make_out
+```
+
 <a name="python"></a>
 ### Python Interface 
 
@@ -61,7 +67,7 @@ You can put the module in the python path by adding the following line to .bashr
 export PYTHONPATH=$(PYTHONPATH):path_to_nstarorbits/python
 ```
 
-Right now, the python interface excludes MUMPS or MPI from compiling.
+Right now, the python interface excludes MUMPS or MPI when compiling.
 
 <a name="packages"></a>
 ### Required Packages
@@ -70,7 +76,7 @@ Required packages for basic, out-of-the-box configuration:
 * gnuplot &mdash; for generating and viewing plots from within QLens
 
 Optional packages:
-* PyBind11: A C++ to python interface.
+* PyBind11: A C++ / python interface.
 * OpenMP &mdash; used for multithreading likelihood evaluations, useful especially for lens models that require numerical integration for lensing calculations, or if source pixel reconstruction is being used.
 * MPI &mdash; for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling; a subset of MPI processes can also be used to parallelize the likelihood if source pixel reconstruction is used, or if multiple source points are being fit at different redshifts
 * CFITSIO library &mdash; for reading and writing FITS files
