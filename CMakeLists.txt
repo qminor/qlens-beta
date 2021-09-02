@@ -18,7 +18,7 @@ include(cmake/utils.cmake)
 set(QLENS_COMPILE_FLAGS
     ${CMAKE_C_FLAGS}
     ${CMAKE_CXX_FLAGS}
-    "-Wno-write-strings -g"
+    "-Wno-write-strings -O3"
 )
 
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
