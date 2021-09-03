@@ -61,6 +61,7 @@ set(QLENS_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
+    ${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
 set(MKDIST_SOURCES
@@ -293,7 +294,7 @@ unset(Polychord_INCLUDE_DIRS CACHE)
 unset(Polychord_INCLUDE_DIR CACHE)
 unset(Polychord_LIBRARIES CACHE)
 unset(Polychord_LIBRARY CACHE)
-set(Polychard_HINT_DIR ${PROJECT_SOURCE_DIR}/contrib/polychord/1.17.1)
+set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/polychord/1.17.1)
 find_package(Polychord)
 if(Polychord_FOUND)
     message (STATUS "Polychord_FOUND = ${Polychord_FOUND}")
@@ -308,7 +309,7 @@ endif(Polychord_FOUND)
 
 message("")
 message("*** MultiNest ***")
-set(MULTINEST_HINT ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
+set(MULTINEST_HINT ${MULTINEST_HINT} ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
 unset(MULTINEST_FOUND CACHE)
 unset(MULTINEST_INCLUDES CACHE)
 unset(MULTINEST_INCLUDE_DIRS CACHE)
