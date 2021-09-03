@@ -941,6 +941,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void extract_word_starts_with(const char initial_character, int starting_word, string& extracted_word) { extract_word_starts_with(initial_character,starting_word,1000,extracted_word); }
 	bool extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words);
 	void set_quit_after_error(bool arg) { quit_after_error = arg; }
+	void set_plot_title(int starting_word, string& temp_title);
 
 	// the following functions are contained in imgsrch.cpp
 	private:
