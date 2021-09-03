@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.12.0)
 
 project(qlen VERSION 1.0.0 LANGUAGES C CXX Fortran)
 
@@ -170,6 +170,18 @@ if(NOT MPI_DISABLE)
         message(STATUS "${Red}MPI not found${ColourReset}")
     endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 endif(NOT MPI_DISABLE)
+
+message("")
+message("*** TCMalloc ***")
+find_library(TCMALLOC_LIBRARY
+    NAMES tcmalloc
+    HINTS ${TCMALLOC_ROOT_DIR}
+)
+if(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
+    message(STATUS "TCMALLOC_LIBRARY = ${TCMALLOC_LIBRARY}")
+else(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
+    message(STATUS "${Red}TCMALLOC not found${ColourReset}")
+endif(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
 
 message("")
 message("*** CFitsio ***")
