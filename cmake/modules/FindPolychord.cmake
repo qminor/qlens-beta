@@ -36,10 +36,10 @@
 if(NOT Polychord_FOUND)
 
     find_path(Polychord_INCLUDE_DIR interfaces.h
-        HINTS ${Polychard_HINT_DIR}
+        HINTS ${Polychord_HINT_DIR}
         PATH_SUFFIXES polychord src/polychord)
     find_library(Polychord_LIBRARY chord
-        HINTS ${Polychard_HINT_DIR}
+        HINTS ${Polychord_HINT_DIR}
         PATH_SUFFIXES lib)
   
     mark_as_advanced(Polychord_INCLUDE_DIR Polychord_LIBRARY)
