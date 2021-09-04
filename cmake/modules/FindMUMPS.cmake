@@ -26,7 +26,7 @@ MUMPS_INCLUDE_DIRS
 
 set(MUMPS_LIBRARY)  # don't endlessly append
 
-include(CheckSourceCompiles)
+#include(CheckSourceCompiles)
 
 # --- functions
 
@@ -53,19 +53,19 @@ set(CMAKE_REQUIRED_LIBRARIES ${MUMPS_LIBRARY} ${SCALAPACK_LIBRARIES} ${LAPACK_LI
 
 foreach(i s d)
 
-check_source_compiles(Fortran
-  "program test_mumps
-  implicit none (type, external)
-  include '${i}mumps_struc.h'
-  external :: ${i}mumps
-  type(${i}mumps_struc) :: mumps_par
-  end program"
-  MUMPS_${i}_links)
+#check_source_compiles(Fortran
+  #"program test_mumps
+  #implicit none (type, external)
+  #include '${i}mumps_struc.h'
+  #external :: ${i}mumps
+  #type(${i}mumps_struc) :: mumps_par
+  #end program"
+  #MUMPS_${i}_links)
 
-if(MUMPS_${i}_links)
+#if(MUMPS_${i}_links)
   set(MUMPS_${i}_FOUND true PARENT_SCOPE)
   set(MUMPS_links true)
-endif()
+#endif()
 
 endforeach()
 
