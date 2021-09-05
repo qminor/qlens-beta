@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12.0)
+cmake_minimum_required(VERSION 3.13.0)
 
 project(qlen VERSION 1.0.0 LANGUAGES C CXX Fortran)
 
@@ -11,14 +11,47 @@ if(CMAKE_VERSION VERSION_LESS "3.7.0")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
 endif()
 
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
+execute_process(
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5411.cmake FindMUMPS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5411.cmake FindSCALAPACK.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5411.cmake FindMETIS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5411.cmake FindScotch.cmake 
+    RESULT_VARIABLE result)
+    set(MUMPS_VERS_STR "v5.4.1.1")
+elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
+execute_process(
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5407.cmake FindMUMPS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5407.cmake FindSCALAPACK.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5407.cmake FindMETIS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5407.cmake FindScotch.cmake 
+    RESULT_VARIABLE result)
+    set(MUMPS_VERS_STR "v5.4.0.7")
+elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13.0")
+execute_process(
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5400.cmake FindMUMPS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5400.cmake FindSCALAPACK.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5400.cmake FindMETIS.cmake 
+    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5400.cmake FindScotch.cmake 
+    RESULT_VARIABLE result)
+    set(MUMPS_VERS_STR "v5.4.0.0")
+else()
+    message(SEND_ERROR "MUMPS needs cmake version greater or equal to 3.13.")
+endif()
+
+if (NOT ${result} STREQUAL "0")
+    message(SEND_ERROR "Cannot make symlink, mesg=${result}")
+endif()
+
 #include(FortranCInterface)
 #FortranCInterface_VERIFY(CXX)
 include(cmake/utils.cmake)
 
 set(QLENS_COMPILE_FLAGS
-    ${CMAKE_C_FLAGS}
-    ${CMAKE_CXX_FLAGS}
-    "-Wno-write-strings -O3"
+    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -O3"
 )
 
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
@@ -61,7 +94,7 @@ set(QLENS_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
-    ${PROJECT_SOURCE_DIR}/cmake/dummy.f
+    #${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
 set(MKDIST_SOURCES
@@ -177,6 +210,7 @@ message("*** TCMalloc ***")
 find_library(TCMALLOC_LIBRARY
     NAMES tcmalloc
     HINTS ${TCMALLOC_ROOT_DIR}
+    DOC "TCMalloc library"
 )
 if(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
     message(STATUS "TCMALLOC_LIBRARY = ${TCMALLOC_LIBRARY}")
@@ -244,11 +278,10 @@ else(LAPACK_FOUND)
     message(STATUS "${Red}LAPACK not found${ColourReset}")
 endif(LAPACK_FOUND)
 
-
 message("")
 message("*** MUMPS ***")
 #unset(MUMPS_ROOT CACHE)
-set(MUMPS_ROOT ${PROJECT_SOURCE_DIR}/contrib/mumps)
+set(MUMPS_ROOT ${MUMPS_ROOT} ${PROJECT_SOURCE_DIR}/contrib/mumps)
 unset(MUMPS_FOUND CACHE)
 unset(MUMPS_INCLUDE_DIRS CACHE)
 unset(UMPS_LIBRARIES CACHE)
@@ -269,7 +302,7 @@ endif(MUMPS_FOUND)
 message("")
 message("*** SCALAPACK ***")
 #unset(SCALAPACK_ROOT CACHE)
-set(SCALAPACK_ROOT ${PROJECT_SOURCE_DIR}/contrib/mumps)
+set(SCALAPACK_ROOT ${SCALAPACK_ROOT} ${PROJECT_SOURCE_DIR}/contrib/mumps)
 unset(SCALAPACK_FOUND CACHE)
 unset(SCALAPACK_INCLUDE_DIRS CACHE)
 unset(UMPS_LIBRARIES CACHE)
@@ -286,6 +319,20 @@ if(SCALAPACK_FOUND)
 else(SCALAPACK_FOUND)
     message(STATUS "${Red}SCALAPACK not found${ColourReset}")
 endif(SCALAPACK_FOUND)
+
+message("")
+message("*** BLACS ***")
+find_library(BLACS_LIBRARY
+    NAMES blacs
+    HINTS ${BLACS_ROOT_DIR} ${PROJECT_SOURCE_DIR}/contrib/mumps/lib
+    DOC "BLACS library"
+)
+if(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
+    message(STATUS "BLACS_LIBRARY = ${BLACS_LIBRARY}")
+    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${BLACS_LIBRARY})
+else(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
+    message(STATUS "${Red}BLACS not found${ColourReset}")
+endif(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
 
 message("")
 message("*** Polychord ***")

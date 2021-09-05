@@ -26,7 +26,7 @@ MUMPS_INCLUDE_DIRS
 
 set(MUMPS_LIBRARY)  # don't endlessly append
 
-#include(CheckSourceCompiles)
+include(CheckSourceCompiles)
 
 # --- functions
 
@@ -53,19 +53,19 @@ set(CMAKE_REQUIRED_LIBRARIES ${MUMPS_LIBRARY} ${SCALAPACK_LIBRARIES} ${LAPACK_LI
 
 foreach(i s d)
 
-#check_source_compiles(Fortran
-  #"program test_mumps
-  #implicit none (type, external)
-  #include '${i}mumps_struc.h'
-  #external :: ${i}mumps
-  #type(${i}mumps_struc) :: mumps_par
-  #end program"
-  #MUMPS_${i}_links)
+check_source_compiles(Fortran
+  "program test_mumps
+  implicit none (type, external)
+  include '${i}mumps_struc.h'
+  external :: ${i}mumps
+  type(${i}mumps_struc) :: mumps_par
+  end program"
+  MUMPS_${i}_links)
 
-#if(MUMPS_${i}_links)
+if(MUMPS_${i}_links)
   set(MUMPS_${i}_FOUND true PARENT_SCOPE)
   set(MUMPS_links true)
-#endif()
+endif()
 
 endforeach()
 
@@ -142,21 +142,6 @@ else()
 endif()
 if(NOT PORD)
   return()
-endif()
-
-if(DEFINED ENV{MKLROOT})
-  find_library(BLACS
-    NAMES blacs
-    NO_DEFAULT_PATH
-    HINTS ${MUMPS_ROOT}
-    PATH_SUFFIXES lib
-    DOC "BLACS library")
-else()
-  find_library(BLACS
-    NAMES blacs mumps_blacs
-    NAMES_PER_DIR
-    PATH_SUFFIXES openmpi/lib mpich/lib
-    DOC "BLACS library")
 endif()
 
 if(mpiseq IN_LIST MUMPS_FIND_COMPONENTS)
@@ -238,7 +223,7 @@ foreach(comp ${MUMPS_FIND_COMPONENTS})
   list(APPEND MUMPS_LIBRARY ${MUMPS_${comp}_lib})
 endforeach()
 
-set(MUMPS_LIBRARY ${MUMPS_LIBRARY} ${MUMPS_COMMON} ${PORD} ${BLACS} PARENT_SCOPE)
+set(MUMPS_LIBRARY ${MUMPS_LIBRARY} ${MUMPS_COMMON} ${PORD} PARENT_SCOPE)
 set(MUMPS_INCLUDE_DIR ${MUMPS_INCLUDE_DIR} PARENT_SCOPE)
 
 endfunction(mumps_libs)

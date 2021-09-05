@@ -9,7 +9,7 @@ set(FORTRAN_FLAGS ${CMAKE_Fortran_FLAGS})
 ExternalProject_Add(mumps
     GIT_REPOSITORY https://github.com/scivision/mumps.git
     GIT_PROGRESS TRUE
-    GIT_TAG "v5.4.0.7"
+    GIT_TAG ${MUMPS_VERS_STR} #"v5.4.0.7"
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contrib/mumps
     BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contrib/mumps/build
     PATCH_COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/contrib/mumps/build

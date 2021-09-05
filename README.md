@@ -24,6 +24,20 @@ make deps
 cmake ..
 make qlens-all
 ```
+If you are having trouble geting qlens to link, try the following `cmake` options:
+```sh
+cmake -DCMAKE_C_COMPILER=path/to/c/compiler
+      -DCMAKE_CXX_COMPILER=path/to/cxx/compiler
+      -DCMAKE_Fortran_COMPILER=path/to/fortran/compiler
+      -DTCMALLOC_ROOT_DIR=path/to/TCMalloc/library
+      -DCFITSIO_ROOT_DIR=path/to/CFitsio/root
+      -DMUMPS_ROOT=path/to/mumps/root
+      -DSCALAPACK_ROOT=path/to/scalapack/root
+      -DBLACS_ROOT_DIR=path/to/blac/root
+      -DUMFPACK=path/to/UMFPACK/root
+      -DPolychord_HINT_DIR=path/to/PolyChord/root
+      -DMULTINEST_HINT=path/MultiNest/root
+```
 
 And if you have any toubles, don't forget to save the `cmake` and `make` outputs:
 ```sh
@@ -102,7 +116,6 @@ make multinest-distclean
 make make polychord-distclean 
 make deps-distclean            
 ```
-
 
 <a name="change"></a>
 ## change log (Aug. 8, 2018)

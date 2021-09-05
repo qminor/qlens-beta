@@ -46,7 +46,7 @@ References
 * MKL link-line advisor: https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
 #]=======================================================================]
 
-#include(CheckSourceCompiles)
+include(CheckSourceCompiles)
 
 set(SCALAPACK_LIBRARY)  # avoids appending to prior FindScalapack
 set(SCALAPACK_INCLUDE_DIR)
@@ -76,18 +76,18 @@ set(CMAKE_REQUIRED_LIBRARIES ${SCALAPACK_LIBRARY} LAPACK::LAPACK MPI::MPI_Fortra
 
 foreach(i s d)
 
-  #check_source_compiles(Fortran
-    #"program test
-    #implicit none (type, external)
-    #external :: p${i}lamch
-    #external :: blacs_pinfo, blacs_get, blacs_gridinit, blacs_gridexit, blacs_exit
-    #end program"
-    #SCALAPACK_${i}_links)
+  check_source_compiles(Fortran
+    "program test
+    implicit none (type, external)
+    external :: p${i}lamch
+    external :: blacs_pinfo, blacs_get, blacs_gridinit, blacs_gridexit, blacs_exit
+    end program"
+    SCALAPACK_${i}_links)
 
-  #if(SCALAPACK_${i}_links)
+  if(SCALAPACK_${i}_links)
     set(SCALAPACK_${i}_FOUND true PARENT_SCOPE)
     set(SCALAPACK_links true)
-  #endif()
+  endif()
 
 endforeach()
 
