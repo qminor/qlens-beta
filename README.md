@@ -36,7 +36,7 @@ cmake -DCMAKE_C_COMPILER=path/to/c/compiler
       -DBLACS_ROOT_DIR=path/to/blac/root
       -DUMFPACK=path/to/UMFPACK/root
       -DPolychord_HINT_DIR=path/to/PolyChord/root
-      -DMULTINEST_HINT=path/MultiNest/root
+      -DMULTINEST_HINT=path/MultiNest/root ..
 ```
 
 And if you have any toubles, don't forget to save the `cmake` and `make` outputs:
