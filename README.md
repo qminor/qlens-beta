@@ -81,6 +81,15 @@ You can put the module in the python path by adding the following line to .bashr
 export PYTHONPATH=$(PYTHONPATH):path_to_nstarorbits/python
 ```
 
+TCMalloc can also have conflicts the the malloc version python uses.  If using TCMalloc, call python using the `LD_PRELOAD` environment variable set to the TCMalloc library path:
+```sh
+LD_PRELOAD=path\to\tcmalloc\libtcmalloc.so python my_python_file.py
+```
+Or on mac, use the `DYLD_INSERT_LIBRARIES` variable:
+```sh
+DYLD_INSERT_LIBRARIES=path\to\tcmalloc\libtcmalloc.so python my_python_file.py
+```
+
 Right now, the python interface excludes MUMPS or MPI when compiling.
 
 <a name="packages"></a>
