@@ -4973,7 +4973,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> sbmax)) Complain("invalid max surface brightness parameter for model gaussian");
 					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model gaussian");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model gaussian");
 						if (nwords == 7) {
@@ -5069,7 +5069,7 @@ void QLens::process_commands(bool read_file)
 					if ((vary_amp00) and (!amp_specified) and (!(ws[pi++] >> amp00))) Complain("invalid amp00 parameter for model shapelet");
 					if (!(ws[pi++] >> sig)) Complain("invalid sigma parameter for model shapelet");
 					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model shapelet");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= (pi+1)) {
 						if (!(ws[pi++] >> theta)) Complain("invalid theta parameter for model shapelet");
 						if (nwords == (pi+1)) {
@@ -5131,7 +5131,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> reff)) Complain("invalid R_eff parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
 						if (nwords == 8) {
@@ -5197,7 +5197,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model csersic");
 					if (!(ws[5] >> rc)) Complain("invalid rc parameter for model csersic");
 					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 8) {
 						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
 						if (nwords == 9) {
@@ -5332,7 +5332,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> sb)) Complain("invalid surface brightness normalization parameter for model tophat");
 					if (!(ws[3] >> rad)) Complain("invalid radius parameter for model tophat");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model tophat");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model tophat");
 						if (nwords == 8) {
@@ -5375,7 +5375,7 @@ void QLens::process_commands(bool read_file)
 				if (nwords >= 4) {
 					double q, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
 					if (!(ws[3] >> q)) Complain("invalid q parameter");
-					if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 5) {
 						if (!(ws[4] >> theta)) Complain("invalid theta parameter");
 						if (nwords >= 7) {
@@ -5861,6 +5861,17 @@ void QLens::process_commands(bool read_file)
 					extract_word_starts_with('[',2,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					extract_word_starts_with('[',2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					if (range1.empty()) { range1 = range2; range2 = ""; } // range is for image plane if only one range argument specified
+					bool set_title = false;
+					string temp_title;
+					for (int i=1; i < nwords-1; i++) {
+						if (words[i]=="-t") {
+							set_title = true;
+							set_plot_title(i+1,temp_title);
+							remove_word(i);
+							break;
+						}
+					}
+
 
 					int dataset;
 					bool show_multiple = false;
@@ -5943,6 +5954,7 @@ void QLens::process_commands(bool read_file)
 						srcname = words[2];
 						imgname = words[3];
 					}
+					if (set_title) plot_title = temp_title;
 					ofstream imgout;
 					ofstream imgfile;
 					ofstream srcfile;
@@ -6016,6 +6028,7 @@ void QLens::process_commands(bool read_file)
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
+					if (set_title) plot_title = "";
 				}
 				else if (words[1]=="plotshear")
 				{
@@ -7028,6 +7041,16 @@ void QLens::process_commands(bool read_file)
 		{
 			bool plot_from_imgpt = false;
 			bool show_grid = false;
+			bool set_title = false;
+			string temp_title;
+			for (int i=1; i < nwords-1; i++) {
+				if (words[i]=="-t") {
+					set_title = true;
+					set_plot_title(i+1,temp_title);
+					remove_word(i);
+					break;
+				}
+			}
 			vector<string> args;
 			if (extract_word_starts_with('-',3,nwords-1,args)==true)
 			{
@@ -7063,6 +7086,7 @@ void QLens::process_commands(bool read_file)
 					ysource_in = y_in;
 				}
 				if ((show_cc) and (plotcrit("crit.dat")==false)) warn("could not plot critical curves");
+				if (set_title) plot_title = temp_title;
 				if (plot_images_single_source(xsource_in, ysource_in, verbal_mode)==true) {
 					if (nwords==5) {
 						if (show_cc) {
@@ -7094,6 +7118,7 @@ void QLens::process_commands(bool read_file)
 						if (plot_srcplane) run_plotter("source",range2);
 					}
 				}
+				if (set_title) plot_title = "";
 			} else Complain("must specify source position (e.g. 'plotimg 3.0 1.2')");
 		}
 		else if (words[0]=="plotlogkappa")
@@ -7503,6 +7528,17 @@ void QLens::process_commands(bool read_file)
 				//bool old_auto_srcgrid = false;
 				double zoomfactor = 2;
 				int set_npix = -1; // if negative, doesn't set npix; other wise, it's npix by npix grid
+				bool set_title = false;
+				string temp_title;
+				for (int i=1; i < nwords-1; i++) {
+					if (words[i]=="-t") {
+						set_title = true;
+						set_plot_title(i+1,temp_title);
+						remove_word(i);
+						break;
+					}
+				}
+
 				if (words[1]=="mkplotsrc") { plot_source = true; set_npix = 200; }
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -7528,12 +7564,14 @@ void QLens::process_commands(bool read_file)
 					}
 					create_source_surface_brightness_grid(verbal_mode);
 					if (plot_source) {
+						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
 						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
 							run_plotter_range("srcpixel","");
 						} else {
 							run_plotter_range("srcpixel_nocc","");
 						}
+						if (set_title) plot_title = "";
 					}
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
@@ -7556,6 +7594,17 @@ void QLens::process_commands(bool read_file)
 				bool show_mask_only = true;
 				bool show_extended_mask = false;
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				bool set_title = false;
+				string temp_title;
+				for (int i=1; i < nwords-1; i++) {
+					if (words[i]=="-t") {
+						set_title = true;
+						set_plot_title(i+1,temp_title);
+						remove_word(i);
+						break;
+					}
+				}
+
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -7576,6 +7625,7 @@ void QLens::process_commands(bool read_file)
 					ymaxstream << image_pixel_data->yvals[image_pixel_data->npixels_y]; ymaxstream >> ymaxstr;
 					range = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
 				}
+				if (set_title) plot_title = temp_title;
 				if (nwords == 2) {
 					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask);
 					run_plotter_range("datapixel",range);
@@ -7588,6 +7638,7 @@ void QLens::process_commands(bool read_file)
 						run_plotter("datapixel",words[2],range);
 					}
 				}
+				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="unset_all_pixels")
 			{
@@ -7731,6 +7782,17 @@ void QLens::process_commands(bool read_file)
 				bool old_cc_setting = show_cc;
 				bool subcomp = false;
 				bool show_noise_thresh = false;
+				bool set_title = false;
+				string temp_title;
+				for (int i=1; i < nwords-1; i++) {
+					if (words[i]=="-t") {
+						set_title = true;
+						set_plot_title(i+1,temp_title);
+						remove_word(i);
+						break;
+					}
+				}
+
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -7778,6 +7840,7 @@ void QLens::process_commands(bool read_file)
 				}
 				bool foundcc = true;
 				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
+					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
 						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
@@ -7830,6 +7893,7 @@ void QLens::process_commands(bool read_file)
 				} else if (!foundcc) Complain("could not find critical curves");
 				if (omit_source) plot_srcplane = old_plot_srcplane;
 				if (omit_cc) show_cc = old_cc_setting;
+				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="plotsrc")
 			{
@@ -7846,7 +7910,19 @@ void QLens::process_commands(bool read_file)
 					ymaxstream << source_pixel_grid->srcgrid_ymax; ymaxstream >> ymaxstr;
 					range1 = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
 				}
+				bool set_title = false;
+				string temp_title;
+				for (int i=1; i < nwords-1; i++) {
+					if (words[i]=="-t") {
+						set_title = true;
+						set_plot_title(i+1,temp_title);
+						remove_word(i);
+						break;
+					}
+				}
+
 				if (nwords == 2) {
+					if (set_title) plot_title = temp_title;
 					if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
 					if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
 						run_plotter_range("srcpixel",range1);
@@ -7854,6 +7930,7 @@ void QLens::process_commands(bool read_file)
 						run_plotter_range("srcpixel_nocc",range1);
 					}
 				} else if (nwords == 3) {
+					if (set_title) plot_title = temp_title;
 					if (terminal==TEXT) {
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
 					} else {
@@ -7865,6 +7942,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
+				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="invert")
 			{
@@ -8160,13 +8238,7 @@ void QLens::process_commands(bool read_file)
 				if (plot_title.empty()) Complain("plot title has not been set");
 				if (mpi_id==0) cout << "Plot title: '" << plot_title << "'\n";
 			} else {
-				remove_word(0);
-				plot_title = "";
-				for (int i=0; i < nwords-1; i++) plot_title += words[i] + " ";
-				plot_title += words[nwords-1];
-				int pos;
-				while ((pos = plot_title.find('"')) != string::npos) plot_title.erase(pos,1);
-				while ((pos = plot_title.find('\'')) != string::npos) plot_title.erase(pos,1);
+				set_plot_title(1,plot_title);
 			}
 		}
 		else if (words[0]=="post_title")
@@ -10294,6 +10366,20 @@ void QLens::extract_word_starts_with(const char initial_character, int starting_
 	if (nremove==-1) extracted_word = "";
 	else remove_word(nremove);
 }
+
+void QLens::set_plot_title(int starting_word, string& title)
+{
+	title = "";
+	if (starting_word >= nwords) return;
+	for (int i=starting_word; i < nwords-1; i++) title += words[i] + " ";
+	title += words[nwords-1];
+	for (int i=nwords-1; i >= starting_word; i--) remove_word(i);
+	int pos;
+	while ((pos = title.find('"')) != string::npos) title.erase(pos,1);
+	while ((pos = title.find('\'')) != string::npos) title.erase(pos,1);
+}
+
+
 
 bool QLens::extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words)
 {

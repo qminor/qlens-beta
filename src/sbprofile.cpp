@@ -845,6 +845,7 @@ void SB_Profile::set_angle_from_components(const double &comp1, const double &co
 	double angle;
 	if (comp1==0) {
 		if (comp2 > 0) angle = M_HALFPI;
+		else if (comp2==0) angle = 0.0;
 		else angle = -M_HALFPI;
 	} else {
 		angle = atan(abs(comp2/comp1));

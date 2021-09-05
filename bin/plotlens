@@ -107,7 +107,8 @@ if [[ $TERM != "" ]]; then
 		exit
 	else
 		if [[ $TERM == "postscript" ]]; then TERM="$TERM eps"; fi
-		SETTERM="set terminal $TERM enhanced dashed color font 'Times-Roman,$FONTSIZE' size 7,6\nset tics font ', $FONTSIZE'\nset for [i=1:4] linetype i dashtype i\nset output '$PLOTDIR/$FILENAME'"
+		#SETTERM="set terminal $TERM enhanced dashed color font 'Times-Roman,$FONTSIZE' size 7,6\nset tics font ', $FONTSIZE'\nset for [i=1:4] linetype i dashtype i\nset output '$PLOTDIR/$FILENAME'"   # the dashtype only works for gnuplot version 5 or later
+		SETTERM="set terminal $TERM enhanced dashed color font 'Times-Roman,$FONTSIZE' size 7,6\nset tics font ', $FONTSIZE'\nset output '$PLOTDIR/$FILENAME'"
 	fi
 fi
 
@@ -539,7 +540,7 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/crit0.dat' w lines lw $LINEWIDTH lc 0 lt 2 t 'critical curves (unperturbed)'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/crit0.dat' w lines lw $LINEWIDTH lc 1 lt 2 t 'critical curves (unperturbed)'"
 
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "srcpixel" ]]
