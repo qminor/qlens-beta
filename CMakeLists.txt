@@ -51,7 +51,7 @@ endif()
 include(cmake/utils.cmake)
 
 set(QLENS_COMPILE_FLAGS
-    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -O3"
+    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -O3 -std=c++11"
 )
 
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
@@ -117,6 +117,15 @@ set(COSMOCALC_SOURCES
 )
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
+
+message("")
+message("*** System ***")
+message(STATUS "CMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
+message(STATUS "CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
+message(STATUS "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
+message(STATUS "CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
+message(STATUS "CMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}")
+message(STATUS "CMAKE_Fortran_FLAGS=${CMAKE_Fortran_FLAGS}")
 
 message("")
 MESSAGE("** OpenMP ***")
