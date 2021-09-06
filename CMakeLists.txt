@@ -43,6 +43,7 @@ execute_process(
     RESULT_VARIABLE result)
     set(MUMPS_OK FALSE)
     set(MUMPS_VERS_STR "v5.4.0.0")
+    message(STATUS "${Red}For cmake versions < 3.19 MUMPS will be excluded from 'make deps'.${ColourReset}")
 else()
     message(STATUS "MUMPS needs cmake version greater or equal to 3.13")
 endif()
