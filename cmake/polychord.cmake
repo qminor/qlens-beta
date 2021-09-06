@@ -32,7 +32,7 @@ else()
   set(pcCOMPILER_TYPE "gnu")
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  set(pcCXXFLAGS "pcCXXFLAGS -isysroot ${CMAKE_OSX_SYSROOT}")
+  set(pcCXXFLAGS "${pcCXXFLAGS} -isysroot ${CMAKE_OSX_SYSROOT}")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
 
 ExternalProject_Add(${name}#_${ver}
