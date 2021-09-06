@@ -42,7 +42,7 @@ cmake -DCMAKE_C_COMPILER=path/to/c/compiler
 And if you have any toubles, don't forget to save the `cmake` and `make` outputs:
 ```sh
 cmake .. >& cmake_out
-make qlens-all >& make_out
+make qlens-all VERBOSE=1 >& make_out
 ```
 
 <a name="python"></a>

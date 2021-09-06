@@ -69,13 +69,10 @@ set(QLENS_INCLUDE_DIRS
 set(QLENS_HEADERS
 )
 
-set(QLENS_SOURCES 
-    ${PROJECT_SOURCE_DIR}/
+set(QLENS_CORE_SOURCES 
     ${PROJECT_SOURCE_DIR}/src/profile.cpp 
     ${PROJECT_SOURCE_DIR}/src/sbprofile.cpp 
     ${PROJECT_SOURCE_DIR}/src/models.cpp 
-    ${PROJECT_SOURCE_DIR}/src/qlens.cpp 
-    ${PROJECT_SOURCE_DIR}/src/commands.cpp 
     ${PROJECT_SOURCE_DIR}/src/lens.cpp 
     ${PROJECT_SOURCE_DIR}/src/imgsrch.cpp 
     ${PROJECT_SOURCE_DIR}/src/pixelgrid.cpp
@@ -95,6 +92,12 @@ set(QLENS_SOURCES
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
     #${PROJECT_SOURCE_DIR}/cmake/dummy.f
+)
+
+set(QLENS_SOURCES 
+    ${QLENS_CORE_SOURCES}
+    ${PROJECT_SOURCE_DIR}/src/qlens.cpp 
+    ${PROJECT_SOURCE_DIR}/src/commands.cpp 
 )
 
 set(MKDIST_SOURCES
