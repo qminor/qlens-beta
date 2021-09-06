@@ -11,7 +11,8 @@ if(CMAKE_VERSION VERSION_LESS "3.7.0")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
 endif()
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
+#if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
+if(FALSE)
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5411.cmake FindMUMPS.cmake 
@@ -19,8 +20,10 @@ execute_process(
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5411.cmake FindMETIS.cmake 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5411.cmake FindScotch.cmake 
     RESULT_VARIABLE result)
+    set(MUMPS_OK TRUE)
     set(MUMPS_VERS_STR "v5.4.1.1")
-elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
+#elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
+elseif(FALSE)
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5407.cmake FindMUMPS.cmake 
@@ -28,6 +31,7 @@ execute_process(
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5407.cmake FindMETIS.cmake 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5407.cmake FindScotch.cmake 
     RESULT_VARIABLE result)
+    set(MUMPS_OK TRUE)
     set(MUMPS_VERS_STR "v5.4.0.7")
 elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13.0")
 execute_process(
@@ -37,9 +41,10 @@ execute_process(
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5400.cmake FindMETIS.cmake 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5400.cmake FindScotch.cmake 
     RESULT_VARIABLE result)
+    set(MUMPS_OK FALSE)
     set(MUMPS_VERS_STR "v5.4.0.0")
 else()
-    message(SEND_ERROR "MUMPS needs cmake version greater or equal to 3.13.")
+    message(STATUS "MUMPS needs cmake version greater or equal to 3.13")
 endif()
 
 if (NOT ${result} STREQUAL "0")
@@ -51,7 +56,7 @@ endif()
 include(cmake/utils.cmake)
 
 set(QLENS_COMPILE_FLAGS
-    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -O3 -std=c++11"
+    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -std=c++11"
 )
 
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
@@ -97,7 +102,8 @@ set(QLENS_CORE_SOURCES
 set(QLENS_SOURCES 
     ${QLENS_CORE_SOURCES}
     ${PROJECT_SOURCE_DIR}/src/qlens.cpp 
-    ${PROJECT_SOURCE_DIR}/src/commands.cpp 
+    #${PROJECT_SOURCE_DIR}/src/commands.cpp
+    $<TARGET_OBJECTS:command>
 )
 
 set(MKDIST_SOURCES
@@ -412,7 +418,12 @@ add_custom_target(qlens-all)
 add_dependencies(qlens-all qlens mkdist cosmocalc python)
 
 add_custom_target(deps)
-add_dependencies(deps pybind11 multinest mumps polychord)
+add_dependencies(deps pybind11 multinest polychord)
 
 add_custom_target(deps-distclean)
-add_dependencies(deps-distclean pybind11-distclean multinest-distclean mumps-distclean polychord-distclean)
+add_dependencies(deps-distclean pybind11-distclean multinest-distclean polychord-distclean)
+
+if(MUMPS_OK)
+    add_dependencies(deps mumps)
+    add_dependencies(deps-distclean mumps-distclean)
+endif(MUMPS_OK)

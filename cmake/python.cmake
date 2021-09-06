@@ -39,7 +39,7 @@ TARGET_LINK_LIBRARIES( python ${QLENS_PYTHON_LIBRARIES})
 IF(APPLE)
     SET_TARGET_PROPERTIES( python
                             PROPERTIES
-                            COMPILE_FLAGS "${QLENS_COMPILE_FLAGS}"
+                            COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} -O3"
                             INCLUDE_DIRECTORIES "${QLENS_PYTHON_INCLUDE_DIRS}"
                             COMPILE_DEFINITIONS "${QLENS_PYTHON_DEFINITIONS}"
                             LINK_FLAGS "${QLENS_LINKER_FLAGS} -undefined dynamic_lookup"
@@ -51,7 +51,7 @@ IF(APPLE)
 ELSE(APPLE)
     SET_TARGET_PROPERTIES( python
                             PROPERTIES
-                            COMPILE_FLAGS "${QLENS_COMPILE_FLAGS}"
+                            COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} -O3"
                             INCLUDE_DIRECTORIES "${QLENS_PYTHON_INCLUDE_DIRS}"
                             COMPILE_DEFINITIONS "${QLENS_PYTHON_DEFINITIONS}"
                             LINK_FLAGS "${QLENS_LINKER_FLAGS}"
