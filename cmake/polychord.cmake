@@ -31,7 +31,9 @@ else()
   set(pcFFLAGS "${pcFFLAGS} -fno-stack-arrays -ffree-line-length-none")
   set(pcCOMPILER_TYPE "gnu")
 endif()
-
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  set(pcCXXFLAGS "pcCXXFLAGS -isysroot ${CMAKE_OSX_SYSROOT}")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
 ExternalProject_Add(${name}#_${ver}
     #DOWNLOAD_COMMAND ${DL_SCANNER} ${dl} ${md5} ${dir} ${name} ${ver}
