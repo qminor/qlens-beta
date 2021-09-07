@@ -13,16 +13,15 @@ public:
     Lens_Wrap() : QLens()
 	 {
 		int mpi_id=0, mpi_np=1;
-		int ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
 
 #ifdef USE_MPI
 		MPI_Init(NULL, NULL);
 		MPI_Comm_size(MPI_COMM_WORLD, &mpi_np);
 		MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 #endif
+		int ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
 
 		int n_omp_threads;
-
 #ifdef USE_OPENMP
 		#pragma omp parallel
 		{

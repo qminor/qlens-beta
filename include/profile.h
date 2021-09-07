@@ -226,6 +226,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
+	bool set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
 	void shift_angle_90();
 	void shift_angle_minus_90();
