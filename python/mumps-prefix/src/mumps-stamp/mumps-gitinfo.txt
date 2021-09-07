@@ -1,3 +1,0 @@
-repository='https://github.com/scivision/mumps.git'
-module=''
-tag='origin'

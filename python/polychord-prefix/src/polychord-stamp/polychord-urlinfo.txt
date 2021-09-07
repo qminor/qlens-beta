@@ -1,3 +1,0 @@
-repository='external project URL'
-module='https://github.com/PolyChord/PolyChordLite/archive/1.17.1.tar.gz'
-tag='MD5=c47a4b58e1ce5b98eec3b7d79ec7284f'

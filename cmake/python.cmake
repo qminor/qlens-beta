@@ -62,4 +62,4 @@ ELSE(APPLE)
                             SUFFIX ".so")
 ENDIF(APPLE)
 
-ADD_DEPENDENCIES(python cmake_cmd)
+#ADD_DEPENDENCIES(python cmake_cmd)
