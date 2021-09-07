@@ -7,12 +7,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 cmake_policy(SET CMP0057 NEW)
 cmake_policy(SET CMP0074 NEW)
 
+include(cmake/utils.cmake)
+
 if(CMAKE_VERSION VERSION_LESS "3.7.0")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
 endif()
 
-#if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
-if(FALSE)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5411.cmake FindMUMPS.cmake 
@@ -22,8 +23,7 @@ execute_process(
     RESULT_VARIABLE result)
     set(MUMPS_OK TRUE)
     set(MUMPS_VERS_STR "v5.4.1.1")
-#elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
-elseif(FALSE)
+elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
     COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5407.cmake FindMUMPS.cmake 
@@ -51,10 +51,6 @@ endif()
 if (NOT ${result} STREQUAL "0")
     message(SEND_ERROR "Cannot make symlink, mesg=${result}")
 endif()
-
-#include(FortranCInterface)
-#FortranCInterface_VERIFY(CXX)
-include(cmake/utils.cmake)
 
 set(QLENS_COMPILE_FLAGS
     "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -std=c++11"
@@ -104,7 +100,7 @@ set(QLENS_SOURCES
     ${QLENS_CORE_SOURCES}
     ${PROJECT_SOURCE_DIR}/src/qlens.cpp 
     #${PROJECT_SOURCE_DIR}/src/commands.cpp
-    $<TARGET_OBJECTS:command>
+    $<TARGET_OBJECTS:commands_cpp>
 )
 
 set(MKDIST_SOURCES
@@ -137,7 +133,7 @@ message(STATUS "CMAKE_Fortran_FLAGS=${CMAKE_Fortran_FLAGS}")
 message("")
 MESSAGE("** OpenMP ***")
 find_package(OpenMP)
-if (OPENMP_FOUND)
+if(OPENMP_FOUND)
     message(STATUS "OPENMP_FOUND = ${OPENMP_FOUND}")
     message(STATUS "OpenMP_C_FLAGS = ${OpenMP_C_FLAGS}")
     message(STATUS "OpenMP_CXX_FLAGS = ${OpenMP_CXX_FLAGS}")
@@ -147,14 +143,16 @@ if (OPENMP_FOUND)
     message(STATUS "OpenMP_C_LIBRARIES = ${OpenMP_C_LIBRARIES}")
     message(STATUS "OpenMP_CXX_LIBRARIES = ${OpenMP_CXX_LIBRARIES}")
     set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_OPENMP")
-    set (QLENS_COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} ${OpenMP_C_FLAGS}")
-    set (QLENS_COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(QLENS_COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} ${OpenMP_C_FLAGS}")
+    set(QLENS_COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} ${OpenMP_CXX_FLAGS}")
     set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${OpenMP_C_INCLUDE_DIRS})
     set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${OpenMP_CXX_INCLUDE_DIRS})
     set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${OpenMP_C_LIBRARIES})
     set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${OpenMP_CXX_LIBRARIES})
     set (QLENS_LINKER_FLAGS "${QLENS_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+else(OPENMP_FOUND)
+    message(STATUS "${Red}OpenMP not found${ColourReset}")
+endif(OPENMP_FOUND)
 
 MESSAGE("")
 MESSAGE("*** Python ***")

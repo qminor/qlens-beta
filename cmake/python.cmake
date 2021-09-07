@@ -61,3 +61,5 @@ ELSE(APPLE)
                             PREFIX ""
                             SUFFIX ".so")
 ENDIF(APPLE)
+
+ADD_DEPENDENCIES(python cmake_cmd)
