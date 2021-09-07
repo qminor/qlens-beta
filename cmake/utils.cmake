@@ -38,3 +38,7 @@ function(check_result result command)
     message(FATAL_ERROR "${BoldRed}cmake failed because ${command} did not return 0.  Culprit: ${command}${ColourReset}")
   endif()
 endfunction()
+
+add_custom_target(cmake_cmd
+    COMMAND ${CMAKE_COMMAND} ${PROJECT_SOURCE_DIR}
+)

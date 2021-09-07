@@ -1,6 +1,6 @@
-add_library(command OBJECT ${PROJECT_SOURCE_DIR}/src/commands.cpp)
+add_library(commands_cpp OBJECT ${PROJECT_SOURCE_DIR}/src/commands.cpp)
 set_target_properties(
-    command 
+    commands_cpp
     PROPERTIES
     INCLUDE_DIRECTORIES "${QLENS_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${QLENS_COMPILE_DEFINITIONS}"
@@ -27,7 +27,7 @@ set_target_properties(
     OUTPUT_NAME "qlens"
 )
 
-add_dependencies(qlens command)
+add_dependencies(qlens commands_cpp cmake_cmd)
 
 target_link_libraries(qlens ${QLENS_LIBRARIES})
 

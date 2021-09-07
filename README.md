@@ -21,7 +21,6 @@ mkdir build
 cd build
 cmake ..
 make deps
-cmake ..
 make qlens-all
 ```
 If you are having trouble geting qlens to link, try the following `cmake` options:
@@ -75,6 +74,11 @@ cmake -DPYTHON_EXECUTABLE=/usr/bin/python ..
 make deps
 make python
 ```
+Or 
+```sh
+cmake -DPYTHON_EXECUTABLE=`which python` ..
+```
+if your python installation is in a non-standard location.
 
 You can put the module in the python path by adding the following line to .bashrc:
 ```sh
@@ -115,7 +119,7 @@ make pybind11       # downloads PyBind11
 make mumps          # downloads and compiles MUMPS
 make multinest      # downloads and compiles MultiNest
 make make polychord # downloads and compiles PolyChord
-make deps           # downloads and compiles the above packages
+make deps           # downloads and compiles the above packages (not MUMPS for cmake versions < 3.19)
 ```
 And if something goes wrong with the installation, you can wipe it with:
 ```sh
