@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/polychord"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/polychord.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/polychord-complete.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-build.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-configure.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-download.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-install.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-mkdir.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-patch.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/polychord-prefix/src/polychord-stamp/polychord-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"polychord"
+		],
+		"name" : "polychord"
+	}
+}

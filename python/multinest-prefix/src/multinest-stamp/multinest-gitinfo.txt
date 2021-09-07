@@ -1,0 +1,3 @@
+repository='https://github.com/farhanferoz/MultiNest.git'
+module=''
+tag='origin'

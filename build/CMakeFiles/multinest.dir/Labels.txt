@@ -1,0 +1,13 @@
+# Target labels
+ multinest
+# Source files and their labels
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest-complete.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-build.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-configure.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-download.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-install.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-mkdir.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-patch.rule
+/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-update.rule

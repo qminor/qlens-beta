@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/CMakeFiles/multinest-complete.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-build.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-configure.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-download.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-install.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-mkdir.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-patch.rule"
+		},
+		{
+			"file" : "/Users/qminor/git_testdir/qlens-dev/qlens-beta/build/multinest-prefix/src/multinest-stamp/multinest-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"multinest"
+		],
+		"name" : "multinest"
+	}
+}

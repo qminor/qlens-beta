@@ -208,6 +208,8 @@ PYBIND11_MODULE(qlens, m) {
                         curr.chi_square_fit_simplex();
                 } else if (param=="powell") {
                         curr.chi_square_fit_powell();
+                } else if (param=="multinest") {
+                        curr.multinest(true,false);
                 } else if (param=="twalk") {
                         curr.chi_square_twalk();
                 } else {
