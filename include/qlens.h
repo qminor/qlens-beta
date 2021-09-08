@@ -481,6 +481,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 
 	static string fit_output_filename;
+	string get_fit_label() { return fit_output_filename; }
+	void set_fit_label(const string label_in) {
+		fit_output_filename = label_in;
+		if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+	}
 	bool auto_save_bestfit;
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
 	ImageData *image_data;

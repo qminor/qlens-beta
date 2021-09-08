@@ -8537,9 +8537,6 @@ double QLens::chi_square_fit_powell()
 void QLens::nested_sampling()
 {
 	if (fitmethod != NESTED_SAMPLING) fitmethod = NESTED_SAMPLING;
-	fit_output_filename = "alphanest";
-	fit_output_dir = "chains_" + fit_output_filename;
-	cout << "OUTPUT_DIR: " << fit_output_dir << " " << fit_output_filename << endl;
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
@@ -8668,9 +8665,6 @@ void QLens::nested_sampling()
 void QLens::multinest(const bool resume_previous, const bool skip_run)
 {
 	if (fitmethod != MULTINEST) fitmethod = MULTINEST;
-	fit_output_filename = "alphanest";
-	fit_output_dir = "chains_" + fit_output_filename;
-
 #ifdef USE_MULTINEST
 	if (setup_fit_parameters(true)==false) { warn("could not set up fit parameters"); return; }
 	fit_set_optimizations();

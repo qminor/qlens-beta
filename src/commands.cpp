@@ -6195,11 +6195,12 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="label")
 				{
+					string filename;
 					if ((nwords == 2) and (mpi_id==0)) cout << "Fit label: " << fit_output_filename << endl;
 					else {
 						if (nwords != 3) Complain("a single filename must be specified after 'fit label'");
-						if (!(ws[2] >> fit_output_filename)) Complain("Invalid fit label");
-						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+						if (!(ws[2] >> filename)) Complain("Invalid fit label");
+						set_fit_label(filename);
 					}
 				}
 				else if (words[1]=="priors")
