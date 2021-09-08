@@ -284,6 +284,29 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 	return true;
 }
 
+bool LensProfile::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
+{
+	if (n_vary_params==0) return false;
+	int param_i = -1;
+	int i,j;
+	for (i=0,j=0; i < n_params; i++) {
+		if (!vary_params[i]) continue;
+		if (paramnames[i]==name_in) {
+			param_i = j;
+			break;
+		}
+		j++;
+	}
+	if (param_i != -1) {
+		if (!include_limits) include_limits = true;
+		lower_limits[param_i] = lower;
+		upper_limits[param_i] = upper;
+		lower_limits_initial[param_i] = lower;
+		upper_limits_initial[param_i] = upper;
+	}
+	return (param_i != -1);
+}
+
 void LensProfile::set_limits(const dvector& lower, const dvector& upper)
 {
 	include_limits = true;
