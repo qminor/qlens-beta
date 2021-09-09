@@ -36,7 +36,11 @@
 if(NOT Polychord_FOUND)
 
     set(_polychord_CMAKE_FIND_LIBRARY_SUFFIXES_backup ${CMAKE_FIND_LIBRARY_SUFFIXES})
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so")
+    if(WIN32)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".a" ".dll" ".so")
+    else(WIN32)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".so")
+    endif(WIN32)
     find_path(Polychord_INCLUDE_DIR interfaces.h
         HINTS ${Polychord_HINT_DIR}
         PATH_SUFFIXES polychord src/polychord)
