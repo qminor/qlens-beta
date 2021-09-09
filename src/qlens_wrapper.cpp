@@ -16,7 +16,7 @@ public:
 	MPI_Group *onegroup;
 #endif
 
-    Lens_Wrap() : QLens()
+    Lens_Wrap(const py::kwargs& kwargs) : QLens()
 	 {
 		int mpi_id=0, mpi_np=1;
 
@@ -25,7 +25,15 @@ public:
 		MPI_Comm_size(MPI_COMM_WORLD, &mpi_np);
 		MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 #endif
-		int ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
+		int ngroups = mpi_np;
+		if (kwargs) {
+			int ng = -1;
+			for(auto item : kwargs) {
+				 if (py::cast<string>(item.first)=="mpi_ngroups") ng = py::cast<int>(item.second);
+				 else throw std::runtime_error("Keyword argument not recognized");
+			}
+			if ((ng > 0) and (ng <= mpi_np)) ngroups = ng;
+		}
 
 		int n_omp_threads;
 #ifdef USE_OPENMP

@@ -180,7 +180,8 @@ PYBIND11_MODULE(qlens, m) {
         ;
 
     py::class_<Lens_Wrap>(m, "QLens")
-        .def(py::init<>([](){return new Lens_Wrap();}))
+        //.def(py::init<>([](){return new Lens_Wrap();}))
+        .def(py::init<>([](const py::kwargs &kwargs){return new Lens_Wrap(kwargs);}))
         .def("imgdata_display", &Lens_Wrap::imgdata_display)
         .def("imgdata_add", &Lens_Wrap::imgdata_add, 
                 py::arg("x") = -1.0, py::arg("y") = -1.0)
