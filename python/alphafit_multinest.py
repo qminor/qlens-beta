@@ -1,6 +1,7 @@
 from qlens_helper import *
 
 q = QLens()
+
 q.fit_label = 'alphanest'
 
 q.sci_notation = False
@@ -32,9 +33,9 @@ q.fitmodel()
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.n_livepts = 300
-q.run_fit("multinest")
+q.run_fit("nest")
 q.use_bestfit()
-fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
+#fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = fit_plotimg(q,showplot=False) and modify the figures
 
-plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
+#plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

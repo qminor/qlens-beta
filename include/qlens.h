@@ -834,6 +834,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 #ifdef USE_MPI
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm);
 #endif
+	void set_mpi_params_small_group(const int& mpi_id_in, const int& mpi_np_in);
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in);
 	void set_nthreads(const int& nthreads_in) { nthreads=nthreads_in; }
 #ifdef USE_MPI

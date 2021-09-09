@@ -9,6 +9,9 @@ namespace py = pybind11;
 PYBIND11_MODULE(qlens, m) {
     m.doc() = "QLens Python Plugin"; // optional module docstring
 
+    //py::class_<QLens, std::unique_ptr<QLens, py::nodelete>>(m, "QLens_base")
+        //.def(py::init<>([](){return new QLens();}))
+	 //;
     py::class_<LensProfile>(m, "LensProfile")
         .def(py::init<>([](){return new LensProfile();}))
         .def(py::init<const LensProfile*>())
@@ -176,7 +179,7 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<const QTabulated_Model*>())
         ;
 
-    py::class_<Lens_Wrap, std::unique_ptr<Lens_Wrap>>(m, "QLens")
+    py::class_<Lens_Wrap>(m, "QLens")
         .def(py::init<>([](){return new Lens_Wrap();}))
         .def("imgdata_display", &Lens_Wrap::imgdata_display)
         .def("imgdata_add", &Lens_Wrap::imgdata_add, 

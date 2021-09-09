@@ -1,6 +1,7 @@
 from qlens_helper import *
 
 q = QLens()
+
 q.fit_label = 'alphafit'
 
 q.sci_notation = False
