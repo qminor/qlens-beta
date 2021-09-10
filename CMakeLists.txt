@@ -23,6 +23,7 @@ execute_process(
     RESULT_VARIABLE result)
     set(MUMPS_OK TRUE)
     set(MUMPS_VERS_STR "v5.4.1.1")
+    set(SCALAPACK_VERS_STR "v2.1.0.27")
 elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
@@ -33,6 +34,7 @@ execute_process(
     RESULT_VARIABLE result)
     set(MUMPS_OK TRUE)
     set(MUMPS_VERS_STR "v5.4.0.7")
+    set(SCALAPACK_VERS_STR "v2.1.0.25")
 elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13.0")
 execute_process(
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
@@ -43,6 +45,7 @@ execute_process(
     RESULT_VARIABLE result)
     set(MUMPS_OK FALSE)
     set(MUMPS_VERS_STR "v5.4.0.0")
+    set(SCALAPACK_VERS_STR "v2.1.0.19")
     message(STATUS "${Red}For cmake versions < 3.19 MUMPS will be excluded from 'make deps'.${ColourReset}")
 else()
     message(STATUS "MUMPS needs cmake version greater or equal to 3.13")
@@ -319,7 +322,7 @@ endif(MUMPS_FOUND)
 message("")
 message("*** SCALAPACK ***")
 #unset(SCALAPACK_ROOT CACHE)
-set(SCALAPACK_ROOT ${SCALAPACK_ROOT} ${PROJECT_SOURCE_DIR}/contrib/mumps)
+set(SCALAPACK_ROOT ${SCALAPACK_ROOT} ${PROJECT_SOURCE_DIR}/contrib/scalapack)
 unset(SCALAPACK_FOUND CACHE)
 unset(SCALAPACK_INCLUDE_DIRS CACHE)
 unset(UMPS_LIBRARIES CACHE)
@@ -341,7 +344,7 @@ message("")
 message("*** BLACS ***")
 find_library(BLACS_LIBRARY
     NAMES blacs
-    HINTS ${BLACS_ROOT_DIR} ${PROJECT_SOURCE_DIR}/contrib/mumps/lib
+    HINTS ${BLACS_ROOT_DIR} ${PROJECT_SOURCE_DIR}/contrib/scalapack/lib
     DOC "BLACS library"
 )
 if(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
@@ -409,10 +412,15 @@ message("")
 
 include(cmake/polychord.cmake)
 include(cmake/multinest.cmake)
+include(cmake/scalapack.cmake)
 include(cmake/mumps.cmake)
 include(cmake/pybind11.cmake)
 include(cmake/python.cmake)
 include(cmake/executables.cmake)
+
+if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
+    add_dependencies(mumps scalapack)
+endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 
 add_custom_target(qlens-all)
 add_dependencies(qlens-all qlens mkdist cosmocalc python)

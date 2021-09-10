@@ -27,7 +27,7 @@ set_target_properties(
     OUTPUT_NAME "qlens"
 )
 
-add_dependencies(qlens commands_cpp)# cmake_cmd)
+add_dependencies(qlens commands_cpp cmake_cmd)
 
 target_link_libraries(qlens ${QLENS_LIBRARIES})
 

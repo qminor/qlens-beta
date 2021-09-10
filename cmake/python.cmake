@@ -45,6 +45,7 @@ IF(APPLE)
                             LINK_FLAGS "${QLENS_LINKER_FLAGS} -undefined dynamic_lookup"
                             LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/qlens"
                             LIBRARY_OUTPUT_NAME "qlens"
+                            POSITION_INDEPENDENT_CODE ON
                             LINKER_LANGUAGE Fortran
                             PREFIX ""
                             SUFFIX ".so")
@@ -57,9 +58,10 @@ ELSE(APPLE)
                             LINK_FLAGS "${QLENS_LINKER_FLAGS}"
                             LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/python/qlens"
                             LIBRARY_OUTPUT_NAME "qlens"
+                            POSITION_INDEPENDENT_CODE ON
                             LINKER_LANGUAGE Fortran
                             PREFIX ""
                             SUFFIX ".so")
 ENDIF(APPLE)
 
-#ADD_DEPENDENCIES(python cmake_cmd)
+ADD_DEPENDENCIES(python cmake_cmd)

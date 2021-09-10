@@ -40,5 +40,6 @@ function(check_result result command)
 endfunction()
 
 add_custom_target(cmake_cmd
-    COMMAND ${CMAKE_COMMAND} ${PROJECT_SOURCE_DIR}
+    COMMAND ${CMAKE_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )

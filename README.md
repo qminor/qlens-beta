@@ -21,7 +21,6 @@ mkdir build
 cd build
 cmake ..
 make deps
-cmake ..
 make qlens-all
 ```
 If you are having trouble geting qlens to link, try the following `cmake` options:
@@ -55,7 +54,6 @@ mkdir build
 cd build
 cmake ..
 make deps
-cmake ..
 make python
 ```
 
