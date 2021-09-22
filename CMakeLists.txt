@@ -420,6 +420,7 @@ include(cmake/executables.cmake)
 
 if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
     add_dependencies(mumps scalapack)
+    add_dependencies(mumps-distclean scalapack-distclean)
 endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 
 add_custom_target(qlens-all)
