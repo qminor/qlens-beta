@@ -417,6 +417,7 @@ include(cmake/mumps.cmake)
 include(cmake/pybind11.cmake)
 include(cmake/python.cmake)
 include(cmake/executables.cmake)
+include(cmake/python_install.cmake)
 
 if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
     add_dependencies(mumps scalapack)
