@@ -9,7 +9,7 @@ set(PYTHON_RUN_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}") # Final package installa
 # There might be a "cleaner" CMake way to do this... I will do it this "dumb"
 # way for now.
 
-add_custom_target(python_install DEPENDS python)
+add_custom_target(python_install)
 
 # Copies stuff after scan_python target is built
 set(copy_target python_install)

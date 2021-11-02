@@ -64,7 +64,7 @@ class CMakeBuild(build_ext_orig):
             ## This is any OSX-like system
             #origin = r"@loader_path"
         #else:
-            #raise RuntimeError("Unrecognised operating system! pyScannerBit is only compatible with Linux and OSX-like operating systems! Aborting install...")
+            #raise RuntimeError("Unrecognised operating system! qlens is only compatible with Linux and OSX-like operating systems! Aborting install...")
 
         cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + libout,
                       '-DCMAKE_VERBOSE_MAKEFILE:BOOL=OFF',
@@ -101,17 +101,14 @@ class CMakeBuild(build_ext_orig):
         subprocess.check_call(['ls', ext.sourcedir], cwd=self.build_temp, env=env)
         #subprocess.check_call(['ls', ext.sourcedir+'/qlens-beta'], cwd=self.build_temp, env=env)
    
-        # untar ScannerBit tarball
-        #subprocess.check_call(['tar','-C','pyscannerbit/scannerbit/untar/ScannerBit','-xf','pyscannerbit/scannerbit/ScannerBit_stripped.tar','--strip-components=1'], cwd=ext.sourcedir, env=env)
-      
         # First cmake
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=str(build_temp), env=env)
         # Main build
         subprocess.check_call(['cmake', '--build', '.', '--target', 'deps'] + build_args, cwd=str(build_temp))
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=str(build_temp), env=env)
+        subprocess.check_call(['cmake', '--build', '.', '--target', 'python'] + build_args, cwd=str(build_temp))
+        #install
         subprocess.check_call(['cmake', '--build', '.', '--target', 'python_install'] + build_args, cwd=str(build_temp))
-        # Install
-        #subprocess.check_call(['cmake', '--build', '.', '--target', 'install'], cwd=str(build_temp))
 
         print("Checking contents of temporary directory {0}".format(libout))
         print(subprocess.check_call(['ls', libout], cwd=self.build_temp, env=env))
