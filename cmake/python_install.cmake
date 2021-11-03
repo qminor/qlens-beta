@@ -40,5 +40,7 @@ function(copy_dir in out)
 endfunction(copy_dir)
 
 # Copy the ScannerBit 'python' directory that will contain the main 'ScannerBit.so' python-usable library
-copy_dir(${PYTHON_DIR}/qlens
-         ${PYTHON_RUN_DIR})
+if (DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    copy_dir(${PYTHON_DIR}/qlens
+             ${PYTHON_RUN_DIR})
+endif (DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
