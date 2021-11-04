@@ -6,8 +6,8 @@ set(FORTRAN_FLAGS ${CMAKE_Fortran_FLAGS})
     #set(FORTRAN_FLAGS ${FORTRAN_FLAGS} "-fPIC -w -fallow-argument-mismatch")
 #endif()
 
-set(MUMPS_C_FLAGS "${CMAKE_C_FLAGS}-fPIC")
-set(MUMPS_CXX_FLAGS "${CMAKE_CXX_FLAGS}-fPIC")
+set(MUMPS_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+set(MUMPS_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 set(MUMPS_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fPIC")
 
 if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
