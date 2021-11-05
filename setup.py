@@ -120,13 +120,13 @@ setup(
     # Add yourself if you contribute to this package
     author_email='qminor@gmail.com',
     description='Awesome lensing software.',
+    url='https://github.com/qminor/qlens-beta',
     long_description='',
     ext_modules=[CMakeExtension('_qlens')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
-    packages=[''],
+    packages=[],
     install_requires=[
-        'mpi4py',
         'matplotlib',
     ],
     extras_require = {
