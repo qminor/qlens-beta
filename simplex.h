@@ -45,6 +45,8 @@ class Simplex : public Random
 		tfinal = tfinal_default;
 		tinc = tinc_default;
 		simplex_display_bestfit_point = false;
+		fmin = -1e30;
+		fmin_anneal = -1e30;
 	}
 	Simplex(double* point, const int& ndim_in, const double& vertex_displacement, const double& ftol_in, const int seed_in)
 	{
@@ -58,6 +60,8 @@ class Simplex : public Random
 		initialize_simplex(point,ndim_in,disps_in,ftol_in);
 		func = NULL;
 		simplex_display_bestfit_point = false;
+		fmin = -1e30;
+		fmin_anneal = -1e30;
 	}
 	Simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in, const int seed_in)
 	{
@@ -69,6 +73,8 @@ class Simplex : public Random
 		initialize_simplex(point,ndim_in,vertex_displacements,ftol_in);
 		func = NULL;
 		simplex_display_bestfit_point = false;
+		fmin = -1e30;
+		fmin_anneal = -1e30;
 	}
 	~Simplex();
 

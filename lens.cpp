@@ -600,6 +600,8 @@ QLens::QLens() : UCMC()
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
+	ellipticity_gradient = false;
+	contours_overlap = false; // required for ellipticity gradient mode to check that contours don't overlap
 	syserr_pos = 0.0;
 	wl_shear_factor = 1.0;
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
@@ -889,7 +891,7 @@ QLens::QLens() : UCMC()
 	tabulate_q_N = 10;
 	grid = NULL;
 	Gauss_NN = 1024;
-	integral_tolerance = 5e-3;
+	integral_tolerance = 1e-3;
 	default_parameter_mode = 0;
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
@@ -936,6 +938,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	set_cosmology(omega_matter,0.04,hubble,2.215);
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
+	ellipticity_gradient = lens_in->ellipticity_gradient;
+	contours_overlap = lens_in->contours_overlap; // required for ellipticity gradient mode to check that contours don't overlap
 	user_changed_zsource = lens_in->user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = lens_in->auto_zsource_scaling;
 	reference_source_redshift = lens_in->reference_source_redshift; // this is the source redshift with respect to which the lens models are defined
@@ -1629,10 +1633,10 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		case ALPHA:
 			//new_lens = new Alpha(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break; // the old way
 			
-			alphaptr = new Alpha();
-			alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
+			//alphaptr = new Alpha();
+			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			//alphaptr = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
+			alphaptr = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
 		
 			new_lens = alphaptr;
 			break;
@@ -1738,6 +1742,7 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
+	if (emode > 3) die("lens emode greater than 3 does not exist");
 	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f, this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
@@ -1932,6 +1937,7 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 
 void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 {
+	// NOTE: the integration points/weights should NOT be in the LensProfile classes. They should be in one place so they don't get computed & copied multiple times. FIX THIS!!!
 	new_lens->set_integration_parameters(Gauss_NN, integral_tolerance);
 	new_lens->setup_cosmology(this,zl,zs);
 
@@ -2418,8 +2424,8 @@ void QLens::remove_lens(int lensnumber)
 		if (i != lensnumber) lens_list[i]->unanchor_parameter(lens_list[lensnumber]); // this unanchors the lens if any of its parameters are anchored to the lens being deleted
 	}
 	for (i=0; i < n_sb; i++) {
-		// If any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
-		if ((sb_list[i]->center_anchored==true) and (sb_list[i]->get_center_anchor_number()==lensnumber)) sb_list[i]->delete_center_anchor();
+		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
+		if ((sb_list[i]->center_anchored_to_lens==true) and (sb_list[i]->get_center_anchor_number()==lensnumber)) sb_list[i]->delete_center_anchor();
 	}
 	remove_old_lens_redshift(lens_redshift_idx[lensnumber], lensnumber, true); // removes the lens redshift from the list if no other lenses share that redshift
 	for (i=0,j=0; i < nlens; i++) {
@@ -2656,8 +2662,12 @@ void QLens::record_singular_points(double *zfacs)
 	n_singular_points = singular_pts.size();
 }
 
-void QLens::add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc)
+void QLens::add_source_object(SB_ProfileName name, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2)
 {
+	int old_emode = SB_Profile::default_ellipticity_mode;
+	if (emode > 1) die("SB emode greater than 1 does not exist");
+	if (emode != -1) SB_Profile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
+
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++)
@@ -2667,19 +2677,24 @@ void QLens::add_source_object(SB_ProfileName name, double sb_norm, double scale,
 
 	switch (name) {
 		case GAUSSIAN:
-			newlist[n_sb] = new Gaussian(sb_norm, scale, q, theta, xc, yc); break;
+			newlist[n_sb] = new Gaussian(sb_norm, scale, q, theta, xc, yc, this); break;
 		case SERSIC:
-			newlist[n_sb] = new Sersic(sb_norm, scale, logslope_param, q, theta, xc, yc); break;
+			newlist[n_sb] = new Sersic(sb_norm, scale, logslope_param, q, theta, xc, yc, this); break;
+		case CORE_SERSIC:
+			newlist[n_sb] = new CoreSersic(sb_norm, scale, logslope_param, scale2, special_param1, special_param2, q, theta, xc, yc, this); break;
 		case CORED_SERSIC:
-			newlist[n_sb] = new Cored_Sersic(sb_norm, scale, logslope_param, scale2, q, theta, xc, yc); break;
+			newlist[n_sb] = new Cored_Sersic(sb_norm, scale, logslope_param, scale2, q, theta, xc, yc, this); break;
+		case DOUBLE_SERSIC:
+			newlist[n_sb] = new DoubleSersic(sb_norm, scale, scale2, logslope_param, special_param1, special_param2, q, theta, xc, yc, this); break;
 		case TOPHAT:
-			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc); break;
+			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc, this); break;
 		default:
 			die("Surface brightness profile type not recognized");
 	}
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
 void QLens::add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate)
@@ -2691,7 +2706,7 @@ void QLens::add_shapelet_source(const double amp00, const double sig_x, const do
 		delete[] sb_list;
 	}
 
-	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, nonlinear_amp00, truncate);
+	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, nonlinear_amp00, truncate, this);
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
@@ -2706,24 +2721,29 @@ void QLens::add_multipole_source(int m, const double a_m, const double n, const 
 		delete[] sb_list;
 	}
 
-	newlist[n_sb] = new SB_Multipole(a_m, n, m, theta, xc, yc, sine_term);
+	newlist[n_sb] = new SB_Multipole(a_m, n, m, theta, xc, yc, sine_term, this);
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
-void QLens::add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc)
+void QLens::add_source_object(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
+	int old_emode = SB_Profile::default_ellipticity_mode;
+	if (emode > 1) die("SB emode greater than 1 does not exist");
+	if (emode != -1) SB_Profile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
+
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++)
 			newlist[i] = sb_list[i];
 		delete[] sb_list;
 	}
-	newlist[n_sb++] = new SB_Profile(splinefile, q, theta, xc, yc, qx, f);
+	newlist[n_sb++] = new SB_Profile(splinefile, q, theta, xc, yc, qx, f, this);
 
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
 /*
@@ -2756,6 +2776,12 @@ void QLens::remove_source_object(int sb_number)
 			j++;
 		}
 	}
+	for (i=0; i < n_sb; i++) {
+		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
+		if ((i != sb_number) and (sb_list[i]->center_anchored_to_source==true) and (sb_list[i]->get_center_anchor_number()==sb_number)) sb_list[i]->delete_center_anchor();
+	}
+
+
 	delete sb_list[sb_number];
 	delete[] sb_list;
 	n_sb--;
@@ -4840,6 +4866,7 @@ double QLens::einstein_radius_single_lens(const double src_redshift, const int l
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
+	// this is used by the DerivedParam class in qlens.h
 	double total_kappa;
 	int j;
 	double kap, kap2;
@@ -4933,7 +4960,53 @@ void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *ma
 void QLens::plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname)
 {
 	if (l >= nlens) { warn("lens %i does not exist", l); return; }
-	lens_list[l]->plot_kappa_profile(rmin,rmax,steps,kname,kdname);
+	ofstream kout, kdout;
+	open_output_file(kout,kname);
+	if (kdname != NULL) open_output_file(kdout,kdname);
+	lens_list[l]->plot_kappa_profile(rmin,rmax,steps,kout,kdout);
+}
+
+void QLens::plot_sb_profile(int l, double rmin, double rmax, int steps, const char *sname)
+{
+	if (l >= n_sb) { warn("src %i does not exist", l); return; }
+	ofstream sbout;
+	open_output_file(sbout,sname);
+	sb_list[l]->plot_sb_profile(rmin,rmax,steps,sbout);
+}
+
+void QLens::plot_total_sbprofile(double rmin, double rmax, int steps, const char *sbname)
+{
+	double r, rstep, total_sbprofile;
+	rstep = pow(rmax/rmin, 1.0/steps);
+	int i,j,k;
+	ofstream sbout;
+	open_output_file(sbout,sbname);
+	if (use_scientific_notation) sbout << setiosflags(ios::scientific);
+	double arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	double sb;
+	double theta, thetastep;
+	int thetasteps = 200;
+	thetastep = 2*M_PI/thetasteps;
+	double x, y;
+	
+	if (autocenter==true) {
+	for (int i=0; i < nlens; i++)
+		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
+	}
+	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
+		total_sbprofile = 0;
+		for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
+			x = grid_xcenter + r*cos(theta);
+			y = grid_ycenter + r*sin(theta);
+			sb=0;
+			for (k=0; k < n_sb; k++)
+				sb += sb_list[k]->surface_brightness(x,y);
+			total_sbprofile += sb;
+		}
+		total_sbprofile /= thetasteps;
+		sbout << r << " " << total_sbprofile << " " << r*arcsec_to_kpc << endl;
+	}
 }
 
 bool QLens::isspherical()
@@ -4956,36 +5029,38 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 	beta[0] = point[0] - alpha[0];
 	beta[1] = point[1] - alpha[1];
 	double kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
-	cout << "kappa = " << kappaval << endl;
-	cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
-	//cout << "custom deflection = (" << alpha2[0] << "," << alpha2[1] << ")\n";
-	cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
-	cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
-	cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
-	cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
-	cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
+	if (mpi_id==0) {
+		cout << "kappa = " << kappaval << endl;
+		cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
+		//cout << "custom deflection = (" << alpha2[0] << "," << alpha2[1] << ")\n";
+		cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
+		cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
+		cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
+		cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
+		cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
 
-	/*
-	if (n_lens_redshifts > 1) {
-		lensvector xl;
-		for (int i=1; i < n_lens_redshifts; i++) {
-			map_to_lens_plane(i,x,y,xl,0,reference_zfactors,default_zsrc_beta_factors);
-			cout << "x(z=" << lens_redshifts[i] << "): (" << xl[0] << "," << xl[1] << ")" << endl;
-		}
+		/*
+		if (n_lens_redshifts > 1) {
+			lensvector xl;
+			for (int i=1; i < n_lens_redshifts; i++) {
+				map_to_lens_plane(i,x,y,xl,0,reference_zfactors,default_zsrc_beta_factors);
+				cout << "x(z=" << lens_redshifts[i] << "): (" << xl[0] << "," << xl[1] << ")" << endl;
+			}
 
-		int i,j;
-		for (i=1; i < n_lens_redshifts; i++) {
-			for (j=0; j < i; j++) cout << "beta(" << i << "," << j << "): " << default_zsrc_beta_factors[i-1][j] << endl;
+			int i,j;
+			for (i=1; i < n_lens_redshifts; i++) {
+				for (j=0; j < i; j++) cout << "beta(" << i << "," << j << "): " << default_zsrc_beta_factors[i-1][j] << endl;
+			}
+			for (i=0; i < n_lens_redshifts; i++) cout << "zfac(" << i << "): " << reference_zfactors[i] << endl;
 		}
-		for (i=0; i < n_lens_redshifts; i++) cout << "zfac(" << i << "): " << reference_zfactors[i] << endl;
+		*/
+		if (n_sb > 0) {
+			double sb = find_surface_brightness(point);
+			cout << "surface brightness = " << sb << endl;
+		}
+		cout << endl;
+		//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
 	}
-	*/
-	if (n_sb > 0) {
-		double sb = find_surface_brightness(point);
-		cout << "surface brightness = " << sb << endl;
-	}
-	cout << endl;
-	//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
 }
 
 
@@ -6469,8 +6544,12 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 					fitmodel->sb_list[i] = new Gaussian((Gaussian*) sb_list[i]); break;
 				case SERSIC:
 					fitmodel->sb_list[i] = new Sersic((Sersic*) sb_list[i]); break;
+				case CORE_SERSIC:
+					fitmodel->sb_list[i] = new CoreSersic((CoreSersic*) sb_list[i]); break;
 				case CORED_SERSIC:
 					fitmodel->sb_list[i] = new Cored_Sersic((Cored_Sersic*) sb_list[i]); break;
+				case DOUBLE_SERSIC:
+					fitmodel->sb_list[i] = new DoubleSersic((DoubleSersic*) sb_list[i]); break;
 				case SB_MULTIPOLE:
 					fitmodel->sb_list[i] = new SB_Multipole((SB_Multipole*) sb_list[i]); break;
 				case SHAPELET:
@@ -6482,7 +6561,8 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			}
 		}
 		for (i=0; i < n_sb; i++) {
-			if (fitmodel->sb_list[i]->center_anchored==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
+			if (fitmodel->sb_list[i]->center_anchored_to_lens==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
+			if (fitmodel->sb_list[i]->center_anchored_to_source==true) fitmodel->sb_list[i]->anchor_center_to_source(fitmodel->sb_list, sb_list[i]->get_center_anchor_number());
 		}
 	}
 
@@ -6536,7 +6616,9 @@ void QLens::update_anchored_parameters_and_redshift_data()
 		lens_list[i]->update_anchored_parameters();
 	}
 	for (int i=0; i < n_sb; i++) {
-		if (sb_list[i]->center_anchored) sb_list[i]->update_anchor_center();
+		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source)) {
+			sb_list[i]->update_anchor_center();
+		}
 	}
 	update_lens_redshift_data();
 	reset_grid();
@@ -6545,11 +6627,11 @@ void QLens::update_anchored_parameters_and_redshift_data()
 bool QLens::update_fitmodel(const double* params)
 {
 	bool status = true;
+	if (ellipticity_gradient) contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
 	int i, index=0;
 	for (i=0; i < nlens; i++) {
 		fitmodel->lens_list[i]->update_fit_parameters(params,index,status);
 	}
-	fitmodel->update_anchored_parameters_and_redshift_data();
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -6569,6 +6651,8 @@ bool QLens::update_fitmodel(const double* params)
 		if (vary_srcgrid_size_scale) fitmodel->srcgrid_size_scale = params[index++];
 		if (vary_magnification_threshold) fitmodel->pixel_magnification_threshold = params[index++];
 	}
+	fitmodel->update_anchored_parameters_and_redshift_data();
+	//fitmodel->print_source_list(false);
 	if (source_fit_mode == Shapelet_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) fitmodel->regularization_parameter = params[index++];
 	}
@@ -6589,6 +6673,7 @@ bool QLens::update_fitmodel(const double* params)
 	if (vary_wl_shear_factor_parameter) {
 		fitmodel->wl_shear_factor = params[index++];
 	}
+	if ((ellipticity_gradient) and (contours_overlap)) status = false;
 
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
 	return status;
@@ -7584,7 +7669,19 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	//} else if (source_fit_mode==Pixellated_Source) {
 		//if (image_pixel_data==NULL) { warn("cannot do fit; image pixel data has not been loaded"); return false; }
 	//}
-	if (nlens==0) { warn("cannot do fit; no lens models have been defined"); return false; }
+	if (nlens==0) {
+		if (n_sb==0) {
+			warn("cannot do fit; no lens or source models have been defined");
+			return false;
+		} else {
+			bool all_unlensed = true;
+			for (int i=0; i < n_sb; i++) if (sb_list[i]->is_lensed) all_unlensed = false;
+			if (!all_unlensed) {
+				warn("cannot do fit; background sources have been defined, but no lens models have been defined");
+				return false;
+			}
+		}
+	}
 	get_n_fit_parameters(n_fit_parameters);
 	if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
 	fitparams.input(n_fit_parameters);
@@ -8042,6 +8139,7 @@ double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
 
+	
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
@@ -8187,6 +8285,7 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 
 double QLens::chi_square_fit_simplex()
 {
+	fitmethod = SIMPLEX;
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
 	if (!initialize_fitmodel(false)) {
@@ -8303,7 +8402,7 @@ double QLens::chi_square_fit_simplex()
 		cout << "Best-fit model: 2*loglike = " << chisq_bestfit << " (after " << chisq_evals << " evals)" << endl;
 		//cout << "Number of iterations: " << iterations << endl;
 		for (int i=0; i < nlens; i++) fitmodel->lens_list[i]->reset_angle_modulo_2pi();
-		fitmodel->print_lens_list(false);
+		if (nlens > 0) fitmodel->print_lens_list(false);
 
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
@@ -8375,6 +8474,7 @@ double QLens::chi_square_fit_simplex()
 
 double QLens::chi_square_fit_powell()
 {
+	fitmethod = POWELL;
 	if (setup_fit_parameters(false)==false) return 0.0;
 	fit_set_optimizations();
 	if (!initialize_fitmodel(true)) {
@@ -8473,6 +8573,9 @@ double QLens::chi_square_fit_powell()
 			fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		}
 		fitmodel->print_lens_list(false);
+		fitmodel->print_source_list(false);
+		double testchisq = 2*(this->*loglikeptr)(fitparams.array());
+		cout << "Final chisq=" << testchisq << endl;
 
 		if (source_fit_mode == Point_Source) {
 			lensvector *bestfit_src = new lensvector[n_sourcepts_fit];
@@ -8536,6 +8639,7 @@ double QLens::chi_square_fit_powell()
 
 void QLens::nested_sampling()
 {
+	fitmethod = NESTED_SAMPLING;
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
@@ -8663,6 +8767,7 @@ void QLens::nested_sampling()
 
 void QLens::multinest(const bool resume_previous, const bool skip_run)
 {
+	fitmethod = MULTINEST;
 #ifdef USE_MULTINEST
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
@@ -8973,6 +9078,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 void QLens::polychord(const bool resume_previous, const bool skip_run)
 {
+	fitmethod = POLYCHORD;
 #ifdef USE_POLYCHORD
 	if (setup_fit_parameters(true)==false) return;
 	fit_set_optimizations();
@@ -9229,6 +9335,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 bool QLens::add_dparams_to_chain()
 {
+	cout << "WHAT!!?!?!?!" << endl;
 	// Should have an option to specify the extension to the filename for the new chain (which defaults to '.new' if nothing is specified). ADD THIS IN!!!!!!!!!!!!!
 	// Should check whether any new derived parameters have the same name as one of the old derived parameters--this can happen if one accidently adds the
 	// same derived parameters they had before (in addition to some new ones). Have it print an error if this is the case. ADD THIS FEATURE!!!!!!
@@ -9779,7 +9886,7 @@ void QLens::chi_square_twalk()
 
 bool QLens::adopt_model(dvector &fitparams)
 {
-	if (nlens == 0) { if (mpi_id==0) warn(warnings,"No fit model has been specified"); return false; }
+	if ((nlens == 0) and ((n_sb==0) or (source_fit_mode != Parameterized_Source))) { if (mpi_id==0) warn(warnings,"No lens/source model has been specified"); return false; }
 	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
 	if (fitparams.size() != n_fit_parameters) {
 		if (mpi_id==0) {
@@ -9796,8 +9903,6 @@ bool QLens::adopt_model(dvector &fitparams)
 		lens_list[i]->update_fit_parameters(transformed_params,index,status);
 		lens_list[i]->reset_angle_modulo_2pi();
 	}
-	update_anchored_parameters_and_redshift_data();
-	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (source_fit_mode == Point_Source) {
 		if (use_analytic_bestfit_src) {
 			output_analytic_srcpos(sourcepts_fit.data());
@@ -9821,6 +9926,8 @@ bool QLens::adopt_model(dvector &fitparams)
 		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
 		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
 	}
+	update_anchored_parameters_and_redshift_data();
+	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (source_fit_mode == Shapelet_Source) {
 		if ((vary_regularization_parameter) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
@@ -9943,7 +10050,7 @@ double QLens::loglike_deriv(const dvector &params, const int index, const double
 
 void QLens::output_bestfit_model()
 {
-	if (nlens == 0) { warn(warnings,"No fit model has been specified"); return; }
+	if ((nlens == 0) and (n_sb==0)) { warn(warnings,"No fit model has been specified"); return; }
 	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
 	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
 	if (fit_output_dir != ".") create_output_directory();
@@ -10013,12 +10120,14 @@ void QLens::output_bestfit_model()
 			prangefile << "-1e30 1e30" << endl;
 	}
 	prangefile.close();
-	string script_str = fit_output_dir + "/" + fit_output_filename + ".commands";
-	ofstream scriptfile(script_str.c_str());
-	for (int i=0; i < lines.size()-1; i++) {
-		scriptfile << lines[i] << endl;
+	if (lines.size() > 0) {
+		string script_str = fit_output_dir + "/" + fit_output_filename + ".commands";
+		ofstream scriptfile(script_str.c_str());
+		for (int i=0; i < lines.size()-1; i++) {
+			scriptfile << lines[i] << endl;
+		}
+		scriptfile.close();
 	}
-	scriptfile.close();
 
 	QLens* model;
 	if (fitmodel != NULL) model = fitmodel;
@@ -10353,6 +10462,7 @@ double QLens::fitmodel_loglike_extended_source_test(double* params)
 
 void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
+	if (n_derived_params==0) return;
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
@@ -11199,6 +11309,8 @@ bool QLens::create_source_surface_brightness_grid(bool verbal, bool image_grid_a
 			}
 			return false;
 		}
+	} else {
+		if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 	}
 
 	if (auto_sourcegrid) {
@@ -11313,6 +11425,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 
 bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool verbose)
 {
+	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	else if (n_sb==0) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_residual==true) and (image_pixel_data==NULL)) { warn("cannot plot residual image, no pixel data image has been loaded"); return false; }
@@ -11396,10 +11509,19 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		}
 	}
 	if (offload_to_data) {
+		if (plot_residual) {
+			for (i=0; i < n_image_pixels_x; i++) {
+				for (j=0; j < n_image_pixels_y; j++) {
+					image_pixel_grid->surface_brightness[i][j] = image_pixel_data->surface_brightness[i][j] - image_pixel_grid->surface_brightness[i][j];
+				}
+			}
+		}
 		if (image_pixel_data != NULL) delete image_pixel_data;
 		image_pixel_data = new ImagePixelData();
 		image_pixel_data->set_lens(this);
-		image_pixel_data->load_from_image_grid();
+		image_pixel_data->load_from_image_grid(image_pixel_grid,sim_pixel_noise);
+
+		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;
 		int npx, npy;
 		image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
@@ -11407,12 +11529,14 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		grid_ylength = ymax-ymin;
 		set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 		image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
+
 		// Make sure the grid size & center are fixed now
 		if (autocenter) autocenter = false;
 		if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 		if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
-		// The sim_pixel_noise should now become data_pixel_noise, and to be safe, set sim_pixel_noise = 0 since we will be fitting now
-		data_pixel_noise = sim_pixel_noise;
+		// The sim_pixel_noise should now become data_pixel_noise
+		if (sim_pixel_noise != 0) data_pixel_noise = sim_pixel_noise;
+		else if (data_pixel_noise != 0) warn("no noise generated when creating mock data, but data_pixel_noise != 0");
 	}
 
 	delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
@@ -11485,7 +11609,7 @@ bool QLens::set_shapelet_imgpixel_nsplit()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return false; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, source_fit_mode, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	image_pixel_grid->redo_lensing_calculations();
 	double sig,xc,yc,nsplit;
@@ -11512,7 +11636,7 @@ void QLens::load_pixel_grid_from_data()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, source_fit_mode,ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 }
 
@@ -11520,7 +11644,7 @@ void QLens::plot_image_pixel_grid()
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, source_fit_mode,ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->redo_lensing_calculations();
 	image_pixel_grid->plot_grid("map",false);
 }
@@ -11529,7 +11653,7 @@ double QLens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this, reference_zfactors, default_zsrc_beta_factors, source_fit_mode, ray_tracing_method, (*image_pixel_data));
+	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data));
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	double chisq0;
 	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
@@ -11758,7 +11882,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 	} else if (source_fit_mode == Parameterized_Source) {
-		image_pixel_grid->find_surface_brightness();
+		bool foreground_only = (nlens==0) ? true : false;
+		image_pixel_grid->find_surface_brightness(foreground_only);
 		vectorize_image_pixel_surface_brightness();
 		PSF_convolution_pixel_vector(image_surface_brightness,verbal);
 		store_image_pixel_surface_brightness();
@@ -11786,7 +11911,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		int n_data_pixels=0;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if (image_pixel_data->require_fit[i][j]) {
+				if (image_pixel_data->in_mask[i][j]) {
 					n_data_pixels++;
 				}
 			}
@@ -11837,7 +11962,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	int n_data_pixels=0;
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if (image_pixel_data->require_fit[i][j]) {
+			if (image_pixel_data->in_mask[i][j]) {
 				n_data_pixels++;
 				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
 					img_index = image_pixel_grid->pixel_index[i][j];
@@ -11974,7 +12099,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double max_external_sb = -1e30, max_sb = -1e30;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_data->require_fit[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
+				if ((image_pixel_data->in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
 					if (image_surface_brightness[img_index] > max_sb) {
 						 max_sb = image_surface_brightness[img_index];
@@ -11986,7 +12111,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((!image_pixel_data->require_fit[i][j]) and ((image_pixel_data->extended_mask[i][j])) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
+				if ((!image_pixel_data->in_mask[i][j]) and ((image_pixel_data->extended_mask[i][j])) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
 					//cout << image_surface_brightness[img_index] << endl;
 					if (abs(image_surface_brightness[img_index]) >= outside_sb_threshold) {
@@ -12068,7 +12193,7 @@ double QLens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 	int i,j;
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if (image_pixel_data->require_fit[i][j]) {
+			if (image_pixel_data->in_mask[i][j]) {
 				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
 					img_index = image_pixel_grid->pixel_index[i][j];
 					chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later

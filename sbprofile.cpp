@@ -1,5 +1,6 @@
 #include "sbprofile.h"
 #include "qlens.h"
+#include "egrad.h"
 #include "mathexpr.h"
 #include "errors.h"
 #include <cmath>
@@ -10,22 +11,49 @@ using namespace std;
 
 bool SB_Profile::orient_major_axis_north = false; // At the moment, this setting cannot be changed; it should probably be removed altogether
 bool SB_Profile::use_sb_ellipticity_components = false;
+int SB_Profile::default_ellipticity_mode = 1;
 bool SB_Profile::use_fmode_scaled_amplitudes = true;
+bool SB_Profile::fourier_use_eccentric_anomaly = true;
+bool SB_Profile::fourier_sb_perturbation = false; // if true, add fourier modes to the surface brightness, rather than the elliptical radius
 double SB_Profile::zoom_split_factor = 2;
 double SB_Profile::zoom_scale = 4;
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in)
+			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in)
 {
 	model_name = "sbspline";
 	sbtype = SB_SPLINE;
-	set_nparams(6);
+	setup_base_source_properties(6,2,true);
+	lens = lens_in;
 	qx_parameter = qx_in;
 	f_parameter = f_in;
 	sb_spline.input(splinefile);
+	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+}
+
+void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source)
+{
+	center_anchored_to_lens = false;
+	center_anchored_to_source = false;
+	if (is_elliptical_source) {
+		ellipticity_mode = default_ellipticity_mode;
+	} else {
+		ellipticity_mode = -1; // indicates not an elliptical source
+	}
+	include_boxiness_parameter = false;
+	include_truncation_radius = false;
+	is_lensed = true; // default
+	zoom_subgridding = false; // default
+	ellipticity_gradient = false;
+	contours_overlap = false; // only relevant for ellipticity gradient mode
+	set_nparams(np);
+	sbprofile_nparams = sbprofile_np;
+
 	assign_param_pointers();
 	assign_paramnames();
+
+	include_limits = false;
 }
 
 SB_Profile::SB_Profile(const SB_Profile* sb_in)
@@ -40,29 +68,38 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 {
 	model_name = sb_in->model_name;
 	sbtype = sb_in->sbtype;
+	lens = sb_in->lens;
 	sb_number = sb_in->sb_number;
 	set_nparams(sb_in->n_params);
-	center_anchored = sb_in->center_anchored;
+	sbprofile_nparams = sb_in->sbprofile_nparams;
+	center_anchored_to_lens = sb_in->center_anchored_to_lens;
 	center_anchor_lens = sb_in->center_anchor_lens;
+	center_anchored_to_source = sb_in->center_anchored_to_source;
+	center_anchor_source = sb_in->center_anchor_source;
 	is_lensed = sb_in->is_lensed;
 	zoom_subgridding = sb_in->zoom_subgridding;
-
-	q = sb_in->q;
-	epsilon = sb_in->epsilon;
-	epsilon2 = sb_in->epsilon2;
-	set_angle_radians(sb_in->theta);
-	x_center = sb_in->x_center;
-	y_center = sb_in->y_center;
+	ellipticity_mode = sb_in->ellipticity_mode;
+	ellipticity_gradient = sb_in->ellipticity_gradient;
 
 	paramnames = sb_in->paramnames;
 	latex_paramnames = sb_in->latex_paramnames;
 	latex_param_subscripts = sb_in->latex_param_subscripts;
+	angle_param.input(n_params);
+	for (int i=0; i < n_params; i++) angle_param[i] = false; // the angle params will be recognized when assign_param_pointers() is called
 	n_vary_params = sb_in->n_vary_params;
 	vary_params.input(sb_in->vary_params);
 	stepsizes.input(sb_in->stepsizes);
 	set_auto_penalty_limits.input(sb_in->set_auto_penalty_limits);
 	penalty_lower_limits.input(sb_in->penalty_lower_limits);
 	penalty_upper_limits.input(sb_in->penalty_upper_limits);
+
+	q = sb_in->q;
+	epsilon1 = sb_in->epsilon1;
+	epsilon2 = sb_in->epsilon2;
+	angle_param_exists = sb_in->angle_param_exists;
+	if (angle_param_exists) set_angle_radians(sb_in->theta);
+	x_center = sb_in->x_center;
+	y_center = sb_in->y_center;
 
 	include_limits = sb_in->include_limits;
 	if (include_limits) {
@@ -72,7 +109,6 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		upper_limits_initial.input(sb_in->upper_limits_initial);
 	}
 	n_fourier_modes = sb_in->n_fourier_modes;
-	n_contour_bumps = sb_in->n_contour_bumps;
 	if (n_fourier_modes > 0) {
 		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
 		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
@@ -83,35 +119,26 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	include_truncation_radius = sb_in->include_truncation_radius;
 	if (include_boxiness_parameter) c0 = sb_in->c0;
 	if (include_truncation_radius) rt = sb_in->rt;
-	if (n_contour_bumps > 0) {
-		bump_drvals.input(sb_in->bump_drvals);
-		bump_xcvals.input(sb_in->bump_xcvals);
-		bump_ycvals.input(sb_in->bump_ycvals);
-		bump_sigvals.input(sb_in->bump_sigvals);
-		bump_e1vals.input(sb_in->bump_e1vals);
-		bump_e2vals.input(sb_in->bump_e2vals);
-		bump_qvals.input(sb_in->bump_qvals);
-		bump_phivals.input(sb_in->bump_phivals);
-		bump_xcprime.input(sb_in->bump_xcprime);
-		bump_ycprime.input(sb_in->bump_ycprime);
-		bump_paramnum.input(sb_in->bump_paramnum);
+	if (ellipticity_gradient) {
+		contours_overlap = sb_in->contours_overlap;
+		egrad_emode = sb_in->egrad_emode;
+		xi_final_egrad = sb_in->xi_final_egrad;
+		efunc_xi0 = sb_in->efunc_xi0;
+		efunc_dxi = sb_in->efunc_dxi;
+		efunc_qi = sb_in->efunc_qi;
+		efunc_theta_i = sb_in->efunc_theta_i;
+		efunc_qf = sb_in->efunc_qf;
+		efunc_theta_f = sb_in->efunc_theta_f;
 	}
-
 	assign_param_pointers();
 }
 
-void SB_Profile::set_nparams(const int &n_params_in)
+void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 {
+	int old_nparams = (resize) ? n_params : 0;
 	n_params = n_params_in;
-	center_anchored = false;
-	include_boxiness_parameter = false;
-	include_truncation_radius = false;
-	is_lensed = true; // default
-	zoom_subgridding = false; // default
 	n_fourier_modes = 0;
-	n_contour_bumps = 0;
-	n_vary_params = 0;
-	vary_params.input(n_params);
+	vary_params.resize(n_params);
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
 	latex_param_subscripts.resize(n_params);
@@ -119,31 +146,52 @@ void SB_Profile::set_nparams(const int &n_params_in)
 	set_auto_penalty_limits.input(n_params);
 	penalty_lower_limits.input(n_params);
 	penalty_upper_limits.input(n_params);
+	angle_param.input(n_params);
+	for (int i=0; i < n_params; i++) angle_param[i] = false;
 
 	param = new double*[n_params];
+	if (n_params > old_nparams) {
+		for (int i=old_nparams; i < n_params; i++) {
+			vary_params[i] = false;
+		}
+	}
+	n_vary_params = 0;
 	for (int i=0; i < n_params; i++) {
-		vary_params[i] = false;
+		if (vary_params[i]) n_vary_params++;
 	}
 }
 
 void SB_Profile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
 {
-	if (!center_anchored) center_anchored = true;
+	if (!center_anchored_to_lens) center_anchored_to_lens = true;
 	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
 	x_center = center_anchor_lens->x_center;
 	y_center = center_anchor_lens->y_center;
 }
 
+void SB_Profile::anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number)
+{
+	if (!center_anchored_to_source) center_anchored_to_source = true;
+	center_anchor_source = center_anchor_list[center_anchor_source_number];
+	x_center = center_anchor_source->x_center;
+	y_center = center_anchor_source->y_center;
+}
+
 void SB_Profile::delete_center_anchor()
 {
-	if (center_anchored) {
-		center_anchored = false;
+	if (center_anchored_to_lens) {
+		center_anchored_to_lens = false;
 		center_anchor_lens = NULL;
+	} else if (center_anchored_to_source) {
+		center_anchored_to_source = false;
+		center_anchor_source = NULL;
 	}
 }
 
 void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 {
+	// NOTE: this should be fixed up so that it comes before the Fourier modes, and the paramnames, stepsizes etc. should be automatically
+	// assigned in the general functions just as the Fourier modes are. FIX!
 	if (include_boxiness_parameter) return;
 	include_boxiness_parameter = true;
 	c0 = c0_in;
@@ -179,6 +227,8 @@ void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 
 void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
 {
+	// NOTE: this should be fixed up so that it comes before the Fourier modes, and the paramnames, stepsizes etc. should be automatically
+	// assigned in the general functions just as the Fourier modes are. FIX!
 	if (include_truncation_radius) return;
 	include_truncation_radius = true;
 	rt = rt_in;
@@ -212,97 +262,7 @@ void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
 	//assign_param_pointers();
 }
 
-void SB_Profile::add_contour_bump(const double amp, const double x, const double y, const double sig, const double e1, const double e2)
-{
-	n_contour_bumps++;
-	bump_paramnum.resize(n_contour_bumps);
-	bump_drvals.resize(n_contour_bumps);
-	bump_xcvals.resize(n_contour_bumps);
-	bump_ycvals.resize(n_contour_bumps);
-	bump_sigvals.resize(n_contour_bumps);
-	bump_e1vals.resize(n_contour_bumps);
-	bump_e2vals.resize(n_contour_bumps);
-	bump_phivals.resize(n_contour_bumps);
-	bump_qvals.resize(n_contour_bumps);
-	bump_xcprime.resize(n_contour_bumps);
-	bump_ycprime.resize(n_contour_bumps);
-	bump_paramnum[n_contour_bumps-1] = n_params;
-	bump_drvals[n_contour_bumps-1] = amp;
-	bump_xcvals[n_contour_bumps-1] = x;
-	bump_ycvals[n_contour_bumps-1] = y;
-	bump_sigvals[n_contour_bumps-1] = sig;
-	bump_e1vals[n_contour_bumps-1] = e1;
-	bump_e2vals[n_contour_bumps-1] = e2;
-	n_params += 6;
-
-	vary_params.resize(n_params);
-	paramnames.resize(n_params);
-	latex_paramnames.resize(n_params);
-	latex_param_subscripts.resize(n_params);
-	stepsizes.resize(n_params);
-	set_auto_penalty_limits.resize(n_params);
-	penalty_lower_limits.resize(n_params);
-	penalty_upper_limits.resize(n_params);
-
-	for (int i=6; i >= 1; i--) vary_params[n_params-i] = false;
-
-	stringstream nstream;
-	string nstring;
-	int nbump = n_contour_bumps-1;
-	nstream << nbump;
-	nstream >> nstring;
-
-	paramnames[n_params-6] = "cb" + nstring + "_dr";
-	latex_paramnames[n_params-6] = "A";
-	latex_param_subscripts[n_params-6] = "\\delta s" + nstring;
-	paramnames[n_params-5] = "cb" + nstring + "_xc";
-	latex_paramnames[n_params-5] = "x";
-	latex_param_subscripts[n_params-5] = "\\delta s" + nstring;
-	paramnames[n_params-4] = "cb" + nstring + "_yc";
-	latex_paramnames[n_params-4] = "y";
-	latex_param_subscripts[n_params-4] = "\\delta s" + nstring;
-	paramnames[n_params-3] = "cb" + nstring + "_sig";
-	latex_paramnames[n_params-3] = "\\sigma";
-	latex_param_subscripts[n_params-3] = "\\delta s" + nstring;
-	paramnames[n_params-2] = "cb" + nstring + "_e1";
-	latex_paramnames[n_params-2] = "e";
-	latex_param_subscripts[n_params-2] = "1,\\delta s" + nstring;
-	paramnames[n_params-1] = "cb" + nstring + "_e2";
-	latex_paramnames[n_params-1] = "e";
-	latex_param_subscripts[n_params-1] = "2,\\delta s" + nstring;
-
-	stepsizes[n_params-6] = 0.01; // arbitrary
-	set_auto_penalty_limits[n_params-6] = false;
-	stepsizes[n_params-5] = 0.01; // arbitrary
-	set_auto_penalty_limits[n_params-5] = false;
-	stepsizes[n_params-4] = 0.01; // arbitrary
-	set_auto_penalty_limits[n_params-4] = false;
-	stepsizes[n_params-3] = 0.01; // arbitrary
-	set_auto_penalty_limits[n_params-3] = false;
-	stepsizes[n_params-2] = 0.05; // arbitrary
-	set_auto_penalty_limits[n_params-2] = false;
-	stepsizes[n_params-1] = 0.05; // arbitrary
-	set_auto_penalty_limits[n_params-1] = false;
-
-	double **new_param = new double*[n_params];
-	for (int i=0; i < n_params-6; i++) new_param[i] = param[i];
-	new_param[n_params-6] = &bump_drvals[n_contour_bumps-1];
-	new_param[n_params-5] = &bump_xcvals[n_contour_bumps-1];
-	new_param[n_params-4] = &bump_ycvals[n_contour_bumps-1];
-	new_param[n_params-3] = &bump_sigvals[n_contour_bumps-1];
-	new_param[n_params-2] = &bump_e1vals[n_contour_bumps-1];
-	new_param[n_params-1] = &bump_e2vals[n_contour_bumps-1];
-	delete[] param;
-	param = new_param;
-
-	update_ellipticity_meta_parameters();
-
-	//delete[] param;
-	//param = new double*[n_params];
-	//assign_param_pointers();
-}
-
-void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2)
+void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
 {
 	n_fourier_modes++;
 	fourier_mode_mvals.resize(n_fourier_modes);
@@ -311,7 +271,7 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	fourier_mode_paramnum.resize(n_fourier_modes);
 	fourier_mode_mvals[n_fourier_modes-1] = m_in;
 	fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
-	fourier_mode_sinamp[n_fourier_modes-1] = phi_in;
+	fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
 	fourier_mode_paramnum[n_fourier_modes-1] = n_params;
 	n_params += 2;
 	vary_params.resize(n_params);
@@ -322,38 +282,19 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 	set_auto_penalty_limits.resize(n_params);
 	penalty_lower_limits.resize(n_params);
 	penalty_upper_limits.resize(n_params);
+	angle_param.resize(n_params);
+	angle_param[n_params-2] = false;
+	angle_param[n_params-1] = false;
 	if (vary1) n_vary_params++;
 	if (vary2) n_vary_params++;
 
 	vary_params[n_params-2] = vary1;
 	vary_params[n_params-1] = vary2;
-	stringstream mstream;
-	string mstring;
-	mstream << m_in;
-	mstream >> mstring;
-	paramnames[n_params-2] = "A_" + mstring;
-	paramnames[n_params-1] = "B_" + mstring;
-	latex_paramnames[n_params-2] = "A";
-	latex_param_subscripts[n_params-2] = mstring;
-	latex_paramnames[n_params-1] = "B";
-	latex_param_subscripts[n_params-1] = mstring;
-	stepsizes[n_params-2] = 0.005; // arbitrary
-	stepsizes[n_params-1] = 0.005; // arbitrary
-	set_auto_penalty_limits[n_params-2] = false;
-	set_auto_penalty_limits[n_params-1] = false;
-	//for (int i=0; i < n_params; i++) cout << stepsizes[i] << " ";
-	//cout << endl;
 
 	delete[] param;
 	param = new double*[n_params];
 	assign_param_pointers();
-
-	double **new_param = new double*[n_params];
-	for (int i=0; i < n_params-2; i++) new_param[i] = param[i];
-	new_param[n_params-2] = &fourier_mode_cosamp[n_fourier_modes-1];
-	new_param[n_params-1] = &fourier_mode_sinamp[n_fourier_modes-1];
-	delete[] param;
-	param = new_param;
+	assign_paramnames();
 }
 
 void SB_Profile::remove_fourier_modes()
@@ -369,6 +310,8 @@ void SB_Profile::remove_fourier_modes()
 	set_auto_penalty_limits.resize(n_params);
 	penalty_lower_limits.resize(n_params);
 	penalty_upper_limits.resize(n_params);
+	angle_param.resize(n_params);
+	for (int i=0; i < n_params; i++) angle_param[i] = false;
 	n_vary_params = 0;
 	for (int i=0; i < n_params; i++) if (vary_params[i]) n_vary_params++;
 
@@ -383,39 +326,130 @@ void SB_Profile::remove_fourier_modes()
 	assign_param_pointers();
 }
 
+bool SB_Profile::enable_ellipticity_gradient(const dvector& efunc_params)
+{
+	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
+	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
+	//NOTE: when new ellipticity functions are incorporated, n_efunc_params can be different from 4,
+	//      and efunc_params will be able to have different # of parameters, etc.
+
+	int n_egrad_params = 4;
+	if (efunc_params.size() != n_egrad_params) return false;
+	efunc_qi = q;
+	efunc_theta_i = theta;
+	efunc_qf = efunc_params[0];
+	efunc_theta_f = degrees_to_radians(efunc_params[1]);
+	efunc_xi0 = efunc_params[2];
+	efunc_dxi = efunc_params[3];
+
+	ellipticity_gradient = true;
+	int new_nparams = n_params + 4;
+
+	vary_params.resize(new_nparams);
+	paramnames.resize(new_nparams);
+	latex_paramnames.resize(new_nparams);
+	latex_param_subscripts.resize(new_nparams);
+	stepsizes.resize(new_nparams);
+	set_auto_penalty_limits.resize(new_nparams);
+	penalty_lower_limits.resize(new_nparams);
+	penalty_upper_limits.resize(new_nparams);
+	angle_param.resize(new_nparams);
+	for (int i=sbprofile_nparams+2; i < n_params; i++) {
+		vary_params[i+n_egrad_params] = vary_params[i];
+		angle_param[i+n_egrad_params] = angle_param[i];
+	}
+	for (int i=sbprofile_nparams+2; i < sbprofile_nparams + 2 + n_egrad_params; i++) {
+		vary_params[i] = false;
+	}
+	n_params = new_nparams;
+	delete[] param;
+	param = new double*[n_params];
+
+	assign_param_pointers();
+	assign_paramnames();
+
+	egrad_emode = ellipticity_mode;
+	update_ellipticity_meta_parameters();
+	if (lens != NULL) lens->ellipticity_gradient = true;
+	check_for_overlapping_contours();
+	if (contours_overlap) {
+		warn("contours overlap for chosen ellipticity gradient parameters");
+		if (lens != NULL) lens->contours_overlap = true;
+	}
+	return true;
+}
+
+void SB_Profile::disable_ellipticity_gradient()
+{
+	ellipticity_gradient = false;
+	int n_egrad_params = 4;
+
+	// Next, we make sure that if any egrad parameters were set to vary, we fix them and remove prior limits for those parameters
+	boolvector new_vary(vary_params);
+	for (int i=sbprofile_nparams + 2; i < sbprofile_nparams + 2 + n_egrad_params; i++) new_vary[i] = false;
+	vary_parameters(new_vary);
+
+	n_params -= n_egrad_params;
+	for (int i=sbprofile_nparams + 2; i < n_params; i++) {
+		// Now we move all info about remaining parameters (center coordinates, Fourier modes) down and then resize the arrays
+		vary_params[i] = vary_params[i+n_egrad_params];
+		angle_param[i] = angle_param[i+n_egrad_params];
+	}
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	angle_param.resize(n_params);
+	delete[] param;
+	param = new double*[n_params];
+
+	assign_param_pointers();
+	assign_paramnames();
+	update_ellipticity_meta_parameters();
+}
+
+
 void SB_Profile::assign_param_pointers()
 {
 	param[0] = &qx_parameter;
 	param[1] = &f_parameter;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(sbprofile_nparams);
 }
 
 void SB_Profile::set_geometric_param_pointers(int qi)
 {
 	// Sets parameter pointers for ellipticity (or axis ratio) and angle
-	if (use_sb_ellipticity_components) {
-		param[qi++] = &epsilon;
-		param[qi++] = &epsilon2;
-		angle_paramnum = -1; // there is no angle parameter if ellipticity components are being used
+	if (!ellipticity_gradient) {
+		if (use_sb_ellipticity_components) {
+			param[qi++] = &epsilon1;
+			param[qi++] = &epsilon2;
+			angle_param_exists = false; // there is no angle parameter if ellipticity components are being used
+		} else {
+			param[qi++] = &q;
+			param[qi] = &theta;
+			angle_param[qi++] = true;
+			angle_param_exists = true;
+		}
 	} else {
-		param[qi++] = &q;
-		param[qi] = &theta;
-		angle_paramnum = qi++;
+		angle_param_exists = true;
+		param[qi++] = &efunc_qi; // currently only emode=0 or emode=1 is supported with ellipticity gradients
+		param[qi] = &efunc_theta_i;
+		angle_param[qi++] = true;
+		param[qi++] = &efunc_qf;
+		param[qi] = &efunc_theta_f;
+		angle_param[qi++] = true;
+		param[qi++] = &efunc_xi0;
+		param[qi++] = &efunc_dxi;
 	}
+
 	param[qi++] = &x_center;
 	param[qi++] = &y_center;
 	if (include_boxiness_parameter) param[qi++] = &c0;
 	if (include_truncation_radius) param[qi++] = &rt;
-	if (n_contour_bumps > 0) {
-		for (int i=0; i < n_contour_bumps; i++) {
-			param[qi++] = &bump_drvals[i];
-			param[qi++] = &bump_xcvals[i];
-			param[qi++] = &bump_ycvals[i];
-			param[qi++] = &bump_sigvals[i];
-			param[qi++] = &bump_e1vals[i];
-			param[qi++] = &bump_e2vals[i];
-		}
-	}
 	if (n_fourier_modes > 0) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			param[qi++] = &fourier_mode_cosamp[i];
@@ -495,7 +529,7 @@ void SB_Profile::set_limits(const dvector& lower, const dvector& upper, const dv
 void SB_Profile::get_parameters(double* params)
 {
 	for (int i=0; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 }
@@ -513,15 +547,14 @@ bool SB_Profile::get_specific_parameter(const string name_in, double& value)
 	return found_match;
 }
 
-
-
 void SB_Profile::update_parameters(const double* params)
 {
 	for (int i=0; i < n_params; i++) {
-		if (i==angle_paramnum) *(param[i]) = degrees_to_radians(params[i]);
+		if (angle_param[i]) *(param[i]) = degrees_to_radians(params[i]);
 		else *(param[i]) = params[i];
 	}
 	update_meta_parameters();
+	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
 }
 
 bool SB_Profile::update_specific_parameter(const string name_in, const double& value)
@@ -552,7 +585,7 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 	if (n_vary_params > 0) {
 		for (int i=0; i < n_params; i++) {
 			if (vary_params[i]==true) {
-				if (i==angle_paramnum) {
+				if (angle_param[i]) {
 					*(param[i]) = degrees_to_radians(fitparams[index++]);
 					update_angle_meta_params();
 				}
@@ -565,9 +598,12 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 
 void SB_Profile::update_anchor_center()
 {
-	if (center_anchored) {
+	if (center_anchored_to_lens) {
 		x_center = center_anchor_lens->x_center;
 		y_center = center_anchor_lens->y_center;
+	} else if (center_anchored_to_source) {
+		x_center = center_anchor_source->x_center;
+		y_center = center_anchor_source->y_center;
 	}
 }
 
@@ -575,7 +611,7 @@ void SB_Profile::get_fit_parameters(dvector& fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
-			if (i==angle_paramnum) fitparams[index++] = radians_to_degrees(*(param[i]));
+			if (angle_param[i]) fitparams[index++] = radians_to_degrees(*(param[i]));
 			else fitparams[index++] = *(param[i]);
 		}
 	}
@@ -583,22 +619,37 @@ void SB_Profile::get_fit_parameters(dvector& fitparams, int &index)
 
 void SB_Profile::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1;
-	stepsizes[1] = 0.1;
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 1.0;
-	stepsizes[5] = 1.0;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
-void SB_Profile::set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i)
+void SB_Profile::set_geometric_param_auto_stepsizes(int &index)
 {
-	if (use_sb_ellipticity_components) {
-		stepsizes[eparam1_i] = 0.1; // e1
-		stepsizes[eparam2_i] = 0.1; // e2
+	if (!ellipticity_gradient) {
+		if (use_sb_ellipticity_components) {
+			stepsizes[index++] = 0.1; // e1
+			stepsizes[index++] = 0.1; // e2
+		} else {
+			stepsizes[index++] = 0.1; // q
+			stepsizes[index++] = 20;  // angle stepsize
+		}
 	} else {
-		stepsizes[eparam1_i] = 0.1; // q
-		stepsizes[eparam2_i] = 20;  // angle stepsize
+		stepsizes[index++] = 0.1;
+		stepsizes[index++] = 20;
+		stepsizes[index++] = 0.1;
+		stepsizes[index++] = 20;
+		stepsizes[index++] = 0.3;
+		stepsizes[index++] = 0.3;
+	}
+	stepsizes[index++] = 0.1; // xc
+	stepsizes[index++] = 0.1; // yc
+	if (n_fourier_modes > 0) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			stepsizes[index++] = 0.005;
+			stepsizes[index++] = 0.005;
+		}
 	}
 }
 
@@ -614,20 +665,35 @@ void SB_Profile::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = false;
 	set_auto_penalty_limits[1] = false;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(sbprofile_nparams);
 }
 
 void SB_Profile::set_geometric_param_auto_ranges(int param_i)
 {
-	if (use_sb_ellipticity_components) {
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
+	if (!ellipticity_gradient) {
+		if (use_sb_ellipticity_components) {
+			set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
+			set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = -1; penalty_upper_limits[param_i] = 1; param_i++;
+		} else {
+			set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
+			set_auto_penalty_limits[param_i++] = false;
+		}
 	} else {
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
-		set_auto_penalty_limits[param_i++] = false;
+			set_auto_penalty_limits[param_i++] = false;
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
+			set_auto_penalty_limits[param_i++] = false;
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0; penalty_upper_limits[param_i] = 1e30; param_i++;
+		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 1e-3; penalty_upper_limits[param_i] = 1e30; param_i++;
 	}
 	set_auto_penalty_limits[param_i++] = false;
 	set_auto_penalty_limits[param_i++] = false;
+	if (n_fourier_modes > 0) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			set_auto_penalty_limits[param_i++] = false;
+			set_auto_penalty_limits[param_i++] = false;
+		}
+	}
 }
 
 void SB_Profile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
@@ -653,7 +719,6 @@ void SB_Profile::get_fit_parameter_names(vector<string>& paramnames_vary, vector
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
 			paramnames_vary.push_back(paramnames[i]);
-			//cout << "NAME: " << paramnames_vary[i] << endl;
 			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
 			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
 		}
@@ -680,20 +745,39 @@ void SB_Profile::assign_paramnames()
 	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "qx"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "x";
 	paramnames[1] = "f"; latex_paramnames[1] = "f"; latex_param_subscripts[1] = "";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(sbprofile_nparams);
 }
 
 void SB_Profile::set_geometric_paramnames(int qi)
 {
-	if (use_sb_ellipticity_components) {
-		paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1,src"; qi++;
-		paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2,src"; qi++;
+	if (!ellipticity_gradient) {
+		if (use_sb_ellipticity_components) {
+			paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1,src"; qi++;
+			paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2,src"; qi++;
+		} else {
+			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "src"; qi++;
+			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "src"; qi++;
+		}
 	} else {
-		paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "src"; qi++;
-		paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "src"; qi++;
+		paramnames[qi] = "qi"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "i"; qi++;
+		paramnames[qi] = "theta_i"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "i"; qi++;
+		paramnames[qi] = "qf"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "f"; qi++;
+		paramnames[qi] = "theta_f"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "f"; qi++;
+		paramnames[qi] = "xi0"; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = "0"; qi++;
+		paramnames[qi] = "dxi"; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ""; qi++;
 	}
 	paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c,src"; qi++;
 	paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c,src"; qi++;
+	if (n_fourier_modes > 0) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			stringstream mstream;
+			string mstring;
+			mstream << fourier_mode_mvals[i];
+			mstream >> mstring;
+			paramnames[qi] = "A_" + mstring; latex_paramnames[qi] = "A"; latex_param_subscripts[qi] = mstring; qi++;
+			paramnames[qi] = "B_" + mstring; latex_paramnames[qi] = "B"; latex_param_subscripts[qi] = mstring; qi++;
+		}
+	}
 }
 
 void SB_Profile::set_geometric_parameters(const double &q1_in, const double &q2_in, const double &xc_in, const double &yc_in)
@@ -701,7 +785,7 @@ void SB_Profile::set_geometric_parameters(const double &q1_in, const double &q2_
 	qx_parameter = 1.0;
 
 	if (use_sb_ellipticity_components) {
-		epsilon = q1_in;
+		epsilon1 = q1_in;
 		epsilon2 = q2_in;
 	} else {
 		q = q1_in;
@@ -729,45 +813,25 @@ void SB_Profile::calculate_ellipticity_components()
 {
 	if (use_sb_ellipticity_components) {
 		double theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		epsilon = (1-q)*cos(2*theta_eff);
+		epsilon1 = (1-q)*cos(2*theta_eff);
 		epsilon2 = (1-q)*sin(2*theta_eff);
 	}
 }
 
 void SB_Profile::update_ellipticity_meta_parameters()
 {
-	if (use_sb_ellipticity_components) {
-		q = 1 - sqrt(SQR(epsilon) + SQR(epsilon2));
-		set_angle_from_components(epsilon,epsilon2); // note this will automatically set the costheta, sintheta parameters
-	} else {
-		update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
-	}
-	if (n_contour_bumps > 0) {
-		for (int i=0; i < n_contour_bumps; i++) {
-			bump_xcprime[i] = bump_xcvals[i] - x_center;
-			bump_ycprime[i] = bump_ycvals[i] - y_center;
-			if (theta != 0) rotate(bump_xcprime[i],bump_ycprime[i]);
-
-			bump_qvals[i] = 1 - sqrt(SQR(bump_e1vals[i]) + SQR(bump_e2vals[i]));
-			if (bump_qvals[i] < 0) bump_qvals[i] = 0.001;
-			if (bump_e1vals[i]==0) {
-				if (bump_e2vals[i] > 0) bump_phivals[i] = M_HALFPI;
-				else bump_phivals[i] = -M_HALFPI;
-			} else {
-				bump_phivals[i] = atan(abs(bump_e2vals[i]/bump_e1vals[i]));
-				if (bump_e1vals[i] < 0) {
-					if (bump_e2vals[i] < 0)
-						bump_phivals[i] = bump_phivals[i] - M_PI;
-					else
-						bump_phivals[i] = M_PI - bump_phivals[i];
-				} else if (bump_e2vals[i] < 0) {
-					bump_phivals[i] = -bump_phivals[i];
-				}
-			}
-			bump_phivals[i] = 0.5*bump_phivals[i];
-			while (bump_phivals[i] > M_PI) bump_phivals[i] -= M_PI;
-			while (bump_phivals[i] <= 0) bump_phivals[i] += M_PI;
+	if (!ellipticity_gradient) {
+		if (use_sb_ellipticity_components) {
+			q = 1 - sqrt(SQR(epsilon1) + SQR(epsilon2));
+			set_angle_from_components(epsilon1,epsilon2); // note this will automatically set the costheta, sintheta parameters
+		} else {
+			update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
 		}
+	} else {
+		q = efunc_qi; // q shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		theta = efunc_theta_i; // theta shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		check_for_overlapping_contours();
+		if ((lens != NULL) and (contours_overlap)) lens->contours_overlap = true;
 	}
 }
 
@@ -888,76 +952,202 @@ double SB_Profile::surface_brightness(double x, double y)
 	// switch to coordinate system centered on surface brightness profile
 	x -= x_center;
 	y -= y_center;
-	if (theta != 0) rotate(x,y);
-	double phi_q; // used for Fourier modes
-	if (n_fourier_modes > 0) {
-		phi_q = atan(abs(y/(q*x)));
-		if (x < 0) {
-			if (y < 0)
-				phi_q = phi_q - M_PI;
+	if ((!ellipticity_gradient) and (theta != 0)) rotate(x,y);
+
+	double xisq, rsq;
+	double fourier_factor = 0.0;
+
+	rsq = x*x + y*y;
+	if (!ellipticity_gradient) {
+		double rsq_ell = x*x + y*y/(q*q);
+		if (ellipticity_mode==1) rsq_ell *= q;
+		if ((include_boxiness_parameter) and (c0 != 0.0)) {
+			if (ellipticity_mode==0)
+				xisq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
 			else
-				phi_q = M_PI - phi_q;
-		} else if (y < 0) {
-			phi_q = -phi_q;
-		}
-	}
-
-	double rsq, rsq_ell = x*x + y*y/(q*q);
-	if ((include_boxiness_parameter) and (c0 != 0.0)) {
-		rsq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
-	} else {
-		rsq = rsq_ell;
-	}
-	if ((n_fourier_modes > 0) or (n_contour_bumps > 0)) {
-		double fourier_factor = 1.0;
-		if (use_fmode_scaled_amplitudes) {
-			for (int i=0; i < n_fourier_modes; i++) {
-				fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
-			}
+				xisq = pow(pow(abs(x)*sqrt(q),c0+2.0) + pow(abs(y/sqrt(q)),c0+2.0),2.0/(c0+2.0));
 		} else {
-			for (int i=0; i < n_fourier_modes; i++) {
-				fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
-			}
+			xisq = rsq_ell;
 		}
-		if (n_contour_bumps > 0) {
-			double phi_degrees;
-			double r = sqrt(rsq_ell);
-			double xprime, yprime, temp;
-			for (int i=0; i < n_contour_bumps; i++) {
-				//phi_degrees = phi_q*180/M_PI;
-				//while (abs(phi_degrees-bump_xcvals[i]) > 180) {
-					//if (phi_degrees > bump_xcvals[i]) phi_degrees -= 360;
-					//else phi_degrees += 360;
-				//}
-				xprime = x - bump_xcprime[i];
-				yprime = y - bump_ycprime[i];
-				temp = xprime*cos(bump_phivals[i]) + yprime*sin(bump_phivals[i]);
-				yprime = -xprime*sin(bump_phivals[i]) + yprime*cos(bump_phivals[i]);
-				xprime = temp;
+		if (n_fourier_modes > 0) {
+			double phi_q; // used for Fourier modes
+			if (n_fourier_modes > 0) {
+				if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
+				else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
+					// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
+				if (x < 0) phi_q += M_PI;
+				else if (y < 0) phi_q += M_2PI;
+			}
+			if (!fourier_sb_perturbation) fourier_factor = 1.0;
+			if (use_fmode_scaled_amplitudes) {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+				}
+			} else {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+				}
+			}
+			if (!fourier_sb_perturbation) xisq *= fourier_factor*fourier_factor;
+		}
+	} else {
+		double xi = elliptical_radius_root(x,y);
+		xisq = SQR(xi);
+		if ((n_fourier_modes > 0) and (fourier_sb_perturbation)) {
+			double ep, phi0;
+			if (fourier_use_eccentric_anomaly) ellipticity_function(sqrt(rsq),ep,phi0); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+			else ellipticity_function(xi,ep,phi0);
 
-				fourier_factor -= (bump_drvals[i]/r)*exp(-(SQR(xprime) + SQR(yprime/bump_qvals[i]))/SQR(bump_sigvals[i])/2);
+			double costh, sinth, xp, yp, qq, phi_q;
+			costh = cos(phi0);
+			sinth = sin(phi0);
+			xp = x*costh + y*sinth;
+			yp = -x*sinth + y*costh;
+			qq = sqrt(1-ep);
+
+			if (fourier_use_eccentric_anomaly) phi_q = atan(yp/(qq*xp));
+			else phi_q = atan(yp/xp);
+			if (xp < 0) phi_q += M_PI;
+			else if (yp < 0) phi_q += M_2PI;
+
+			if (use_fmode_scaled_amplitudes) {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+				}
+			} else {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+				}
 			}
 		}
-		rsq *= fourier_factor*fourier_factor;
 	}
-	double sb = sb_rsq(rsq);
-	if (include_truncation_radius) sb *= pow(1+pow(rsq/(rt*rt),3),-2);
-	//if (include_truncation_radius) {
-		//double fac = pow(1.0+pow(rsq/(rt*rt),1.5),-1.33333);
-		//cout << "r=" << sqrt(rsq) << " rt=" << rt << " fac=" << fac << endl;
-		//sb *= fac;
-	//}
+	double sb = sb_rsq(xisq);
+	if ((n_fourier_modes > 0) and (fourier_sb_perturbation)) {
+		// create virtual sb_rsq_deriv function in base class, and versions for all inherited classes, so you don't have to do this numerically for analytic models
+		double sbderiv, h = 1e-5;
+
+		if (fourier_use_eccentric_anomaly) {
+			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
+			if (xisq <= h) sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq))/(h);
+			else sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq-h))/(2*h);
+			sb += 2*fourier_factor*sbderiv*xisq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+		} else {
+			if (rsq <= h) sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq))/(h);
+			else sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq-h))/(2*h);
+			sb += 2*fourier_factor*sbderiv*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+		}
+		//sb += fourier_factor; // for testing purposes
+	}
+	if (include_truncation_radius) sb *= pow(1+pow(xisq/(rt*rt),3),-2);
+
+	if (sb*0.0 != 0.0) die("surface brightness returning NAN");
+
 	return sb;
 }
 
-//double SB_Profile::surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength)
-//double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
-//{
-	//return 0; // cop-out, because we're only using this feature for Gaussian profiles at the moment
-//}
+double SB_Profile::surface_brightness_test(double x, double y)
+{
+	// switch to coordinate system centered on surface brightness profile
+	x -= x_center;
+	y -= y_center;
+	if ((!ellipticity_gradient) and (theta != 0)) rotate(x,y);
+
+	double xisq, rsq;
+	double fourier_factor = 0.0;
+
+	rsq = x*x + y*y;
+			double phi_q; // used for Fourier modes
+	if (!ellipticity_gradient) {
+		double rsq_ell = x*x + y*y/(q*q);
+		if (ellipticity_mode==1) rsq_ell *= q;
+		if ((include_boxiness_parameter) and (c0 != 0.0)) {
+			if (ellipticity_mode==0)
+				xisq = pow(pow(abs(x),c0+2.0) + pow(abs(y/q),c0+2.0),2.0/(c0+2.0));
+			else
+				xisq = pow(pow(abs(x)*sqrt(q),c0+2.0) + pow(abs(y/sqrt(q)),c0+2.0),2.0/(c0+2.0));
+		} else {
+			xisq = rsq_ell;
+		}
+		if ((n_fourier_modes > 0)) {
+			if (n_fourier_modes > 0) {
+				if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
+				else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
+					// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
+				if (x < 0) phi_q += M_PI;
+				else if (y < 0) phi_q += M_2PI;
+			}
+			if (!fourier_sb_perturbation) fourier_factor = 1.0;
+			if (use_fmode_scaled_amplitudes) {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+				}
+			} else {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+				}
+			}
+			if (!fourier_sb_perturbation) xisq *= fourier_factor*fourier_factor;
+		}
+	} else {
+		double xi = elliptical_radius_root(x,y);
+		xisq = SQR(xi);
+		if ((n_fourier_modes > 0) and (fourier_sb_perturbation)) {
+			double ep, phi0;
+			if (fourier_use_eccentric_anomaly) ellipticity_function(sqrt(rsq),ep,phi0); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+			else ellipticity_function(xi,ep,phi0);
+
+			double costh, sinth, xp, yp, qq, phi_q;
+			costh = cos(phi0);
+			sinth = sin(phi0);
+			xp = x*costh + y*sinth;
+			yp = -x*sinth + y*costh;
+			qq = sqrt(1-ep);
+
+			if (fourier_use_eccentric_anomaly) phi_q = atan(yp/(qq*xp));
+			else phi_q = atan(yp/xp);
+			if (xp < 0) phi_q += M_PI;
+			else if (yp < 0) phi_q += M_2PI;
+
+			if (use_fmode_scaled_amplitudes) {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+				}
+			} else {
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+				}
+			}
+		}
+	}
+	double sb = sb_rsq(xisq);
+	double sbderiv;
+	if ((n_fourier_modes > 0) and (fourier_sb_perturbation)) {
+		// create virtual sb_rsq_deriv function in base class, and versions for all inherited classes, so you don't have to do this numerically for analytic models
+		double h = 1e-5;
+
+		if (fourier_use_eccentric_anomaly) {
+			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
+			if (xisq <= h) sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq))/(h);
+			else sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq-h))/(2*h);
+			sb += 2*fourier_factor*sbderiv*xisq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+		} else {
+			if (rsq <= h) sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq))/(h);
+			else sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq-h))/(2*h);
+			sb += 2*fourier_factor*sbderiv*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+		}
+		//sb += fourier_factor; // for testing purposes
+	}
+	if (include_truncation_radius) sb *= pow(1+pow(xisq/(rt*rt),3),-2);
+
+	if (sb*0.0 != 0.0) die("surface brightness returning NAN");
+	cout << "HI " << sb << " ff=" << fourier_factor << " sbder=" << sbderiv << " rsq=" << rsq << " xisq=" << xisq << " phi_q=" << phi_q << " x=" << x << " y=" << y << " q=" << q << " theta=" << theta << endl;
+
+	return sb;
+}
 
 double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
 {
+	// Note: at present this does not include Fourier modes or ellipticity gradients
 	//double pt1[0], pt2[0], pt1[1], pt2[1];
 	bool subgrid = false;
 	//pt1[0] = x - pixel_xlength/2;
@@ -1059,48 +1249,6 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 		if (d2.norm() < scale) subgrid = true;
 	}
 
-	/*
-	if ((iii==25) and (jjj==13)) {
-		//if (subgrid) cout << "SUBGRIDDING!" << endl;
-		//else cout << " NOT SUBGRIDDING! WTF???!!!!" << endl;
-		ofstream blargh("blargh.dat");
-		blargh << pt1[0] << " " << pt1[1] << endl;
-		blargh << pt2[0] << " " << pt2[1] << endl;
-		blargh << pt4[0] << " " << pt4[1] << endl;
-		blargh << pt3[0] << " " << pt3[1] << endl;
-		blargh << pt1[0] << " " << pt1[1] << endl << endl;
-		blargh << scpt1[0] << " " << scpt1[1] << endl;
-		blargh << scpt2[0] << " " << scpt2[1] << endl;
-		blargh << scpt4[0] << " " << scpt4[1] << endl;
-		blargh << scpt3[0] << " " << scpt3[1] << endl;
-		blargh << scpt1[0] << " " << scpt1[1] << endl << endl;
-		ofstream blarghpt("blarghpt.dat");
-		blarghpt << sbcenter[0] << " " << sbcenter[1] << endl;
-		ofstream blarghpt2("blarghpt2.dat");
-		blarghpt2 << centerpt[0] << " " << centerpt[1] << endl;
-	}
-	*/
-
-	/*
-	double pixel_xlength = dmax(pt2[0]-pt1[0],pt4[0]-pt3[0]); // a bit rough
-	double pixel_ylength = dmax(pt3[1]-pt1[1],pt4[1]-pt2[1]); // a bit rough
-	double pl = SQR(dmax(pixel_xlength,pixel_ylength))/4.0;
-	double scale = length_scale();
-	if ((pixel_xlength < scale/6) and (pixel_ylength < scale*q/6)) ; // grid already fine enough
-	// Redo the below line using cross products!
-	else if ((x_center >= pt1[0]) and (x_center <= pt2[0]) and (y_center >= pt1[1]) and (y_center <= pt2[1])) { subgrid = true; }
-	else {
-		double rsq;
-		rsq = SQR(pt1[0]-x_center) + SQR(pt1[1]-y_center);
-		if (rsq < 3*pl) subgrid = true;
-		rsq = SQR(pt2[0]-x_center) + SQR(pt2[1]-y_center);
-		if (rsq < 3*pl) subgrid = true;
-		rsq = SQR(pt3[0]-x_center) + SQR(pt3[1]-y_center);
-		if (rsq < 3*pl) subgrid = true;
-		rsq = SQR(pt4[0]-x_center) + SQR(pt4[1]-y_center);
-		if (rsq < 3*pl) subgrid = true;
-	}
-	*/
 	if (!subgrid) return surface_brightness(centerpt[0],centerpt[1]);
 	//if (subgrid) cout << "Subgridding! pt=" << centerpt[0] << "," << centerpt[1] << endl;
 	double pixel_xlength, pixel_ylength;
@@ -1142,11 +1290,87 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 	return sb;
 }
 
-
-
 double SB_Profile::surface_brightness_r(const double r)
 {
 	return sb_rsq(r*r);
+}
+
+bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts, const int mpi_np, const int mpi_id)
+{
+	// nested sampling: fitmode = 0
+	// downhill simplex: fitmode = 1 or higher
+	for (int i=0; i < sbprofile_nparams; i++) {
+		if (!vary_params[i]) {
+			warn("all sbprofile parameters must be allowed to vary (param %i set fixed)",i);
+			return false;
+		}
+		if ((fit_mode==0) and (lower_limits.size() != n_vary_params)) {
+			warn("lower/upper prior limits have not been set for sbprofile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
+			return false;
+		}
+	}
+	if (sbprofile_nparams == 0) {
+		warn("Not an ellipical sbprofile object; cannot do sbprofile fit");
+		return false;
+	}
+	n_isophote_datapts = isophote_data.n_xivals;
+	sbprofile_xivals = isophote_data.xivals;
+	sbprofile_data = isophote_data.sb_avg_vals;
+	sbprofile_errors = isophote_data.sb_errs;
+	double *fitparams = new double[sbprofile_nparams];
+	double *param_errors = new double[sbprofile_nparams];
+
+	if (fit_mode==0) {
+#ifdef USE_MPI
+		Set_MCMC_MPI(mpi_np,mpi_id);
+#endif
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&SB_Profile::sbprofile_loglike);
+		InputPoint(fitparams,lower_limits.array(),upper_limits.array(),sbprofile_nparams);
+		double lnZ;
+		MonoSample("sbprofile",n_livepts,lnZ,fitparams,param_errors,false);
+		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
+	} else {
+		double (Simplex::*loglikeptr)(double*);
+		loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::sbprofile_loglike);
+		double *stepsizes = new double [sbprofile_nparams];
+		for (int i=0; i < sbprofile_nparams; i++) {
+			stepsizes[i] = 0.1; // arbitrary
+			fitparams[i] = *(param[i]);
+		}
+		double chisq_tolerance = 1e-4;
+		if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
+		initialize_simplex(fitparams,sbprofile_nparams,stepsizes,chisq_tolerance);
+		simplex_set_display_bfpont(true);
+		simplex_set_function(loglikeptr);
+		int it, nrep=1;
+		while (nrep-- >= 0) {
+			it=0;
+			downhill_simplex(it,10000,0); // do final run with zero temperature
+		}
+		delete[] stepsizes;
+	}
+
+	delete[] fitparams;
+	delete[] param_errors;
+	sbprofile_xivals = NULL;
+	sbprofile_data = NULL;
+	sbprofile_errors = NULL;
+	return true;
+}
+
+double SB_Profile::sbprofile_loglike(double *params)
+{
+	int i;
+	double loglike=0;
+	for (i=0; i < sbprofile_nparams; i++) {
+		*(param[i]) = params[i];
+	}
+	update_meta_parameters();
+	for (i=0; i < n_isophote_datapts; i++) {
+		loglike += SQR((sbprofile_data[i] - sb_rsq(SQR(sbprofile_xivals[i])))/sbprofile_errors[i]);
+	}
+	loglike /= 2;
+	return loglike;
 }
 
 /*
@@ -1177,7 +1401,6 @@ double SB_Profile::surface_brightness_zeroth_order(double x, double y)
 	return 0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-
 void SB_Profile::update_indxptr(const int newval)
 {
 	return;
@@ -1190,6 +1413,18 @@ void SB_Profile::get_amplitudes(double *ampvec)
 }
 */
 
+void SB_Profile::plot_sb_profile(double rmin, double rmax, int steps, ofstream &sbout)
+{
+	double r, rstep;
+	rstep = pow(rmax/rmin, 1.0/steps);
+	int i;
+	sbout << setiosflags(ios::scientific);
+	bool converged;
+	for (i=0, r=rmin; i < steps; i++, r *= rstep) {
+		sbout << r << " " << sb_rsq(r*r) << " " << endl;
+	}
+}
+
 void SB_Profile::print_parameters()
 {
 	cout << model_name;
@@ -1199,11 +1434,19 @@ void SB_Profile::print_parameters()
 	cout << ": ";
 	for (int i=0; i < n_params; i++) {
 		cout << paramnames[i] << "=";
-		if (i==angle_paramnum) cout << radians_to_degrees(*(param[i])) << " degrees";
+		if (angle_param[i]) cout << radians_to_degrees(*(param[i])) << " degrees";
 		else cout << *(param[i]);
 		if (i != n_params-1) cout << ", ";
 	}
-	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
+	if (center_anchored_to_lens) cout << " (center anchored to lens " << center_anchor_lens->lens_number << ")";
+	else if (center_anchored_to_source) cout << " (center anchored to source " << center_anchor_source->sb_number << ")";
+	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != -1)) {
+		cout << " (";
+		if (ellipticity_gradient) cout << "egrad=on, ";
+		cout << "emode=" << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
+	} else {
+		if (ellipticity_gradient) cout << " (egrad=on)";
+	}
 	cout << endl;
 }
 
@@ -1237,10 +1480,18 @@ void SB_Profile::print_vary_parameters()
 void SB_Profile::window_params(double& xmin, double& xmax, double& ymin, double& ymax)
 {
 	double rmax = window_rmax();
-	xmin = -rmax;
-	xmax = rmax;
-	ymin = -q*rmax;
-	ymax = q*rmax;
+	if (ellipticity_mode==0) {
+		xmin = -rmax;
+		xmax = rmax;
+		ymin = -q*rmax;
+		ymax = q*rmax;
+	} else {
+		double sqrtq = sqrt(q);
+		xmin = -rmax/sqrtq;
+		xmax = rmax/sqrtq;
+		ymin = -sqrtq*rmax;
+		ymax = sqrtq*rmax;
+	}
 	if (theta != 0) {
 		double xx[4], yy[4];
 		xx[0]=xmin; yy[0]=ymin;
@@ -1280,7 +1531,7 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 	if (zoom_subgridding) scriptout << "-zoom ";
 
 	for (int i=0; i < n_params; i++) {
-		if (i==angle_paramnum) scriptout << radians_to_degrees(*(param[i]));
+		if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
 		else {
 			// If this is an optional parameter, need to specify parameter name before the value
 			if (paramnames[i]=="c0") scriptout << "c0="; // boxiness parameter
@@ -1288,9 +1539,6 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 			else {
 				for (int j=0; j < n_fourier_modes; j++) {
 					if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "="; // Fourier mode
-				}
-				for (int j=0; j < n_contour_bumps; j++) {
-					if (bump_paramnum[j]==i) scriptout << "cb" << "="; // Fourier mode
 				}
 			}
 			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
@@ -1351,17 +1599,16 @@ inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scri
 
 /********************************* Specific SB_Profile models (derived classes) *********************************/
 
-Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
 {
 	model_name = "gaussian";
 	sbtype = GAUSSIAN;
-	set_nparams(6);
+	setup_base_source_properties(6,2,true);
+	lens = lens_in;
 	max_sb = max_sb_in;
 	sig_x = sig_x_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 Gaussian::Gaussian(const Gaussian* sb_in)
@@ -1376,7 +1623,8 @@ Gaussian::Gaussian(const Gaussian* sb_in)
 void Gaussian::update_meta_parameters()
 {
 	//max_sb = sbtot/(M_2PI*q*sig_x*sig_x);
-	sbtot = max_sb*(M_2PI*q*sig_x*sig_x);
+	sbtot = max_sb*(M_2PI*sig_x*sig_x);
+	if (ellipticity_mode==0) sbtot *= q;
 	update_ellipticity_meta_parameters();
 }
 
@@ -1384,30 +1632,29 @@ void Gaussian::assign_paramnames()
 {
 	paramnames[0] = "sbmax";     latex_paramnames[0] = "S";       latex_param_subscripts[0] = "max";
 	paramnames[1] = "sigma"; latex_paramnames[1] = "\\sigma"; latex_param_subscripts[1] = "";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(sbprofile_nparams);
 }
 
 void Gaussian::assign_param_pointers()
 {
 	param[0] = &max_sb;
 	param[1] = &sig_x;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(sbprofile_nparams);
 }
 
 void Gaussian::set_auto_stepsizes()
 {
-	stepsizes[0] = (max_sb != 0) ? 0.1*max_sb : 0.1;
-	stepsizes[1] = (sig_x != 0) ? 0.1*sig_x : 0.1; // arbitrary
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.1;
-	stepsizes[5] = 0.1;
+	int index = 0;
+	stepsizes[index++] = (max_sb != 0) ? 0.1*max_sb : 0.1;
+	stepsizes[index++] = (sig_x != 0) ? 0.1*sig_x : 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Gaussian::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(sbprofile_nparams);
 }
 
 double Gaussian::sb_rsq(const double rsq)
@@ -1425,18 +1672,17 @@ double Gaussian::length_scale()
 	return sig_x;
 }
 
-Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
 {
 	model_name = "sersic";
 	sbtype = SERSIC;
-	set_nparams(7);
+	setup_base_source_properties(7,3,true);
+	lens = lens_in;
 	n = n_in;
 	Reff = Reff_in;
 	s0 = s0_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 Sersic::Sersic(const Sersic* sb_in)
@@ -1451,7 +1697,7 @@ Sersic::Sersic(const Sersic* sb_in)
 void Sersic::update_meta_parameters()
 {
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
-	k = b*pow(sqrt(q)/Reff,1.0/n);
+	k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
 }
@@ -1461,7 +1707,7 @@ void Sersic::assign_paramnames()
 	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
 	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(sbprofile_nparams);
 }
 
 void Sersic::assign_param_pointers()
@@ -1469,17 +1715,16 @@ void Sersic::assign_param_pointers()
 	param[0] = &s0;
 	param[1] = &Reff;
 	param[2] = &n;
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(sbprofile_nparams);
 }
 
 void Sersic::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1; // arbitrary
-	stepsizes[1] = 0.1; // arbitrary
-	stepsizes[2] = 0.1; // arbitrary
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.1;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Sersic::set_auto_ranges()
@@ -1487,7 +1732,7 @@ void Sersic::set_auto_ranges()
 	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(sbprofile_nparams);
 }
 
 double Sersic::sb_rsq(const double rsq)
@@ -1505,20 +1750,18 @@ double Sersic::length_scale()
 	return Reff;
 }
 
-
-Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
 {
 	model_name = "csersic";
 	sbtype = CORED_SERSIC;
-	set_nparams(8);
+	setup_base_source_properties(8,4,true);
+	lens = lens_in;
 	n = n_in;
 	Reff = Reff_in;
 	s0 = s0_in;
 	rc = rc_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 Cored_Sersic::Cored_Sersic(const Cored_Sersic* sb_in)
@@ -1534,7 +1777,7 @@ Cored_Sersic::Cored_Sersic(const Cored_Sersic* sb_in)
 void Cored_Sersic::update_meta_parameters()
 {
 	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	k = b*pow(sqrt(q)/Reff,1.0/n);
+	k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
 }
@@ -1545,7 +1788,7 @@ void Cored_Sersic::assign_paramnames()
 	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	paramnames[3] = "rc"; latex_paramnames[3] = "r"; latex_param_subscripts[3] = "c";
-	set_geometric_paramnames(4);
+	set_geometric_paramnames(sbprofile_nparams);
 }
 
 void Cored_Sersic::assign_param_pointers()
@@ -1554,18 +1797,17 @@ void Cored_Sersic::assign_param_pointers()
 	param[1] = &Reff;
 	param[2] = &n;
 	param[3] = &rc;
-	set_geometric_param_pointers(4);
+	set_geometric_param_pointers(sbprofile_nparams);
 }
 
 void Cored_Sersic::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1; // arbitrary
-	stepsizes[1] = 0.1; // arbitrary
-	stepsizes[2] = 0.1; // arbitrary
-	stepsizes[3] = 0.1; // arbitrary
-	set_auto_eparam_stepsizes(4,5);
-	stepsizes[6] = 0.1;
-	stepsizes[7] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Cored_Sersic::set_auto_ranges()
@@ -1574,12 +1816,20 @@ void Cored_Sersic::set_auto_ranges()
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
-	set_geometric_param_auto_ranges(4);
+	set_geometric_param_auto_ranges(sbprofile_nparams);
 }
 
 double Cored_Sersic::sb_rsq(const double rsq)
 {
-	return s0*exp(-k*pow(rsq+rc*rc,0.5/n));
+	// The rcore_corrected is a hack because the previous way I did this effectively had rc equal to the major axis of the core, not the average radius.
+	// It's bullshit, but required for backwards compatibility; otherwise my previous fits to J0946 won't work. REMOVE THIS HACK LATER!!!!!!
+	// SERIOUSLY, REMOVE THIS HACK LATER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! IT'S BULLSHIT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	double rcore_corrected;
+	if (ellipticity_mode==0) rcore_corrected = rc;
+	else rcore_corrected = rc*sqrt(q);
+
+	return s0*exp(-k*pow(rsq+rcore_corrected*rcore_corrected,0.5/n));
 }
 
 double Cored_Sersic::window_rmax()
@@ -1592,13 +1842,211 @@ double Cored_Sersic::length_scale()
 	return Reff;
 }
 
-Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate)
+CoreSersic::CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in,	const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+{
+	model_name = "Csersic";
+	sbtype = CORE_SERSIC;
+	setup_base_source_properties(10,6,true);
+	lens = lens_in;
+	n = n_in;
+	Reff = Reff_in;
+	s0 = s0_in;
+	rc = rc_in;
+	gamma = gamma_in;
+	alpha = alpha_in;
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+CoreSersic::CoreSersic(const CoreSersic* sb_in)
+{
+	s0 = sb_in->s0;
+	n = sb_in->n;
+	Reff = sb_in->Reff;
+	rc = sb_in->rc;
+	gamma = sb_in->gamma;
+	alpha = sb_in->alpha;
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void CoreSersic::update_meta_parameters()
+{
+	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	k = b*pow(1.0/Reff,1.0/n);
+	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
+	update_ellipticity_meta_parameters();
+}
+
+void CoreSersic::assign_paramnames()
+{
+	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
+	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
+	paramnames[3] = "rc"; latex_paramnames[3] = "r"; latex_param_subscripts[3] = "c";
+	paramnames[4] = "gamma"; latex_paramnames[4] = "\\gamma"; latex_param_subscripts[4] = "";
+	paramnames[5] = "alpha"; latex_paramnames[5] = "\\alpha"; latex_param_subscripts[5] = "";
+	set_geometric_paramnames(sbprofile_nparams);
+}
+
+void CoreSersic::assign_param_pointers()
+{
+	param[0] = &s0;
+	param[1] = &Reff;
+	param[2] = &n;
+	param[3] = &rc;
+	param[4] = &gamma;
+	param[5] = &alpha;
+	set_geometric_param_pointers(sbprofile_nparams);
+}
+
+void CoreSersic::set_auto_stepsizes()
+{
+	int index = 0;
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void CoreSersic::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
+	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
+	set_geometric_param_auto_ranges(sbprofile_nparams);
+}
+
+double CoreSersic::sb_rsq(const double rsq)
+{
+	double rca = pow(rc,alpha);
+	double ra = pow(rsq,alpha/2);
+	return s0*pow(1+rca/ra,gamma/alpha)*exp(-k*pow(ra+rca,1.0/(alpha*n)));
+}
+
+double CoreSersic::window_rmax()
+{
+	return pow(3.0/k,n);
+}
+
+double CoreSersic::length_scale()
+{
+	return Reff;
+}
+
+DoubleSersic::DoubleSersic(const double &s0_1_in, const double &Reff1_in, const double &n1_in, const double &s0_2_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+{
+	model_name = "dsersic";
+	sbtype = DOUBLE_SERSIC;
+	setup_base_source_properties(10,6,true);
+	lens = lens_in;
+	n1 = n1_in;
+	Reff1 = Reff1_in;
+	s0_1 = s0_1_in;
+	n2 = n2_in;
+	Reff2 = Reff2_in;
+	s0_2 = s0_2_in;
+
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+DoubleSersic::DoubleSersic(const DoubleSersic* sb_in)
+{
+	s0_1 = sb_in->s0_1;
+	n1 = sb_in->n1;
+	Reff1 = sb_in->Reff1;
+	s0_2 = sb_in->s0_2;
+	n2 = sb_in->n2;
+	Reff2 = sb_in->Reff2;
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void DoubleSersic::update_meta_parameters()
+{
+	k1 = (2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1))*pow(1.0/Reff1,1.0/n1);
+	k2 = (2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2))*pow(1.0/Reff2,1.0/n2);
+	update_ellipticity_meta_parameters();
+}
+
+void DoubleSersic::assign_paramnames()
+{
+	paramnames[0] = "s0_1"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0,1";
+	paramnames[1] = "Reff1"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff,1";
+	paramnames[2] = "n1"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "1";
+	paramnames[3] = "s0_2"; latex_paramnames[3] = "S"; latex_param_subscripts[3] = "0,2";
+	paramnames[4] = "Reff2"; latex_paramnames[4] = "R"; latex_param_subscripts[4] = "eff,2";
+	paramnames[5] = "n2"; latex_paramnames[5] = "n"; latex_param_subscripts[5] = "2";
+
+	set_geometric_paramnames(sbprofile_nparams);
+}
+
+void DoubleSersic::assign_param_pointers()
+{
+	param[0] = &s0_1;
+	param[1] = &Reff1;
+	param[2] = &n1;
+	param[3] = &s0_2;
+	param[4] = &Reff2;
+	param[5] = &n2;
+	set_geometric_param_pointers(sbprofile_nparams);
+}
+
+void DoubleSersic::set_auto_stepsizes()
+{
+	int index = 0;
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void DoubleSersic::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_auto_penalty_limits[3] = false; penalty_lower_limits[3] = -1e30; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
+	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
+	set_geometric_param_auto_ranges(sbprofile_nparams);
+}
+
+double DoubleSersic::sb_rsq(const double rsq)
+{
+	return (s0_1*exp(-k1*pow(rsq,0.5/n1)) + s0_2*exp(-k2*pow(rsq,0.5/n2)));
+}
+
+double DoubleSersic::window_rmax()
+{
+	double max1 = pow(3.0/k1,n1);
+	double max2 = pow(3.0/k2,n2);
+	return dmax(max1,max2);
+}
+
+double DoubleSersic::length_scale()
+{
+	return sqrt(Reff1*Reff1 + Reff2*Reff2);
+}
+
+Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, QLens* lens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
 	nonlinear_amp00 = nonlinear_amp00_in;
 	int npar = (nonlinear_amp00) ? 6 : 5;
-	set_nparams(npar);
+	setup_base_source_properties(npar,1,false);
+	lens = lens_in;
 	sig = sig_in;
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
@@ -1642,8 +2090,6 @@ Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 Shapelet::Shapelet(const Shapelet* sb_in)
@@ -1692,9 +2138,7 @@ void Shapelet::set_auto_stepsizes()
 	int indx=0;
 	if (nonlinear_amp00) stepsizes[indx++] = 0.1;
 	stepsizes[indx++] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
-	set_auto_eparam_stepsizes(indx,indx+1);
-	stepsizes[indx+2] = 0.1;
-	stepsizes[indx+3] = 0.1;
+	set_geometric_param_auto_stepsizes(indx);
 }
 
 void Shapelet::set_auto_ranges()
@@ -1922,7 +2366,7 @@ bool Shapelet::get_special_command_arg(string &arg)
 }
 
 
-SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine)
+SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* lens_in)
 {
 	model_name = "sbmpole";
 	sbtype = SB_MULTIPOLE;
@@ -1932,7 +2376,8 @@ SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m
 	//mstr >> mstring;
 	//special_parameter_command = "m=" + mstring;
 	sine_term = sine;
-	set_nparams(5);
+	setup_base_source_properties(5,0,false);
+	lens = lens_in;
 
 	r0 = r0_in;
 	m = m_in;
@@ -1940,9 +2385,6 @@ SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m
 	set_angle(theta_degrees);
 	x_center = xc_in;
 	y_center = yc_in;
-
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 SB_Multipole::SB_Multipole(const SB_Multipole* sb_in)
@@ -1975,7 +2417,7 @@ void SB_Multipole::assign_param_pointers()
 {
 	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &r0;
-	param[2] = &theta; angle_paramnum = 2;
+	param[2] = &theta; angle_param[2] = true;
 	param[3] = &x_center;
 	param[4] = &y_center;
 }
@@ -2025,15 +2467,14 @@ double SB_Multipole::length_scale()
 	return r0;
 }
 
-TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
 {
 	model_name = "tophat";
 	sbtype = TOPHAT;
-	set_nparams(6);
+	setup_base_source_properties(6,2,true);
+	lens = lens_in;
 	sb = sb_in; rad = rad_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-	assign_param_pointers();
-	assign_paramnames();
 }
 
 TopHat::TopHat(const TopHat* sb_in)
@@ -2054,23 +2495,22 @@ void TopHat::assign_param_pointers()
 {
 	param[0] = &sb;
 	param[1] = &rad;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(sbprofile_nparams);
 }
 
 void TopHat::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1; // arbitrary
-	stepsizes[1] = 0.1; // arbitrary
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.1;
-	stepsizes[5] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.1; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void TopHat::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(sbprofile_nparams);
 }
 
 double TopHat::sb_rsq(const double rsq)

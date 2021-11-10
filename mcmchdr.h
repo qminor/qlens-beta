@@ -104,7 +104,7 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		int NDerivedParams;
 		double *dparam_list;
 		unsigned long long int rand;
-		int mpi_np, mpi_id, mpi_ngroups, mpi_group_num, mpi_group_id;
+		int mpi_np, mpi_id, mpi_ngroups, mpi_group_num;
 		int *mpi_group_leader;
 		
 	public:

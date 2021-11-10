@@ -433,6 +433,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
 	double omega_matter_lower_limit, omega_matter_upper_limit;
+	bool ellipticity_gradient, contours_overlap;
 	bool vary_syserr_pos_parameter;
 	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
 	bool vary_wl_shear_factor_parameter;
@@ -481,6 +482,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 
 	static string fit_output_filename;
+	string get_fit_label() { return fit_output_filename; }
+	void set_fit_label(const string label_in) {
+		fit_output_filename = label_in;
+		if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
+	}
 	bool auto_save_bestfit;
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
 	ImageData *image_data;
@@ -721,9 +727,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_regularization_matrix_dense();
 	void generate_Rmatrix_norm_dense();
 	void generate_Rmatrix_shapelet_gradient();
-	bool Cholesky_dcmp(double** a, double &logdet, int n);
+	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
-	void Cholesky_solve(double** a, double* b, double* x, int n);
+	//void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_packed(double* a, double* b, double* x, int n);
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 
@@ -927,10 +933,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
+	bool read_efunc_params(bool vary_params, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags);
 	void run_plotter(string plotcommand, string extra_command = "");
-	void run_plotter_file(string plotcommand, string filename);
-	void run_plotter_range(string plotcommand, string range);
-	void run_plotter(string plotcommand, string filename, string range);
+	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");
+	void run_plotter_range(string plotcommand, string range, string extra_command = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
@@ -1017,8 +1023,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
-	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
-	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
+	void add_source_object(SB_ProfileName name, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
+	void add_source_object(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
 	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate);
 
@@ -1129,6 +1135,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
+	void plot_sb_profile(int l, double rmin, double rmax, int steps, const char *sname);
+	void plot_total_sbprofile(double rmin, double rmax, int steps, const char *sbname);
 	double total_kappa(const double r, const int lensnum, const bool use_kpc);
 	double total_dkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);

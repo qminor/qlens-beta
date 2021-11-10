@@ -22,7 +22,6 @@ Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, cons
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
 	initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -87,13 +86,11 @@ void Alpha::update_meta_parameters()
 
 void Alpha::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1*b;
-	stepsizes[1] = 0.1;
-	stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.1*b;
-	stepsizes[6] = 0.1*b;
-	stepsizes[7] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1*b;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Alpha::set_auto_ranges()
@@ -109,33 +106,35 @@ void Alpha::set_model_specific_integration_pointers()
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq);
-	if (alpha==1.0) {
-		kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq_iso);
-		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_iso);
-		if (q != 1.0) {
-			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_iso);
-			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
-			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
-		}
-	} else if (s==0.0) {
-		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
-		if (q != 1.0) {
-			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
-			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
-			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
-			def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&Alpha::deflection_and_hessian_elliptical_nocore);
+	if (!ellipticity_gradient) {
+		if (alpha==1.0) {
+			kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq_iso);
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_iso);
+			if (q != 1.0) {
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_iso);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
+			}
+		} else if (s==0.0) {
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
+			if (q != 1.0) {
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
+				def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&Alpha::deflection_and_hessian_elliptical_nocore);
+			}
 		}
 	}
 }
 
 double Alpha::kappa_rsq(const double rsq)
 {
-	return (0.5 * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2));
+	return ((2-alpha) * pow(b*b/(s*s+rsq), alpha/2) / 2);
 }
 
 double Alpha::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * alpha * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2 + 1)) / (b*b);
+	return (-alpha * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2 + 1)) / (4*b*b);
 }
 
 double Alpha::kapavg_spherical_rsq(const double rsq)
@@ -391,7 +390,6 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -546,7 +544,7 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 		params[2] = s;
 	}
 	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -561,23 +559,21 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 
 void PseudoJaffe::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*b;
-		stepsizes[1] = 0.2*b;
-		stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*b;
+		stepsizes[index++] = 0.2*b;
+		stepsizes[index++] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*sigma0;
-		stepsizes[1] = 0.2*b/kpc_to_arcsec;
-		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*sigma0;
+		stepsizes[index++] = 0.2*b/kpc_to_arcsec;
+		stepsizes[index++] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
 	} else {
-		stepsizes[0] = 0.2*mtot;
-		stepsizes[1] = 0.2*b/kpc_to_arcsec;
-		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*mtot;
+		stepsizes[index++] = 0.2*b/kpc_to_arcsec;
+		stepsizes[index++] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
 	}
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.2*b;
-	stepsizes[6] = 0.2*b;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void PseudoJaffe::set_auto_ranges()
@@ -592,10 +588,12 @@ void PseudoJaffe::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::potential_spherical_rsq);
-	if (q != 1.0) {
-		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
-		hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&PseudoJaffe::hessian_elliptical);
-		potptr = static_cast<double (LensProfile::*)(const double,const double)> (&PseudoJaffe::potential_elliptical);
+	if (!ellipticity_gradient) {
+		if (q != 1.0) {
+			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
+			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&PseudoJaffe::hessian_elliptical);
+			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&PseudoJaffe::potential_elliptical);
+		}
 	}
 }
 
@@ -735,7 +733,6 @@ double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
 NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -836,7 +833,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 	}
 	for (int i=2; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -878,20 +875,18 @@ void NFW::update_special_anchored_params()
 
 void NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
 	}
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void NFW::set_auto_ranges()
@@ -1028,7 +1023,6 @@ bool NFW::output_cosmology_info(const int lens_number)
 Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -1187,7 +1181,7 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[2] = rt;
 	}
 	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -1233,32 +1227,30 @@ void Truncated_NFW::update_special_anchored_params()
 
 void Truncated_NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==4) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*tau_s;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*tau_s;
 	} else if (parameter_mode==3) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*rt_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*rt_kpc;
 	} else if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*tau200;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*tau200;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*rt_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*rt_kpc;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
-		stepsizes[2] = 0.2*rt;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
+		stepsizes[index++] = 0.2*rt;
 	}
 
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.5;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Truncated_NFW::set_auto_ranges()
@@ -1408,7 +1400,6 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -1535,7 +1526,7 @@ void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[2] = rc;
 	}
 	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -1585,27 +1576,25 @@ void Cored_NFW::update_special_anchored_params()
 
 void Cored_NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==3) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.05*rs_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.05*rs_kpc;
 	} else if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*beta;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*beta;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*beta;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*beta;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
-		stepsizes[2] = 0.05*rs;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
+		stepsizes[index++] = 0.05*rs;
 	}
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.5;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Cored_NFW::set_auto_ranges()
@@ -1857,7 +1846,6 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
 	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -1913,12 +1901,10 @@ void Hernquist::update_meta_parameters()
 
 void Hernquist::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*ks;
-	stepsizes[1] = 0.2*rs;
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.2*ks;
+	stepsizes[index++] = 0.2*rs;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Hernquist::set_auto_ranges()
@@ -1977,7 +1963,6 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
 	initialize_parameters(k0_in,R_d_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -2032,12 +2017,10 @@ void ExpDisk::update_meta_parameters()
 
 void ExpDisk::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*k0;
-	stepsizes[1] = 0.2*R_d;
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.2*k0;
+	stepsizes[index++] = 0.2*R_d;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void ExpDisk::set_auto_ranges()
@@ -2138,10 +2121,10 @@ void Shear::assign_param_pointers()
 	if (use_shear_component_params) {
 		param[0] = &shear1;
 		param[1] = &shear2;
-		angle_paramnum = -1; // since there is no angle parameter in this mode
+		angle_param_exists = false; // since there is no angle parameter in this mode
 	} else {
 		param[0] = &shear; // here, shear is actually the shear magnitude
-		param[1] = &theta; angle_paramnum = 1;
+		param[1] = &theta; angle_param[1] = true; angle_param_exists = true;
 	}
 	if (!lensed_center_coords) {
 		param[2] = &x_center;
@@ -2351,7 +2334,7 @@ void Multipole::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &n;
-	param[2] = &theta; angle_paramnum = 2;
+	param[2] = &theta; angle_param[2] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[3] = &x_center;
 		param[4] = &y_center;
@@ -2702,7 +2685,7 @@ void PointMass::assign_param_pointers()
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void PointMass::set_auto_stepsizes()
@@ -2818,7 +2801,6 @@ double PointMass::kappa_avg_r(const double r)
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
 	initialize_parameters(mass_param_in,gamma_in,n_in,a_in,s_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -2954,22 +2936,14 @@ void CoreCusp::update_special_anchored_params()
 
 void CoreCusp::set_auto_stepsizes()
 {
-	if (parameter_mode==1) stepsizes[0] = 0.1*einstein_radius;
-	else stepsizes[0] = 0.1*k0;
-	stepsizes[1] = 0.1;
-	stepsizes[2] = 0.1;
-	stepsizes[3] = 0.1*a;
-	stepsizes[4] = 0.02*a;
-	set_auto_eparam_stepsizes(5,6);
-	if (parameter_mode==1) {
-		// take advantage of the fact that we're keeping track of the Einstein radius
-		stepsizes[7] = 0.1*einstein_radius;
-		stepsizes[8] = 0.1*einstein_radius;
-	} else {
-		stepsizes[7] = 0.1; // arbitrary...maybe we should just calculate Einstein radius before determining stepsizes anyway?
-		stepsizes[8] = 0.1;
-	}
-	stepsizes[9] = 0.1;
+	int index = 0;
+	if (parameter_mode==1) stepsizes[index++] = 0.1*einstein_radius;
+	else stepsizes[index++] = 0.1*k0;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1*a;
+	stepsizes[index++] = 0.02*a;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void CoreCusp::set_auto_ranges()
@@ -3166,7 +3140,6 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,Re_in,n_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -3247,17 +3220,15 @@ void SersicLens::update_meta_parameters()
 
 void SersicLens::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa_e;
 	} else {
-		stepsizes[0] = 0.2*mstar;
+		stepsizes[index++] = 0.2*mstar;
 	}
-	stepsizes[1] = 0.2*re;
-	stepsizes[2] = 0.2;
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.3;
-	stepsizes[7] = 0.1;
+	stepsizes[index++] = 0.2*re;
+	stepsizes[index++] = 0.2;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void SersicLens::set_auto_ranges()
@@ -3299,7 +3270,6 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
 	initialize_parameters(p1_in,Re_in,n_in,rc_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 }
@@ -3384,18 +3354,16 @@ void Cored_SersicLens::update_meta_parameters()
 
 void Cored_SersicLens::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa_e;
 	} else {
-		stepsizes[0] = 0.2*mstar;
+		stepsizes[index++] = 0.2*mstar;
 	}
-	stepsizes[1] = 0.2*re;
-	stepsizes[2] = 0.2;
-	stepsizes[3] = 0.05*re;
-	set_auto_eparam_stepsizes(4,5);
-	stepsizes[6] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[7] = 0.3;
-	stepsizes[8] = 0.1;
+	stepsizes[index++] = 0.2*re;
+	stepsizes[index++] = 0.2;
+	stepsizes[index++] = 0.05*re;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Cored_SersicLens::set_auto_ranges()
@@ -3490,7 +3458,7 @@ void MassSheet::assign_param_pointers()
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void MassSheet::set_auto_stepsizes()
@@ -3622,7 +3590,7 @@ void Deflection::assign_param_pointers()
 	param[1] = &def_y;
 	param[2] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void Deflection::set_auto_stepsizes()
@@ -3912,7 +3880,7 @@ void Tabulated_Model::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &kscale;
 	param[1] = &rscale;
-	param[2] = &theta; angle_paramnum = 2;
+	param[2] = &theta; angle_param[2] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[3] = &x_center;
 		param[4] = &y_center;
@@ -4627,7 +4595,7 @@ void QTabulated_Model::assign_param_pointers()
 	param[0] = &kscale;
 	param[1] = &rscale;
 	param[2] = &q;
-	param[3] = &theta; angle_paramnum = 3;
+	param[3] = &theta; angle_param[3] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[4] = &x_center;
 		param[5] = &y_center;
@@ -5040,7 +5008,6 @@ TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &
 	setup_lens_properties();
 	special_parameter_command = "";
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false
-	set_integration_parameters(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
 }

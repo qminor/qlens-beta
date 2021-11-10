@@ -9,6 +9,9 @@ namespace py = pybind11;
 PYBIND11_MODULE(qlens, m) {
     m.doc() = "QLens Python Plugin"; // optional module docstring
 
+    //py::class_<QLens, std::unique_ptr<QLens, py::nodelete>>(m, "QLens_base")
+        //.def(py::init<>([](){return new QLens();}))
+	 //;
     py::class_<LensProfile>(m, "LensProfile")
         .def(py::init<>([](){return new LensProfile();}))
         .def(py::init<const LensProfile*>())
@@ -37,6 +40,11 @@ PYBIND11_MODULE(qlens, m) {
 						 throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
 					 }
         })
+        .def("set_prior_limits", [](LensProfile &curr, const std::string &param, const double lower, const double upper){
+                if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
+						 throw std::runtime_error("could not set limits for given parameter " + param);
+					 }
+		  })
 		  .def("anchor_center",&LensProfile::anchor_center_to_lens)
 			.def("__repr__", [](LensProfile &a) {
 					string outstring = a.get_parameters_string();
@@ -171,7 +179,7 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<const QTabulated_Model*>())
         ;
 
-    py::class_<Lens_Wrap, std::unique_ptr<Lens_Wrap, py::nodelete>>(m, "QLens")
+    py::class_<Lens_Wrap>(m, "QLens")
         .def(py::init<>([](){return new Lens_Wrap();}))
         .def("imgdata_display", &Lens_Wrap::imgdata_display)
         .def("imgdata_add", &Lens_Wrap::imgdata_add, 
@@ -203,15 +211,21 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("status") = false, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, 
                 py::arg("verbal") = false) 
         .def("get_data_imagesets", &Lens_Wrap::export_to_ImageDataSet)
-        .def("run_fit", [](Lens_Wrap &curr, const std::string &param="simplex"){
-                if(param=="simplex") {
+        .def("run_fit", [](Lens_Wrap &curr, const std::string &fitmethod="simplex"){
+                if(fitmethod=="simplex") {
                         curr.chi_square_fit_simplex();
-                } else if (param=="powell") {
+                } else if (fitmethod=="powell") {
                         curr.chi_square_fit_powell();
-                } else if (param=="twalk") {
+                } else if (fitmethod=="nest") {
+                        curr.nested_sampling();
+                } else if (fitmethod=="multinest") {
+                        curr.multinest(false,false);
+                } else if (fitmethod=="polychord") {
+                        curr.polychord(true,false);
+                } else if (fitmethod=="twalk") {
                         curr.chi_square_twalk();
                 } else {
-                        throw std::runtime_error("Available parameters: simplex (default), powell, twalk");
+                        throw std::runtime_error("Available fitmethodeters: simplex (default), powell, twalk");
                 }
         })
         .def("use_bestfit", &Lens_Wrap::use_bestfit)
@@ -223,18 +237,21 @@ PYBIND11_MODULE(qlens, m) {
         .def("fitmodel", &Lens_Wrap::print_fit_model)
         .def_readonly("sorted_critical_curve", &Lens_Wrap::sorted_critical_curve)
         .def_readonly("nlens", &Lens_Wrap::nlens)
-		  .def_readwrite("zlens", &Lens_Wrap::lens_redshift)
 		  .def_property("zsrc", &Lens_Wrap::get_source_redshift, &Lens_Wrap::set_source_redshift)
 		  .def_property("zsrc_ref", &Lens_Wrap::get_reference_source_redshift, &Lens_Wrap::set_reference_source_redshift)
 		  .def_property("analytic_bestfit_src", &Lens_Wrap::get_analytic_bestfit_src, &Lens_Wrap::set_analytic_bestfit_src)
 		  .def_readwrite("cc_splitlevels", &Lens_Wrap::cc_splitlevels)
+		  .def_readwrite("zlens", &Lens_Wrap::lens_redshift)
 		  .def_readwrite("imgplane_chisq", &Lens_Wrap::imgplane_chisq)
 		  .def_readwrite("nrepeat", &Lens_Wrap::n_repeats)
 		  .def_readwrite("flux_chisq", &Lens_Wrap::include_flux_chisq)
 		  .def_readwrite("chisqtol", &Lens_Wrap::chisq_tolerance)
 		  .def_readwrite("central_image", &Lens_Wrap::include_central_image)
 		  .def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
+		  .def_readwrite("n_livepts", &Lens_Wrap::n_livepts)
 		  .def_property("sci_notation", &Lens_Wrap::get_sci_notation, &Lens_Wrap::set_sci_notation)
+		  .def_property("fit_label", &Lens_Wrap::get_fit_label, &Lens_Wrap::set_fit_label)
+		  .def_readwrite("fit_output_dir", &Lens_Wrap::fit_output_dir)
 		  .def_readwrite_static("ansi_output", &Lens_Wrap::use_ansi_output_during_fit)
         ;
 

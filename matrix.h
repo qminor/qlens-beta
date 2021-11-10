@@ -21,7 +21,7 @@ public:
 	Matrix(const int &n) { input(n,n); }
 	Matrix(const int &m, const int &n) { input(m,n); }
 	Matrix(const int &m, const int &n, const char filename[]) { input(m,n,filename); }
-	Matrix(T **inmatrix, const int &m, const int &n) { input(inmatrix, m, n); }
+	Matrix(T **inmatrix, const int &m, const int &n) { a = NULL; input(inmatrix, m, n); }
 	Matrix(const Matrix&); // copy-constructor
 	Matrix& operator = (const Matrix&);
 	Matrix& operator = (const T&);

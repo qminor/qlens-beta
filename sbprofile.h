@@ -3,18 +3,25 @@
 
 #include "mathexpr.h"
 #include "spline.h"
+#include "egrad.h"
 #include "lensvec.h"
 #include "profile.h"
+//#include "GregsMathHdr.h"
+#include "mcmchdr.h"
+#include "simplex.h"
 #include <cmath>
 #include <iostream>
 #include <vector>
 using namespace std;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORED_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
+struct ImagePixelData;
 
-class SB_Profile
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
+
+class SB_Profile : public EllipticityGradient, UCMC, Simplex
 {
 	friend class QLens;
+	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
 	double sb_splint(double);
@@ -23,7 +30,7 @@ class SB_Profile
 	protected:
 	SB_ProfileName sbtype;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived surface brightness models
-	double epsilon, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon, epsilon2)
+	double epsilon1, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon1, epsilon2)
 	double c0; // "boxiness" parameter
 	double rt; // truncation radius parameter
 	double costheta, sintheta;
@@ -31,10 +38,12 @@ class SB_Profile
 	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
 
 	int n_params, n_vary_params;
+	int sbprofile_nparams; // just the parameters that define the SB profile (rather than the angular structure or center coord's)
+	bool angle_param_exists;
 	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
+	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
-	bool include_contour_bumps; // localized isophote perturbation
 	boolvector vary_params;
 	string model_name;
 	vector<string> paramnames;
@@ -50,12 +59,11 @@ class SB_Profile
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
 
-	int n_contour_bumps; // Number of contour "bump" perturbations to elliptical isophotes (zero by default)
-	ivector bump_paramnum;
-	dvector bump_drvals, bump_xcvals, bump_ycvals, bump_sigvals, bump_e1vals, bump_e2vals;
-	dvector bump_qvals, bump_phivals, bump_xcprime, bump_ycprime; // meta-parameters
+	int n_isophote_datapts;
+	double *sbprofile_xivals, *sbprofile_data, *sbprofile_errors;
 
-	void set_nparams(const int &n_params_in);
+	void set_nparams(const int &n_params_in, const bool resize = false);
+	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source);
 	void copy_base_source_data(const SB_Profile* sb_in);
 
 	void set_geometric_param_pointers(int qi);
@@ -79,35 +87,44 @@ class SB_Profile
 	void rotate(double&, double&);
 	void rotate_back(double&, double&);
 	static bool orient_major_axis_north;
-	static bool use_sb_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of gamma and theta
+	static bool use_sb_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of q and theta
+	static int default_ellipticity_mode;
 	static bool use_fmode_scaled_amplitudes; // if set to true, uses a_m = m*A_m and b_m = m*B_m as parameters instead of true amplitudes
+	static bool fourier_sb_perturbation; // if true, add fourier modes to the surface brightness, rather than the elliptical radius
+	static bool fourier_use_eccentric_anomaly; // use eccentric anomaly as angle for fourier modes? (preferable, but lensing multiploes must use polar angle)
 	static double zoom_split_factor; 
 	static double zoom_scale; 
+	int ellipticity_mode;
+	bool ellipticity_gradient; // if true, then allows a gradient in both ellipticity and position angle
 
 	public:
 	int sb_number;
 	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
 	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
-	bool center_anchored;
+	bool center_anchored_to_lens, center_anchored_to_source;
 	LensProfile* center_anchor_lens;
+	SB_Profile* center_anchor_source;
 	int *indxptr; // points to important integer values for subclasses that uses them (e.g. shapelets)
+	QLens* lens;
 
-	SB_Profile() : qx_parameter(1), param(0) {}
-	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in);
+	SB_Profile() : qx_parameter(1), param(0) { lens = NULL; }
+	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in);
 	SB_Profile(const SB_Profile* sb_in);
 	~SB_Profile() {
 		if (param != NULL) delete[] param;
 	}
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
+	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
 	void delete_center_anchor();
+	bool enable_ellipticity_gradient(const dvector& efunc_params);
+	void disable_ellipticity_gradient();
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool vary_parameters(const boolvector& vary_params_in);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
-	void add_contour_bump(const double amp, const double x, const double y, const double sig, const double e1, const double e2);
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
 	}
@@ -126,7 +143,7 @@ class SB_Profile
 	virtual void set_auto_stepsizes();  // This *must* be redefined in all derived classes
 	virtual void set_auto_ranges(); // This *must* be redefined in all derived classes
 
-	void set_auto_eparam_stepsizes(int eparam1_i, int eparam2_i);
+	void set_geometric_param_auto_stepsizes(int &index);
 	void get_auto_stepsizes(dvector& stepsizes, int &index);
 	void set_geometric_param_auto_ranges(int param_i);
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
@@ -139,6 +156,11 @@ class SB_Profile
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_anchor_center();
+
+	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0); // for fitting to isophote data
+	double sbprofile_loglike(double *params);
+
+	void plot_sb_profile(double rmin, double rmax, int steps, ofstream &sbout);
 	void print_parameters();
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
@@ -154,6 +176,7 @@ class SB_Profile
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double surface_brightness_r(const double r);
 	virtual double surface_brightness(double x, double y);
+	double surface_brightness_test(double x, double y);
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
@@ -168,7 +191,11 @@ class SB_Profile
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	int get_n_params() { return n_params; }
 	int get_n_vary_params() { return n_vary_params; }
-	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
+	int get_center_anchor_number() {
+		if (center_anchored_to_lens) return center_anchor_lens->lens_number;
+		else if (center_anchored_to_source) return center_anchor_source->sb_number;
+		else return -1;
+	}
 	void set_include_limits(bool inc) { include_limits = inc; }
 };
 
@@ -181,7 +208,7 @@ class Gaussian : public SB_Profile
 
 	public:
 	Gaussian() : SB_Profile() {}
-	Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
 	Gaussian(const Gaussian* sb_in);
 	~Gaussian() {}
 
@@ -208,9 +235,34 @@ class Sersic : public SB_Profile
 
 	public:
 	Sersic() : SB_Profile() {}
-	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
 	Sersic(const Sersic* sb_in);
 	~Sersic() {}
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	void print_parameters();
+	double window_rmax();
+	double length_scale();
+};
+
+class CoreSersic : public SB_Profile
+{
+	private:
+	double s0, k, n, rc, gamma, alpha;
+	double Reff; // effective radius
+
+	double sb_rsq(const double);
+
+	public:
+	CoreSersic() : SB_Profile() {}
+	CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	CoreSersic(const CoreSersic* sb_in);
+	~CoreSersic() {}
 
 	void update_meta_parameters();
 	void assign_paramnames();
@@ -233,9 +285,35 @@ class Cored_Sersic : public SB_Profile
 
 	public:
 	Cored_Sersic() : SB_Profile() {}
-	Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
 	Cored_Sersic(const Cored_Sersic* sb_in);
 	~Cored_Sersic() {}
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	void print_parameters();
+	double window_rmax();
+	double length_scale();
+};
+
+class DoubleSersic : public SB_Profile
+{
+	private:
+	double s0_1, k1, n1;
+	double s0_2, k2, n2;
+	double Reff1, Reff2; // effective radius
+
+	double sb_rsq(const double);
+
+	public:
+	DoubleSersic() : SB_Profile() {}
+	DoubleSersic(const double &s0_1_in, const double &Reff1_in, const double &n1_in, const double &s0_2_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	DoubleSersic(const DoubleSersic* sb_in);
+	~DoubleSersic() {}
 
 	void update_meta_parameters();
 	void assign_paramnames();
@@ -259,7 +337,7 @@ class Shapelet : public SB_Profile
 
 	public:
 	Shapelet() : SB_Profile() { amps = NULL; }
-	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig);
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, QLens* lens_in);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (amps != NULL) {
@@ -301,7 +379,7 @@ class SB_Multipole : public SB_Profile
 
 	public:
 	SB_Multipole() : SB_Profile() {}
-	SB_Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine);
+	SB_Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* lens_in);
 	SB_Multipole(const SB_Multipole* sb_in);
 	~SB_Multipole() {}
 
@@ -326,7 +404,7 @@ class TopHat : public SB_Profile
 
 	public:
 	TopHat() : SB_Profile() {}
-	TopHat(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	TopHat(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
 	TopHat(const TopHat* sb_in);
 	~TopHat() {}
 
