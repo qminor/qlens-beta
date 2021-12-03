@@ -18,136 +18,6 @@ int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::output_integration_errors = true;
 int LensProfile::default_fejer_nlevels = 12;
 
-// Later, move the EllipticityGradient functions out of this file and into a separate file
-void EllipticityGradient::get_egrad_params(dvector& egrad_params)
-{
-	egrad_params.input(4);
-	egrad_params[0] = efunc_qf;
-	egrad_params[1] = radians_to_degrees(efunc_theta_f);
-	egrad_params[2] = efunc_xi0;
-	egrad_params[3] = efunc_dxi;
-}
-
-void EllipticityGradient::check_for_overlapping_contours()
-{
-	int i, j, n_contours = 100, npoints = 100;
-	double xi, ximin, ximax, xistep;
-	double qq, th, qprev, thprev, ep, costh, sinth;
-	double phi, x, y;
-	double phistep = M_2PI/(npoints-1);
-	double xisqtest, xisqprev;
-	double xprimesq, yprimesq;
-
-	ximin = efunc_xi0 - 3*efunc_dxi;
-	ximax = xi_final_egrad;
-	if (ximin < 0) ximin = 0;
-	xistep = (ximax-ximin)/(n_contours-1);
-	if (ximin==0) {
-		ximin = xistep;
-		n_contours--;
-	}
-
-	qq = efunc_qi;
-	th = efunc_theta_i;
-	for (i=0, xi=ximin; i < n_contours; i++, xi += xistep) {
-		qprev = qq;
-		thprev = th;
-		xisqprev = SQR(xi-xistep);
-		ellipticity_function(xi,ep,th);
-		qq = sqrt(1-ep);
-		if (i==0) continue;
-		costh = cos(th-thprev);
-		sinth = sin(th-thprev);
-		for (j=0, phi=0; j < npoints-1; j++, phi += phistep) {
-			double xisqcheck;
-			if (egrad_emode==0) {
-				x = xi*cos(phi);
-				y = xi*qq*sin(phi);
-			} else {
-				x = xi/sqrt(qq)*cos(phi);
-				y = xi*sqrt(qq)*sin(phi);
-			}
-			// Now we rotate the coordinates so we can 
-			xprimesq = SQR(x*costh - y*sinth);
-			yprimesq = SQR(x*sinth + y*costh);
-			if (egrad_emode==0) {
-				xisqtest = xprimesq + yprimesq/(qprev*qprev);
-			} else {
-				xisqtest = qprev*xprimesq + yprimesq/(qprev);
-			}
-			if (xisqtest < xisqprev) {
-				// a point in the contour is inside the previous ellipse (at smaller xi), indicating contours have crossed
-				contours_overlap = true;
-				return;
-			}
-		}
-	}
-	contours_overlap = false;
-}
-
-void EllipticityGradient::ellipticity_function(const double xi, double& ep, double& angle)
-{
-	double stepf = tanh((xi-efunc_xi0)/efunc_dxi);
-
-	angle = (efunc_theta_i*(1-stepf) + efunc_theta_f*(1+stepf))/2;
-	ep = (efunc_qi*(1-stepf) + efunc_qf*(1+stepf))/2; // right now, 'ep' is actually the axis ratio
-	ep = 1 - SQR(ep); // this gets it in the epsilon form required for deflection formulas (remember 'ep' is the axis ratio before this line)
-}
-
-void EllipticityGradient::plot_ellipticity_function(const double ximin, const double ximax, const int nn)
-{
-	double xi, xistep = pow(ximax/ximin,1.0/(nn-1));
-	int i;
-	ofstream qout("qfunc.dat");
-	ofstream thetaout("thetafunc.dat");
-	double ep, angle, q;
-	for (i=0, xi=ximin; i < nn; i++, xi *= xistep) {
-		ellipticity_function(xi,ep,angle);
-		q = sqrt(1 - ep);
-		qout << xi << " " << q << endl;
-		thetaout << xi << " " << radians_to_degrees(angle) << endl;
-	}
-}
-
-double EllipticityGradient::elliptical_radius_root(const double x, const double y)
-{
-	double (Brent::*xiptr)(const double, const double&, const double&);
-	xiptr = static_cast<double (Brent::*)(const double, const double&, const double&)> (&EllipticityGradient::elliptical_radius_root_eq);
-	double minq = (efunc_qf < efunc_qi) ? efunc_qf : efunc_qi;
-	double xsq = x*x, ysq = y*y;
-	double minx = (xsq < ysq) ? abs(x) : abs(y);
-	double ximax, ximin;
-	ximax = ximin = (x*x+y*y);
-	if (egrad_emode==0) {
-		ximax /= minq*minq; // greatest possible xi value is if efunc_qi is at its minimum value, and (x,y) are on the minor axis
-	}
-	else {
-		ximax /= minq; // greatest possible xi value is if efunc_qi is at its minimum value, and (x,y) are on the minor axis
-		ximin *= minq; // smallest possible xi value is if efunc_qi is at its minimum value, and (x,y) are on the major axis
-	}
-	ximax = sqrt(ximax);
-	ximin = sqrt(ximin);
-	ximin *= 0.9;
-	ximax *= 1.1;
-	double xi = BrentsMethod(xiptr,x,y,ximin,ximax,1e-4);
-	return xi;
-}
-
-double EllipticityGradient::elliptical_radius_root_eq(const double xi, const double &xi_root_x, const double &xi_root_y)
-{
-	double ep, efunc_theta_i;
-	double costh, sinth, xprime, yprime;
-	ellipticity_function(xi,ep,efunc_theta_i);
-	double fsqinv = (egrad_emode==0) ? 1 : sqrt(1-ep);
-	costh = cos(efunc_theta_i);
-	sinth = sin(efunc_theta_i);
-	xprime = xi_root_x*costh + xi_root_y*sinth;
-	yprime = -xi_root_x*sinth + xi_root_y*costh;
-	return (xi*xi - fsqinv*(xprime*xprime + (yprime*yprime)/(1-ep)));
-}
-
-
-
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
 {
 	setup_lens_properties();
@@ -168,15 +38,16 @@ void LensProfile::setup_lens_properties(const int parameter_mode, const int subc
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true); // number of parameters = 7, is_elliptical_lens = true
 }
 
-void LensProfile::setup_base_lens_properties(const int np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
+void LensProfile::setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
 	center_defined = true;
 	parameter_mode = pmode_in;
 	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
 	set_nparams_and_anchordata(np);
+	lensprofile_nparams = lensprofile_np;
 	center_anchored = false;
 	anchor_special_parameter = false;
 	if (is_elliptical_lens) {
@@ -238,6 +109,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
+	lensprofile_nparams = lens_in->lensprofile_nparams;
 	parameter_mode = lens_in->parameter_mode;
 	lens_subclass = lens_in->lens_subclass;
 	special_parameter_command = lens_in->special_parameter_command;
@@ -252,9 +124,6 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	latex_param_subscripts = lens_in->latex_param_subscripts;
 	angle_param.input(n_params);
 	for (int i=0; i < n_params; i++) angle_param[i] = false; // the angle params will be recognized when assign_param_pointers() is called
-	param = new double*[n_params];
-	copy_parameter_anchors(lens_in);
-	assign_param_pointers();
 	n_vary_params = lens_in->n_vary_params;
 	vary_params.input(lens_in->vary_params);
 	stepsizes.input(lens_in->stepsizes);
@@ -280,14 +149,34 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		y_center_lensed = lens_in->y_center_lensed;
 	}
 	if (ellipticity_gradient) {
-		contours_overlap = lens_in->contours_overlap;
+
+		egrad_mode = lens_in->egrad_mode;
+		egrad_ellipticity_mode = lens_in->egrad_ellipticity_mode;
+		center_gradient = lens_in->center_gradient;
+		int i,j;
+		for (i=0; i < 4; i++) {
+			n_egrad_params[i] = lens_in->n_egrad_params[i];
+			geometric_param[i] = new double[n_egrad_params[i]];
+			for (j=0; j < n_egrad_params[i]; j++) {
+				geometric_param[i][j] = lens_in->geometric_param[i][j];
+			}
+		}
+		 angle_param_egrad = new bool[n_egrad_params[1]]; // keeps track of which parameters are angles, so they can be converted to degrees when displayed
+		for (j=0; j < n_egrad_params[1]; j++) {
+			angle_param_egrad[j] = lens_in->angle_param_egrad[j];
+		}
+		xi_initial_egrad = lens_in->xi_initial_egrad;
 		xi_final_egrad = lens_in->xi_final_egrad;
-		efunc_xi0 = lens_in->efunc_xi0;
-		efunc_dxi = lens_in->efunc_dxi;
-		efunc_qi = lens_in->efunc_qi;
-		efunc_theta_i = lens_in->efunc_theta_i;
-		efunc_qf = lens_in->efunc_qf;
-		efunc_theta_f = lens_in->efunc_theta_f;
+		if (egrad_mode==0) {
+			bspline_order = lens_in->bspline_order;
+			n_bspline_knots_tot = lens_in->n_bspline_knots_tot;
+			for (i=0; i < 4; i++) {
+				geometric_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) geometric_knots[i][j] = lens_in->geometric_knots[i][j];
+			}
+		}
+		contours_overlap = lens_in->contours_overlap;
+		set_egrad_ptr();
 	}
 	include_limits = lens_in->include_limits;
 	if (include_limits) {
@@ -296,6 +185,9 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		lower_limits_initial.input(lens_in->lower_limits_initial);
 		upper_limits_initial.input(lens_in->upper_limits_initial);
 	}
+	param = new double*[n_params];
+	copy_parameter_anchors(lens_in);
+	assign_param_pointers();
 }
 
 void LensProfile::copy_integration_tables(const LensProfile* lens_in)
@@ -674,17 +566,12 @@ void LensProfile::set_geometric_param_auto_stepsizes(int &index)
 			stepsizes[index++] = 0.1; // q
 			stepsizes[index++] = 20;  // angle stepsize
 		}
+		stepsizes[index++] = 0.1; // xc
+		stepsizes[index++] = 0.1; // yc
 	} else {
-		stepsizes[index++] = 0.1;
-		stepsizes[index++] = 20;
-		stepsizes[index++] = 0.1;
-		stepsizes[index++] = 20;
-		stepsizes[index++] = 0.3;
-		stepsizes[index++] = 0.3;
+		set_geometric_stepsizes_egrad(stepsizes,index);
 	}
-	stepsizes[index++] = 0.1; // xc
-	stepsizes[index++] = 0.1; // yc
-	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1; // z
 }
 
 void LensProfile::get_auto_stepsizes(dvector& stepsizes_in, int &index)
@@ -699,7 +586,7 @@ void LensProfile::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = false;
 	set_auto_penalty_limits[1] = false;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void LensProfile::set_geometric_param_auto_ranges(int param_i)
@@ -718,16 +605,11 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 			param_i++;
 			set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
 		}
+		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
+		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
 	} else {
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1;
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1;
-		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
-		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
-		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
-		set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
+		set_geometric_param_ranges_egrad(set_auto_penalty_limits, penalty_lower_limits, penalty_upper_limits, param_i);
 	}
-	set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
-	set_auto_penalty_limits[param_i] = false; penalty_lower_limits[param_i] = -1e30; penalty_upper_limits[param_i] = 1e30; param_i++;
 	set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0.01; penalty_upper_limits[param_i] = zsrc_ref; param_i++;
 }
 
@@ -848,7 +730,7 @@ void LensProfile::assign_paramnames()
 	latex_param_subscripts.resize(n_params);
 	paramnames[0] = "qx"; latex_paramnames[0] = "q"; latex_param_subscripts[0] = "x";
 	paramnames[1] = "f"; latex_paramnames[1] = "f"; latex_param_subscripts[1] = "";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void LensProfile::set_geometric_paramnames(int qi)
@@ -865,27 +747,22 @@ void LensProfile::set_geometric_paramnames(int qi)
 			}
 			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = ""; qi++;
 		}
+		if (!center_anchored) {
+			paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c";
+			if (lensed_center_coords) {
+				paramnames[qi] += "_l";
+				latex_param_subscripts[qi] += ",l";
+			}
+			qi++;
+			paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c";
+			if (lensed_center_coords) {
+				paramnames[qi] += "_l";
+				latex_param_subscripts[qi] += ",l";
+			}
+			qi++;
+		}
 	} else {
-		paramnames[qi] = "qi"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "i"; qi++;
-		paramnames[qi] = "theta_i"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "i"; qi++;
-		paramnames[qi] = "qf"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "f"; qi++;
-		paramnames[qi] = "theta_f"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "f"; qi++;
-		paramnames[qi] = "xi0"; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = "0"; qi++;
-		paramnames[qi] = "dxi"; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ""; qi++;
-	}
-	if (!center_anchored) {
-		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c";
-		if (lensed_center_coords) {
-			paramnames[qi] += "_l";
-			latex_param_subscripts[qi] += ",l";
-		}
-		qi++;
-		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c";
-		if (lensed_center_coords) {
-			paramnames[qi] += "_l";
-			latex_param_subscripts[qi] += ",l";
-		}
-		qi++;
+		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ",src");
 	}
 	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
@@ -894,7 +771,7 @@ void LensProfile::assign_param_pointers()
 {
 	param[0] = &qx_parameter;
 	param[1] = &f_parameter;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void LensProfile::set_geometric_param_pointers(int qi)
@@ -916,26 +793,19 @@ void LensProfile::set_geometric_param_pointers(int qi)
 			angle_param[qi++] = true;
 			angle_param_exists = true;
 		}
+		if (!center_anchored) {
+			if (!lensed_center_coords) {
+				param[qi++] = &x_center;
+				param[qi++] = &y_center;
+			} else {
+				param[qi++] = &x_center_lensed;
+				param[qi++] = &y_center_lensed;
+			}
+		}
 	} else {
 		angle_param_exists = true;
-		ellipticity_paramnum = -1; // no single ellipticity parameter here
-		param[qi++] = &efunc_qi; // currently only emode=0 or emode=1 is supported with ellipticity gradients
-		param[qi] = &efunc_theta_i;
-		angle_param[qi++] = true;
-		param[qi++] = &efunc_qf;
-		param[qi] = &efunc_theta_f;
-		angle_param[qi++] = true;
-		param[qi++] = &efunc_xi0;
-		param[qi++] = &efunc_dxi;
-	}
-	if (!center_anchored) {
-		if (!lensed_center_coords) {
-			param[qi++] = &x_center;
-			param[qi++] = &y_center;
-		} else {
-			param[qi++] = &x_center_lensed;
-			param[qi++] = &y_center_lensed;
-		}
+		set_geometric_param_pointers_egrad(param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
+		// Still need to make lensed_center_coords compatible with egrad (or else forbid having both turned on!!!)
 	}
 	param[qi++] = &zlens;
 }
@@ -969,308 +839,6 @@ void LensProfile::set_center_if_lensed_coords()
 		x_center = xl[0];
 		y_center = xl[1];
 	}
-}
-
-void LensProfile::print_parameters()
-{
-	if (ellipticity_mode==3) cout << "pseudo-";
-	cout << model_name << "(";
-	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
-	cout << "z=" << zlens << "): ";
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-			cout << paramnames[i] << "=";
-			if (angle_param[i]) cout << radians_to_degrees(*(param[i])) << " degrees";
-			else cout << *(param[i]);
-			cout << ", ";
-		}
-		if (!lensed_center_coords) cout << "xc=" << x_center << ", yc=" << y_center;
-		else cout << "xc_l=" << x_center_lensed << ", yc_l=" << y_center_lensed << " (xc=" << x_center << ",yc=" << y_center << ")";
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-			cout << paramnames[i] << "=";
-			if (angle_param[i]) cout << radians_to_degrees(*(param[i])) << " degrees";
-			else cout << *(param[i]);
-			if (i != n_params-2) cout << ", ";
-		}
-	}
-	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
-	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
-		cout << " (";
-		if (ellipticity_gradient) cout << "egrad=on, ";
-		cout << "emode=" << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
-	} else {
-		if ((ellipticity_mode != -1) and (ellipticity_gradient)) cout << " (egrad=on)";
-	}
-	double aux_param;
-	string aux_paramname;
-	get_auxiliary_parameter(aux_paramname,aux_param);
-	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
-	cout << endl;
-}
-
-string LensProfile::mkstring_doub(const double db)
-{
-	stringstream dstr;
-	string dstring;
-	dstr << db;
-	dstr >> dstring;
-	return dstring;
-}
-
-string LensProfile::mkstring_int(const int i)
-{
-	stringstream istr;
-	string istring;
-	istr << i;
-	istr >> istring;
-	return istring;
-}
-
-// Not sure if this function is even being used any more...check!!
-string LensProfile::get_parameters_string()
-{
-	string paramstring = "";
-	paramstring += mkstring_int(lens_number) + ". ";
-	if (ellipticity_mode==3) paramstring += "pseudo-";
-	paramstring += model_name + "(";
-	if (lens_subclass != -1) paramstring += subclass_label + "=" + mkstring_int(lens_subclass) + ",";
-	paramstring += "z=" + mkstring_doub(zlens) + "): ";
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-			paramstring += paramnames[i] + "=";
-			if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
-			else paramstring += mkstring_doub(*(param[i]));
-			paramstring += ", ";
-		}
-		if (!lensed_center_coords) paramstring += "xc=" + mkstring_doub(x_center) + ", yc=" + mkstring_doub(y_center);
-		else paramstring += "xc_l=" + mkstring_doub(x_center_lensed) + ", yc_l=" + mkstring_doub(y_center_lensed);
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-			paramstring += paramnames[i] + "=";
-			if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
-			else paramstring += *(param[i]);
-			if (i != n_params-2) paramstring += ", ";
-		}
-	}
-	if (center_anchored) paramstring += " (center_anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
-	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-		paramstring += " (ellipticity mode = " + mkstring_doub(ellipticity_mode) + ")"; // emode=3 is indicated by "pseudo-" name, not here
-	}
-	double aux_param;
-	string aux_paramname;
-	get_auxiliary_parameter(aux_paramname,aux_param);
-	if (aux_paramname != "") paramstring += " (" + aux_paramname + "=" + mkstring_doub(aux_param) + ")";
-	return paramstring;
-}
-
-void LensProfile::print_vary_parameters()
-{
-	if (n_vary_params==0) {
-		cout << "   parameters: none\n";
-	} else {
-		vector<string> paramnames_vary;
-		get_fit_parameter_names(paramnames_vary);
-		if (include_limits) {
-			if (lower_limits_initial.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
-			else {
-				cout << "   parameter limits:\n";
-				for (int i=0; i < n_vary_params; i++) {
-					if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
-					else
-						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "], initial range: [" << lower_limits_initial[i] << ":" << upper_limits_initial[i] << "]\n";
-				}
-			}
-		} else {
-			cout << "   parameters: ";
-			cout << paramnames_vary[0];
-			for (int i=1; i < n_vary_params; i++) cout << ", " << paramnames_vary[i];
-			cout << endl;
-		}
-	}
-	bool parameter_anchored = false;
-	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter[i]) parameter_anchored = true;
-	}
-	if (parameter_anchored) {
-		cout << "   anchored parameters: ";
-		int j=0;
-		for (int i=0; i < n_params; i++) {
-			if (anchor_parameter[i]) {
-				if (j > 0) cout << ", ";
-				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": ";
-				if ((parameter_anchor_ratio[i] != 1.0) or (parameter_anchor_exponent[i] != 1.0)) {
-					cout << parameter_anchor_ratio[i] << "*" << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
-					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
-				}
-				else cout << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
-				cout << ")";
-				j++;
-			}
-		}
-		cout << endl;
-	}
-}
-
-inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
-{
-	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
-	// It doesn't work very well (due to binary vs. base 10 storage), so canning it for now, not a big deal
-	//int exp;
-	//double mantissa = frexp10((*num),&exp);
-	//double mantissa;
-   //exp = ((*num) == 0) ? 0 : 1 + (int)std::floor(std::log10(abs((*num))));
-   //mantissa = (*num) * std::pow(10 , -exp);
-	scriptout << setiosflags(ios::scientific);
-	scriptout << (*num);
-	scriptout << resetiosflags(ios::scientific);
-	if (space) scriptout << " ";
-}
-
-void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	//scriptout << setiosflags(ios::scientific);
-	scriptout << "fit lens " << model_name << " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-			scriptout << "emode=" << ellipticity_mode << " ";
-	}
-	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
-	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
-
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
-				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
-			} else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-		else {
-			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
-			else scriptout << x_center_lensed << " " << y_center_lensed << " z=" << zlens << " -lensed_center" << endl;
-		}
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		scriptout << " z=" << zlens << endl;
-	}
-	for (int i=0; i < n_params-1; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
-	else scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-					}
-				} else {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
-						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-					}
-
-				}
-			}
-		}
-	}
-}
-
-void LensProfile::output_lens_command_nofit(string& command)
-{
-	command += "lens " + model_name + " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-		{
-			stringstream emodestr;
-			string emodestring;
-			emodestr << ellipticity_mode;
-			emodestr >> emodestring;
-			command += "emode=" + emodestring + " ";
-		}
-	}
-	if (special_parameter_command != "") command += special_parameter_command += " ";
-
-	string xcstring = "";
-	string ycstring = "";
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-		stringstream xcstr;
-		stringstream ycstr;
-		xcstr << setprecision(16);
-		xcstr << x_center;
-		xcstr >> xcstring;
-		ycstr << setprecision(16);
-		ycstr << y_center;
-		ycstr >> ycstring;
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-	}
-	stringstream zlstr;
-	string zlstring;
-	zlstr << setprecision(16);
-	zlstr << zlens;
-	zlstr >> zlstring;
-	command += xcstring + " " + ycstring + " z=" + zlstring;
 }
 
 bool LensProfile::output_cosmology_info(const int lens_number)
@@ -1772,9 +1340,12 @@ void LensProfile::update_ellipticity_meta_parameters()
 		}
 		if (!use_ellipticity_components) update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
 	} else {
-		xi_final_egrad = efunc_xi0 + 3*efunc_dxi;
-		q = efunc_qi; // q shouldn't be used at all, but this is just in case ellipticity gradient is turned off
-		theta = efunc_theta_i; // theta shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		q = geometric_param[0][0];
+		if (q > 1.0) q = 1.0;
+		theta = geometric_param[1][0];
+		x_center = geometric_param[2][0];
+		y_center = geometric_param[3][0];
+		update_egrad_meta_parameters();
 		check_for_overlapping_contours();
 		if ((lens != NULL) and (contours_overlap)) lens->contours_overlap = true;
 	}
@@ -1912,27 +1483,83 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 	}
 }
 
-bool LensProfile::enable_ellipticity_gradient(const dvector& efunc_params)
+bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double bspline_ximin, const double bspline_ximax, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
 	//NOTE: when new ellipticity functions are incorporated, n_efunc_params can be different from 4,
 	//      and efunc_params will be able to have different # of parameters, etc.
-	ellipticity_gradient = true;
-	int new_nparams = n_params + 4;
-	set_nparams_and_anchordata(new_nparams);
+
+	
+	if (egrad_mode==0) {
+		// Not sure if I should do this here, or before calling enable_ellipticity_gradient?
+		efunc_params.input(2*n_bspline_coefs+2);
+		for (int i=0; i < n_bspline_coefs; i++) efunc_params[i] = q;
+		for (int i=n_bspline_coefs; i < 2*n_bspline_coefs; i++) efunc_params[i] = radians_to_degrees(theta);
+		efunc_params[2*n_bspline_coefs] = x_center;
+		efunc_params[2*n_bspline_coefs+1] = y_center;
+	}
+
+	int n_egrad_params;
+	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+		warn("could not set up egrad params properly");
+		return false;
+	}
+	int new_nparams = n_params + n_egrad_params - 4; // we already had q, theta, xc and yc
+	//cout << "WTF? " << n_egrad_params << " " << n_params << " " << new_nparams << " " << n_bspline_coefs << endl;
+	if (n_egrad_params < 4) {
+		warn("could not setup egrad params; less than four egrad parameters were created");
+		return false;
+	}
+
+	vary_params.resize(new_nparams);
+	paramnames.resize(new_nparams);
+	latex_paramnames.resize(new_nparams);
+	latex_param_subscripts.resize(new_nparams);
+	stepsizes.resize(new_nparams);
+	set_auto_penalty_limits.resize(new_nparams);
+	penalty_lower_limits.resize(new_nparams);
+	penalty_upper_limits.resize(new_nparams);
+	angle_param.resize(new_nparams);
+	for (int i=lensprofile_nparams+4; i < n_params; i++) {
+		vary_params[i+n_egrad_params-4] = vary_params[i];
+		angle_param[i+n_egrad_params-4] = angle_param[i];
+	}
+	//for (int i=0; i < n_fourier_modes; i++) fourier_mode_paramnum[i] += n_egrad_params - 4; // so it keeps track of where the Fourier modes are
+	int j=0;
+	for (int i=lensprofile_nparams; i < lensprofile_nparams + n_egrad_params; i++) {
+		if (!copy_vary_settings) vary_params[i] = false;
+		else vary_params[i] = (*vary_egrad)[j++];
+		angle_param[i] = false; // the angle params will be set when the param pointers are set
+	}
+	n_params = new_nparams;
+	delete[] param;
+	param = new double*[n_params];
+
+	if (anchor_parameter != NULL) delete[] anchor_parameter;
+	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+
+	anchor_parameter = new bool[n_params];
+	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+
+	// parameters should not be anchored before enable egrad, since the anchors are deleted here
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter[i] = false;
+		parameter_anchor_lens[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
+	}
+
 	assign_param_pointers();
 	assign_paramnames();
 
-	if (efunc_params.size() != 4) return false;
-	efunc_qi = q;
-	efunc_theta_i = theta;
-	efunc_qf = efunc_params[0];
-	efunc_theta_f = degrees_to_radians(efunc_params[1]);
-	efunc_xi0 = efunc_params[2];
-	efunc_dxi = efunc_params[3];
-
-	egrad_emode = ellipticity_mode;
 	update_ellipticity_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
@@ -2954,6 +2581,292 @@ double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double
 	//}
 
 	return abdif*result;
+}
+
+/*********************************** Functions for printing lens/parameter information *************************************/
+
+void LensProfile::print_parameters()
+{
+	if (ellipticity_mode==3) cout << "pseudo-";
+	cout << model_name << "(";
+	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
+	cout << "z=" << zlens << "): ";
+	for (int i=0; i < n_params-1; i++) {
+		cout << paramnames[i] << "=";
+		if (angle_param[i]) cout << radians_to_degrees(*(param[i])) << " degrees";
+		else cout << *(param[i]);
+		if (i != n_params-2) cout << ", ";
+	}
+	//if (!lensed_center_coords) cout << "xc=" << x_center << ", yc=" << y_center;
+	//else cout << "xc_l=" << x_center_lensed << ", yc_l=" << y_center_lensed << " (xc=" << x_center << ",yc=" << y_center << ")";
+	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
+	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
+		cout << " (";
+		if (ellipticity_gradient) cout << "egrad=on, ";
+		cout << "emode=" << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
+	} else {
+		if ((ellipticity_mode != -1) and (ellipticity_gradient)) cout << " (egrad=on)";
+	}
+	double aux_param;
+	string aux_paramname;
+	get_auxiliary_parameter(aux_paramname,aux_param);
+	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
+	cout << endl;
+}
+
+string LensProfile::mkstring_doub(const double db)
+{
+	stringstream dstr;
+	string dstring;
+	dstr << db;
+	dstr >> dstring;
+	return dstring;
+}
+
+string LensProfile::mkstring_int(const int i)
+{
+	stringstream istr;
+	string istring;
+	istr << i;
+	istr >> istring;
+	return istring;
+}
+
+// Not sure if this function is even being used any more...check!!
+string LensProfile::get_parameters_string()
+{
+	string paramstring = "";
+	paramstring += mkstring_int(lens_number) + ". ";
+	if (ellipticity_mode==3) paramstring += "pseudo-";
+	paramstring += model_name + "(";
+	if (lens_subclass != -1) paramstring += subclass_label + "=" + mkstring_int(lens_subclass) + ",";
+	paramstring += "z=" + mkstring_doub(zlens) + "): ";
+	for (int i=0; i < n_params-1; i++) {
+		paramstring += paramnames[i] + "=";
+		if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
+		else paramstring += *(param[i]);
+		if (i != n_params-2) paramstring += ", ";
+	}
+	if (center_anchored) paramstring += " (center_anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
+	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+		paramstring += " (ellipticity mode = " + mkstring_doub(ellipticity_mode) + ")"; // emode=3 is indicated by "pseudo-" name, not here
+	}
+	double aux_param;
+	string aux_paramname;
+	get_auxiliary_parameter(aux_paramname,aux_param);
+	if (aux_paramname != "") paramstring += " (" + aux_paramname + "=" + mkstring_doub(aux_param) + ")";
+	return paramstring;
+}
+
+void LensProfile::print_vary_parameters()
+{
+	if (n_vary_params==0) {
+		cout << "   parameters: none\n";
+	} else {
+		vector<string> paramnames_vary;
+		get_fit_parameter_names(paramnames_vary);
+		if (include_limits) {
+			if (lower_limits_initial.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
+			else {
+				cout << "   parameter limits:\n";
+				for (int i=0; i < n_vary_params; i++) {
+					if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
+						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
+					else
+						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "], initial range: [" << lower_limits_initial[i] << ":" << upper_limits_initial[i] << "]\n";
+				}
+			}
+		} else {
+			cout << "   parameters: ";
+			cout << paramnames_vary[0];
+			for (int i=1; i < n_vary_params; i++) cout << ", " << paramnames_vary[i];
+			cout << endl;
+		}
+	}
+	bool parameter_anchored = false;
+	for (int i=0; i < n_params; i++) {
+		if (anchor_parameter[i]) parameter_anchored = true;
+	}
+	if (parameter_anchored) {
+		cout << "   anchored parameters: ";
+		int j=0;
+		for (int i=0; i < n_params; i++) {
+			if (anchor_parameter[i]) {
+				if (j > 0) cout << ", ";
+				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": ";
+				if ((parameter_anchor_ratio[i] != 1.0) or (parameter_anchor_exponent[i] != 1.0)) {
+					cout << parameter_anchor_ratio[i] << "*" << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
+					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
+				}
+				else cout << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
+				cout << ")";
+				j++;
+			}
+		}
+		cout << endl;
+	}
+}
+
+inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
+{
+	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
+	// It doesn't work very well (due to binary vs. base 10 storage), so canning it for now, not a big deal
+	//int exp;
+	//double mantissa = frexp10((*num),&exp);
+	//double mantissa;
+   //exp = ((*num) == 0) ? 0 : 1 + (int)std::floor(std::log10(abs((*num))));
+   //mantissa = (*num) * std::pow(10 , -exp);
+	scriptout << setiosflags(ios::scientific);
+	scriptout << (*num);
+	scriptout << resetiosflags(ios::scientific);
+	if (space) scriptout << " ";
+}
+
+void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
+{
+	scriptout << setprecision(16);
+	//scriptout << setiosflags(ios::scientific);
+	scriptout << "fit lens " << model_name << " ";
+	if (ellipticity_mode != default_ellipticity_mode) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+			scriptout << "emode=" << ellipticity_mode << " ";
+	}
+	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
+	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
+
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
+				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
+			} else {
+				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
+				else {
+					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+					else scriptout << *(param[i]);
+				}
+				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				scriptout << " ";
+			}
+		}
+		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
+		else {
+			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
+			else scriptout << x_center_lensed << " " << y_center_lensed << " z=" << zlens << " -lensed_center" << endl;
+		}
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
+				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
+			} else {
+				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
+				else {
+					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
+					else scriptout << *(param[i]);
+				}
+				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				scriptout << " ";
+			}
+		}
+		scriptout << " z=" << zlens << endl;
+	}
+	for (int i=0; i < n_params-1; i++) {
+		if (vary_params[i]) scriptout << "1 ";
+		else scriptout << "0 ";
+	}
+	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
+	else scriptout << endl;
+	if ((use_limits) and (include_limits)) {
+		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
+		else {
+			for (int i=0; i < n_vary_params; i++) {
+				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
+					}
+				} else {
+					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
+						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
+						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
+						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
+						scriptout << endl;
+					} else {
+						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
+					}
+
+				}
+			}
+		}
+	}
+}
+
+void LensProfile::output_lens_command_nofit(string& command)
+{
+	command += "lens " + model_name + " ";
+	if (ellipticity_mode != default_ellipticity_mode) {
+		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
+		{
+			stringstream emodestr;
+			string emodestring;
+			emodestr << ellipticity_mode;
+			emodestr >> emodestring;
+			command += "emode=" + emodestring + " ";
+		}
+	}
+	if (special_parameter_command != "") command += special_parameter_command += " ";
+
+	string xcstring = "";
+	string ycstring = "";
+	if (center_defined) {
+		for (int i=0; i < n_params-3; i++) {
+				stringstream paramstr;
+				paramstr << setprecision(16);
+				string paramstring;
+			if (angle_param[i]) {
+				paramstr << radians_to_degrees(*(param[i]));
+			}
+			else {
+				paramstr << *(param[i]);
+			}
+			paramstr >> paramstring;
+			command += paramstring + " ";
+		}
+		stringstream xcstr;
+		stringstream ycstr;
+		xcstr << setprecision(16);
+		xcstr << x_center;
+		xcstr >> xcstring;
+		ycstr << setprecision(16);
+		ycstr << y_center;
+		ycstr >> ycstring;
+	} else {
+		for (int i=0; i < n_params-1; i++) {
+				stringstream paramstr;
+				paramstr << setprecision(16);
+				string paramstring;
+			if (angle_param[i]) {
+				paramstr << radians_to_degrees(*(param[i]));
+			}
+			else {
+				paramstr << *(param[i]);
+			}
+			paramstr >> paramstring;
+			command += paramstring + " ";
+		}
+	}
+	stringstream zlstr;
+	string zlstring;
+	zlstr << setprecision(16);
+	zlstr << zlens;
+	zlstr >> zlstring;
+	command += xcstring + " " + ycstring + " z=" + zlstring;
 }
 
 

@@ -42,7 +42,7 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = profile.o sbprofile.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
+objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
 				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
 				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
@@ -76,7 +76,7 @@ lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h si
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -85,13 +85,16 @@ cg.o: cg.cpp cg.h
 mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
 	$(CC) -c mcmchdr.cpp
 
-profile.o: profile.h profile.cpp lensvec.h
+egrad.o: egrad.cpp egrad.h 
+	$(CC) -c egrad.cpp
+
+profile.o: profile.h profile.cpp lensvec.h egrad.h
 	$(CC) -c profile.cpp
 
-models.o: profile.h models.cpp
+models.o: models.cpp profile.h 
 	$(CC) -c models.cpp
 
-sbprofile.o: sbprofile.h sbprofile.cpp
+sbprofile.o: sbprofile.cpp sbprofile.h egrad.h
 	$(CC) -c sbprofile.cpp
 
 errors.o: errors.cpp errors.h

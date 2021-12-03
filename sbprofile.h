@@ -40,7 +40,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	int n_params, n_vary_params;
 	int sbprofile_nparams; // just the parameters that define the SB profile (rather than the angular structure or center coord's)
 	bool angle_param_exists;
-	int angle_paramnum; // used to keep track of angle parameter so it can be easily converted to degrees and displayed
 	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
@@ -58,9 +57,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical isophotes (zero by default)
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
-
-	int n_isophote_datapts;
-	double *sbprofile_xivals, *sbprofile_data, *sbprofile_errors;
 
 	void set_nparams(const int &n_params_in, const bool resize = false);
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source);
@@ -95,7 +91,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	static double zoom_split_factor; 
 	static double zoom_scale; 
 	int ellipticity_mode;
-	bool ellipticity_gradient; // if true, then allows a gradient in both ellipticity and position angle
 
 	public:
 	int sb_number;
@@ -117,14 +112,23 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
 	void delete_center_anchor();
-	bool enable_ellipticity_gradient(const dvector& efunc_params);
+	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs = 0, const double bspline_ximin = 1e30, const double bspline_ximax = 1e30, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void disable_ellipticity_gradient();
+	bool enable_fourier_gradient(dvector& fourier_params, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
+
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool vary_parameters(const boolvector& vary_params_in);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
+	bool fourier_mode_exists(const int mval) {
+		bool mode_exists = false;
+		for (int i=0; i < n_fourier_modes; i++) {
+			if (fourier_mode_mvals[i]==mval) { mode_exists = true; break; }
+		}
+		return mode_exists;
+	}
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
 	}
@@ -134,9 +138,13 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	void remove_fourier_modes();
 
+	void get_vary_flags(boolvector& vary_flags);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
+	bool get_limits(dvector& lower, dvector& upper, int &index);
+	bool get_limits(dvector& lower, dvector& upper);
+
 	void shift_angle_90();
 	void shift_angle_minus_90();
 	void reset_angle_modulo_2pi();
@@ -159,6 +167,10 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0); // for fitting to isophote data
 	double sbprofile_loglike(double *params);
+	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0);
+	double profile_fit_loglike(double *params);
+	double profile_fit_loglike_bspline(double *params);
+	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
 	void plot_sb_profile(double rmin, double rmax, int steps, ofstream &sbout);
 	void print_parameters();
@@ -190,6 +202,8 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	int get_n_params() { return n_params; }
+	int get_sbprofile_nparams() { return sbprofile_nparams; }
+	void check_vary_params();
 	int get_n_vary_params() { return n_vary_params; }
 	int get_center_anchor_number() {
 		if (center_anchored_to_lens) return center_anchor_lens->lens_number;

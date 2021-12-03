@@ -31,7 +31,7 @@ void Alpha::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = ALPHA;
 	model_name = "alpha";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -63,7 +63,7 @@ void Alpha::assign_paramnames()
 	paramnames[0] = "b";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "";
 	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
 	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Alpha::assign_param_pointers()
@@ -71,7 +71,7 @@ void Alpha::assign_param_pointers()
 	param[0] = &b;
 	param[1] = &alpha;
 	param[2] = &s;
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Alpha::update_meta_parameters()
@@ -98,7 +98,7 @@ void Alpha::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Alpha::set_model_specific_integration_pointers()
@@ -419,7 +419,7 @@ void PseudoJaffe::setup_lens_properties(const int parameter_mode, const int subc
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -457,7 +457,7 @@ void PseudoJaffe::assign_paramnames()
 		paramnames[1] = "a_kpc"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "kpc";
 		paramnames[2] = "s_kpc"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "kpc";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void PseudoJaffe::assign_param_pointers()
@@ -475,7 +475,7 @@ void PseudoJaffe::assign_param_pointers()
 		param[1] = &a_kpc;
 		param[2] = &s_kpc;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void PseudoJaffe::update_meta_parameters()
@@ -543,7 +543,7 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 		params[1] = a;
 		params[2] = s;
 	}
-	for (int i=3; i < n_params; i++) {
+	for (int i=lensprofile_nparams; i < n_params; i++) {
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
@@ -581,7 +581,7 @@ void PseudoJaffe::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void PseudoJaffe::set_model_specific_integration_pointers()
@@ -760,7 +760,7 @@ void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = nfw;
 	model_name = "nfw";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -793,7 +793,7 @@ void NFW::assign_paramnames()
 		paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	}
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void NFW::assign_param_pointers()
@@ -808,7 +808,7 @@ void NFW::assign_param_pointers()
 		param[0] = &ks;
 		param[1] = &rs;
 	}
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void NFW::get_parameters_pmode(const int pmode, double* params)
@@ -832,7 +832,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		params[0] = ks;
 		params[1] = rs;
 	}
-	for (int i=2; i < n_params; i++) {
+	for (int i=lensprofile_nparams; i < n_params; i++) {
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
@@ -893,7 +893,7 @@ void NFW::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void NFW::set_model_specific_integration_pointers()
@@ -1067,7 +1067,7 @@ void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int su
 	tstr << subclass;
 	tstr >> tstring;
 	special_parameter_command = "tmode=" + tstring;
-	setup_base_lens_properties(8,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1122,7 +1122,7 @@ void Truncated_NFW::assign_paramnames()
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Truncated_NFW::assign_param_pointers()
@@ -1148,7 +1148,7 @@ void Truncated_NFW::assign_param_pointers()
 		param[1] = &rs;
 		param[2] = &rt;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
@@ -1180,7 +1180,7 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 		params[2] = rt;
 	}
-	for (int i=3; i < n_params; i++) {
+	for (int i=lensprofile_nparams; i < n_params; i++) {
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
@@ -1258,7 +1258,7 @@ void Truncated_NFW::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Truncated_NFW::set_model_specific_integration_pointers()
@@ -1435,7 +1435,7 @@ void Cored_NFW::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1481,7 +1481,7 @@ void Cored_NFW::assign_paramnames()
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "rc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Cored_NFW::assign_param_pointers()
@@ -1503,7 +1503,7 @@ void Cored_NFW::assign_param_pointers()
 		param[1] = &rs;
 		param[2] = &rc;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
@@ -1525,7 +1525,7 @@ void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 		params[2] = rc;
 	}
-	for (int i=3; i < n_params; i++) {
+	for (int i=lensprofile_nparams; i < n_params; i++) {
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
@@ -1602,7 +1602,7 @@ void Cored_NFW::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Cored_NFW::set_model_specific_integration_pointers()
@@ -1865,7 +1865,7 @@ void Hernquist::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = HERNQUIST;
 	model_name = "hern";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1882,14 +1882,14 @@ void Hernquist::assign_paramnames()
 {
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Hernquist::assign_param_pointers()
 {
 	param[0] = &ks;
 	param[1] = &rs;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Hernquist::update_meta_parameters()
@@ -1911,7 +1911,7 @@ void Hernquist::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Hernquist::set_model_specific_integration_pointers()
@@ -1982,7 +1982,7 @@ void ExpDisk::setup_lens_properties(const int parameter_mode, const int subclass
 	lenstype = EXPDISK;
 	model_name = "expdisk";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
@@ -1998,14 +1998,14 @@ void ExpDisk::assign_paramnames()
 {
 	paramnames[0] = "k0";  latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	paramnames[1] = "R_d"; latex_paramnames[1] = "R";       latex_param_subscripts[1] = "d";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void ExpDisk::assign_param_pointers()
 {
 	param[0] = &k0;
 	param[1] = &R_d;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void ExpDisk::update_meta_parameters()
@@ -2027,7 +2027,7 @@ void ExpDisk::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void ExpDisk::set_model_specific_integration_pointers()
@@ -2086,7 +2086,7 @@ void Shear::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = SHEAR;
 	model_name = "shear";
 	special_parameter_command = "";
-	setup_base_lens_properties(5,false); // number of parameters = 4, is_elliptical_lens = false
+	setup_base_lens_properties(5,-1,false); // number of parameters = 4, is_elliptical_lens = false
 }
 
 Shear::Shear(const Shear* lens_in)
@@ -2288,7 +2288,7 @@ void Multipole::setup_lens_properties(const int parameter_mode, const int subcla
 	special_parameter_command = sine_command + " m=" + mstring;
 	model_name = "mpole";
 	m = subclass; // m will be used when assigning the amplitude parameter name (A_m or B_m)
-	setup_base_lens_properties(6,false,0,m); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false,0,m); // number of parameters = 5, is_elliptical_lens = false
 }
 
 Multipole::Multipole(const Multipole* lens_in)
@@ -2641,7 +2641,7 @@ void PointMass::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = PTMASS;
 	model_name = "ptmass";
 	special_parameter_command = "";
-	setup_base_lens_properties(4,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(4,-1,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
 }
 
 PointMass::PointMass(const PointMass* lens_in)
@@ -2835,7 +2835,7 @@ void CoreCusp::setup_lens_properties(const int parameter_mode, const int subclas
 	lenstype = CORECUSP;
 	model_name = "corecusp";
 	special_parameter_command = ((parameter_mode==1) ? "re_param" : "");
-	setup_base_lens_properties(10,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
+	setup_base_lens_properties(10,5,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -2863,7 +2863,7 @@ void CoreCusp::assign_paramnames()
 	paramnames[2] = "n";     latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	paramnames[3] = "a";     latex_paramnames[3] = "a";       latex_param_subscripts[3] = "";
 	paramnames[4] = "s";     latex_paramnames[4] = "s";       latex_param_subscripts[4] = "";
-	set_geometric_paramnames(5);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void CoreCusp::assign_param_pointers()
@@ -2874,7 +2874,7 @@ void CoreCusp::assign_param_pointers()
 	param[2] = &n;
 	param[3] = &a;
 	param[4] = &s;
-	set_geometric_param_pointers(5);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void CoreCusp::update_meta_parameters()
@@ -2953,7 +2953,7 @@ void CoreCusp::set_auto_ranges()
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
 	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
-	set_geometric_param_auto_ranges(5);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void CoreCusp::set_model_specific_integration_pointers()
@@ -3164,7 +3164,7 @@ void SersicLens::setup_lens_properties(const int parameter_mode, const int subcl
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 SersicLens::SersicLens(const SersicLens* lens_in)
@@ -3191,7 +3191,7 @@ void SersicLens::assign_paramnames()
 	}
 	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void SersicLens::assign_param_pointers()
@@ -3204,7 +3204,7 @@ void SersicLens::assign_param_pointers()
 
 	param[1] = &re;
 	param[2] = &n;
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void SersicLens::update_meta_parameters()
@@ -3236,7 +3236,7 @@ void SersicLens::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = false;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void SersicLens::set_model_specific_integration_pointers()
@@ -3295,7 +3295,7 @@ void Cored_SersicLens::setup_lens_properties(const int parameter_mode, const int
 	lenstype = CORED_SERSIC_LENS;
 	model_name = "csersic";
 	special_parameter_command = "";
-	setup_base_lens_properties(9,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(9,4,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
@@ -3324,7 +3324,7 @@ void Cored_SersicLens::assign_paramnames()
 	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	paramnames[3] = "rc";       latex_paramnames[3] = "r";       latex_param_subscripts[3] = "c";
-	set_geometric_paramnames(4);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Cored_SersicLens::assign_param_pointers()
@@ -3338,7 +3338,7 @@ void Cored_SersicLens::assign_param_pointers()
 	param[1] = &re;
 	param[2] = &n;
 	param[3] = &rc;
-	set_geometric_param_pointers(4);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Cored_SersicLens::update_meta_parameters()
@@ -3372,7 +3372,7 @@ void Cored_SersicLens::set_auto_ranges()
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
-	set_geometric_param_auto_ranges(4);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Cored_SersicLens::set_model_specific_integration_pointers()
@@ -3424,7 +3424,7 @@ void MassSheet::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = SHEET;
 	model_name = "sheet";
 	special_parameter_command = "";
-	setup_base_lens_properties(4,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(4,-1,false); // number of parameters = 3, is_elliptical_lens = false
 }
 
 MassSheet::MassSheet(const MassSheet* lens_in)
@@ -3557,7 +3557,7 @@ void Deflection::setup_lens_properties(const int parameter_mode, const int subcl
 	lenstype = DEFLECTION;
 	model_name = "deflection";
 	special_parameter_command = "";
-	setup_base_lens_properties(3,false); // number of parameters = 2, is_elliptical_lens = false
+	setup_base_lens_properties(3,-1,false); // number of parameters = 2, is_elliptical_lens = false
 	center_defined = false;
 }
 
@@ -3648,7 +3648,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	setup_base_lens_properties(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
 	rscale = rscale0 = rscale_in;
@@ -3784,7 +3784,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 {
 	lenstype = TABULATED;
 	special_parameter_command = "";
-	setup_base_lens_properties(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
@@ -4305,7 +4305,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
@@ -4477,7 +4477,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 {
 	lenstype = QTABULATED;
 	special_parameter_command = "";
-	setup_base_lens_properties(7,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;

@@ -4050,7 +4050,7 @@ void ImagePixelData::estimate_pixel_noise(const double xmin, const double xmax, 
 	} while (nclip > prev_nclip);
 }
 
-bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const int emode, const double qi, const double theta_i_degrees, const double xc_i, const double yc_i, const int max_it, IsophoteData &isophote_data, const bool use_polar_higher_harmonics, const bool verbose, SB_Profile* sbprofile, const int default_sampling_mode_in, const bool fix_center, const int max_xi_it, const double ximax_in, const double rms_sbgrad_rel_threshold, const double npts_frac, const double rms_sbgrad_rel_transition, const double npts_frac_zeroweight)
+bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const int emode, const double qi, const double theta_i_degrees, const double xc_i, const double yc_i, const int max_it, IsophoteData &isophote_data, const bool use_polar_higher_harmonics, const bool verbose, SB_Profile* sbprofile, const int default_sampling_mode_in, const int n_higher_harmonics, const bool fix_center, const int max_xi_it, const double ximax_in, const double rms_sbgrad_rel_threshold, const double npts_frac, const double rms_sbgrad_rel_transition, const double npts_frac_zeroweight)
 {
 	const int npts_max = 2000;
 	const int min_it = 7;
@@ -4068,7 +4068,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	if (pixel_size <= 0) {
 		pixel_size = dmax(pixel_xcvals[1]-pixel_xcvals[0],pixel_ycvals[1]-pixel_ycvals[0]);
 	}
-	double xi_min = 2.5*pixel_size;
+	//double xi_min = 2.5*pixel_size;
+	double xi_min = 1.5*pixel_size;
 	double xi_max = dmax(pixel_xcvals[npixels_x-1],pixel_ycvals[npixels_y-1]); // NOTE: we may never reach xi_max if S/N falls too low
 	if (ximax_in > 0) {
 		if (ximax_in > xi_max) {
@@ -4090,6 +4091,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	int *xi_ivals = new int[n_xivals];
 	int *xi_ivals_sorted = new int[n_xivals];
 	double *xivals = new double[n_xivals];
+	bool *repeat_params = new bool[n_xivals];
+	for (i=0; i < n_xivals; i++) repeat_params[i] = false;
 
 	for (i=0, xi=xi0; xi < xi_max; i++, xi *= xifac) { xivals[i] = xi; xi_ivals_sorted[i] = i; if (i==n_xivals-1) { i++; break;} }
 	i_switch = i;
@@ -4107,6 +4110,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	}
 	isophote_data.input(n_xivals,xivals);
 	isophote_data.setnan(); // in case any of the isophotes can't be fit, the NAN will indicate it
+	if (n_higher_harmonics > 2) isophote_data.use_A56 = true;
 
 	/*************************************** lambda functions ******************************************/
 	// We'll use this lambda function to construct the matrices used for least-squares fitting
@@ -4170,7 +4174,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	double theta_i = degrees_to_radians(theta_i_degrees);
 	double epsilon, theta, xc, yc;
 	double dtheta;
-	double sb_avg, next_sb_avg, prev_sb_avg, grad_xistep, sb_grad, rms_sbgrad_rel, max_amp;
+	double sb_avg, next_sb_avg, prev_sb_avg, grad_xistep, sb_grad, prev_sbgrad, rms_sbgrad_rel, prev_rms_sbgrad_rel, max_amp;
 	bool abort_isofit = false;
 	epsilon = 1 - qi;
 	theta = theta_i;
@@ -4193,8 +4197,10 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	}
 	n_ellipse_amps = 2*(3-lowest_harmonic);
 
-	const int n_higher_harmonics = 2; //  should be at least 2. Seems to be unstable if n_higher_harmonics > 4; not sure why (possibly roundoff error)
+	//const int n_higher_harmonics = 4; //  should be at least 2. Seems to be unstable if n_higher_harmonics > 4; probably matrices becoming singular for some xi vals
 	int nmax_amp = n_ellipse_amps + 2*n_higher_harmonics;
+	int n_harmonics_it; // will be reduced if singular matrix occurs
+	int nmax_amp_it; // will be reduced if singular matrix occurs
 	double *sb_residual = new double[npts_max];
 	double *sb_weights = new double[npts_max];
 	double *sbvals = new double[npts_max];
@@ -4219,7 +4225,10 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	int npts, npts_sample, next_npts, prev_npts, ngrad;
 	double minchisq;
 	bool already_switched = false;
-	bool revert_parameters = false;
+	bool failed_isophote_fit;
+	bool using_prev_sbgrad;
+	bool do_parameter_search;
+	bool tried_parameter_search;
 	double rms_resid, rms_resid_min;
 	double xc_minres, yc_minres, epsilon_minres, theta_minres, sbgrad_minres, rms_sbgrad_rel_minres, maxamp_minres;
 	double maxamp_min;
@@ -4256,12 +4265,102 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		yc_prev = yc;
 
 		sampling_mode = default_sampling_mode;
-		revert_parameters = false; // revert_parameters is flagged if the parameters jump by absurd values
+		n_harmonics_it = n_higher_harmonics;
+		do_parameter_search = false;
+		nmax_amp_it = nmax_amp;
+		//if (xi > 1.0) { // this is just a hack because it's having trouble with higher harmonics above m=4 beyond 1 arcsec or so
+			//n_harmonics_it = 2;
+			//nmax_amp_it = n_ellipse_amps + 2*n_harmonics_it;
+		//}
+		if (failed_isophote_fit) do_parameter_search = true; // start out with a parameter search
+		tried_parameter_search = false;
+		failed_isophote_fit = false;
 		while (true) {
+			using_prev_sbgrad = false;
 			//cout << "Sampling mode: " << sampling_mode << endl;
 			npts_sample = -1; // so it will choose automatically
 			//cout << "EPSILON=" << epsilon << " THETA=" << theta << endl;
-			sb_avg = sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_higher_harmonics,use_polar_higher_harmonics);
+			sb_avg = sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics);
+			if (npts < npts_sample*npts_frac) {
+				// if there aren't enough points/sectors, then it's not worth doing a parameter search (it can even backfire and result in contour crossings etc.); just move on
+				do_parameter_search = false;
+				tried_parameter_search = true;
+				epsilon = epsilon_prev;
+				theta = theta_prev;
+				xc = xc_prev;
+				yc = yc_prev;
+				failed_isophote_fit = true;
+				break;
+			}
+			//if (do_parameter_search) {
+				//do_parameter_search = false;
+				//tried_parameter_search = true;
+			//}
+			if (do_parameter_search) {
+				double ep, th;
+				double epmin = epsilon - 0.1;
+				double epmax = epsilon + 0.1;
+				if (epmin < 0) epmin = 0.01;
+				if (epmax > 1) epmax = 0.9;
+				double thmin = theta - M_PI/4;
+				double thmax = theta + M_PI/4;
+				int parameter_search_nn = 100;
+				double epstep = (epmax-epmin)/(parameter_search_nn-1);
+				double thstep = (thmax-thmin)/(parameter_search_nn-1);
+				int ii,jj;
+				double residmin = 1e30;
+
+				for (ii=0, ep=epmin; ii < parameter_search_nn; ii++, ep += epstep) {
+					for (jj=0, th=thmin; jj < parameter_search_nn; jj++, th += thstep) {
+						sample_ellipse(false,xi,xistep,ep,th,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics);
+
+						// now generate Dvec and Smatrix (s_transpose * s), then do inversion to get amplitudes A.
+						fill_matrices(npts,nmax_amp_it,sb_residual,sb_weights,smatrix,Dvec,Smatrix,1.0);
+						bool chol_status;
+						chol_status = Cholesky_dcmp(Smatrix,nmax_amp_it);
+						if (!chol_status) continue;
+						Cholesky_solve(Smatrix,Dvec,amp,nmax_amp_it);
+
+						rms_resid = 0;
+						for (i=0; i < npts; i++) {
+							hterm = sb_residual[i];
+							for (j=n_ellipse_amps; j < nmax_amp_it; j++) hterm -= amp[j]*smatrix[j][i];
+							rms_resid += hterm*hterm;
+						}
+						rms_resid = sqrt(rms_resid/npts);
+
+						if (rms_resid < residmin) {
+							epsilon = ep;
+							theta = th;
+							residmin = rms_resid;
+						}
+					}
+				}
+				if (residmin==1e30) {
+					warn("Cholesky decomposition failed during parameter search; repeating previous isophote parameters");
+					failed_isophote_fit = true;
+					break;
+				}
+				cout << "Smallest residuals for epsilon=" << epsilon << ", theta=" << theta << " during parameter search (rms_resid=" << residmin << ")" << endl;
+				//sb_avg = sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics);
+				do_parameter_search = false;
+				tried_parameter_search = true;
+				it = 0; // it's effectively a do-over now
+				minchisq = 1e30;
+				rms_resid_min = 1e30;
+				maxamp_min = 1e30;
+				epsilon_prev = epsilon;
+				theta_prev = theta;
+				xc_prev = xc;
+				yc_prev = yc;
+
+				sampling_mode = default_sampling_mode;
+				n_harmonics_it = n_higher_harmonics;
+				nmax_amp_it = nmax_amp;
+				failed_isophote_fit = false;
+				continue;
+			}
+
 			if (verbose) {
 				if (sb_avg*0.0 != 0.0) {
 					for (i=0; i < npts; i++) {
@@ -4281,28 +4380,34 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				theta = theta_prev;
 				xc = xc_prev;
 				yc = yc_prev;
+				failed_isophote_fit = true;
 				break;
 			}
 			// now generate Dvec and Smatrix (s_transpose * s), then do inversion to get amplitudes A. pixel errors are ignored here because they just cancel anyway
-			fill_matrices(npts,nmax_amp,sb_residual,sb_weights,smatrix,Dvec,Smatrix,1.0);
-			if (!Cholesky_dcmp(Smatrix,nmax_amp)) {
-				// Try to invert by brute force...this may cause serious problems, especially if roundoff error was the reason for Cholesky failure!
-				dmatrix Smat(Smatrix,nmax_amp,nmax_amp);
-				Smat.invert();
-				dvector ampvec(amp,nmax_amp);
-				dvector Dvect(Dvec,nmax_amp);
-				ampvec = Smat*Dvect;
-				for (i=0; i < nmax_amp; i++) {
-					amp[i] = ampvec[i];
+			fill_matrices(npts,nmax_amp_it,sb_residual,sb_weights,smatrix,Dvec,Smatrix,1.0);
+			bool chol_status;
+			chol_status = Cholesky_dcmp(Smatrix,nmax_amp_it);
+			if (!chol_status) {
+				if (n_harmonics_it > 2) {
+					n_harmonics_it--;
+					nmax_amp_it -= 2;
+					continue;
+				} else {
+					warn("Cholesky decomposition failed, even with only two higher harmonics; repeating previous isophote parameters");
+					epsilon = epsilon_prev;
+					theta = theta_prev;
+					xc = xc_prev;
+					yc = yc_prev;
+					failed_isophote_fit = true;
+					break;
 				}
-			} else {
-				Cholesky_solve(Smatrix,Dvec,amp,nmax_amp);
 			}
+			Cholesky_solve(Smatrix,Dvec,amp,nmax_amp_it);
 
 			rms_resid = 0;
 			for (i=0; i < npts; i++) {
 				hterm = sb_residual[i];
-				for (j=n_ellipse_amps; j < nmax_amp; j++) hterm -= amp[j]*smatrix[j][i];
+				for (j=n_ellipse_amps; j < nmax_amp_it; j++) hterm -= amp[j]*smatrix[j][i];
 				rms_resid += hterm*hterm;
 			}
 			rms_resid = sqrt(rms_resid/npts);
@@ -4316,40 +4421,66 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			double nextstep = grad_xistep, prevstep = grad_xistep, gradstep;
 
 			// Now we will see if not enough points are being sampled for the gradient, and will expand the stepsize to see if it helps (this can occur around masks)
-		/*
 			if (prev_npts < npts_sample*npts_frac) {
 				warn("RUHROH! not enough points when getting gradient (npts_prev). Will increase stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
 				prev_sb_avg = sample_ellipse(verbose,xi-2*grad_xistep,xistep,epsilon,theta,xc,yc,prev_npts,npts_sample,emode,sampling_mode,sbvals_prev,sbgrad_weights_prev,sbprofile);
-				if (prev_npts < npts_sample*npts_frac) die("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
+				if (prev_npts < npts_sample*npts_frac) {
+					warn("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
+					sb_grad = prev_sbgrad; // hack when all else fails
+					rms_sbgrad_rel = prev_rms_sbgrad_rel;
+					using_prev_sbgrad = true;
+				}
 				nextstep *= 2;
 			}
 			else if (next_npts < npts_sample*npts_frac) {
 				warn("RUHROH! not enough points when getting gradient (npts_next) Will increase stepsize(npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
 				next_sb_avg = sample_ellipse(verbose,xi+2*grad_xistep,xistep,epsilon,theta,xc,yc,next_npts,npts_sample,emode,sampling_mode,sbvals_next,sbgrad_weights_next,sbprofile);
-				if (next_npts < npts_sample*npts_frac) die("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
+				if (next_npts < npts_sample*npts_frac) {
+					warn("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
+					sb_grad = prev_sbgrad; // hack when all else fails
+					rms_sbgrad_rel = prev_rms_sbgrad_rel;
+					using_prev_sbgrad = true;
+				}
 				prevstep *= 2;
 			}
-			*/
-			gradstep = nextstep+prevstep;
 			if ((prev_npts==0) or (next_npts==0)) {
 				warn("isophote fit failed; no sampling points were accepted on ellipse for determining sbgrad");
 				epsilon = epsilon_prev;
 				theta = theta_prev;
 				xc = xc_prev;
 				yc = yc_prev;
+				failed_isophote_fit = true;
 				break;
 			}
 
-			if (!find_sbgrad(npts_sample,sbvals_prev,sbvals_next,sbgrad_weights_prev,sbgrad_weights_next,gradstep,sb_grad,rms_sbgrad_rel,ngrad)) { abort_isofit = true; break; }
-			if (verbose) cout << "it=" << it << " sbavg=" << sb_avg << " rms=" << rms_resid << " sbgrad=" << sb_grad << " maxamp=" << max_amp << " eps=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << " (npts=" << npts << ")" << endl;
-			if (ngrad < npts_sample*npts_frac) warn("RUHROH! not enough points when getting gradient (ngrad=%i,npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",ngrad,npts_sample,prev_npts,next_npts,npts);
+			if (!using_prev_sbgrad) {
+				gradstep = nextstep+prevstep;
+				if (!find_sbgrad(npts_sample,sbvals_prev,sbvals_next,sbgrad_weights_prev,sbgrad_weights_next,gradstep,sb_grad,rms_sbgrad_rel,ngrad))
+				{
+					abort_isofit = true;
+					break;
+				} else {
+					if (verbose) cout << "it=" << it << " sbavg=" << sb_avg << " rms=" << rms_resid << " sbgrad=" << sb_grad << " maxamp=" << max_amp << " eps=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << " (npts=" << npts << ")" << endl;
+					if (ngrad < npts_sample*npts_frac) {
+						warn("RUHROH! not enough points when getting gradient (ngrad=%i,npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",ngrad,npts_sample,prev_npts,next_npts,npts);
+						epsilon = epsilon_prev;
+						theta = theta_prev;
+						xc = xc_prev;
+						yc = yc_prev;
+						failed_isophote_fit = true;
+						break;
+					}
+					prev_sbgrad = sb_grad;
+					prev_rms_sbgrad_rel = rms_sbgrad_rel;
+				}
+			}
 			//if (prev_npts < npts_sample*npts_frac) die();
 			//if (next_npts < npts_sample*npts_frac) die();
 			//if (ngrad < npts_sample*npts_frac) die();
 
 			if (rms_resid < rms_resid_min) {
 				// save params in case this solution is better than the final one
-				for (j=0; j < nmax_amp; j++) {
+				for (j=0; j < nmax_amp_it; j++) {
 					amp_minres[j] = amp[j];
 				}
 				rms_resid_min = rms_resid;
@@ -4389,7 +4520,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				theta = theta_prev;
 				xc = xc_prev;
 				yc = yc_prev;
-				revert_parameters = true;
+				failed_isophote_fit = true;
 				break;
 			}
 			if ((yc_ampnum >= 0) and ((yc < pixel_ycvals[0]) or (yc > pixel_ycvals[npixels_y-1]))) {
@@ -4398,29 +4529,61 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				theta = theta_prev;
 				xc = xc_prev;
 				yc = yc_prev;
-				revert_parameters = true;
+				failed_isophote_fit = true;
 				break;
 			}
 			if ((epsilon > 1.0) or (epsilon < 0.0)) {
 				double frac = ((double) npts)/npts_sample;
-				if (epsilon > 1.0) warn("isofit failed; ellipticity went above 1.0. Moving on to next isophote (npts=%i, npts_sample=%i, npts/npts_sample=%g)",npts,npts_sample,frac);
+				if ((!tried_parameter_search) and (npts > npts_sample*npts_frac)) {
+					if (epsilon > 1.0) warn("isofit failed; ellipticity went above 1.0. Will now try a parameter search in epsilon, theta (npts=%i, npts_sample=%i, npts/npts_sample=%g)",npts,npts_sample,frac);
+					else warn("isofit failed; ellipticity went below 0.0 (epsilon=%g). Will now try a parameter search in epsilon, theta (npts=%i, npts_sample=%i, npts/npts_sample=%g)",epsilon,npts,npts_sample,frac);
 
-				else warn("isofit failed; ellipticity went below 0.0. Moving on to next isophote (npts=%i, npts_sample=%i, npts/npts_sample=%g)",npts,npts_sample,frac);
-				epsilon = epsilon_prev;
-				theta = theta_prev;
-				xc = xc_prev;
-				yc = yc_prev;
-				revert_parameters = true;
-				break;
+					epsilon = epsilon_prev;
+					theta = theta_prev;
+					xc = xc_prev;
+					yc = yc_prev;
+					do_parameter_search = true;
+					continue;
+				} else {
+					if (epsilon > 1.0) warn("isofit failed; ellipticity went above 1.0. Moving on to next isophote (npts=%i, npts_sample=%i, npts/npts_sample=%g)",npts,npts_sample,frac);
+					else warn("isofit failed; ellipticity went below 0.0 (epsilon=%g). Moving on to next isophote (npts=%i, npts_sample=%i, npts/npts_sample=%g)",epsilon,npts,npts_sample,frac);
+
+					epsilon = epsilon_prev;
+					theta = theta_prev;
+					xc = xc_prev;
+					yc = yc_prev;
+					if (n_harmonics_it > 2) {
+						n_harmonics_it--;
+						nmax_amp_it -= 2;
+						continue;
+					}
+					failed_isophote_fit = true;
+					break;
+				}
 			}
 			if ((jmax==theta_ampnum) and (abs(dtheta) > M_PI)) {
-				warn("isofit failed; position angle jumped by more than 180 degrees(dtheta=%g, theta_amp=%g). Moving on to next isophote (npts/npts_sample=%g)",radians_to_degrees(dtheta),amp[theta_ampnum],(((double) npts)/npts_sample));
-				epsilon = epsilon_prev;
-				theta = theta_prev;
-				xc = xc_prev;
-				yc = yc_prev;
-				revert_parameters = true;
-				break;
+				if ((!tried_parameter_search) and (npts > npts_sample*npts_frac)) {
+					warn("isofit failed; position angle jumped by more than 180 degrees(dtheta=%g, theta_amp=%g). Will now try a parameter search in epsilon, theta (npts/npts_sample=%g)",radians_to_degrees(dtheta),amp[theta_ampnum],(((double) npts)/npts_sample));
+					epsilon = epsilon_prev;
+					theta = theta_prev;
+					xc = xc_prev;
+					yc = yc_prev;
+					do_parameter_search = true;
+					continue;
+				} else {
+					epsilon = epsilon_prev;
+					theta = theta_prev;
+					xc = xc_prev;
+					yc = yc_prev;
+					if (n_harmonics_it > 2) {
+						n_harmonics_it--;
+						nmax_amp_it -= 2;
+						continue;
+					}
+					warn("isofit failed; position angle jumped by more than 180 degrees(dtheta=%g, theta_amp=%g). Moving on to next isophote (npts/npts_sample=%g)",radians_to_degrees(dtheta),amp[theta_ampnum],(((double) npts)/npts_sample));
+					failed_isophote_fit = true;
+					break;
+				}
 			}
 
 			if ((sampling_mode==0) and (default_sampling_mode_in != 0) and (rms_sbgrad_rel > rms_sbgrad_rel_transition)) {
@@ -4441,10 +4604,12 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				theta = theta_prev;
 				xc = xc_prev;
 				yc = yc_prev;
+				failed_isophote_fit = true;
 				break;
 			}
-		}
-		if ((rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres)) {
+		} // End of while loop
+
+		if ((!failed_isophote_fit) and ((rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres))) {
 			//warn("rms_sbgrad_rel (%g) greater than threshold; retaining previous isofit fit parameters",rms_sbgrad_rel);
 			epsilon = epsilon_prev;
 			theta = theta_prev;
@@ -4459,10 +4624,15 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				break;
 			}
 		}
+		if ((failed_isophote_fit) and (xi_it==0)) {
+			warn("cannot have failed isophote fit on first iteration; aborting isofit");
+			abort_isofit = true;
+		}
 
 		if (abort_isofit) break;
 		if (npts==0) continue; // don't even record previous isophote parameters because we can't even get an estimate for sb_avg or its uncertainty
-		if ((rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres)) {
+		if ((failed_isophote_fit) or (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres)) {
+			repeat_params[xi_i] = true;
 			isophote_data.sb_avg_vals[xi_i] = sb_avg;
 			isophote_data.sb_errs[xi_i] = rms_resid_min/sqrt(npts); // standard error of the mean
 			isophote_data.qvals[xi_i] = isophote_data.qvals[xi_i_prev];
@@ -4481,6 +4651,30 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			isophote_data.B3_errs[xi_i] = isophote_data.B3_errs[xi_i_prev];
 			isophote_data.A4_errs[xi_i] = isophote_data.A4_errs[xi_i_prev];
 			isophote_data.B4_errs[xi_i] = isophote_data.B4_errs[xi_i_prev];
+			if (n_higher_harmonics > 2) {
+				if (n_harmonics_it > 2) {
+					isophote_data.A5vals[xi_i] = isophote_data.A5vals[xi_i_prev];
+					isophote_data.B5vals[xi_i] = isophote_data.B5vals[xi_i_prev];
+					isophote_data.A5_errs[xi_i] = isophote_data.A5_errs[xi_i_prev];
+					isophote_data.B5_errs[xi_i] = isophote_data.B5_errs[xi_i_prev];
+				} else {
+					isophote_data.A5vals[xi_i] = 0;
+					isophote_data.B5vals[xi_i] = 0;
+					isophote_data.A5_errs[xi_i] = 1e-6;
+					isophote_data.B5_errs[xi_i] = 1e-6;
+				}
+				if (n_harmonics_it > 3) {
+					isophote_data.A6vals[xi_i] = isophote_data.A6vals[xi_i_prev];
+					isophote_data.B6vals[xi_i] = isophote_data.B6vals[xi_i_prev];
+					isophote_data.A6_errs[xi_i] = isophote_data.A6_errs[xi_i_prev];
+					isophote_data.B6_errs[xi_i] = isophote_data.B6_errs[xi_i_prev];
+				} else {
+					isophote_data.A6vals[xi_i] = 0;
+					isophote_data.B6vals[xi_i] = 0;
+					isophote_data.A6_errs[xi_i] = 1e-6;
+					isophote_data.B6_errs[xi_i] = 1e-6;
+				}
+			}
 			if (verbose) {
 				if (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) cout << "rms_sbgrad_rel > threshold (" << rms_sbgrad_rel_minres << " vs " << rms_sbgrad_rel_threshold << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
 				if (npts_minres < npts_frac*npts_sample_minres) cout << "npts/npts_sample < npts_frac (" << (((double) npts_minres)/npts_sample) << " vs " << npts_frac << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
@@ -4489,9 +4683,9 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			}
 
 		} else {
-			if ((!revert_parameters) and (rms_resid > rms_resid_min)) {
+			if (rms_resid > rms_resid_min) {
 				// in this case the final solution was NOT the one with the smallest rms residuals
-				for (j=0; j < nmax_amp; j++) {
+				for (j=0; j < nmax_amp_it; j++) {
 					amp[j] = amp_minres[j];
 				}
 				xc = xc_minres;
@@ -4503,6 +4697,9 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				max_amp = maxamp_minres;
 				npts = npts_minres;
 				npts_sample = npts_sample_minres;
+
+				prev_sbgrad = sb_grad;
+				prev_rms_sbgrad_rel = rms_sbgrad_rel;
 			}
 
 			if (verbose) {
@@ -4521,19 +4718,15 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			}
 			//sampling_noise = (sampling_mode==1) ? 2*rms_resid_min : pixel_noise;
 
-			sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_higher_harmonics,use_polar_higher_harmonics); // sample again in case we switched back to previous parameters
-			fill_matrices(npts,nmax_amp,NULL,sb_weights,smatrix,NULL,Smatrix,sampling_noise);
-			if (!Cholesky_dcmp(Smatrix,nmax_amp)) {
-				dmatrix Smat(Smatrix,nmax_amp,nmax_amp);
-				Smat.invert();
-				for (i=0; i < nmax_amp; i++) {
-						amperrs[i] += Smatrix[i][i]; // just getting the diagonal elements of S_inverse from L_inv*L_inv^T
-						amperrs[i] = sqrt(amperrs[i]);
-				}
+			sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics); // sample again in case we switched back to previous parameters
+			fill_matrices(npts,nmax_amp_it,NULL,sb_weights,smatrix,NULL,Smatrix,sampling_noise);
+			if (!Cholesky_dcmp(Smatrix,nmax_amp_it)) {
+				warn("unexpected failure of Cholesky decomposition; isofit failed");
+				return false;
 			} else {
-				Cholesky_fac_inverse(Smatrix,nmax_amp); // Now the lower triangle of Smatrix gives L_inv
+				Cholesky_fac_inverse(Smatrix,nmax_amp_it); // Now the lower triangle of Smatrix gives L_inv
 
-				for (i=0; i < nmax_amp; i++) {
+				for (i=0; i < nmax_amp_it; i++) {
 					amperrs[i] = 0;
 					for (k=0; k <= i; k++) {
 						amperrs[i] += SQR(Smatrix[i][k]); // just getting the diagonal elements of S_inverse from L_inv*L_inv^T
@@ -4546,7 +4739,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				//cout << "Untransformed: A3_err=" << amperrs[0] << " B3_err=" << amperrs[1] << " A4_err=" << amperrs[2] << " B4_err=" << amperrs[3] << endl;
 			//}
 
-			for (i=n_ellipse_amps; i < nmax_amp; i++) {
+			for (i=n_ellipse_amps; i < nmax_amp_it; i++) {
 				amp[i] = -amp[i]/(sb_grad*xi); // this will relate it to the contour shape amplitudes (when perturbing the elliptical radius)
 				amperrs[i] = abs(amperrs[i]/(sb_grad*xi));
 			}
@@ -4558,14 +4751,24 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				if (yc_ampnum >= 0) yc_err = amperrs[yc_ampnum]*sqrt(sqrt(1-epsilon)/sb_grad);
 			}
 			epsilon_err = amperrs[epsilon_ampnum]*sqrt(2*(1-epsilon)/(xi*sb_grad));
+			if (epsilon_err > 1e10) die("absurd epsilon error! xi=%g, amperr=%g, sb_grad=%g",xi,amperrs[epsilon_ampnum],sb_grad);
 			theta_err = amperrs[theta_ampnum]*sqrt(2*(1-epsilon)/(xi*sb_grad*(1-SQR(1-epsilon))));
-			if (theta_err > degrees_to_radians(200)) die("absurd theta error; amperr=%g,sbgrad=%g,epsilon=%g",amperrs[3],sb_grad,epsilon);
+			if (theta_err > degrees_to_radians(200)) warn("absurd theta error; amperr=%g,sbgrad=%g,epsilon=%g",amperrs[3],sb_grad,epsilon);
 
 			//cout << "AMPERRS: " << amperrs[0] << " " << amperrs[1] << " " << amperrs[2] << " " << amperrs[3] << endl;
 			if (verbose) {
 				cout << "epsilon_err=" << epsilon_err << ", theta_err=" << radians_to_degrees(theta_err) << ", xc_err=" << xc_err << ", yc_err=" << yc_err << endl;
 				cout << "A3=" << amp[n_ellipse_amps] << " B3=" << amp[n_ellipse_amps+1] << " A4=" << amp[n_ellipse_amps+2] << " B4=" << amp[n_ellipse_amps+3] << endl;
 				cout << "A3_err=" << amperrs[n_ellipse_amps] << " B3_err=" << amperrs[n_ellipse_amps+1] << " A4_err=" << amperrs[n_ellipse_amps+2] << " B4_err=" << amperrs[n_ellipse_amps+3] << endl;
+				if (n_harmonics_it > 2) {
+					cout << "A5=" << amp[n_ellipse_amps+4] << " B5=" << amp[n_ellipse_amps+5] << endl;
+					cout << "A5_err=" << amperrs[n_ellipse_amps+4] << " B5_err=" << amperrs[n_ellipse_amps+5] << endl;
+				}
+				if (n_harmonics_it > 3) {
+					cout << "A6=" << amp[n_ellipse_amps+6] << " B6=" << amp[n_ellipse_amps+7] << endl;
+					cout << "A6_err=" << amperrs[n_ellipse_amps+6] << " B6_err=" << amperrs[n_ellipse_amps+7] << endl;
+				}
+
 			}
 
 			if ((verbose) and (sbprofile==NULL)) cout << "Best-fit rms_resid=" << rms_resid_min << ", sb_avg=" << sb_avg << ", sbgrad=" << sbgrad_minres << ", maxamp=" << maxamp_minres << ", rms_sbgrad_rel=" << rms_sbgrad_rel << endl;
@@ -4584,6 +4787,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 
 			isophote_data.sb_avg_vals[xi_i] = sb_avg;
 			if (npts_minres < npts_frac_zeroweight*npts_sample_minres) {
+				// Here we blow up the error (giving the data point zero weight) if there weren't enough points to sample the surface brightness well enough
 				isophote_data.sb_errs[xi_i] = 1e30;
 			} else {
 				isophote_data.sb_errs[xi_i] = rms_resid_min/sqrt(npts); // standard error of the mean
@@ -4604,6 +4808,32 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			isophote_data.B3_errs[xi_i] = amperrs[n_ellipse_amps+1];
 			isophote_data.A4_errs[xi_i] = amperrs[n_ellipse_amps+2];
 			isophote_data.B4_errs[xi_i] = amperrs[n_ellipse_amps+3];
+
+			if (n_higher_harmonics > 2) {
+				if (n_harmonics_it > 2) {
+					isophote_data.A5vals[xi_i] = amp[n_ellipse_amps+4];
+					isophote_data.B5vals[xi_i] = amp[n_ellipse_amps+5];
+					isophote_data.A5_errs[xi_i] = amperrs[n_ellipse_amps+4];
+					isophote_data.B5_errs[xi_i] = amperrs[n_ellipse_amps+5];
+				} else {
+					isophote_data.A5vals[xi_i] = 0;
+					isophote_data.B5vals[xi_i] = 0;
+					isophote_data.A5_errs[xi_i] = 1e-6;
+					isophote_data.B5_errs[xi_i] = 1e-6;
+				}
+				if (n_harmonics_it > 3) {
+					isophote_data.A6vals[xi_i] = amp[n_ellipse_amps+6];
+					isophote_data.B6vals[xi_i] = amp[n_ellipse_amps+7];
+					isophote_data.A6_errs[xi_i] = amperrs[n_ellipse_amps+6];
+					isophote_data.B6_errs[xi_i] = amperrs[n_ellipse_amps+7];
+				} else {
+					isophote_data.A6vals[xi_i] = 0;
+					isophote_data.B6vals[xi_i] = 0;
+					isophote_data.A6_errs[xi_i] = 1e-6;
+					isophote_data.B6_errs[xi_i] = 1e-6;
+				}
+			}
+
 		}
 		if (abort_isofit) break;
 
@@ -4700,6 +4930,23 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		sbprofile->plot_ellipticity_function(xi_min,xi_max,nn_plot);
 	}
 
+	/*
+	double repeat_errfac = 1e30;
+	for (i=0; i < n_xivals; i++) {
+		if (repeat_params[i]) {
+			isophote_data.q_errs[i] *= repeat_errfac;
+			isophote_data.theta_errs[i] *= repeat_errfac;
+			isophote_data.xc_errs[i] *= repeat_errfac;
+			isophote_data.yc_errs[i] *= repeat_errfac;
+			isophote_data.A3_errs[i] *= repeat_errfac;
+			isophote_data.B3_errs[i] *= repeat_errfac;
+			isophote_data.A4_errs[i] *= repeat_errfac;
+			isophote_data.B4_errs[i] *= repeat_errfac;
+		}
+	}
+	*/
+
+
 	delete[] xivals;
 	delete[] xi_ivals;
 	delete[] xi_ivals_sorted;
@@ -4724,6 +4971,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	return true;
 }
 
+/*
 bool ImagePixelData::fit_isophote_ecomp(const double xi0, const double xistep, const int emode, const double qi, const double theta_i_degrees, const double xc_i, const double yc_i, const int max_it, IsophoteData &isophote_data, const bool use_polar_higher_harmonics, const bool verbose, SB_Profile* sbprofile, const int default_sampling_mode_in, const int max_xi_it, const double ximax_in)
 {
 	const int npts_max = 2000;
@@ -5391,6 +5639,7 @@ bool ImagePixelData::fit_isophote_ecomp(const double xi0, const double xistep, c
 	if (abort_isofit) return false;
 	return true;
 }
+*/
 
 double ImagePixelData::sample_ellipse(const bool show_warnings, const double xi, const double xistep_in, const double epsilon, const double theta, const double xc, const double yc, int& npts, int& npts_sample, const int emode, int& sampling_mode, double *sbvals, double *sbgrad_wgts, SB_Profile* sbprofile, const bool fill_matrices, double* sb_residual, double *sb_weights, double** smatrix, const int ni, const int nf, const bool use_polar_higher_harmonics, const bool plot_ellipse, ofstream *ellout)
 {

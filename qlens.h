@@ -338,6 +338,26 @@ struct WeakLensingData
 	~WeakLensingData();
 };
 
+struct ParamAnchor {
+	bool anchor_param;
+	int paramnum;
+	int anchor_paramnum;
+	bool use_implicit_ratio;
+	bool use_exponent;
+	int anchor_lens_number;
+	double ratio;
+	double exponent;
+	ParamAnchor() {
+		anchor_param = false;
+		use_implicit_ratio = false;
+		use_exponent = false;
+		ratio = 1.0;
+		exponent = 1.0;
+	}
+	void shift_down() { paramnum--; }
+};
+
+
 double mcsampler_set_lensptr(QLens* lens_in);
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
 void polychord_prior (double cube[], double theta[], int nDims);
@@ -933,7 +953,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
-	bool read_efunc_params(bool vary_params, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags);
+	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, double& ximin, double& ximax, bool& enter_params_and_varyflags);
+	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int current_nparams, const int n_bspline_coefs, const bool enter_params_and_varyflags);
 	void run_plotter(string plotcommand, string extra_command = "");
 	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");
 	void run_plotter_range(string plotcommand, string range, string extra_command = "");

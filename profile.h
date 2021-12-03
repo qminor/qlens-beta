@@ -72,6 +72,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
+	int lensprofile_nparams; // just the parameters that define the kappa profile (rather than the angular structure or center coord's)
 	bool angle_param_exists;
 	int ellipticity_paramnum; // used to keep track of ellipticity parameter (this feature is used only by qtab models)
 	boolvector vary_params;
@@ -88,7 +89,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	dvector lower_limits_initial, upper_limits_initial;
 
 	virtual void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
-	void setup_base_lens_properties(const int np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
+	void setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
 	void copy_base_lensdata(const LensProfile* lens_in);
 
 	void set_nparams_and_anchordata(const int &n_params_in);
@@ -178,7 +179,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static int default_fejer_nlevels;
 	QLens* lens;
 	int ellipticity_mode;
-	bool ellipticity_gradient; // if true, then allows a gradient in both ellipticity and position angle
 	int parameter_mode; // allows for different parametrizations
 	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
 	string subclass_label;
@@ -230,7 +230,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
-	bool enable_ellipticity_gradient(const dvector& efunc_params);
+	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs = 0, const double bspline_ximin = 1e30, const double bspline_ximax = 1e30, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool register_vary_flags();

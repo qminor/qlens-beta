@@ -80,6 +80,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	zoom_subgridding = sb_in->zoom_subgridding;
 	ellipticity_mode = sb_in->ellipticity_mode;
 	ellipticity_gradient = sb_in->ellipticity_gradient;
+	fourier_gradient = sb_in->fourier_gradient;
 
 	paramnames = sb_in->paramnames;
 	latex_paramnames = sb_in->latex_paramnames;
@@ -120,15 +121,68 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	if (include_boxiness_parameter) c0 = sb_in->c0;
 	if (include_truncation_radius) rt = sb_in->rt;
 	if (ellipticity_gradient) {
-		contours_overlap = sb_in->contours_overlap;
-		egrad_emode = sb_in->egrad_emode;
+		egrad_mode = sb_in->egrad_mode;
+		egrad_ellipticity_mode = sb_in->egrad_ellipticity_mode;
+		center_gradient = sb_in->center_gradient;
+		int i,j;
+		for (i=0; i < 4; i++) {
+			n_egrad_params[i] = sb_in->n_egrad_params[i];
+			geometric_param[i] = new double[n_egrad_params[i]];
+			for (j=0; j < n_egrad_params[i]; j++) {
+				geometric_param[i][j] = sb_in->geometric_param[i][j];
+			}
+		}
+		 angle_param_egrad = new bool[n_egrad_params[1]]; // keeps track of which parameters are angles, so they can be converted to degrees when displayed
+		for (j=0; j < n_egrad_params[1]; j++) {
+			angle_param_egrad[j] = sb_in->angle_param_egrad[j];
+		}
+		xi_initial_egrad = sb_in->xi_initial_egrad;
 		xi_final_egrad = sb_in->xi_final_egrad;
-		efunc_xi0 = sb_in->efunc_xi0;
-		efunc_dxi = sb_in->efunc_dxi;
-		efunc_qi = sb_in->efunc_qi;
-		efunc_theta_i = sb_in->efunc_theta_i;
-		efunc_qf = sb_in->efunc_qf;
-		efunc_theta_f = sb_in->efunc_theta_f;
+		if (egrad_mode==0) {
+			bspline_order = sb_in->bspline_order;
+			n_bspline_knots_tot = sb_in->n_bspline_knots_tot;
+			for (i=0; i < 4; i++) {
+				geometric_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) geometric_knots[i][j] = sb_in->geometric_knots[i][j];
+			}
+		}
+		contours_overlap = sb_in->contours_overlap;
+		set_egrad_ptr();
+
+		//efunc_xi0 = sb_in->efunc_xi0;
+		//efunc_dxi = sb_in->efunc_dxi;
+		//efunc_qi = sb_in->efunc_qi;
+		//efunc_theta_i = sb_in->efunc_theta_i;
+		//efunc_qf = sb_in->efunc_qf;
+		//efunc_theta_f = sb_in->efunc_theta_f;
+	}
+	if (fourier_gradient) {
+		n_fourier_grad_modes = sb_in->n_fourier_grad_modes;
+		fourier_grad_mvals = fourier_mode_mvals.array(); // fourier_grad_mvals is used in the egrad functions (which are inherited by this class)
+		n_fourier_grad_params = new int[n_fourier_modes];
+		int i,j,k;
+		for (i=0; i < n_fourier_grad_modes; i++) {
+			n_fourier_grad_params[i] = sb_in->n_fourier_grad_params[i];
+		}
+		int n_amps = n_fourier_grad_modes*2;
+		fourier_param = new double*[n_amps];
+		for (i=0,k=0; i < n_fourier_grad_modes; i++, k+=2) {
+			fourier_param[k] = new double[n_fourier_grad_params[i]];
+			fourier_param[k+1] = new double[n_fourier_grad_params[i]];
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k][j] = sb_in->fourier_param[k][j];
+			}
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k+1][j] = sb_in->fourier_param[k+1][j];
+			}
+		}
+		if (egrad_mode==0) {
+			fourier_knots = new double*[n_amps];
+			for (i=0; i < n_amps; i++) {
+				fourier_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) fourier_knots[i][j] = sb_in->fourier_knots[i][j];
+			}
+		}
 	}
 	assign_param_pointers();
 }
@@ -326,24 +380,31 @@ void SB_Profile::remove_fourier_modes()
 	assign_param_pointers();
 }
 
-bool SB_Profile::enable_ellipticity_gradient(const dvector& efunc_params)
+bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double bspline_ximin, const double bspline_ximax, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
-	//NOTE: when new ellipticity functions are incorporated, n_efunc_params can be different from 4,
-	//      and efunc_params will be able to have different # of parameters, etc.
+	
+	if (egrad_mode==0) {
+		// Not sure if I should do this here, or before calling enable_ellipticity_gradient?
+		efunc_params.input(2*n_bspline_coefs+2);
+		for (int i=0; i < n_bspline_coefs; i++) efunc_params[i] = q;
+		for (int i=n_bspline_coefs; i < 2*n_bspline_coefs; i++) efunc_params[i] = radians_to_degrees(theta);
+		efunc_params[2*n_bspline_coefs] = x_center;
+		efunc_params[2*n_bspline_coefs+1] = y_center;
+	}
 
-	int n_egrad_params = 4;
-	if (efunc_params.size() != n_egrad_params) return false;
-	efunc_qi = q;
-	efunc_theta_i = theta;
-	efunc_qf = efunc_params[0];
-	efunc_theta_f = degrees_to_radians(efunc_params[1]);
-	efunc_xi0 = efunc_params[2];
-	efunc_dxi = efunc_params[3];
-
-	ellipticity_gradient = true;
-	int new_nparams = n_params + 4;
+	int n_egrad_params;
+	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+		warn("could not set up egrad params properly");
+		return false;
+	}
+	int new_nparams = n_params + n_egrad_params - 4; // we already had q, theta, xc and yc
+	//cout << "WTF? " << n_egrad_params << " " << n_params << " " << new_nparams << " " << n_bspline_coefs << endl;
+	if (n_egrad_params < 4) {
+		warn("could not setup egrad params; less than four egrad parameters were created");
+		return false;
+	}
 
 	vary_params.resize(new_nparams);
 	paramnames.resize(new_nparams);
@@ -354,12 +415,16 @@ bool SB_Profile::enable_ellipticity_gradient(const dvector& efunc_params)
 	penalty_lower_limits.resize(new_nparams);
 	penalty_upper_limits.resize(new_nparams);
 	angle_param.resize(new_nparams);
-	for (int i=sbprofile_nparams+2; i < n_params; i++) {
-		vary_params[i+n_egrad_params] = vary_params[i];
-		angle_param[i+n_egrad_params] = angle_param[i];
+	for (int i=sbprofile_nparams+4; i < n_params; i++) {
+		vary_params[i+n_egrad_params-4] = vary_params[i];
+		angle_param[i+n_egrad_params-4] = angle_param[i];
 	}
-	for (int i=sbprofile_nparams+2; i < sbprofile_nparams + 2 + n_egrad_params; i++) {
-		vary_params[i] = false;
+	for (int i=0; i < n_fourier_modes; i++) fourier_mode_paramnum[i] += n_egrad_params - 4; // so it keeps track of where the Fourier modes are
+	int j=0;
+	for (int i=sbprofile_nparams; i < sbprofile_nparams + n_egrad_params; i++) {
+		if (!copy_vary_settings) vary_params[i] = false;
+		else vary_params[i] = (*vary_egrad)[j++];
+		angle_param[i] = false; // the angle params will be set when the param pointers are set
 	}
 	n_params = new_nparams;
 	delete[] param;
@@ -368,8 +433,6 @@ bool SB_Profile::enable_ellipticity_gradient(const dvector& efunc_params)
 	assign_param_pointers();
 	assign_paramnames();
 
-	egrad_emode = ellipticity_mode;
-	update_ellipticity_meta_parameters();
 	if (lens != NULL) lens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
@@ -381,19 +444,17 @@ bool SB_Profile::enable_ellipticity_gradient(const dvector& efunc_params)
 
 void SB_Profile::disable_ellipticity_gradient()
 {
-	ellipticity_gradient = false;
-	int n_egrad_params = 4;
-
-	// Next, we make sure that if any egrad parameters were set to vary, we fix them and remove prior limits for those parameters
+	int n_tot_egrad_params;
+	disable_egrad_mode(n_tot_egrad_params);
+	int n_extra_egrad_params = n_tot_egrad_params - 4; // since we'll still have four geometric params: q,theta,xc,yc
 	boolvector new_vary(vary_params);
-	for (int i=sbprofile_nparams + 2; i < sbprofile_nparams + 2 + n_egrad_params; i++) new_vary[i] = false;
+	for (int i=sbprofile_nparams; i < sbprofile_nparams + n_tot_egrad_params; i++) new_vary[i] = false;
 	vary_parameters(new_vary);
-
-	n_params -= n_egrad_params;
-	for (int i=sbprofile_nparams + 2; i < n_params; i++) {
+	n_params -= n_extra_egrad_params;
+	for (int i=sbprofile_nparams + 4; i < n_params; i++) {
 		// Now we move all info about remaining parameters (center coordinates, Fourier modes) down and then resize the arrays
-		vary_params[i] = vary_params[i+n_egrad_params];
-		angle_param[i] = angle_param[i+n_egrad_params];
+		vary_params[i] = vary_params[i+n_extra_egrad_params];
+		angle_param[i] = angle_param[i+n_extra_egrad_params];
 	}
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
@@ -412,6 +473,67 @@ void SB_Profile::disable_ellipticity_gradient()
 	update_ellipticity_meta_parameters();
 }
 
+bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const bool copy_vary_settings, boolvector* vary_fgrad)
+{
+	if (ellipticity_mode==-1) return false; // Fourier gradient only works for lenses that have elliptical isodensity contours
+	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
+	if (n_fourier_modes==0) return false; // Fourier modes must already be present
+	if ((include_boxiness_parameter) or (include_truncation_radius)) return false; // not compatible with these parameters (unless you move them to the end)
+
+	if (egrad_mode==0) {
+		int n_bspline_coefs = n_bspline_knots_tot - bspline_order - 1;
+		// Not sure if I should do this here, or before calling enable_fourier_gradient?
+		fourier_params.input(2*n_fourier_modes*n_bspline_coefs);
+		int i,j,k;
+		for (k=0; k < 2*n_fourier_modes; k++) {
+			for (i=0,j=0; i < n_bspline_coefs; i++, j++) {
+				fourier_params[j] = q;
+			}
+		}
+	}
+
+	int n_fourier_grad_params;
+	if (setup_fourier_grad_params(n_fourier_modes,fourier_mode_mvals,fourier_params,n_fourier_grad_params)==false) return false;
+	int param_ndif = n_fourier_grad_params - 2*n_fourier_modes; // we already had q, theta, xc and yc
+	int new_nparams = n_params + param_ndif; // we already had q, theta, xc and yc
+	int fourier_istart = fourier_mode_paramnum[0];
+
+	vary_params.resize(new_nparams);
+	paramnames.resize(new_nparams);
+	latex_paramnames.resize(new_nparams);
+	latex_param_subscripts.resize(new_nparams);
+	stepsizes.resize(new_nparams);
+	set_auto_penalty_limits.resize(new_nparams);
+	penalty_lower_limits.resize(new_nparams);
+	penalty_upper_limits.resize(new_nparams);
+	angle_param.resize(new_nparams);
+	// The next part is only relevant if there are parameters after the Fourier modes
+	for (int i=fourier_istart+2*n_fourier_modes; i < n_params; i++) {
+		vary_params[i+param_ndif] = vary_params[i];
+		angle_param[i+param_ndif] = angle_param[i];
+	}
+	int j=0;
+	for (int i=fourier_istart; i < fourier_istart + n_fourier_grad_params; i++) {
+		if (!copy_vary_settings) vary_params[i] = false;
+		else vary_params[i] = (*vary_fgrad)[j++];
+		angle_param[i] = false; // the angle params will be set when the param pointers are set
+	}
+	set_fourier_paramnums(fourier_mode_paramnum.array(),fourier_istart);
+	n_params = new_nparams;
+	delete[] param;
+	param = new double*[n_params];
+
+	assign_param_pointers();
+	assign_paramnames();
+
+	if (lens != NULL) lens->ellipticity_gradient = true;
+	check_for_overlapping_contours();
+	if (contours_overlap) {
+		warn("contours overlap for chosen ellipticity gradient parameters");
+		if (lens != NULL) lens->contours_overlap = true;
+	}
+	return true;
+}
 
 void SB_Profile::assign_param_pointers()
 {
@@ -434,23 +556,16 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 			angle_param[qi++] = true;
 			angle_param_exists = true;
 		}
+		param[qi++] = &x_center;
+		param[qi++] = &y_center;
 	} else {
 		angle_param_exists = true;
-		param[qi++] = &efunc_qi; // currently only emode=0 or emode=1 is supported with ellipticity gradients
-		param[qi] = &efunc_theta_i;
-		angle_param[qi++] = true;
-		param[qi++] = &efunc_qf;
-		param[qi] = &efunc_theta_f;
-		angle_param[qi++] = true;
-		param[qi++] = &efunc_xi0;
-		param[qi++] = &efunc_dxi;
+		set_geometric_param_pointers_egrad(param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
 	}
 
-	param[qi++] = &x_center;
-	param[qi++] = &y_center;
 	if (include_boxiness_parameter) param[qi++] = &c0;
 	if (include_truncation_radius) param[qi++] = &rt;
-	if (n_fourier_modes > 0) {
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			param[qi++] = &fourier_mode_cosamp[i];
 			param[qi++] = &fourier_mode_sinamp[i];
@@ -461,8 +576,10 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 {
 	if (vary_params_in.size() != n_params) {
+		warn("vary params doesn't have the right size: %i vs %i",vary_params_in.size(),n_params);
 		return false;
 	}
+
 	// Save the old limits, if they exist
 	dvector old_lower_limits(n_params);
 	dvector old_upper_limits(n_params);
@@ -502,6 +619,14 @@ bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 	upper_limits_initial.input(upper_limits);
 
 	return true;
+}
+
+void SB_Profile::get_vary_flags(boolvector& vary_flags)
+{
+	vary_flags.input(n_params);
+	for (int i=0; i < n_params; i++) {
+		vary_flags[i] = vary_params[i];
+	}
 }
 
 void SB_Profile::set_limits(const dvector& lower, const dvector& upper)
@@ -635,17 +760,12 @@ void SB_Profile::set_geometric_param_auto_stepsizes(int &index)
 			stepsizes[index++] = 0.1; // q
 			stepsizes[index++] = 20;  // angle stepsize
 		}
+		stepsizes[index++] = 0.1; // xc
+		stepsizes[index++] = 0.1; // yc
 	} else {
-		stepsizes[index++] = 0.1;
-		stepsizes[index++] = 20;
-		stepsizes[index++] = 0.1;
-		stepsizes[index++] = 20;
-		stepsizes[index++] = 0.3;
-		stepsizes[index++] = 0.3;
+		set_geometric_stepsizes_egrad(stepsizes,index);
 	}
-	stepsizes[index++] = 0.1; // xc
-	stepsizes[index++] = 0.1; // yc
-	if (n_fourier_modes > 0) {
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			stepsizes[index++] = 0.005;
 			stepsizes[index++] = 0.005;
@@ -678,17 +798,12 @@ void SB_Profile::set_geometric_param_auto_ranges(int param_i)
 			set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
 			set_auto_penalty_limits[param_i++] = false;
 		}
+		set_auto_penalty_limits[param_i++] = false;
+		set_auto_penalty_limits[param_i++] = false;
 	} else {
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
-			set_auto_penalty_limits[param_i++] = false;
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++;
-			set_auto_penalty_limits[param_i++] = false;
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0; penalty_upper_limits[param_i] = 1e30; param_i++;
-		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 1e-3; penalty_upper_limits[param_i] = 1e30; param_i++;
+		set_geometric_param_ranges_egrad(set_auto_penalty_limits, penalty_lower_limits, penalty_upper_limits, param_i);
 	}
-	set_auto_penalty_limits[param_i++] = false;
-	set_auto_penalty_limits[param_i++] = false;
-	if (n_fourier_modes > 0) {
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			set_auto_penalty_limits[param_i++] = false;
 			set_auto_penalty_limits[param_i++] = false;
@@ -738,6 +853,29 @@ bool SB_Profile::get_limits(dvector& lower, dvector& upper, dvector& lower0, dve
 	return true;
 }
 
+bool SB_Profile::get_limits(dvector& lower, dvector& upper, int &index)
+{
+	if ((include_limits==false) or (lower_limits.size() != n_vary_params)) return false;
+	for (int i=0; i < n_vary_params; i++) {
+		lower[index] = lower_limits[i];
+		upper[index] = upper_limits[i];
+		index++;
+	}
+	return true;
+}
+
+bool SB_Profile::get_limits(dvector& lower, dvector& upper)
+{
+	if (include_limits==false) return false;
+	lower.input(n_vary_params);
+	upper.input(n_vary_params);
+	for (int i=0; i < n_vary_params; i++) {
+		lower[i] = lower_limits[i];
+		upper[i] = upper_limits[i];
+	}
+	return true;
+}
+
 void SB_Profile::assign_paramnames()
 {
 	paramnames.resize(n_params);
@@ -758,17 +896,12 @@ void SB_Profile::set_geometric_paramnames(int qi)
 			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "src"; qi++;
 			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "src"; qi++;
 		}
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c,src"; qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c,src"; qi++;
 	} else {
-		paramnames[qi] = "qi"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "i"; qi++;
-		paramnames[qi] = "theta_i"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "i"; qi++;
-		paramnames[qi] = "qf"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "f"; qi++;
-		paramnames[qi] = "theta_f"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "f"; qi++;
-		paramnames[qi] = "xi0"; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = "0"; qi++;
-		paramnames[qi] = "dxi"; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ""; qi++;
+		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ",src");
 	}
-	paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c,src"; qi++;
-	paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c,src"; qi++;
-	if (n_fourier_modes > 0) {
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			stringstream mstream;
 			string mstring;
@@ -828,8 +961,14 @@ void SB_Profile::update_ellipticity_meta_parameters()
 			update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
 		}
 	} else {
-		q = efunc_qi; // q shouldn't be used at all, but this is just in case ellipticity gradient is turned off
-		theta = efunc_theta_i; // theta shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		//q = efunc_qi; // q shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		//theta = efunc_theta_i; // theta shouldn't be used at all, but this is just in case ellipticity gradient is turned off
+		q = geometric_param[0][0];
+		if (q > 1.0) q = 1.0;
+		theta = geometric_param[1][0];
+		x_center = geometric_param[2][0];
+		y_center = geometric_param[3][0];
+		update_egrad_meta_parameters();
 		check_for_overlapping_contours();
 		if ((lens != NULL) and (contours_overlap)) lens->contours_overlap = true;
 	}
@@ -971,13 +1110,12 @@ double SB_Profile::surface_brightness(double x, double y)
 		}
 		if (n_fourier_modes > 0) {
 			double phi_q; // used for Fourier modes
-			if (n_fourier_modes > 0) {
-				if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
-				else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
-					// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
-				if (x < 0) phi_q += M_PI;
-				else if (y < 0) phi_q += M_2PI;
-			}
+			if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
+			else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
+				// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
+			if (x < 0) phi_q += M_PI;
+			else if (y < 0) phi_q += M_2PI;
+
 			if (!fourier_sb_perturbation) fourier_factor = 1.0;
 			if (use_fmode_scaled_amplitudes) {
 				for (int i=0; i < n_fourier_modes; i++) {
@@ -1010,14 +1148,31 @@ double SB_Profile::surface_brightness(double x, double y)
 			if (xp < 0) phi_q += M_PI;
 			else if (yp < 0) phi_q += M_2PI;
 
+			double *cosamps;
+			double *sinamps;
+			if (fourier_gradient) {
+				cosamps = new double[n_fourier_modes];
+				sinamps = new double[n_fourier_modes];
+				if (fourier_use_eccentric_anomaly) fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+				else fourier_mode_function(xi,cosamps,sinamps);
+			} else {
+				// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+				cosamps = fourier_mode_cosamp.array();
+				sinamps = fourier_mode_sinamp.array();
+			}
+
 			if (use_fmode_scaled_amplitudes) {
 				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+					fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
 				}
 			} else {
 				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+					fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q);
 				}
+			}
+			if (fourier_gradient) {
+				delete[] cosamps;
+				delete[] sinamps;
 			}
 		}
 	}
@@ -1068,26 +1223,24 @@ double SB_Profile::surface_brightness_test(double x, double y)
 		} else {
 			xisq = rsq_ell;
 		}
-		if ((n_fourier_modes > 0)) {
-			if (n_fourier_modes > 0) {
-				if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
-				else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
-					// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
-				if (x < 0) phi_q += M_PI;
-				else if (y < 0) phi_q += M_2PI;
-			}
-			if (!fourier_sb_perturbation) fourier_factor = 1.0;
-			if (use_fmode_scaled_amplitudes) {
-				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
-				}
-			} else {
-				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
-				}
-			}
-			if (!fourier_sb_perturbation) xisq *= fourier_factor*fourier_factor;
+		if (n_fourier_modes > 0) {
+			if (fourier_use_eccentric_anomaly) phi_q = atan(y/(q*x));
+			else phi_q = atan(y/x); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
+				// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
+			if (x < 0) phi_q += M_PI;
+			else if (y < 0) phi_q += M_2PI;
 		}
+		if (!fourier_sb_perturbation) fourier_factor = 1.0;
+		if (use_fmode_scaled_amplitudes) {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor += (fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+			}
+		} else {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+			}
+		}
+		if (!fourier_sb_perturbation) xisq *= fourier_factor*fourier_factor;
 	} else {
 		double xi = elliptical_radius_root(x,y);
 		xisq = SQR(xi);
@@ -1314,12 +1467,13 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 		return false;
 	}
 	n_isophote_datapts = isophote_data.n_xivals;
-	sbprofile_xivals = isophote_data.xivals;
+	profile_fit_xivals = isophote_data.xivals;
 	sbprofile_data = isophote_data.sb_avg_vals;
 	sbprofile_errors = isophote_data.sb_errs;
 	double *fitparams = new double[sbprofile_nparams];
 	double *param_errors = new double[sbprofile_nparams];
 
+	set_auto_ranges(); // this is so it can give a penalty prior if a parameter takes an absurd value
 	if (fit_mode==0) {
 #ifdef USE_MPI
 		Set_MCMC_MPI(mpi_np,mpi_id);
@@ -1352,7 +1506,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 
 	delete[] fitparams;
 	delete[] param_errors;
-	sbprofile_xivals = NULL;
+	profile_fit_xivals = NULL;
 	sbprofile_data = NULL;
 	sbprofile_errors = NULL;
 	return true;
@@ -1363,13 +1517,290 @@ double SB_Profile::sbprofile_loglike(double *params)
 	int i;
 	double loglike=0;
 	for (i=0; i < sbprofile_nparams; i++) {
+		if ((set_auto_penalty_limits[i]) and ((params[i] < penalty_lower_limits[i]) or (params[i] > penalty_upper_limits[i]))) {
+			//cout << "PENALTY! param " << i << " = " << params[i] << endl;
+			return 1e30; // penalty prior
+		}
 		*(param[i]) = params[i];
 	}
 	update_meta_parameters();
 	for (i=0; i < n_isophote_datapts; i++) {
-		loglike += SQR((sbprofile_data[i] - sb_rsq(SQR(sbprofile_xivals[i])))/sbprofile_errors[i]);
+		loglike += SQR((sbprofile_data[i] - sb_rsq(SQR(profile_fit_xivals[i])))/sbprofile_errors[i]);
 	}
 	loglike /= 2;
+	return loglike;
+}
+
+bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode_in, const int n_livepts, const int mpi_np, const int mpi_id)
+{
+	// nested sampling: fitmode = 0
+	// downhill simplex: fitmode = 1 or higher
+	int fit_mode = fit_mode_in;
+	if (ellipticity_gradient == false) {
+		warn("ellipticity gradient must be on for egrad profile fitting");
+		return false;
+	}
+	if (fit_mode==0) {
+		if (egrad_mode==0) {
+			warn("nested sampling is not currently set up with egrad_mode=0; switching to downhill simplex");
+			fit_mode = 1;
+		}
+	}
+
+	egrad_paramnum = egrad_param;
+	n_isophote_datapts = isophote_data.n_xivals;
+	if (egrad_param==0) {
+		profile_fit_data = isophote_data.qvals;
+		profile_fit_errs = isophote_data.q_errs;
+	} else if (egrad_param==1) {
+		profile_fit_data = isophote_data.thetavals;
+		profile_fit_errs = isophote_data.theta_errs;
+	} else if (egrad_param==2) {
+		profile_fit_data = isophote_data.xcvals;
+		profile_fit_errs = isophote_data.xc_errs;
+	} else if (egrad_param==3) {
+		profile_fit_data = isophote_data.ycvals;
+		profile_fit_errs = isophote_data.yc_errs;
+	} else if (egrad_param==4) {
+		profile_fit_data = isophote_data.A3vals;
+		profile_fit_errs = isophote_data.A3_errs;
+	} else if (egrad_param==5) {
+		profile_fit_data = isophote_data.B3vals;
+		profile_fit_errs = isophote_data.B3_errs;
+	} else if (egrad_param==6) {
+		profile_fit_data = isophote_data.A4vals;
+		profile_fit_errs = isophote_data.A4_errs;
+	} else if (egrad_param==7) {
+		profile_fit_data = isophote_data.B4vals;
+		profile_fit_errs = isophote_data.B4_errs;
+	} else if (egrad_param==8) {
+		profile_fit_data = isophote_data.A5vals;
+		profile_fit_errs = isophote_data.A5_errs;
+	} else if (egrad_param==9) {
+		profile_fit_data = isophote_data.B5vals;
+		profile_fit_errs = isophote_data.B5_errs;
+	} else if (egrad_param==10) {
+		profile_fit_data = isophote_data.A6vals;
+		profile_fit_errs = isophote_data.A6_errs;
+	} else if (egrad_param==11) {
+		profile_fit_data = isophote_data.B6vals;
+		profile_fit_errs = isophote_data.B6_errs;
+	}
+
+	int i,j,k;
+	if (egrad_param < 4) {
+		if (egrad_mode==0) {
+			profile_fit_nparams = n_bspline_knots_tot - 2*bspline_order - 1;
+			profile_fit_egrad_params = geometric_knots[egrad_param];
+			profile_fit_bspline_coefs = geometric_param[egrad_param];
+		} else {
+			profile_fit_nparams = n_egrad_params[egrad_param];
+			profile_fit_egrad_params = geometric_param[egrad_param];
+			profile_fit_istart = sbprofile_nparams;
+		}
+		for (i=0; i < egrad_param; i++) profile_fit_istart += n_egrad_params[i];
+	} else {
+		int fparam, fmode, sinmode_num;
+		fparam = egrad_param - 4;
+		fmode = 3 + fparam / 2;
+		sinmode_num = fparam % 2;
+		//cout << "fmode=" << fmode << " sinmode_num=" << sinmode_num << endl;
+		bool fmode_found = false;
+		for (i=0,k=0; i < n_fourier_modes; i++, k+=2) {
+			if (fourier_mode_mvals[i]==fmode) {
+				if (egrad_mode==0) {
+					profile_fit_nparams = n_bspline_knots_tot - 2*bspline_order - 1;
+					profile_fit_egrad_params = fourier_knots[k+sinmode_num];
+					profile_fit_bspline_coefs = fourier_param[k+sinmode_num];
+				} else {
+					profile_fit_nparams = n_fourier_grad_params[i];
+					profile_fit_egrad_params = fourier_param[k+sinmode_num];
+					profile_fit_istart = fourier_mode_paramnum[i];
+					if (sinmode_num==1) profile_fit_istart += profile_fit_nparams;
+				}
+				fmode_found = true;
+				break;
+			}
+		}
+		if (!fmode_found) die("could not find Fourier mode");
+	}
+
+	double bspline_logximin, bspline_logximax;
+	if (egrad_mode==0) {
+		xi_initial_egrad = isophote_data.xivals[0];
+		xi_final_egrad = isophote_data.xivals[n_isophote_datapts-1];
+		bspline_logximin = log(xi_initial_egrad)/ln10;
+		bspline_logximax = log(xi_final_egrad)/ln10;
+
+		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
+		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
+		for (j=0; j < bspline_order; j++) {
+			profile_fit_egrad_params[j] = bspline_logximin;
+		}
+		for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) profile_fit_egrad_params[j+bspline_order] = logxi;
+		for (j=0; j < bspline_order; j++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
+	} else {
+		for (i=profile_fit_istart; i < profile_fit_istart + profile_fit_nparams; i++) {
+			if (!vary_params[i]) {
+				warn("all egrad profile parameters must be allowed to vary (param %i set fixed, profile_fit_nparams=%i, istart=%i)",i,profile_fit_nparams,profile_fit_istart);
+				return false;
+			}
+			if ((fit_mode==0) and (lower_limits.size() != n_vary_params)) {
+				warn("lower/upper prior limits have not been set for egrad profile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
+				return false;
+			}
+		}
+	}
+	profile_fit_xivals = isophote_data.xivals;
+	profile_fit_logxivals = isophote_data.logxivals;
+	profile_fit_weights = new double[n_isophote_datapts];
+	for (i=0; i < n_isophote_datapts; i++) profile_fit_weights[i] = 1.0/profile_fit_errs[i];
+
+	double *fitparams = new double[profile_fit_nparams];
+	double *param_errors = new double[profile_fit_nparams];
+	
+	if (egrad_mode==0) {
+		allocate_bspline_work_arrays(n_isophote_datapts);
+		for (i=0; i < profile_fit_nparams; i++) fitparams[i] = profile_fit_egrad_params[bspline_order+i+1] - profile_fit_egrad_params[bspline_order+i];
+	}
+
+	if (fit_mode==0) {
+#ifdef USE_MPI
+		Set_MCMC_MPI(mpi_np,mpi_id);
+#endif
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&SB_Profile::profile_fit_loglike);
+		double *lower = new double[profile_fit_nparams];
+		double *upper = new double[profile_fit_nparams];
+		for (i=0,j=0,k=0; i < n_params; i++) {
+			if (vary_params[i]) {
+				if (i >= profile_fit_istart) {
+					lower[k] = lower_limits[j];
+					upper[k] = upper_limits[j];
+					k++;
+				}
+				j++;
+			}
+			if (k==profile_fit_nparams) break;
+		}
+
+		//cout << "nparams=" << profile_fit_nparams << endl;
+		//cout << "LIMITS: " << endl;
+		//for (i=0; i < profile_fit_nparams; i++) {
+			//cout << lower[i] << " " << upper[i] << endl;
+		//}
+		InputPoint(fitparams,lower,upper,profile_fit_nparams);
+		double lnZ;
+		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
+		cout << "chisq=" << chisq_bestfit << endl;
+		MonoSample("egrad_profile",n_livepts,lnZ,fitparams,param_errors,false);
+		chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
+		delete[] lower;
+		delete[] upper;
+	} else {
+		if ((egrad_mode==0) and (fit_mode > 1)) {
+			profile_fit_loglike_bspline(fitparams); // just fit B-spline with same knots as before; no need to call Simplex
+		} else {
+			double *stepsizes = new double [profile_fit_nparams];
+			double (Simplex::*loglikeptr)(double*);
+			if (egrad_mode==0) {
+				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike_bspline);
+				for (i=0; i < profile_fit_nparams; i++) {
+					stepsizes[i] = fitparams[i]/3.0; // arbitrary
+				}
+				double min_data_interval = 1e30;
+				for (i=0; i < n_isophote_datapts-1; i++) {
+					if ((profile_fit_logxivals[i+1]-profile_fit_logxivals[i]) < min_data_interval) min_data_interval = (profile_fit_logxivals[i+1]-profile_fit_logxivals[i]);
+				}
+				// the minimum knot interval allowed is given in terms of a specified fraction of the spacing between data points
+				profile_fit_min_knot_interval = 0.333333333333333*min_data_interval;
+
+			} else {
+				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike);
+				for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
+					if (angle_param[i]) stepsizes[j] = 20;
+					else stepsizes[j] = 0.1;
+					fitparams[j] = *(param[i]);
+				}
+			}
+			double chisq_tolerance = 1e-4;
+			if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
+			initialize_simplex(fitparams,profile_fit_nparams,stepsizes,chisq_tolerance);
+			simplex_set_display_bfpont(true);
+			simplex_set_function(loglikeptr);
+			int it, nrep=1;
+			while (nrep-- >= 0) {
+				it=0;
+				downhill_simplex(it,10000,0); // do final run with zero temperature
+			}
+			delete[] stepsizes;
+		}
+	}
+
+	if (egrad_mode==0) {
+		free_bspline_work_arrays();
+	}
+	if (egrad_param==0) update_ellipticity_meta_parameters(); // since the q-parameters have changed
+
+	delete[] fitparams;
+	delete[] param_errors;
+	delete[] profile_fit_weights;
+	profile_fit_xivals = NULL;
+	profile_fit_logxivals = NULL;
+	profile_fit_data = NULL;
+	profile_fit_errs = NULL;
+	profile_fit_weights = NULL;
+	profile_fit_egrad_params = NULL;
+	return true;
+}
+
+void SB_Profile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f)
+{
+	qi = sbprofile_nparams;
+	qf = qi + n_egrad_params[0];
+	theta_i = qf;
+	theta_f = theta_i + n_egrad_params[1];
+
+	if (fourier_gradient) {
+		amp_i = fourier_mode_paramnum[0];
+		amp_f = amp_i;
+		for (int i=0; i < n_fourier_modes; i++) {
+			amp_f += 2*n_fourier_grad_params[i];
+		}
+	}
+}
+
+
+double SB_Profile::profile_fit_loglike(double *params)
+{
+	int i,j;
+	double loglike=0;
+	for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
+		if (angle_param[i]) *(param[i]) = degrees_to_radians(params[j]);
+		else *(param[i]) = params[j];
+	}
+	update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
+	for (i=0; i < n_isophote_datapts; i++) {
+		loglike += SQR((profile_fit_data[i] - (this->*egrad_ptr)(profile_fit_xivals[i],profile_fit_egrad_params,egrad_paramnum))/profile_fit_errs[i]);
+	}
+	loglike /= 2;
+	//cout << "params: " << params[0] << " " << params[1] << " " << params[2] << " " << params[3] << " " << "LOGLIKE=" << loglike << endl;
+	return loglike;
+}
+
+double SB_Profile::profile_fit_loglike_bspline(double *params)
+{
+	int i;
+	double tot_interval = 0;
+	for (i=0; i < n_bspline_knots_tot-2*bspline_order-1; i++) {
+		if (abs(params[i]) < profile_fit_min_knot_interval) return 1e30;
+		tot_interval += abs(params[i]);
+		profile_fit_egrad_params[bspline_order+i+1] = profile_fit_egrad_params[bspline_order+i] + abs(params[i]);
+	}
+	for (i=0; i < bspline_order; i++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+i] = profile_fit_egrad_params[n_bspline_knots_tot-bspline_order-1];
+	//update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
+	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) return 1e30; // penalty chisq
+
+	double loglike = fit_bspline_curve(profile_fit_egrad_params,profile_fit_bspline_coefs);
 	return loglike;
 }
 
@@ -1442,10 +1873,14 @@ void SB_Profile::print_parameters()
 	else if (center_anchored_to_source) cout << " (center anchored to source " << center_anchor_source->sb_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != -1)) {
 		cout << " (";
-		if (ellipticity_gradient) cout << "egrad=on, ";
+		if (ellipticity_gradient) cout << "egrad=on,";
+		if (fourier_gradient) cout << "fgrad=on,";
 		cout << "emode=" << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
 	} else {
-		if (ellipticity_gradient) cout << " (egrad=on)";
+		if (ellipticity_gradient) {
+			if (fourier_gradient) cout << " (egrad,fgrad=on)";
+			else cout << " (egrad=on)";
+		}
 	}
 	cout << endl;
 }

@@ -6673,7 +6673,10 @@ bool QLens::update_fitmodel(const double* params)
 	if (vary_wl_shear_factor_parameter) {
 		fitmodel->wl_shear_factor = params[index++];
 	}
-	if ((ellipticity_gradient) and (contours_overlap)) status = false;
+	if ((ellipticity_gradient) and (contours_overlap)) {
+		status = false;
+		warn("contours overlap in ellipticity gradient model");
+	}
 
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
 	return status;
@@ -10327,11 +10330,16 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		for (int i=0; i < n_fit_parameters; i++) {
 			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
 				//cout << "parameter " << i << ": plimits " << fitmodel->param_settings->penalty_limits_lo[i] << fitmodel->param_settings->penalty_limits_hi[i] << endl;
-				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
+				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) {
+					//cout << "RUHROH parameter " << i << ": " << transformed_params[i] << endl;
+					return 1e30;
+				}
 			}
 			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
-		if (update_fitmodel(transformed_params)==false) return 1e30;
+		if (update_fitmodel(transformed_params)==false) {
+			return 1e30;
+		}
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
 				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
