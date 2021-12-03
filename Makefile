@@ -10,6 +10,11 @@
 #MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
 #POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
+#FITPACKDIR=./contrib/fitpack
+#F77=gfortran
+#.f.o:
+	#$(F77) -c -o  $@ $<
+
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
 CCOMP = g++
@@ -19,8 +24,7 @@ CCOMP = g++
 OPTS = -Wno-write-strings -O3 -std=c++11
 OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #OPTS = -w -g
-#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
-#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
+#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
 FLAGS = -DUSE_READLINE
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  -lm -lreadline

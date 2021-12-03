@@ -1540,6 +1540,12 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		warn("ellipticity gradient must be on for egrad profile fitting");
 		return false;
 	}
+#ifndef USE_FITPACK
+	if (egrad_mode==0) {
+		warn("cannot do B-spline fit without compiling with FITPACK");
+		return false;
+	}
+#endif
 	if (fit_mode==0) {
 		if (egrad_mode==0) {
 			warn("nested sampling is not currently set up with egrad_mode=0; switching to downhill simplex");

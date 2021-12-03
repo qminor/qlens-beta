@@ -2912,7 +2912,12 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -3010,7 +3015,13 @@ void QLens::process_commands(bool read_file)
 						} else {
 							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
@@ -3238,7 +3249,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3383,7 +3400,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3492,7 +3515,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_median_concentration) {
@@ -3576,7 +3605,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -3662,7 +3697,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -3742,7 +3783,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -3856,7 +3903,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (set_tidal_host) {
@@ -4025,7 +4078,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -4115,7 +4174,13 @@ void QLens::process_commands(bool read_file)
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
-							if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
@@ -4540,7 +4605,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
-						if (egrad) lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_lens(nlens-1);
+								Complain("could not initialize ellipticity gradient; lens object could not be created");
+							}
+						}
+
 						if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
 						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -5046,7 +5117,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(GAUSSIAN, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5206,7 +5282,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(SERSIC, emode, s0, reff, 0, n, q, theta, xc, yc);
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5275,7 +5356,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(CORE_SERSIC, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5343,7 +5429,12 @@ void QLens::process_commands(bool read_file)
 					} else {
 						add_source_object(CORED_SERSIC, emode, s0, reff, rc, n, q, theta, xc, yc);
 
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5412,7 +5503,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(DOUBLE_SERSIC, emode, s0_1, reff1, n1, s0_2, q, theta, xc, yc, reff2, n2); // super-awkward to use the "add_source_object" function for this....
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
@@ -5539,7 +5635,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						add_source_object(TOPHAT, emode, sb, rad, 0, 0, q, theta, xc, yc);
-						if (egrad) sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax);
+						if (egrad) {
+							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+								remove_source_object(n_sb-1);
+								Complain("could not initialize ellipticity gradient; source object could not be created");
+							}
+						}
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}

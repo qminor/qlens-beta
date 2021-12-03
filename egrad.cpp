@@ -7,10 +7,12 @@
 #include "egrad.h"
 using namespace std;
 
+#ifdef USE_FITPACK
 extern "C" {
 	void curfit_(int *iopt, int *m, double *x, double *y, double *w, double *xb, double *xe, int *order, double *s, int *bspline_nmax, int *n_knots, double *knots, double *coefs, double *minchisq, double *work, int *lwork, int *iwork, int *ier);
 	void splev_(double *knots, int *n_knots, double *coefs, int *order, double *x, double *y, int *m, int *e, int *ier);
 }
+#endif
 
 EllipticityGradient::EllipticityGradient()
 {
@@ -64,12 +66,17 @@ EllipticityGradient::~EllipticityGradient()
 
 bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const double bspline_ximin, const double bspline_ximax)
 {
+#ifndef USE_FITPACK
+	if (egrad_mode_in==0) {
+		warn("qlens must be compiled with FITPACK in order to use B-spline mode");
+		return false;
+	}
+#endif
 	for (int i=0; i < 4; i++) {
 		if (geometric_param[i] != NULL) delete[] geometric_param[i];
 		if (geometric_knots[i] != NULL) delete[] geometric_knots[i];
 	}
 	if (angle_param_egrad != NULL) delete[] angle_param_egrad;
-
 	ellipticity_gradient = true;
 	egrad_mode = egrad_mode_in;
 	egrad_ellipticity_mode = ellipticity_mode_in;
@@ -354,6 +361,7 @@ double EllipticityGradient::egrad_tanh_function(const double xi, double *paramva
 double EllipticityGradient::egrad_bspline_function(const double xi, double *paramvals, const int param_index)
 {
 	double ans = 0.0;
+#ifdef USE_FITPACK
 	int m = 1; // Evaluate a single point
 	int e = 0;
 	int ier = 0;
@@ -374,6 +382,7 @@ double EllipticityGradient::egrad_bspline_function(const double xi, double *para
 		throw runtime_error(s.str());
 	}
 	if ((param_index==0) and (ans > 1)) return 1.0; // in case something greater than q=1 is returned
+#endif
 
 	return ans;
 }
@@ -394,13 +403,14 @@ void EllipticityGradient::free_bspline_work_arrays()
 
 double EllipticityGradient::fit_bspline_curve(double *knots, double *coefs)
 {
+	double minchisq = 0.0; // optimal chi-square that will be returned
+#ifdef USE_FITPACK
 	double logxi_initial = log(xi_initial_egrad)/ln10;
 	double logxi_final = log(xi_final_egrad)/ln10;
 	int lwork = (n_isophote_datapts * (bspline_order + 1) + bspline_nmax * (7 + 3 * bspline_order));
 	int iopt = -1;                       // Least-squares fitting mode
 	int ier = 0;
 	double smoothing = 0;
-	double minchisq = 0.0; // optimal chi-square that will be returned
 	curfit_(&iopt, &n_isophote_datapts, profile_fit_logxivals, profile_fit_data, profile_fit_weights, &logxi_initial, &logxi_final, &bspline_order, &smoothing, &bspline_nmax, &n_bspline_knots_tot, knots, coefs, &minchisq, bspline_work, &lwork, bspline_iwork, &ier);
 	if (ier > 0) {
 		if (ier >= 10) {
@@ -416,6 +426,7 @@ double EllipticityGradient::fit_bspline_curve(double *knots, double *coefs)
 			cerr << "WARNING:  Non-fatal error while fitting B-Spline curve using curfit(): " << ier << endl;
 		}
 	}
+#endif
 	return minchisq/2;
 }
 
