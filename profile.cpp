@@ -11,7 +11,7 @@
 #include <iomanip>
 using namespace std;
 
-IntegrationMethod LensProfile::integral_method = Fejer_Quadrature;
+IntegrationMethod LensProfile::integral_method = Gauss_Patterson_Quadrature;
 bool LensProfile::orient_major_axis_north = true;
 bool LensProfile::use_ellipticity_components = false;
 int LensProfile::default_ellipticity_mode = 1;
@@ -1953,7 +1953,8 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 			if ((lens->mpi_id==0) and (lens->warnings)) {
 				if (integral_method==Gauss_Patterson_Quadrature) {
 					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
-					if (numberOfPoints >= 1023) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+					if (numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+					else cout << endl;	
 				} else if (integral_method==Fejer_Quadrature) {
 					cout << "*WARNING*: Fejer quadrature did not converge (x=" << x << ",y=" << y << ")" << endl;
 				}
@@ -2489,6 +2490,7 @@ double LensIntegral::PattersonIntegrate(double (LensIntegral::*func)(double), do
 			result += weightptr[j]*pat_funcs[i];
 		}
 		if ((level > 1) and (abs(result-result_old) < profile->pat_tolerance*abs(result))) break;
+		//if ((level > 1) and (abs(result-result_old) < profile->pat_tolerance)) break;
 	} while (++level < 9);
 
 	if (level == 9) {

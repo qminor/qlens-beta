@@ -9058,10 +9058,12 @@ void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 	int Lmatrix_psf_nn=0;
 	int Lmatrix_psf_nn_part=0;
 	double *lmatptr, *lmatpsfptr, psfval;
+	double totweight; // we'll use this to keep track of whether the full PSF area is not used (e.g. near borders or near masked pixels), and adjust
 	#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,src_index,psf_k,psf_l,lmatptr,lmatpsfptr,psfval) schedule(static) reduction(+:Lmatrix_psf_nn_part)
 	for (img_index1=0; img_index1 < image_npixels; img_index1++)
 	{ // this loops over columns of the PSF blurring matrix
 		int col_i=0;
+		totweight = 0;
 		k = active_image_pixel_i[img_index1];
 		l = active_image_pixel_j[img_index1];
 		for (psf_k=0; psf_k < psf_npixels_y; psf_k++) {
@@ -9078,11 +9080,13 @@ void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 							for (src_index=0; src_index < source_npixels; src_index++) {
 								(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
 							}
+							totweight += psfval;
 						}
 					}
 				}
 			}
 		}
+		if (totweight != 1.0) [img_index1] /= totweight;
 	}
 
 	Lmatrix_dense.input(Lmatrix_psf);
