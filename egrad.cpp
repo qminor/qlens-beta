@@ -490,18 +490,21 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 	double ximax = sqrt(xisqrmax);
 	double ximin = sqrt(xisqrmin);
 	if ((ximax < xi_initial_egrad) or (ximin > xi_final_egrad)) {
-		double qq, xisq;
+		double ep, th, xisq;
 		if (ximax < xi_initial_egrad) {
-			qq = (this->*egrad_ptr)(xi_initial_egrad,geometric_param[0],0);
+			ellipticity_function(xi_initial_egrad,ep,th);
+			//qq = (this->*egrad_ptr)(xi_initial_egrad,geometric_param[0],0);
 		} else if (ximin > xi_final_egrad) {
-			qq = (this->*egrad_ptr)(xi_final_egrad,geometric_param[0],0);
+			ellipticity_function(xi_final_egrad,ep,th);
+			//qq = (this->*egrad_ptr)(xi_final_egrad,geometric_param[0],0);
 		}
-		if (egrad_ellipticity_mode==0) {
-			xisq = x*x + SQR(y/qq);
-		} else {
-			xisq = qq*x*x + y*y/qq;
-		}
-		return sqrt(xisq);
+		double costh, sinth, xprime, yprime;
+		double fsqinv = (egrad_ellipticity_mode==0) ? 1 : sqrt(1-ep);
+		costh = cos(th);
+		sinth = sin(th);
+		xprime = x*costh + y*sinth;
+		yprime = -x*sinth + y*costh;
+		return sqrt(fsqinv*(xprime*xprime + (yprime*yprime)/(1-ep)));
 	}
 	//cout << "minq=" << egrad_minq << " ximin=" << ximin << " ximax=" << ximax << endl;
 	//double xi = BrentsMethod(xiptr,x,y,0.9*ximin,1.1*ximax,1e-4);
