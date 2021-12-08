@@ -7,12 +7,17 @@
 #include "brent.h"
 #include "egrad.h"
 #include "lensvec.h"
+//#include "sbprofile.h"
 #include "romberg.h"
 #include "cosmo.h"
 #include <iostream>
 #include <vector>
 #include <complex>
 using namespace std;
+
+class Sersic;
+class Cored_Sersic;
+class SB_Profile;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
 enum LensProfileName
@@ -46,6 +51,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	friend struct LensIntegral;
 	friend class QLens;
 	friend class SB_Profile;
+	friend class Sersic;
+	friend class Cored_Sersic;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:
@@ -91,6 +98,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
 	void copy_base_lensdata(const LensProfile* lens_in);
+	void copy_source_data_to_lens(const SB_Profile* in);
 
 	void set_nparams_and_anchordata(const int &n_params_in);
 	void set_geometric_param_pointers(int qi);
@@ -161,11 +169,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int lens_number;
 	bool center_anchored;
 	LensProfile* center_anchor_lens;
-	bool* anchor_parameter;
+	bool* anchor_parameter_to_lens;
 	LensProfile** parameter_anchor_lens;
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
 	double* parameter_anchor_exponent;
+
+	bool* anchor_parameter_to_source;
+	SB_Profile** parameter_anchor_source;
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
@@ -193,8 +204,10 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	LensProfile(const LensProfile* lens_in);
 	~LensProfile() {
 		if (param != NULL) delete[] param;
-		if (anchor_parameter != NULL) delete[] anchor_parameter;
+		if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 		if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
+		if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+		if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
 		if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 		if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 		if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
@@ -207,8 +220,10 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		hessptr = NULL;
 		potptr = NULL;
 		def_and_hess_ptr = NULL;
-		anchor_parameter = NULL;
+		anchor_parameter_to_lens = NULL;
 		parameter_anchor_lens = NULL;
+		anchor_parameter_to_source = NULL;
+		parameter_anchor_source = NULL;
 		parameter_anchor_paramnum = NULL;
 		param = NULL;
 		parameter_anchor_ratio = NULL;
@@ -258,6 +273,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool get_specific_parameter(const string name_in, double& value);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
 	bool update_specific_parameter(const string name_in, const double& value);
+	bool update_specific_parameter(const int paramnum, const double& value);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_ellipticity_parameter(const double param);
@@ -269,8 +285,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void copy_special_parameter_anchor(const LensProfile *lens_in);
 	void delete_special_parameter_anchor();
 	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile* param_anchor_lens);
+	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source);
+
 	void copy_parameter_anchors(const LensProfile* lens_in);
 	void unanchor_parameter(LensProfile* param_anchor_lens);
+	void unanchor_parameter(SB_Profile* param_anchor_source);
 	void print_parameters();
 	string mkstring_doub(const double db);
 	string mkstring_int(const int i);
@@ -893,8 +912,11 @@ class CoreCusp : public LensProfile
 
 class SersicLens : public LensProfile
 {
+	friend class SB_Profile;
+	friend class Sersic;
+
 	private:
-	double kappa_e, b, n;
+	double kappa0, b, n;
 	double re; // effective radius
 	double mstar; // total stellar mass (alternate parameterization)
 	double def_factor; // used to calculate the spherical deflection
@@ -916,6 +938,7 @@ class SersicLens : public LensProfile
 	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens*);
 	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	SersicLens(const SersicLens* lens_in);
+	SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -927,7 +950,7 @@ class SersicLens : public LensProfile
 class Cored_SersicLens : public LensProfile
 {
 	private:
-	double kappa_e, b, n;
+	double kappa0, b, n;
 	double re; // effective radius
 	double rc; // core radius
 	double mstar; // total stellar mass (alternate parameterization)
@@ -950,6 +973,7 @@ class Cored_SersicLens : public LensProfile
 	Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens*);
 	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Cored_SersicLens(const Cored_SersicLens* lens_in);
+	Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();

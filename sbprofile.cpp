@@ -148,13 +148,6 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		}
 		contours_overlap = sb_in->contours_overlap;
 		set_egrad_ptr();
-
-		//efunc_xi0 = sb_in->efunc_xi0;
-		//efunc_dxi = sb_in->efunc_dxi;
-		//efunc_qi = sb_in->efunc_qi;
-		//efunc_theta_i = sb_in->efunc_theta_i;
-		//efunc_qf = sb_in->efunc_qf;
-		//efunc_theta_f = sb_in->efunc_theta_f;
 	}
 	if (fourier_gradient) {
 		n_fourier_grad_modes = sb_in->n_fourier_grad_modes;
@@ -186,6 +179,18 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	}
 	assign_param_pointers();
 }
+
+/*
+bool SB_Profile::spawn_lens_model(Alpha* lens_model)
+{
+	cout << "About to spawn..." << endl;
+	lens_model = new Alpha();
+	lens_model->initialize_parameters(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
+	cout << "Spawned lens model..." << endl;
+	cout << "LENS NAME from SB: " << lens_model->get_model_name() << endl;
+	return true;
+}
+*/
 
 void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 {
@@ -230,6 +235,13 @@ void SB_Profile::anchor_center_to_source(SB_Profile** center_anchor_list, const 
 	x_center = center_anchor_source->x_center;
 	y_center = center_anchor_source->y_center;
 }
+
+int SB_Profile::get_center_anchor_number() {
+	if (center_anchored_to_lens) return center_anchor_lens->lens_number;
+	else if (center_anchored_to_source) return center_anchor_source->sb_number;
+	else return -1;
+}
+
 
 void SB_Profile::delete_center_anchor()
 {
@@ -2137,8 +2149,8 @@ Sersic::Sersic(const Sersic* sb_in)
 
 void Sersic::update_meta_parameters()
 {
-	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
-	k = b*pow(1.0/Reff,1.0/n);
+	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
+	//k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
 }
@@ -2178,12 +2190,12 @@ void Sersic::set_auto_ranges()
 
 double Sersic::sb_rsq(const double rsq)
 {
-	return s0*exp(-k*pow(rsq,0.5/n));
+	return s0*exp(-b*pow(rsq/(Reff*Reff),0.5/n));
 }
 
 double Sersic::window_rmax()
 {
-	return pow(3.0/k,n);
+	return Reff*pow(3.0/b,n);
 }
 
 double Sersic::length_scale()
@@ -2217,8 +2229,8 @@ Cored_Sersic::Cored_Sersic(const Cored_Sersic* sb_in)
 
 void Cored_Sersic::update_meta_parameters()
 {
-	double b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	k = b*pow(1.0/Reff,1.0/n);
+	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
+	//k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
 }
@@ -2266,16 +2278,17 @@ double Cored_Sersic::sb_rsq(const double rsq)
 	// It's bullshit, but required for backwards compatibility; otherwise my previous fits to J0946 won't work. REMOVE THIS HACK LATER!!!!!!
 	// SERIOUSLY, REMOVE THIS HACK LATER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! IT'S BULLSHIT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	double rcore_corrected;
-	if (ellipticity_mode==0) rcore_corrected = rc;
-	else rcore_corrected = rc*sqrt(q);
+	//double rcore_corrected;
+	//if (ellipticity_mode==0) rcore_corrected = rc;
+	//else rcore_corrected = rc*sqrt(q);
+	//return s0*exp(-b*pow((rsq+rcore_corrected*rcore_corrected)/(Reff*Reff),0.5/n));
 
-	return s0*exp(-k*pow(rsq+rcore_corrected*rcore_corrected,0.5/n));
+	return s0*exp(-b*pow((rsq+rc*rc)/(Reff*Reff),0.5/n));
 }
 
 double Cored_Sersic::window_rmax()
 {
-	return pow(3.0/k,n);
+	return Reff*pow(3.0/b,n);
 }
 
 double Cored_Sersic::length_scale()

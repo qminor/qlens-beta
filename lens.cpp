@@ -1637,7 +1637,6 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
 			alphaptr = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
-		
 			new_lens = alphaptr;
 			break;
 		case SHEAR:
@@ -1678,6 +1677,39 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 	add_lens(new_lens,zl,zs);
 }
+
+bool QLens::spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper)
+{
+	// NOTE: the source object should store its intrinsic redshift, which should be used as the lens redshift here! Implement this soon!
+	LensProfile* new_lens;
+	bool spawn_lens = true;
+	switch (sb_list[src_number]->get_sbtype()) {
+		case GAUSSIAN:
+			warn("Spawning lens from Gaussian is currently not supported"); spawn_lens = false; break;
+		case SERSIC:
+			new_lens = new SersicLens((Sersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+		case CORE_SERSIC:
+			warn("Spawning lens from Core-Sersic is currently not supported"); spawn_lens = false; break;
+		case CORED_SERSIC:
+			new_lens = new Cored_SersicLens((Cored_Sersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+		case DOUBLE_SERSIC:
+			warn("Spawning lens from double Sersic model is currently not supported"); spawn_lens = false; break;
+		case SB_MULTIPOLE:
+			warn("cannot spawn lens from SB multipole"); spawn_lens = false; break;
+		case SHAPELET:
+			warn("cannot spawn lens from shapelet"); spawn_lens = false; break;
+		case TOPHAT:
+			warn("cannot spawn lens from tophat model"); spawn_lens = false; break;
+		default:
+			die("surface brightness profile type not supported for fitting");
+	}
+	if (!spawn_lens) return false;
+
+	add_lens(new_lens,zl,zs);
+	return true;
+}
+
+
 
 /*
 void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
@@ -2780,7 +2812,9 @@ void QLens::remove_source_object(int sb_number)
 		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
 		if ((i != sb_number) and (sb_list[i]->center_anchored_to_source==true) and (sb_list[i]->get_center_anchor_number()==sb_number)) sb_list[i]->delete_center_anchor();
 	}
-
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->unanchor_parameter(sb_list[sb_number]); // this unanchors the lens if any of its parameters are anchored to the source being deleted
+	}
 
 	delete sb_list[sb_number];
 	delete[] sb_list;
@@ -2804,7 +2838,11 @@ void QLens::clear_source_objects()
 			if (pi < pi_min) pi_min=pi;
 			if (pf > pf_max) pf_max=pf;
 		}	
-		for (int i=0; i < n_sb; i++) {
+		int i,j;
+		for (i=0; i < n_sb; i++) {
+			for (j=0; j < nlens; j++) {
+				lens_list[j]->unanchor_parameter(sb_list[i]); // this unanchors the lens if any of its parameters are anchored to the source being deleted
+			}
 			delete sb_list[i];
 		}	
 		delete[] sb_list;
@@ -2829,6 +2867,17 @@ void QLens::print_source_list(bool show_vary_params)
 	else cout << "No source models have been specified" << endl;
 	cout << endl;
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
+	/*
+	if (n_sb > 0) {
+		Alpha* lens_spawn;
+		//lens_spawn = new Alpha(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
+		sb_list[0]->spawn_lens_model(lens_spawn);
+		//lens_spawn->initialize_parameters(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
+		cout << "GOT HERE?" << endl;
+		cout << "LENS NAME: " << lens_spawn->get_model_name() << endl;
+		//add_lens(lens_spawn,lens_redshift,source_redshift);
+	}
+	*/
 }
 
 void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
@@ -6518,22 +6567,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 		fitmodel->lens_list[i]->lens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
-	for (i=0; i < nlens; i++) {
-		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
-		// lens in fitmodel (the lens whose parameters will be varied)
-		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(lens_list[i]->get_center_anchor_number());
-		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
-			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
-			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1,false);
-		}
-		for (j=0; j < fitmodel->lens_list[i]->get_n_params(); j++) {
-			if (fitmodel->lens_list[i]->anchor_parameter[j]==true) {
-				LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->parameter_anchor_lens[j]->lens_number];
-				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
-				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,true,lens_list[i]->parameter_anchor_ratio[j],lens_list[i]->parameter_anchor_exponent[j],parameter_anchor_lens);
-			}
-		}
-	}
 
 	fitmodel->n_sb = n_sb;
 	if (n_sb > 0) {
@@ -6560,10 +6593,33 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 					die("surface brightness profile type not supported for fitting");
 			}
 		}
-		for (i=0; i < n_sb; i++) {
-			if (fitmodel->sb_list[i]->center_anchored_to_lens==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
-			if (fitmodel->sb_list[i]->center_anchored_to_source==true) fitmodel->sb_list[i]->anchor_center_to_source(fitmodel->sb_list, sb_list[i]->get_center_anchor_number());
+	}
+
+	for (i=0; i < nlens; i++) {
+		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
+		// lens in fitmodel (the lens whose parameters will be varied)
+		if (fitmodel->lens_list[i]->center_anchored==true) fitmodel->lens_list[i]->anchor_center_to_lens(lens_list[i]->get_center_anchor_number());
+		if (fitmodel->lens_list[i]->anchor_special_parameter==true) {
+			LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->get_special_parameter_anchor_number()];
+			fitmodel->lens_list[i]->assign_special_anchored_parameters(parameter_anchor_lens,1,false);
 		}
+		for (j=0; j < fitmodel->lens_list[i]->get_n_params(); j++) {
+			if (fitmodel->lens_list[i]->anchor_parameter_to_lens[j]==true) {
+				LensProfile *parameter_anchor_lens = fitmodel->lens_list[lens_list[i]->parameter_anchor_lens[j]->lens_number];
+				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
+				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,true,lens_list[i]->parameter_anchor_ratio[j],lens_list[i]->parameter_anchor_exponent[j],parameter_anchor_lens);
+			} else if (fitmodel->lens_list[i]->anchor_parameter_to_source[j]==true) {
+				SB_Profile *parameter_anchor_source = fitmodel->sb_list[lens_list[i]->parameter_anchor_source[j]->sb_number];
+				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
+				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,true,lens_list[i]->parameter_anchor_ratio[j],lens_list[i]->parameter_anchor_exponent[j],parameter_anchor_source);
+			}
+
+		}
+	}
+
+	for (i=0; i < n_sb; i++) {
+		if (fitmodel->sb_list[i]->center_anchored_to_lens==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
+		if (fitmodel->sb_list[i]->center_anchored_to_source==true) fitmodel->sb_list[i]->anchor_center_to_source(fitmodel->sb_list, sb_list[i]->get_center_anchor_number());
 	}
 
 	fitmodel->fitmethod = fitmethod;

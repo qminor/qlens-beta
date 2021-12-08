@@ -5,7 +5,7 @@
 #include "spline.h"
 #include "egrad.h"
 #include "lensvec.h"
-#include "profile.h"
+//#include "profile.h"
 //#include "GregsMathHdr.h"
 #include "mcmchdr.h"
 #include "simplex.h"
@@ -15,12 +15,17 @@
 using namespace std;
 
 struct ImagePixelData;
+class LensProfile;
+class QLens;
 
 enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile : public EllipticityGradient, UCMC, Simplex
 {
 	friend class QLens;
+	friend class LensProfile;
+	friend class SersicLens;
+	friend class Cored_SersicLens;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -61,6 +66,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void set_nparams(const int &n_params_in, const bool resize = false);
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source);
 	void copy_base_source_data(const SB_Profile* sb_in);
+	//bool spawn_lens_model(Alpha* lens_model);
 
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
@@ -205,11 +211,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	int get_sbprofile_nparams() { return sbprofile_nparams; }
 	void check_vary_params();
 	int get_n_vary_params() { return n_vary_params; }
-	int get_center_anchor_number() {
-		if (center_anchored_to_lens) return center_anchor_lens->lens_number;
-		else if (center_anchored_to_source) return center_anchor_source->sb_number;
-		else return -1;
-	}
+	int get_center_anchor_number();
 	void set_include_limits(bool inc) { include_limits = inc; }
 };
 
@@ -241,8 +243,9 @@ class Gaussian : public SB_Profile
 
 class Sersic : public SB_Profile
 {
+	friend class SersicLens;
 	private:
-	double s0, k, n;
+	double s0, b, n;
 	double Reff; // effective radius
 
 	double sb_rsq(const double);
@@ -291,8 +294,9 @@ class CoreSersic : public SB_Profile
 
 class Cored_Sersic : public SB_Profile
 {
+	friend class Cored_SersicLens;
 	private:
-	double s0, k, n, rc;
+	double s0, b, n, rc;
 	double Reff; // effective radius
 
 	double sb_rsq(const double);

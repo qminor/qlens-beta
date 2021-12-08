@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include "profile.h"
+#include "sbprofile.h"
 #include "mathexpr.h"
 #include "errors.h"
 #include "GregsMathHdr.h"
@@ -3149,7 +3150,7 @@ void SersicLens::initialize_parameters(const double &p1_in, const double &Re_in,
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	if (parameter_mode==0) {
-		kappa_e = p1_in;
+		kappa0 = p1_in;
 	} else {
 		mstar = p1_in;
 	}
@@ -3171,7 +3172,7 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 {
 	copy_base_lensdata(lens_in);
 	if (parameter_mode==0) {
-		kappa_e = lens_in->kappa_e;
+		kappa0 = lens_in->kappa0;
 	} else {
 		mstar = lens_in->mstar;
 	}
@@ -3182,14 +3183,53 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
+SersicLens::SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	n = sb_in->n;
+	re = sb_in->Reff;
+	b = sb_in->b;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
 void SersicLens::assign_paramnames()
 {
 	if (parameter_mode==0) {
-		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	} else {
 		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
 	}
-	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[1] = "Reff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	set_geometric_paramnames(lensprofile_nparams);
 }
@@ -3197,7 +3237,7 @@ void SersicLens::assign_paramnames()
 void SersicLens::assign_param_pointers()
 {
 	if (parameter_mode==0) {
-		param[0] = &kappa_e;
+		param[0] = &kappa0;
 	} else {
 		param[0] = &mstar;
 	}
@@ -3213,16 +3253,16 @@ void SersicLens::update_meta_parameters()
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
 	if (parameter_mode==1) {
-		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+		kappa0 = (mstar*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
-	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+	def_factor = 2*n*re*re*kappa0*pow(b,-2*n);
 }
 
 void SersicLens::set_auto_stepsizes()
 {
 	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[index++] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa0;
 	} else {
 		stepsizes[index++] = 0.2*mstar;
 	}
@@ -3246,12 +3286,13 @@ void SersicLens::set_model_specific_integration_pointers()
 
 double SersicLens::kappa_rsq(const double rsq)
 {
-	return kappa_e*exp(-b*(pow(rsq/(re*re),0.5/n)-1));
+	return kappa0*exp(-b*pow(rsq/(re*re),0.5/n));
+	//kappa0 = kappa_e*exp(b);
 }
 
 double SersicLens::kappa_rsq_deriv(const double rsq)
 {
-	return -kappa_e*exp(-b*(pow(rsq/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow(rsq,0.5/n-1)/(2*n);
+	return -kappa0*exp(-b*pow(rsq/(re*re),0.5/n))*b*pow(re,-1.0/n)*pow(rsq,0.5/n-1)/(2*n);
 }
 
 double SersicLens::kapavg_spherical_rsq(const double rsq)
@@ -3279,7 +3320,7 @@ void Cored_SersicLens::initialize_parameters(const double &p1_in, const double &
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	if (parameter_mode==0) {
-		kappa_e = p1_in;
+		kappa0 = p1_in;
 	} else {
 		mstar = p1_in;
 	}
@@ -3302,7 +3343,7 @@ Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
 {
 	copy_base_lensdata(lens_in);
 	if (parameter_mode==0) {
-		kappa_e = lens_in->kappa_e;
+		kappa0 = lens_in->kappa0;
 	} else {
 		mstar = lens_in->mstar;
 	}
@@ -3314,14 +3355,54 @@ Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
+Cored_SersicLens::Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	n = sb_in->n;
+	re = sb_in->Reff;
+	b = sb_in->b;
+	rc = sb_in->rc;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
 void Cored_SersicLens::assign_paramnames()
 {
 	if (parameter_mode==0) {
-		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	} else {
 		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
 	}
-	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[1] = "Reff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	paramnames[3] = "rc";       latex_paramnames[3] = "r";       latex_param_subscripts[3] = "c";
 	set_geometric_paramnames(lensprofile_nparams);
@@ -3330,7 +3411,7 @@ void Cored_SersicLens::assign_paramnames()
 void Cored_SersicLens::assign_param_pointers()
 {
 	if (parameter_mode==0) {
-		param[0] = &kappa_e;
+		param[0] = &kappa0;
 	} else {
 		param[0] = &mstar;
 	}
@@ -3346,17 +3427,19 @@ void Cored_SersicLens::update_meta_parameters()
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	if (parameter_mode==1) {
-		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+	if (parameter_mode==0) {
+		mstar = (kappa0*sigma_cr*re*re*M_2PI*n*Gamma(2*n)) / pow(b,2*n);
+	} else {
+		kappa0 = (mstar*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
-	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+	def_factor = 2*n*re*re*kappa0*pow(b,-2*n);
 }
 
 void Cored_SersicLens::set_auto_stepsizes()
 {
 	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[index++] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa0;
 	} else {
 		stepsizes[index++] = 0.2*mstar;
 	}
@@ -3382,12 +3465,12 @@ void Cored_SersicLens::set_model_specific_integration_pointers()
 
 double Cored_SersicLens::kappa_rsq(const double rsq)
 {
-	return kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1));
+	return kappa0*exp(-b*pow((rsq+rc*rc)/(re*re),0.5/n));
 }
 
 double Cored_SersicLens::kappa_rsq_deriv(const double rsq)
 {
-	return -kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow((rsq+rc*rc),0.5/n-1)/(2*n);
+	return -kappa0*exp(-b*pow((rsq+rc*rc)/(re*re),0.5/n))*b*pow(re,-1.0/n)*pow((rsq+rc*rc),0.5/n-1)/(2*n);
 }
 
 double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
@@ -4238,7 +4321,7 @@ void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_lim
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
 	for (int i=0; i < n_params-2; i++) {
-		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 		else {
 			if (i==0) {
 				if (loaded_from_file) scriptout << kscale;
@@ -4250,7 +4333,7 @@ void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_lim
 			}
 			else if (i==2) scriptout << radians_to_degrees(*(param[i]));
 			else scriptout << *(param[i]);
-			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+			if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
 			scriptout << " ";
 		}
 	}

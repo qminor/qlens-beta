@@ -1390,6 +1390,7 @@ void QLens::process_commands(bool read_file)
 				{
 					if (nwords==2)
 						cout << "source <sourcemodel> <source_parameter##> ... [emode=#]\n"
+							"source update <lens_number> ...\n"
 							"source changevary ...\n"
 							"source clear\n\n"
 							"Creates a source object from specified source surface brightness profile model and parameters.\n"
@@ -4722,6 +4723,7 @@ void QLens::process_commands(bool read_file)
 			bool vary_parameters = false;
 			bool anchor_source_center = false;
 			int anchornum; // in case new source is being anchored to existing lens
+			int pmode = 0; // Parameter modes are currently not used by any of the source models, but it is used when spawning a lens model from a source
 			int emode = -1;
 			bool egrad = false;
 			int egrad_mode = -1;
@@ -4781,6 +4783,19 @@ void QLens::process_commands(bool read_file)
 					i = nwords; // breaks out of this loop, without breaking from outer loop
 				}
 			}	
+
+			for (int i=2; i < nwords; i++) {
+				int pos;
+				if ((pos = words[i].find("pmode=")) != string::npos) {
+					string pnumstring = words[i].substr(pos+6);
+					stringstream pnumstr;
+					pnumstr << pnumstring;
+					if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
+					remove_word(i);
+					i = nwords; // breaks out of this loop, without breaking from outer loop
+				}
+			}
+
 			for (int i=nwords-1; i > 1; i--) {
 				int pos;
 				if ((pos = words[i].find("egrad=")) != string::npos) {
@@ -4793,7 +4808,6 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 				}
 			}	
-
 
 			for (int i=nwords-1; i > 1; i--) {
 				if (words[i]=="-fgrad") {
@@ -5069,6 +5083,31 @@ void QLens::process_commands(bool read_file)
 					if (src_number >= n_sb) Complain("source number does not exist");
 					sb_list[src_number]->set_zoom_subgridding(false);
 				}
+			}
+			else if (words[1]=="spawn")
+			{
+				if (n_sb==0) Complain("no source objects have been created");
+				if (nwords < 3) Complain("need at least one argument to 'source spawn' (source number, optional mass parameter value)");
+				int src_number;
+				if (!(ws[2] >> src_number)) Complain("invalid source number");
+				if (src_number >= n_sb) Complain("source number does not exist");
+				double mass_param = -1e30;
+				if (nwords > 3) {
+					if (!(ws[3] >> mass_param)) Complain("invalid mass parameter value");
+				}
+				bool include_lims = false;
+				double minpar=-1e30, maxpar=1e30;
+				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+					include_lims = true;
+					if (mpi_id==0) cout << "Prior limits for mass parameter of spawned lens:" << endl;
+					if (read_command(false)==false) Complain("could not read prior limits for mass parameter of spawned lens");
+					if (nwords != 2) Complain("must give two arguments: lower prior limit and upper prior limit");
+					if (!(ws[0] >> minpar)) Complain("invalid lower limit");
+					if (!(ws[1] >> maxpar)) Complain("invalid upper limit");
+				}
+				if (!spawn_lens_from_source_object(src_number,lens_redshift,source_redshift,pmode,vary_parameters,include_lims,minpar,maxpar)) Complain("Lens spawning failed");
+				if (mass_param > 0) lens_list[nlens-1]->update_specific_parameter(0,mass_param);
+				vary_parameters = false; // This is so it doesn't try to set limits later down in the code, like it does for regular source models
 			}
 			else if (words[1]=="gaussian")
 			{
@@ -10661,6 +10700,13 @@ void QLens::process_commands(bool read_file)
 			//else image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
 			//isodata.plot_isophote_parameters(output_label);
 		} else if (words[0]=="test") {
+			if (n_sb == 0) Complain("need a source object to spawn a lens");
+			int pmode = 0;
+			if (nwords > 1) {
+				if (!(ws[1] >> pmode)) Complain("invalid pmode");
+			}
+			spawn_lens_from_source_object(0,lens_redshift,source_redshift,pmode,true,true,0.1,10);
+			/*
 			dvector efunc_params;
 			dvector lower_limits, upper_limits;
 			boolvector varyflags;
@@ -10671,6 +10717,7 @@ void QLens::process_commands(bool read_file)
 			sb_list[0]->enable_ellipticity_gradient(efunc_params,1);
 			sb_list[0]->vary_parameters(varyflags);
 			sb_list[0]->set_limits(lower_limits,upper_limits);
+			*/
 		} else if (words[0]=="isofit") {
 			if (image_pixel_data == NULL) Complain("image pixel data not loaded");
 			if (nwords < 8) Complain("need 6 args");

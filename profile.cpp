@@ -149,7 +149,6 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		y_center_lensed = lens_in->y_center_lensed;
 	}
 	if (ellipticity_gradient) {
-
 		egrad_mode = lens_in->egrad_mode;
 		egrad_ellipticity_mode = lens_in->egrad_ellipticity_mode;
 		center_gradient = lens_in->center_gradient;
@@ -188,6 +187,55 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	param = new double*[n_params];
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
+}
+
+void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
+{
+	q = sb_in->q;
+	epsilon1 = sb_in->epsilon1;
+	epsilon2 = sb_in->epsilon2;
+	angle_param_exists = sb_in->angle_param_exists;
+	if (angle_param_exists) set_angle_radians(sb_in->theta);
+	x_center = sb_in->x_center;
+	y_center = sb_in->y_center;
+	ellipticity_mode = sb_in->ellipticity_mode;
+	ellipticity_gradient = sb_in->ellipticity_gradient;
+
+	if (ellipticity_gradient) {
+		egrad_mode = sb_in->egrad_mode;
+		egrad_ellipticity_mode = sb_in->egrad_ellipticity_mode;
+		center_gradient = sb_in->center_gradient;
+		f_major_axis = 1.0; // f_major_axis doesn't apply when egrad is on, but is still called in get_einstein_radius(...)
+		int i,j;
+		for (i=0; i < 4; i++) {
+			n_egrad_params[i] = sb_in->n_egrad_params[i];
+			geometric_param[i] = new double[n_egrad_params[i]];
+			for (j=0; j < n_egrad_params[i]; j++) {
+				geometric_param[i][j] = sb_in->geometric_param[i][j];
+			}
+		}
+		angle_param_egrad = new bool[n_egrad_params[1]]; // keeps track of which parameters are angles, so they can be converted to degrees when displayed
+		for (j=0; j < n_egrad_params[1]; j++) {
+			angle_param_egrad[j] = sb_in->angle_param_egrad[j];
+		}
+		xi_initial_egrad = sb_in->xi_initial_egrad;
+		xi_final_egrad = sb_in->xi_final_egrad;
+		if (egrad_mode==0) {
+			bspline_order = sb_in->bspline_order;
+			n_bspline_knots_tot = sb_in->n_bspline_knots_tot;
+			for (i=0; i < 4; i++) {
+				geometric_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) geometric_knots[i][j] = sb_in->geometric_knots[i][j];
+			}
+		}
+		contours_overlap = sb_in->contours_overlap;
+		set_egrad_ptr();
+	}
+	int n_new_params = n_params + get_egrad_nparams() - 4;
+	set_nparams_and_anchordata(n_new_params);
+	assign_paramnames();
+	assign_param_pointers();
+	// Next, copy Fourier amplitudes/gradient once this has been implemented for lens models
 }
 
 void LensProfile::copy_integration_tables(const LensProfile* lens_in)
@@ -252,22 +300,28 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 	for (int i=0; i < n_params; i++) angle_param[i] = false;
 
 	if (param != NULL) delete[] param;
-	if (anchor_parameter != NULL) delete[] anchor_parameter;
+	if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
 	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
 
-	anchor_parameter = new bool[n_params];
+	anchor_parameter_to_lens = new bool[n_params];
 	parameter_anchor_lens = new LensProfile*[n_params];
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
 	parameter_anchor_ratio = new double[n_params];
 	parameter_anchor_exponent = new double[n_params];
 	param = new double*[n_params];
 	for (int i=0; i < n_params; i++) {
 		vary_params[i] = false;
-		anchor_parameter[i] = false;
+		anchor_parameter_to_lens[i] = false;
 		parameter_anchor_lens[i] = NULL;
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
 		parameter_anchor_paramnum[i] = -1;
 		parameter_anchor_ratio[i] = 1.0;
 		parameter_anchor_exponent[i] = 1.0;
@@ -487,6 +541,22 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 	return found_match;
 }
 
+bool LensProfile::update_specific_parameter(const int paramnum, const double& value)
+{
+	if (paramnum >= n_params) return false;
+	double* newparams = new double[n_params];
+	get_parameters(newparams);
+	for (int i=0; i < n_params; i++) {
+		if (i==paramnum) {
+			newparams[i] = value;
+			break;
+		}
+	}
+	update_parameters(newparams);
+	delete[] newparams;
+	return true;
+}
+
 void LensProfile::update_ellipticity_parameter(const double eparam)
 {
 	// This function is only used by the "qtab" model at the moment
@@ -520,8 +590,11 @@ void LensProfile::update_anchored_parameters()
 {
 	bool at_least_one_param_anchored = false;
 	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter[i]) {
+		if (anchor_parameter_to_lens[i]) {
 			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+		} else if (anchor_parameter_to_source[i]) {
+			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
 			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 		}
 	}
@@ -661,14 +734,18 @@ bool LensProfile::get_limits(dvector& lower, dvector& upper, dvector& lower0, dv
 void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 {
 	// n_params *must* already be set before running this
-	anchor_parameter = new bool[n_params];
+	anchor_parameter_to_lens = new bool[n_params];
 	parameter_anchor_lens = new LensProfile*[n_params];
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
 	parameter_anchor_ratio = new double[n_params];
 	parameter_anchor_exponent = new double[n_params];
 	for (int i=0; i < n_params; i++) {
-		anchor_parameter[i] = lens_in->anchor_parameter[i];
+		anchor_parameter_to_lens[i] = lens_in->anchor_parameter_to_lens[i];
 		parameter_anchor_lens[i] = lens_in->parameter_anchor_lens[i];
+		anchor_parameter_to_source[i] = lens_in->anchor_parameter_to_source[i];
+		parameter_anchor_source[i] = lens_in->parameter_anchor_source[i];
 		parameter_anchor_paramnum[i] = lens_in->parameter_anchor_paramnum[i];
 		parameter_anchor_ratio[i] = lens_in->parameter_anchor_ratio[i];
 		parameter_anchor_exponent[i] = lens_in->parameter_anchor_exponent[i];
@@ -686,7 +763,8 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 {
 	if (paramnum >= n_params) die("Parameter does not exist for this lens");
 	if (anchor_paramnum >= param_anchor_lens->n_params) die("Parameter does not exist for lens you are anchoring to");
-	anchor_parameter[paramnum] = true;
+	if (anchor_parameter_to_source[paramnum]) { warn("cannot anchor a parameter to both a lens and a source object"); return; }
+	anchor_parameter_to_lens[paramnum] = true;
 	parameter_anchor_lens[paramnum] = param_anchor_lens;
 	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
 	if ((!use_implicit_ratio) and (!use_exponent)) {
@@ -709,13 +787,55 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 	update_anchored_parameters();
 }
 
+void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
+{
+	if (paramnum >= n_params) die("Parameter does not exist for this source");
+	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
+	if (anchor_parameter_to_lens[paramnum]) { warn("cannot anchor a parameter to both a lens and a source object"); return; }
+	anchor_parameter_to_source[paramnum] = true;
+	parameter_anchor_source[paramnum] = param_anchor_source;
+	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
+	if ((!use_implicit_ratio) and (!use_exponent)) {
+		parameter_anchor_ratio[paramnum] = 1.0;
+		(*param[paramnum]) = *(param_anchor_source->param[anchor_paramnum]);
+	}
+	else if (use_implicit_ratio) {
+		parameter_anchor_exponent[paramnum] = 1.0;
+		if ((*(param_anchor_source->param[anchor_paramnum]))==0) {
+			if (*param[paramnum]==0) parameter_anchor_ratio[paramnum] = 1.0;
+			else die("cannot anchor to parameter with specified ratio if parameter is equal to zero");
+		} else {
+			parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_source->param[anchor_paramnum]));
+		}
+	}
+	else if (use_exponent) {
+		parameter_anchor_ratio[paramnum] = ratio;
+		parameter_anchor_exponent[paramnum] = exponent;
+	}
+	update_anchored_parameters();
+}
+
 void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 {
 	// if any parameters are anchored to the lens in question, unanchor them (use this when you are deleting a lens, in case others are anchored to it)
 	for (int i=0; i < n_params; i++) {
-		if ((anchor_parameter[i]) and (parameter_anchor_lens[i] == param_anchor_lens)) {
+		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_lens[i] == param_anchor_lens)) {
 			parameter_anchor_lens[i] = NULL;
-			anchor_parameter[i] = false;
+			anchor_parameter_to_lens[i] = false;
+			parameter_anchor_paramnum[i] = -1;
+			parameter_anchor_ratio[i] = 1.0;
+			parameter_anchor_exponent[i] = 1.0;
+		}
+	}
+}
+
+void LensProfile::unanchor_parameter(SB_Profile* param_anchor_source)
+{
+	// if any parameters are anchored to the source in question, unanchor them (use this when you are deleting a source, in case others are anchored to it)
+	for (int i=0; i < n_params; i++) {
+		if ((anchor_parameter_to_source[i]) and (parameter_anchor_source[i] == param_anchor_source)) {
+			parameter_anchor_source[i] = NULL;
+			anchor_parameter_to_source[i] = false;
 			parameter_anchor_paramnum[i] = -1;
 			parameter_anchor_ratio[i] = 1.0;
 			parameter_anchor_exponent[i] = 1.0;
@@ -1536,22 +1656,28 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	delete[] param;
 	param = new double*[n_params];
 
-	if (anchor_parameter != NULL) delete[] anchor_parameter;
+	if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
 	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
 
-	anchor_parameter = new bool[n_params];
+	anchor_parameter_to_lens = new bool[n_params];
 	parameter_anchor_lens = new LensProfile*[n_params];
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
 	parameter_anchor_ratio = new double[n_params];
 	parameter_anchor_exponent = new double[n_params];
 
 	// parameters should not be anchored before enable egrad, since the anchors are deleted here
 	for (int i=0; i < n_params; i++) {
-		anchor_parameter[i] = false;
+		anchor_parameter_to_lens[i] = false;
 		parameter_anchor_lens[i] = NULL;
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
 		parameter_anchor_paramnum[i] = -1;
 		parameter_anchor_ratio[i] = 1.0;
 		parameter_anchor_exponent[i] = 1.0;
@@ -2688,13 +2814,13 @@ void LensProfile::print_vary_parameters()
 	}
 	bool parameter_anchored = false;
 	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter[i]) parameter_anchored = true;
+		if ((anchor_parameter_to_lens[i]) or (anchor_parameter_to_source[i])) parameter_anchored = true;
 	}
 	if (parameter_anchored) {
 		cout << "   anchored parameters: ";
 		int j=0;
 		for (int i=0; i < n_params; i++) {
-			if (anchor_parameter[i]) {
+			if (anchor_parameter_to_lens[i]) {
 				if (j > 0) cout << ", ";
 				cout << paramnames[i] << " --> (lens " << parameter_anchor_lens[i]->lens_number << ": ";
 				if ((parameter_anchor_ratio[i] != 1.0) or (parameter_anchor_exponent[i] != 1.0)) {
@@ -2702,6 +2828,17 @@ void LensProfile::print_vary_parameters()
 					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
 				}
 				else cout << parameter_anchor_lens[i]->paramnames[parameter_anchor_paramnum[i]];
+				cout << ")";
+				j++;
+			}
+			else if (anchor_parameter_to_source[i]) {
+				if (j > 0) cout << ", ";
+				cout << paramnames[i] << " --> (source " << parameter_anchor_source[i]->sb_number << ": ";
+				if ((parameter_anchor_ratio[i] != 1.0) or (parameter_anchor_exponent[i] != 1.0)) {
+					cout << parameter_anchor_ratio[i] << "*" << parameter_anchor_source[i]->paramnames[parameter_anchor_paramnum[i]];
+					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
+				}
+				else cout << parameter_anchor_source[i]->paramnames[parameter_anchor_paramnum[i]];
 				cout << ")";
 				j++;
 			}
@@ -2739,7 +2876,7 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 
 	if (center_defined) {
 		for (int i=0; i < n_params-3; i++) {
-			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
 				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
 			} else {
@@ -2748,7 +2885,7 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
 					else scriptout << *(param[i]);
 				}
-				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
 				scriptout << " ";
 			}
 		}
@@ -2759,7 +2896,7 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 		}
 	} else {
 		for (int i=0; i < n_params-1; i++) {
-			if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
 				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
 			} else {
@@ -2768,7 +2905,7 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
 					else scriptout << *(param[i]);
 				}
-				if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
 				scriptout << " ";
 			}
 		}

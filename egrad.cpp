@@ -476,9 +476,6 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 {
 	double (Brent::*xiptr)(const double, const double&, const double&);
 	xiptr = static_cast<double (Brent::*)(const double, const double&, const double&)> (&EllipticityGradient::elliptical_radius_root_eq);
-	//double minq = (geometric_param[0][1] < geometric_param[0][0]) ? geometric_param[0][1] : geometric_param[0][0];
-	//double minq = (efunc_qf < efunc_qi) ? efunc_qf : efunc_qi;
-	//update_egrad_meta_parameters(); // CANNOT DO THIS HERE!!!!!!!!!!!!!!!! JUST FOR TESTING
 	double xisqrmax, xisqrmin;
 	xisqrmax = xisqrmin = (x*x+y*y);
 	if (egrad_minq > 1.0) die("egrad_minq has not been set (egrad_minq=%g)",egrad_minq);
@@ -492,6 +489,20 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 	}
 	double ximax = sqrt(xisqrmax);
 	double ximin = sqrt(xisqrmin);
+	if ((ximax < xi_initial_egrad) or (ximin > xi_final_egrad)) {
+		double qq, xisq;
+		if (ximax < xi_initial_egrad) {
+			qq = (this->*egrad_ptr)(xi_initial_egrad,geometric_param[0],0);
+		} else if (ximin > xi_final_egrad) {
+			qq = (this->*egrad_ptr)(xi_final_egrad,geometric_param[0],0);
+		}
+		if (egrad_ellipticity_mode==0) {
+			xisq = x*x + SQR(y/qq);
+		} else {
+			xisq = qq*x*x + y*y/qq;
+		}
+		return sqrt(xisq);
+	}
 	//cout << "minq=" << egrad_minq << " ximin=" << ximin << " ximax=" << ximax << endl;
 	//double xi = BrentsMethod(xiptr,x,y,0.9*ximin,1.1*ximax,1e-4);
 	//cout << "Trying x=" << x << ", y=" << y << ", minq=" << egrad_minq << ", ximin=" << ximin << ", ximax=" << ximax << endl;
@@ -501,7 +512,7 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 		double ep,th;
 		ellipticity_function(xi,ep,th);
 		double qq = sqrt(1 - ep);
-		cout << "q=" << qq << ", theta=" << radians_to_degrees(th) << ", minq=" << egrad_minq << endl;
+		cout << "x=" << x << ", y=" << y << ", xi0=" << xi_initial_egrad << ", xif=" << xi_final_egrad << ", q=" << qq << ", theta=" << radians_to_degrees(th) << ", minq=" << egrad_minq << endl;
 
 		if (egrad_mode==0) {
 			double bspline_logximin = geometric_knots[0][0];
