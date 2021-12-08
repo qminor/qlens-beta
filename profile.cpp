@@ -15,7 +15,7 @@ IntegrationMethod LensProfile::integral_method = Gauss_Patterson_Quadrature;
 bool LensProfile::orient_major_axis_north = true;
 bool LensProfile::use_ellipticity_components = false;
 int LensProfile::default_ellipticity_mode = 1;
-bool LensProfile::output_integration_errors = true;
+bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
@@ -2074,9 +2074,9 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 
 inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
-	if ((!converged) and (output_integration_errors)) {
+	if ((!converged) and (integration_warnings)) {
 		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
-			if ((lens->mpi_id==0) and (lens->warnings)) {
+			if (lens->mpi_id==0) {
 				if (integral_method==Gauss_Patterson_Quadrature) {
 					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
 					if (numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;

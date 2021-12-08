@@ -5494,12 +5494,12 @@ void QLens::process_commands(bool read_file)
 			{
 				if (nwords > 12) Complain("more than 10 parameters not allowed for model dsersic");
 				if (nwords >= 9) {
-					double s0_1, reff1, n1, s0_2, reff2, n2;
+					double s0, ds, reff1, n1, reff2, n2;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[2] >> s0_1)) Complain("invalid s0_1 parameter for model dsersic");
-					if (!(ws[3] >> reff1)) Complain("invalid R_eff1 parameter for model dsersic");
-					if (!(ws[4] >> n1)) Complain("invalid n1 parameter for model dsersic");
-					if (!(ws[5] >> s0_2)) Complain("invalid s0_2 parameter for model dsersic");
+					if (!(ws[2] >> s0)) Complain("invalid s0 parameter for model dsersic");
+					if (!(ws[3] >> ds)) Complain("invalid delta_s parameter for model dsersic");
+					if (!(ws[4] >> reff1)) Complain("invalid R_eff1 parameter for model dsersic");
+					if (!(ws[5] >> n1)) Complain("invalid n1 parameter for model dsersic");
 					if (!(ws[6] >> reff2)) Complain("invalid R_eff2 parameter for model dsersic");
 					if (!(ws[7] >> n2)) Complain("invalid n2 parameter for model dsersic");
 					if (!(ws[8] >> q)) Complain("invalid q parameter for model dsersic");
@@ -5523,7 +5523,7 @@ void QLens::process_commands(bool read_file)
 
 					nparams_to_vary = 10;
 					param_vals.input(nparams_to_vary);
-					param_vals[0]=s0_1; param_vals[1]=reff1; param_vals[2] = n1; param_vals[3] = s0_2; param_vals[4] = reff2; param_vals[5] = n2; param_vals[6]=q; param_vals[7]=theta; param_vals[8]=xc; param_vals[9]=yc;
+					param_vals[0]=s0; param_vals[1]=ds; param_vals[2] = reff1; param_vals[3] = n1; param_vals[4] = reff2; param_vals[5] = n2; param_vals[6]=q; param_vals[7]=theta; param_vals[8]=xc; param_vals[9]=yc;
 
 					if (vary_parameters) {
 						if (include_boxiness_parameter) nparams_to_vary++;
@@ -5541,7 +5541,7 @@ void QLens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_source_object(DOUBLE_SERSIC, emode, s0_1, reff1, n1, s0_2, q, theta, xc, yc, reff2, n2); // super-awkward to use the "add_source_object" function for this....
+						add_source_object(DOUBLE_SERSIC, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
 								remove_source_object(n_sb-1);
@@ -5562,7 +5562,7 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
-				else Complain("dsersic requires at least 7 parameters (s0_1, Reff1, n1, s0_2, Reff2, n2, q)");
+				else Complain("dsersic requires at least 7 parameters (s0, ds, Reff1, n1, Reff2, n2, q)");
 			}
 
 			else if (words[1]=="sbmpole")
@@ -8570,6 +8570,17 @@ void QLens::process_commands(bool read_file)
 				string setword;
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'warnings' command");
 				else set_switch(newton_warnings,setword);
+			}
+			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="integration_warnings")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile::integration_warnings) << endl;
+			} else if (nwords==2) {
+				string setword;
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'integration_warnings' command");
+				else set_switch(LensProfile::integration_warnings,setword);
 			}
 			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

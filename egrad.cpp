@@ -540,8 +540,6 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 			}
 			cout << "CHECKING EGRAD_MINQ: " << egrad_minq << endl;	
 		}
-
-
 		die();
 		//cout << "qi=" << geometric_param[0][0] << " qf=" << geometric_param[0][1] << " xi_q=" << geometric_param[0][2] << " dxi_q=" << geometric_param[0][3] << endl;
 		//die();

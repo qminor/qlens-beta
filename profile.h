@@ -185,7 +185,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static IntegrationMethod integral_method;
 	static bool orient_major_axis_north;
 	static bool use_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of q and theta
-	static bool output_integration_errors;
+	static bool integration_warnings;
 	static int default_ellipticity_mode;
 	static int default_fejer_nlevels;
 	QLens* lens;
@@ -981,6 +981,47 @@ class Cored_SersicLens : public LensProfile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 };
+
+/*
+class DoubleSersicLens : public LensProfile
+{
+	friend class SB_Profile;
+	friend class DoubleSersic;
+
+	private:
+	double kappa0_1, b1, n1;
+	double kappa0_2, b2, n2;
+	double re1, re2; // effective radius
+	double def_factor; // used to calculate the spherical deflection
+
+	double kappa_rsq(const double rsq);
+	double kappa_rsq_deriv(const double rsq);
+	double kapavg_spherical_rsq(const double rsq);
+
+	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void set_model_specific_integration_pointers();
+
+	public:
+
+	DoubleSersicLens()
+	{
+		set_null_ptrs_and_values();
+		setup_lens_properties();
+	}
+	DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens*);
+	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	DoubleSersicLens(const DoubleSersicLens* lens_in);
+	DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+};
+*/
+
+
 
 class MassSheet : public LensProfile
 {

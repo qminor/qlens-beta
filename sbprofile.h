@@ -321,15 +321,16 @@ class Cored_Sersic : public SB_Profile
 class DoubleSersic : public SB_Profile
 {
 	private:
-	double s0_1, k1, n1;
-	double s0_2, k2, n2;
+	double s0, delta_s;
+	double s0_1, b1, n1;
+	double s0_2, b2, n2;
 	double Reff1, Reff2; // effective radius
 
 	double sb_rsq(const double);
 
 	public:
 	DoubleSersic() : SB_Profile() {}
-	DoubleSersic(const double &s0_1_in, const double &Reff1_in, const double &n1_in, const double &s0_2_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
 	DoubleSersic(const DoubleSersic* sb_in);
 	~DoubleSersic() {}
 

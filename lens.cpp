@@ -2717,7 +2717,7 @@ void QLens::add_source_object(SB_ProfileName name, const int emode, const double
 		case CORED_SERSIC:
 			newlist[n_sb] = new Cored_Sersic(sb_norm, scale, logslope_param, scale2, q, theta, xc, yc, this); break;
 		case DOUBLE_SERSIC:
-			newlist[n_sb] = new DoubleSersic(sb_norm, scale, scale2, logslope_param, special_param1, special_param2, q, theta, xc, yc, this); break;
+			newlist[n_sb] = new DoubleSersic(sb_norm, logslope_param, scale, special_param1, scale2, special_param2, q, theta, xc, yc, this); break;
 		case TOPHAT:
 			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc, this); break;
 		default:
@@ -6683,7 +6683,7 @@ void QLens::update_anchored_parameters_and_redshift_data()
 bool QLens::update_fitmodel(const double* params)
 {
 	bool status = true;
-	if (ellipticity_gradient) contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
+	if (ellipticity_gradient) fitmodel->contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
 	int i, index=0;
 	for (i=0; i < nlens; i++) {
 		fitmodel->lens_list[i]->update_fit_parameters(params,index,status);
@@ -6729,9 +6729,9 @@ bool QLens::update_fitmodel(const double* params)
 	if (vary_wl_shear_factor_parameter) {
 		fitmodel->wl_shear_factor = params[index++];
 	}
-	if ((ellipticity_gradient) and (contours_overlap)) {
+	if ((ellipticity_gradient) and (fitmodel->contours_overlap)) {
 		status = false;
-		warn("contours overlap in ellipticity gradient model");
+		//warn("contours overlap in ellipticity gradient model");
 	}
 
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
@@ -10381,6 +10381,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 double QLens::fitmodel_loglike_extended_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
+	double loglike, chisq=0, chisq0;
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
@@ -10394,7 +10395,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
 		if (update_fitmodel(transformed_params)==false) {
-			return 1e30;
+			chisq = 2e30;
 		}
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
@@ -10403,7 +10404,6 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 		}
 	}
-	double loglike, chisq=0, chisq0;
 	if (chisq != 2e30) {
 		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
 		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);

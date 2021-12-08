@@ -2394,18 +2394,18 @@ double CoreSersic::length_scale()
 	return Reff;
 }
 
-DoubleSersic::DoubleSersic(const double &s0_1_in, const double &Reff1_in, const double &n1_in, const double &s0_2_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+DoubleSersic::DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
 {
 	model_name = "dsersic";
 	sbtype = DOUBLE_SERSIC;
 	setup_base_source_properties(10,6,true);
 	lens = lens_in;
+	s0 = s0_in;
+	delta_s = delta_s_in;
 	n1 = n1_in;
 	Reff1 = Reff1_in;
-	s0_1 = s0_1_in;
 	n2 = n2_in;
 	Reff2 = Reff2_in;
-	s0_2 = s0_2_in;
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
@@ -2413,10 +2413,10 @@ DoubleSersic::DoubleSersic(const double &s0_1_in, const double &Reff1_in, const 
 
 DoubleSersic::DoubleSersic(const DoubleSersic* sb_in)
 {
-	s0_1 = sb_in->s0_1;
+	s0 = sb_in->s0;
+	delta_s = sb_in->delta_s;
 	n1 = sb_in->n1;
 	Reff1 = sb_in->Reff1;
-	s0_2 = sb_in->s0_2;
 	n2 = sb_in->n2;
 	Reff2 = sb_in->Reff2;
 	copy_base_source_data(sb_in);
@@ -2425,17 +2425,19 @@ DoubleSersic::DoubleSersic(const DoubleSersic* sb_in)
 
 void DoubleSersic::update_meta_parameters()
 {
-	k1 = (2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1))*pow(1.0/Reff1,1.0/n1);
-	k2 = (2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2))*pow(1.0/Reff2,1.0/n2);
+	s0_1 = s0*(1+delta_s);
+	s0_2 = s0*(1-delta_s);
+	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
+	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
 	update_ellipticity_meta_parameters();
 }
 
 void DoubleSersic::assign_paramnames()
 {
-	paramnames[0] = "s0_1"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0,1";
-	paramnames[1] = "Reff1"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff,1";
-	paramnames[2] = "n1"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "1";
-	paramnames[3] = "s0_2"; latex_paramnames[3] = "S"; latex_param_subscripts[3] = "0,2";
+	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "delta_s"; latex_paramnames[1] = "\\Delta"; latex_param_subscripts[1] = "s";
+	paramnames[2] = "Reff1"; latex_paramnames[2] = "R"; latex_param_subscripts[2] = "eff,1";
+	paramnames[3] = "n1"; latex_paramnames[3] = "n"; latex_param_subscripts[3] = "1";
 	paramnames[4] = "Reff2"; latex_paramnames[4] = "R"; latex_param_subscripts[4] = "eff,2";
 	paramnames[5] = "n2"; latex_paramnames[5] = "n"; latex_param_subscripts[5] = "2";
 
@@ -2444,10 +2446,10 @@ void DoubleSersic::assign_paramnames()
 
 void DoubleSersic::assign_param_pointers()
 {
-	param[0] = &s0_1;
-	param[1] = &Reff1;
-	param[2] = &n1;
-	param[3] = &s0_2;
+	param[0] = &s0;
+	param[1] = &delta_s;
+	param[2] = &Reff1;
+	param[3] = &n1;
 	param[4] = &Reff2;
 	param[5] = &n2;
 	set_geometric_param_pointers(sbprofile_nparams);
@@ -2468,9 +2470,9 @@ void DoubleSersic::set_auto_stepsizes()
 void DoubleSersic::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
-	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[1] = false; penalty_lower_limits[1] = -1e30; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_auto_penalty_limits[3] = false; penalty_lower_limits[3] = -1e30; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
 	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
 	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
 	set_geometric_param_auto_ranges(sbprofile_nparams);
@@ -2478,13 +2480,13 @@ void DoubleSersic::set_auto_ranges()
 
 double DoubleSersic::sb_rsq(const double rsq)
 {
-	return (s0_1*exp(-k1*pow(rsq,0.5/n1)) + s0_2*exp(-k2*pow(rsq,0.5/n2)));
+	return (s0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1)) + s0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2)));
 }
 
 double DoubleSersic::window_rmax()
 {
-	double max1 = pow(3.0/k1,n1);
-	double max2 = pow(3.0/k2,n2);
+	double max1 = Reff1*pow(3.0/b1,n1);
+	double max2 = Reff2*pow(3.0/b2,n2);
 	return dmax(max1,max2);
 }
 
