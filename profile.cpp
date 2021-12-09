@@ -155,6 +155,8 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		int i,j;
 		for (i=0; i < 4; i++) {
 			n_egrad_params[i] = lens_in->n_egrad_params[i];
+			geometric_param_ref[i] = lens_in->geometric_param_ref[i];
+			geometric_param_dif[i] = lens_in->geometric_param_dif[i];
 			geometric_param[i] = new double[n_egrad_params[i]];
 			for (j=0; j < n_egrad_params[i]; j++) {
 				geometric_param[i][j] = lens_in->geometric_param[i][j];
@@ -166,6 +168,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		}
 		xi_initial_egrad = lens_in->xi_initial_egrad;
 		xi_final_egrad = lens_in->xi_final_egrad;
+		xi_ref_egrad = lens_in->xi_ref_egrad;
 		if (egrad_mode==0) {
 			bspline_order = lens_in->bspline_order;
 			n_bspline_knots_tot = lens_in->n_bspline_knots_tot;

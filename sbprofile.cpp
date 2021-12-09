@@ -127,6 +127,8 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		int i,j;
 		for (i=0; i < 4; i++) {
 			n_egrad_params[i] = sb_in->n_egrad_params[i];
+			geometric_param_ref[i] = sb_in->geometric_param_ref[i];
+			geometric_param_dif[i] = sb_in->geometric_param_dif[i];
 			geometric_param[i] = new double[n_egrad_params[i]];
 			for (j=0; j < n_egrad_params[i]; j++) {
 				geometric_param[i][j] = sb_in->geometric_param[i][j];
@@ -138,6 +140,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 		}
 		xi_initial_egrad = sb_in->xi_initial_egrad;
 		xi_final_egrad = sb_in->xi_final_egrad;
+		xi_ref_egrad = sb_in->xi_ref_egrad;
 		if (egrad_mode==0) {
 			bspline_order = sb_in->bspline_order;
 			n_bspline_knots_tot = sb_in->n_bspline_knots_tot;
