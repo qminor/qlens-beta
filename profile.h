@@ -245,7 +245,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
-	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs = 0, const double bspline_ximin = 1e30, const double bspline_ximax = 1e30, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
+	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs = 0, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool register_vary_flags();
@@ -945,6 +945,7 @@ class SersicLens : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	bool output_cosmology_info(const int lens_number);
 };
 
 class Cored_SersicLens : public LensProfile
@@ -980,6 +981,7 @@ class Cored_SersicLens : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
+	bool output_cosmology_info(const int lens_number);
 };
 
 /*

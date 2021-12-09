@@ -17,7 +17,7 @@ class EllipticityGradient : public Brent
 	bool contours_overlap; // relevant for ellipticity gradient mode
 	int egrad_ellipticity_mode; // same as ellipticity_mode in LensProfile, but only allows modes 0 or 1 right now
 	int egrad_mode;
-	double xi_initial_egrad, xi_final_egrad; // keeps track of the region where ellipticity/PA is changing
+	double xi_initial_egrad, xi_final_egrad, xi_ref_egrad; // keeps track of the region where ellipticity/PA is changing
 	bool center_gradient; // this is currently always false, but later I might add the option to have a center gradient
 	bool fourier_gradient; // if true, allows a gradient in the Fourier amplitudes perturbing surface brightness (or kappa)
 
@@ -25,6 +25,8 @@ class EllipticityGradient : public Brent
 	int n_bspline_knots_tot;
 	double *geometric_param[4]; // this will point to the parameter arrays for q, theta, xc and yc
 	double *geometric_knots[4]; // this is only needed if B-spline fitting (egrad_mode=0) is used
+	double geometric_param_ref[4]; // used by egrad=2
+	double geometric_param_dif[4]; // used by egrad=2
 	int n_egrad_params[4];
 	double **fourier_param;
 	double **fourier_knots;
@@ -50,7 +52,7 @@ class EllipticityGradient : public Brent
 	public:
 	EllipticityGradient();
 	~EllipticityGradient();
-	bool setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs = 0, const double bspline_ximin = 0.1, const double bspline_ximax = 5); // arbitrary default values for the latter two arguments
+	bool setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs = 0, const double ximin = 0.1, const double ximax = 5, const double xiref = 1.5); // arbitrary default values for the last three arguments
 	bool setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot);
 	void set_egrad_ptr();
 	void disable_egrad_mode(int& n_tot_egrad_params);

@@ -28,6 +28,8 @@ EllipticityGradient::EllipticityGradient()
 		n_egrad_params[i] = 0;
 		geometric_param[i] = NULL;
 		geometric_knots[i] = NULL;
+		geometric_param_ref[i] = 0;
+		geometric_param_dif[i] = 0;
 	}
 	n_bspline_knots_tot = 0;
 	angle_param_egrad = NULL;
@@ -64,7 +66,7 @@ EllipticityGradient::~EllipticityGradient()
 	}
 }
 
-bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const double bspline_ximin, const double bspline_ximax)
+bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const double ximin, const double ximax, const double xiref)
 {
 #ifndef USE_FITPACK
 	if (egrad_mode_in==0) {
@@ -107,8 +109,8 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 		// Set up the knot vectors
 		n_bspline_knots_tot = n_bspline_coefs + bspline_order + 1;
 		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
-		double bspline_logximin = log(bspline_ximin)/ln10;
-		double bspline_logximax = log(bspline_ximax)/ln10;
+		double bspline_logximin = log(ximin)/ln10;
+		double bspline_logximax = log(ximax)/ln10;
 		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
 		for (i=0; i < 4; i++) {
 			geometric_knots[i] = new double[n_bspline_knots_tot];
@@ -116,8 +118,8 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 			for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) geometric_knots[i][j+bspline_order] = logxi;
 			for (j=0; j < bspline_order; j++) geometric_knots[i][n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
 		}
-		xi_initial_egrad = bspline_ximin;
-		xi_final_egrad = bspline_ximax;
+		xi_initial_egrad = ximin;
+		xi_final_egrad = ximax;
 		egrad_minq = 1e30;
 		int n_xisteps_qmin = 50;
 		//for (int i=0; i < n_egrad_params[0]; i++) if (geometric_param[0][i] < egrad_minq) egrad_minq = geometric_param[0][i];
@@ -128,7 +130,7 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 			qq = (this->*egrad_ptr)(xi,geometric_param[0],0);
 			if (qq < egrad_minq) egrad_minq = qq;
 		}
-	} else if (egrad_mode==1) {
+	} else if ((egrad_mode==1) or (egrad_mode==2)) {
 		n_egrad_params_tot=10;
 		if (egrad_params.size() != n_egrad_params_tot) {
 			warn("incorrect number of efunc_params");
@@ -145,10 +147,47 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 		angle_param_egrad[3] = false;
 		for (i=0; i < 4; i++) {
 			geometric_param[i] = new double[n_egrad_params[i]];
-			for (j=0; j < n_egrad_params[i]; j++) {
-				if ((i==1) and (angle_param_egrad[j])) geometric_param[i][j] = degrees_to_radians(egrad_params[ip++]);
-				else geometric_param[i][j] = egrad_params[ip++];
+		}
+
+		if (egrad_mode==1) {
+			for (i=0; i < 4; i++) {
+				for (j=0; j < n_egrad_params[i]; j++) {
+					if ((i==1) and (angle_param_egrad[j])) geometric_param[i][j] = degrees_to_radians(egrad_params[ip++]);
+					else geometric_param[i][j] = egrad_params[ip++];
+				}
 			}
+		} else {
+			for (i=0; i < 4; i++) {
+				for (j=0; j < n_egrad_params[i]; j++) {
+					if (j==0) {
+						if (i==1) geometric_param_ref[i] = degrees_to_radians(egrad_params[ip++]);
+						else geometric_param_ref[i] = egrad_params[ip++];
+					} else if (j==1) { 
+						if (i==1) geometric_param_dif[i] = degrees_to_radians(egrad_params[ip++]);
+						else geometric_param_dif[i] = egrad_params[ip++];
+					} else {
+						geometric_param[i][j] = egrad_params[ip++];
+					}
+				}
+			}
+			xi_ref_egrad = xiref;
+			double step_ref;
+			for (i=0; i < 4; i++) {
+				if (n_egrad_params[i]==1) geometric_param[i][0] = geometric_param_ref[i];
+				else {
+					step_ref = tanh((xi_ref_egrad-geometric_param[i][2])/geometric_param[i][3]);
+					geometric_param[i][0] = geometric_param_ref[i] - (1+step_ref)*geometric_param_dif[i]/2;
+					geometric_param[i][1] = geometric_param_ref[i] + (1-step_ref)*geometric_param_dif[i]/2;
+				}
+			}
+			if (geometric_param[0][0] > 1.0) geometric_param[0][0] = 1.0; // q cannot be greater than 1
+			if (geometric_param[0][1] > 1.0) geometric_param[0][1] = 1.0; // q cannot be greater than 1
+			if (geometric_param[0][0] < 0.001) geometric_param[0][0] = 0.001;
+			if (geometric_param[0][1] < 0.001) geometric_param[0][1] = 0.001;
+			//cout << "qi=" << geometric_param[0][0] << ", qf=" << geometric_param[0][1] << endl;
+			//cout << "theta_i=" << radians_to_degrees(geometric_param[1][0]) << ", theta_f=" << radians_to_degrees(geometric_param[1][1]) << endl;
+			//cout << "xc=" << geometric_param[2][0] << endl;
+			//cout << "yc=" << geometric_param[3][0] << endl;
 		}
 		if (ip != egrad_params.size()) die("we fucked up the egrad_params, wrong number of arguments");
 
@@ -165,7 +204,7 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 		xi_final_egrad = dmax(xif_q,xif_th);
 		egrad_minq = (geometric_param[0][1] < geometric_param[0][0]) ? geometric_param[0][1] : geometric_param[0][0];
 	} else {
-		warn("only egrad_mode=1 currently supported");
+		warn("only egrad_mode=0,1,2 currently supported");
 		ellipticity_gradient = false;
 		return false;
 	}
@@ -565,7 +604,7 @@ void EllipticityGradient::set_egrad_ptr()
 {
 	if (egrad_mode==0) {
 		egrad_ptr = &EllipticityGradient::egrad_bspline_function;
-	} else if (egrad_mode==1) {
+	} else if ((egrad_mode==1) or (egrad_mode==2)) {
 		egrad_ptr = &EllipticityGradient::egrad_tanh_function;
 	} else {
 		egrad_ptr = NULL;
@@ -587,12 +626,23 @@ void EllipticityGradient::disable_egrad_mode(int& n_tot_egrad_params)
 void EllipticityGradient::set_geometric_param_pointers_egrad(double **param, boolvector& angle_param, int& qi)
 {
 	int i,j;
-	for (i=0; i < 4; i++) {
-		for (j=0; j < n_egrad_params[i]; j++) {
-			if ((i==1) and (angle_param_egrad[j])) angle_param[qi] = true;
-			param[qi++] = &geometric_param[i][j];
+	if ((egrad_mode==0) or (egrad_mode==1)) {
+		for (i=0; i < 4; i++) {
+			for (j=0; j < n_egrad_params[i]; j++) {
+				if ((i==1) and (angle_param_egrad[j])) angle_param[qi] = true;
+				param[qi++] = &geometric_param[i][j];
+			}
 		}
-	}
+	} else if (egrad_mode==2) {
+		for (i=0; i < 4; i++) {
+			for (j=0; j < n_egrad_params[i]; j++) {
+				if ((i==1) and (angle_param_egrad[j])) angle_param[qi] = true;
+				if (j==0) param[qi++] = &geometric_param_ref[i];
+				else if (j==1) param[qi++] = &geometric_param_dif[i];
+				else param[qi++] = &geometric_param[i][j];
+			}
+		}
+	} else die("only egrad_mode=0,1,2 supported");
 	if (fourier_gradient) {
 		int k=0;
 		for (i=0, k=0; i < n_fourier_grad_modes; i++, k += 2) {
@@ -632,7 +682,6 @@ int EllipticityGradient::get_egrad_nparams()
 void EllipticityGradient::update_egrad_meta_parameters()
 {
 	if (egrad_mode==0) {
-		// No meta parameters needed here?
 		egrad_minq = 1e30;
 		int i, n_xisteps_qmin = 120;
 		//for (int i=0; i < n_egrad_params[0]; i++) if (geometric_param[0][i] < egrad_minq) egrad_minq = geometric_param[0][i];
@@ -658,7 +707,22 @@ void EllipticityGradient::update_egrad_meta_parameters()
 			die("absurd minimum q value from B-spline");
 		}
 		//cout << "updated egrad_minq=" << egrad_minq << endl;
-	} else if (egrad_mode==1) {
+	} else if ((egrad_mode==1) or (egrad_mode==2)) {
+		if (egrad_mode==2) {
+			double step_ref;
+			for (int i=0; i < 4; i++) {
+				if (n_egrad_params[i]==1) geometric_param[i][0] = geometric_param_ref[i];
+				else {
+					step_ref = tanh((xi_ref_egrad-geometric_param[i][2])/geometric_param[i][3]);
+					geometric_param[i][0] = geometric_param_ref[i] - (1+step_ref)*geometric_param_dif[i]/2;
+					geometric_param[i][1] = geometric_param_ref[i] + (1-step_ref)*geometric_param_dif[i]/2;
+				}
+			}
+			if (geometric_param[0][0] > 1.0) geometric_param[0][0] = 1.0; // q cannot be greater than 1
+			if (geometric_param[0][1] > 1.0) geometric_param[0][1] = 1.0; // q cannot be greater than 1
+			if (geometric_param[0][0] < 0.001) geometric_param[0][0] = 0.001;
+			if (geometric_param[0][1] < 0.001) geometric_param[0][1] = 0.001;
+		}
 		double xi0_q, xif_q, xi0_th, xif_th;
 		xi0_q = geometric_param[0][2] - 3*geometric_param[0][3];
 		if (xi0_q < 0) xi0_q = 0;
@@ -671,6 +735,11 @@ void EllipticityGradient::update_egrad_meta_parameters()
 		if (xi_initial_egrad < 0) xi_initial_egrad = 0;
 		xi_final_egrad = dmax(xif_q,xif_th);
 		egrad_minq = (geometric_param[0][1] < geometric_param[0][0]) ? geometric_param[0][1] : geometric_param[0][0];
+		//cout << "qi=" << geometric_param[0][0] << ", qf=" << geometric_param[0][1] << endl;
+		//cout << "theta_i=" << radians_to_degrees(geometric_param[1][0]) << ", theta_f=" << radians_to_degrees(geometric_param[1][1]) << endl;
+		//cout << "xc=" << geometric_param[2][0] << endl;
+		//cout << "yc=" << geometric_param[3][0] << endl;
+
 	} else die("only egrad_mode=0 or 1 currently supported");
 }
 
@@ -751,7 +820,37 @@ void EllipticityGradient::set_geometric_paramnames_egrad(vector<string>& paramna
 			paramnames[qi] = "xi0_" + ampname; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
 			paramnames[qi] = "dxi_" + ampname; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
 		}
-	} else die("only egrad_mode=0 or 1 currently supported");
+	} else if (egrad_mode==2) {
+		paramnames[qi] = "qref"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "ref" + latex_suffix; qi++;
+		paramnames[qi] = "delta_q"; latex_paramnames[qi] = "\\Delta"; latex_param_subscripts[qi] = "q" + latex_suffix; qi++;
+		paramnames[qi] = "xi0_q"; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = "0,q" + latex_suffix; qi++;
+		paramnames[qi] = "dxi_q"; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = "q" + latex_suffix; qi++;
+		paramnames[qi] = "theta_ref"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "ref" + latex_suffix; qi++;
+		paramnames[qi] = "delta_theta"; latex_paramnames[qi] = "\\Delta"; latex_param_subscripts[qi] = "\\theta" + latex_suffix; qi++;
+		paramnames[qi] = "xi0_theta"; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = "0,\\theta" + latex_suffix; qi++;
+		paramnames[qi] = "dxi_theta"; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = "\\theta" + latex_suffix; qi++;
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c" + latex_suffix; qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c" + latex_suffix; qi++;
+		for (int i=0; i < n_fourier_grad_modes; i++) {
+			string mstring, ampname, latex_ampname;
+			stringstream mstr;
+			mstr << fourier_grad_mvals[i];
+			mstr >> mstring;
+			ampname = "A" + mstring;
+			latex_ampname = "A";
+			paramnames[qi] = ampname + "_i"; latex_paramnames[qi] = latex_ampname; latex_param_subscripts[qi] = mstring + "i" + latex_suffix; qi++;
+			paramnames[qi] = ampname + "_f"; latex_paramnames[qi] = latex_ampname; latex_param_subscripts[qi] = mstring + "f" + latex_suffix; qi++;
+			paramnames[qi] = "xi0_" + ampname; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
+			paramnames[qi] = "dxi_" + ampname; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
+
+			ampname = "B" + mstring;
+			latex_ampname = "B";
+			paramnames[qi] = ampname + "_i"; latex_paramnames[qi] = latex_ampname; latex_param_subscripts[qi] = mstring + "i" + latex_suffix; qi++;
+			paramnames[qi] = ampname + "_f"; latex_paramnames[qi] = latex_ampname; latex_param_subscripts[qi] = mstring + "f" + latex_suffix; qi++;
+			paramnames[qi] = "xi0_" + ampname; latex_paramnames[qi] = "\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
+			paramnames[qi] = "dxi_" + ampname; latex_paramnames[qi] = "\\Delta\\xi"; latex_param_subscripts[qi] = ampname + latex_suffix; qi++;
+		}
+	} else die("only egrad_mode=0, 1, or 2 currently supported");
 }
 
 void EllipticityGradient::set_geometric_param_ranges_egrad(boolvector& set_auto_penalty_limits, dvector& penalty_lower_limits, dvector& penalty_upper_limits, int &param_i)
@@ -778,7 +877,7 @@ void EllipticityGradient::set_geometric_param_ranges_egrad(boolvector& set_auto_
 				}
 			}
 		}
-	} else if (egrad_mode==1) {
+	} else if ((egrad_mode==1) or (egrad_mode==2)) {
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++; // qi
 		set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 5e-3; penalty_upper_limits[param_i] = 1; param_i++; // qf
 		set_auto_penalty_limits[param_i++] = false; // xi0_q
@@ -795,7 +894,7 @@ void EllipticityGradient::set_geometric_param_ranges_egrad(boolvector& set_auto_
 			set_auto_penalty_limits[param_i++] = false; // xi0_amp
 			set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 1e-3; penalty_upper_limits[param_i] = 1e30; param_i++; // dxi_amp
 		}
-	} else die("only egrad_mode=0 or 1 currently supported");
+	} else die("only egrad_mode=0, 1, or 2 currently supported");
 }
 
 void EllipticityGradient::set_geometric_stepsizes_egrad(dvector& stepsizes, int &index)
@@ -821,13 +920,13 @@ void EllipticityGradient::set_geometric_stepsizes_egrad(dvector& stepsizes, int 
 				}
 			}
 		}
-	} else if (egrad_mode==1) {
-		stepsizes[index++] = 0.1; // qi
-		stepsizes[index++] = 0.1; // qf
+	} else if ((egrad_mode==1) or (egrad_mode==2)) {
+		stepsizes[index++] = 0.1; // qi (or qref)
+		stepsizes[index++] = 0.1; // qf (or delta_q)
 		stepsizes[index++] = 0.3; // xi0_q
 		stepsizes[index++] = 0.3; // dxi_q
-		stepsizes[index++] = 5; // theta_i
-		stepsizes[index++] = 5; // theta_f
+		stepsizes[index++] = 5; // theta_i (or theta_ref)
+		stepsizes[index++] = 5; // theta_f (or delta_theta)
 		stepsizes[index++] = 0.3; // xi0_theta
 		stepsizes[index++] = 0.3; // xi0_theta
 		stepsizes[index++] = 0.1; // xc
@@ -838,7 +937,7 @@ void EllipticityGradient::set_geometric_stepsizes_egrad(dvector& stepsizes, int 
 			stepsizes[index++] = 0.3; // xi0_q
 			stepsizes[index++] = 0.3; // dxi_q
 		}
-	} else die("only egrad_mode=0 and 1 currently supported");
+	} else die("only egrad_mode=0, 1, or 2 currently supported");
 }
 
 void EllipticityGradient::set_fourier_paramnums(int *paramnum, int paramnum0)

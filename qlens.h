@@ -953,7 +953,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
-	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, double& ximin, double& ximax, bool& enter_params_and_varyflags);
+	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, double& ximin, double& ximax, double& xiref, bool& enter_params_and_varyflags);
 	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int current_nparams, const int n_bspline_coefs, const bool enter_params_and_varyflags);
 	void run_plotter(string plotcommand, string extra_command = "");
 	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");

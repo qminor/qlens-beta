@@ -3252,9 +3252,12 @@ void SersicLens::update_meta_parameters()
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
-	if (parameter_mode==1) {
+	if (parameter_mode==0) {
+		mstar = (kappa0*sigma_cr*re*re*M_2PI*n*Gamma(2*n)) / pow(b,2*n);
+	} else {
 		kappa0 = (mstar*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
+
 	def_factor = 2*n*re*re*kappa0*pow(b,-2*n);
 }
 
@@ -3303,6 +3306,30 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 	IncGammaP_and_Gamma(2*n,b*x,incgam2n,gamm2n);
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
+
+bool SersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	double Reff_kpc = re/kpc_to_arcsec;
+	cout << "R_eff = " << Reff_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
+}
+
+
 
 /***************************** Cored Sersic profile *****************************/
 
@@ -3481,6 +3508,30 @@ double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
 	x = pow((rsq+rc*rc)/(re*re),1.0/(2*n));
 	IncGammaP_and_Gamma(2*n,b*x,incgam2n,gamm2n);
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
+}
+
+bool Cored_SersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	double Reff_kpc = re/kpc_to_arcsec;
+	double rc_kpc = rc/kpc_to_arcsec;
+	cout << "R_eff = " << Reff_kpc << " kpc" << endl;
+	cout << "rc = " << rc_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
 }
 
 

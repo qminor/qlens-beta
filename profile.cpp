@@ -1603,7 +1603,7 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 	}
 }
 
-bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double bspline_ximin, const double bspline_ximax, const bool copy_vary_settings, boolvector* vary_egrad)
+bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double ximin, const double ximax, const double xiref, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -1621,7 +1621,7 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	}
 
 	int n_egrad_params;
-	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,bspline_ximin,bspline_ximax)==false) {
+	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,ximin,ximax,xiref)==false) {
 		warn("could not set up egrad params properly");
 		return false;
 	}
