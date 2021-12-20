@@ -34,6 +34,7 @@ SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double 
 
 void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source)
 {
+	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	center_anchored_to_lens = false;
 	center_anchored_to_source = false;
 	if (is_elliptical_source) {
@@ -66,6 +67,7 @@ SB_Profile::SB_Profile(const SB_Profile* sb_in)
 
 void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 {
+	set_null_ptrs_and_values();
 	model_name = sb_in->model_name;
 	sbtype = sb_in->sbtype;
 	lens = sb_in->lens;
@@ -180,6 +182,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 			}
 		}
 	}
+	copy_parameter_anchors(sb_in);
 	assign_param_pointers();
 }
 
@@ -211,7 +214,28 @@ void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 	angle_param.input(n_params);
 	for (int i=0; i < n_params; i++) angle_param[i] = false;
 
+	if (param != NULL) delete[] param;
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+
 	param = new double*[n_params];
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
+	}
+
 	if (n_params > old_nparams) {
 		for (int i=old_nparams; i < n_params; i++) {
 			vary_params[i] = false;
@@ -445,6 +469,27 @@ bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int eg
 	delete[] param;
 	param = new double*[n_params];
 
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+
+	// parameters should not be anchored before enable egrad, since the anchors are deleted here
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
+	}
+
 	assign_param_pointers();
 	assign_paramnames();
 
@@ -537,6 +582,27 @@ bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const bool cop
 	n_params = new_nparams;
 	delete[] param;
 	param = new double*[n_params];
+
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+
+	// parameters should not be anchored before enable egrad, since the anchors are deleted here
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
+	}
 
 	assign_param_pointers();
 	assign_paramnames();
@@ -720,6 +786,24 @@ bool SB_Profile::update_specific_parameter(const string name_in, const double& v
 	return found_match;
 }
 
+bool SB_Profile::update_specific_parameter(const int paramnum, const double& value)
+{
+	if (paramnum >= n_params) return false;
+	double* newparams = new double[n_params];
+	get_parameters(newparams);
+	for (int i=0; i < n_params; i++) {
+		if (i==paramnum) {
+			newparams[i] = value;
+			break;
+		}
+	}
+	update_parameters(newparams);
+	delete[] newparams;
+	return true;
+}
+
+
+
 void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
@@ -732,6 +816,20 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 				else *(param[i]) = fitparams[index++];
 			}
 		}
+		update_meta_parameters();
+	}
+}
+
+void SB_Profile::update_anchored_parameters()
+{
+	bool at_least_one_param_anchored = false;
+	for (int i=0; i < n_params; i++) {
+		if (anchor_parameter_to_source[i]) {
+			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+		}
+	}
+	if (at_least_one_param_anchored) {
 		update_meta_parameters();
 	}
 }
@@ -889,6 +987,65 @@ bool SB_Profile::get_limits(dvector& lower, dvector& upper)
 		upper[i] = upper_limits[i];
 	}
 	return true;
+}
+
+void SB_Profile::copy_parameter_anchors(const SB_Profile* sb_in)
+{
+	// n_params *must* already be set before running this
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter_to_source[i] = sb_in->anchor_parameter_to_source[i];
+		parameter_anchor_source[i] = sb_in->parameter_anchor_source[i];
+		parameter_anchor_paramnum[i] = sb_in->parameter_anchor_paramnum[i];
+		parameter_anchor_ratio[i] = sb_in->parameter_anchor_ratio[i];
+		parameter_anchor_exponent[i] = sb_in->parameter_anchor_exponent[i];
+	}
+}
+
+void SB_Profile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
+{
+	if (paramnum >= n_params) die("Parameter does not exist for this source");
+	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
+	anchor_parameter_to_source[paramnum] = true;
+	parameter_anchor_source[paramnum] = param_anchor_source;
+	//(*param_anchor_source->param[0]) = 88;
+	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
+	if ((!use_implicit_ratio) and (!use_exponent)) {
+		parameter_anchor_ratio[paramnum] = 1.0;
+		(*param[paramnum]) = *(param_anchor_source->param[anchor_paramnum]);
+	}
+	else if (use_implicit_ratio) {
+		parameter_anchor_exponent[paramnum] = 1.0;
+		if ((*(param_anchor_source->param[anchor_paramnum]))==0) {
+			if (*param[paramnum]==0) parameter_anchor_ratio[paramnum] = 1.0;
+			else die("cannot anchor to parameter with specified ratio if parameter is equal to zero");
+		} else {
+			parameter_anchor_ratio[paramnum] = (*param[paramnum]) / (*(param_anchor_source->param[anchor_paramnum]));
+		}
+	}
+	else if (use_exponent) {
+		parameter_anchor_ratio[paramnum] = ratio;
+		parameter_anchor_exponent[paramnum] = exponent;
+	}
+	update_anchored_parameters();
+}
+
+void SB_Profile::unanchor_parameter(SB_Profile* param_anchor_source)
+{
+	// if any parameters are anchored to the source in question, unanchor them (use this when you are deleting a source, in case others are anchored to it)
+	for (int i=0; i < n_params; i++) {
+		if ((anchor_parameter_to_source[i]) and (parameter_anchor_source[i] == param_anchor_source)) {
+			parameter_anchor_source[i] = NULL;
+			anchor_parameter_to_source[i] = false;
+			parameter_anchor_paramnum[i] = -1;
+			parameter_anchor_ratio[i] = 1.0;
+			parameter_anchor_exponent[i] = 1.0;
+		}
+	}
 }
 
 void SB_Profile::assign_paramnames()
@@ -1931,6 +2088,30 @@ void SB_Profile::print_vary_parameters()
 			cout << endl;
 		}
 	}
+	bool parameter_anchored = false;
+	for (int i=0; i < n_params; i++) {
+		if (anchor_parameter_to_source[i]) parameter_anchored = true;
+	}
+	if (parameter_anchored) {
+		cout << "   anchored parameters: ";
+		int j=0;
+		for (int i=0; i < n_params; i++) {
+			if (anchor_parameter_to_source[i]) {
+				if (j > 0) cout << ", ";
+				cout << paramnames[i] << " --> (source " << parameter_anchor_source[i]->sb_number << ": ";
+				if ((parameter_anchor_ratio[i] != 1.0) or 
+					(parameter_anchor_exponent[i] != 1.0)) {
+					cout << parameter_anchor_ratio[i] << "*" << parameter_anchor_source[i]->paramnames[parameter_anchor_paramnum[i]];
+					if (parameter_anchor_exponent[i] != 1.0) cout << "^" << parameter_anchor_exponent[i];
+				}
+				else cout << parameter_anchor_source[i]->paramnames[parameter_anchor_paramnum[i]];
+				cout << ")";
+				j++;
+			}
+		}
+		cout << endl;
+	}
+
 }
 
 void SB_Profile::window_params(double& xmin, double& xmax, double& ymin, double& ymax)

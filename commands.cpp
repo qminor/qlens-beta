@@ -2350,6 +2350,9 @@ void QLens::process_commands(bool read_file)
 					cout << "grid = (" << grid_xcenter-xlh << "," << grid_xcenter+xlh << ") x (" << grid_ycenter-ylh << "," << grid_ycenter+ylh << ")" << endl;
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 				}
+			} else if ((nwords==2) and (words[1]=="-imgpixel")) {
+				if (data_pixel_size <= 0) Complain("must have data_pixel_size > 0 to create grid based on image pixels");
+				set_grid_from_pixels();
 			} else if (nwords == 3) {
 				double xlh, ylh;
 				if (!(ws[1] >> xlh)) Complain("invalid grid x-coordinate");
@@ -2484,7 +2487,7 @@ void QLens::process_commands(bool read_file)
 			const int nmax_anchor = 100;
 			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per lens can't exceed 100 (which will never happen!)
 			int parameter_anchor_i = 0;
-			for (int i=0; i < nmax_anchor; i++) parameter_anchors[i].anchor_lens_number = nlens; // by default, param anchors are to parameters within the new lens, unless specified otherwise
+			for (int i=0; i < nmax_anchor; i++) parameter_anchors[i].anchor_object_number = nlens; // by default, param anchors are to parameters within the new lens, unless specified otherwise
 
 			for (int i=nwords-1; i > 1; i--) {
 				if (words[i]=="-lensed_center") {
@@ -2640,7 +2643,7 @@ void QLens::process_commands(bool read_file)
 								parameter_anchors[parameter_anchor_i].anchor_param = true;
 								parameter_anchors[parameter_anchor_i].use_exponent = true;
 								parameter_anchors[parameter_anchor_i].paramnum = i-2;
-								parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+								parameter_anchors[parameter_anchor_i].anchor_object_number = lnum;
 								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 								parameter_anchors[parameter_anchor_i].ratio = ratio;
 								parameter_anchors[parameter_anchor_i].exponent = anchor_exponent;
@@ -2668,7 +2671,7 @@ void QLens::process_commands(bool read_file)
 								parameter_anchors[parameter_anchor_i].anchor_param = true;
 								parameter_anchors[parameter_anchor_i].use_implicit_ratio = true;
 								parameter_anchors[parameter_anchor_i].paramnum = i-2;
-								parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+								parameter_anchors[parameter_anchor_i].anchor_object_number = lnum;
 								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 								parameter_anchor_i++;
 								words[i] = pvalstring;
@@ -2696,7 +2699,7 @@ void QLens::process_commands(bool read_file)
 							if ((lnum != nlens) and (pnum >= lens_list[lnum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given lens");
 							parameter_anchors[parameter_anchor_i].anchor_param = true;
 							parameter_anchors[parameter_anchor_i].paramnum = i-2;
-							parameter_anchors[parameter_anchor_i].anchor_lens_number = lnum;
+							parameter_anchors[parameter_anchor_i].anchor_object_number = lnum;
 							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 							parameter_anchor_i++;
 							words[i] = "0";
@@ -2874,7 +2877,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(8);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=b; param_vals[1]=alpha; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
@@ -2921,7 +2924,7 @@ void QLens::process_commands(bool read_file)
 								}
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -2974,7 +2977,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(8);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
@@ -3024,7 +3027,7 @@ void QLens::process_commands(bool read_file)
 								}
 							}
 
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
@@ -3104,7 +3107,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(6);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=a_m; param_vals[1]=n; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
 						else param_vals[5]=lens_list[lens_number]->zlens;
@@ -3145,7 +3148,7 @@ void QLens::process_commands(bool read_file)
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) {
-								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -3211,7 +3214,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(7);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
 						else param_vals[6]=lens_list[lens_number]->zlens;
@@ -3259,7 +3262,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3362,7 +3365,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(8);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
@@ -3410,7 +3413,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3477,7 +3480,7 @@ void QLens::process_commands(bool read_file)
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
 						param_vals.input(8);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
@@ -3525,7 +3528,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],1,true);
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
@@ -3567,7 +3570,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(7);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=k0; param_vals[1]=R_d; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
 						else param_vals[6]=lens_list[lens_number]->zlens;
@@ -3615,7 +3618,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3659,7 +3662,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(7);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=qx; param_vals[1]=f; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
 						else param_vals[6]=lens_list[lens_number]->zlens;
@@ -3707,7 +3710,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3745,7 +3748,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(7);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
 						else param_vals[6]=lens_list[lens_number]->zlens;
@@ -3793,7 +3796,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -3865,7 +3868,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(10);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[9]=zl_in;
 						else param_vals[9]=lens_list[lens_number]->zlens;
@@ -3913,7 +3916,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_tidal_host) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[hostnum],1,true);
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
@@ -3954,7 +3957,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(4);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=xc; param_vals[2]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
 						else param_vals[3]=lens_list[lens_number]->zlens;
@@ -3994,7 +3997,7 @@ void QLens::process_commands(bool read_file)
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4040,7 +4043,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(8);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
@@ -4088,7 +4091,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -4136,7 +4139,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(9);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=rc; param_vals[4]=q; param_vals[5]=theta; param_vals[6]=xc; param_vals[7]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[8]=zl_in;
 						else param_vals[8]=lens_list[lens_number]->zlens;
@@ -4184,7 +4187,7 @@ void QLens::process_commands(bool read_file)
 							}
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -4217,7 +4220,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(4);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kappa; param_vals[1]=xc; param_vals[2]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
 						else param_vals[3]=lens_list[lens_number]->zlens;
@@ -4257,7 +4260,7 @@ void QLens::process_commands(bool read_file)
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4271,7 +4274,7 @@ void QLens::process_commands(bool read_file)
 						if (!(ws[2] >> defx)) Complain("invalid defx parameter for model deflection");
 						if (!(ws[3] >> defy)) Complain("invalid defy parameter for model deflection");
 						param_vals.input(3);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=defx; param_vals[1]=defy;
 						if ((update_zl) or (!update_parameters)) param_vals[2]=zl_in;
 						else param_vals[2]=lens_list[lens_number]->zlens;
@@ -4305,7 +4308,7 @@ void QLens::process_commands(bool read_file)
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4343,7 +4346,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(5);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=shear_p1; param_vals[1]=shear_p2; param_vals[2]=xc; param_vals[3]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[4]=zl_in;
 						else param_vals[4]=lens_list[lens_number]->zlens;
@@ -4373,7 +4376,7 @@ void QLens::process_commands(bool read_file)
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
 					}
@@ -4433,7 +4436,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(6);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
 						else param_vals[5]=lens_list[lens_number]->zlens;
@@ -4477,7 +4480,7 @@ void QLens::process_commands(bool read_file)
 								if (!add_tabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (tabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4538,7 +4541,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						param_vals.input(7);
-						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_lens_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
 						else param_vals[6]=lens_list[lens_number]->zlens;
@@ -4582,7 +4585,7 @@ void QLens::process_commands(bool read_file)
 								if (!add_qtabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, q, theta, xc, yc, filename)) Complain("input file for qtabulated model either does not exist, or is in incorrect format");
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_lens_number]);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (qtabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4755,8 +4758,10 @@ void QLens::process_commands(bool read_file)
 			double c0val = 0;
 			double rtval = 0;
 
-			ParamAnchor parameter_anchors[100]; // number of anchors per source can't exceed 100 (which will never happen!)
+			const int nmax_anchor = 100;
+			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per source can't exceed 100 (which will never happen!)
 			int parameter_anchor_i = 0;
+			for (int i=0; i < nmax_anchor; i++) parameter_anchors[i].anchor_object_number = n_sb; // by default, param anchors are to parameters within the new source, unless specified otherwise
 
 			if (words[0]=="fit") {
 				if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
@@ -4772,50 +4777,6 @@ void QLens::process_commands(bool read_file)
 				nwords--;
 				delete[] ws;
 				ws = new_ws;
-			}
-			for (int i=2; i < nwords; i++) {
-				int pos;
-				if ((pos = words[i].find("emode=")) != string::npos) {
-					string enumstring = words[i].substr(pos+6);
-					stringstream enumstr;
-					enumstr << enumstring;
-					if (!(enumstr >> emode)) Complain("incorrect format for ellipticity mode; must specify 0, 1, 2, or 3");
-					if ((emode < 0) or (emode > 3)) Complain("ellipticity mode must be either 0, 1, 2, or 3");
-					remove_word(i);
-					i = nwords; // breaks out of this loop, without breaking from outer loop
-				}
-			}	
-
-			for (int i=2; i < nwords; i++) {
-				int pos;
-				if ((pos = words[i].find("pmode=")) != string::npos) {
-					string pnumstring = words[i].substr(pos+6);
-					stringstream pnumstr;
-					pnumstr << pnumstring;
-					if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
-					remove_word(i);
-					i = nwords; // breaks out of this loop, without breaking from outer loop
-				}
-			}
-
-			for (int i=nwords-1; i > 1; i--) {
-				int pos;
-				if ((pos = words[i].find("egrad=")) != string::npos) {
-					string egradstring = words[i].substr(pos+6);
-					stringstream egradstr;
-					egradstr << egradstring;
-					if (!(egradstr >> egrad_mode)) Complain("incorrect format for ellipticity gradient mode; must specify 0 or 1");
-					if ((egrad_mode < 0) or (egrad_mode > 1)) Complain("ellipticity gradient mode must be either 0 or 1");
-					egrad = true;
-					remove_word(i);
-				}
-			}	
-
-			for (int i=nwords-1; i > 1; i--) {
-				if (words[i]=="-fgrad") {
-					fgrad = true;
-					remove_word(i);
-				}
 			}
 
 			SB_ProfileName profile_name;
@@ -4843,7 +4804,148 @@ void QLens::process_commands(bool read_file)
 					delete[] ws;
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
+			} else {
+				for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("emode=")) != string::npos) {
+						string enumstring = words[i].substr(pos+6);
+						stringstream enumstr;
+						enumstr << enumstring;
+						if (!(enumstr >> emode)) Complain("incorrect format for ellipticity mode; must specify 0, 1, 2, or 3");
+						if ((emode < 0) or (emode > 3)) Complain("ellipticity mode must be either 0, 1, 2, or 3");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}	
+
+				for (int i=2; i < nwords; i++) {
+					int pos;
+					if ((pos = words[i].find("pmode=")) != string::npos) {
+						string pnumstring = words[i].substr(pos+6);
+						stringstream pnumstr;
+						pnumstr << pnumstring;
+						if (!(pnumstr >> pmode)) Complain("incorrect format for parameter mode; must specify 0, 1, or 2");
+						remove_word(i);
+						i = nwords; // breaks out of this loop, without breaking from outer loop
+					}
+				}
+
+				for (int i=nwords-1; i > 1; i--) {
+					int pos;
+					if ((pos = words[i].find("egrad=")) != string::npos) {
+						string egradstring = words[i].substr(pos+6);
+						stringstream egradstr;
+						egradstr << egradstring;
+						if (!(egradstr >> egrad_mode)) Complain("incorrect format for ellipticity gradient mode; must specify 0 or 1");
+						if ((egrad_mode < 0) or (egrad_mode > 1)) Complain("ellipticity gradient mode must be either 0 or 1");
+						egrad = true;
+						remove_word(i);
+					}
+				}	
+
+				for (int i=nwords-1; i > 1; i--) {
+					if (words[i]=="-fgrad") {
+						fgrad = true;
+						remove_word(i);
+					}
+				}
+
+				for (int i=2; i < nwords; i++) {
+					int pos0, pos1;
+					if ((pos0 = words[i].find("/anchor=")) != string::npos) {
+						if ((pos1 = words[i].find("x^")) != string::npos) {
+							string pvalstring, expstring, astr;
+							pvalstring = words[i].substr(0,pos1);
+							expstring = words[i].substr(pos1+2,pos0-pos1-2);
+							astr = words[i].substr(pos0+8);
+							int pos, snum, pnum;
+							double ratio, anchor_exponent;
+							stringstream rstr, expstr;
+							rstr << pvalstring;
+							rstr >> ratio;
+							expstr << expstring;
+							expstr >> anchor_exponent;
+							if ((pos = astr.find(",")) != string::npos) {
+								string snumstring, pnumstring;
+								snumstring = astr.substr(0,pos);
+								pnumstring = astr.substr(pos+1);
+								stringstream snumstr, pnumstr;
+								snumstr << snumstring;
+								if (!(snumstr >> snum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+								pnumstr << pnumstring;
+								if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+								if (snum > n_sb) Complain("specified source number to anchor to does not exist");
+								if ((snum != n_sb) and (pnum >= sb_list[snum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given source");
+								parameter_anchors[parameter_anchor_i].anchor_param = true;
+								parameter_anchors[parameter_anchor_i].use_exponent = true;
+								parameter_anchors[parameter_anchor_i].paramnum = i-2;
+								parameter_anchors[parameter_anchor_i].anchor_object_number = snum;
+								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+								parameter_anchors[parameter_anchor_i].ratio = ratio;
+								parameter_anchors[parameter_anchor_i].exponent = anchor_exponent;
+								parameter_anchor_i++;
+								words[i] = pvalstring;
+								ws[i].str(""); ws[i].clear();
+								ws[i] << words[i];
+							} else Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+						} else {
+							string pvalstring, astr;
+							pvalstring = words[i].substr(0,pos0);
+							astr = words[i].substr(pos0+8);
+							int pos, snum, pnum;
+							if ((pos = astr.find(",")) != string::npos) {
+								string snumstring, pnumstring;
+								snumstring = astr.substr(0,pos);
+								pnumstring = astr.substr(pos+1);
+								stringstream snumstr, pnumstr;
+								snumstr << snumstring;
+								if (!(snumstr >> snum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+								pnumstr << pnumstring;
+								if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+								if (snum > n_sb) Complain("specified source number to anchor to does not exist");
+								if ((snum != n_sb) and (pnum >= sb_list[snum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given source");
+								parameter_anchors[parameter_anchor_i].anchor_param = true;
+								parameter_anchors[parameter_anchor_i].use_implicit_ratio = true;
+								parameter_anchors[parameter_anchor_i].paramnum = i-2;
+								parameter_anchors[parameter_anchor_i].anchor_object_number = snum;
+								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+								parameter_anchor_i++;
+								words[i] = pvalstring;
+								ws[i].str(""); ws[i].clear();
+								ws[i] << words[i];
+							} else Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+						}
+					}
+				}	
+
+				for (int i=2; i < nwords; i++) {
+					if (words[i].find("anchor=")==0) {
+						string astr = words[i].substr(7);
+						int pos, snum, pnum;
+						if ((pos = astr.find(",")) != string::npos) {
+							string snumstring, pnumstring;
+							snumstring = astr.substr(0,pos);
+							pnumstring = astr.substr(pos+1);
+							stringstream snumstr, pnumstr;
+							snumstr << snumstring;
+							if (!(snumstr >> snum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+							pnumstr << pnumstring;
+							if (!(pnumstr >> pnum)) Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+							if (snum > n_sb) Complain("specified source number to anchor to does not exist");
+							if ((snum != n_sb) and (pnum >= sb_list[snum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given source");
+							parameter_anchors[parameter_anchor_i].anchor_param = true;
+							parameter_anchors[parameter_anchor_i].paramnum = i-2;
+							parameter_anchors[parameter_anchor_i].anchor_object_number = snum;
+							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
+							parameter_anchor_i++;
+							words[i] = "0";
+							ws[i].str(""); ws[i].clear();
+							ws[i] << words[i];
+						} else Complain("incorrect format for anchoring parameter; must type 'anchor=<sb_number>,<param_number>' in place of parameter");
+					}
+				}	
 			}
+
 			for (int i=nwords-1; i > 1; i--) {
 				if (words[i]=="-unlensed") {
 					unlensed = true;
@@ -5172,6 +5274,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -5184,14 +5287,10 @@ void QLens::process_commands(bool read_file)
 			{
 				int nmax = -1;
 				bool truncate = false;
-				bool vary_amp00 = false;
 				double amp00 = 0.1;
 				bool amp_specified = false;
 				for (int j=nwords-1; j >= 2; j--) {
-					if (words[j]=="-vary_amp0") {
-						vary_amp00 = true;
-						remove_word(j);
-					} else if (words[j]=="-truncate") {
+					if (words[j]=="-truncate") {
 						truncate = true;
 						remove_word(j);
 					} else if (words[j].find("n=")==0) {
@@ -5213,13 +5312,11 @@ void QLens::process_commands(bool read_file)
 				}
 				int pi = 2;
 				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
-				if ((vary_amp00) and (nwords > 8)) Complain("more than 6 parameters not allowed for model shapelet (with -vary_amp0)");
-				else if ((!vary_amp00) and (nwords > 7)) Complain("more than 5 parameters not allowed for model shapelet");
+				if (nwords > 7) Complain("more than 5 parameters not allowed for model shapelet");
 				if (nmax <= 0) Complain("nmax cannot be negative");
 				if (nwords >= 5) {
 					double sig;
 					double q, theta = 0, xc = 0, yc = 0;
-					if ((vary_amp00) and (!amp_specified) and (!(ws[pi++] >> amp00))) Complain("invalid amp00 parameter for model shapelet");
 					if (!(ws[pi++] >> sig)) Complain("invalid sigma parameter for model shapelet");
 					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model shapelet");
 					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
@@ -5239,11 +5336,10 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model shapelet");
 						}
 					}
-					nparams_to_vary = (vary_amp00) ? 6 : 5;
+					nparams_to_vary = 5;
 					param_vals.input(nparams_to_vary);
 					//param_vals[0]=amp00; // currently cannot vary amp00 as a free parameter (it would have to be removed from the source amplitudes when inverting)
 					int indx=0;
-					if (vary_amp00) param_vals[indx++] = amp00;
 					param_vals[indx++]=sig;
 					param_vals[indx++]=q;
 					param_vals[indx++]=theta;
@@ -5252,18 +5348,17 @@ void QLens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (amp00,sigma,q,theta,xc,yc) in model shapelet, plus optional c0/rfsc parameter or fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for five parameters (sigma,q,theta,xc,yc) in model shapelet, plus optional c0/rfsc parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					nonlinear_shapelet_amp00 = vary_amp00;
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_shapelet_source(amp00, sig, q, theta, xc, yc, nmax, vary_amp00, truncate);
+						add_shapelet_source(amp00, sig, q, theta, xc, yc, nmax, false, truncate);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (vary_parameters) {
 							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model shapelet");
@@ -5337,6 +5432,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -5411,6 +5507,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -5484,6 +5581,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -5558,6 +5656,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -5687,6 +5786,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -11583,7 +11683,6 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 				stringstream xirefstr;
 				xirefstr << xirefstring;
 				if (!(xirefstr >> xiref)) return false;
-				cout << "Now xiref=" << xiref << endl;
 				remove_word(i);
 			}
 		}	

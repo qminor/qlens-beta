@@ -754,7 +754,6 @@ QLens::QLens() : UCMC()
 	auto_sourcegrid = true;
 	auto_shapelet_scaling = true;
 	auto_shapelet_center = true;
-	nonlinear_shapelet_amp00 = false;
 	shapelet_scale_mode = 0;
 	ray_tracing_method = Interpolate;
 	weight_interpolation_by_imgplane_area = true;
@@ -818,6 +817,8 @@ QLens::QLens() : UCMC()
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
+	active_image_pixel_i_fgmask = NULL;
+	active_image_pixel_j_fgmask= NULL;
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -1074,7 +1075,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
 	auto_shapelet_center = lens_in->auto_shapelet_center;
-	nonlinear_shapelet_amp00 = lens_in->nonlinear_shapelet_amp00;
 	shapelet_scale_mode = lens_in->shapelet_scale_mode;
 	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
 	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
@@ -1128,6 +1128,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
+	active_image_pixel_i_fgmask = NULL;
+	active_image_pixel_j_fgmask = NULL;
 	Lmatrix_index = NULL;
 	if (lens_in->psf_matrix==NULL) psf_matrix = NULL;
 	else {
@@ -2811,7 +2813,9 @@ void QLens::remove_source_object(int sb_number)
 	for (i=0; i < n_sb; i++) {
 		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
 		if ((i != sb_number) and (sb_list[i]->center_anchored_to_source==true) and (sb_list[i]->get_center_anchor_number()==sb_number)) sb_list[i]->delete_center_anchor();
+		if (i != sb_number) sb_list[i]->unanchor_parameter(sb_list[sb_number]); // this unanchors the source if any of its parameters are anchored to the source being deleted
 	}
+
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->unanchor_parameter(sb_list[sb_number]); // this unanchors the lens if any of its parameters are anchored to the source being deleted
 	}
@@ -2969,6 +2973,18 @@ void QLens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 }
+
+void QLens::set_grid_from_pixels()
+{
+	grid_xlength = n_image_pixels_x * data_pixel_size;
+	grid_ylength = n_image_pixels_y * data_pixel_size;
+	cc_rmax = 0.5*dmax(grid_xlength, grid_ylength);
+	if (autocenter) autocenter = false;
+	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
+	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
+}
+
+
 
 void QLens::autogrid(double rmin, double rmax, double frac)
 {
@@ -6451,6 +6467,16 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		else if ((image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data has been defined"); return false; }
 	} else {
 		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return false; }
+		if (source_fit_mode==Shapelet_Source) {
+			bool found_shapelet = false;
+			for (int i=0; i < n_sb; i++) {
+				if (sb_list[i]->sbtype==SHAPELET) {
+					found_shapelet = true;
+					break; // currently only one shapelet source supported
+				}
+			}
+			if (!found_shapelet) { warn("no shapelet source object found"); return false; }
+		}
 	}
 	if (fitmodel != NULL) delete fitmodel;
 	fitmodel = new QLens(this);
@@ -6592,6 +6618,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				default:
 					die("surface brightness profile type not supported for fitting");
 			}
+			fitmodel->sb_list[i]->lens = fitmodel; // point to the fitmodel
 		}
 	}
 
@@ -6616,10 +6643,16 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 		}
 	}
-
 	for (i=0; i < n_sb; i++) {
 		if (fitmodel->sb_list[i]->center_anchored_to_lens==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
 		if (fitmodel->sb_list[i]->center_anchored_to_source==true) fitmodel->sb_list[i]->anchor_center_to_source(fitmodel->sb_list, sb_list[i]->get_center_anchor_number());
+		for (j=0; j < fitmodel->sb_list[i]->get_n_params(); j++) {
+			if (fitmodel->sb_list[i]->anchor_parameter_to_source[j]==true) {
+				SB_Profile *parameter_anchor_source = fitmodel->sb_list[sb_list[i]->parameter_anchor_source[j]->sb_number];
+				int paramnum = fitmodel->sb_list[i]->parameter_anchor_paramnum[j];
+				fitmodel->sb_list[i]->assign_anchored_parameter(j,paramnum,true,true,sb_list[i]->parameter_anchor_ratio[j],sb_list[i]->parameter_anchor_exponent[j],parameter_anchor_source);
+			} 
+		}
 	}
 
 	fitmodel->fitmethod = fitmethod;
@@ -6666,15 +6699,16 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 void QLens::update_anchored_parameters_and_redshift_data()
 {
-	for (int i=0; i < nlens; i++) {
-		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
-		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
-		lens_list[i]->update_anchored_parameters();
-	}
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source)) {
 			sb_list[i]->update_anchor_center();
 		}
+		sb_list[i]->update_anchored_parameters();
+	}
+	for (int i=0; i < nlens; i++) {
+		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
+		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
+		lens_list[i]->update_anchored_parameters();
 	}
 	update_lens_redshift_data();
 	reset_grid();
@@ -11513,9 +11547,17 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) return false;
 	}
-	image_pixel_grid->find_surface_brightness(plot_foreground_only);
+	if (!plot_foreground_only) {
+		image_pixel_grid->find_surface_brightness(plot_foreground_only,true);
+		assign_foreground_mappings();
+		calculate_foreground_pixel_surface_brightness();
+		store_foreground_pixel_surface_brightness();
+	} else {
+		image_pixel_grid->find_surface_brightness(plot_foreground_only);
+	}
+	//image_pixel_grid->find_surface_brightness(plot_foreground_only);
 	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
-	if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
+	if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 	store_image_pixel_surface_brightness();
 
 	clear_pixel_matrices();
@@ -11534,7 +11576,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		n_image_pixels_x /= reduce_factor;
 		n_image_pixels_y /= reduce_factor;
 		vectorize_image_pixel_surface_brightness();
-		PSF_convolution_pixel_vector(image_surface_brightness,verbose);
+		PSF_convolution_pixel_vector(image_surface_brightness,false,verbose);
 		store_image_pixel_surface_brightness();
 		clear_pixel_matrices();
 
@@ -11777,6 +11819,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
 		}
 	}
+	bool at_least_one_foreground_src = false;
+	for (int k=0; k < n_sb; k++) {
+		if (!sb_list[k]->is_lensed) {
+			at_least_one_foreground_src = true;
+			break;
+		}
+	}
+
 
 	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations();
 	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners();
@@ -11882,6 +11932,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if (assign_pixel_mappings(verbal)==false) {
 			return 2e30;
 		}
+		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
+		assign_foreground_mappings();
 
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Number of active image pixels: " << image_npixels << endl;
@@ -11949,7 +12001,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		bool foreground_only = (nlens==0) ? true : false;
 		image_pixel_grid->find_surface_brightness(foreground_only);
 		vectorize_image_pixel_surface_brightness();
-		PSF_convolution_pixel_vector(image_surface_brightness,verbal);
+		PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 		store_image_pixel_surface_brightness();
 
 		if (n_image_prior) {
@@ -11966,20 +12018,22 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);
 		// note, if nonlinear_shapelet_amp00==true, the following function will also put the shapelet amp00 into sbprofile_surface_brightness
+		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
+		assign_foreground_mappings();
 		calculate_foreground_pixel_surface_brightness();
 
 		if (regularization_method != None) create_regularization_matrix_dense();
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		create_lensing_matrices_from_Lmatrix_dense(verbal);
 
-		int n_data_pixels=0;
-		for (i=0; i < image_pixel_data->npixels_x; i++) {
-			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if (image_pixel_data->in_mask[i][j]) {
-					n_data_pixels++;
-				}
-			}
-		}
+		//int n_data_pixels=0;
+		//for (i=0; i < image_pixel_data->npixels_x; i++) {
+			//for (j=0; j < image_pixel_data->npixels_y; j++) {
+				//if (image_pixel_data->in_mask[i][j]) {
+					//n_data_pixels++;
+				//}
+			//}
+		//}
 		if (optimize_regparam) optimize_regularization_parameter(verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -12023,30 +12077,36 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double dchisq, dchisq2;
 	int img_index;
 	int count=0;
-	int n_data_pixels=0;
+	//int n_data_pixels=0;
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if (image_pixel_data->in_mask[i][j]) {
-				n_data_pixels++;
-				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+			if ((image_pixel_data->in_mask[i][j]) or ((at_least_one_foreground_src) and (image_pixel_data->foreground_mask[i][j]))) {
+				//n_data_pixels++;
+				if ((image_pixel_data->in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					if (at_least_one_foreground_src) chisq += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					else chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
 					count++;
 				} else {
-					chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance;
+					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
+					if (at_least_one_foreground_src) chisq += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance;
+					else if (image_pixel_data->in_mask[i][j]) chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
 				}
 			}
 		}
 	}
 	chisq0 = chisq;
 
+	int n_tot_pixels;
+	if (at_least_one_foreground_src) n_tot_pixels = image_npixels_fgmask;
+	else n_tot_pixels = image_pixel_data->n_required_pixels;
 	if (group_id==0) {
 		if (logfile.is_open()) {
-			logfile << "it=" << chisq_it << " chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << " ";
+			logfile << "it=" << chisq_it << " chisq0=" << chisq << " chisq0_per_pixel=" << chisq/n_tot_pixels << " ";
 			if (vary_pixel_fraction) logfile << "F=" << ((double) source_npixels)/image_npixels << " ";
 		}
 	}
-	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
+	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/n_tot_pixels << endl;
 	//double chisqreg;
 	if (source_fit_mode==Pixellated_Source) {
 		if ((regularization_method != None) and (vary_regularization_parameter)) {
@@ -12119,27 +12179,26 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			initialize_pixel_matrices(verbal);
 			PSF_convolution_Lmatrix(verbal);
 			source_pixel_grid->fill_surface_brightness_vector();
-			calculate_image_pixel_surface_brightness();
+			calculate_image_pixel_surface_brightness(false);
 		} else if (source_fit_mode==Shapelet_Source) {
 #ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
+			if (show_wtime) {
+				wtime0 = omp_get_wtime();
+			}
 #endif
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 			else image_pixel_grid->activate_extended_mask(); 
 
-			image_pixel_grid->find_surface_brightness();
+			image_pixel_grid->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness();
 #ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for calculating SB outside mask: " << wtime << endl;
-	}
+			if (show_wtime) {
+				wtime = omp_get_wtime() - wtime0;
+				if (mpi_id==0) cout << "Wall time for calculating SB outside mask: " << wtime << endl;
+			}
 #endif
-
-			PSF_convolution_pixel_vector(image_surface_brightness,verbal);
+			PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 			image_pixel_grid->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grid (used for the inversion)
 
 			// The following works, but is slower...after awhile you can probably delete these lines
@@ -12151,9 +12210,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			clear_pixel_matrices();
 			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 			else image_pixel_grid->activate_extended_mask(); 
-			image_pixel_grid->find_surface_brightness();
+			image_pixel_grid->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness();
-			PSF_convolution_pixel_vector(image_surface_brightness,verbal);
+			PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 			store_image_pixel_surface_brightness();
 		}
 		if (default_imgpixel_nsplit != old_imgpixel_nsplit) {
@@ -12246,7 +12305,7 @@ double QLens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
 	}
 	image_pixel_grid->find_surface_brightness();
 	vectorize_image_pixel_surface_brightness();
-	PSF_convolution_pixel_vector(image_surface_brightness,verbal); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
+	PSF_convolution_pixel_vector(image_surface_brightness,false,verbal); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 	store_image_pixel_surface_brightness();
 
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
@@ -13613,6 +13672,8 @@ QLens::~QLens()
 	if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
+	if (active_image_pixel_i_fgmask != NULL) delete[] active_image_pixel_i_fgmask;
+	if (active_image_pixel_j_fgmask != NULL) delete[] active_image_pixel_j_fgmask;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;

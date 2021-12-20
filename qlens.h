@@ -344,7 +344,7 @@ struct ParamAnchor {
 	int anchor_paramnum;
 	bool use_implicit_ratio;
 	bool use_exponent;
-	int anchor_lens_number;
+	int anchor_object_number;
 	double ratio;
 	double exponent;
 	ParamAnchor() {
@@ -695,7 +695,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_ccspline;
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
-	bool nonlinear_shapelet_amp00;
 	int shapelet_scale_mode;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
@@ -705,8 +704,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int image_npixels, source_npixels;
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
+	int image_npixels_fgmask;
+	int *active_image_pixel_i_fgmask;
+	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
 	double *sbprofile_surface_brightness;
+	//double *sbprofile_surface_brightness_fgmask;
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
 
@@ -719,6 +722,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<int> *Lmatrix_index_rows;
 
 	bool assign_pixel_mappings(bool verbal);
+	void assign_foreground_mappings();
 	double *Dvector;
 	double *Fmatrix;
 	int *Fmatrix_index;
@@ -735,7 +739,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void convert_Lmatrix_to_dense();
 	void assign_Lmatrix_shapelets(bool verbal);
-	void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
+	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
 	void PSF_convolution_Lmatrix_dense(bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
@@ -743,7 +747,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_regparam(const double logreg);
 	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void calculate_image_pixel_surface_brightness_dense();
+	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
 	void create_regularization_matrix_dense();
 	void generate_Rmatrix_norm_dense();
 	void generate_Rmatrix_shapelet_gradient();
@@ -790,7 +794,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void assign_Lmatrix(bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	//void PSF_convolution_image_pixel_vector(bool verbal = false);
-	void PSF_convolution_pixel_vector(double *surface_brightness_vector, bool verbal = false);
+	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
 	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
@@ -807,10 +811,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
-	void calculate_image_pixel_surface_brightness();
+	void calculate_image_pixel_surface_brightness(const bool calculate_foreground = true);
 	void calculate_foreground_pixel_surface_brightness();
 	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness();
+	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root);
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
@@ -1196,6 +1201,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool isspherical();
 	bool islens() { return (nlens > 0); }
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
+	void set_grid_from_pixels();
+
 	void set_gridsize(double xl, double yl);
 	void set_gridcenter(double xc, double yc);
 	void autogrid(double rmin, double rmax, double frac);

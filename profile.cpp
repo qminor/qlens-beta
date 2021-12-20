@@ -43,6 +43,7 @@ void LensProfile::setup_lens_properties(const int parameter_mode, const int subc
 
 void LensProfile::setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
+	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	center_defined = true;
 	parameter_mode = pmode_in;
 	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
@@ -287,10 +288,10 @@ void LensProfile::copy_integration_tables(const LensProfile* lens_in)
 	}
 }
 
-void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
+void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool resize)
 {
+	int old_nparams = (resize) ? n_params : 0;
 	n_params = n_params_in;
-	n_vary_params = 0;
 	vary_params.input(n_params);
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
@@ -320,7 +321,7 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 	parameter_anchor_exponent = new double[n_params];
 	param = new double*[n_params];
 	for (int i=0; i < n_params; i++) {
-		vary_params[i] = false;
+		//vary_params[i] = false;
 		anchor_parameter_to_lens[i] = false;
 		parameter_anchor_lens[i] = NULL;
 		anchor_parameter_to_source[i] = false;
@@ -328,6 +329,15 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in)
 		parameter_anchor_paramnum[i] = -1;
 		parameter_anchor_ratio[i] = 1.0;
 		parameter_anchor_exponent[i] = 1.0;
+	}
+	if (n_params > old_nparams) {
+		for (int i=old_nparams; i < n_params; i++) {
+			vary_params[i] = false;
+		}
+	}
+	n_vary_params = 0;
+	for (int i=0; i < n_params; i++) {
+		if (vary_params[i]) n_vary_params++;
 	}
 }
 

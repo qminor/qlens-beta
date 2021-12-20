@@ -183,6 +183,7 @@ class ImagePixelGrid : public Sort
 	lensvector **center_pts;
 	lensvector **center_sourcepts;
 	double **surface_brightness;
+	double **foreground_surface_brightness;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 	bool **fit_to_data;
@@ -193,6 +194,7 @@ class ImagePixelGrid : public Sort
 	int **nsplits;
 	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
+	int **pixel_index_fgmask;
 	int **twist_status;
 	lensvector **twist_pts;
 	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
@@ -245,7 +247,7 @@ class ImagePixelGrid : public Sort
 	void set_source_pixel_grid(SourcePixelGrid* source_pixel_ptr) { source_pixel_grid = source_pixel_ptr; }
 	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
-	void find_surface_brightness(bool plot_foreground_only = false);
+	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false);
 	void plot_surface_brightness(string outfile_root, bool plot_residual = false, bool show_only_mask = true, bool show_extended_mask = false, bool show_noise_thresh = false, bool plot_log = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
@@ -268,6 +270,7 @@ struct ImagePixelData : public Sort
 	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	bool **in_mask;
 	bool **extended_mask;
+	bool **foreground_mask;
 	double *xvals, *yvals, *pixel_xcvals, *pixel_ycvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
@@ -279,6 +282,7 @@ struct ImagePixelData : public Sort
 		high_sn_pixel = NULL;
 		in_mask = NULL;
 		extended_mask = NULL;
+		foreground_mask = NULL;
 		xvals = NULL;
 		yvals = NULL;
 		pixel_xcvals = NULL;

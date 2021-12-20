@@ -105,6 +105,12 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	bool center_anchored_to_lens, center_anchored_to_source;
 	LensProfile* center_anchor_lens;
 	SB_Profile* center_anchor_source;
+	SB_Profile** parameter_anchor_source;
+	int* parameter_anchor_paramnum;
+	double* parameter_anchor_ratio;
+	double* parameter_anchor_exponent;
+	bool* anchor_parameter_to_source;
+
 	int *indxptr; // points to important integer values for subclasses that uses them (e.g. shapelets)
 	QLens* lens;
 
@@ -113,6 +119,20 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	SB_Profile(const SB_Profile* sb_in);
 	~SB_Profile() {
 		if (param != NULL) delete[] param;
+		if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+		if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
+		if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+		if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+		if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+	}
+	void set_null_ptrs_and_values()
+	{
+		anchor_parameter_to_source = NULL;
+		parameter_anchor_source = NULL;
+		parameter_anchor_paramnum = NULL;
+		param = NULL;
+		parameter_anchor_ratio = NULL;
+		parameter_anchor_exponent = NULL;
 	}
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
@@ -167,9 +187,15 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void get_parameters(double* params);
 	bool get_specific_parameter(const string name_in, double& value);
 	bool update_specific_parameter(const string name_in, const double& value);
+	bool update_specific_parameter(const int paramnum, const double& value);
+
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	void update_anchored_parameters();
 	void update_anchor_center();
+	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source);
+	void copy_parameter_anchors(const SB_Profile* sb_in);
+	void unanchor_parameter(SB_Profile* param_anchor_source);
 
 	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0); // for fitting to isophote data
 	double sbprofile_loglike(double *params);

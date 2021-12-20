@@ -100,7 +100,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void copy_base_lensdata(const LensProfile* lens_in);
 	void copy_source_data_to_lens(const SB_Profile* in);
 
-	void set_nparams_and_anchordata(const int &n_params_in);
+	void set_nparams_and_anchordata(const int &n_params_in, const bool resize = false);
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
 	void set_angle(const double &theta_degrees);
@@ -228,7 +228,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		param = NULL;
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
-		lens = NULL;
 		zlens = zlens_current = 0;
 		zfac = 1.0;
 	}
