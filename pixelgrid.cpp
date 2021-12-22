@@ -6838,7 +6838,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_extended_mask, bool show_noise_thresh, bool plot_log)
+void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_noise_thresh, bool plot_log)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -6861,9 +6861,10 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j]) or ((show_extended_mask) and (lens->image_pixel_data->extended_mask[i][j]))) {
+			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j])) {
 				if (!plot_residual) {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
+					//if (sb*0.0 != 0.0) die("WTF %g %g",surface_brightness[i][j],foreground_surface_brightness[i][j]);
 					if (!plot_log) pixel_image_file << sb;
 					else pixel_image_file << log(abs(sb));
 				} else {
@@ -6879,7 +6880,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 				}
 			} else {
 				if (plot_residual) {
-					if ((show_only_mask) or (show_extended_mask)) pixel_image_file << "NaN";
+					if (show_only_mask) pixel_image_file << "NaN";
 					else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
 				} else {
 					pixel_image_file << "NaN";

@@ -11542,6 +11542,10 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		active_image_pixel_j = NULL;
 	}
 
+	if ((show_extended_mask) and (image_pixel_data != NULL)) {
+		if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+		else image_pixel_grid->activate_extended_mask(); 
+	}
 	if (source_fit_mode==Pixellated_Source) {
 		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
@@ -11599,9 +11603,12 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	}
 
 	if (output_fits==false) {
-		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only,show_extended_mask,show_noise_thresh);
+		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only,show_noise_thresh);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
+	}
+	if ((show_extended_mask) and (image_pixel_data != NULL)) {
+		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
 
 	int i,j;

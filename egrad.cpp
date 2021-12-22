@@ -548,7 +548,7 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 	//cout << "minq=" << egrad_minq << " ximin=" << ximin << " ximax=" << ximax << endl;
 	//double xi = BrentsMethod(xiptr,x,y,0.9*ximin,1.1*ximax,1e-4);
 	//cout << "Trying x=" << x << ", y=" << y << ", minq=" << egrad_minq << ", ximin=" << ximin << ", ximax=" << ximax << endl;
-	double xi = BrentsMethod(xiptr,x,y,0.4*ximin,1.6*ximax,1e-4);
+	double xi = BrentsMethod(xiptr,x,y,0.4*ximin,1.6*ximax,1e-7);
 	if ((xi > (1.1*ximax)) or (xi < (0.9*ximin))) {
 		cout << "WARNING: xi out of expected range (xi=" << xi << ", ximin=" << ximin << ", ximax=" << ximax << ")" << endl;
 		double ep,th;
