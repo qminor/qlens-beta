@@ -10940,7 +10940,7 @@ void QLens::process_commands(bool read_file)
 				if (sbptr->fourier_mode_exists(3)) include_fourier_m3_mode = true; 
 				if ((n_higher_harmonics >= 3) and (!sbptr->fourier_mode_exists(5))) Complain("sbprofile object must have Fourier mode m=5 if fmodes > 2 is specified"); 
 				if ((n_higher_harmonics >= 4) and (!sbptr->fourier_mode_exists(6))) Complain("sbprofile object must have Fourier mode m=6 if fmodes > 2 is specified"); 
-				if (!SB_Profile::fourier_sb_perturbation) Complain("fourier_sb_perturbation must be set to 'on' to fit sbprofile object to isofit profiles");
+				if (!SB_Profile::fourier_sb_perturbation) Complain("fourier_sbmode must be set to 'on' to fit sbprofile object to isofit profiles");
 			}
 			int n_sbfit_livepts = 300;
 			bool verbal = true;

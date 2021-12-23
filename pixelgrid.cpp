@@ -6278,6 +6278,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	pixel_index_fgmask = new int*[x_N];
 	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
 	surface_brightness = new double*[x_N];
+	foreground_surface_brightness = new double*[x_N];
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
 	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
@@ -8327,7 +8328,7 @@ void QLens::assign_foreground_mappings()
 	int i,j;
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if (image_pixel_data->foreground_mask[i][j]) {
+			if ((!image_pixel_data) or (image_pixel_data->foreground_mask[i][j])) {
 				image_npixels_fgmask++;
 			}
 		}
@@ -8341,7 +8342,7 @@ void QLens::assign_foreground_mappings()
 	int image_pixel_index=0;
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if (image_pixel_data->foreground_mask[i][j]) {
+			if ((!image_pixel_data) or (image_pixel_data->foreground_mask[i][j])) {
 				active_image_pixel_i_fgmask[image_pixel_index] = i;
 				active_image_pixel_j_fgmask[image_pixel_index] = j;
 				//cout << "Assigining " << image_pixel_index << " to (" << i << "," << j << ")" << endl;
