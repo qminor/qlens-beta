@@ -9621,7 +9621,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 	double chisq, minchisq = 1e30;
 	while (!chain_file.eof()) {
 		chain_file.getline(dataline,n_characters);
-		if (dataline[0]=='#') continue;
+		if (dataline[0]=='#') { nline++; continue; }
 		istringstream datastream(dataline);
 		datastream >> weight;
 		for (i=0; i < n_tot_parameters; i++) {
@@ -9723,6 +9723,7 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 	while (!chain_file.eof()) {
 		chain_file.getline(dataline,n_characters);
 		//if (dataline[0]=='#') cout << string(dataline) << endl;
+		if (dataline[0]=='#') { nline++; continue; }
 		istringstream datastream(dataline);
 		datastream >> weight;
 		for (i=0; i < n_tot_parameters; i++) {
@@ -12081,13 +12082,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	} else {
 		// Shapelet source mode
-		initialize_pixel_matrices_shapelets(verbal);
-
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		assign_foreground_mappings();
 		calculate_foreground_pixel_surface_brightness();
 		store_foreground_pixel_surface_brightness();
 		if ((auto_shapelet_scaling) or (auto_shapelet_center)) find_shapelet_scaling_parameters(verbal);
+		initialize_pixel_matrices_shapelets(verbal);
 
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);
