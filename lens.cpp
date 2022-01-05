@@ -9598,9 +9598,58 @@ bool QLens::add_dparams_to_chain()
 	return true;
 }
 
+bool QLens::adopt_bestfit_point_from_chain()
+{
+	int i, nparams, n_dparams, n_tot_parameters;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams >> n_dparams;
+	n_tot_parameters = nparams + n_dparams;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	pnumfile.close();
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[n_fit_parameters];
+
+	string chain_str = fit_output_dir + "/" + fit_output_filename;
+	ifstream chain_file(chain_str.c_str());
+
+	unsigned long nline=0, line_num;
+	double weight, max_weight = -1e30;
+	double chisq, minchisq = 1e30;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+		istringstream datastream(dataline);
+		datastream >> weight;
+		for (i=0; i < n_tot_parameters; i++) {
+			datastream >> params[i];
+		}
+		datastream >> chisq;
+		//cout << params[paramnum] << endl;
+		if (chisq < minchisq) {
+			//max_weight = weight;
+			minchisq = chisq;
+			line_num = nline;
+		}
+
+		nline++;
+	}
+	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines)" << endl;
+	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
+	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
+
+	dvector chain_params(params,n_fit_parameters);
+	adopt_model(chain_params);
+
+	delete[] params;
+	return true;
+}
+
 bool QLens::adopt_point_from_chain(const unsigned long line_num)
 {
-
 	int i, nparams, n_dparams_old;
 	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 	ifstream pnumfile(pnumfile_str.c_str());
@@ -11521,10 +11570,11 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool show_mask_only, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_mask_only, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool verbose)
 {
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
+	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 	else if (n_sb==0) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_residual==true) and (image_pixel_data==NULL)) { warn("cannot plot residual image, no pixel data image has been loaded"); return false; }
 	double xmin,xmax,ymin,ymax;
@@ -11551,11 +11601,22 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) return false;
 	}
-	if (!plot_foreground_only) {
-		image_pixel_grid->find_surface_brightness(plot_foreground_only,true);
+	/*
+	image_pixel_grid->find_surface_brightness(plot_foreground_only,omit_foreground);
+	if ((!omit_foreground) and (!plot_foreground_only)) {
 		assign_foreground_mappings();
 		calculate_foreground_pixel_surface_brightness();
 		store_foreground_pixel_surface_brightness();
+	}
+	*/
+
+	if (!plot_foreground_only) {
+		image_pixel_grid->find_surface_brightness(plot_foreground_only,true);
+		if (!omit_foreground) {
+			assign_foreground_mappings();
+			calculate_foreground_pixel_surface_brightness();
+			store_foreground_pixel_surface_brightness();
+		}
 	} else {
 		image_pixel_grid->find_surface_brightness(plot_foreground_only);
 	}
@@ -12020,14 +12081,17 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	} else {
 		// Shapelet source mode
-		if ((auto_shapelet_scaling) or (auto_shapelet_center)) find_shapelet_scaling_parameters(verbal);
 		initialize_pixel_matrices_shapelets(verbal);
-		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
-		PSF_convolution_Lmatrix_dense(verbal);
-		// note, if nonlinear_shapelet_amp00==true, the following function will also put the shapelet amp00 into sbprofile_surface_brightness
+
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		assign_foreground_mappings();
 		calculate_foreground_pixel_surface_brightness();
+		store_foreground_pixel_surface_brightness();
+		if ((auto_shapelet_scaling) or (auto_shapelet_center)) find_shapelet_scaling_parameters(verbal);
+
+		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
+		PSF_convolution_Lmatrix_dense(verbal);
+		// note, if nonlinear_shapelet_amp00==true, the following function will also put the shapelet amp00 into sbprofile_surface_brightness
 
 		if (regularization_method != None) create_regularization_matrix_dense();
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;

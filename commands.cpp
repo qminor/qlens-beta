@@ -7028,6 +7028,9 @@ void QLens::process_commands(bool read_file)
 					if (nwords != 3) Complain("one argument required for command 'fit adopt_chain_point' (line_number)");
 					if (!(ws[2] >> pnum)) Complain("incorrect format for argument to 'fit adopt_chain_point' (line number should be integer)");
 					if (adopt_point_from_chain(pnum)==false) Complain("could not load point from chain");
+				} else if (words[1]=="adopt_chain_bestfit") {
+					if (nwords != 2) Complain("no arguments required for command 'fit adopt_chain_bestfit'");
+					if (adopt_bestfit_point_from_chain()==false) Complain("could not load point from chain");
 				} else if (words[1]=="adopt_point_prange") {
 					int paramnum;
 					double minval, maxval;
@@ -8334,6 +8337,7 @@ void QLens::process_commands(bool read_file)
 				bool replot = false;
 				bool plot_residual = false;
 				bool plot_foreground_only = false;
+				bool omit_foreground = false;
 				bool show_mask_only = true;
 				bool show_extended_mask = false;
 				bool plot_fits = false;
@@ -8366,8 +8370,9 @@ void QLens::process_commands(bool read_file)
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
 						else if (args[i]=="-thresh") show_noise_thresh = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
-						else if (args[i]=="-nomask") { show_mask_only = false; }
-						else if (args[i]=="-emask") { show_extended_mask = true; }
+						else if (args[i]=="-nofg") omit_foreground = true;
+						else if (args[i]=="-nomask") show_mask_only = false;
+						else if (args[i]=="-emask") show_extended_mask = true;
 						else if (args[i]=="-fits") plot_fits = true;
 						else if (args[i]=="-nosrc") omit_source = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
@@ -8438,7 +8443,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh,plot_log)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh,plot_log)==true)) {
 							if ((subcomp) and (show_cc)) {
 								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							}
@@ -8456,9 +8461,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range1,contstring);
 								else run_plotter_file("imgpixel",words[2],range1,contstring);
@@ -8469,11 +8474,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh);
 								if ((source_pixel_grid != NULL) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_mask_only,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
 							if ((!replot) and (source_pixel_grid != NULL)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring);

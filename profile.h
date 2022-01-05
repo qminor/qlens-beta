@@ -79,6 +79,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
+	int n_param2;
 	int lensprofile_nparams; // just the parameters that define the kappa profile (rather than the angular structure or center coord's)
 	bool angle_param_exists;
 	int ellipticity_paramnum; // used to keep track of ellipticity parameter (this feature is used only by qtab models)

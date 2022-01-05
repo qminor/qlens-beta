@@ -913,7 +913,8 @@ void LensProfile::set_geometric_param_pointers(int qi)
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
 			param[qi++] = &epsilon1;
-			param[qi++] = &epsilon2;
+			param[qi] = &epsilon2;
+			angle_param[qi++] = false;
 			angle_param_exists = false; // there is no angle parameter if ellipticity components are being used
 			ellipticity_paramnum = -1; // no single ellipticity parameter here
 		} else {
@@ -926,14 +927,12 @@ void LensProfile::set_geometric_param_pointers(int qi)
 			angle_param[qi++] = true;
 			angle_param_exists = true;
 		}
-		if (!center_anchored) {
-			if (!lensed_center_coords) {
-				param[qi++] = &x_center;
-				param[qi++] = &y_center;
-			} else {
-				param[qi++] = &x_center_lensed;
-				param[qi++] = &y_center_lensed;
-			}
+		if (!lensed_center_coords) {
+			param[qi++] = &x_center;
+			param[qi++] = &y_center;
+		} else {
+			param[qi++] = &x_center_lensed;
+			param[qi++] = &y_center_lensed;
 		}
 	} else {
 		angle_param_exists = true;

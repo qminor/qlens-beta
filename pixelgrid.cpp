@@ -6922,8 +6922,8 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
 					for (i=0; i < x_N; i++) {
-						if (!plot_residual) pixels[i] = surface_brightness[i][j];
-						else pixels[i] = lens->image_pixel_data->surface_brightness[i][j] - surface_brightness[i][j];
+						if (!plot_residual) pixels[i] = surface_brightness[i][j] + foreground_surface_brightness[i][j];
+						else pixels[i] = lens->image_pixel_data->surface_brightness[i][j] - surface_brightness[i][j] - foreground_surface_brightness[i][j];
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
@@ -7555,15 +7555,17 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double xcavg=0, ycavg=0;
 	double totsurf=0;
 	double area, min_area = 1e30, max_area = -1e30;
-	double xcmin, ycmin;
+	double xcmin, ycmin, sb;
 	int i,j;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				xcavg += area*surface_brightness[i][j]*center_sourcepts[i][j][0];
-				ycavg += area*surface_brightness[i][j]*center_sourcepts[i][j][1];
-				totsurf += area*surface_brightness[i][j];
+				xcavg += area*sb*center_sourcepts[i][j][0];
+				ycavg += area*sb*center_sourcepts[i][j][1];
+				totsurf += area*sb;
 			}
 		}
 	}
@@ -7573,10 +7575,11 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
-				rsqavg += area*surface_brightness[i][j]*rsq;
+				rsqavg += area*sb*rsq;
 			}
 		}
 	}
@@ -7594,7 +7597,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	int ntot=0, nout=0;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
 				ntot++;
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
 				if (sqrt(rsq) > 2*sig) {
@@ -7610,7 +7614,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	const double window_size_for_srcarea = 1;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (surface_brightness[i][j] > 3*pixel_noise)) {
+			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
 				il = i - window_size_for_srcarea;
 				ih = i + window_size_for_srcarea;
 				jl = j - window_size_for_srcarea;

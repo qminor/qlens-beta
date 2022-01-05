@@ -835,7 +835,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -1092,6 +1092,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void multinest(const bool resume_previous, const bool skip_run);
 	void chi_square_twalk();
 	bool add_dparams_to_chain();
+	bool adopt_bestfit_point_from_chain();
 	bool adopt_point_from_chain(const unsigned long point_num);
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);

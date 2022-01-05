@@ -629,7 +629,8 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 	if (!ellipticity_gradient) {
 		if (use_sb_ellipticity_components) {
 			param[qi++] = &epsilon1;
-			param[qi++] = &epsilon2;
+			param[qi] = &epsilon2;
+			angle_param[qi++] = false;
 			angle_param_exists = false; // there is no angle parameter if ellipticity components are being used
 		} else {
 			param[qi++] = &q;
@@ -2914,6 +2915,7 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 				//}
 				//else {
 					//Rmatrix_elements[n] = 1.0;
+					//*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
 					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
 					//Rmatrix_elements[n] = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig);
 					//Rmatrix_elements[n] = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig);
