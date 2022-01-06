@@ -755,6 +755,7 @@ QLens::QLens() : UCMC()
 	auto_shapelet_scaling = true;
 	auto_shapelet_center = true;
 	shapelet_scale_mode = 0;
+	shapelet_max_scale = 1.0;
 	ray_tracing_method = Interpolate;
 	weight_interpolation_by_imgplane_area = true;
 	interpolate_sb_3pt = true; // if false, will not use 3-point interpolation even when ray tracing method is set to "interpolate"
@@ -1076,6 +1077,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
 	auto_shapelet_center = lens_in->auto_shapelet_center;
 	shapelet_scale_mode = lens_in->shapelet_scale_mode;
+	shapelet_max_scale = lens_in->shapelet_max_scale;
 	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
 	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
 
@@ -9628,7 +9630,6 @@ bool QLens::adopt_bestfit_point_from_chain()
 			datastream >> params[i];
 		}
 		datastream >> chisq;
-		//cout << params[paramnum] << endl;
 		if (chisq < minchisq) {
 			//max_weight = weight;
 			minchisq = chisq;

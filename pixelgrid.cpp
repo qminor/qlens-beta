@@ -7591,6 +7591,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		scale = sig;
 	else if (lens->shapelet_scale_mode==1)
 		scale = window_scaling*sig/sqrt(nn);
+	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
 	xcenter = xcavg;
 	ycenter = ycavg;
 

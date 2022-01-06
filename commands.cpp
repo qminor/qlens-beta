@@ -10625,6 +10625,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(auto_shapelet_scaling,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="shapelet_max_scale")
+		{
+			double param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid scale");
+				shapelet_max_scale = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "shapelet_max_scale = " << shapelet_max_scale << endl;
+			} else Complain("must specify either zero or one argument (shapelet_max_scale)");
+		}
 		else if (words[0]=="optimize_regparam")
 		{
 			if (nwords==1) {

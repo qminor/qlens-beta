@@ -696,6 +696,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
 	int shapelet_scale_mode;
+	double shapelet_max_scale;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
 
