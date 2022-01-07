@@ -3957,7 +3957,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	for (i=0; i < grid_logr_N; i++) tabfile >> grid_logrvals[i];
 	for (j=0; j < grid_phi_N; j++) tabfile >> grid_phivals[j];
 
-	rmin_einstein_radius = exp(grid_logrvals[0]);
+	rmin_einstein_radius = exp(2*grid_logrvals[0]);
 	rmax_einstein_radius = exp(grid_logrvals[grid_logr_N-1]);
 
 	for (i=0; i < grid_logr_N; i++) {

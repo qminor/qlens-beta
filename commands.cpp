@@ -4479,11 +4479,17 @@ void QLens::process_commands(bool read_file)
 							} else {
 								if (!add_tabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 							}
+							cout << "GOT HERE" << endl;
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
+							cout << "HI0" << endl;
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
+							cout << "HI1" << endl;
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							cout << "HI2" << endl;
 							if (tabulate_existing_lens) remove_lens(lnum);
+							cout << "HI3" << endl;
 							if (auto_set_primary_lens) set_primary_lens();
+							cout << "GOT HERE?" << endl;
 						}
 					}
 					else Complain("tab requires at least 2 parameters (kscale, rscale)");
@@ -10357,6 +10363,15 @@ void QLens::process_commands(bool read_file)
 					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
+		}
+		else if (words[0]=="include_emask_in_chisq")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include extended mask in chisq & inversion (include_emask_in_chisq): " << display_switch(include_extended_mask_in_inversion) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_emask_in_chisq' command; must specify 'on' or 'off'");
+				set_switch(include_extended_mask_in_inversion,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="nimg_sb_frac_threshold")
 		{

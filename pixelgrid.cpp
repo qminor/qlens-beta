@@ -1091,18 +1091,20 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	long int ntot = 0;
 	for (i=0; i < image_pixel_grid->x_N; i++) {
 		for (j=0; j < image_pixel_grid->y_N; j++) {
-			if (lens->image_pixel_data->extended_mask[i][j]) ntot++;
+			if (lens->image_pixel_data->in_mask[i][j]) ntot++;
+			//if (lens->image_pixel_data->extended_mask[i][j]) ntot++;
 		}
 	}
-	int *extended_mask_i = new int[ntot];
-	int *extended_mask_j = new int[ntot];
+	int *mask_i = new int[ntot];
+	int *mask_j = new int[ntot];
 	int n_cell=0;
-	// you shouldn't have to calculate this again...this was already calculated in redo_lensing_calculations. Save extended_mask_i arrays?
+	// you shouldn't have to calculate this again...this was already calculated in redo_lensing_calculations. Save mask_i arrays?
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if (lens->image_pixel_data->extended_mask[i][j]) {
-				extended_mask_i[n_cell] = i;
-				extended_mask_j[n_cell] = j;
+			if (lens->image_pixel_data->in_mask[i][j]) {
+			//if (lens->image_pixel_data->extended_mask[i][j]) {
+				mask_i[n_cell] = i;
+				mask_j[n_cell] = j;
 				n_cell++;
 			}
 		}
@@ -1144,8 +1146,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			overlap_matrix_row_nn[n] = 0;
 			//img_j = n / image_pixel_grid->x_N;
 			//img_i = n % image_pixel_grid->x_N;
-			img_j = extended_mask_j[n];
-			img_i = extended_mask_i[n];
+			img_j = mask_j[n];
+			img_i = mask_i[n];
 			//cout << "WOAH " << img_i << " " << img_j << " " << img_i2 << " " << img_j2 << endl;
 
 			corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
@@ -1154,7 +1156,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			corners_threads[thread][3] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j+1];
 			//for (int l=0; l < 4; l++) if ((*corners_threads[thread][l])[0]==-5000) {
 				//cout << "WHOOPS! " << l << " " << img_i << " " << img_j << " " << endl;
-				//if (!lens->image_pixel_data->extended_mask[img_i][img_j]) cout << "NOT IN EXTENDED MASK" << endl;
 				//cout << "checking corner 0: " << image_pixel_grid->corner_sourcepts[img_i][img_j][0] << " " << image_pixel_grid->corner_sourcepts[img_i][img_j][1] << endl;
 				//cout << "checking corner 1: " << image_pixel_grid->corner_sourcepts[img_i][img_j+1][0] << " " << image_pixel_grid->corner_sourcepts[img_i][img_j+1][1] << endl;
 				//cout << "checking corner 2: " << image_pixel_grid->corner_sourcepts[img_i+1][img_j][0] << " " << image_pixel_grid->corner_sourcepts[img_i+1][img_j][1] << endl;
@@ -1281,8 +1282,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	for (n=0; n < ntot; n++) {
 		//img_j = n / image_pixel_grid->x_N;
 		//img_i = n % image_pixel_grid->x_N;
-		img_j = extended_mask_j[n];
-		img_i = extended_mask_i[n];
+		img_j = mask_j[n];
+		img_i = mask_i[n];
 		for (l=image_pixel_location_overlap[n]; l < image_pixel_location_overlap[n+1]; l++) {
 			nsrc = overlap_matrix_index[l];
 			j = nsrc / u_N;
@@ -1329,8 +1330,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	delete[] overlap_area_matrix_rows;
 	delete[] area_matrix;
 	delete[] high_sn_area_matrix;
-	delete[] extended_mask_i;
-	delete[] extended_mask_j;
+	delete[] mask_i;
+	delete[] mask_j;
 }
 
 double SourcePixelGrid::get_lowest_mag_sourcept(double &xsrc, double &ysrc)
@@ -6732,7 +6733,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	fit_to_data = NULL;
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool ignore_mask)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
 {
 	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
 	lens = lens_in;
@@ -6817,7 +6818,10 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 				center_pts[i][j][0] = x + 0.5*pixel_xlength;
 				center_pts[i][j][1] = y + 0.5*pixel_ylength;
 				surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
-				if (!ignore_mask) fit_to_data[i][j] = pixel_data.in_mask[i][j];
+				if (!ignore_mask) {
+					if (!include_extended_mask) fit_to_data[i][j] = pixel_data.in_mask[i][j];
+					else fit_to_data[i][j] = pixel_data.extended_mask[i][j];
+				}
 				else fit_to_data[i][j] = true;
 				if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
 			}
@@ -7557,18 +7561,21 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin, sb;
 	int i,j;
+	//ofstream wtf("wtf.dat");
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				xcavg += area*sb*center_sourcepts[i][j][0];
-				ycavg += area*sb*center_sourcepts[i][j][1];
-				totsurf += area*sb;
+				xcavg += area*abs(sb)*center_sourcepts[i][j][0];
+				ycavg += area*abs(sb)*center_sourcepts[i][j][1];
+				totsurf += area*abs(sb);
+				//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 			}
 		}
 	}
+	//wtf.close();
 	xcavg /= totsurf;
 	ycavg /= totsurf;
 	double rsq, rsqavg=0;
@@ -7576,17 +7583,18 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
-				rsqavg += area*sb*rsq;
+				rsqavg += area*abs(sb)*rsq;
 			}
 		}
 	}
+	//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
 	rsqavg /= totsurf;
 	int nn = lens->get_shapelet_nn();
 	const double window_scaling = 1.2;
-	double sig = sqrt(rsqavg);
+	double sig = sqrt(abs(rsqavg));
 	if (lens->shapelet_scale_mode==0)
 		scale = sig;
 	else if (lens->shapelet_scale_mode==1)
@@ -7599,7 +7607,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				ntot++;
 				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
 				if (sqrt(rsq) > 2*sig) {
@@ -7616,7 +7624,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 3*pixel_noise)) {
+			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				il = i - window_size_for_srcarea;
 				ih = i + window_size_for_srcarea;
 				jl = j - window_size_for_srcarea;
@@ -8767,7 +8775,6 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 					}
 				}
 				*/
-
 
 				for (ii=0; ii < nsplit; ii++) {
 					for (jj=0; jj < nsplit; jj++) {

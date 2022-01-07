@@ -220,7 +220,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	// these functions can be redefined in the derived classes, but don't have to be
 	virtual double surface_brightness_r(const double r);
 	virtual double surface_brightness(double x, double y);
-	double surface_brightness_test(double x, double y);
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
