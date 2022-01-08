@@ -6546,10 +6546,49 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		if (j > (y_N+1)) die("FUCK! corner j is huge");
 	}
 
+	double mask_min_r = 1e30;
+	if (lens->image_pixel_data) {
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (lens->image_pixel_data->in_mask[i][j]) {
+					double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+					if (r < mask_min_r) mask_min_r = r;
+				}
+			}
+		}
+	}
+	//if (lens->mpi_id==0) cout << "HACK: mask_min_r=" << mask_min_r << endl;
+
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
-			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+			if (lens->split_imgpixels) {
+				if (lens->image_pixel_data) {
+					if (lens->image_pixel_data->in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+					else {
+						nsplits[i][j] = 2;
+						double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+						if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
+						/*
+						for (int k=0; k < lens->n_sb; k++) {
+							if (!lens->sb_list[k]->is_lensed) {
+								//cout << "Trying lens " << k << endl;
+								SB_Profile* sbptr = lens->sb_list[k];
+								double xc,yc;
+								sbptr->get_center_coords(xc,yc);
+								if ((xc > corner_pts[i][j][0]) and (xc < corner_pts[i+1][j][0]) and (yc > corner_pts[i][j][1]) and (yc < corner_pts[i][j+1][1])) {
+									//nsplits[i][j] = imax(6,lens->default_imgpixel_nsplit);
+									//die("worked at x=(%g,%g) and y=(%g,%g)",corner_pts[i][j][0],corner_pts[i+1][j][0],corner_pts[i][j][1],corner_pts[i][j+1][1]);
+									break;
+								}
+							}
+						}
+						*/
+					}
+				} else {
+					nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+				}
+			}
 		}
 	}
 }
@@ -6794,7 +6833,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 			foreground_surface_brightness[i][j] = 0;
 			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			if (lens_in->split_imgpixels) {
-				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
+				//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 			}
@@ -6985,6 +7024,53 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 			fit_to_data[i][j] = pixel_data.in_mask[i][j];
 		}
 	}
+	double mask_min_r = 1e30;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (pixel_data.in_mask[i][j]) {
+				double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+				if (r < mask_min_r) mask_min_r = r;
+			}
+		}
+	}
+	if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
+
+	if (lens) {
+		//NOTE: this code is also in setup_ray_tracing_arrays(). Ugly redundancy!!! FIX LATER
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				mapped_source_pixels[i][j].clear();
+				if (lens->split_imgpixels) {
+					if (lens->image_pixel_data) {
+						if (pixel_data.in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+						else {
+							nsplits[i][j] = 2;
+							double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+							if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
+							/*
+							for (int k=0; k < lens->n_sb; k++) {
+								if (!lens->sb_list[k]->is_lensed) {
+									//cout << "Trying lens " << k << endl;
+									SB_Profile* sbptr = lens->sb_list[k];
+									double xc,yc;
+									sbptr->get_center_coords(xc,yc);
+									if ((xc > corner_pts[i][j][0]) and (xc < corner_pts[i+1][j][0]) and (yc > corner_pts[i][j][1]) and (yc < corner_pts[i][j+1][1])) {
+										//nsplits[i][j] = imax(6,lens->default_imgpixel_nsplit);
+										//die("worked at x=(%g,%g) and y=(%g,%g)",corner_pts[i][j][0],corner_pts[i+1][j][0],corner_pts[i][j][1],corner_pts[i][j+1][1]);
+										break;
+									}
+								}
+							}
+							*/
+						}
+					} else {
+						nsplits[i][j] = lens->default_imgpixel_nsplit; // default
+					}
+				}
+			}
+		}
+	}
+
 }
 
 void ImagePixelGrid::include_all_pixels()
@@ -8070,6 +8156,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 							sb=0;
 							nsplit = nsplits[i][j];
+							//if (nsplit==6) die("splitting 6 at %g,%g",center_pts[i][j][0],center_pts[i][j][1]);
 							subpixel_xlength = pixel_xlength/nsplit;
 							subpixel_ylength = pixel_ylength/nsplit;
 							for (ii=0; ii < nsplit; ii++) {
