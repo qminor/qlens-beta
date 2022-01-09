@@ -80,7 +80,7 @@ void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const 
 	zsrc_ref = zsrc_in;
 	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
 	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
-	update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
+	//update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)

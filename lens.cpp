@@ -9049,6 +9049,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 			cont = 0;
 		} else {
 			ofstream mnout(filename.c_str());
+			mnout << setprecision(16);
 			if (data_info != "") mnout << "# DATA_INFO: " << data_info << endl;
 			if (chain_info != "") mnout << "# CHAIN_INFO: " << chain_info << endl;
 			mnout << "# Sampler: MultiNest, n_livepts = " << n_livepts << endl;
@@ -9321,6 +9322,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		string polyin_filename = filename + ".txt";
 		ifstream polyin(polyin_filename.c_str());
 		ofstream polyout(filename.c_str());
+		polyout << setprecision(16);
 		if (data_info != "") polyout << "# DATA_INFO: " << data_info << endl;
 		if (chain_info != "") polyout << "# CHAIN_INFO: " << chain_info << endl;
 		polyout << "# Sampler: PolyChord, n_livepts = " << n_livepts << endl;
@@ -9432,7 +9434,6 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 bool QLens::add_dparams_to_chain()
 {
-	cout << "WHAT!!?!?!?!" << endl;
 	// Should have an option to specify the extension to the filename for the new chain (which defaults to '.new' if nothing is specified). ADD THIS IN!!!!!!!!!!!!!
 	// Should check whether any new derived parameters have the same name as one of the old derived parameters--this can happen if one accidently adds the
 	// same derived parameters they had before (in addition to some new ones). Have it print an error if this is the case. ADD THIS FEATURE!!!!!!
@@ -9640,7 +9641,21 @@ bool QLens::adopt_bestfit_point_from_chain()
 
 		nline++;
 	}
-	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines)" << endl;
+
+	chain_file.close();
+	chain_file.open(chain_str.c_str());
+	for (i=0; i <= line_num; i++) {
+		chain_file.getline(dataline,n_characters);
+	}
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	istringstream datastream(dataline);
+	datastream >> weight;
+	for (i=0; i < n_tot_parameters; i++) {
+		datastream >> params[i];
+	}
+	datastream >> chisq;
+
+	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines); -2*loglike = " << chisq << ")" << endl;
 	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 
@@ -9742,7 +9757,6 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 
 		nline++;
 	}
-	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines)" << endl;
 	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 
@@ -9757,6 +9771,8 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 	for (i=0; i < n_fit_parameters; i++) {
 		datastream >> params[i];
 	}
+	datastream >> chisq;
+	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines); chisq=" << chisq << endl;
 	dvector chain_params(params,n_fit_parameters);
 	adopt_model(chain_params);
 
