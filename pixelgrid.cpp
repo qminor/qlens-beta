@@ -11500,6 +11500,16 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 
 				if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
 				else nsplit = 1;
+				if ((nsplit < 4) and (i > 0) and (i < image_pixel_grid->x_N-1) and (j > 0) and (j < image_pixel_grid->y_N)) {
+					for (k=0; k < n_sb; k++) {
+						if (!sb_list[k]->is_lensed) {
+							double xc = sb_list[k]->x_center;
+							double yc = sb_list[k]->y_center;
+							if ((xc > image_pixel_grid->corner_pts[i-1][j][0]) and (xc < image_pixel_grid->corner_pts[i+2][j][0]) and (yc > image_pixel_grid->corner_pts[i][j-1][1]) and (yc < image_pixel_grid->corner_pts[i][j+2][1])) nsplit = 4;
+						} 
+					}
+				}
+
 				subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
 				subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
 				for (ii=0; ii < nsplit; ii++) {
