@@ -3758,9 +3758,10 @@ void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bo
 	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
-void ImagePixelData::set_neighbor_pixels()
+void ImagePixelData::set_neighbor_pixels(const bool only_interior_neighbors)
 {
 	int i,j;
+	double r0, r;
 	bool **req = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
 	for (i=0; i < npixels_x; i++) {
@@ -3771,28 +3772,45 @@ void ImagePixelData::set_neighbor_pixels()
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			if ((in_mask[i][j])) {
+				if (only_interior_neighbors) r0 = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j]));
 				if ((i < npixels_x-1) and (!in_mask[i+1][j])) {
 					if (!req[i+1][j]) {
-						req[i+1][j] = true;
-						n_required_pixels++;
+						if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i+1]) + SQR(pixel_ycvals[j]));
+						if ((only_interior_neighbors) and (r > r0)) ;
+						else {
+							req[i+1][j] = true;
+							n_required_pixels++;
+						}
 					}
 				}
 				if ((i > 0) and (!in_mask[i-1][j])) {
 					if (!req[i-1][j]) {
-						req[i-1][j] = true;
-						n_required_pixels++;
+						if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i-1]) + SQR(pixel_ycvals[j]));
+						if ((only_interior_neighbors) and (r > r0)) ;
+						else {
+							req[i-1][j] = true;
+							n_required_pixels++;
+						}
 					}
 				}
 				if ((j < npixels_y-1) and (!in_mask[i][j+1])) {
 					if (!req[i][j+1]) {
-						req[i][j+1] = true;
-						n_required_pixels++;
+						if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j+1]));
+						if ((only_interior_neighbors) and (r > r0)) ;
+						else {
+							req[i][j+1] = true;
+							n_required_pixels++;
+						}
 					}
 				}
 				if ((j > 0) and (!in_mask[i][j-1])) {
 					if (!req[i][j-1]) {
-						req[i][j-1] = true;
-						n_required_pixels++;
+						if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j-1]));
+						if ((only_interior_neighbors) and (r > r0)) ;
+						else {
+							req[i][j-1] = true;
+							n_required_pixels++;
+						}
 					}
 				}
 			}
@@ -3899,10 +3917,11 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
-void ImagePixelData::set_extended_mask(const int n_neighbors)
+void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_emask_in, const bool only_interior_neighbors)
 {
 	// This is very similar to the set_neighbor_pixels() function in ImagePixelData; used here for the outside_sb_prior feature
 	int i,j,k;
+	bool add_to_emask = add_to_emask_in;
 	if (n_neighbors < 0) {
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
@@ -3911,44 +3930,61 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 		}
 		return;
 	}
+	if ((add_to_emask) and (get_size_of_extended_mask()==0)) add_to_emask = false;
 	bool **req = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
-			extended_mask[i][j] = in_mask[i][j];
-			req[i][j] = in_mask[i][j];
+			if (!add_to_emask) {
+				extended_mask[i][j] = in_mask[i][j];
+				req[i][j] = in_mask[i][j];
+			} else {
+				req[i][j] = extended_mask[i][j];
+			}
 		}
 	}
+	double r0, r;
+	int emask_npix, emask_npix0;
 	for (k=0; k < n_neighbors; k++) {
+		emask_npix0 = get_size_of_extended_mask();
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
 				if (req[i][j]) {
+					if (only_interior_neighbors) r0 = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j]));
 					if ((i < npixels_x-1) and (!req[i+1][j])) {
 						if (!extended_mask[i+1][j]) {
-							//cout << "NEW PIX!" << endl;
-							extended_mask[i+1][j] = true;
-							//n_required_pixels++;
+							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i+1]) + SQR(pixel_ycvals[j]));
+							if ((only_interior_neighbors) and (r > r0)) ;
+							else {
+								extended_mask[i+1][j] = true;
+							}
 						}
 					}
 					if ((i > 0) and (!req[i-1][j])) {
 						if (!extended_mask[i-1][j]) {
-							//cout << "NEW PIX!" << endl;
-							extended_mask[i-1][j] = true;
-							//n_required_pixels++;
+							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i-1]) + SQR(pixel_ycvals[j]));
+							if ((only_interior_neighbors) and (r > r0)) ;
+							else {
+								extended_mask[i-1][j] = true;
+							}
 						}
 					}
 					if ((j < npixels_y-1) and (!req[i][j+1])) {
 						if (!extended_mask[i][j+1]) {
-							//cout << "NEW PIX!" << endl;
-							extended_mask[i][j+1] = true;
-							//n_required_pixels++;
+							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j+1]));
+							if ((only_interior_neighbors) and (r > r0)) ;
+							else {
+								extended_mask[i][j+1] = true;
+							}
 						}
 					}
 					if ((j > 0) and (!req[i][j-1])) {
 						if (!extended_mask[i][j-1]) {
-							extended_mask[i][j-1] = true;
-							//cout << "NEW PIX!" << endl;
-							//n_required_pixels++;
+							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j-1]));
+							if ((only_interior_neighbors) and (r > r0)) ;
+							else {
+								extended_mask[i][j-1] = true;
+							}
 						}
 					}
 				}
@@ -3961,7 +3997,6 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 					if (((i < npixels_x-1) and (extended_mask[i+1][j])) and ((i > 0) and (extended_mask[i-1][j])) and ((j < npixels_y-1) and (extended_mask[i][j+1])) and ((j > 0) and (extended_mask[i][j-1]))) {
 						if (!extended_mask[i][j]) {
 							extended_mask[i][j] = true;
-							//n_required_pixels++;
 						}
 					}
 				}
@@ -3972,6 +4007,9 @@ void ImagePixelData::set_extended_mask(const int n_neighbors)
 				req[i][j] = extended_mask[i][j];
 			}
 		}
+		emask_npix = get_size_of_extended_mask();
+		if (emask_npix==emask_npix0) break;
+
 		//long int npix = 0;
 		//for (i=0; i < npixels_x; i++) {
 			//for (j=0; j < npixels_y; j++) {
@@ -6546,17 +6584,17 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		if (j > (y_N+1)) die("FUCK! corner j is huge");
 	}
 
-	double mask_min_r = 1e30;
-	if (lens->image_pixel_data) {
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				if (lens->image_pixel_data->in_mask[i][j]) {
-					double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-					if (r < mask_min_r) mask_min_r = r;
-				}
-			}
-		}
-	}
+	//double mask_min_r = 1e30;
+	//if (lens->image_pixel_data) {
+		//for (i=0; i < x_N; i++) {
+			//for (j=0; j < y_N; j++) {
+				//if (lens->image_pixel_data->in_mask[i][j]) {
+					//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+					//if (r < mask_min_r) mask_min_r = r;
+				//}
+			//}
+		//}
+	//}
 	//if (lens->mpi_id==0) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
 	for (i=0; i < x_N; i++) {
@@ -6567,8 +6605,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 					if (lens->image_pixel_data->in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 					else {
 						nsplits[i][j] = 2;
-						double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-						if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
+						//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+						//if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
 						/*
 						for (int k=0; k < lens->n_sb; k++) {
 							if (!lens->sb_list[k]->is_lensed) {
@@ -7024,16 +7062,16 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 			fit_to_data[i][j] = pixel_data.in_mask[i][j];
 		}
 	}
-	double mask_min_r = 1e30;
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			if (pixel_data.in_mask[i][j]) {
-				double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-				if (r < mask_min_r) mask_min_r = r;
-			}
-		}
-	}
-	if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
+	//double mask_min_r = 1e30;
+	//for (i=0; i < x_N; i++) {
+		//for (j=0; j < y_N; j++) {
+			//if (pixel_data.in_mask[i][j]) {
+				//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+				//if (r < mask_min_r) mask_min_r = r;
+			//}
+		//}
+	//}
+	//if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
 	if (lens) {
 		//NOTE: this code is also in setup_ray_tracing_arrays(). Ugly redundancy!!! FIX LATER
@@ -7045,8 +7083,8 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 						if (pixel_data.in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 						else {
 							nsplits[i][j] = 2;
-							double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-							if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
+							//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
+							//if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
 							/*
 							for (int k=0; k < lens->n_sb; k++) {
 								if (!lens->sb_list[k]->is_lensed) {

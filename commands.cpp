@@ -8220,7 +8220,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
 				}
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels();
+				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(false);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
 			else if (words[1]=="unset_neighbor_pixels")
@@ -8232,7 +8232,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->invert_mask();
-				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels();
+				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(false);
 				image_pixel_data->invert_mask();
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 			}
@@ -10346,12 +10346,23 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="emask_n_neighbors")
 		{
 			double emask_n;
+			bool only_interior_pixels = false;
+			bool add_to_emask = false;
+			if (words[nwords-1]=="-add") {
+				add_to_emask = true;
+				remove_word(nwords-1);
+			}
 			if (nwords == 2) {
 				if (words[1]=="all") emask_n = -1;
+				else if (words[1]=="interior") {
+					only_interior_pixels = true;
+					add_to_emask = true;
+					emask_n = 1000;
+				}
 				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
 				if ((emask_n != -1) and (adaptive_grid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
 				extended_mask_n_neighbors = emask_n;
-				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors);
+				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors,add_to_emask,only_interior_pixels);
 				int npix;
 				if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
