@@ -3696,7 +3696,6 @@ void ImagePixelData::assign_mask_windows(const double sb_noise_threshold)
 	}
 	for (i=0; i < npixels_x; i++) delete[] mask_window_id[i];
 	delete[] mask_window_id;
-	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit)
@@ -3755,7 +3754,6 @@ void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bo
 	}
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
-	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::set_neighbor_pixels(const bool only_interior_neighbors)
@@ -3841,7 +3839,6 @@ void ImagePixelData::set_neighbor_pixels(const bool only_interior_neighbors)
 	}
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
-	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset)
@@ -3864,7 +3861,6 @@ void ImagePixelData::set_required_data_window(const double xmin, const double xm
 			}
 		}
 	}
-	set_extended_mask(lens->extended_mask_n_neighbors);
 }
 
 void ImagePixelData::set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
@@ -3914,7 +3910,16 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 			}
 		}
 	}
-	set_extended_mask(lens->extended_mask_n_neighbors);
+}
+
+void ImagePixelData::reset_extended_mask()
+{
+	int i,j;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			extended_mask[i][j] = in_mask[i][j];
+		}
+	}
 }
 
 void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_emask_in, const bool only_interior_neighbors)
@@ -4021,6 +4026,55 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
 }
+
+void ImagePixelData::set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
+{
+	// the angles MUST be between 0 and 360 here, so we enforce this in the following
+	while (theta1_deg < 0) theta1_deg += 360;
+	while (theta1_deg > 360) theta1_deg -= 360;
+	while (theta2_deg < 0) theta2_deg += 360;
+	while (theta2_deg > 360) theta2_deg -= 360;
+	double x, y, rsq, rminsq, rmaxsq, theta, theta1, theta2;
+	rminsq = rmin*rmin;
+	rmaxsq = rmax*rmax;
+	theta1 = degrees_to_radians(theta1_deg);
+	theta2 = degrees_to_radians(theta2_deg);
+	int i,j;
+	double theta_old;
+	for (i=0; i < npixels_x; i++) {
+		x = 0.5*(xvals[i] + xvals[i+1]);
+		for (j=0; j < npixels_y; j++) {
+			y = 0.5*(yvals[j] + yvals[j+1]);
+			rsq = SQR((x-xc)/xstretch) + SQR((y-yc)/ystretch);
+			theta = atan(abs(((y-yc)/(x-xc))*xstretch/ystretch));
+			theta_old=theta;
+			if (x < xc) {
+				if (y < yc)
+					theta = theta + M_PI;
+				else
+					theta = M_PI - theta;
+			} else if (y < yc) {
+				theta = M_2PI - theta;
+			}
+			if ((rsq > rminsq) and (rsq < rmaxsq)) {
+				// allow for two possibilities: theta1 < theta2, and theta2 < theta1 (which can happen if, e.g. theta1 is input as negative and theta1 is input as positive)
+				if (((theta2 > theta1) and (theta >= theta1) and (theta <= theta2)) or ((theta1 > theta2) and ((theta >= theta1) or (theta <= theta2)))) {
+					if (!unset) {
+						if (extended_mask[i][j] == false) {
+							extended_mask[i][j] = true;
+						}
+					} else {
+						if (extended_mask[i][j] == true) {
+							extended_mask[i][j] = false;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
 
 long int ImagePixelData::get_size_of_extended_mask()
 {
@@ -11491,15 +11545,12 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 				i = active_image_pixel_i_fgmask[img_index];
 				j = active_image_pixel_j_fgmask[img_index];
 
-				//cout  << i << " " << j << endl;
-
 				sb = 0;
-				//nsplit = 1;
-					//cout << i << " " << j << " " << image_pixel_grid->x_N << " " << image_pixel_grid->y_N << endl;
-					//cout << image_pixel_grid->center_pts[i][j][0] << " " << image_pixel_grid->center_pts[i][j][1] << endl;
 
 				if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
 				else nsplit = 1;
+				// Now check to see if center of foreground galaxy is in or next to the pixel; if so, make sure it has at least four splittings so its
+				// surface brightness is well-reproduced
 				if ((nsplit < 4) and (i > 0) and (i < image_pixel_grid->x_N-1) and (j > 0) and (j < image_pixel_grid->y_N)) {
 					for (k=0; k < n_sb; k++) {
 						if (!sb_list[k]->is_lensed) {

@@ -8198,6 +8198,12 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_no_required_data_pixels();
 			}
+			else if (words[1]=="reset_emask")
+			{
+				if (nwords > 2) Complain("no arguments allowed for command 'sbmap reset_emask'");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->reset_extended_mask();
+			}
 			else if (words[1]=="set_all_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
@@ -8295,6 +8301,27 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_required_data_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true); // the 'true' says to deactivate the pixels, instead of activating them
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
+			}
+			else if (words[1]=="set_emask_annulus")
+			{
+				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
+				if (nwords >= 6) {
+					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
+					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
+					if (!(ws[4] >> rmin)) Complain("invalid annulas rmin");
+					if (!(ws[5] >> rmax)) Complain("invalid annulas rmax");
+					if (nwords >= 8) {
+						if (!(ws[6] >> thetamin)) Complain("invalid annulus thetamin");
+						if (!(ws[7] >> thetamax)) Complain("invalid annulus thetamax");
+						if (nwords == 10) {
+							if (!(ws[8] >> xstretch)) Complain("invalid annulus xstretch");
+							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
+						} 
+					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch);
+				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask() << endl;
 			}
 			else if (words[1]=="set_data_window")
 			{

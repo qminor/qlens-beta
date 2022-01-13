@@ -315,7 +315,10 @@ struct ImagePixelData : public Sort
 	void set_neighbor_pixels(const bool only_interior_neighbors);
 	void set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
+	void reset_extended_mask();
 	void set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false);
+	void set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
+
 	long int get_size_of_extended_mask();
 	bool test_if_in_fit_region(const double& x, const double& y);
 	void set_lens(QLens* lensptr) {
