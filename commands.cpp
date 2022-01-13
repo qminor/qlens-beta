@@ -10412,6 +10412,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(include_extended_mask_in_inversion,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="zero_sb_emask_prior")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use zero SB prior for extended mask pixels: " << display_switch(zero_sb_extended_mask_prior) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_emask_in_chisq' command; must specify 'on' or 'off'");
+				set_switch(zero_sb_extended_mask_prior,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="nimg_sb_frac_threshold")
 		{
 			double sb_thresh;

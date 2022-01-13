@@ -682,6 +682,7 @@ QLens::QLens() : UCMC()
 	einstein_radius_high_threshold = 1000;
 	extended_mask_n_neighbors = -1;
 	include_extended_mask_in_inversion = false;
+	zero_sb_extended_mask_prior = false;
 	high_sn_frac = 0.5; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -1009,6 +1010,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	einstein_radius_high_threshold = lens_in->einstein_radius_high_threshold;
 	extended_mask_n_neighbors = lens_in->extended_mask_n_neighbors;
 	include_extended_mask_in_inversion = lens_in->include_extended_mask_in_inversion;
+	zero_sb_extended_mask_prior = lens_in->zero_sb_extended_mask_prior;
 
 	high_sn_frac = lens_in->high_sn_frac; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	subhalo_prior = lens_in->subhalo_prior;

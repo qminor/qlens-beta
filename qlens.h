@@ -415,6 +415,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double einstein_radius_high_threshold;
 	int extended_mask_n_neighbors;
 	bool include_extended_mask_in_inversion;
+	bool zero_sb_extended_mask_prior;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
