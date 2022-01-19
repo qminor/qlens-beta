@@ -156,7 +156,8 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 					else geometric_param[i][j] = egrad_params[ip++];
 				}
 			}
-		} else {
+			if ((geometric_param[0][0] <= 0) or (geometric_param[0][0] > 1) or (geometric_param[0][1] <= 0) or (geometric_param[0][1] > 1)) die("qi and qf must be between 0 and 1 in egrad mode 1");
+		} else { // egrad_mode==2
 			for (i=0; i < 4; i++) {
 				for (j=0; j < n_egrad_params[i]; j++) {
 					if (j==0) {

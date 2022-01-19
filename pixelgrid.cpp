@@ -3752,6 +3752,20 @@ void ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bo
 			}
 		}
 	}
+	// check for any lingering "holes" in the mask and activate them
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (!in_mask[i][j]) {
+				if (((i < npixels_x-1) and (in_mask[i+1][j])) and ((i > 0) and (in_mask[i-1][j])) and ((j < npixels_y-1) and (in_mask[i][j+1])) and ((j > 0) and (in_mask[i][j-1]))) {
+					if (!req[i][j]) {
+						in_mask[i][j] = true;
+						n_required_pixels++;
+					}
+				}
+			}
+		}
+	}
+
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
 }
@@ -4411,6 +4425,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				xc = xc_prev;
 				yc = yc_prev;
 				failed_isophote_fit = true;
+				double nfrac = npts/((double) npts_sample);
+				warn("not enough points being sampled; moving on to next ellipse (npts_frac=%g,npts_frac_threshold=%g)",nfrac,npts_frac);
 				break;
 			}
 			//if (do_parameter_search) {
@@ -4439,7 +4455,10 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 						fill_matrices(npts,nmax_amp_it,sb_residual,sb_weights,smatrix,Dvec,Smatrix,1.0);
 						bool chol_status;
 						chol_status = Cholesky_dcmp(Smatrix,nmax_amp_it);
-						if (!chol_status) continue;
+						if (!chol_status) {
+							//warn("amplitude matrix is not positive-definite");
+							continue;
+						}
 						Cholesky_solve(Smatrix,Dvec,amp,nmax_amp_it);
 
 						rms_resid = 0;
@@ -4542,14 +4561,16 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			double nextstep = grad_xistep, prevstep = grad_xistep, gradstep;
 
 			// Now we will see if not enough points are being sampled for the gradient, and will expand the stepsize to see if it helps (this can occur around masks)
+			bool not_enough_pts = false;
 			if (prev_npts < npts_sample*npts_frac) {
 				warn("RUHROH! not enough points when getting gradient (npts_prev). Will increase stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
 				prev_sb_avg = sample_ellipse(verbose,xi-2*grad_xistep,xistep,epsilon,theta,xc,yc,prev_npts,npts_sample,emode,sampling_mode,sbvals_prev,sbgrad_weights_prev,sbprofile);
 				if (prev_npts < npts_sample*npts_frac) {
 					warn("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
-					sb_grad = prev_sbgrad; // hack when all else fails
-					rms_sbgrad_rel = prev_rms_sbgrad_rel;
-					using_prev_sbgrad = true;
+					not_enough_pts = true;
+					//sb_grad = prev_sbgrad; // hack when all else fails
+					//rms_sbgrad_rel = prev_rms_sbgrad_rel;
+					//using_prev_sbgrad = true;
 				}
 				nextstep *= 2;
 			}
@@ -4558,14 +4579,15 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				next_sb_avg = sample_ellipse(verbose,xi+2*grad_xistep,xistep,epsilon,theta,xc,yc,next_npts,npts_sample,emode,sampling_mode,sbvals_next,sbgrad_weights_next,sbprofile);
 				if (next_npts < npts_sample*npts_frac) {
 					warn("RUHROH! not enough points when getting gradient (npts_next), even after reducing stepsize (npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",npts_sample,prev_npts,next_npts,npts);
-					sb_grad = prev_sbgrad; // hack when all else fails
-					rms_sbgrad_rel = prev_rms_sbgrad_rel;
-					using_prev_sbgrad = true;
+					not_enough_pts = true;
+					//sb_grad = prev_sbgrad; // hack when all else fails
+					//rms_sbgrad_rel = prev_rms_sbgrad_rel;
+					//using_prev_sbgrad = true;
 				}
 				prevstep *= 2;
 			}
-			if ((prev_npts==0) or (next_npts==0)) {
-				warn("isophote fit failed; no sampling points were accepted on ellipse for determining sbgrad");
+			if ((not_enough_pts) or (prev_npts==0) or (next_npts==0)) {
+				warn("isophote fit failed; not enough sampling points were accepted on ellipse for determining sbgrad");
 				epsilon = epsilon_prev;
 				theta = theta_prev;
 				xc = xc_prev;
@@ -4720,7 +4742,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				continue;
 			}
 			if (rms_sbgrad_rel > rms_sbgrad_rel_threshold) {
-				warn("rms_sbgrad_rel (%g) greater than threshold; retaining previous isofit fit parameters",rms_sbgrad_rel);
+				warn("rms_sbgrad_rel (%g) greater than threshold; retaining previous isofit fit parameters for xi=%g",rms_sbgrad_rel,xi);
 				epsilon = epsilon_prev;
 				theta = theta_prev;
 				xc = xc_prev;
@@ -4753,6 +4775,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		if (abort_isofit) break;
 		if (npts==0) continue; // don't even record previous isophote parameters because we can't even get an estimate for sb_avg or its uncertainty
 		if ((failed_isophote_fit) or (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres)) {
+			//cout << "The ellipse parameters are epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
+			//cout << "USING VERY LARGE ERRORS IN STRUCTURAL PARAMS" << endl;
 			repeat_params[xi_i] = true;
 			isophote_data.sb_avg_vals[xi_i] = sb_avg;
 			isophote_data.sb_errs[xi_i] = rms_resid_min/sqrt(npts); // standard error of the mean
@@ -4760,18 +4784,32 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			isophote_data.thetavals[xi_i] = isophote_data.thetavals[xi_i_prev];
 			isophote_data.xcvals[xi_i] = isophote_data.xcvals[xi_i_prev];
 			isophote_data.ycvals[xi_i] = isophote_data.ycvals[xi_i_prev];
-			isophote_data.q_errs[xi_i] = isophote_data.q_errs[xi_i_prev];
-			isophote_data.theta_errs[xi_i] = isophote_data.theta_errs[xi_i_prev];
-			isophote_data.xc_errs[xi_i] = isophote_data.xc_errs[xi_i_prev];
-			isophote_data.yc_errs[xi_i] = isophote_data.yc_errs[xi_i_prev];
+			//if (failed_isophote_fit) {
+				isophote_data.q_errs[xi_i] = 1e30;
+				isophote_data.theta_errs[xi_i] = 1e30;
+				isophote_data.xc_errs[xi_i] = 1e30;
+				isophote_data.yc_errs[xi_i] = 1e30;
+			//} else {
+				//isophote_data.q_errs[xi_i] = isophote_data.q_errs[xi_i_prev];
+				//isophote_data.theta_errs[xi_i] = isophote_data.theta_errs[xi_i_prev];
+				//isophote_data.xc_errs[xi_i] = isophote_data.xc_errs[xi_i_prev];
+				//isophote_data.yc_errs[xi_i] = isophote_data.yc_errs[xi_i_prev];
+			//}
 			isophote_data.A3vals[xi_i] = isophote_data.A3vals[xi_i_prev];
 			isophote_data.B3vals[xi_i] = isophote_data.B3vals[xi_i_prev];
 			isophote_data.A4vals[xi_i] = isophote_data.A4vals[xi_i_prev];
 			isophote_data.B4vals[xi_i] = isophote_data.B4vals[xi_i_prev];
-			isophote_data.A3_errs[xi_i] = isophote_data.A3_errs[xi_i_prev];
-			isophote_data.B3_errs[xi_i] = isophote_data.B3_errs[xi_i_prev];
-			isophote_data.A4_errs[xi_i] = isophote_data.A4_errs[xi_i_prev];
-			isophote_data.B4_errs[xi_i] = isophote_data.B4_errs[xi_i_prev];
+			//if (failed_isophote_fit) {
+				isophote_data.A3_errs[xi_i] = 1e30;
+				isophote_data.B3_errs[xi_i] = 1e30;
+				isophote_data.A4_errs[xi_i] = 1e30;
+				isophote_data.B4_errs[xi_i] = 1e30;
+			//} else {
+				//isophote_data.A3_errs[xi_i] = isophote_data.A3_errs[xi_i_prev];
+				//isophote_data.B3_errs[xi_i] = isophote_data.B3_errs[xi_i_prev];
+				//isophote_data.A4_errs[xi_i] = isophote_data.A4_errs[xi_i_prev];
+				//isophote_data.B4_errs[xi_i] = isophote_data.B4_errs[xi_i_prev];
+			//}
 			if (n_higher_harmonics > 2) {
 				if (n_harmonics_it > 2) {
 					isophote_data.A5vals[xi_i] = isophote_data.A5vals[xi_i_prev];
@@ -6187,7 +6225,6 @@ bool ImagePixelData::Cholesky_dcmp(double** a, int n)
 			}
 		}
 		if (a[i][i] < 0) {
-			warn("matrix is not positive-definite (row %i)",i);
 			status = false;
 		}
 		a[i][i] = sqrt(abs(a[i][i]));
@@ -6533,15 +6570,15 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
 	}
 #endif
-	setup_ray_tracing_arrays();
 	fit_to_data = NULL;
+	setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::setup_ray_tracing_arrays()
 {
 	int i,j,n,n_cell,n_corner;
 
-	if (lens->image_pixel_data == NULL) {
+	if ((!fit_to_data) or (lens->image_pixel_data == NULL)) {
 		ntot_cells = x_N*y_N;
 		ntot_corners = (x_N+1)*(y_N+1);
 	} else {
@@ -6583,7 +6620,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				extended_mask_i[n_cell] = i;
 				extended_mask_j[n_cell] = j;
 				nvals[i][j] = n_cell;
@@ -6595,7 +6632,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	}
 
 	n_corner=0;
-	if (lens->image_pixel_data == NULL) {
+	if ((!fit_to_data) or (lens->image_pixel_data == NULL)) {
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				ncvals[i][j] = -1;
@@ -6655,7 +6692,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
 			if (lens->split_imgpixels) {
-				if (lens->image_pixel_data) {
+				if ((fit_to_data) and (lens->image_pixel_data)) {
 					if (lens->image_pixel_data->in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 					else {
 						nsplits[i][j] = 2;
@@ -6860,8 +6897,8 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		}
 	}
 
-	setup_ray_tracing_arrays();
 	fit_to_data = NULL;
+	setup_ray_tracing_arrays();
 }
 
 ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
@@ -6974,7 +7011,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_only_mask, bool show_noise_thresh, bool plot_log)
+void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_noise_thresh, bool plot_log)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -6997,7 +7034,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!show_only_mask) or (fit_to_data==NULL) or (fit_to_data[i][j])) {
+			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
 				if (!plot_residual) {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					//if (sb*0.0 != 0.0) die("WTF %g %g",surface_brightness[i][j],foreground_surface_brightness[i][j]);
@@ -7015,12 +7052,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 					if (abs(residual) > 0.02) pixel_src_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << residual << endl;
 				}
 			} else {
-				if (plot_residual) {
-					if (show_only_mask) pixel_image_file << "NaN";
-					else pixel_image_file << lens->image_pixel_data->surface_brightness[i][j];
-				} else {
-					pixel_image_file << "NaN";
-				}
+				pixel_image_file << "NaN";
 			}
 			if (i < x_N-1) pixel_image_file << " ";
 		}
@@ -8248,6 +8280,19 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 							sb=0;
 							nsplit = nsplits[i][j];
+
+							// Now check to see if center of foreground galaxy is in or next to the pixel; if so, make sure it has at least four splittings so its
+							// surface brightness is well-reproduced
+							if ((nsplit < 4) and (i > 0) and (i < x_N-1) and (j > 0) and (j < y_N)) {
+								for (int k=0; k < lens->n_sb; k++) {
+									if (!lens->sb_list[k]->is_lensed) {
+										double xc, yc;
+										lens->sb_list[k]->get_center_coords(xc,yc);
+										if ((xc > corner_pts[i-1][j][0]) and (xc < corner_pts[i+2][j][0]) and (yc > corner_pts[i][j-1][1]) and (yc < corner_pts[i][j+2][1])) nsplit = 4;
+									} 
+								}
+							}
+
 							//if (nsplit==6) die("splitting 6 at %g,%g",center_pts[i][j][0],center_pts[i][j][1]);
 							subpixel_xlength = pixel_xlength/nsplit;
 							subpixel_ylength = pixel_ylength/nsplit;
@@ -8510,7 +8555,7 @@ bool QLens::assign_pixel_mappings(bool verbal)
 	return true;
 }
 
-void QLens::assign_foreground_mappings()
+void QLens::assign_foreground_mappings(const bool use_data)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -8521,7 +8566,7 @@ void QLens::assign_foreground_mappings()
 	int i,j;
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if ((!image_pixel_data) or (image_pixel_data->foreground_mask[i][j])) {
+			if ((!image_pixel_data) or (!use_data) or (image_pixel_data->foreground_mask[i][j])) {
 				image_npixels_fgmask++;
 			}
 		}
@@ -8535,7 +8580,7 @@ void QLens::assign_foreground_mappings()
 	int image_pixel_index=0;
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
-			if ((!image_pixel_data) or (image_pixel_data->foreground_mask[i][j])) {
+			if ((!image_pixel_data) or (!use_data) or (image_pixel_data->foreground_mask[i][j])) {
 				active_image_pixel_i_fgmask[image_pixel_index] = i;
 				active_image_pixel_j_fgmask[image_pixel_index] = j;
 				//cout << "Assigining " << image_pixel_index << " to (" << i << "," << j << ")" << endl;
@@ -11555,8 +11600,8 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 				if ((nsplit < 4) and (i > 0) and (i < image_pixel_grid->x_N-1) and (j > 0) and (j < image_pixel_grid->y_N)) {
 					for (k=0; k < n_sb; k++) {
 						if (!sb_list[k]->is_lensed) {
-							double xc = sb_list[k]->x_center;
-							double yc = sb_list[k]->y_center;
+							double xc, yc;
+							sb_list[k]->get_center_coords(xc,yc);
 							if ((xc > image_pixel_grid->corner_pts[i-1][j][0]) and (xc < image_pixel_grid->corner_pts[i+2][j][0]) and (yc > image_pixel_grid->corner_pts[i][j-1][1]) and (yc < image_pixel_grid->corner_pts[i][j+2][1])) nsplit = 4;
 						} 
 					}

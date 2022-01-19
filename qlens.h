@@ -725,7 +725,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<int> *Lmatrix_index_rows;
 
 	bool assign_pixel_mappings(bool verbal);
-	void assign_foreground_mappings();
+	void assign_foreground_mappings(const bool use_data = true);
 	double *Dvector;
 	double *Fmatrix;
 	int *Fmatrix_index;

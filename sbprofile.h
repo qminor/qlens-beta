@@ -183,7 +183,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
+	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
 	virtual void get_parameters(double* params);
 	bool get_specific_parameter(const string name_in, double& value);
 	bool update_specific_parameter(const string name_in, const double& value);

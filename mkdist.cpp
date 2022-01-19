@@ -358,36 +358,38 @@ int main(int argc, char *argv[])
 	paramnames_file.close();
 
 	string *latex_param_names = new string[nparams];
-	string latex_paramnames_filename = file_root + ".latex_paramnames";
-	ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
-	string dummy;
-	const int n_characters = 1024;
-	char line[n_characters];
-	for (i=0; i < nparams; i++) {
-		if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		istringstream instream(line);
-		if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		while (instream >> dummy) latex_param_names[i] += " " + dummy;
-	}
-	latex_paramnames_file.close();
-
-	if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
-
-	if (mpi_id==0) {
-		string out_paramnames_filename = file_root + ".py_paramnames";
-		ofstream paramnames_out(out_paramnames_filename.c_str());
-		for (i=0; i < nparams_eff; i++) {
-			paramnames_out << param_names[i] << endl;
+	if ((make_1d_posts) or (make_2d_posts)) {
+		string latex_paramnames_filename = file_root + ".latex_paramnames";
+		ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
+		string dummy;
+		const int n_characters = 1024;
+		char line[n_characters];
+		for (i=0; i < nparams; i++) {
+			if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			istringstream instream(line);
+			if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			while (instream >> dummy) latex_param_names[i] += " " + dummy;
 		}
-		paramnames_out.close();
+		latex_paramnames_file.close();
 
-		string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
-		ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
-		for (i=0; i < nparams_eff; i++) {
-			latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
+
+		if (mpi_id==0) {
+			string out_paramnames_filename = file_root + ".py_paramnames";
+			ofstream paramnames_out(out_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				paramnames_out << param_names[i] << endl;
+			}
+			paramnames_out.close();
+
+			string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
+			ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+			}
+			latex_paramnames_out.close();
 		}
-		latex_paramnames_out.close();
 	}
 
 	bool *hist2d_active_params = new bool[nparams_eff];

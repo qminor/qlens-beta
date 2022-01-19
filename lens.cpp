@@ -7965,11 +7965,11 @@ void QLens::get_parameter_names()
 	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 		int srcparams_start = fit_parameter_names.size();
 		for (i=0; i < n_sb; i++) {
-			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
 		}
-		for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
-			fit_parameter_names[i] += "_src";
-		}
+		//for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
+			//fit_parameter_names[i] += "_src";
+		//}
 	}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
@@ -11592,21 +11592,34 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_mask_only, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool verbose)
 {
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 	else if (n_sb==0) { warn("No surface brightness profiles have been defined"); return false; }
-	if ((plot_residual==true) and (image_pixel_data==NULL)) { warn("cannot plot residual image, no pixel data image has been loaded"); return false; }
+	bool use_data = true;
+	if (image_pixel_data==NULL) use_data = false;
+	if ((image_pixel_data != NULL) and ((n_image_pixels_x != image_pixel_data->npixels_x) or (n_image_pixels_y != image_pixel_data->npixels_y))) {
+		use_data = false;
+		warn("img_npixels does not match number of pixels in data image; showing all pixels (using '-nomask' option)");
+	}
+	if ((plot_residual==true) and (!use_data)) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
 	double xmin,xmax,ymin,ymax;
-	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
-	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-	xmax += 1e-10; // is this still necessary? Check
-	ymax += 1e-10;
+	if (use_data) {
+		xmin = image_pixel_data->xmin;
+		xmax = image_pixel_data->xmax;
+		ymin = image_pixel_data->ymin;
+		ymax = image_pixel_data->ymax;
+	} else {
+		xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
+		ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
+		xmax += 1e-10; // is this still necessary? Check
+		ymax += 1e-10;
+	}
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
-	if (image_pixel_data != NULL) image_pixel_grid->set_fit_window((*image_pixel_data)); 
+	if (use_data) image_pixel_grid->set_fit_window((*image_pixel_data)); 
 	if (active_image_pixel_i != NULL) {
 		delete[] active_image_pixel_i;
 		delete[] active_image_pixel_j;
@@ -11614,7 +11627,9 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		active_image_pixel_j = NULL;
 	}
 
-	if ((show_extended_mask) and (image_pixel_data != NULL)) {
+	if (show_all_pixels) {
+		image_pixel_grid->include_all_pixels();
+	} else if ((show_extended_mask) and (use_data)) {
 		if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 		else image_pixel_grid->activate_extended_mask(); 
 	}
@@ -11623,26 +11638,16 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) return false;
 	}
-	/*
-	image_pixel_grid->find_surface_brightness(plot_foreground_only,omit_foreground);
-	if ((!omit_foreground) and (!plot_foreground_only)) {
-		assign_foreground_mappings();
-		calculate_foreground_pixel_surface_brightness();
-		store_foreground_pixel_surface_brightness();
-	}
-	*/
-
 	if (!plot_foreground_only) {
 		image_pixel_grid->find_surface_brightness(plot_foreground_only,true);
 		if (!omit_foreground) {
-			assign_foreground_mappings();
+			assign_foreground_mappings(use_data);
 			calculate_foreground_pixel_surface_brightness();
 			store_foreground_pixel_surface_brightness();
 		}
 	} else {
 		image_pixel_grid->find_surface_brightness(plot_foreground_only);
 	}
-	//image_pixel_grid->find_surface_brightness(plot_foreground_only);
 	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 	if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 	store_image_pixel_surface_brightness();
@@ -11709,11 +11714,11 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	}
 
 	if (output_fits==false) {
-		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_mask_only,show_noise_thresh);
+		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_noise_thresh);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
-	if ((show_extended_mask) and (image_pixel_data != NULL)) {
+	if (((show_all_pixels) or (show_extended_mask)) and (use_data)) {
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
 
@@ -11727,7 +11732,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		}
 	}
 	if (offload_to_data) {
-		if (plot_residual) {
+		if ((plot_residual) and (use_data)) {
 			for (i=0; i < n_image_pixels_x; i++) {
 				for (j=0; j < n_image_pixels_y; j++) {
 					image_pixel_grid->surface_brightness[i][j] = image_pixel_data->surface_brightness[i][j] - image_pixel_grid->surface_brightness[i][j];
@@ -12117,7 +12122,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		store_image_pixel_surface_brightness();
 
 		if (n_image_prior) {
-			create_source_surface_brightness_grid(true,true);
+			create_source_surface_brightness_grid(verbal,true);
 			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 			source_pixel_grid->calculate_pixel_magnifications();
@@ -12175,7 +12180,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				srcgrid_wtime0 = omp_get_wtime();
 			}
 #endif
-			create_source_surface_brightness_grid(false,true);
+			create_source_surface_brightness_grid(verbal,true);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;

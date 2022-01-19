@@ -942,12 +942,17 @@ void SB_Profile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower,
 	}
 }
 
-void SB_Profile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
+void SB_Profile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary, const bool include_suffix)
 {
 	int i;
+	string suffix = "";
+	if (include_suffix) {
+		if (is_lensed) suffix = "_src";
+		else suffix = "_fg";
+	}
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
-			paramnames_vary.push_back(paramnames[i]);
+			paramnames_vary.push_back(paramnames[i] + suffix);
 			if (latex_paramnames_vary != NULL) latex_paramnames_vary->push_back(latex_paramnames[i]);
 			if (latex_subscripts_vary != NULL) latex_subscripts_vary->push_back(latex_param_subscripts[i]);
 		}
@@ -1061,18 +1066,21 @@ void SB_Profile::assign_paramnames()
 
 void SB_Profile::set_geometric_paramnames(int qi)
 {
+	string suffix;
+	if (is_lensed) suffix = "src";
+	else suffix = "fg";
 	if (!ellipticity_gradient) {
 		if (use_sb_ellipticity_components) {
-			paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1,src"; qi++;
-			paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2,src"; qi++;
+			paramnames[qi] = "e1"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "1," + suffix; qi++;
+			paramnames[qi] = "e2"; latex_paramnames[qi] = "e"; latex_param_subscripts[qi] = "2," + suffix; qi++;
 		} else {
-			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = "src"; qi++;
-			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = "src"; qi++;
+			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = suffix; qi++;
+			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = suffix; qi++;
 		}
-		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c,src"; qi++;
-		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c,src"; qi++;
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c," + suffix; qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c," + suffix; qi++;
 	} else {
-		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ",src");
+		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ("," + suffix));
 	}
 	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
@@ -1773,7 +1781,36 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		double lnZ;
 		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 		cout << "chisq=" << chisq_bestfit << endl;
-		MonoSample("egrad_profile",n_livepts,lnZ,fitparams,param_errors,false);
+
+		string fit_output_dir, fit_output_filename, egrad_istring;
+		fit_output_dir = ".";
+		stringstream egrad_istr;
+		egrad_istr << egrad_param;
+		egrad_istr >> egrad_istring;
+		fit_output_filename = "egrad_profile" + egrad_istring;
+
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << profile_fit_nparams << " " << 0 << endl;
+		pnumfile.close();
+
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
+			pnamefile << paramnames[i] << endl;
+		}
+		pnamefile.close();
+
+		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (i=0; i < profile_fit_nparams; i++)
+		{
+			prangefile << lower[i] << " " << upper[i] << endl;
+		}
+		prangefile.close();
+
+		string filename = fit_output_dir + "/" + fit_output_filename;
+		MonoSample(filename.c_str(),n_livepts,lnZ,fitparams,param_errors,false);
 		chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 		delete[] lower;
 		delete[] upper;
@@ -1861,6 +1898,7 @@ double SB_Profile::profile_fit_loglike(double *params)
 	}
 	update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
 	for (i=0; i < n_isophote_datapts; i++) {
+		if (profile_fit_errs[i]>=1e30) continue; // in this case don't bother to include in chisq
 		loglike += SQR((profile_fit_data[i] - (this->*egrad_ptr)(profile_fit_xivals[i],profile_fit_egrad_params,egrad_paramnum))/profile_fit_errs[i]);
 	}
 	loglike /= 2;
