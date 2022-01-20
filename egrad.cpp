@@ -416,15 +416,6 @@ double EllipticityGradient::egrad_bspline_function(const double xi, double *para
 	else knots = fourier_knots[param_index-4];
 
 	splev_(knots, &n_bspline_knots_tot, paramvals, &bspline_order, &logxi, &ans, &m, &e, &ier);
-	for (int i=0; i < n_bspline_knots_tot; i++) {
-		cout << knots[i] << " ";
-	}
-	cout << " coefs: ";
-	for (int i=0; i < 8; i++) {
-		cout << paramvals[i] << " ";
-	}
-	cout << endl;
-	cout << "ANS: " << ans << endl;
 	if (ier > 0) {
 		stringstream s;
 		s << "Error evaluating B-Spline curve using splev() at point " << xi << ": " << ier;
