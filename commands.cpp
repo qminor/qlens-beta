@@ -300,6 +300,7 @@ void QLens::process_commands(bool read_file)
 						"verbal_mode -- if on, display detailed output and input script text to terminal (default=on)\n"
 						"warnings -- set warning flags on/off\n"
 						"imgsrch_warnings -- set warning flags related to image searching on/off\n"
+						"integration_warnings -- set warning flags related to numerical integral convergence on/off\n"
 						"show_wtime -- show time required for executing commands (e.g. mkgrid); requires OpenMP\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
 						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
@@ -8326,6 +8327,27 @@ void QLens::process_commands(bool read_file)
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch);
+				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask() << endl;
+			}
+			else if (words[1]=="unset_emask_annulus")
+			{
+				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
+				if (nwords >= 6) {
+					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
+					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
+					if (!(ws[4] >> rmin)) Complain("invalid annulas rmin");
+					if (!(ws[5] >> rmax)) Complain("invalid annulas rmax");
+					if (nwords >= 8) {
+						if (!(ws[6] >> thetamin)) Complain("invalid annulus thetamin");
+						if (!(ws[7] >> thetamax)) Complain("invalid annulus thetamax");
+						if (nwords == 10) {
+							if (!(ws[8] >> xstretch)) Complain("invalid annulus xstretch");
+							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
+						} 
+					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true);
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask() << endl;
 			}
 			else if (words[1]=="set_data_window")

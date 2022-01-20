@@ -1334,8 +1334,8 @@ double SB_Profile::surface_brightness(double x, double y)
 			if (fourier_gradient) {
 				cosamps = new double[n_fourier_modes];
 				sinamps = new double[n_fourier_modes];
-				if (fourier_use_eccentric_anomaly) fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
-				else fourier_mode_function(xi,cosamps,sinamps);
+				if (fourier_use_eccentric_anomaly) fourier_mode_function(xi,cosamps,sinamps);
+				else fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 			} else {
 				// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
 				cosamps = fourier_mode_cosamp.array();
