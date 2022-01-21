@@ -234,11 +234,11 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 		}
 		contours_overlap = sb_in->contours_overlap;
 		set_egrad_ptr();
+		int n_new_params = n_params + get_egrad_nparams() - 4;
+		set_nparams_and_anchordata(n_new_params);
+		assign_paramnames();
+		assign_param_pointers();
 	}
-	int n_new_params = n_params + get_egrad_nparams() - 4;
-	set_nparams_and_anchordata(n_new_params);
-	assign_paramnames();
-	assign_param_pointers();
 	// Next, copy Fourier amplitudes/gradient once this has been implemented for lens models
 }
 
