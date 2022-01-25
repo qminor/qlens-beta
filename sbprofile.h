@@ -64,6 +64,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
 
 	void set_nparams(const int &n_params_in, const bool resize = false);
+	void reset_anchor_lists();
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source);
 	void copy_base_source_data(const SB_Profile* sb_in);
 	//bool spawn_lens_model(Alpha* lens_model);
@@ -199,7 +200,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0); // for fitting to isophote data
 	double sbprofile_loglike(double *params);
-	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0);
+	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0);
 	double profile_fit_loglike(double *params);
 	double profile_fit_loglike_bspline(double *params);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);

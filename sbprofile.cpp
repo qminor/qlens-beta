@@ -386,6 +386,7 @@ void SB_Profile::add_fourier_mode(const int m_in, const double amp_in, const dou
 
 	delete[] param;
 	param = new double*[n_params];
+	reset_anchor_lists();
 	assign_param_pointers();
 	assign_paramnames();
 }
@@ -469,27 +470,7 @@ bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int eg
 	delete[] param;
 	param = new double*[n_params];
 
-	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
-	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
-	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
-	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
-	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
-
-	anchor_parameter_to_source = new bool[n_params];
-	parameter_anchor_source = new SB_Profile*[n_params];
-	parameter_anchor_paramnum = new int[n_params];
-	parameter_anchor_ratio = new double[n_params];
-	parameter_anchor_exponent = new double[n_params];
-
-	// parameters should not be anchored before enable egrad, since the anchors are deleted here
-	for (int i=0; i < n_params; i++) {
-		anchor_parameter_to_source[i] = false;
-		parameter_anchor_source[i] = NULL;
-		parameter_anchor_paramnum[i] = -1;
-		parameter_anchor_ratio[i] = 1.0;
-		parameter_anchor_exponent[i] = 1.0;
-	}
-
+	reset_anchor_lists();
 	assign_param_pointers();
 	assign_paramnames();
 
@@ -531,6 +512,30 @@ void SB_Profile::disable_ellipticity_gradient()
 	assign_param_pointers();
 	assign_paramnames();
 	update_ellipticity_meta_parameters();
+}
+
+void SB_Profile::reset_anchor_lists()
+{
+	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
+	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
+	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
+	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
+	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+
+	anchor_parameter_to_source = new bool[n_params];
+	parameter_anchor_source = new SB_Profile*[n_params];
+	parameter_anchor_paramnum = new int[n_params];
+	parameter_anchor_ratio = new double[n_params];
+	parameter_anchor_exponent = new double[n_params];
+
+	// parameters should not be anchored before enable egrad or adding Fourier modes, since the anchors are deleted here
+	for (int i=0; i < n_params; i++) {
+		anchor_parameter_to_source[i] = false;
+		parameter_anchor_source[i] = NULL;
+		parameter_anchor_paramnum[i] = -1;
+		parameter_anchor_ratio[i] = 1.0;
+		parameter_anchor_exponent[i] = 1.0;
+	}
 }
 
 bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const bool copy_vary_settings, boolvector* vary_fgrad)
@@ -583,27 +588,7 @@ bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const bool cop
 	delete[] param;
 	param = new double*[n_params];
 
-	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
-	if (parameter_anchor_source != NULL) delete[] parameter_anchor_source;
-	if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
-	if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
-	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
-
-	anchor_parameter_to_source = new bool[n_params];
-	parameter_anchor_source = new SB_Profile*[n_params];
-	parameter_anchor_paramnum = new int[n_params];
-	parameter_anchor_ratio = new double[n_params];
-	parameter_anchor_exponent = new double[n_params];
-
-	// parameters should not be anchored before enable egrad, since the anchors are deleted here
-	for (int i=0; i < n_params; i++) {
-		anchor_parameter_to_source[i] = false;
-		parameter_anchor_source[i] = NULL;
-		parameter_anchor_paramnum[i] = -1;
-		parameter_anchor_ratio[i] = 1.0;
-		parameter_anchor_exponent[i] = 1.0;
-	}
-
+	reset_anchor_lists();
 	assign_param_pointers();
 	assign_paramnames();
 
@@ -1540,7 +1525,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 			warn("all sbprofile parameters must be allowed to vary (param %i set fixed)",i);
 			return false;
 		}
-		if ((fit_mode==0) and (lower_limits.size() != n_vary_params)) {
+		if ((fit_mode<=0) and (lower_limits.size() != n_vary_params)) {
 			warn("lower/upper prior limits have not been set for sbprofile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
 			return false;
 		}
@@ -1557,7 +1542,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 	double *param_errors = new double[sbprofile_nparams];
 
 	set_auto_ranges(); // this is so it can give a penalty prior if a parameter takes an absurd value
-	if (fit_mode==0) {
+	if (fit_mode<=0) {
 #ifdef USE_MPI
 		Set_MCMC_MPI(mpi_np,mpi_id);
 #endif
@@ -1614,7 +1599,7 @@ double SB_Profile::sbprofile_loglike(double *params)
 	return loglike;
 }
 
-bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode_in, const int n_livepts, const int mpi_np, const int mpi_id)
+bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode_in, const int n_livepts, const bool optimize_knots, const int mpi_np, const int mpi_id)
 {
 	// nested sampling: fitmode = 0
 	// downhill simplex: fitmode = 1 or higher
@@ -1635,6 +1620,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			fit_mode = 1;
 		}
 	}
+	if (fit_mode < 0) fit_mode = 0; // this is a trick so that nested sampling can be run even in egrad_mode==0 at the end of an isofit call
 
 	egrad_paramnum = egrad_param;
 	n_isophote_datapts = isophote_data.n_xivals;
@@ -1678,7 +1664,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 
 	int i,j,k;
 	if (egrad_param < 4) {
-		if (egrad_mode==0) {
+		if ((egrad_mode==0) and (fit_mode != 0)) {
 			profile_fit_nparams = n_bspline_knots_tot - 2*bspline_order - 1;
 			profile_fit_egrad_params = geometric_knots[egrad_param];
 			profile_fit_bspline_coefs = geometric_param[egrad_param];
@@ -1721,13 +1707,15 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		bspline_logximin = log(xi_initial_egrad)/ln10;
 		bspline_logximax = log(xi_final_egrad)/ln10;
 
-		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
-		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
-		for (j=0; j < bspline_order; j++) {
-			profile_fit_egrad_params[j] = bspline_logximin;
+		if (fit_mode != 0) {
+			int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
+			double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
+			for (j=0; j < bspline_order; j++) {
+				profile_fit_egrad_params[j] = bspline_logximin;
+			}
+			for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) profile_fit_egrad_params[j+bspline_order] = logxi;
+			for (j=0; j < bspline_order; j++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
 		}
-		for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) profile_fit_egrad_params[j+bspline_order] = logxi;
-		for (j=0; j < bspline_order; j++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
 	} else {
 		for (i=profile_fit_istart; i < profile_fit_istart + profile_fit_nparams; i++) {
 			if (!vary_params[i]) {
@@ -1779,8 +1767,8 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		//}
 		InputPoint(fitparams,lower,upper,profile_fit_nparams);
 		double lnZ;
-		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
-		cout << "chisq=" << chisq_bestfit << endl;
+		double chisq_bestfit;
+		//double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 
 		string fit_output_dir, fit_output_filename, egrad_istring;
 		fit_output_dir = ".";
@@ -1812,10 +1800,11 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		string filename = fit_output_dir + "/" + fit_output_filename;
 		MonoSample(filename.c_str(),n_livepts,lnZ,fitparams,param_errors,false);
 		chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
+		if (mpi_id==0) cout << "chisq=" << chisq_bestfit << endl;
 		delete[] lower;
 		delete[] upper;
 	} else {
-		if ((egrad_mode==0) and (fit_mode > 1)) {
+		if ((egrad_mode==0) and ((!optimize_knots) or (fit_mode > 1))) {
 			profile_fit_loglike_bspline(fitparams); // just fit B-spline with same knots as before; no need to call Simplex
 		} else {
 			double *stepsizes = new double [profile_fit_nparams];
@@ -1842,6 +1831,11 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			}
 			double chisq_tolerance = 1e-4;
 			if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
+			//cout << "Initial knots: " << endl;
+			//for (i=0; i < profile_fit_nparams+1; i++) {
+				//cout << pow(10,profile_fit_egrad_params[bspline_order+i]) << endl;
+			//}
+
 			initialize_simplex(fitparams,profile_fit_nparams,stepsizes,chisq_tolerance);
 			simplex_set_display_bfpont(true);
 			simplex_set_function(loglikeptr);
@@ -1851,6 +1845,11 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 				downhill_simplex(it,10000,0); // do final run with zero temperature
 			}
 			delete[] stepsizes;
+			//cout << "Final Knots: " << endl;
+			//for (i=0; i < profile_fit_nparams+1; i++) {
+				//cout << pow(10,profile_fit_egrad_params[bspline_order+i]) << endl;
+				//if ((i>0) and (profile_fit_egrad_params[bspline_order+i] < profile_fit_egrad_params[bspline_order+i-1])) die("wtf?");
+			//}
 		}
 	}
 
@@ -1897,6 +1896,9 @@ double SB_Profile::profile_fit_loglike(double *params)
 		else *(param[i]) = params[j];
 	}
 	update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
+	//for (i=0; i < profile_fit_nparams; i++) {
+		//cout << profile_fit_egrad_params[i] << endl;
+	//}
 	for (i=0; i < n_isophote_datapts; i++) {
 		if (profile_fit_errs[i]>=1e30) continue; // in this case don't bother to include in chisq
 		loglike += SQR((profile_fit_data[i] - (this->*egrad_ptr)(profile_fit_xivals[i],profile_fit_egrad_params,egrad_paramnum))/profile_fit_errs[i]);
@@ -2052,7 +2054,6 @@ void SB_Profile::print_vary_parameters()
 		}
 		cout << endl;
 	}
-
 }
 
 void SB_Profile::window_params(double& xmin, double& xmax, double& ymin, double& ymax)

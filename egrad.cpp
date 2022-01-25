@@ -454,10 +454,10 @@ double EllipticityGradient::fit_bspline_curve(double *knots, double *coefs)
 	curfit_(&iopt, &n_isophote_datapts, profile_fit_logxivals, profile_fit_data, profile_fit_weights, &logxi_initial, &logxi_final, &bspline_order, &smoothing, &bspline_nmax, &n_bspline_knots_tot, knots, coefs, &minchisq, bspline_work, &lwork, bspline_iwork, &ier);
 	if (ier > 0) {
 		if (ier >= 10) {
-			cout << "KNOTS: " << endl;
-			for (int i=0; i < n_bspline_knots_tot; i++) cout << knots[i] << endl;
-			cout << "DATA: " << endl;
-			for (int i=0; i < n_isophote_datapts; i++) cout << pow(10,profile_fit_logxivals[i]) << " " << profile_fit_data[i] << " " << profile_fit_weights[i] << endl;
+			//cout << "KNOTS: " << endl;
+			//for (int i=0; i < n_bspline_knots_tot; i++) cout << knots[i] << endl;
+			//cout << "DATA: " << endl;
+			//for (int i=0; i < n_isophote_datapts; i++) cout << pow(10,profile_fit_logxivals[i]) << " " << profile_fit_data[i] << " " << profile_fit_weights[i] << endl;
 			//for (int i=0; i < n_bspline_knots_tot - bspline_order - 1; i++) cout << coefs[i] << endl;
 			stringstream s;
 			s << "Error fitting B-Spline curve using curfit(): " << ier;

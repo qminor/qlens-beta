@@ -4055,6 +4055,7 @@ void ImagePixelData::set_extended_mask_annulus(const double xc, const double yc,
 	theta2 = degrees_to_radians(theta2_deg);
 	int i,j;
 	double theta_old;
+	bool pixels_in_mask = false;
 	for (i=0; i < npixels_x; i++) {
 		x = 0.5*(xvals[i] + xvals[i+1]);
 		for (j=0; j < npixels_y; j++) {
@@ -4079,16 +4080,66 @@ void ImagePixelData::set_extended_mask_annulus(const double xc, const double yc,
 						}
 					} else {
 						if (extended_mask[i][j] == true) {
-							extended_mask[i][j] = false;
+							if (!in_mask[i][j]) extended_mask[i][j] = false;
+							else pixels_in_mask = true;
 						}
 					}
 				}
 			}
 		}
 	}
+	if (pixels_in_mask) warn("some pixels in the annulus were in the primary (lensed image) mask, and therefore could not be removed from extended mask");
 }
 
-
+void ImagePixelData::set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
+{
+	// the angles MUST be between 0 and 360 here, so we enforce this in the following
+	while (theta1_deg < 0) theta1_deg += 360;
+	while (theta1_deg > 360) theta1_deg -= 360;
+	while (theta2_deg < 0) theta2_deg += 360;
+	while (theta2_deg > 360) theta2_deg -= 360;
+	double x, y, rsq, rminsq, rmaxsq, theta, theta1, theta2;
+	rminsq = rmin*rmin;
+	rmaxsq = rmax*rmax;
+	theta1 = degrees_to_radians(theta1_deg);
+	theta2 = degrees_to_radians(theta2_deg);
+	int i,j;
+	double theta_old;
+	bool pixels_in_mask = false;
+	for (i=0; i < npixels_x; i++) {
+		x = 0.5*(xvals[i] + xvals[i+1]);
+		for (j=0; j < npixels_y; j++) {
+			y = 0.5*(yvals[j] + yvals[j+1]);
+			rsq = SQR((x-xc)/xstretch) + SQR((y-yc)/ystretch);
+			theta = atan(abs(((y-yc)/(x-xc))*xstretch/ystretch));
+			theta_old=theta;
+			if (x < xc) {
+				if (y < yc)
+					theta = theta + M_PI;
+				else
+					theta = M_PI - theta;
+			} else if (y < yc) {
+				theta = M_2PI - theta;
+			}
+			if ((rsq > rminsq) and (rsq < rmaxsq)) {
+				// allow for two possibilities: theta1 < theta2, and theta2 < theta1 (which can happen if, e.g. theta1 is input as negative and theta1 is input as positive)
+				if (((theta2 > theta1) and (theta >= theta1) and (theta <= theta2)) or ((theta1 > theta2) and ((theta >= theta1) or (theta <= theta2)))) {
+					if (!unset) {
+						if (foreground_mask[i][j] == false) {
+							foreground_mask[i][j] = true;
+						}
+					} else {
+						if (foreground_mask[i][j] == true) {
+							if (!in_mask[i][j]) foreground_mask[i][j] = false;
+							else pixels_in_mask = true;
+						}
+					}
+				}
+			}
+		}
+	}
+	if (pixels_in_mask) warn("some pixels in the annulus were in the primary (lensed image) mask, and therefore could not be removed from foreground mask");
+}
 
 long int ImagePixelData::get_size_of_extended_mask()
 {
@@ -4097,6 +4148,18 @@ long int ImagePixelData::get_size_of_extended_mask()
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			if (extended_mask[i][j]) npix++;
+		}
+	}
+	return npix;
+}
+
+long int ImagePixelData::get_size_of_foreground_mask()
+{
+	int i,j;
+	long int npix = 0;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (foreground_mask[i][j]) npix++;
 		}
 	}
 	return npix;

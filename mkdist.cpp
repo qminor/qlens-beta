@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
 	}
 	if (file_label=="-T") show_transform_usage();
 	string output_dir = ".";
+	double pct_scaling = 1; // used if one wants to scale the uncertainties by a given factor
 	//string output_dir = "chains_" + file_label;
 	//struct stat sb;
 	//stat(output_dir.c_str(),&sb);
@@ -127,7 +128,12 @@ int main(int argc, char *argv[])
 						output_cl = true;
 						if (*(argv[i]+1)=='2') { cl_2sigma = true; argv[i]++; }
 						break;
-					case 'u': show_uncertainties_as_percentiles = true; break;
+					case 'u':
+						show_uncertainties_as_percentiles = true;
+						if (sscanf(argv[i], "u%lf", &pct_scaling)==1) {
+							argv[i] = advance(argv[i]);
+						}
+						break;
 					case 'P': run_python_script = true; break;
 					case 'x': exclude_derived_params = true; break;
 					case 'i': output_chain_header = true; break; // Deprecated
@@ -704,10 +710,16 @@ int main(int argc, char *argv[])
 						hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
 					}
 					halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
-					if (show_uncertainties_as_percentiles)
-						cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
-					else
+					if (show_uncertainties_as_percentiles) {
+						double lowerr = pct_scaling*(halfpct[i] - lowcl[i]);
+						double hierr = pct_scaling*(hicl[i] - halfpct[i]);
+						double lowpct = halfpct[i] - lowerr;
+						double hipct = halfpct[i] + hierr;
+						//cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
+						cout << param_names[i] << ": " << halfpct[i] << " " << lowpct << " " << hipct << endl;
+					} else {
 						cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+					}
 				}
 				cout << endl;
 				delete[] halfpct;

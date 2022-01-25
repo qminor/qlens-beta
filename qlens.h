@@ -46,6 +46,7 @@ enum RayTracingMethod {
 };
 enum DerivedParamType {
 	KappaR,
+	LambdaR,
 	DKappaR,
 	Mass2dR,
 	Mass3dR,
@@ -1425,6 +1426,8 @@ struct DerivedParam
 		use_kpc_units = usekpc;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
+		} else if (derived_param_type == LambdaR) { // here lambda_R = 1 - <kappa>(R)
+			name = "lambdaR"; latex_name = "\\lambda_R";
 		} else if (derived_param_type == DKappaR) {
 			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == Mass2dR) {
@@ -1479,6 +1482,7 @@ struct DerivedParam
 	double get_derived_param(QLens* lens_in)
 	{
 		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param,use_kpc_units);
+		else if (derived_param_type == LambdaR) return (1 - lens_in->total_dkappa(funcparam,-1,use_kpc_units));
 		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param,use_kpc_units);
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param,use_kpc_units);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param,use_kpc_units);
@@ -1531,6 +1535,8 @@ struct DerivedParam
 		if (derived_param_type == KappaR) {
 			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << unitstring << endl;
 			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
+		} else if (derived_param_type == LambdaR) {
+			cout << "One minus average kappa at r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == DKappaR) {
 			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << unitstring << endl;
 			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
