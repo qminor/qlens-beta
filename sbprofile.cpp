@@ -420,12 +420,12 @@ void SB_Profile::remove_fourier_modes()
 	assign_param_pointers();
 }
 
-bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double ximin, const double ximax, const double xiref, const bool copy_vary_settings, boolvector* vary_egrad)
+bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
 	
-	if (egrad_mode==0) {
+	if ((egrad_mode==0) and (efunc_params[0]==-1e30)) { // in this case, the egrad params were never initialized
 		// Not sure if I should do this here, or before calling enable_ellipticity_gradient?
 		efunc_params.input(2*n_bspline_coefs+2);
 		for (int i=0; i < n_bspline_coefs; i++) efunc_params[i] = q;
@@ -435,12 +435,11 @@ bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int eg
 	}
 
 	int n_egrad_params;
-	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,ximin,ximax,xiref)==false) {
+	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,knots,ximin,ximax,xiref,linear_xivals)==false) {
 		warn("could not set up egrad params properly");
 		return false;
 	}
 	int new_nparams = n_params + n_egrad_params - 4; // we already had q, theta, xc and yc
-	//cout << "WTF? " << n_egrad_params << " " << n_params << " " << new_nparams << " " << n_bspline_coefs << endl;
 	if (n_egrad_params < 4) {
 		warn("could not setup egrad params; less than four egrad parameters were created");
 		return false;
@@ -1702,18 +1701,27 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 
 	double bspline_logximin, bspline_logximax;
 	if (egrad_mode==0) {
+		// note that B-spline curve fitting requires that xi_initial_egrad and xi_final_egrad be set to the initial/final data xi values
 		xi_initial_egrad = isophote_data.xivals[0];
 		xi_final_egrad = isophote_data.xivals[n_isophote_datapts-1];
 		bspline_logximin = log(xi_initial_egrad)/ln10;
 		bspline_logximax = log(xi_final_egrad)/ln10;
 
-		if (fit_mode != 0) {
+		// note that if fit_mode==0, we do MCMC and the knots will be fixed. If fit_mode == 1 and optimize_knots is set to true, knots will be optimized
+		if (fit_mode == 1) {
 			int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
 			double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
+			double xi, xistep = (xi_final_egrad-xi_initial_egrad)/(n_unique_knots-1);
 			for (j=0; j < bspline_order; j++) {
 				profile_fit_egrad_params[j] = bspline_logximin;
 			}
-			for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) profile_fit_egrad_params[j+bspline_order] = logxi;
+			if (!use_linear_xivals) {
+				for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) profile_fit_egrad_params[j+bspline_order] = logxi;
+			} else {
+				for (j=0, xi=xi_initial_egrad; j < n_unique_knots; j++, xi += xistep) {
+					profile_fit_egrad_params[j+bspline_order] = log(xi)/ln10;
+				}
+			}
 			for (j=0; j < bspline_order; j++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
 		}
 	} else {
@@ -1812,15 +1820,15 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			if (egrad_mode==0) {
 				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike_bspline);
 				for (i=0; i < profile_fit_nparams; i++) {
-					stepsizes[i] = fitparams[i]/3.0; // arbitrary
+					stepsizes[i] = fitparams[i]/4.0; // arbitrary
 				}
 				double min_data_interval = 1e30;
 				for (i=0; i < n_isophote_datapts-1; i++) {
 					if ((profile_fit_logxivals[i+1]-profile_fit_logxivals[i]) < min_data_interval) min_data_interval = (profile_fit_logxivals[i+1]-profile_fit_logxivals[i]);
 				}
 				// the minimum knot interval allowed is given in terms of a specified fraction of the spacing between data points
-				profile_fit_min_knot_interval = 0.333333333333333*min_data_interval;
-
+				profile_fit_min_knot_interval = 2*min_data_interval;
+				//cout << "min interval: " << profile_fit_min_knot_interval << endl;
 			} else {
 				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike);
 				for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
@@ -1831,10 +1839,6 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			}
 			double chisq_tolerance = 1e-4;
 			if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
-			//cout << "Initial knots: " << endl;
-			//for (i=0; i < profile_fit_nparams+1; i++) {
-				//cout << pow(10,profile_fit_egrad_params[bspline_order+i]) << endl;
-			//}
 
 			initialize_simplex(fitparams,profile_fit_nparams,stepsizes,chisq_tolerance);
 			simplex_set_display_bfpont(true);
@@ -1845,11 +1849,6 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 				downhill_simplex(it,10000,0); // do final run with zero temperature
 			}
 			delete[] stepsizes;
-			//cout << "Final Knots: " << endl;
-			//for (i=0; i < profile_fit_nparams+1; i++) {
-				//cout << pow(10,profile_fit_egrad_params[bspline_order+i]) << endl;
-				//if ((i>0) and (profile_fit_egrad_params[bspline_order+i] < profile_fit_egrad_params[bspline_order+i-1])) die("wtf?");
-			//}
 		}
 	}
 
@@ -1918,6 +1917,7 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 		profile_fit_egrad_params[bspline_order+i+1] = profile_fit_egrad_params[bspline_order+i] + abs(params[i]);
 	}
 	for (i=0; i < bspline_order; i++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+i] = profile_fit_egrad_params[n_bspline_knots_tot-bspline_order-1];
+
 	//update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
 	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) return 1e30; // penalty chisq
 
@@ -2004,6 +2004,20 @@ void SB_Profile::print_parameters()
 		}
 	}
 	cout << endl;
+	if ((ellipticity_gradient) and (egrad_mode==0)) {
+		cout << "   q-knots: ";
+		for (int i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+			cout << pow(10,geometric_knots[0][i]); // gives the elliptical radius values
+			if (i < n_bspline_knots_tot-1) cout << " ";
+		}
+		cout << endl;
+		cout << "   theta-knots: ";
+		for (int i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+			cout << pow(10,geometric_knots[1][i]); // gives the elliptical radius values
+			if (i < n_bspline_knots_tot-1) cout << " ";
+		}
+		cout << endl;
+	}
 }
 
 void SB_Profile::print_vary_parameters()

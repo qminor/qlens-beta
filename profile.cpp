@@ -1615,7 +1615,7 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 	}
 }
 
-bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const double ximin, const double ximax, const double xiref, const bool copy_vary_settings, boolvector* vary_egrad)
+bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -1623,7 +1623,7 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	//      and efunc_params will be able to have different # of parameters, etc.
 
 	
-	if (egrad_mode==0) {
+	if ((egrad_mode==0) and (efunc_params[0]==-1e30)) { // in this case, the egrad params were never initialized
 		// Not sure if I should do this here, or before calling enable_ellipticity_gradient?
 		efunc_params.input(2*n_bspline_coefs+2);
 		for (int i=0; i < n_bspline_coefs; i++) efunc_params[i] = q;
@@ -1633,7 +1633,7 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	}
 
 	int n_egrad_params;
-	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,ximin,ximax,xiref)==false) {
+	if (setup_egrad_params(egrad_mode,ellipticity_mode,efunc_params,n_egrad_params,n_bspline_coefs,knots,ximin,ximax,xiref,linear_xivals)==false) {
 		warn("could not set up egrad params properly");
 		return false;
 	}

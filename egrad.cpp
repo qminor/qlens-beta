@@ -22,6 +22,7 @@ EllipticityGradient::EllipticityGradient()
 	egrad_mode = 0;
 	egrad_ellipticity_mode = -1; // ellipticity gradient is off by default
 	center_gradient = false;
+	use_linear_xivals = false;
 	xi_initial_egrad = 0.0;
 	xi_final_egrad = 0.0;
 	for (int i=0; i < 4; i++) {
@@ -66,7 +67,7 @@ EllipticityGradient::~EllipticityGradient()
 	}
 }
 
-bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const double ximin, const double ximax, const double xiref)
+bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals)
 {
 #ifndef USE_FITPACK
 	if (egrad_mode_in==0) {
@@ -82,6 +83,7 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 	ellipticity_gradient = true;
 	egrad_mode = egrad_mode_in;
 	egrad_ellipticity_mode = ellipticity_mode_in;
+	use_linear_xivals = linear_xivals;
 	int i,j,ip=0;
 	if (egrad_mode==0) {
 		n_egrad_params_tot=2*n_bspline_coefs+2;
@@ -105,25 +107,46 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 			}
 		}
 		if (ip != egrad_params.size()) die("we fucked up the egrad_params, wrong number of arguments");
-
-		// Set up the knot vectors
 		n_bspline_knots_tot = n_bspline_coefs + bspline_order + 1;
-		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
+		int n_unique_knots = n_bspline_coefs - bspline_order + 1;
 		double bspline_logximin = log(ximin)/ln10;
 		double bspline_logximax = log(ximax)/ln10;
 		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
-		for (i=0; i < 4; i++) {
-			geometric_knots[i] = new double[n_bspline_knots_tot];
-			for (j=0; j < bspline_order; j++) geometric_knots[i][j] = bspline_logximin;
-			for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) geometric_knots[i][j+bspline_order] = logxi;
-			for (j=0; j < bspline_order; j++) geometric_knots[i][n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
+		double xi, xistep = (ximax-ximin)/(n_unique_knots-1);
+		if (knots[0]==-1e30) {
+			// Set up the knot vectors
+			for (i=0; i < 4; i++) {
+				geometric_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < bspline_order; j++) geometric_knots[i][j] = bspline_logximin;
+				if (!use_linear_xivals) {
+					for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) geometric_knots[i][j+bspline_order] = logxi;
+				} else {
+					for (j=0, xi=ximin; j < n_unique_knots; j++, xi += xistep) {
+						geometric_knots[i][j+bspline_order] = log(xi)/ln10;
+						//cout << pow(10,geometric_knots[i][j+bspline_order]) << endl;
+					}
+				}
+				for (j=0; j < bspline_order; j++) geometric_knots[i][n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
+			}
+		} else {
+			ip=0;
+			for (i=0; i < 4; i++) {
+				geometric_knots[i] = new double[n_bspline_knots_tot];
+				if ((i < 2) or (center_gradient)) {
+					for (j=0; j < bspline_order; j++) geometric_knots[i][j] = log(knots[ip])/ln10;
+					for (j=0; j < n_unique_knots; j++) geometric_knots[i][j+bspline_order] = log(knots[ip++])/ln10;
+					for (j=0; j < bspline_order; j++) geometric_knots[i][n_bspline_knots_tot-bspline_order+j] = log(knots[ip-1])/ln10;
+				}
+			}
+			if (ip != knots.size()) die("we fucked up the knot vector, wrong number of arguments");
 		}
+
 		xi_initial_egrad = ximin;
 		xi_final_egrad = ximax;
 		egrad_minq = 1e30;
 		int n_xisteps_qmin = 50;
 		//for (int i=0; i < n_egrad_params[0]; i++) if (geometric_param[0][i] < egrad_minq) egrad_minq = geometric_param[0][i];
-		double qq, xi, logxistep_q = (bspline_logximax-bspline_logximin)/(n_xisteps_qmin-1);
+		double qq, logxistep_q = (bspline_logximax-bspline_logximin)/(n_xisteps_qmin-1);
 		set_egrad_ptr();
 		for (i=0, logxi = bspline_logximin; i < n_xisteps_qmin; i++, logxi += logxistep_q) {
 			xi = pow(10.0,logxi);

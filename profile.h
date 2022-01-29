@@ -245,7 +245,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
-	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs = 0, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
+	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool register_vary_flags();

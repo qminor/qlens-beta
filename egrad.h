@@ -20,6 +20,7 @@ class EllipticityGradient : public Brent
 	double xi_initial_egrad, xi_final_egrad, xi_ref_egrad; // keeps track of the region where ellipticity/PA is changing
 	bool center_gradient; // this is currently always false, but later I might add the option to have a center gradient
 	bool fourier_gradient; // if true, allows a gradient in the Fourier amplitudes perturbing surface brightness (or kappa)
+	bool use_linear_xivals; // for initial knot spacing
 
 	int bspline_order; // set to 3 by default
 	int n_bspline_knots_tot;
@@ -52,7 +53,7 @@ class EllipticityGradient : public Brent
 	public:
 	EllipticityGradient();
 	~EllipticityGradient();
-	bool setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs = 0, const double ximin = 0.1, const double ximax = 5, const double xiref = 1.5); // arbitrary default values for the last three arguments
+	bool setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const dvector& knots, const double ximin = 0.1, const double ximax = 5, const double xiref = 1.5, const bool linear_xivals = false); // arbitrary default values for the last three arguments
 	bool setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot);
 	void set_egrad_ptr();
 	void disable_egrad_mode(int& n_tot_egrad_params);

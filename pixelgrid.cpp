@@ -11801,7 +11801,6 @@ void QLens::plot_image_pixel_surface_brightness(string outfile_root)
 
 	ofstream surface_brightness_file; open_output_file(surface_brightness_file,sb_filename);
 	int index=0;
-	index=0;
 	for (int j=0; j < image_pixel_grid->y_N; j++) {
 		for (int i=0; i < image_pixel_grid->x_N; i++) {
 			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])))
