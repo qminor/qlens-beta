@@ -2363,7 +2363,10 @@ double LensIntegral::j_integral_egrad(const int nval_in, bool &converged)
 		fac0 = sinth*sinth;
 		fac1 = -costh*costh;
 	}
-	ans = 2*profile->kappa_rsq(xif*xif)*(sqrt(1-epf)/epf)*(fac0*(1-sqrt(1-epf)) + fac1*(1-1.0/sqrt(1-epf))); // This is the boundary term
+	if (epf > 1e-9)
+		ans = 2*profile->kappa_rsq(xif*xif)*(sqrt(1-epf)/epf)*(fac0*(1-sqrt(1-epf)) + fac1*(1-1.0/sqrt(1-epf))); // This is the boundary term
+	else
+		ans = profile->kappa_rsq(xif*xif)*sqrt(1-epf)*(fac0 - fac1); // This is the boundary term
 
 	if (profile->integral_method == Romberg_Integration)
 	{
@@ -2451,7 +2454,10 @@ double LensIntegral::jprime_integral_egrad(const int nval_in, bool &converged)
 		fac0 = xprime*sinth;
 		fac1 = -yprime*costh;
 	}
-	ans = 2*profile->kappa_rsq(xif*xif)*(sqrt(1-epf)/epf)*(fac0*(1-sqrt(1-epf)) + fac1*(1-1.0/sqrt(1-epf))); // This is the boundary term
+	if (epf > 1e-9)
+		ans = 2*profile->kappa_rsq(xif*xif)*(sqrt(1-epf)/epf)*(fac0*(1-sqrt(1-epf)) + fac1*(1-1.0/sqrt(1-epf))); // This is the boundary term
+	else
+		ans = profile->kappa_rsq(xif*xif)*sqrt(1-epf)*(fac0 - fac1); // This is the boundary term
 
 	if (profile->integral_method == Romberg_Integration)
 	{
@@ -2512,9 +2518,11 @@ double LensIntegral::j_integrand_egrad(const double xi)
 		fac1 = costh*costh;
 	}
 	qufactor = sqrt(1-epsilon*u);
-	gfac = fac0*(1-qufactor) + fac1*(1-1.0/qufactor);
-	if (gfac==0.0) return 0.0;
-	return (2*xi*(profile->kappa_rsq_deriv(xisq))*(qval/epsilon)*gfac);
+	if (epsilon > 1e-9)
+		gfac = (fac0*(1-qufactor) + fac1*(1-1.0/qufactor))/epsilon; // I moved epsilon into the gfac so it can have a first order expansion in the limit of small epsilon
+	else
+		gfac = (fac0 - fac1)*u/2; // I moved epsilon into the gfac so it can have a first order expansion in the limit of small epsilon
+	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
 
 double LensIntegral::k_integrand_egrad(const double xi)
@@ -2583,8 +2591,12 @@ double LensIntegral::jprime_integrand_egrad(const double xi)
 		fac1 = yprime*costh;
 	}
 	qufactor = sqrt(1-epsilon*u);
-	gfac = fac0*(1-qufactor) + fac1*(1-1.0/qufactor);
-	return (2*xi*(profile->kappa_rsq_deriv(xisq))*(qval/epsilon)*gfac);
+	if (epsilon > 1e-9)
+		gfac = (fac0*(1-qufactor) + fac1*(1-1.0/qufactor))/epsilon; // I moved epsilon into the gfac so it can have a first order expansion in the limit of small epsilon
+	else
+		gfac = (fac0 - fac1)*u/2; // I moved epsilon into the gfac so it can have a first order expansion in the limit of small epsilon
+
+	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
 
 

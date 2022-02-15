@@ -5941,7 +5941,12 @@ void QLens::process_commands(bool read_file)
 #ifdef USE_POLYCHORD
 							set_fitmethod(POLYCHORD);
 #else
+#ifdef USE_MULTINEST
+							warn("qlens has not been compiled with PolyChord; switching to multinest");
+							set_fitmethod(MULTINEST);
+#else
 							Complain("qlens code needs to be compiled with PolyChord to use this fit method");
+#endif
 #endif
 						}
 						else if (setword=="multinest") {

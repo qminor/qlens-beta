@@ -1708,7 +1708,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		bspline_logximax = log(xi_final_egrad)/ln10;
 
 		// note that if fit_mode==0, we do MCMC and the knots will be fixed. If fit_mode == 1 and optimize_knots is set to true, knots will be optimized
-		if (fit_mode == 1) {
+		if ((fit_mode == 1) and (optimize_knots)) {
 			int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
 			double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
 			double xi, xistep = (xi_final_egrad-xi_initial_egrad)/(n_unique_knots-1);
