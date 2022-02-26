@@ -54,12 +54,13 @@ class EllipticityGradient : public Brent
 	EllipticityGradient();
 	~EllipticityGradient();
 	bool setup_egrad_params(const int egrad_mode_in, const int ellipticity_mode_in, const dvector& egrad_params, int& n_egrad_params_tot, const int n_bspline_coefs, const dvector& knots, const double ximin = 0.1, const double ximax = 5, const double xiref = 1.5, const bool linear_xivals = false); // arbitrary default values for the last three arguments
-	bool setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot);
+	bool setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot, const dvector& knots);
 	void set_egrad_ptr();
 	void disable_egrad_mode(int& n_tot_egrad_params);
 	void set_geometric_param_pointers_egrad(double **param, boolvector& angle_param, int& qi);
 	void get_egrad_params(dvector& egrad_params);
 	int get_egrad_nparams();
+	int get_fgrad_nparams();
 	void update_egrad_meta_parameters();
 	void set_geometric_paramnames_egrad(vector<string>& paramnames, vector<string>& latex_paramnames, vector<string>& latex_param_subscripts, int &qi, string latex_suffix = "");
 	void set_geometric_param_ranges_egrad(boolvector& set_auto_penalty_limits, dvector& penalty_lower_limits, dvector& penalty_upper_limits, int &param_i);
@@ -67,6 +68,7 @@ class EllipticityGradient : public Brent
 	void set_fourier_paramnums(int *paramnum, int paramnum0);
 
 	void ellipticity_function(const double xi, double& ep, double& theta);
+	double angle_function(const double xi);
 	void fourier_mode_function(const double xi, double* cosamp, double* sinamp);
 	void fourier_mode_function(const double xi, const int mval, double& cosamp, double& sinamp);
 	double (EllipticityGradient::*egrad_ptr)(const double xi, double *paramvals, const int param_index);

@@ -2471,7 +2471,11 @@ void QLens::process_commands(bool read_file)
 			bool egrad = false;
 			int egrad_mode = -1;
 			int n_bspline_coefs = 0; // only used for egrad_mode=0 (B-spline mode)
-			bool enter_egrad_limits = true;
+			bool enter_egrad_params_and_varyflags = true;
+			bool enter_knots = false;
+			bool fgrad = false;
+			int egrad_qi, egrad_qf, egrad_theta_i, egrad_theta_f;
+			int fgrad_amp_i, fgrad_amp_f;
 			double ximin; // only used for egrad_mode=0 (B-spline mode)
 			double ximax; // only used for egrad_mode=0 (B-spline mode)
 			bool linear_xivals; // only used for egrad_mode=0 (B-spline mode)
@@ -2480,6 +2484,7 @@ void QLens::process_commands(bool read_file)
 			bool lensed_center_coords = false;
 			boolvector vary_flags, shear_vary_flags;
 			dvector efunc_params, egrad_knots;
+			dvector fgrad_params, fgrad_knots;
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
 			dvector param_vals;
@@ -2487,6 +2492,10 @@ void QLens::process_commands(bool read_file)
 			int nparams_to_vary, tot_nparams_to_vary;
 			int anchornum; // in case new lens is being anchored to existing lens
 			int lens_number;
+			vector<int> fourier_mvals;
+			vector<double> fourier_Amvals;
+			vector<double> fourier_Bmvals;
+			int fourier_nmodes = 0;
 			bool update_zl = false;
 			double zl_in = lens_redshift;
 			bool vary_zl = false;
@@ -2516,6 +2525,41 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 				}
 			}	
+			for (int i=nwords-1; i > 1; i--) {
+				if (words[i]=="-fgrad") {
+					fgrad = true;
+					remove_word(i);
+				}
+			}
+
+
+			for (int i=nwords-1; i > 2; i--) {
+				int pos0;
+				if ((words[i][0]=='f') and (pos0 = words[i].find("=")) != string::npos) {
+					if (i==nwords-1) Complain("must specify both fourier amplitudes A_m and B_m (e.g. 'f1=0.01 0.02')");
+					string mvalstring, amstring, bmstring;
+					mvalstring = words[i].substr(1,pos0-1);
+					amstring = words[i].substr(pos0+1);
+					bmstring = words[i+1];
+					int mval;
+					double Am, Bm;
+					stringstream mstr, astr, bstr;
+					mstr << mvalstring;
+					astr << amstring;
+					bstr << bmstring;
+					if (!(mstr >> mval)) Complain("invalid fourier m-value");
+					if (!(astr >> Am)) Complain("invalid fourier A_m amplitude");
+					if (!(bstr >> Bm)) Complain("invalid fourier B_m amplitude");
+					fourier_mvals.push_back(mval);
+					fourier_Amvals.push_back(Am);
+					fourier_Bmvals.push_back(Bm);
+					remove_word(i+1);
+					remove_word(i);
+					//astr = words[i].substr(pos0+8);
+					//int pos, lnum, pnum;
+					fourier_nmodes++;
+				}
+			}
 
 			if (words[0]=="fit") {
 				vary_parameters = true;
@@ -2892,6 +2936,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -2920,7 +2965,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -2933,11 +2978,18 @@ void QLens::process_commands(bool read_file)
 								}
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							//if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_params_and_varyflags))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("alpha requires at least 4 parameters (b, alpha, s, q)");
@@ -2992,6 +3044,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3022,7 +3075,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3035,6 +3088,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (set_tidal_host) {
@@ -3045,6 +3103,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("pjaffe requires at least 4 parameters (b, a, s, q)");
@@ -3122,6 +3181,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[5]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 3 : 5;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3162,6 +3222,7 @@ void QLens::process_commands(bool read_file)
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("mpole requires at least 2 parameters (a_m, n)");
@@ -3229,6 +3290,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3257,7 +3319,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3269,6 +3331,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3280,6 +3347,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("nfw requires at least 3 parameters (ks, rs, q)");
@@ -3380,6 +3448,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3408,7 +3477,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3420,6 +3489,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3431,6 +3505,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("tnfw requires at least 4 parameters (ks, rs, rt, q)");
@@ -3495,6 +3570,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3523,7 +3599,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3535,6 +3611,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3546,6 +3627,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("cnfw requires at least 4 parameters (ks, rs, rc, q)");
@@ -3585,6 +3667,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3613,7 +3696,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3625,6 +3708,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3632,6 +3720,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("expdisk requires at least 3 parameteR_d (k0, R_d, q)");
@@ -3677,6 +3766,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3705,7 +3795,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3717,6 +3807,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3724,6 +3819,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("kspline requires at least 1 argument (filename)");
@@ -3763,6 +3859,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3791,7 +3888,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3803,6 +3900,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3810,6 +3912,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("hern requires at least 3 parameters (ks, rs, q)");
@@ -3883,6 +3986,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[9]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 7 : 9;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -3911,7 +4015,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,9,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,9,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -3923,6 +4027,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -3934,6 +4043,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("corecusp requires at least 6 parameters (k0, gamma, n, a, s, q)");
@@ -3972,6 +4082,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[3]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 1 : 3;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -4058,6 +4169,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 5 : 7;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -4086,7 +4198,7 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -4098,6 +4210,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -4105,6 +4222,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
@@ -4154,9 +4272,11 @@ void QLens::process_commands(bool read_file)
 						else param_vals[8]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 6 : 8;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
+
 							if (nwords != tot_nparams_to_vary) {
 								string complain_str = "";
 								if (anchor_lens_center) {
@@ -4182,7 +4302,8 @@ void QLens::process_commands(bool read_file)
 							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
 							vary_flags[nparams_to_vary] = vary_zl;
 						}
-						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
+
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
@@ -4194,6 +4315,11 @@ void QLens::process_commands(bool read_file)
 									Complain("could not initialize ellipticity gradient; lens object could not be created");
 								}
 							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
@@ -4201,6 +4327,7 @@ void QLens::process_commands(bool read_file)
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
 					else Complain("csersic requires at least 5 parameters (kappe_e, R_eff, n, rc, q)");
@@ -4235,6 +4362,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[3]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 1 : 3;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -4361,6 +4489,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[4]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 2 : 4;
+							nparams_to_vary += fourier_nmodes*2;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
 							if (nwords != nparams_to_vary) {
@@ -4451,6 +4580,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[5]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 3 : 5;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -4488,17 +4618,11 @@ void QLens::process_commands(bool read_file)
 							} else {
 								if (!add_tabulated_lens_from_file(zl_in, reference_source_redshift, kscale, rscale, theta, xc, yc, filename)) Complain("input file for tabulated model either does not exist, or is in incorrect format");
 							}
-							cout << "GOT HERE" << endl;
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							cout << "HI0" << endl;
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-							cout << "HI1" << endl;
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
-							cout << "HI2" << endl;
 							if (tabulate_existing_lens) remove_lens(lnum);
-							cout << "HI3" << endl;
 							if (auto_set_primary_lens) set_primary_lens();
-							cout << "GOT HERE?" << endl;
 						}
 					}
 					else Complain("tab requires at least 2 parameters (kscale, rscale)");
@@ -4562,6 +4686,7 @@ void QLens::process_commands(bool read_file)
 						else param_vals[6]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? 4 : 6;
+							nparams_to_vary += fourier_nmodes*2;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
 							if (read_command(false)==false) return;
 							vary_zl = check_vary_z();
@@ -4631,7 +4756,9 @@ void QLens::process_commands(bool read_file)
 								Complain("could not initialize ellipticity gradient; lens object could not be created");
 							}
 						}
-
+						for (int i=fourier_nmodes-1; i >= 0; i--) {
+							lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+						}
 						if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 						if (vary_parameters) Complain("vary parameters not supported for testmodel");
 						if (is_perturber) lens_list[nlens-1]->set_perturber(true);
@@ -4642,6 +4769,7 @@ void QLens::process_commands(bool read_file)
 				else Complain("unrecognized lens model");
 				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
 					int nvary=0;
+					bool enter_limits = true;
 					if (vary_zl) nparams_to_vary++;
 					for (int i=0; i < nparams_to_vary; i++) if (vary_flags[i]==true) nvary++;
 					if (nvary != 0) {
@@ -4651,31 +4779,57 @@ void QLens::process_commands(bool read_file)
 						int i,j;
 						for (i=0, j=0; j < nparams_to_vary; j++) {
 							if (vary_flags[j]) {
-								if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
-								if (read_command(false)==false) { remove_lens(nlens-1); Complain("parameter limits could not be read"); }
-								if (nwords >= 2) {
-									if (!(ws[0] >> lower[i])) { remove_lens(nlens-1); Complain("invalid lower limit"); }
-									if (!(ws[1] >> upper[i])) { remove_lens(nlens-1); Complain("invalid upper limit"); }
-									if (nwords == 2) {
+								enter_limits = true;
+								if ((egrad) and (egrad_mode==0) and (!enter_egrad_params_and_varyflags)) {
+									// It should be possible for the user to enter the egrad limits on a single line, instead of requiring these default values. Implement!
+									if ((j >= egrad_qi) and (j < egrad_qf)) {
+										lower[i] = 5e-3;
+										upper[i] = 1;
+										enter_limits = false;
+									}
+									else if ((j >= egrad_theta_i) and (j < egrad_theta_f)) {
+										lower[i] = -90;
+										upper[i] = 90;
+										enter_limits = false;
+									}
+									else if ((fgrad) and (j >= fgrad_amp_i) and (j < fgrad_amp_f)) {
+										lower[i] = -0.05;
+										upper[i] = 0.05;
+										enter_limits = false;
+									}
+									if (!enter_limits) {
 										lower_initial[i] = lower[i];
 										upper_initial[i] = upper[i];
-									} else if (nwords == 3) {
-										double width;
-										if (!(ws[2] >> width)) { remove_lens(nlens-1); Complain("invalid initial parameter width"); }
-										lower_initial[i] = param_vals[j] - width;
-										upper_initial[i] = param_vals[j] + width;
-									} else if (nwords == 4) {
-										if (!(ws[2] >> lower_initial[i])) { remove_lens(nlens-1); Complain("invalid initial lower limit"); }
-										if (!(ws[3] >> upper_initial[i])) { remove_lens(nlens-1); Complain("invalid initial upper limit"); }
+										i++;
+									}
+								}
+								if (enter_limits) {
+									if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
+									if (read_command(false)==false) { remove_lens(nlens-1); Complain("parameter limits could not be read"); }
+									if (nwords >= 2) {
+										if (!(ws[0] >> lower[i])) { remove_lens(nlens-1); Complain("invalid lower limit"); }
+										if (!(ws[1] >> upper[i])) { remove_lens(nlens-1); Complain("invalid upper limit"); }
+										if (nwords == 2) {
+											lower_initial[i] = lower[i];
+											upper_initial[i] = upper[i];
+										} else if (nwords == 3) {
+											double width;
+											if (!(ws[2] >> width)) { remove_lens(nlens-1); Complain("invalid initial parameter width"); }
+											lower_initial[i] = param_vals[j] - width;
+											upper_initial[i] = param_vals[j] + width;
+										} else if (nwords == 4) {
+											if (!(ws[2] >> lower_initial[i])) { remove_lens(nlens-1); Complain("invalid initial lower limit"); }
+											if (!(ws[3] >> upper_initial[i])) { remove_lens(nlens-1); Complain("invalid initial upper limit"); }
+										} else {
+											remove_lens(nlens-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+										}
 									} else {
 										remove_lens(nlens-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
 									}
-								} else {
-									remove_lens(nlens-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+									if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
+									if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
+									i++;
 								}
-								if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
-								if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
-								i++;
 							}
 						}
 						lens_list[nlens-1]->set_limits(lower,upper,lower_initial,upper_initial);
@@ -4751,13 +4905,14 @@ void QLens::process_commands(bool read_file)
 			double ximax; // only used for egrad_mode=0 (B-spline mode)
 			bool linear_xivals; // only used for egrad_mode=0 (B-spline mode)
 			double xiref; // only used for egrad_mode=2 
-			bool enter_egrad_limits = true;
+			bool enter_egrad_params_and_varyflags = true;
+			bool enter_knots = false;
 			bool fgrad = false;
 			int egrad_qi, egrad_qf, egrad_theta_i, egrad_theta_f;
 			int fgrad_amp_i, fgrad_amp_f;
 			boolvector vary_flags;
 			dvector efunc_params, egrad_knots;
-			dvector fgrad_params;
+			dvector fgrad_params, fgrad_knots;
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
 			dvector param_vals;
@@ -4766,7 +4921,7 @@ void QLens::process_commands(bool read_file)
 			vector<int> fourier_mvals;
 			vector<double> fourier_Amvals;
 			vector<double> fourier_Bmvals;
-			int fourier_nmodes=0;
+			int fourier_nmodes = 0;
 			bool include_boxiness_parameter = false;
 			bool include_truncation_radius = false;
 			bool unlensed = false;
@@ -4858,7 +5013,6 @@ void QLens::process_commands(bool read_file)
 						remove_word(i);
 					}
 				}	
-
 				for (int i=nwords-1; i > 1; i--) {
 					if (words[i]=="-fgrad") {
 						fgrad = true;
@@ -5271,7 +5425,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5288,13 +5442,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("gaussian requires at least 3 parameters (sbtot, sig, q)");
@@ -5429,7 +5583,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5446,13 +5600,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("sersic requires at least 4 parameters (max_sb, Reff, n, q)");
@@ -5504,7 +5658,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5521,13 +5675,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("Csersic requires at least 5 parameters (max_sb, k, n, rc, q)");
@@ -5577,7 +5731,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5595,13 +5749,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("csersic requires at least 5 parameters (max_sb, k, n, rc, q)");
@@ -5653,7 +5807,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5670,13 +5824,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("dsersic requires at least 7 parameters (s0, ds, Reff1, n1, Reff2, n2, q)");
@@ -5749,7 +5903,6 @@ void QLens::process_commands(bool read_file)
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("sbmpole requires at least 2 parameters (a_m, r0)");
@@ -5786,7 +5939,7 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
+					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
@@ -5800,13 +5953,13 @@ void QLens::process_commands(bool read_file)
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
-						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),n_bspline_coefs,enter_egrad_limits))) Complain("could not read ellipticity gradient parameters");
-						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params);
+						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
+						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
-						if ((egrad) and (!enter_egrad_limits)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
 				else Complain("tophat requires at least 3 parameters (sb, radius, q)");
@@ -5854,7 +6007,7 @@ void QLens::process_commands(bool read_file)
 					for (i=0, j=0; j < nparams_to_vary; j++) {
 						if (vary_flags[j]) {
 							enter_limits = true;
-							if ((egrad) and (egrad_mode==0) and (!enter_egrad_limits)) {
+							if ((egrad) and (egrad_mode==0) and (!enter_egrad_params_and_varyflags)) {
 								// It should be possible for the user to enter the egrad limits on a single line, instead of requiring these default values. Implement!
 								if ((j >= egrad_qi) and (j < egrad_qf)) {
 									lower[i] = 5e-3;
@@ -11819,7 +11972,7 @@ bool QLens::check_vary_z()
 	else return true;
 }
 
-bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags)
+bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots)
 {
 	// NOTE: the parameter enter_params_and_varyflags will be plugged in as 'enter_prior_limits', because that's how it will be used for after calling this function
 	bool anchor_params = false;
@@ -11827,7 +11980,7 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	enter_params_and_varyflags = true;
 	linear_xivals = false;
 	int n_unique_knots = 0;
-	bool enter_knots = false;
+	enter_knots = false;
 	xiref = 1.5; // default value (only relevant for egrad_mode=2 right now)
 	if (egrad_mode==0) {
 		enter_params_and_varyflags = false;
@@ -11932,15 +12085,22 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	if (vary_params) {
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_efunc_params - 2;
-		//cout << "OLD VARYFLAGS: " << endl;
+		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;
 		//for (int j=0; j < npar_old; j++) {
 			//cout << varyflags[j] << " ";
 		//}
 		//cout << endl;
 		varyflags.resize(npar_new);
+		//cout << "VARYFLAGS after resizing (np=" << npar_new << "): " << endl;
+		//for (int j=0; j < npar_new; j++) {
+			//cout << "FLAG " << j << ": " << varyflags[j] << endl;
+		//}
+		//cout << endl;
+
 		// The following are the center coords and redshift flags, which are always the last three parameters
 		int insertion_point = default_nparams - 2; // Note that default_nparams does not include the redshift parameter, so this should work regardless of whether z is included as a parameter
-		for (int i=insertion_point; i < npar_old; i++) varyflags[i+n_efunc_params-2] = varyflags[i];
+		//cout << "insertion point: " << insertion_point << " npar_old=" << npar_old << endl;
+		for (int i=npar_old-1; i >= insertion_point; i--) varyflags[i+n_efunc_params-2] = varyflags[i];
 
 		insertion_point -= 2; // now we're going to overwrite q, theta in favor of the new egrad param's
 
@@ -12006,11 +12166,42 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	return true;
 }
 
-bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const int n_bspline_coefs, const bool enter_params_and_varyflags)
+bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots)
 {
+	bool anchor_params = false;
 	int n_fgrad_params;
+	int n_unique_knots = 0;
 	if (egrad_mode==0) {
 		n_fgrad_params = 2*n_fmodes*n_bspline_coefs;
+		n_unique_knots = n_bspline_coefs - 2; // assuming order 3 spline
+		knots.input(2*n_fmodes*n_unique_knots);
+		if (!enter_knots) {
+			for (int i=0; i < n_unique_knots; i++) knots[i] = -1e30;
+		} else {
+			for (int j=0; j < n_fmodes; j++) {
+				if (mpi_id==0) cout << "Knot values for A_" << fourier_mvals[j] << " (not counting multiplicities):" << endl;
+				if (read_command(false)==false) return false;
+				if (nwords != n_unique_knots) {
+					warn("wrong number of knots given (%i); expecting %i",nwords,n_unique_knots);
+					return false;
+				}
+				bool invalid_params = false;
+				for (int i=0; i < n_unique_knots; i++) {
+					if (!(ws[i] >> knots[2*j*n_unique_knots+i])) invalid_params = true;
+				}
+				if (invalid_params==true) return false;
+				if (mpi_id==0) cout << "Knot values for B_" << fourier_mvals[j] << " (not counting multiplicities):" << endl;
+				if (read_command(false)==false) return false;
+				if (nwords != n_unique_knots) {
+					warn("wrong number of knots given (%i); expecting %i",nwords,n_unique_knots);
+					return false;
+				}
+				invalid_params = false;
+				for (int i=0; i < n_unique_knots; i++) {
+					if (!(ws[i] >> knots[(2*j+1)*n_unique_knots+i])) invalid_params = true;
+				}
+			}
+		}
 	} else if ((egrad_mode==1) or (egrad_mode==2)) {
 		n_fgrad_params = n_fmodes*8; // this is for egrad_mode=0
 	} else {
@@ -12021,6 +12212,12 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 	if (enter_params_and_varyflags) {
 		if (mpi_id==0) cout << "Fourier gradient parameters:" << endl;
 		if (read_command(false)==false) return false;
+		for (int i=nwords-1; i > 1; i--) {
+			if (words[i]=="-anchor_scale_params") {
+				anchor_params = true;
+				remove_word(i);
+			}
+		}
 		if (nwords != n_fgrad_params) return false;
 		bool invalid_params = false;
 		for (int i=0; i < n_fgrad_params; i++) {
@@ -12033,7 +12230,7 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 	if (vary_params) {
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_fgrad_params - n_fmodes*2;
-		//cout << "OLD VARYFLAGS: " << endl;
+		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;
 		//for (int j=0; j < npar_old; j++) {
 			//cout << varyflags[j] << " ";
 		//}
@@ -12045,9 +12242,35 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 		int n_amps = n_fmodes*2;
 		//int insertion_point = (include_redshift_param) ? default_nparams + n_amps - 1 : default_nparams + n_amps;
 		int insertion_point = default_nparams + n_amps;
-		for (int i=insertion_point; i < npar_old; i++) varyflags[i+n_fgrad_params-n_amps] = varyflags[i];
+		for (int i=npar_old-1; i >= insertion_point; i--) varyflags[i+n_fgrad_params-n_amps] = varyflags[i];
 
 		insertion_point -= n_amps; // now we're going to overwrite the current Fourier entries
+
+		boolvector fgrad_param_anchored(n_fgrad_params);
+		for (int i=0; i < n_fgrad_params; i++) fgrad_param_anchored[i] = false;
+		if (anchor_params) {
+			if (egrad_mode==0) {
+				warn("cannot anchor egrad parameters in B-spline mode");
+				return false;
+			} else if ((egrad_mode==1) or (egrad_mode==2)) {
+				int fpi;
+				for(int i=1; i < n_amps; i++) {
+					fpi = 4*i;
+					// anchor xi0 params
+					parameter_anchors[parameter_anchor_i].anchor_param = true;
+					parameter_anchors[parameter_anchor_i].paramnum = insertion_point+2+fpi;
+					parameter_anchors[parameter_anchor_i].anchor_paramnum = insertion_point+2;
+					parameter_anchor_i++;
+					fgrad_param_anchored[2+fpi] = true;
+					// anchor dxi params
+					parameter_anchors[parameter_anchor_i].anchor_param = true;
+					parameter_anchors[parameter_anchor_i].paramnum = insertion_point+3+fpi;
+					parameter_anchors[parameter_anchor_i].anchor_paramnum = insertion_point+3;
+					parameter_anchor_i++;
+					fgrad_param_anchored[3+fpi] = true;
+				}
+			}
+		}
 		if (enter_params_and_varyflags) {
 			if (mpi_id==0) cout << "Fourier gradient vary flags:" << endl;
 			if (read_command(false)==false) return false;
@@ -12059,6 +12282,10 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 			for (i=0; i < n_fgrad_params; i++) {
 				if (!(ws[i] >> varyflags[insertion_point+i])) invalid_params = true;
 				//if (varyflags[insertion_point+i]) nparams_to_vary++;
+				if ((fgrad_param_anchored[i]) and (varyflags[insertion_point+i])) {
+					warn("cannot vary egrad parameter if it has been anchored to another egrad parameter");
+					return false;
+				}
 			}
 			if (invalid_params==true) return false;
 		} else {
@@ -12068,7 +12295,7 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 			}
 		}
 
-		//cout << "NEW VARYFLAGS: " << endl;
+		//cout << "NEW VARYFLAGS(np=" << npar_new << "): " << endl;
 		//for (int j=0; j < npar_new; j++) {
 			//cout << varyflags[j] << " ";
 		//}

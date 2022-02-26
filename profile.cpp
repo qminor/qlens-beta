@@ -57,6 +57,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 		f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 		ellipticity_mode = -1; // indicates not an elliptical lens
 	}
+	n_fourier_modes = 0;
 	ellipticity_gradient = false;
 	contours_overlap = false; // only relevant for ellipticity gradient mode
 	lensed_center_coords = false;
@@ -117,9 +118,11 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	subclass_label = lens_in->subclass_label;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	ellipticity_gradient = lens_in->ellipticity_gradient;
+	fourier_gradient = lens_in->fourier_gradient;
 	perturber = lens_in->perturber;
 	lensed_center_coords = lens_in->lensed_center_coords;
 	analytic_3d_density = lens_in->analytic_3d_density;
+
 	paramnames = lens_in->paramnames;
 	latex_paramnames = lens_in->latex_paramnames;
 	latex_param_subscripts = lens_in->latex_param_subscripts;
@@ -148,6 +151,13 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	if (lensed_center_coords) {
 		x_center_lensed = lens_in->x_center_lensed;
 		y_center_lensed = lens_in->y_center_lensed;
+	}
+	n_fourier_modes = lens_in->n_fourier_modes;
+	if (n_fourier_modes > 0) {
+		fourier_mode_mvals.input(lens_in->fourier_mode_mvals);
+		fourier_mode_cosamp.input(lens_in->fourier_mode_cosamp);
+		fourier_mode_sinamp.input(lens_in->fourier_mode_sinamp);
+		fourier_mode_paramnum.input(lens_in->fourier_mode_paramnum);
 	}
 	if (ellipticity_gradient) {
 		egrad_mode = lens_in->egrad_mode;
@@ -181,6 +191,34 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		contours_overlap = lens_in->contours_overlap;
 		set_egrad_ptr();
 	}
+	if (fourier_gradient) {
+		n_fourier_grad_modes = lens_in->n_fourier_grad_modes;
+		fourier_grad_mvals = fourier_mode_mvals.array(); // fourier_grad_mvals is used in the egrad functions (which are inherited by this class)
+		n_fourier_grad_params = new int[n_fourier_modes];
+		int i,j,k;
+		for (i=0; i < n_fourier_grad_modes; i++) {
+			n_fourier_grad_params[i] = lens_in->n_fourier_grad_params[i];
+		}
+		int n_amps = n_fourier_grad_modes*2;
+		fourier_param = new double*[n_amps];
+		for (i=0,k=0; i < n_fourier_grad_modes; i++, k+=2) {
+			fourier_param[k] = new double[n_fourier_grad_params[i]];
+			fourier_param[k+1] = new double[n_fourier_grad_params[i]];
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k][j] = lens_in->fourier_param[k][j];
+			}
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k+1][j] = lens_in->fourier_param[k+1][j];
+			}
+		}
+		if (egrad_mode==0) {
+			fourier_knots = new double*[n_amps];
+			for (i=0; i < n_amps; i++) {
+				fourier_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) fourier_knots[i][j] = lens_in->fourier_knots[i][j];
+			}
+		}
+	}
 	include_limits = lens_in->include_limits;
 	if (include_limits) {
 		lower_limits.input(lens_in->lower_limits);
@@ -188,6 +226,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		lower_limits_initial.input(lens_in->lower_limits_initial);
 		upper_limits_initial.input(lens_in->upper_limits_initial);
 	}
+
 	param = new double*[n_params];
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
@@ -204,6 +243,17 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	y_center = sb_in->y_center;
 	ellipticity_mode = sb_in->ellipticity_mode;
 	ellipticity_gradient = sb_in->ellipticity_gradient;
+	fourier_gradient = sb_in->fourier_gradient;
+
+	n_fourier_modes = sb_in->n_fourier_modes;
+	if (n_fourier_modes > 0) {
+		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
+		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
+		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
+		fourier_mode_paramnum.input(sb_in->fourier_mode_paramnum);
+		int n_new_params = n_params + 2*n_fourier_modes;
+		set_nparams_and_anchordata(n_new_params);
+	}
 
 	if (ellipticity_gradient) {
 		egrad_mode = sb_in->egrad_mode;
@@ -236,10 +286,39 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 		set_egrad_ptr();
 		int n_new_params = n_params + get_egrad_nparams() - 4;
 		set_nparams_and_anchordata(n_new_params);
-		assign_paramnames();
-		assign_param_pointers();
 	}
-	// Next, copy Fourier amplitudes/gradient once this has been implemented for lens models
+	if (fourier_gradient) {
+		n_fourier_grad_modes = sb_in->n_fourier_grad_modes;
+		fourier_grad_mvals = fourier_mode_mvals.array(); // fourier_grad_mvals is used in the egrad functions (which are inherited by this class)
+		n_fourier_grad_params = new int[n_fourier_modes];
+		int i,j,k;
+		for (i=0; i < n_fourier_grad_modes; i++) {
+			n_fourier_grad_params[i] = sb_in->n_fourier_grad_params[i];
+		}
+		int n_amps = n_fourier_grad_modes*2;
+		fourier_param = new double*[n_amps];
+		for (i=0,k=0; i < n_fourier_grad_modes; i++, k+=2) {
+			fourier_param[k] = new double[n_fourier_grad_params[i]];
+			fourier_param[k+1] = new double[n_fourier_grad_params[i]];
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k][j] = sb_in->fourier_param[k][j];
+			}
+			for (j=0; j < n_fourier_grad_params[i]; j++) {
+				fourier_param[k+1][j] = sb_in->fourier_param[k+1][j];
+			}
+		}
+		if (egrad_mode==0) {
+			fourier_knots = new double*[n_amps];
+			for (i=0; i < n_amps; i++) {
+				fourier_knots[i] = new double[n_bspline_knots_tot];
+				for (j=0; j < n_bspline_knots_tot; j++) fourier_knots[i][j] = sb_in->fourier_knots[i][j];
+			}
+		}
+		int n_new_params = n_params + get_fgrad_nparams() - 2*n_fourier_modes;
+		set_nparams_and_anchordata(n_new_params);
+	}
+	assign_paramnames();
+	assign_param_pointers();
 }
 
 void LensProfile::copy_integration_tables(const LensProfile* lens_in)
@@ -451,6 +530,7 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 void LensProfile::set_limits(const dvector& lower, const dvector& upper)
 {
 	include_limits = true;
+
 	if (lower.size() != n_vary_params) die("number of parameters with lower limits does not match number of variable parameters (%i vs %i)",lower.size(),n_vary_params);
 	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters",upper.size(),n_vary_params);
 	lower_limits = lower;
@@ -462,6 +542,7 @@ void LensProfile::set_limits(const dvector& lower, const dvector& upper)
 void LensProfile::set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init)
 {
 	include_limits = true;
+	
 	if (lower.size() != n_vary_params) die("number of parameters with lower limits does not match number of variable parameters (%i vs %i)",lower.size(),n_vary_params);
 	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters",upper.size(),n_vary_params);
 	lower_limits = lower;
@@ -696,6 +777,12 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 	} else {
 		set_geometric_param_ranges_egrad(set_auto_penalty_limits, penalty_lower_limits, penalty_upper_limits, param_i);
 	}
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			set_auto_penalty_limits[param_i++] = false;
+			set_auto_penalty_limits[param_i++] = false;
+		}
+	}
 	set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0.01; penalty_upper_limits[param_i] = zsrc_ref; param_i++;
 }
 
@@ -897,6 +984,16 @@ void LensProfile::set_geometric_paramnames(int qi)
 	} else {
 		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ",src");
 	}
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			stringstream mstream;
+			string mstring;
+			mstream << fourier_mode_mvals[i];
+			mstream >> mstring;
+			paramnames[qi] = "A_" + mstring; latex_paramnames[qi] = "A"; latex_param_subscripts[qi] = mstring; qi++;
+			paramnames[qi] = "B_" + mstring; latex_paramnames[qi] = "B"; latex_param_subscripts[qi] = mstring; qi++;
+		}
+	}
 	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
 
@@ -938,6 +1035,12 @@ void LensProfile::set_geometric_param_pointers(int qi)
 		angle_param_exists = true;
 		set_geometric_param_pointers_egrad(param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
 		// Still need to make lensed_center_coords compatible with egrad (or else forbid having both turned on!!!)
+	}
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			param[qi++] = &fourier_mode_cosamp[i];
+			param[qi++] = &fourier_mode_sinamp[i];
+		}
 	}
 	param[qi++] = &zlens;
 }
@@ -1518,17 +1621,72 @@ double LensProfile::kappa(double x, double y)
 	x -= x_center;
 	y -= y_center;
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+	double ans, rsq;
+	if (n_fourier_modes > 0) rsq = x*x + y*y;
+
 	if ((ellipticity_mode==3) and (q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
 	} else {
-		double xisq;
+		double xisq, fourier_factor = 0;
 		if (!ellipticity_gradient) {
 			xisq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
+			if (n_fourier_modes > 0) {
+				double phi_q; // used for Fourier modes
+				phi_q = atan(y/x);
+				if (x < 0) phi_q += M_PI;
+				else if (y < 0) phi_q += M_2PI;
+
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
+				}
+			}
 		} else {
 			xisq = SQR(elliptical_radius_root(x,y));
+			if (n_fourier_modes > 0) {
+				double phi0 = (this->*egrad_ptr)(sqrt(rsq),geometric_param[1],1);
+
+				double costh, sinth, xp, yp, phi_q;
+				costh = cos(phi0);
+				sinth = sin(phi0);
+				xp = x*costh + y*sinth;
+				yp = -x*sinth + y*costh;
+
+				phi_q = atan(yp/xp);
+				if (xp < 0) phi_q += M_PI;
+				else if (yp < 0) phi_q += M_2PI;
+
+				//double phi = atan(y/x);
+				//if (x < 0) phi += M_PI;
+				//else if (y < 0) phi += M_2PI;
+
+				double *cosamps;
+				double *sinamps;
+				if (fourier_gradient) {
+					cosamps = new double[n_fourier_modes];
+					sinamps = new double[n_fourier_modes];
+					fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+				} else {
+					// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+					cosamps = fourier_mode_cosamp.array();
+					sinamps = fourier_mode_sinamp.array();
+				}
+				for (int i=0; i < n_fourier_modes; i++) {
+					fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q);
+					//fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi0) - sinamps[i]*sin(fourier_mode_mvals[i]*phi0))*cos(fourier_mode_mvals[i]*phi) + (cosamps[i]*sin(fourier_mode_mvals[i]*phi0) + sinamps[i]*cos(fourier_mode_mvals[i]*phi0))*sin(fourier_mode_mvals[i]*phi); // testing since this is form used to get deflection integrals
+				}
+				if (fourier_gradient) {
+					delete[] cosamps;
+					delete[] sinamps;
+				}
+			}
 		}
-		return kappa_rsq(xisq);
+		ans = kappa_rsq(xisq);
+
+		if (n_fourier_modes > 0) {
+			ans += 2*fourier_factor*kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+		}
 	}
+	return ans;
 }
 
 void LensProfile::deflection(double x, double y, lensvector& def)
@@ -1541,6 +1699,10 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 		deflection_from_elliptical_potential(x,y,def);
 	} else {
 		(this->*defptr)(x,y,def);
+	}
+
+	if (n_fourier_modes > 0) {
+		deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
 	}
 	if ((!ellipticity_gradient) and (sintheta != 0)) def.rotate_back(costheta,sintheta);
 }
@@ -1556,7 +1718,41 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	} else {
 		(this->*hessptr)(x,y,hess);
 	}
+	/*
+	if (n_fourier_modes > 0) {
+		// Replace with actual formulae!!!
+		lensvector def0, defdx, defdy, defmdx, defmdy;
+		def0[0] = 0;
+		def0[1] = 0;
+		defdx[0] = 0;
+		defdx[1] = 0;
+		defdy[0] = 0;
+		defdy[1] = 0;
+		defmdx[0] = 0;
+		defmdx[1] = 0;
+		defmdy[0] = 0;
+		defmdy[1] = 0;
+
+		double h=1e-5;
+		deflection_from_fourier_modes(x,y,def0);
+		deflection_from_fourier_modes(x-h,y,defmdx);
+		deflection_from_fourier_modes(x,y-h,defmdy);
+		deflection_from_fourier_modes(x+h,y,defdx);
+		deflection_from_fourier_modes(x,y+h,defdy);
+		double hess00, hess11, hess01, hess10;
+		hess00 = (defdx[0] - defmdx[0]) / (2*h);
+		hess11 = (defdy[1] - defmdy[1]) / (2*h);
+		hess01 = (defdx[1] - defmdx[1]) / (2*h);
+		hess10 = (defdy[0] - defmdy[0]) / (2*h);
+		//cout << "HESSCHECK: " << hess01 << " " << hess10 << endl;
+		hess[0][0] += hess00;
+		hess[1][1] += hess11;
+		hess[0][1] += hess01;
+		hess[1][0] += hess01;
+	}
+	*/
 	if ((!ellipticity_gradient) and (sintheta != 0)) hess.rotate_back(costheta,sintheta);
+	//cout << "KAPPACHECK: (hess00+hess11)/2 = " << ((hess[0][0]+hess[1][1])/2) << endl;
 }
 
 double LensProfile::potential(double x, double y)
@@ -1613,6 +1809,79 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 		(this->*defptr)(x,y,def);
 		(this->*hessptr)(x,y,hess);
 	}
+	if (n_fourier_modes > 0) {
+		deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
+	}
+	// /************ ADD HESSIAN FROM FOURIER MODES ************/ 
+
+}
+
+void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
+{
+	n_fourier_modes++;
+	fourier_mode_mvals.resize(n_fourier_modes);
+	fourier_mode_cosamp.resize(n_fourier_modes);
+	fourier_mode_sinamp.resize(n_fourier_modes);
+	fourier_mode_paramnum.resize(n_fourier_modes);
+	fourier_mode_mvals[n_fourier_modes-1] = m_in;
+	fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
+	fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
+	fourier_mode_paramnum[n_fourier_modes-1] = n_params;
+	n_params += 2;
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	angle_param.resize(n_params);
+	angle_param[n_params-2] = false;
+	angle_param[n_params-1] = false;
+	if (vary1) n_vary_params++;
+	if (vary2) n_vary_params++;
+
+	vary_params[n_params-1] = vary_params[n_params-3]; // moving redshift to the end
+	vary_params[n_params-3] = vary1;
+	vary_params[n_params-2] = vary2;
+
+	delete[] param;
+	param = new double*[n_params];
+	reset_anchor_lists();
+	assign_param_pointers();
+	assign_paramnames();
+}
+
+void LensProfile::remove_fourier_modes()
+{
+	// This is not well-written, because it assumes the last parameters (before the zlens parameter) are fourier modes. Have it actually check the parameter name
+	// before deleting it. FIX!
+	if (n_fourier_modes==0) return;
+	vary_params[n_params-1 - n_fourier_modes*2] = vary_params[n_params-1]; // moving zlens parameter back
+	n_params -= n_fourier_modes*2;
+	vary_params.resize(n_params);
+	paramnames.resize(n_params);
+	latex_paramnames.resize(n_params);
+	latex_param_subscripts.resize(n_params);
+	stepsizes.resize(n_params);
+	set_auto_penalty_limits.resize(n_params);
+	penalty_lower_limits.resize(n_params);
+	penalty_upper_limits.resize(n_params);
+	angle_param.resize(n_params);
+	for (int i=0; i < n_params; i++) angle_param[i] = false;
+	n_vary_params = 0;
+	for (int i=0; i < n_params; i++) if (vary_params[i]) n_vary_params++;
+
+	n_fourier_modes = 0;
+	fourier_mode_mvals.resize(n_fourier_modes);
+	fourier_mode_sinamp.resize(n_fourier_modes);
+	fourier_mode_cosamp.resize(n_fourier_modes);
+	fourier_mode_paramnum.resize(n_fourier_modes);
+
+	delete[] param;
+	param = new double*[n_params];
+	assign_param_pointers();
 }
 
 bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
@@ -1657,7 +1926,7 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 		vary_params[i+n_egrad_params-4] = vary_params[i];
 		angle_param[i+n_egrad_params-4] = angle_param[i];
 	}
-	//for (int i=0; i < n_fourier_modes; i++) fourier_mode_paramnum[i] += n_egrad_params - 4; // so it keeps track of where the Fourier modes are
+	for (int i=0; i < n_fourier_modes; i++) fourier_mode_paramnum[i] += n_egrad_params - 4; // so it keeps track of where the Fourier modes are
 	int j=0;
 	for (int i=lensprofile_nparams; i < lensprofile_nparams + n_egrad_params; i++) {
 		if (!copy_vary_settings) vary_params[i] = false;
@@ -1668,6 +1937,24 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	delete[] param;
 	param = new double*[n_params];
 
+	reset_anchor_lists();
+	assign_param_pointers();
+	assign_paramnames();
+
+	update_ellipticity_meta_parameters();
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	if (lens != NULL) lens->ellipticity_gradient = true;
+	check_for_overlapping_contours();
+	if (contours_overlap) {
+		warn("contours overlap for chosen ellipticity gradient parameters");
+		if (lens != NULL) lens->contours_overlap = true;
+	}
+	return true;
+}
+
+void LensProfile::reset_anchor_lists()
+{
 	if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
 	if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
@@ -1694,13 +1981,65 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 		parameter_anchor_ratio[i] = 1.0;
 		parameter_anchor_exponent[i] = 1.0;
 	}
+}
 
+bool LensProfile::enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
+{
+	if (ellipticity_mode==-1) return false; // Fourier gradient only works for lenses that have elliptical isodensity contours
+	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
+	if (n_fourier_modes==0) return false; // Fourier modes must already be present
+
+	if (egrad_mode==0) {
+		int n_bspline_coefs = n_bspline_knots_tot - bspline_order - 1;
+		// Not sure if I should do this here, or before calling enable_fourier_gradient?
+		fourier_params.input(2*n_fourier_modes*n_bspline_coefs);
+		int i,j,k;
+		for (k=0; k < 2*n_fourier_modes; k++) {
+			for (i=0,j=0; i < n_bspline_coefs; i++, j++) {
+				fourier_params[j] = 0.0;
+			}
+		}
+	}
+
+	int n_fourier_grad_params;
+	//NOTE: here we assume that ximin, ximax were set when enabling ellipticity gradient
+	if (setup_fourier_grad_params(n_fourier_modes,fourier_mode_mvals,fourier_params,n_fourier_grad_params,knots)==false) {
+		warn("could not set up fgrad params properly");
+		return false;
+	}
+	int param_ndif = n_fourier_grad_params - 2*n_fourier_modes; // we already had q, theta, xc and yc
+	int new_nparams = n_params + param_ndif; // we already had q, theta, xc and yc
+	int fourier_istart = fourier_mode_paramnum[0];
+
+	vary_params.resize(new_nparams);
+	paramnames.resize(new_nparams);
+	latex_paramnames.resize(new_nparams);
+	latex_param_subscripts.resize(new_nparams);
+	stepsizes.resize(new_nparams);
+	set_auto_penalty_limits.resize(new_nparams);
+	penalty_lower_limits.resize(new_nparams);
+	penalty_upper_limits.resize(new_nparams);
+	angle_param.resize(new_nparams);
+	// The next part is only relevant if there are parameters after the Fourier modes
+	for (int i=fourier_istart+2*n_fourier_modes; i < n_params; i++) {
+		vary_params[i+param_ndif] = vary_params[i];
+		angle_param[i+param_ndif] = angle_param[i];
+	}
+	int j=0;
+	for (int i=fourier_istart; i < fourier_istart + n_fourier_grad_params; i++) {
+		if (!copy_vary_settings) vary_params[i] = false;
+		else vary_params[i] = (*vary_fgrad)[j++];
+		angle_param[i] = false; // the angle params will be set when the param pointers are set
+	}
+	set_fourier_paramnums(fourier_mode_paramnum.array(),fourier_istart);
+	n_params = new_nparams;
+	delete[] param;
+	param = new double*[n_params];
+
+	reset_anchor_lists();
 	assign_param_pointers();
 	assign_paramnames();
 
-	update_ellipticity_meta_parameters();
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
 	if (lens != NULL) lens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
@@ -1708,6 +2047,22 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 		if (lens != NULL) lens->contours_overlap = true;
 	}
 	return true;
+}
+
+void LensProfile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f)
+{
+	qi = lensprofile_nparams;
+	qf = qi + n_egrad_params[0];
+	theta_i = qf;
+	theta_f = theta_i + n_egrad_params[1];
+
+	if (fourier_gradient) {
+		amp_i = fourier_mode_paramnum[0];
+		amp_f = amp_i;
+		for (int i=0; i < n_fourier_modes; i++) {
+			amp_f += 2*n_fourier_grad_params[i];
+		}
+	}
 }
 
 bool LensProfile::has_kapavg_profile()
@@ -2599,7 +2954,134 @@ double LensIntegral::jprime_integrand_egrad(const double xi)
 	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
 
+/************************************* Integration algorithms *************************************/
 
+void LensProfile::deflection_from_fourier_modes(double x, double y, lensvector& def)
+{
+	if (n_fourier_modes==0) return;
+	double r = sqrt(x*x+y*y);
+	double ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, m, rmfac, cosm, sinm;
+
+	bool converged;
+	LensIntegral lens_integral(this,x,y);
+	if (fourier_gradient) {
+		lens_integral.cosamps = new double[n_fourier_modes];
+		lens_integral.sinamps = new double[n_fourier_modes];
+		fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+	} else {
+		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+		lens_integral.cosamps = fourier_mode_cosamp.array();
+		lens_integral.sinamps = fourier_mode_sinamp.array();
+	}
+
+	if (ellipticity_gradient) {
+		lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+	}
+
+	double phi; // used for Fourier modes
+	phi = atan(y/x);
+	if (x < 0) phi += M_PI;
+	else if (y < 0) phi += M_2PI;
+
+	for (int i=0; i < n_fourier_modes; i++) {
+		m = fourier_mode_mvals[i];
+		lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
+		lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+
+		rmfac = pow(r,m);
+		//double alph = 0.8;
+		//double ileftcheck = -alph*fourier_mode_cosamp[i]*r*r*kappa_rsq(r*r)/(2+m-alph);
+		//double irightcheck = alph*fourier_mode_cosamp[i]*r*r*kappa_rsq(r*r)/(2-m-alph);
+		//cout << "ileft_cos=" << (ileft_cos/rmfac) << " " << ileftcheck << endl;
+		//cout << "iright_cos=" << (iright_cos*rmfac) << " " << irightcheck << endl;
+		pots = -(ileft_sin/rmfac + iright_sin*rmfac)/m;
+		dpots_dr = (ileft_sin/rmfac - iright_sin*rmfac)/r;
+		potc = -(ileft_cos/rmfac + iright_cos*rmfac)/m;
+		dpotc_dr = (ileft_cos/rmfac - iright_cos*rmfac)/r;
+		//cout << "psi_cos=" << potc << endl;
+		//cout << "dpsi_cos=" << dpotc_dr << endl;
+		cosm = cos(m*phi);
+		sinm = sin(m*phi);
+		def_r = dpotc_dr*cosm + dpots_dr*sinm;
+		def_phi = (-potc*sinm + pots*cosm)*m/r;
+		def[0] += (x*def_r - y*def_phi)/r;
+		def[1] += (y*def_r + x*def_phi)/r;
+	}
+	if (fourier_gradient) {
+		delete[] lens_integral.cosamps;
+		delete[] lens_integral.sinamps;
+	}
+}
+
+void LensIntegral::calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged)
+{
+	mval = mval_in;
+	fourier_ival = fourier_ival_in;
+	cosmode = cosmode_in;
+	converged = true; // will change if convergence not achieved
+	double ans;
+	if (profile->integral_method == Romberg_Integration)
+	{
+		double (Romberg::*fptr)(const double);
+		fptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::ileft_integrand);
+		ileft = romberg_open(fptr, 0, rval, profile->integral_tolerance, 5);
+		fptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::iright_integrand);
+		iright = romberg_open(fptr, 0, 1.0/rval, profile->integral_tolerance, 5);
+	}
+	else if (profile->integral_method == Gaussian_Quadrature)
+	{
+		double (LensIntegral::*fptr)(double) = &LensIntegral::ileft_integrand;
+		ileft = GaussIntegrate(fptr,0,rval);
+		fptr = &LensIntegral::iright_integrand;
+		iright = GaussIntegrate(fptr,0,1.0/rval);
+	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (LensIntegral::*fptr)(double) = &LensIntegral::ileft_integrand;
+		ileft = PattersonIntegrate(fptr,0,rval,converged);
+		fptr = &LensIntegral::iright_integrand;
+		iright = PattersonIntegrate(fptr,0,1.0/rval,converged);
+	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		double (LensIntegral::*fptr)(double) = &LensIntegral::ileft_integrand;
+		ileft = FejerIntegrate(fptr,0,rval,converged);
+		fptr = &LensIntegral::iright_integrand;
+		iright = FejerIntegrate(fptr,0,1.0/rval,converged);
+	}
+	else die("unknown integral method");
+}
+
+inline double LensIntegral::fourier_kappa_perturbation(const double r)
+{
+	if (profile->ellipticity_gradient) {
+		phi0 = profile->angle_function(r);
+	}
+	if (profile->fourier_gradient) {
+		profile->fourier_mode_function(r,cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+	}
+	double kapm;
+	if (phi0==0) {
+		if (cosmode) kapm = cosamps[fourier_ival];
+		else kapm = sinamps[fourier_ival];
+	} else {
+		if (cosmode) kapm = cosamps[fourier_ival]*cos(mval*phi0) - sinamps[fourier_ival]*sin(mval*phi0);
+		else kapm = cosamps[fourier_ival]*sin(mval*phi0) + sinamps[fourier_ival]*cos(mval*phi0);
+	}
+	double rsq = r*r;
+	kapm *= 2*profile->kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+	return kapm;
+}
+
+double LensIntegral::ileft_integrand(const double r)
+{
+	return pow(r,mval+1)*fourier_kappa_perturbation(r);
+}
+
+double LensIntegral::iright_integrand(const double u) // here, u = 1/r
+{
+	return pow(u,mval-3)*fourier_kappa_perturbation(1.0/u);
+}
 
 /************************************* Integration algorithms *************************************/
 
@@ -2755,9 +3237,13 @@ void LensProfile::print_parameters()
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		cout << " (";
 		if (ellipticity_gradient) cout << "egrad=on, ";
+		if (fourier_gradient) cout << "fgrad=on,";
 		cout << "emode=" << ellipticity_mode << ")"; // emode=3 is indicated by "pseudo-" name, not here
 	} else {
-		if ((ellipticity_mode != -1) and (ellipticity_gradient)) cout << " (egrad=on)";
+		if ((ellipticity_mode != -1) and (ellipticity_gradient)) {
+			if (fourier_gradient) cout << " (egrad,fgrad=on)";
+			else cout << " (egrad=on)";
+		}
 	}
 	double aux_param;
 	string aux_paramname;

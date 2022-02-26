@@ -12,7 +12,7 @@ using namespace std;
 bool SB_Profile::orient_major_axis_north = false; // At the moment, this setting cannot be changed; it should probably be removed altogether
 bool SB_Profile::use_sb_ellipticity_components = false;
 int SB_Profile::default_ellipticity_mode = 1;
-bool SB_Profile::use_fmode_scaled_amplitudes = true;
+bool SB_Profile::use_fmode_scaled_amplitudes = false;
 bool SB_Profile::fourier_use_eccentric_anomaly = true;
 bool SB_Profile::fourier_sb_perturbation = false; // if true, add fourier modes to the surface brightness, rather than the elliptical radius
 double SB_Profile::zoom_split_factor = 2;
@@ -42,11 +42,13 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	} else {
 		ellipticity_mode = -1; // indicates not an elliptical source
 	}
+	n_fourier_modes = 0;
 	include_boxiness_parameter = false;
 	include_truncation_radius = false;
 	is_lensed = true; // default
 	zoom_subgridding = false; // default
 	ellipticity_gradient = false;
+	fourier_gradient = false;
 	contours_overlap = false; // only relevant for ellipticity gradient mode
 	set_nparams(np);
 	sbprofile_nparams = sbprofile_np;
@@ -202,7 +204,6 @@ void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 {
 	int old_nparams = (resize) ? n_params : 0;
 	n_params = n_params_in;
-	n_fourier_modes = 0;
 	vary_params.resize(n_params);
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
@@ -422,7 +423,7 @@ void SB_Profile::remove_fourier_modes()
 
 bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
 {
-	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
+	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for sources that have elliptical isophotes
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
 	
 	if ((egrad_mode==0) and (efunc_params[0]==-1e30)) { // in this case, the egrad params were never initialized
@@ -537,29 +538,28 @@ void SB_Profile::reset_anchor_lists()
 	}
 }
 
-bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const bool copy_vary_settings, boolvector* vary_fgrad)
+bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
 {
-	if (ellipticity_mode==-1) return false; // Fourier gradient only works for lenses that have elliptical isodensity contours
+	if (ellipticity_mode==-1) return false; // Fourier gradient only works for sources that have elliptical isophotes
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
 	if (n_fourier_modes==0) return false; // Fourier modes must already be present
 	if ((include_boxiness_parameter) or (include_truncation_radius)) return false; // not compatible with these parameters (unless you move them to the end)
 
-	if (egrad_mode==0) {
-		int n_bspline_coefs = n_bspline_knots_tot - bspline_order - 1;
+	if ((egrad_mode==0) and (fourier_params[0]==-1e30)) { // in this case, the fgrad params were never initialized
 		// Not sure if I should do this here, or before calling enable_fourier_gradient?
+		int n_bspline_coefs = n_bspline_knots_tot - bspline_order - 1;
 		fourier_params.input(2*n_fourier_modes*n_bspline_coefs);
-		int i,j,k;
-		for (k=0; k < 2*n_fourier_modes; k++) {
-			for (i=0,j=0; i < n_bspline_coefs; i++, j++) {
-				fourier_params[j] = q;
-			}
+		int i,j=0,k;
+		for (k=0; k < n_fourier_modes; k++) {
+			for (i=0; i < n_bspline_coefs; i++) fourier_params[j++] = fourier_mode_cosamp[k];
+			for (i=0; i < n_bspline_coefs; i++) fourier_params[j++] = fourier_mode_sinamp[k];
 		}
 	}
 
 	int n_fourier_grad_params;
-	if (setup_fourier_grad_params(n_fourier_modes,fourier_mode_mvals,fourier_params,n_fourier_grad_params)==false) return false;
-	int param_ndif = n_fourier_grad_params - 2*n_fourier_modes; // we already had q, theta, xc and yc
-	int new_nparams = n_params + param_ndif; // we already had q, theta, xc and yc
+	if (setup_fourier_grad_params(n_fourier_modes,fourier_mode_mvals,fourier_params,n_fourier_grad_params,knots)==false) return false;
+	int param_ndif = n_fourier_grad_params - 2*n_fourier_modes; // we already had Am, Bm amplitudes as parameters
+	int new_nparams = n_params + param_ndif; // we already had Am, Bm amplitudes as parameters
 	int fourier_istart = fourier_mode_paramnum[0];
 
 	vary_params.resize(new_nparams);
@@ -1298,8 +1298,8 @@ double SB_Profile::surface_brightness(double x, double y)
 		xisq = SQR(xi);
 		if ((n_fourier_modes > 0) and (fourier_sb_perturbation)) {
 			double ep, phi0;
-			if (fourier_use_eccentric_anomaly) ellipticity_function(sqrt(rsq),ep,phi0); // lensing multipoles depend on r, not xi, so we follow the same restriction here
-			else ellipticity_function(xi,ep,phi0);
+			if (fourier_use_eccentric_anomaly) ellipticity_function(xi,ep,phi0);
+			else ellipticity_function(sqrt(rsq),ep,phi0); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 
 			double costh, sinth, xp, yp, qq, phi_q;
 			costh = cos(phi0);

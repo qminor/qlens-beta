@@ -96,12 +96,17 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	dvector lower_limits, upper_limits;
 	dvector lower_limits_initial, upper_limits_initial;
 
+	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical density contours (zero by default)
+	ivector fourier_mode_mvals, fourier_mode_paramnum;
+	dvector fourier_mode_cosamp, fourier_mode_sinamp;
+
 	virtual void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
 	void copy_base_lensdata(const LensProfile* lens_in);
 	void copy_source_data_to_lens(const SB_Profile* in);
 
 	void set_nparams_and_anchordata(const int &n_params_in, const bool resize = false);
+	void reset_anchor_lists();
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
 	void set_angle(const double &theta_degrees);
@@ -246,6 +251,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
+	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
+	void remove_fourier_modes();
+	bool enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
+	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
+
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
 	bool register_vary_flags();
@@ -326,10 +336,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	virtual void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess);
 	virtual void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
-	virtual double potential(double, double);
+	virtual double potential(double x, double y);
 	virtual double kappa(double x, double y);
-	virtual void deflection(double, double, lensvector&);
-	virtual void hessian(double, double, lensmatrix&); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+	virtual void deflection(double x, double y, lensvector& def);
+	virtual void hessian(double x, double y, lensmatrix& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+	void deflection_from_fourier_modes(double x, double y, lensvector& def);
 
 	public:
 	bool isspherical() { return (q==1.0); }
@@ -341,6 +352,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double get_f_major_axis() { return f_major_axis; }
 	double get_redshift() { return zlens; }
 	int get_n_params() { return n_params; }
+	int get_lensprofile_nparams() { return lensprofile_nparams; }
 	int get_n_vary_params() { return n_vary_params; }
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	virtual int get_special_parameter_anchor_number() { return -1; } // no special parameters can be center_anchored for the base class
@@ -363,7 +375,10 @@ struct LensIntegral : public Romberg
 {
 	LensProfile *profile;
 	double xval, yval, xsqval, ysqval, fsqinv, xisq, u, epsilon, qfac, nval_plus_half, mnval_plus_half;
-	int nval, emode;
+	int nval, mval, fourier_ival, emode; // mval, fourier_ival are used for the Fourier mode integrals
+	double phi0; // phi0 is used for Fourier mode integrals if ellipticity gradient is used
+	bool cosmode;
+	double *cosamps, *sinamps; // used for Fourier modes
 	double *gausspoints, *gaussweights;
 	double *pat_points, **pat_weights;
 	double *pat_funcs;
@@ -377,6 +392,7 @@ struct LensIntegral : public Romberg
 		epsilon = 1 - q*q;
 		if (q != 1.0) fsqinv = 1.0/SQR(profile->f_major_axis);
 		else fsqinv = 1.0; // even if the lens model itself is not spherical, we can still get the spherical calculations if needed by setting f=1 here
+		phi0 = 0;
 		emode = profile->ellipticity_mode;
 		gausspoints = profile->points;
 		gaussweights = profile->weights;
@@ -389,6 +405,7 @@ struct LensIntegral : public Romberg
 			cc_weights = profile->cc_weights;
 			cc_funcs = new double[profile->cc_N];
 		}
+		cosamps=sinamps=NULL;
 	}
 	~LensIntegral() {
 		if (profile->integral_method==Gauss_Patterson_Quadrature) {
@@ -417,6 +434,11 @@ struct LensIntegral : public Romberg
 	double k_integral_egrad(const int nval_in, bool &converged);
 	double jprime_integral_egrad(const int nval_in, bool &converged);
 	double jprime_integrand_egrad(const double w);
+
+	void calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged);
+	double fourier_kappa_perturbation(const double r);
+	double ileft_integrand(const double r);
+	double iright_integrand(const double u); // here, u = 1/r
 };
 
 class Alpha : public LensProfile

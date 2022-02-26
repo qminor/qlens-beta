@@ -141,7 +141,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void delete_center_anchor();
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void disable_ellipticity_gradient();
-	bool enable_fourier_gradient(dvector& fourier_params, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
+	bool enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
 
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();

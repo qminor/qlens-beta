@@ -113,10 +113,10 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 		double bspline_logximax = log(ximax)/ln10;
 		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
 		double xi, xistep = (ximax-ximin)/(n_unique_knots-1);
+		for (i=0; i < 4; i++) geometric_knots[i] = new double[n_bspline_knots_tot];
 		if (knots[0]==-1e30) {
 			// Set up the knot vectors
 			for (i=0; i < 4; i++) {
-				geometric_knots[i] = new double[n_bspline_knots_tot];
 				for (j=0; j < bspline_order; j++) geometric_knots[i][j] = bspline_logximin;
 				if (!use_linear_xivals) {
 					for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) geometric_knots[i][j+bspline_order] = logxi;
@@ -131,7 +131,6 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 		} else {
 			ip=0;
 			for (i=0; i < 4; i++) {
-				geometric_knots[i] = new double[n_bspline_knots_tot];
 				if ((i < 2) or (center_gradient)) {
 					for (j=0; j < bspline_order; j++) geometric_knots[i][j] = log(knots[ip])/ln10;
 					for (j=0; j < n_unique_knots; j++) geometric_knots[i][j+bspline_order] = log(knots[ip++])/ln10;
@@ -236,7 +235,7 @@ bool EllipticityGradient::setup_egrad_params(const int egrad_mode_in, const int 
 	return true;
 }
 
-bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot)
+bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ivector& mvals, const dvector& fourier_grad_params, int& n_fourier_grad_params_tot, const dvector& knots)
 {
 	if (ellipticity_gradient==false) {
 		// Is this truly necessary? Might be nice to make them independent
@@ -268,12 +267,44 @@ bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ive
 	n_fourier_grad_modes = n_modes;
 	n_fourier_grad_params = new int[n_modes];
 	int n_amps = n_modes*2;
-	int k,ip=0;
+	int k,ip;
 	if (egrad_mode==0) {
 		int n_bspline_coefs = n_bspline_knots_tot - bspline_order - 1;
 		n_fourier_grad_params_tot = n_amps*n_bspline_coefs;
 		for (i=0; i < n_modes; i++) {
 			n_fourier_grad_params[i] = n_bspline_coefs;
+		}
+		// Set up the knot vectors
+		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
+
+		fourier_knots = new double*[n_amps];
+		for (i=0; i < n_amps; i++) fourier_knots[i] = new double[n_bspline_knots_tot];
+		if (knots[0]==-1e30) {
+			// Set up the knot vectors
+			double bspline_logximin = log(xi_initial_egrad)/ln10;
+			double bspline_logximax = log(xi_final_egrad)/ln10;
+			double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
+			for (i=0; i < n_amps; i++) {
+				for (j=0; j < bspline_order; j++) fourier_knots[i][j] = bspline_logximin;
+				if (!use_linear_xivals) {
+					for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) fourier_knots[i][j+bspline_order] = logxi;
+				} else {
+					double xi, xistep = (xi_final_egrad-xi_initial_egrad)/(n_unique_knots-1);
+					for (j=0, xi=xi_initial_egrad; j < n_unique_knots; j++, xi += xistep) {
+						fourier_knots[i][j+bspline_order] = log(xi)/ln10;
+						//cout << pow(10,geometric_knots[i][j+bspline_order]) << endl;
+					}
+				}
+				for (j=0; j < bspline_order; j++) fourier_knots[i][n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
+			}
+		} else {
+			ip=0;
+			for (i=0; i < n_amps; i++) {
+				for (j=0; j < bspline_order; j++) fourier_knots[i][j] = log(knots[ip])/ln10;
+				for (j=0; j < n_unique_knots; j++) fourier_knots[i][j+bspline_order] = log(knots[ip++])/ln10;
+				for (j=0; j < bspline_order; j++) fourier_knots[i][n_bspline_knots_tot-bspline_order+j] = log(knots[ip-1])/ln10;
+			}
+			if (ip != knots.size()) die("we fucked up the knot vector, wrong number of arguments");
 		}
 	} else if (egrad_mode==1) {
 		n_fourier_grad_params_tot = n_amps*4;
@@ -298,6 +329,7 @@ bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ive
 	}
 	fourier_grad_mvals = mvals.array();
 	fourier_param = new double*[n_amps];
+	ip = 0;
 	for (i=0,k=0; i < n_modes; i++, k += 2) {
 		fourier_param[k] = new double[n_fourier_grad_params[i]];
 		fourier_param[k+1] = new double[n_fourier_grad_params[i]];
@@ -308,22 +340,8 @@ bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ive
 			fourier_param[k+1][j] = fourier_grad_params[ip++];
 		}
 	}
-	if (ip != fourier_grad_params.size()) die("we fucked up size of fourier_grad_params");
+	if (ip != fourier_grad_params.size()) die("we fucked up size of fourier_grad_params (%i vs %i)",ip,fourier_grad_params.size());
 
-	if (egrad_mode==0) {
-		// Set up the knot vectors
-		int n_unique_knots = n_bspline_knots_tot - 2*bspline_order;
-		double bspline_logximin = log(xi_initial_egrad)/ln10;
-		double bspline_logximax = log(xi_final_egrad)/ln10;
-		double logxi, logxistep = (bspline_logximax-bspline_logximin)/(n_unique_knots-1);
-		fourier_knots = new double*[n_amps];
-		for (i=0; i < n_amps; i++) {
-			fourier_knots[i] = new double[n_bspline_knots_tot];
-			for (j=0; j < bspline_order; j++) fourier_knots[i][j] = bspline_logximin;
-			for (j=0, logxi=bspline_logximin; j < n_unique_knots; j++, logxi += logxistep) fourier_knots[i][j+bspline_order] = logxi;
-			for (j=0; j < bspline_order; j++) fourier_knots[i][n_bspline_knots_tot-bspline_order+j] = bspline_logximax;
-		}
-	}
 	return true;
 }
 
@@ -388,6 +406,11 @@ void EllipticityGradient::ellipticity_function(const double xi, double& ep, doub
 	ep = (this->*egrad_ptr)(xi,geometric_param[0],0); // NOTE!!! ep is actually the axis ratio q on this line!!!
 	angle = (this->*egrad_ptr)(xi,geometric_param[1],1);
 	ep = 1 - ep*ep; // this gets it in the epsilon form required for deflection formulas (remember 'ep' is the axis ratio before this line)
+}
+
+double EllipticityGradient::angle_function(const double xi)
+{
+	return ((this->*egrad_ptr)(xi,geometric_param[1],1));
 }
 
 void EllipticityGradient::fourier_mode_function(const double xi, double* cosamp, double* sinamp)
@@ -572,7 +595,8 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 	//cout << "minq=" << egrad_minq << " ximin=" << ximin << " ximax=" << ximax << endl;
 	//double xi = BrentsMethod(xiptr,x,y,0.9*ximin,1.1*ximax,1e-4);
 	//cout << "Trying x=" << x << ", y=" << y << ", minq=" << egrad_minq << ", ximin=" << ximin << ", ximax=" << ximax << endl;
-	double xi = BrentsMethod(xiptr,x,y,0.4*ximin,1.6*ximax,1e-7);
+	double acc = dmin(1e-7,0.1*(ximax-ximin));
+	double xi = BrentsMethod(xiptr,x,y,0.4*ximin,1.6*ximax,acc);
 	if ((xi > (1.1*ximax)) or (xi < (0.9*ximin))) {
 		cout << "WARNING: xi out of expected range (xi=" << xi << ", ximin=" << ximin << ", ximax=" << ximax << ")" << endl;
 		double ep,th;
@@ -701,6 +725,18 @@ int EllipticityGradient::get_egrad_nparams()
 	int n_tot_egrad_params = 0;
 	for (int i=0; i < 4; i++) n_tot_egrad_params += n_egrad_params[i];
 	return n_tot_egrad_params;
+}
+
+int EllipticityGradient::get_fgrad_nparams()
+{
+	int n_tot_egrad_params = 0;
+	if (fourier_gradient) {
+		for (int i=0; i < n_fourier_grad_modes; i++) {
+			n_tot_egrad_params += 2*n_fourier_grad_params[i];
+		}
+	}
+	return n_tot_egrad_params;
+
 }
 
 void EllipticityGradient::update_egrad_meta_parameters()

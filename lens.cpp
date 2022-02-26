@@ -1688,6 +1688,16 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 
 bool QLens::spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper)
 {
+	if (!SB_Profile::fourier_sb_perturbation) {
+		warn("cannot spawn lens unless 'fourier_sbmode' is turned on");
+		return false;
+	}
+	if (LensProfile::orient_major_axis_north) {
+		warn("cannot spawn lens unless 'major_axis_along_y' is turned off");
+		return false;
+	}
+
+	if (SB_Profile::fourier_use_eccentric_anomaly) warn("spawned lens must use polar angle for Fourier modes; to ensure that angular structure is identical to source model, set 'fourier_ecc_anomaly' off");
 	// NOTE: the source object should store its intrinsic redshift, which should be used as the lens redshift here! Implement this soon!
 	LensProfile* new_lens;
 	bool spawn_lens = true;
@@ -11633,20 +11643,27 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 		else image_pixel_grid->activate_extended_mask(); 
 	}
+	bool at_least_one_lensed_src;
 	if (source_fit_mode==Pixellated_Source) {
+		at_least_one_lensed_src = true;
 		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) return false;
+	} else {
+		at_least_one_lensed_src = false;
+		for (int k=0; k < n_sb; k++) {
+			if (sb_list[k]->is_lensed) at_least_one_lensed_src = true;
+		}
 	}
-	if (!plot_foreground_only) {
-		image_pixel_grid->find_surface_brightness(plot_foreground_only,true);
+	if ((!plot_foreground_only) and (at_least_one_lensed_src)) {
+		image_pixel_grid->find_surface_brightness(false,true);
 		if (!omit_foreground) {
 			assign_foreground_mappings(use_data);
 			calculate_foreground_pixel_surface_brightness();
 			store_foreground_pixel_surface_brightness();
 		}
 	} else {
-		image_pixel_grid->find_surface_brightness(plot_foreground_only);
+		image_pixel_grid->find_surface_brightness(true);
 	}
 	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 	if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
