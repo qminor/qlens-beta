@@ -300,7 +300,7 @@ void QLens::process_commands(bool read_file)
 						"verbal_mode -- if on, display detailed output and input script text to terminal (default=on)\n"
 						"warnings -- set warning flags on/off\n"
 						"imgsrch_warnings -- set warning flags related to image searching on/off\n"
-						"integration_warnings -- set warning flags related to numerical integral convergence on/off\n"
+						"integral_warnings -- set warning flags related to numerical integral convergence on/off\n"
 						"show_wtime -- show time required for executing commands (e.g. mkgrid); requires OpenMP\n"
 						"sci_notation -- display numbers in scientific notation (on/off)\n"
 						"sim_err_pos -- random error in image positions, added when producing simulated image data\n"
@@ -8948,7 +8948,7 @@ void QLens::process_commands(bool read_file)
 			}
 			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="integration_warnings")
+		else if ((words[0]=="integral_warnings") or (words[0]=="integration_warnings"))
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile::integration_warnings) << endl;

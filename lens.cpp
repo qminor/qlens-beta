@@ -1688,7 +1688,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 
 bool QLens::spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper)
 {
-	if (!SB_Profile::fourier_sb_perturbation) {
+	if ((!SB_Profile::fourier_sb_perturbation) and (sb_list[src_number]->n_fourier_modes > 0)) {
 		warn("cannot spawn lens unless 'fourier_sbmode' is turned on");
 		return false;
 	}

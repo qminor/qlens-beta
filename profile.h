@@ -340,7 +340,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double kappa(double x, double y);
 	virtual void deflection(double x, double y, lensvector& def);
 	virtual void hessian(double x, double y, lensmatrix& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
-	void deflection_from_fourier_modes(double x, double y, lensvector& def);
+	double kappa_from_fourier_modes(const double x, const double y);
+	void add_deflection_from_fourier_modes(const double x, const double y, lensvector& def);
+	void add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess);
 
 	public:
 	bool isspherical() { return (q==1.0); }
@@ -439,6 +441,8 @@ struct LensIntegral : public Romberg
 	double fourier_kappa_perturbation(const double r);
 	double ileft_integrand(const double r);
 	double iright_integrand(const double u); // here, u = 1/r
+	double fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in);
+
 };
 
 class Alpha : public LensProfile

@@ -1622,7 +1622,6 @@ double LensProfile::kappa(double x, double y)
 	y -= y_center;
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
 	double ans, rsq;
-	if (n_fourier_modes > 0) rsq = x*x + y*y;
 
 	if ((ellipticity_mode==3) and (q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
@@ -1630,62 +1629,12 @@ double LensProfile::kappa(double x, double y)
 		double xisq, fourier_factor = 0;
 		if (!ellipticity_gradient) {
 			xisq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
-			if (n_fourier_modes > 0) {
-				double phi_q; // used for Fourier modes
-				phi_q = atan(y/x);
-				if (x < 0) phi_q += M_PI;
-				else if (y < 0) phi_q += M_2PI;
-
-				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi_q) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi_q);
-				}
-			}
 		} else {
 			xisq = SQR(elliptical_radius_root(x,y));
-			if (n_fourier_modes > 0) {
-				double phi0 = (this->*egrad_ptr)(sqrt(rsq),geometric_param[1],1);
-
-				double costh, sinth, xp, yp, phi_q;
-				costh = cos(phi0);
-				sinth = sin(phi0);
-				xp = x*costh + y*sinth;
-				yp = -x*sinth + y*costh;
-
-				phi_q = atan(yp/xp);
-				if (xp < 0) phi_q += M_PI;
-				else if (yp < 0) phi_q += M_2PI;
-
-				//double phi = atan(y/x);
-				//if (x < 0) phi += M_PI;
-				//else if (y < 0) phi += M_2PI;
-
-				double *cosamps;
-				double *sinamps;
-				if (fourier_gradient) {
-					cosamps = new double[n_fourier_modes];
-					sinamps = new double[n_fourier_modes];
-					fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
-				} else {
-					// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-					cosamps = fourier_mode_cosamp.array();
-					sinamps = fourier_mode_sinamp.array();
-				}
-				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q);
-					//fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi0) - sinamps[i]*sin(fourier_mode_mvals[i]*phi0))*cos(fourier_mode_mvals[i]*phi) + (cosamps[i]*sin(fourier_mode_mvals[i]*phi0) + sinamps[i]*cos(fourier_mode_mvals[i]*phi0))*sin(fourier_mode_mvals[i]*phi); // testing since this is form used to get deflection integrals
-				}
-				if (fourier_gradient) {
-					delete[] cosamps;
-					delete[] sinamps;
-				}
-			}
 		}
 		ans = kappa_rsq(xisq);
-
-		if (n_fourier_modes > 0) {
-			ans += 2*fourier_factor*kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
-		}
 	}
+	if (n_fourier_modes > 0) ans += kappa_from_fourier_modes(x,y);
 	return ans;
 }
 
@@ -1702,7 +1651,7 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 	}
 
 	if (n_fourier_modes > 0) {
-		deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
+		add_deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
 	}
 	if ((!ellipticity_gradient) and (sintheta != 0)) def.rotate_back(costheta,sintheta);
 }
@@ -1718,8 +1667,15 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	} else {
 		(this->*hessptr)(x,y,hess);
 	}
-	/*
 	if (n_fourier_modes > 0) {
+		add_hessian_from_fourier_modes(x, y, hess);
+		/*
+		lensmatrix hesscheck;
+		hesscheck[0][0] = 0;
+		hesscheck[1][1] = 0;
+		hesscheck[0][1] = 0;
+		hesscheck[1][0] = 0;
+		add_hessian_from_fourier_modes(x, y, hesscheck);
 		// Replace with actual formulae!!!
 		lensvector def0, defdx, defdy, defmdx, defmdy;
 		def0[0] = 0;
@@ -1733,26 +1689,33 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 		defmdy[0] = 0;
 		defmdy[1] = 0;
 
-		double h=1e-5;
-		deflection_from_fourier_modes(x,y,def0);
-		deflection_from_fourier_modes(x-h,y,defmdx);
-		deflection_from_fourier_modes(x,y-h,defmdy);
-		deflection_from_fourier_modes(x+h,y,defdx);
-		deflection_from_fourier_modes(x,y+h,defdy);
+		double h=1e-4;
+		add_deflection_from_fourier_modes(x,y,def0);
+		add_deflection_from_fourier_modes(x-h,y,defmdx);
+		add_deflection_from_fourier_modes(x,y-h,defmdy);
+		add_deflection_from_fourier_modes(x+h,y,defdx);
+		add_deflection_from_fourier_modes(x,y+h,defdy);
 		double hess00, hess11, hess01, hess10;
 		hess00 = (defdx[0] - defmdx[0]) / (2*h);
 		hess11 = (defdy[1] - defmdy[1]) / (2*h);
 		hess01 = (defdx[1] - defmdx[1]) / (2*h);
 		hess10 = (defdy[0] - defmdy[0]) / (2*h);
+		cout << "HESSCHECK: " << hesscheck[0][0] << " " << hesscheck[1][1] << " " << hesscheck[0][1] << " vs " << hess00 << " " << hess11 << " " << hess01 << " " << hess10 << endl;
+		double kapcheck = kappa_from_fourier_modes(x,y);
+		cout << "KAPCHECK: " << ((hesscheck[0][0] + hesscheck[1][1])/2) << " " << kapcheck << endl;
 		//cout << "HESSCHECK: " << hess01 << " " << hess10 << endl;
-		hess[0][0] += hess00;
-		hess[1][1] += hess11;
-		hess[0][1] += hess01;
-		hess[1][0] += hess01;
+		//hess[0][0] += hess00;
+		//hess[1][1] += hess11;
+		//hess[0][1] += hess01;
+		//hess[1][0] += hess01;
+		*/
 	}
-	*/
 	if ((!ellipticity_gradient) and (sintheta != 0)) hess.rotate_back(costheta,sintheta);
 	//cout << "KAPPACHECK: (hess00+hess11)/2 = " << ((hess[0][0]+hess[1][1])/2) << endl;
+	//double kapcheck = (hess[0][0]+hess[1][1])/2;
+	//if ((!ellipticity_gradient) and (sintheta != 0)) rotate_back(x,y);
+	//double kapcheck2 = kappa(x,y);
+	//if (abs(kapcheck-kapcheck2) > 1e-3*abs(kapcheck2)) cout << "KAPPACHECK: " << kapcheck << " " << kapcheck2 << endl;
 }
 
 double LensProfile::potential(double x, double y)
@@ -1780,10 +1743,19 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 		kap = kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
 		(this->*def_and_hess_ptr)(x,y,def,hess);
 	}
+	if (n_fourier_modes > 0) {
+		add_deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
+		add_hessian_from_fourier_modes(x,y,hess);
+	}
 	if ((!ellipticity_gradient) and (sintheta != 0)) {
 		def.rotate_back(costheta,sintheta);
 		hess.rotate_back(costheta,sintheta);
 	}
+	//double kapcheck = (hess[0][0]+hess[1][1])/2;
+	//if ((!ellipticity_gradient) and (sintheta != 0)) rotate_back(x,y);
+	//double kapcheck2 = kappa(x,y);
+	//if (abs(kapcheck-kapcheck2) > 1e-3*abs(kapcheck2)) cout << "KAPPACHECK: " << kapcheck << " " << kapcheck2 << "(x=" << x << "," << y << ")" << endl;
+
 }
 
 void LensProfile::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
@@ -1808,9 +1780,6 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 	} else {
 		(this->*defptr)(x,y,def);
 		(this->*hessptr)(x,y,hess);
-	}
-	if (n_fourier_modes > 0) {
-		deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
 	}
 	// /************ ADD HESSIAN FROM FOURIER MODES ************/ 
 
@@ -2956,7 +2925,58 @@ double LensIntegral::jprime_integrand_egrad(const double xi)
 
 /************************************* Integration algorithms *************************************/
 
-void LensProfile::deflection_from_fourier_modes(double x, double y, lensvector& def)
+double LensProfile::kappa_from_fourier_modes(const double x, const double y)
+{
+	double fourier_factor = 0;
+	double rsq = x*x + y*y;
+	double phi;
+	if (!ellipticity_gradient) {
+		// it is assumed here that coordinates have already been rotated so that major axis is along x
+		phi = atan(y/x);
+		if (x < 0) phi += M_PI;
+		else if (y < 0) phi += M_2PI;
+
+		for (int i=0; i < n_fourier_modes; i++) {
+			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi);
+		}
+	} else {
+		double phi0 = (this->*egrad_ptr)(sqrt(rsq),geometric_param[1],1);
+
+		double costh, sinth, xp, yp, phi;
+		costh = cos(phi0);
+		sinth = sin(phi0);
+		xp = x*costh + y*sinth;
+		yp = -x*sinth + y*costh;
+
+		phi = atan(yp/xp);
+		if (xp < 0) phi += M_PI;
+		else if (yp < 0) phi += M_2PI;
+
+		double *cosamps;
+		double *sinamps;
+		if (fourier_gradient) {
+			cosamps = new double[n_fourier_modes];
+			sinamps = new double[n_fourier_modes];
+			fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+		} else {
+			// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+			cosamps = fourier_mode_cosamp.array();
+			sinamps = fourier_mode_sinamp.array();
+		}
+		for (int i=0; i < n_fourier_modes; i++) {
+			fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi) + sinamps[i]*sin(fourier_mode_mvals[i]*phi);
+			//fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi0) - sinamps[i]*sin(fourier_mode_mvals[i]*phi0))*cos(fourier_mode_mvals[i]*phi) + (cosamps[i]*sin(fourier_mode_mvals[i]*phi0) + sinamps[i]*cos(fourier_mode_mvals[i]*phi0))*sin(fourier_mode_mvals[i]*phi); // testing since this is form used to get deflection integrals
+		}
+		if (fourier_gradient) {
+			delete[] cosamps;
+			delete[] sinamps;
+		}
+	}
+	//NOTE: this doesn't work for emode=3 (can't use kappa_rsq_deriv). extend later?
+	return 2*fourier_factor*kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
+}
+
+void LensProfile::add_deflection_from_fourier_modes(const double x, const double y, lensvector& def)
 {
 	if (n_fourier_modes==0) return;
 	double r = sqrt(x*x+y*y);
@@ -2989,23 +3009,85 @@ void LensProfile::deflection_from_fourier_modes(double x, double y, lensvector& 
 		lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
 
 		rmfac = pow(r,m);
-		//double alph = 0.8;
-		//double ileftcheck = -alph*fourier_mode_cosamp[i]*r*r*kappa_rsq(r*r)/(2+m-alph);
-		//double irightcheck = alph*fourier_mode_cosamp[i]*r*r*kappa_rsq(r*r)/(2-m-alph);
-		//cout << "ileft_cos=" << (ileft_cos/rmfac) << " " << ileftcheck << endl;
-		//cout << "iright_cos=" << (iright_cos*rmfac) << " " << irightcheck << endl;
 		pots = -(ileft_sin/rmfac + iright_sin*rmfac)/m;
 		dpots_dr = (ileft_sin/rmfac - iright_sin*rmfac)/r;
 		potc = -(ileft_cos/rmfac + iright_cos*rmfac)/m;
 		dpotc_dr = (ileft_cos/rmfac - iright_cos*rmfac)/r;
-		//cout << "psi_cos=" << potc << endl;
-		//cout << "dpsi_cos=" << dpotc_dr << endl;
 		cosm = cos(m*phi);
 		sinm = sin(m*phi);
 		def_r = dpotc_dr*cosm + dpots_dr*sinm;
 		def_phi = (-potc*sinm + pots*cosm)*m/r;
 		def[0] += (x*def_r - y*def_phi)/r;
 		def[1] += (y*def_r + x*def_phi)/r;
+	}
+	if (fourier_gradient) {
+		delete[] lens_integral.cosamps;
+		delete[] lens_integral.sinamps;
+	}
+}
+
+void LensProfile::add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess)
+{
+	if (n_fourier_modes==0) return;
+	double r = sqrt(x*x+y*y);
+	double cosphi, sinphi, cossq, sinsq, sincos;
+	cosphi = x/r;
+	sinphi = y/r;
+	cossq = cosphi*cosphi;
+	sinsq = sinphi*sinphi;
+	sincos = cosphi*sinphi;
+
+	bool converged;
+	LensIntegral lens_integral(this,x,y);
+	if (fourier_gradient) {
+		lens_integral.cosamps = new double[n_fourier_modes];
+		lens_integral.sinamps = new double[n_fourier_modes];
+		fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+	} else {
+		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+		lens_integral.cosamps = fourier_mode_cosamp.array();
+		lens_integral.sinamps = fourier_mode_sinamp.array();
+	}
+
+	if (ellipticity_gradient) {
+		lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+	}
+
+	double ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, m, rmfac, cosm, sinm;
+	double hess_pp, hess_rr, hess_pr, hess_rp, rpterm, offdiag, kapm;
+
+	double phi; // used for Fourier modes
+	phi = atan(y/x);
+	if (x < 0) phi += M_PI;
+	else if (y < 0) phi += M_2PI;
+
+	for (int i=0; i < n_fourier_modes; i++) {
+		m = fourier_mode_mvals[i];
+		lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
+		lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+		kapm = lens_integral.fourier_kappa_m(r,phi,m,i);
+
+		rmfac = pow(r,m);
+		pots = -(ileft_sin/rmfac + iright_sin*rmfac)/m;
+		dpots_dr = (ileft_sin/rmfac - iright_sin*rmfac)/r;
+		potc = -(ileft_cos/rmfac + iright_cos*rmfac)/m;
+		dpotc_dr = (ileft_cos/rmfac - iright_cos*rmfac)/r;
+		cosm = cos(m*phi);
+		sinm = sin(m*phi);
+		def_r = dpotc_dr*cosm + dpots_dr*sinm;
+		def_phi = (-potc*sinm + pots*cosm)*m/r;
+		hess_pp = -SQR(m/r)*(potc*cosm + pots*sinm);
+		hess_rr = 2*kapm - def_r/r - hess_pp;
+		hess_rp = (m/r)*(-dpotc_dr*sinm + dpots_dr*cosm);
+		hess_pr = hess_rp - def_phi/r;
+		rpterm = (hess_rp+hess_pr)*sincos;
+		//cout << "mode " << m << " VARS: " << m << " " << ileft_cos << " " << ileft_sin << " " << kapm << " " << pots << " " << dpots_dr << " " << potc << " " << dpotc_dr << endl;
+		hess[0][0] += hess_rr*cossq + hess_pp*sinsq - rpterm + (def_r*sinphi+def_phi*cosphi)*sinphi/r;
+		hess[1][1] += hess_rr*sinsq + hess_pp*cossq + rpterm + (def_r*cosphi-def_phi*sinphi)*cosphi/r;
+		//offdiag = (hess_rr - hess_pp)*sincos - hess_rp*sinsq + hess_pr*cossq - def_r*sincos/r + def_phi*sinsq/r;
+		offdiag = (hess_rr - hess_pp)*sincos + hess_pr*(cossq-sinsq) - def_r*sincos/r;
+		hess[0][1] += offdiag;
+		hess[1][0] += offdiag;
 	}
 	if (fourier_gradient) {
 		delete[] lens_integral.cosamps;
@@ -3052,6 +3134,20 @@ void LensIntegral::calculate_fourier_integrals(const int mval_in, const int four
 	else die("unknown integral method");
 }
 
+double LensIntegral::fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in)
+{
+	double ans, mphi;
+	mval = mval_in;
+	fourier_ival = fourier_ival_in;
+	mphi = mval*phi;
+	cosmode = true;
+	ans = fourier_kappa_perturbation(r)*cos(mphi);
+	cosmode = false;
+	ans += fourier_kappa_perturbation(r)*sin(mphi);
+	return ans;
+}
+
+
 inline double LensIntegral::fourier_kappa_perturbation(const double r)
 {
 	if (profile->ellipticity_gradient) {
@@ -3069,6 +3165,7 @@ inline double LensIntegral::fourier_kappa_perturbation(const double r)
 		else kapm = cosamps[fourier_ival]*sin(mval*phi0) + sinamps[fourier_ival]*cos(mval*phi0);
 	}
 	double rsq = r*r;
+	//NOTE: this doesn't work for emode=3 (can't use kappa_rsq_deriv). extend later?
 	kapm *= 2*profile->kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 	return kapm;
 }
