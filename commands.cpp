@@ -11273,9 +11273,9 @@ void QLens::process_commands(bool read_file)
 			if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
 
 			if (!fix_center) {
-				double* skip = new double[isodata.n_xivals];
+				double* skip_outlier = new double[isodata.n_xivals];
 				for (int i=0; i < isodata.n_xivals; i++) {
-					skip[i] = false;
+					skip_outlier[i] = false;
 				}
 				bool at_least_one_outlier;
 				double xc_avg, xc_invsqr;
@@ -11287,7 +11287,7 @@ void QLens::process_commands(bool read_file)
 					yc_avg=0;
 					yc_invsqr=0;
 					for (int i=0; i < isodata.n_xivals; i++) {
-						if (!skip[i]) {
+						if (!skip_outlier[i]) {
 							xc_avg += isodata.xcvals[i]/SQR(isodata.xc_errs[i]);
 							xc_invsqr += 1.0/SQR(isodata.xc_errs[i]);
 							yc_avg += isodata.ycvals[i]/SQR(isodata.yc_errs[i]);
@@ -11303,14 +11303,14 @@ void QLens::process_commands(bool read_file)
 					}
 					at_least_one_outlier = false;
 					for (int i=0; i < isodata.n_xivals; i++) {
-						if (!skip[i]) {
+						if (!skip_outlier[i]) {
 							if (abs(isodata.xcvals[i]-xc_avg) > 4*isodata.xc_errs[i]) {
-								skip[i] = true;
+								skip_outlier[i] = true;
 								at_least_one_outlier = true;
 								warn("at least one xc value (xc=%g, xc_err=%g at xi=%g) differs from the mean by more than 4*sigma_err; this point will be clipped and xc will be recalculated",isodata.xcvals[i],isodata.xc_errs[i],isodata.xivals[i]);
 							}
 							else if (abs(isodata.ycvals[i]-yc_avg) > 4*isodata.yc_errs[i]) {
-								skip[i] = true;
+								skip_outlier[i] = true;
 								at_least_one_outlier = true;
 								warn("at least one yc value (yc=%g, yc_err=%g at xi=%g) differs from the mean by more than 4*sigma_err; this point will be clipped and yc will be recalculated",isodata.ycvals[i],isodata.yc_errs[i],isodata.xivals[i]);
 							}
@@ -11333,9 +11333,15 @@ void QLens::process_commands(bool read_file)
 						cout << "avg yc: " << yc_avg << endl;
 					}
 				}
-				delete[] skip;
+				delete[] skip_outlier;
 			}
 
+			double* skip = new double[isodata.n_xivals];
+			for (int i=0; i < isodata.n_xivals; i++) {
+				skip[i] = false; // if any isophotes don't have fitted values (i.e. are set to NAN), we'll set skip[i] = true for that isophote so we don't try to use it
+				if (isodata.A4vals[i]*0.0 != 0.0) { skip[i] = true; continue; }
+				if (isodata.sb_avg_vals[i]*0.0 != 0.0) { skip[i] = true; continue; }
+			}
 
 			IsophoteData isodata0(isodata);
 			// the remaining code is to apply the PSF correction
@@ -11369,12 +11375,9 @@ void QLens::process_commands(bool read_file)
 				bool include_fourier_gradient = sbptr->fourier_gradient;
 
 				double A4update;
-				bool *skip = new bool[n_xivals];
-				for (i=0; i < n_xivals; i++) {
-					skip[i] = false; // if any isophotes don't have fitted values (i.e. are set to NAN), we'll set skip[i] = true for that isophote so we don't try to use it
-				}
 				for (i=0; i < n_xivals; i++) {
 					if (isodata.A4vals[i]*0.0 != 0.0) { skip[i] = true; continue; }
+					if (isodata.sb_avg_vals[i]*0.0 != 0.0) { skip[i] = true; continue; }
 					//iso_qvals[i] = isodata.qvals[i];
 					//iso_A4vals[i] = isodata.A4vals[i];
 					//iso_thetavals[i] = isodata.thetavals[i];
@@ -11736,8 +11739,8 @@ void QLens::process_commands(bool read_file)
 				delete[] qcorr;
 				delete[] qvals;
 				*/
-				delete[] skip;
 			}
+			delete[] skip;
 
 			if (((fit_sbprofile) or (psf_iterations > 0)) and (sbptr != NULL) and (!nested_sampling_on_final_iter)) { // if we finished with nested sampling, we don't need to redo the fits here
 				if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id)) Complain("sbprofile fit failed");

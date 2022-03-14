@@ -4489,7 +4489,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				yc = yc_prev;
 				failed_isophote_fit = true;
 				double nfrac = npts/((double) npts_sample);
-				warn("not enough points being sampled; moving on to next ellipse (npts_frac=%g,npts_frac_threshold=%g)",nfrac,npts_frac);
+				warn("not enough points being sampled; moving on to next ellipse (npts_frac=%g,npts_frac_threshold=%g,sb_avg=%g)",nfrac,npts_frac,sb_avg);
 				break;
 			}
 			//if (do_parameter_search) {

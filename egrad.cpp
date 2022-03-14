@@ -460,6 +460,12 @@ double EllipticityGradient::egrad_bspline_function(const double xi, double *para
 	double *knots;
 	if (param_index < 4) knots = geometric_knots[param_index];
 	else knots = fourier_knots[param_index-4];
+	//if (param_index >= 4) {
+		////cout << "FOURIER KNOTS: " << endl;
+		////for (int i=0; i < n_bspline_knots_tot; i++) cout << knots[i] << endl;
+		//cout << "COEFS: " << endl;
+		//for (int i=0; i < n_bspline_knots_tot-4; i++) cout << paramvals[i] << endl;
+	//}
 
 	splev_(knots, &n_bspline_knots_tot, paramvals, &bspline_order, &logxi, &ans, &m, &e, &ier);
 	if (ier > 0) {
@@ -467,6 +473,11 @@ double EllipticityGradient::egrad_bspline_function(const double xi, double *para
 		s << "Error evaluating B-Spline curve using splev() at point " << xi << ": " << ier;
 		throw runtime_error(s.str());
 	}
+	//if (param_index >= 4) {
+		//cout << "ANS=" << ans << endl;
+		//cout << "PINDEX=" << param_index << endl;
+		//die();
+	//}
 	if ((param_index==0) and (ans > 1)) return 1.0; // in case something greater than q=1 is returned
 #endif
 

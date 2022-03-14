@@ -198,7 +198,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		for (j=0; j < mpi_np; j++) nlines_per_file[i][j] = 0;
 	}
 	smoothWidth = 1.0;
-	double temp;
+	long double temp;
 	points = new double **[numOfFiles];
 	chi2 = new double *[numOfFiles];
 	mults = new double*[numOfFiles];

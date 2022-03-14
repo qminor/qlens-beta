@@ -583,6 +583,8 @@ bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const dvector&
 		angle_param[i] = false; // the angle params will be set when the param pointers are set
 	}
 	set_fourier_paramnums(fourier_mode_paramnum.array(),fourier_istart);
+	//for (int i=0; i < n_fourier_modes; i++) cout << "fmode(" << i << ") start: " << fourier_mode_paramnum[i] << endl;
+	//die();
 	n_params = new_nparams;
 	delete[] param;
 	param = new double*[n_params];
@@ -1592,6 +1594,7 @@ double SB_Profile::sbprofile_loglike(double *params)
 	}
 	update_meta_parameters();
 	for (i=0; i < n_isophote_datapts; i++) {
+		if (sbprofile_data[i]*0.0 != 0.0) continue;
 		loglike += SQR((sbprofile_data[i] - sb_rsq(SQR(profile_fit_xivals[i])))/sbprofile_errors[i]);
 	}
 	loglike /= 2;
@@ -1670,32 +1673,33 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		} else {
 			profile_fit_nparams = n_egrad_params[egrad_param];
 			profile_fit_egrad_params = geometric_param[egrad_param];
-			profile_fit_istart = sbprofile_nparams;
 		}
+		profile_fit_istart = sbprofile_nparams;
 		for (i=0; i < egrad_param; i++) profile_fit_istart += n_egrad_params[i];
 	} else {
 		int fparam, fmode, sinmode_num;
 		fparam = egrad_param - 4;
 		fmode = 3 + fparam / 2;
 		sinmode_num = fparam % 2;
-		//cout << "fmode=" << fmode << " sinmode_num=" << sinmode_num << endl;
 		bool fmode_found = false;
 		for (i=0,k=0; i < n_fourier_modes; i++, k+=2) {
 			if (fourier_mode_mvals[i]==fmode) {
-				if (egrad_mode==0) {
+				if ((egrad_mode==0) and (fit_mode != 0)) {
 					profile_fit_nparams = n_bspline_knots_tot - 2*bspline_order - 1;
 					profile_fit_egrad_params = fourier_knots[k+sinmode_num];
 					profile_fit_bspline_coefs = fourier_param[k+sinmode_num];
 				} else {
 					profile_fit_nparams = n_fourier_grad_params[i];
 					profile_fit_egrad_params = fourier_param[k+sinmode_num];
-					profile_fit_istart = fourier_mode_paramnum[i];
-					if (sinmode_num==1) profile_fit_istart += profile_fit_nparams;
 				}
+				profile_fit_istart = fourier_mode_paramnum[i];
+				if (sinmode_num==1) profile_fit_istart += profile_fit_nparams;
+				egrad_paramnum = 4 + i;
 				fmode_found = true;
 				break;
 			}
 		}
+		//cout << "fparam=" << fparam << " fmode=" << fmode << " sinmode_num=" << sinmode_num << " istart=" << profile_fit_istart << endl;
 		if (!fmode_found) die("could not find Fourier mode");
 	}
 
@@ -1851,6 +1855,16 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			delete[] stepsizes;
 		}
 	}
+	//double loglike=0;
+	//double pval;
+	//for (i=0; i < n_isophote_datapts; i++) {
+		//if (profile_fit_errs[i]>=1e30) continue; // in this case don't bother to include in chisq
+		//pval = (this->*egrad_ptr)(profile_fit_xivals[i],profile_fit_egrad_params,egrad_paramnum);
+		//loglike += SQR((profile_fit_data[i] - pval)/profile_fit_errs[i]);
+		//cout << "datapt " << i << ": " << profile_fit_data[i] << " " << profile_fit_errs[i] << " " << pval << " logl=" << loglike << endl;
+	//}
+	//loglike /= 2;
+	//cout << "LOGLIKE=" << loglike << endl;
 
 	if (egrad_mode==0) {
 		free_bspline_work_arrays();
@@ -1903,12 +1917,15 @@ double SB_Profile::profile_fit_loglike(double *params)
 		loglike += SQR((profile_fit_data[i] - (this->*egrad_ptr)(profile_fit_xivals[i],profile_fit_egrad_params,egrad_paramnum))/profile_fit_errs[i]);
 	}
 	loglike /= 2;
-	//cout << "params: " << params[0] << " " << params[1] << " " << params[2] << " " << params[3] << " " << "LOGLIKE=" << loglike << endl;
+	//if (profile_fit_istart==22) {
+		//cout << "params: " << params[0] << " " << params[1] << " " << params[2] << " " << params[3] << " " << "LOGLIKE=" << loglike << endl;
+	//}
 	return loglike;
 }
 
 double SB_Profile::profile_fit_loglike_bspline(double *params)
 {
+	// here, the nonlinear parameters are the knots that are being optimized
 	int i;
 	double tot_interval = 0;
 	for (i=0; i < n_bspline_knots_tot-2*bspline_order-1; i++) {
@@ -2017,6 +2034,26 @@ void SB_Profile::print_parameters()
 			if (i < n_bspline_knots_tot-1) cout << " ";
 		}
 		cout << endl;
+	}
+	if ((fourier_gradient) and (egrad_mode==0)) {
+		for (int j=0; j < n_fourier_grad_modes; j++) {
+			stringstream mvalstr;
+			string mvalstring;
+			mvalstr << fourier_grad_mvals[j];
+			mvalstr >> mvalstring;
+			cout << "   A" << mvalstring << "-knots: ";
+			for (int i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+				cout << pow(10,fourier_knots[0][i]); // gives the elliptical radius values
+				if (i < n_bspline_knots_tot-1) cout << " ";
+			}
+			cout << endl;
+			cout << "   B" << mvalstring << "-knots: ";
+			for (int i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+				cout << pow(10,fourier_knots[1][i]); // gives the elliptical radius values
+				if (i < n_bspline_knots_tot-1) cout << " ";
+			}
+			cout << endl;
+		}
 	}
 }
 
