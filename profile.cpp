@@ -17,6 +17,7 @@ bool LensProfile::use_ellipticity_components = false;
 int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
+int LensProfile::fourier_spline_npoints = 1000;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
 {
@@ -2987,7 +2988,7 @@ void LensProfile::add_deflection_from_fourier_modes(const double x, const double
 	if (fourier_gradient) {
 		lens_integral.cosamps = new double[n_fourier_modes];
 		lens_integral.sinamps = new double[n_fourier_modes];
-		fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+		//fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 	} else {
 		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
 		lens_integral.cosamps = fourier_mode_cosamp.array();
@@ -3005,8 +3006,17 @@ void LensProfile::add_deflection_from_fourier_modes(const double x, const double
 
 	for (int i=0; i < n_fourier_modes; i++) {
 		m = fourier_mode_mvals[i];
-		lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
-		lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+		if ((fourier_integrals_splined) and fourier_integral_left_cos_spline[i].in_range(r)) {
+			ileft_cos = fourier_integral_left_cos_spline[i].splint(r);
+			iright_cos = fourier_integral_right_cos_spline[i].splint(r);
+			ileft_sin = fourier_integral_left_sin_spline[i].splint(r);
+			iright_sin = fourier_integral_right_sin_spline[i].splint(r);
+			//cout << "USED THE SPLINE! x=" << x << " y=" << y << " r=" << r << endl;
+		} else {
+			lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
+			lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+			//if (!converged) warn("FUCK x=%g y=%g r=%g ilc=%g irc=%g ils=%g irs=%g",x,y,r,ileft_cos,iright_cos,ileft_sin,iright_sin);
+		}
 
 		rmfac = pow(r,m);
 		pots = -(ileft_sin/rmfac + iright_sin*rmfac)/m;
@@ -3042,7 +3052,7 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 	if (fourier_gradient) {
 		lens_integral.cosamps = new double[n_fourier_modes];
 		lens_integral.sinamps = new double[n_fourier_modes];
-		fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+		//fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 	} else {
 		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
 		lens_integral.cosamps = fourier_mode_cosamp.array();
@@ -3063,8 +3073,15 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 
 	for (int i=0; i < n_fourier_modes; i++) {
 		m = fourier_mode_mvals[i];
-		lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
-		lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+		if ((fourier_integrals_splined) and fourier_integral_left_cos_spline[i].in_range(r)) {
+			ileft_cos = fourier_integral_left_cos_spline[i].splint(r);
+			iright_cos = fourier_integral_right_cos_spline[i].splint(r);
+			ileft_sin = fourier_integral_left_sin_spline[i].splint(r);
+			iright_sin = fourier_integral_right_sin_spline[i].splint(r);
+		} else {
+			lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
+			lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
+		}
 		kapm = lens_integral.fourier_kappa_m(r,phi,m,i);
 
 		rmfac = pow(r,m);
@@ -3095,6 +3112,79 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 	}
 }
 
+void LensProfile::spline_fourier_mode_integrals(const double rmin, const double rmax)
+{
+	if (n_fourier_modes==0) return;
+	if (!fourier_integrals_splined) {
+		fourier_integral_left_cos_spline = new Spline[n_fourier_modes];
+		fourier_integral_right_cos_spline = new Spline[n_fourier_modes];
+		fourier_integral_left_sin_spline = new Spline[n_fourier_modes];
+		fourier_integral_right_sin_spline = new Spline[n_fourier_modes];
+	}
+
+	bool converged;
+	LensIntegral lens_integral(this,0,0);
+	if (fourier_gradient) {
+		lens_integral.cosamps = new double[n_fourier_modes];
+		lens_integral.sinamps = new double[n_fourier_modes];
+	} else {
+		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+		lens_integral.cosamps = fourier_mode_cosamp.array();
+		lens_integral.sinamps = fourier_mode_sinamp.array();
+	}
+
+	int i,j,m;
+
+	double **ileft_cos = new double*[n_fourier_modes];
+	double **iright_cos = new double*[n_fourier_modes];
+	double **ileft_sin = new double*[n_fourier_modes];
+	double **iright_sin = new double*[n_fourier_modes];
+	for (j=0; j < n_fourier_modes; j++) {
+		ileft_cos[j] = new double[fourier_spline_npoints];
+		iright_cos[j] = new double[fourier_spline_npoints];
+		ileft_sin[j] = new double[fourier_spline_npoints];
+		iright_sin[j] = new double[fourier_spline_npoints];
+	}
+	double *rvals = new double[fourier_spline_npoints];
+
+
+	double r, rstep = (rmax-rmin)/(fourier_spline_npoints-1);
+	for (r=rmin, i=0; i < fourier_spline_npoints; i++, r += rstep) {
+		rvals[i] = r;
+		if (ellipticity_gradient) {
+			lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+		}
+		for (j=0; j < n_fourier_modes; j++) {
+			m = fourier_mode_mvals[j];
+			lens_integral.calculate_fourier_integrals(m,j,false,r,ileft_sin[j][i],iright_sin[j][i],converged);
+			lens_integral.calculate_fourier_integrals(m,j,true,r,ileft_cos[j][i],iright_cos[j][i],converged);
+		}
+	}
+	for (j=0; j < n_fourier_modes; j++) {
+		fourier_integral_left_cos_spline[j].input(rvals,ileft_cos[j],fourier_spline_npoints);
+		fourier_integral_right_cos_spline[j].input(rvals,iright_cos[j],fourier_spline_npoints);
+		fourier_integral_left_sin_spline[j].input(rvals,ileft_sin[j],fourier_spline_npoints);
+		fourier_integral_right_sin_spline[j].input(rvals,iright_sin[j],fourier_spline_npoints);
+	}
+	for (j=0; j < n_fourier_modes; j++) {
+		delete[] ileft_cos[j];
+		delete[] iright_cos[j];
+		delete[] ileft_sin[j];
+		delete[] iright_sin[j];
+	}
+	delete[] ileft_cos;
+	delete[] iright_cos;
+	delete[] ileft_sin;
+	delete[] iright_sin;
+	delete[] rvals;
+
+	if (fourier_gradient) {
+		delete[] lens_integral.cosamps;
+		delete[] lens_integral.sinamps;
+	}
+	fourier_integrals_splined = true;
+}
+
 void LensIntegral::calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged)
 {
 	mval = mval_in;
@@ -3102,6 +3192,7 @@ void LensIntegral::calculate_fourier_integrals(const int mval_in, const int four
 	cosmode = cosmode_in;
 	converged = true; // will change if convergence not achieved
 	double ans;
+
 	if (profile->integral_method == Romberg_Integration)
 	{
 		double (Romberg::*fptr)(const double);
@@ -3132,6 +3223,23 @@ void LensIntegral::calculate_fourier_integrals(const int mval_in, const int four
 		iright = FejerIntegrate(fptr,0,1.0/rval,converged);
 	}
 	else die("unknown integral method");
+
+	/*
+	cc_points = profile->cc_points;
+	cc_weights = profile->cc_weights;
+	cc_funcs = new double[profile->cc_N];
+	double (LensIntegral::*fptr)(double) = &LensIntegral::ileft_integrand;
+	profile->cc_tolerance = 1e-5;
+	double ileftcheck = FejerIntegrate(fptr,0,rval,converged);
+	fptr = &LensIntegral::iright_integrand;
+	double irightcheck = FejerIntegrate(fptr,0,1.0/rval,converged);
+	delete[] cc_funcs;
+	if ((abs(ileft-ileftcheck) > 1e-3*abs(ileftcheck)) or (abs(iright-irightcheck) > 1e-3*abs(irightcheck))) {
+		cout << "CHECK(r=" << rval << "): " << ileftcheck << " " << ileft << " " << (abs((ileft-ileftcheck)/ileftcheck)) << " " << irightcheck << " " << iright << " " << (abs((iright-irightcheck)/irightcheck)) << endl;
+	}
+	*/
+
+
 }
 
 double LensIntegral::fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in)

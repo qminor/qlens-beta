@@ -11961,6 +11961,23 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 
+		double fspline_wtime0, fspline_wtime;
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			fspline_wtime0 = omp_get_wtime();
+		}
+#endif
+
+	// fix it so it uses the biggest r value from the masked region!!!!!
+	for (int i=0; i < nlens; i++) {
+		if (lens_list[i]->n_fourier_modes > 0) lens_list[i]->spline_fourier_mode_integrals(0.01,2.8);
+	}
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			fspline_wtime = omp_get_wtime() - fspline_wtime0;
+			if (mpi_id==0) cout << "Wall time for splining Fourier integrals: " << fspline_wtime << endl;
+		}
+#endif
 
 	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations();
 	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners();

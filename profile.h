@@ -99,6 +99,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical density contours (zero by default)
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
 	dvector fourier_mode_cosamp, fourier_mode_sinamp;
+	Spline *fourier_integral_left_cos_spline;
+	Spline *fourier_integral_left_sin_spline;
+	Spline *fourier_integral_right_cos_spline;
+	Spline *fourier_integral_right_sin_spline;
+	bool fourier_integrals_splined;
 
 	virtual void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in = 0, const int subclass_in = -1);
@@ -194,6 +199,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static bool integration_warnings;
 	static int default_ellipticity_mode;
 	static int default_fejer_nlevels;
+	static int fourier_spline_npoints;
 	QLens* lens;
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
@@ -217,6 +223,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 		if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 		if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
+		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_left_cos_spline;
+		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_left_sin_spline;
+		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_right_cos_spline;
+		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_right_sin_spline;
+
 	}
 	void set_null_ptrs_and_values()
 	{
@@ -236,6 +247,11 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		parameter_anchor_exponent = NULL;
 		zlens = zlens_current = 0;
 		zfac = 1.0;
+		fourier_integrals_splined = false;
+		fourier_integral_left_cos_spline = NULL;
+		fourier_integral_left_sin_spline = NULL;
+		fourier_integral_right_cos_spline = NULL;
+		fourier_integral_right_sin_spline = NULL;
 	}
 	void setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in);
 
@@ -343,6 +359,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double kappa_from_fourier_modes(const double x, const double y);
 	void add_deflection_from_fourier_modes(const double x, const double y, lensvector& def);
 	void add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess);
+	void spline_fourier_mode_integrals(const double rmin, const double rmax);
 
 	public:
 	bool isspherical() { return (q==1.0); }

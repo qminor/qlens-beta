@@ -16,6 +16,7 @@ class Spline
 		int length(void) { return nn; }
 		double xmin(void) { return xarray[0]; }
 		double xmax(void) { return xarray[nn-1]; }
+		bool in_range(const double x) { return ((x >= xarray[0]) and (x <= xarray[nn-1])); }
 		double y_at_xmin(void) { return yarray[0]; }
 		double y_at_xmax(void) { return yarray[nn-1]; }
 		double ymax(void) { double ymax_val=-1e30; for (int i=0; i < nn; i++) if (yarray[i] > ymax_val) ymax_val = yarray[i]; return ymax_val; }
