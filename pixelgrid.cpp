@@ -1138,8 +1138,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 #else
 		thread = 0;
 #endif
-		//int img_i2,img_j2;
-					//cout << "TRYING HERE..." << endl;
 		#pragma omp for private(i,j,nsrc,overlap_area,weighted_overlap,triangle1_overlap,triangle2_overlap,triangle1_weight,triangle2_weight,inside) schedule(dynamic) reduction(+:overlap_matrix_nn_part)
 		for (n=mpi_start; n < mpi_end; n++)
 		{
@@ -1148,7 +1146,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			//img_i = n % image_pixel_grid->x_N;
 			img_j = mask_j[n];
 			img_i = mask_i[n];
-			//cout << "WOAH " << img_i << " " << img_j << " " << img_i2 << " " << img_j2 << endl;
 
 			corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
 			corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
@@ -6002,8 +5999,10 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
@@ -6036,7 +6035,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
+			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				extended_mask_i[n_cell] = i;
 				extended_mask_j[n_cell] = j;
 				nvals[i][j] = n_cell;
@@ -6064,8 +6064,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				ncvals[i][j] = -1;
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (lens->image_pixel_data->extended_mask[i][j-1])) or (lens->image_pixel_data->extended_mask[i-1][j-1])) {
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					extended_mask_corner_i[n_corner] = i;
 					extended_mask_corner_j[n_corner] = j;
 					if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
@@ -6111,24 +6111,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 				if ((fit_to_data) and (lens->image_pixel_data)) {
 					if (lens->image_pixel_data->in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 					else {
-						nsplits[i][j] = 2;
-						//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-						//if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
-						/*
-						for (int k=0; k < lens->n_sb; k++) {
-							if (!lens->sb_list[k]->is_lensed) {
-								//cout << "Trying lens " << k << endl;
-								SB_Profile* sbptr = lens->sb_list[k];
-								double xc,yc;
-								sbptr->get_center_coords(xc,yc);
-								if ((xc > corner_pts[i][j][0]) and (xc < corner_pts[i+1][j][0]) and (yc > corner_pts[i][j][1]) and (yc < corner_pts[i][j+1][1])) {
-									//nsplits[i][j] = imax(6,lens->default_imgpixel_nsplit);
-									//die("worked at x=(%g,%g) and y=(%g,%g)",corner_pts[i][j][0],corner_pts[i+1][j][0],corner_pts[i][j][1],corner_pts[i][j+1][1]);
-									break;
-								}
-							}
-						}
-						*/
+						nsplits[i][j] = 1; // only one splitting used for extended mask by default (maybe allow user to adjust this?)
 					}
 				} else {
 					nsplits[i][j] = lens->default_imgpixel_nsplit; // default
@@ -6704,8 +6687,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 	long int ntot_corners_check = 0;
 	for (i=0; i < x_N+1; i++) {
 		for (j=0; j < y_N+1; j++) {
-			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_check++;
-			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells_check++;
+			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+			//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_check++;
+			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 				ntot_corners_check++;
 			}
 		}
@@ -6931,6 +6916,12 @@ void ImagePixelGrid::redo_lensing_calculations()
 		i = extended_mask_corner_i[n];
 		corner_sourcepts[i][j][0] = defx_corners[n];
 		corner_sourcepts[i][j][1] = defy_corners[n];
+		//if ((lens->image_pixel_data->in_mask[i][j]) or ((i>0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((j>0) and (lens->image_pixel_data->in_mask[i][j-1]))) ;
+		//else {
+			// sabotage to see if extended mask corners are still being used
+			//corner_sourcepts[i][j][0] = -1e30;
+			//corner_sourcepts[i][j][1] = -1e30;
+		//}
 	}
 	for (n=0; n < ntot_cells; n++) {
 		//n_cell = j*x_N+i;
@@ -7199,7 +7190,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 				//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
@@ -7219,7 +7211,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
@@ -7245,7 +7238,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				ntot++;
 				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
@@ -7264,7 +7258,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				il = i - window_size_for_srcarea;
 				ih = i + window_size_for_srcarea;
 				jl = j - window_size_for_srcarea;

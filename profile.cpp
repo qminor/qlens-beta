@@ -22,7 +22,7 @@ bool LensProfile::use_ellipticity_components = false;
 int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
-int LensProfile::fourier_spline_npoints = 1000;
+int LensProfile::fourier_spline_npoints = 336;
 
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
 {

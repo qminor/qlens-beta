@@ -11027,6 +11027,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="imgpixel_nsplit")
 		{
+			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
 			if (nwords == 2) {
 				if (words[1]=="-shapelet") {
 					if (source_fit_mode != Shapelet_Source) Complain("must be in shapelet mode to set pixel splitting from shapelets");
