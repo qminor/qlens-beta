@@ -16,6 +16,7 @@
 using namespace std;
 
 class Sersic;
+class DoubleSersic;
 class Cored_Sersic;
 class SB_Profile;
 
@@ -32,6 +33,7 @@ enum LensProfileName
 	EXPDISK,
 	CORECUSP,
 	SERSIC_LENS,
+	DOUBLE_SERSIC_LENS,
 	CORED_SERSIC_LENS,
 	MULTIPOLE,
 	PTMASS,
@@ -394,7 +396,8 @@ struct LensIntegral : public Romberg
 {
 	LensProfile *profile;
 	double xval, yval, xsqval, ysqval, fsqinv, xisq, u, epsilon, qfac, nval_plus_half, mnval_plus_half;
-	int nval, mval, fourier_ival, emode; // mval, fourier_ival are used for the Fourier mode integrals
+	int nval, emode;
+	int mval, fourier_ival; // mval, fourier_ival are used for the Fourier mode integrals
 	double phi0; // phi0 is used for Fourier mode integrals if ellipticity gradient is used
 	bool cosmode;
 	double *cosamps, *sinamps; // used for Fourier modes
@@ -404,8 +407,18 @@ struct LensIntegral : public Romberg
 	double *cc_points, **cc_weights;
 	double *cc_funcs;
 
-	LensIntegral(LensProfile *profile_in, const double xval_in, const double yval_in, const double q = 1) : profile(profile_in), xval(xval_in), yval(yval_in)
+	LensIntegral()
 	{
+		cosamps=sinamps=NULL;
+	}
+	LensIntegral(LensProfile *profile_in, const double xval_in, const double yval_in, const double q = 1) : xval(xval_in), yval(yval_in)
+	{
+		cosamps=sinamps=NULL;
+		initialize(profile_in,q);
+	}
+	void initialize(LensProfile *profile_in, const double q = 1)
+	{
+		profile = profile_in;
 		xsqval = xval*xval;
 		ysqval = yval*yval;
 		epsilon = 1 - q*q;
@@ -424,7 +437,6 @@ struct LensIntegral : public Romberg
 			cc_weights = profile->cc_weights;
 			cc_funcs = new double[profile->cc_N];
 		}
-		cosamps=sinamps=NULL;
 	}
 	~LensIntegral() {
 		if (profile->integral_method==Gauss_Patterson_Quadrature) {
@@ -982,6 +994,46 @@ class SersicLens : public LensProfile
 	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	SersicLens(const SersicLens* lens_in);
 	SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	bool output_cosmology_info(const int lens_number);
+};
+
+class DoubleSersicLens : public LensProfile
+{
+	friend class SB_Profile;
+	friend class DoubleSersic;
+
+	private:
+	double kappa0, delta_k;
+	double kappa0_1, b1, n1;
+	double kappa0_2, b2, n2;
+	double Reff1, Reff2; // effective radiukappa
+	double mstar; // total stellar mass (alternate parameterization to kappa0)
+	//double def_factor; // used to calculate the spherical deflection
+
+	double kappa_rsq(const double rsq);
+	double kappa_rsq_deriv(const double rsq);
+	//double kapavg_spherical_rsq(const double rsq);
+
+	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	//void set_model_specific_integration_pointers();
+
+	public:
+
+	DoubleSersicLens()
+	{
+		set_null_ptrs_and_values();
+		setup_lens_properties();
+	}
+	DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens*);
+	void initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	DoubleSersicLens(const DoubleSersicLens* lens_in);
+	DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();

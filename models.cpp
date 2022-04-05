@@ -3329,6 +3329,218 @@ bool SersicLens::output_cosmology_info(const int lens_number)
 	return true;
 }
 
+/***************************** Double Sersic profile *****************************/
+
+DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
+{
+	setup_lens_properties(parameter_mode_in);
+
+	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,delta_k_in,Reff1_in,n1_in,Reff2_in,n2_in,q_in,theta_degrees,xc_in,yc_in);
+}
+
+void DoubleSersicLens::initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+{
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+
+	if (parameter_mode==0) {
+		kappa0 = p1_in;
+	} else {
+		mstar = p1_in;
+	}
+	delta_k = delta_k_in;
+	n1 = n1_in;
+	Reff1 = Reff1_in;
+	n2 = n2_in;
+	Reff2 = Reff2_in;
+
+	update_meta_parameters_and_pointers();
+}
+
+void DoubleSersicLens::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = DOUBLE_SERSIC_LENS;
+	model_name = "dsersic";
+	special_parameter_command = "";
+	setup_base_lens_properties(11,6,true,parameter_mode); // number of parameters = 10 (not including redshift), is_elliptical_lens = true
+}
+
+DoubleSersicLens::DoubleSersicLens(const DoubleSersicLens* lens_in)
+{
+	copy_base_lensdata(lens_in);
+	if (parameter_mode==0) {
+		kappa0 = lens_in->kappa0;
+	} else {
+		mstar = lens_in->mstar;
+	}
+	delta_k = lens_in->delta_k;
+	n1 = lens_in->n1;
+	Reff1 = lens_in->Reff1;
+	n2 = lens_in->n2;
+	Reff2 = lens_in->Reff2;
+
+	update_meta_parameters_and_pointers();
+}
+
+DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	delta_k = sb_in->delta_s;
+	n1 = sb_in->n1;
+	n2 = sb_in->n2;
+	Reff1 = sb_in->Reff1;
+	Reff2 = sb_in->Reff2;
+	b1 = sb_in->b1;
+	b2 = sb_in->b2;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
+void DoubleSersicLens::assign_paramnames()
+{
+	if (parameter_mode==0) {
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	} else {
+		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
+	}
+	paramnames[1] = "delta_k"; latex_paramnames[1] = "\\Delta"; latex_param_subscripts[1] = "\\kappa";
+	paramnames[2] = "Reff1"; latex_paramnames[2] = "R"; latex_param_subscripts[2] = "eff,1";
+	paramnames[3] = "n1"; latex_paramnames[3] = "n"; latex_param_subscripts[3] = "1";
+	paramnames[4] = "Reff2"; latex_paramnames[4] = "R"; latex_param_subscripts[4] = "eff,2";
+	paramnames[5] = "n2"; latex_paramnames[5] = "n"; latex_param_subscripts[5] = "2";
+
+	set_geometric_paramnames(lensprofile_nparams);
+}
+
+void DoubleSersicLens::assign_param_pointers()
+{
+	if (parameter_mode==0) {
+		param[0] = &kappa0;
+	} else {
+		param[0] = &mstar;
+	}
+	param[1] = &delta_k;
+	param[2] = &Reff1;
+	param[3] = &n1;
+	param[4] = &Reff2;
+	param[5] = &n2;
+	set_geometric_param_pointers(lensprofile_nparams);
+}
+
+void DoubleSersicLens::update_meta_parameters()
+{
+	update_zlens_meta_parameters();
+	update_ellipticity_meta_parameters();
+	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
+	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
+	if (parameter_mode==0) {
+		mstar = M_PI*sigma_cr*kappa0*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2));
+	} else {
+		kappa0 = mstar / (M_PI*sigma_cr*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2)));
+	}
+	kappa0_1 = kappa0*(1+delta_k)/2;
+	kappa0_2 = kappa0*(1-delta_k)/2;
+	update_ellipticity_meta_parameters();
+}
+
+void DoubleSersicLens::set_auto_stepsizes()
+{
+	int index = 0;
+	if (parameter_mode==0) {
+		stepsizes[index++] = 0.2*kappa0;
+	} else {
+		stepsizes[index++] = 0.2*mstar;
+	}
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.2*Reff1; // arbitrary
+	stepsizes[index++] = 0.2; // arbitrary
+	stepsizes[index++] = 0.2*Reff2; // arbitrary
+	stepsizes[index++] = 0.2; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void DoubleSersicLens::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = false; penalty_lower_limits[1] = -1e30; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
+	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
+	set_geometric_param_auto_ranges(lensprofile_nparams);
+}
+
+double DoubleSersicLens::kappa_rsq(const double rsq)
+{
+	return (kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1)) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2)));
+}
+
+double DoubleSersicLens::kappa_rsq_deriv(const double rsq)
+{
+	return -(kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1))*b1*pow(Reff1,-1.0/n1)*pow(rsq,0.5/n1-1)/(2*n1) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2))*b2*pow(Reff2,-1.0/n2)*pow(rsq,0.5/n2-1)/(2*n2));
+}
+
+bool DoubleSersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != lens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	cout << "kappa1(r=0) = " << kappa0_1 << endl;
+	cout << "kappa2(r=0) = " << kappa0_2 << endl;
+	double mstar1 = M_PI*sigma_cr*kappa0*(1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1);
+	double mstar2 = M_PI*sigma_cr*kappa0*(1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2);
+	cout << "mstar1 = " << mstar1 << endl;
+	cout << "mstar2 = " << mstar2 << endl;
+
+	double Reff1_kpc = Reff1/kpc_to_arcsec;
+	double Reff2_kpc = Reff2/kpc_to_arcsec;
+	cout << "R_eff1 = " << Reff1_kpc << " kpc" << endl;
+	cout << "R_eff2 = " << Reff2_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
+}
+
 
 
 /***************************** Cored Sersic profile *****************************/
@@ -3533,8 +3745,6 @@ bool Cored_SersicLens::output_cosmology_info(const int lens_number)
 	cout << endl;
 	return true;
 }
-
-
 
 /***************************** Mass sheet *****************************/
 

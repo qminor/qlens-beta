@@ -2943,6 +2943,7 @@ void ImagePixelData::load_data(string root)
 			sbfile >> surface_brightness[i][j];
 		}
 	}
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 	assign_high_sn_pixels();
 }
 
@@ -3017,6 +3018,7 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid, cons
 		}
 	}
 	pixel_noise = noise_in;
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 	assign_high_sn_pixels();
 }
 
@@ -3556,6 +3558,7 @@ void ImagePixelData::invert_mask()
 		}
 	}
 	n_required_pixels = npixels_x*npixels_y;
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 }
 
 bool ImagePixelData::inside_mask(const double x, const double y)
@@ -3934,6 +3937,7 @@ void ImagePixelData::reset_extended_mask()
 			extended_mask[i][j] = in_mask[i][j];
 		}
 	}
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 }
 
 void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_emask_in, const bool only_interior_neighbors)
@@ -4037,6 +4041,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 		//}
 		//cout << "iteration " << k << ": npix=" << npix << endl;
 	}
+	find_extended_mask_rmax();
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
 }
@@ -4088,8 +4093,26 @@ void ImagePixelData::set_extended_mask_annulus(const double xc, const double yc,
 			}
 		}
 	}
+	find_extended_mask_rmax();
 	if (pixels_in_mask) warn("some pixels in the annulus were in the primary (lensed image) mask, and therefore could not be removed from extended mask");
 }
+
+void ImagePixelData::find_extended_mask_rmax()
+{
+	double r, rmax = -1e30;
+	int i,j;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (extended_mask[i][j]) {
+				r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j+1]));
+				if (r > rmax) rmax = r;
+			}
+		}
+	}
+	emask_rmax = rmax;
+	return;
+}
+
 
 void ImagePixelData::set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)
 {
@@ -6826,7 +6849,9 @@ void ImagePixelGrid::redo_lensing_calculations()
 			j = extended_mask_j[n_cell];
 			i = extended_mask_i[n_cell];
 			//cout << "TEST: " << i << " " << j << " " << ii << "  " << jj << endl;
-			lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+			if (!lens->split_imgpixels) {
+				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+			}
 
 			//n = j*(x_N+1)+i;
 			//n_yp = (j+1)*(x_N+1)+i;
@@ -6886,8 +6911,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 			chunk = ntot_cells / lens->group_np;
 			start = id*chunk;
 			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-			MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			if (!lens->split_imgpixels) {
+				MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			}
 			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
 			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
 			MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
@@ -6911,8 +6938,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 		i = extended_mask_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
-		center_sourcepts[i][j][0] = defx_centers[n];
-		center_sourcepts[i][j][1] = defy_centers[n];
+		if (!lens->split_imgpixels) {
+			center_sourcepts[i][j][0] = defx_centers[n];
+			center_sourcepts[i][j][1] = defy_centers[n];
+		}
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
@@ -7163,6 +7192,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double totsurf=0;
 	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin, sb;
+	double xsavg, ysavg;
 	int i,j;
 	//ofstream wtf("wtf.dat");
 	for (i=0; i < x_N; i++) {
@@ -7170,9 +7200,12 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				xcavg += area*abs(sb)*center_sourcepts[i][j][0];
-				ycavg += area*abs(sb)*center_sourcepts[i][j][1];
+				xcavg += area*abs(sb)*xsavg;
+				ycavg += area*abs(sb)*ysavg;
 				totsurf += area*abs(sb);
 				//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 			}
@@ -7187,8 +7220,10 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
+				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				rsqavg += area*abs(sb)*rsq;
 			}
 		}
@@ -7212,7 +7247,9 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				ntot++;
-				rsq = SQR(center_sourcepts[i][j][0] - xcavg) + SQR(center_sourcepts[i][j][1] - ycavg);
+				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				if (sqrt(rsq) > 2*sig) {
 					nout++;
 				}

@@ -1002,7 +1002,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
-	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
+	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
@@ -1114,11 +1114,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
+	bool output_parameter_values();
+	bool output_parameter_prior_ranges();
+	bool update_parameter_value(const int param_num, const double param_val);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
 	bool initialize_fitmodel(const bool running_fit_in);
-	bool update_fitmodel(const double* params);
+	bool update_model(const double* params);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_loglike_extended_source_test(double* params);
@@ -1579,9 +1582,15 @@ struct ParamSettings
 	ParamPrior **priors;
 	ParamTransform **transforms;
 	string *param_names;
+	string *override_names; // this allows to manually set names even after parameter transformations
+	// ParamSettings should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
 	double *prior_norms;
 	double *penalty_limits_lo, *penalty_limits_hi;
 	bool *use_penalty_limits;
+	// It would be nice if penalty limits and override_limits could be merged. The tricky part is that the penalty limits deal with the	
+	// untransformed parameters, while override_limits deal with the transformed parameters. Not sure yet what is the best way to handle this.
+	double *override_limits_lo, *override_limits_hi;
+	bool *override_prior_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
 	bool *hist2d_param;
@@ -1595,28 +1604,36 @@ struct ParamSettings
 		nparams = param_settings_in.nparams;
 		n_dparams = param_settings_in.n_dparams;
 		param_names = new string[nparams];
+		override_names = new string[nparams];
 		priors = new ParamPrior*[nparams];
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
 		auto_stepsize = new bool[nparams];
 		hist2d_param = new bool[nparams];
 		subplot_param = new bool[nparams];
+		prior_norms = new double[nparams];
 		penalty_limits_lo = new double[nparams];
 		penalty_limits_hi = new double[nparams];
-		prior_norms = new double[nparams];
 		use_penalty_limits = new bool[nparams];
+		override_limits_lo = new double[nparams];
+		override_limits_hi = new double[nparams];
+		override_prior_limits = new bool[nparams];
 		for (int i=0; i < nparams; i++) {
 			priors[i] = new ParamPrior(param_settings_in.priors[i]);
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
 			param_names[i] = param_settings_in.param_names[i];
+			override_names[i] = param_settings_in.override_names[i];
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
 			hist2d_param[i] = param_settings_in.hist2d_param[i];
 			subplot_param[i] = param_settings_in.subplot_param[i];
+			prior_norms[i] = param_settings_in.prior_norms[i];
 			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
-			prior_norms[i] = param_settings_in.prior_norms[i];
 			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
+			override_limits_lo[i] = param_settings_in.override_limits_lo[i];
+			override_limits_hi[i] = param_settings_in.override_limits_hi[i];
+			override_prior_limits[i] = param_settings_in.override_prior_limits[i];
 		}
 		if (n_dparams > 0) {
 			dparam_names = new string[n_dparams];
@@ -1646,13 +1663,17 @@ struct ParamSettings
 	}
 	int lookup_param_number(const string pname)
 	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		int pnum = -1;
 		for (int i=0; i < nparams; i++) {
-			if (param_names[i]==pname) return i;
+			if ((transformed_names[i]==pname) or (param_names[i]==pname)) { pnum = i; break; }
 		}
 		for (int i=0; i < n_dparams; i++) {
-			if (dparam_names[i]==pname) return nparams+i;
+			if (dparam_names[i]==pname) pnum = nparams+i;
 		}
-		return -1;
+		delete[] transformed_names;
+		return pnum;
 	}
 
 	bool exclude_hist2d_param(const string pname)
@@ -1826,6 +1847,7 @@ struct ParamSettings
 		}
 	}
 	void print_priors();
+	bool output_prior(const int i);
 	void print_stepsizes();
 	void print_penalty_limits();
 	void scale_stepsizes(const double fac)
@@ -1884,7 +1906,6 @@ struct ParamSettings
 			penalty_limits_hi[index] = upper[i];
 		}
 	}
-
 	void clear_penalty_limit(const int i)
 	{
 		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
@@ -1920,11 +1941,24 @@ struct ParamSettings
 					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
 				}
 			} else if (transforms[i]->transform==RATIO) {
-				//lower[i] = lower[i]/upper[transforms[i]->ratio_paramnum];
-				//upper[i] = upper[i]/lower[transforms[i]->ratio_paramnum];
-				// CUSTOM LIMITS CAN BE USED HERE:
-				lower[i] = 0; // these can be customized
+				lower[i] = 0; // these can be manually adjusted using 'fit priors range ...'
 				upper[i] = 1; // these can be customized
+			}
+		}
+	}
+	void set_override_prior_limit(const int i, const double lo, const double hi)
+	{
+		if (i >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",i,nparams);
+		override_prior_limits[i] = true;
+		override_limits_lo[i] = lo;
+		override_limits_hi[i] = hi;
+	}
+	void override_limits(double *lower, double *upper)
+	{
+		for (int i=0; i < nparams; i++) {
+			if (override_prior_limits[i]) {
+				lower[i] = override_limits_lo[i];
+				upper[i] = override_limits_hi[i];
 			}
 		}
 	}
@@ -1970,6 +2004,23 @@ struct ParamSettings
 				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
 			}
 		}
+		override_parameter_names(transformed_names); // allows for manually setting parameter names
+	}
+	bool set_override_parameter_name(const int i, const string name)
+	{
+		bool unique_name = true;
+		for (int j=0; j < nparams; j++) {
+			if ((i != j) and (((override_names[j] != "") and (override_names[j]==name)) or (param_names[j]==name))) unique_name = false;
+		}
+		if (!unique_name) return false;
+		override_names[i] = name;
+		return true;
+	}
+	void override_parameter_names(string* names)
+	{
+		for (int i=0; i < nparams; i++) {
+			if (override_names[i] != "") names[i] = override_names[i];
+		}
 	}
 	void transform_stepsizes()
 	{
@@ -2011,6 +2062,32 @@ struct ParamSettings
 			}
 		}
 	}
+	void update_reference_paramnums(int *new_paramnums)
+	{
+		// This updates any parameter numbers that are referenced by the priors or transforms; this is done any time the parameter list is changed
+		int new_paramnum;
+		for (int i=0; i < nparams; i++) {
+			if (priors[i]->prior==GAUSS2_PRIOR) {
+				new_paramnum = new_paramnums[priors[i]->gauss_paramnums[0]];
+				if (new_paramnum==-1) {
+					// parameter no longer exists; revert back to uniform prior
+					priors[i]->set_uniform();
+				} else {
+					priors[i]->gauss_paramnums[0] = new_paramnum;
+					priors[i]->gauss_paramnums[1] = new_paramnum;
+				}
+			}
+			if (transforms[i]->transform==RATIO) {
+				new_paramnum = new_paramnums[transforms[i]->ratio_paramnum];
+				if (new_paramnum==-1) {
+					// parameter no longer exists; remove transformation
+					transforms[i]->set_none();
+				} else {
+					transforms[i]->ratio_paramnum = new_paramnum;
+				}
+			}
+		}
+	}
 	void set_prior_norms(double *lower_limit, double* upper_limit)
 	{
 		// flat priors are automatically given a norm of 1.0, since we'll be transforming to the unit hypercube when doing nested sampling;
@@ -2038,6 +2115,8 @@ struct ParamSettings
 	void clear_params()
 	{
 		if (nparams > 0) {
+			delete[] param_names;
+			delete[] override_names;
 			for (int i=0; i < nparams; i++) {
 				delete priors[i];
 				delete transforms[i];
@@ -2047,12 +2126,19 @@ struct ParamSettings
 			delete[] stepsizes;
 			delete[] auto_stepsize;
 			delete[] subplot_param;
+			delete[] hist2d_param;
+			delete[] prior_norms;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
+			delete[] override_limits_lo;
+			delete[] override_limits_hi;
+			delete[] override_prior_limits;
+
 		}
 		priors = NULL;
 		param_names = NULL;
+		override_names = NULL;
 		transforms = NULL;
 		nparams = 0;
 		stepsizes = NULL;
@@ -2062,6 +2148,8 @@ struct ParamSettings
 	~ParamSettings()
 	{
 		if (nparams > 0) {
+			delete[] param_names;
+			delete[] override_names;
 			for (int i=0; i < nparams; i++) {
 				delete priors[i];
 				delete transforms[i];
@@ -2071,9 +2159,14 @@ struct ParamSettings
 			delete[] stepsizes;
 			delete[] auto_stepsize;
 			delete[] subplot_param;
+			delete[] hist2d_param;
+			delete[] prior_norms;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
+			delete[] override_limits_lo;
+			delete[] override_limits_hi;
+			delete[] override_prior_limits;
 		}
 		if (n_dparams > 0) {
 			delete[] dparam_names;

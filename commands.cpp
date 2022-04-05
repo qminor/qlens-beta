@@ -712,6 +712,7 @@ void QLens::process_commands(bool read_file)
 							"fit plimits ...\n"
 							"fit stepsizes ...\n"
 							"fit dparams ...\n"
+							"fit params ...\n"
 							"fit priors ...\n"
 							"fit transform ...\n"
 							"fit vary_sourcept ...\n"
@@ -984,13 +985,29 @@ void QLens::process_commands(bool read_file)
 							"for parameter 5 to 0.3. You can also scale all the stepsizes by a certain factor, e.g. 'fit\n"
 							"stepsize scale 5' multiplies all stepsizes by 5. To reset all stepsizes to their automatic values,\n"
 							"type 'fit stepsize reset'.\n";
+					else if (words[2]=="params")
+						cout << "fit params [-nosci]\n"
+							"fit params update <param_num/name> <param_val>\n"
+							"fit params update <name>=<val> ...\n"
+							"fit params rename <param_num/name> <new_name>\n\n"
+							"If no additional argument is given, outputs the current parameter values for all parameters being varied\n"
+							"(to not use scientific notation, add '-nosci' argument; this works even if 'sci_notation' is turned off).\n"
+							"To update parameters, you can specify a parameter number/name followed by its new value, or else you can\n"
+							"update multiple parameters at once using arguments of the form '<name>=<val>', e.g. 'b=1.5 q=0.7' etc.\n"
+							"To manually rename a parameter, use 'rename <param_num/name> <new_name>'. Note that for the second argument\n"
+							"you can put the parameter number as displayed in the list, or you can enter the parameter name (the latter\n"
+							"approach is less bug-prone since parameter numbers may change if the model is changed).\n\n";
 					else if (words[2]=="priors")
-						cout << "fit priors\n"
-							"fit priors <param_num/name> <prior_type> [prior_params]\n\n"
+						cout << "fit priors [-nosci]\n"
+							"fit priors <param_num/name> <prior_type> [prior_params]\n"
+							"fit priors <param_num/name> range <lower_limit> <upper_limit>\n\n"
 							"Define prior probability distributions in each fit parameter, which are used by the T-Walk and nested\n"
-							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors.\n"
-							"For the first argument you can put the parameter number as displayed in the list, or you can enter the\n"
+							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors/limits\n"
+							"(to not use scientific notation, add '-nosci' argument; this works even if 'sci_notation' is turned off).\n"
+							"To define a prior, you can enter the parameter number as displayed in the list, or you can enter the\n"
 							"parameter name (the latter approach is less bug-prone since numbers may change if the model is changed).\n"
+							"To just change the lower/upper prior limits for that parameter, use 'range <low> <high>'; this manually\n"
+							"overrides the prior range, which is especially useful if a transformation is being used via 'fit transform'.\n"
 							"The list of available priors is given below. Regardless of the prior chosen, the upper and lower bounds\n"
 							"defined when you create lens models (in twalk or nest mode) still apply. Keep in mind that the initial\n"
 							"sampling of the parameter space will not follow the prior chosen, but rather will draw uniform deviates\n"
@@ -1007,7 +1024,7 @@ void QLens::process_commands(bool read_file)
 							"            (e.g., 'fit priors 0 gauss2 1 0.5 0.5 0.1 0.2 0.05' is a Gaussian prior in parameters 0,1.)\n\n";
 					else if (words[2]=="transform")
 						cout << "fit transform\n"
-							"fit transform <param_num/name> <transform_type> [transform_params] ... [include_jac]\n\n"
+							"fit transform <param_num/name> <transform_type> [transform_params] ... [-include_jac] [-name=...]\n\n"
 							"Define coordinate transformation of one or more fit parameters. Type 'fit transform' to see current list of\n"
 							"fit parameters and corresponding transformations/priors being used. The list of available transformations is\n"
 							"given below. If upper/lower bounds were defined on the original parameter while in twalk/nest mode, these\n"
@@ -1018,14 +1035,15 @@ void QLens::process_commands(bool read_file)
 							"prior should not also be selected; for example, you can either define a log-prior in the parameter p, or\n"
 							"else transform to log(p) and use a uniform prior in log(p). These two approaches are equivalent, the only\n"
 							"difference is in how the parameter space is initially explored. If you want to transform the parameter but\n"
-							"still have a uniform prior in the *original* parameter, add the argument 'include_jac'.\n\n"
+							"still have a uniform prior in the *original* parameter, add the argument '-include_jac'.\n"
+							"Finally, to rename the transformed parameter, add the '-name=<name>' argument.\n\n"
 							"Available transformation types:\n\n"
 							"none     -- no transformation (the default for all parameters)\n"
 							"log      -- transform to log(p) using the base 10 logarithm\n"
 							"linear   -- transform to L{p} = A*p + b. The two parameter arguments are <A> and <b>, so e.g. 'fit transform\n"
 							"              linear 2 5' will transform p --> 2*p + 5.\n"
 							"ratio   -- transform p1 --> p1/p2, that is, to the ratio of two parameters. There is one argument, which is\n"
-							"              the parameter number for p2. e.g., 'fit transform 3 ratio 4' will transform to the ratio of\n"
+							"              the parameter number/name for p2. e.g., 'fit transform 3 ratio 4' will transform to the ratio of\n"
 							"              parameter 3 over parameter 4.\n"
 							"gaussian -- transformation whose Jacobian is Gaussian, and thus is equivalent to having a Gaussian prior in\n"
 							"              the original parameter. There are two arguments, mean value <mean> and dispersion <sig>\n"
@@ -2596,6 +2614,7 @@ void QLens::process_commands(bool read_file)
 									(profile_name==EXPDISK) ? "expdisk" :
 									(profile_name==CORECUSP) ? "corecusp" :
 									(profile_name==SERSIC_LENS) ? "sersic" :
+									(profile_name==DOUBLE_SERSIC_LENS) ? "dsersic" :
 									(profile_name==CORED_SERSIC_LENS) ? "csersic" :
 									(profile_name==SHEAR) ? "shear" :
 									(profile_name==SHEET) ? "sheet" :
@@ -2970,7 +2989,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, q, theta, xc, yc);
+							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, 0, q, theta, xc, yc);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3080,7 +3099,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -3324,7 +3343,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, p2, 0.0, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3482,7 +3501,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
+							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3604,7 +3623,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3701,7 +3720,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, R_d, 0.0, q, theta, xc, yc);
+							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, 0, R_d, 0.0, q, theta, xc, yc);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3893,7 +3912,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, rs, 0.0, q, theta, xc, yc);
+							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, 0, rs, 0.0, q, theta, xc, yc);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -4020,7 +4039,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, a, s, q, theta, xc, yc, gamma, n, pmode);
+							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, 0, a, s, q, theta, xc, yc, gamma, n, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -4137,10 +4156,10 @@ void QLens::process_commands(bool read_file)
 						if (pmode==1) {
 							if (!(ws[2] >> p1)) Complain("invalid mstar parameter for model sersic");
 						} else {
-							if (!(ws[2] >> p1)) Complain("invalid kappe_e parameter for model sersic");
+							if (!(ws[2] >> p1)) Complain("invalid kappa_e parameter for model sersic");
 						}
-						if (!(ws[3] >> re)) Complain("invalid sersic parameter for model sersic");
-						if (!(ws[4] >> n)) Complain("invalid n (core) parameter for model sersic");
+						if (!(ws[3] >> re)) Complain("invalid R_eff parameter for model sersic");
+						if (!(ws[4] >> n)) Complain("invalid n parameter for model sersic");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
 						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 						if (re <= 0) Complain("re cannot be less than or equal to zero");
@@ -4179,9 +4198,9 @@ void QLens::process_commands(bool read_file)
 									if (nwords==tot_nparams_to_vary+2) {
 										if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-									} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model sersic (plus optional Fourier modes)";
+									} else complain_str = "Must specify vary flags for five parameters (kappa_e,R_eff,n,q,theta) in model sersic (plus optional Fourier modes)";
 								}
-								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model sersic (plus optional Fourier modes)";
+								else complain_str = "Must specify vary flags for seven parameters (kappa_e,R_eff,n,q,theta,xc,yc) in model sersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
 									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -4203,7 +4222,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n, re, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -4225,7 +4244,113 @@ void QLens::process_commands(bool read_file)
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
-					else Complain("sersic requires at least 4 parameters (kappe_e, R_eff, n, q)");
+					else Complain("sersic requires at least 4 parameters (kappa_e, R_eff, n, q)");
+				}
+				else if (words[1]=="dsersic")
+				{
+					int primary_lens_num;
+					if ((pmode < 0) or (pmode > 1)) Complain("parameter mode must be either 0 or 1");
+					if (nwords > 12) Complain("more than 10 parameters not allowed for model dsersic");
+					if (nwords >= 9) {
+						double p1, delta_k, re1, n1, re2, n2;
+						double q, theta = 0, xc = 0, yc = 0;
+						int pos;
+						if (pmode==1) {
+							if (!(ws[2] >> p1)) Complain("invalid mstar parameter for model dsersic");
+						} else {
+							if (!(ws[2] >> p1)) Complain("invalid kappa0 parameter for model dsersic");
+						}
+						if (!(ws[3] >> delta_k)) Complain("invalid delta_k parameter for model dsersic");
+						if (!(ws[4] >> re1)) Complain("invalid Reff1 parameter for model dsersic");
+						if (!(ws[5] >> n1)) Complain("invalid n1 parameter for model dsersic");
+						if (!(ws[6] >> re2)) Complain("invalid Reff2 parameter for model dsersic");
+						if (!(ws[7] >> n2)) Complain("invalid n2 parameter for model dsersic");
+						if (!(ws[8] >> q)) Complain("invalid q parameter for model dsersic");
+						if ((LensProfile::use_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
+						if (re1 <= 0) Complain("Reff1 cannot be less than or equal to zero");
+						if (re2 <= 0) Complain("Reff2 cannot be less than or equal to zero");
+						if (nwords >= 10) {
+							if (!(ws[9] >> theta)) Complain("invalid theta parameter for model dsersic");
+							if (nwords == 11) {
+								if (words[10].find("anchor_center=")==0) {
+									string anchorstr = words[10].substr(14);
+									stringstream anchorstream;
+									anchorstream << anchorstr;
+									if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+									if (anchornum >= nlens) Complain("lens anchor number does not exist");
+									anchor_lens_center = true;
+								} else Complain("x-coordinate entered for center, but not y-coordinate");
+							}
+							if (nwords == 12) {
+								if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
+								if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model dsersic");
+								if (!(ws[11] >> yc)) Complain("invalid y-center parameter for model dsersic");
+							}
+						}
+						param_vals.input(11);
+						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
+						param_vals[0]=p1; param_vals[1]=delta_k; param_vals[2]=re1; param_vals[3]=n1; param_vals[4]=re2; param_vals[5]=n2; param_vals[6]=q; param_vals[7]=theta; param_vals[8]=xc; param_vals[9]=yc;
+						if ((update_zl) or (!update_parameters)) param_vals[10]=zl_in;
+						else param_vals[10]=lens_list[lens_number]->zlens;
+						if (vary_parameters) {
+							nparams_to_vary = (anchor_lens_center) ? 8 : 10;
+							nparams_to_vary += fourier_nmodes*2;
+							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
+							if (read_command(false)==false) return;
+							vary_zl = check_vary_z();
+							if (nwords != tot_nparams_to_vary) {
+								string complain_str = "";
+								if (anchor_lens_center) {
+									if (nwords==tot_nparams_to_vary+2) {
+										if ((words[8] != "0") or (words[9] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
+										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
+									} else complain_str = "Must specify vary flags for five parameters (kappe_e,R_eff,n,q,theta) in model dsersic (plus optional Fourier modes)";
+								}
+								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model dsersic (plus optional Fourier modes)";
+								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
+									complain_str += ",\n     plus two shear parameters ";
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+								}
+								if (complain_str != "") Complain(complain_str);
+							}
+							vary_flags.input(nparams_to_vary+1);
+							if (add_shear) shear_vary_flags.input(2);
+							bool invalid_params = false;
+							int i,j;
+							for (i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+							for (i=nparams_to_vary, j=0; i < tot_nparams_to_vary; i++, j++) if (!(ws[i] >> shear_vary_flags[j])) invalid_params = true;
+							if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+							for (i=0; i < parameter_anchor_i; i++) if (vary_flags[parameter_anchors[i].paramnum]==true) Complain("Vary flag for anchored parameter must be set to 0");
+							vary_flags[nparams_to_vary] = vary_zl;
+						}
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
+						if (update_parameters) {
+							lens_list[lens_number]->update_parameters(param_vals.array());
+							if (auto_ccspline) automatically_determine_ccspline_mode();
+						} else {
+							create_and_add_lens(DOUBLE_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n1, re1, re2, q, theta, xc, yc, delta_k, n2, pmode); // weird ordering of parameters in this function. Dislike...
+							if (egrad) {
+								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
+									remove_lens(nlens-1);
+									Complain("could not initialize ellipticity gradient; lens object could not be created");
+								}
+							}
+							for (int i=fourier_nmodes-1; i >= 0; i--) {
+								lens_list[nlens-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
+							}
+							if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,lens_list[nlens-1]->get_lensprofile_nparams()+lens_list[nlens-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read fourier gradient parameters");
+							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+
+							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
+							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
+							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
+							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
+							if (auto_set_primary_lens) set_primary_lens();
+							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
+						}
+					}
+					else Complain("dsersic requires at least 7 parameters (kappa0, delta_k, R_eff1, n1, R_eff2, n2, q)");
 				}
 				else if (words[1]=="csersic")
 				{
@@ -4308,7 +4433,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, re, n, q, theta, xc, yc, rc, 0, pmode);
+							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n, re, rc, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -4443,7 +4568,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, defx, defy, 0, 0, 0, 0);
+							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, 0, defx, defy, 0, 0, 0, 0);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
@@ -4749,7 +4874,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[5] >> yc)) Complain("invalid y-center parameter for model testmodel");
 							}
 						}
-						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, q, theta, xc, yc);
+						create_and_add_lens(TESTMODEL, emode, zl_in, reference_source_redshift, 0, 0, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_lens(nlens-1);
@@ -6831,12 +6956,96 @@ void QLens::process_commands(bool read_file)
 						set_fit_label(label);
 					}
 				}
+				else if (words[1]=="params")
+				{
+					bool no_sci_notation = false;
+					for (int i=nwords-1; i > 1; i--) {
+						if (words[i]=="-nosci") {
+							no_sci_notation = true;
+							remove_word(i);
+						}
+					}
+					if (nwords==2) {
+						if ((no_sci_notation) and (use_scientific_notation)) {
+							cout << resetiosflags(ios::scientific);
+							cout.unsetf(ios_base::floatfield);
+						}
+						if (output_parameter_values()==false) Complain("could not output parameter values");
+						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
+					} else if (words[2]=="rename") {
+						if (nwords != 5) Complain("two arguments required for 'fit params rename' (param#, param_name)");
+						int param_num;
+						if (!(ws[3] >> param_num)) {
+							if ((param_num = param_settings->lookup_param_number(words[3])) == -1)
+							Complain("Invalid parameter number/name");
+						}
+						int nparams;
+						get_n_fit_parameters(nparams);
+						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit params')");
+						if (!param_settings->set_override_parameter_name(param_num,words[4])) Complain("parameter name not unique; parameter could not be renamed");
+					} else if (words[2]=="update") {
+						int pos, n_updates = 0;
+						double pval;
+						vector<string> update_param_list;
+						vector<double> update_param_vals;
+						for (int i=3; i < nwords; i++) {
+							if ((pos = words[i].find("="))!=string::npos) {
+								n_updates++;
+								update_param_list.push_back(words[i].substr(0,pos));
+								stringstream pvalstr;
+								pvalstr << words[i].substr(pos+1);
+								pvalstr >> pval;
+								update_param_vals.push_back(pval);
+							} else if (i==3) break;
+						}
+						for (int i=nwords-1; i >= 3; i--) {
+							if ((pos = words[i].find("="))!=string::npos) remove_word(i); // now that they're stored, remove all the '<name>=<val>' arguments
+						}
+
+						if (n_updates > 0) {
+							int paramnum_list[n_updates];
+							if (nwords != 3) Complain("parameters must be updated using '<param_name>=<val>' arguments or else using '<param_num> <val>'");
+							for (int i=0; i < n_updates; i++) {
+								if ((paramnum_list[i] = param_settings->lookup_param_number(update_param_list[i])) == -1) Complain("Invalid parameter name '" << update_param_list[i] << "'");
+							}
+							for (int i=0; i < n_updates; i++)
+								if (update_parameter_value(paramnum_list[i],update_param_vals[i])==false) Complain("could not update parameter " << paramnum_list);
+						} else {
+							if (nwords != 5) Complain("two arguments required for 'fit params update' (param#, value)");
+							int param_num;
+							double paramval;
+							if (!(ws[3] >> param_num)) {
+								if ((param_num = param_settings->lookup_param_number(words[3])) == -1)
+								Complain("Invalid parameter number/name");
+							}
+							int nparams;
+							get_n_fit_parameters(nparams);
+							if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit params')");
+							if (!(ws[4] >> paramval)) Complain("invalid parameter value");
+							if (update_parameter_value(param_num,paramval)==false) Complain("could not update parameter value");
+						}
+					} else Complain("argument not recognized for 'fit params'");
+				}
 				else if (words[1]=="priors")
 				{
 					int nparams;
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
-					if (nwords==2) { if (mpi_id==0) param_settings->print_priors(); }
+					bool no_sci_notation = false;
+					for (int i=nwords-1; i > 1; i--) {
+						if (words[i]=="-nosci") {
+							no_sci_notation = true;
+							remove_word(i);
+						}
+					}
+					if (nwords==2) {
+						if ((no_sci_notation) and (use_scientific_notation)) {
+							cout << resetiosflags(ios::scientific);
+							cout.unsetf(ios_base::floatfield);
+						}
+						output_parameter_prior_ranges();
+						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
+					}
 					else if (nwords >= 4) {
 						int param_num;
 						if (!(ws[2] >> param_num)) {
@@ -6844,7 +7053,14 @@ void QLens::process_commands(bool read_file)
 							Complain("Invalid parameter number/name");
 						}
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit priors')");
-						if (words[3]=="uniform") param_settings->priors[param_num]->set_uniform();
+						if (words[3]=="range") {
+							if (nwords != 6) Complain("require lower and upper limits after 'fit priors <param#> range'");
+							double lo, hi;
+							if (!(ws[4] >> lo)) Complain("Invalid lower prior limit");
+							if (!(ws[5] >> hi)) Complain("Invalid upper prior limit");
+							param_settings->set_override_prior_limit(param_num,lo,hi);
+						}
+						else if (words[3]=="uniform") param_settings->priors[param_num]->set_uniform();
 						else if (words[3]=="log") param_settings->priors[param_num]->set_log();
 						else if (words[3]=="gaussian") {
 							if (nwords != 6) Complain("'fit priors gaussian' requires two additional arguments (mean,sigma)");
@@ -6873,18 +7089,23 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="transform")
 				{
-					bool include_jac=false;
-					if (words[nwords-1].find("include_jac")==0) {
-						include_jac = true;
-						stringstream* new_ws = new stringstream[nwords-1];
-						words.erase(words.begin()+nwords-1);
-						for (int i=0; i < nwords-1; i++) {
-							new_ws[i] << words[i];
+					bool include_jac = false;
+					bool rename = false;
+					string new_name = "";
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						int pos;
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-include_jac") include_jac = true;
+							else if ((pos = args[i].find("-name=")) != string::npos) {
+								rename = true;
+								new_name = args[i].substr(pos+6);
+							}
+							else Complain("argument '" << args[i] << "' not recognized");
 						}
-						delete[] ws;
-						ws = new_ws;
-						nwords--;
 					}
+
 					int nparams;
 					get_n_fit_parameters(nparams);
 					if (nparams==0) Complain("no fit parameters have been defined");
@@ -6915,13 +7136,18 @@ void QLens::process_commands(bool read_file)
 						else if (words[3]=="ratio") {
 							if (nwords != 5) Complain("'fit transform ratio' requires one additional argument (paramnum)");
 							int ratio_pnum;
-							if (!(ws[4] >> ratio_pnum)) Complain("Invalid parameter number for ratio transformation");
+							if (!(ws[4] >> ratio_pnum)) {
+								if ((ratio_pnum = param_settings->lookup_param_number(words[4])) == -1)
+								Complain("Invalid parameter number/name for ratio transformation");
+							}
 							if ((ratio_pnum >= nparams) or (ratio_pnum < 0)) Complain("Parameter number specified for ratio transformation does not exist");
+							if (ratio_pnum==param_num) Complain("Parameter number in denominator for ratio transformation must be different from parameter number in numerator");
 							param_settings->transforms[param_num]->set_ratio(ratio_pnum);
 						}
 						else Complain("transformation type not recognized");
 						param_settings->transforms[param_num]->set_include_jacobian(include_jac);
 						param_settings->transform_stepsizes();
+						if ((rename) and (!param_settings->set_override_parameter_name(param_num,new_name))) Complain("parameter name not unique; parameter could not be renamed");
 					}
 					else Complain("command 'fit transform' requires either zero or two arguments (param_number,transformation_type)");
 				}

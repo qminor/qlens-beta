@@ -276,6 +276,7 @@ struct ImagePixelData : public Sort
 	double xmin, xmax, ymin, ymax;
 	double pixel_size, pixel_noise;
 	double global_max_sb;
+	double emask_rmax;
 	ImagePixelData()
 	{
 		surface_brightness = NULL;
@@ -318,6 +319,7 @@ struct ImagePixelData : public Sort
 	void reset_extended_mask();
 	void set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false);
 	void set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
+	void find_extended_mask_rmax();
 	void set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
 
 

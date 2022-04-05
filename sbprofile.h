@@ -25,6 +25,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class QLens;
 	friend class LensProfile;
 	friend class SersicLens;
+	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
 	friend struct ImagePixelData;
 	private:
@@ -346,6 +347,7 @@ class Cored_Sersic : public SB_Profile
 
 class DoubleSersic : public SB_Profile
 {
+	friend class DoubleSersicLens;
 	private:
 	double s0, delta_s;
 	double s0_1, b1, n1;

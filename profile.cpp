@@ -9,6 +9,11 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 using namespace std;
 
 IntegrationMethod LensProfile::integral_method = Gauss_Patterson_Quadrature;
@@ -3122,17 +3127,6 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 		fourier_integral_right_sin_spline = new Spline[n_fourier_modes];
 	}
 
-	bool converged;
-	LensIntegral lens_integral(this,0,0);
-	if (fourier_gradient) {
-		lens_integral.cosamps = new double[n_fourier_modes];
-		lens_integral.sinamps = new double[n_fourier_modes];
-	} else {
-		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-		lens_integral.cosamps = fourier_mode_cosamp.array();
-		lens_integral.sinamps = fourier_mode_sinamp.array();
-	}
-
 	int i,j,m;
 
 	double **ileft_cos = new double*[n_fourier_modes];
@@ -3146,18 +3140,53 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 		iright_sin[j] = new double[fourier_spline_npoints];
 	}
 	double *rvals = new double[fourier_spline_npoints];
-
-
 	double r, rstep = (rmax-rmin)/(fourier_spline_npoints-1);
 	for (r=rmin, i=0; i < fourier_spline_npoints; i++, r += rstep) {
 		rvals[i] = r;
-		if (ellipticity_gradient) {
-			lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+	}
+
+
+	int nthreads = 1;
+#ifdef USE_OPENMP
+	#pragma omp parallel
+	{
+		#pragma omp master
+		nthreads = omp_get_num_threads();
+	}
+#endif
+	LensIntegral *lens_integral = new LensIntegral[nthreads];
+
+	for (i=0; i < nthreads; i++) {
+		lens_integral[i].initialize(this);
+		if (fourier_gradient) {
+			lens_integral[i].cosamps = new double[n_fourier_modes];
+			lens_integral[i].sinamps = new double[n_fourier_modes];
+		} else {
+			// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
+			lens_integral[i].cosamps = fourier_mode_cosamp.array();
+			lens_integral[i].sinamps = fourier_mode_sinamp.array();
 		}
-		for (j=0; j < n_fourier_modes; j++) {
-			m = fourier_mode_mvals[j];
-			lens_integral.calculate_fourier_integrals(m,j,false,r,ileft_sin[j][i],iright_sin[j][i],converged);
-			lens_integral.calculate_fourier_integrals(m,j,true,r,ileft_cos[j][i],iright_cos[j][i],converged);
+	}
+
+	#pragma omp parallel
+	{
+		int thread;
+		bool converged;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		#pragma omp for private(i,j) schedule(static)
+		for (i=0; i < fourier_spline_npoints; i++) {
+			if (ellipticity_gradient) {
+				lens_integral[thread].phi0 = (this->*egrad_ptr)(rvals[i],geometric_param[1],1);
+			}
+
+			for (j=0; j < n_fourier_modes; j++) {
+				lens_integral[thread].calculate_fourier_integrals(fourier_mode_mvals[j],j,false,rvals[i],ileft_sin[j][i],iright_sin[j][i],converged);
+				lens_integral[thread].calculate_fourier_integrals(fourier_mode_mvals[j],j,true,rvals[i],ileft_cos[j][i],iright_cos[j][i],converged);
+			}
 		}
 	}
 	for (j=0; j < n_fourier_modes; j++) {
@@ -3179,9 +3208,12 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 	delete[] rvals;
 
 	if (fourier_gradient) {
-		delete[] lens_integral.cosamps;
-		delete[] lens_integral.sinamps;
+		for (i=0; i < nthreads; i++) {
+			delete[] lens_integral[i].cosamps;
+			delete[] lens_integral[i].sinamps;
+		}
 	}
+	delete[] lens_integral;
 	fourier_integrals_splined = true;
 }
 

@@ -2602,8 +2602,8 @@ DoubleSersic::DoubleSersic(const DoubleSersic* sb_in)
 
 void DoubleSersic::update_meta_parameters()
 {
-	s0_1 = s0*(1+delta_s);
-	s0_2 = s0*(1-delta_s);
+	s0_1 = s0*(1+delta_s)/2;
+	s0_2 = s0*(1-delta_s)/2;
 	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
 	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
 	update_ellipticity_meta_parameters();

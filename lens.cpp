@@ -69,31 +69,42 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 		return;
 	}
 	int newparams = nparams_in - nparams;
+	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
+	for (i=0; i < nparams; i++) new_paramnums[i] = -1;
 	ParamPrior** newpriors = new ParamPrior*[nparams_in];
 	ParamTransform** newtransforms = new ParamTransform*[nparams_in];
 	double* new_stepsizes = new double[nparams_in];
 	bool* new_auto_stepsize = new bool[nparams_in];
 	bool* new_subplot_param = new bool[nparams_in];
 	bool* new_hist2d_param = new bool[nparams_in];
+	double* new_prior_norms = new double[nparams_in];
 	double* new_penalty_limits_lo = new double[nparams_in];
 	double* new_penalty_limits_hi = new double[nparams_in];
-	double* new_prior_norms = new double[nparams_in];
 	bool* new_use_penalty_limits = new bool[nparams_in];
+	double* new_override_limits_lo = new double[nparams_in];
+	double* new_override_limits_hi = new double[nparams_in];
+	bool* new_override_prior_limits = new bool[nparams_in];
 	if (param_names != NULL) delete[] param_names;
 	param_names = new string[nparams_in];
+	string* new_override_names = new string[nparams_in];
 	if (nparams_in > nparams) {
 		for (i=0; i < nparams; i++) {
+			new_paramnums[i] = i;
 			newpriors[i] = new ParamPrior(priors[i]);
 			newtransforms[i] = new ParamTransform(transforms[i]);
 			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
 			new_subplot_param[i] = subplot_param[i];
 			new_hist2d_param[i] = hist2d_param[i];
+			new_prior_norms[i] = prior_norms[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
-			new_prior_norms[i] = prior_norms[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
+			new_override_limits_lo[i] = override_limits_lo[i];
+			new_override_limits_hi[i] = override_limits_hi[i];
+			new_override_prior_limits[i] = override_prior_limits[i];
 			param_names[i] = names[i];
+			new_override_names[i] = override_names[i];
 		}
 		for (i=nparams; i < nparams_in; i++) {
 			//cout << "New parameter " << i << ", setting plimits to false" << endl;
@@ -104,24 +115,33 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
 			new_subplot_param[i] = false; 
 			new_hist2d_param[i] = true; 
+			new_prior_norms[i] = 1.0;
 			new_penalty_limits_lo[i] = -1e30;
 			new_penalty_limits_hi[i] = 1e30;
-			new_prior_norms[i] = 1.0;
 			new_use_penalty_limits[i] = false;
+			new_override_limits_lo[i] = -1e30;
+			new_override_limits_hi[i] = 1e30;
+			new_override_prior_limits[i] = false;
+			new_override_names[i] = "";
 		}
 	} else {
 		for (i=0; i < nparams_in; i++) {
+			new_paramnums[i] = i;
 			newpriors[i] = new ParamPrior(priors[i]);
 			newtransforms[i] = new ParamTransform(transforms[i]);
 			new_stepsizes[i] = stepsizes[i];
 			new_auto_stepsize[i] = auto_stepsize[i];
 			new_subplot_param[i] = subplot_param[i];
 			new_hist2d_param[i] = hist2d_param[i];
+			new_prior_norms[i] = prior_norms[i];
 			new_penalty_limits_lo[i] = penalty_limits_lo[i];
 			new_penalty_limits_hi[i] = penalty_limits_hi[i];
-			new_prior_norms[i] = prior_norms[i];
 			new_use_penalty_limits[i] = use_penalty_limits[i];
+			new_override_limits_lo[i] = override_limits_lo[i];
+			new_override_limits_hi[i] = override_limits_hi[i];
+			new_override_prior_limits[i] = override_prior_limits[i];
 			param_names[i] = names[i];
+			new_override_names[i] = override_names[i];
 		}
 	}
 	if (nparams > 0) {
@@ -135,10 +155,14 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 		delete[] auto_stepsize;
 		delete[] subplot_param;
 		delete[] hist2d_param;
+		delete[] prior_norms;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
-		delete[] prior_norms;
 		delete[] use_penalty_limits;
+		delete[] override_limits_lo;
+		delete[] override_limits_hi;
+		delete[] override_prior_limits;
+		delete[] override_names;
 	}
 	priors = newpriors;
 	transforms = newtransforms;
@@ -146,39 +170,55 @@ void ParamSettings::update_params(const int nparams_in, vector<string>& names, d
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
 	hist2d_param = new_hist2d_param;
+	prior_norms = new_prior_norms;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
-	prior_norms = new_prior_norms;
 	use_penalty_limits = new_use_penalty_limits;
+	override_limits_lo = new_override_limits_lo;
+	override_limits_hi = new_override_limits_hi;
+	override_prior_limits = new_override_prior_limits;
+	override_names = new_override_names;
 	nparams = nparams_in;
+	update_reference_paramnums(new_paramnums);
+	delete[] new_paramnums;
 }
 void ParamSettings::insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
 {
 	int i, j, np = pf-pi;
 	int new_nparams = nparams + np;
+	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
 	ParamPrior** newpriors = new ParamPrior*[new_nparams];
 	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
 	double* new_stepsizes = new double[new_nparams];
 	bool* new_auto_stepsize = new bool[new_nparams];
 	bool* new_subplot_param = new bool[new_nparams];
 	bool* new_hist2d_param = new bool[new_nparams];
+	double* new_prior_norms = new double[new_nparams];
 	double* new_penalty_limits_lo = new double[new_nparams];
 	double* new_penalty_limits_hi = new double[new_nparams];
-	double* new_prior_norms = new double[new_nparams];
 	bool* new_use_penalty_limits = new bool[new_nparams];
+	double* new_override_limits_lo = new double[new_nparams];
+	double* new_override_limits_hi = new double[new_nparams];
+	bool* new_override_prior_limits = new bool[new_nparams];
 	string* new_param_names = new string[new_nparams];
+	string* new_override_names = new string[new_nparams];
 	for (i=0; i < pi; i++) {
+		new_paramnums[i] = i;
 		newpriors[i] = new ParamPrior(priors[i]);
 		newtransforms[i] = new ParamTransform(transforms[i]);
 		new_auto_stepsize[i] = auto_stepsize[i];
 		new_hist2d_param[i] = hist2d_param[i];
 		new_subplot_param[i] = subplot_param[i];
 		new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
+		new_prior_norms[i] = prior_norms[i];
 		new_penalty_limits_lo[i] = penalty_limits_lo[i];
 		new_penalty_limits_hi[i] = penalty_limits_hi[i];
-		new_prior_norms[i] = prior_norms[i];
 		new_use_penalty_limits[i] = use_penalty_limits[i];
+		new_override_limits_lo[i] = override_limits_lo[i];
+		new_override_limits_hi[i] = override_limits_hi[i];
+		new_override_prior_limits[i] = override_prior_limits[i];
 		new_param_names[i] = names[i];
+		new_override_names[i] = override_names[i];
 	}
 	for (i=pi; i < pf; i++) {
 		newpriors[i] = new ParamPrior();
@@ -187,24 +227,33 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
 		new_hist2d_param[i] = true; // stepsizes for newly added parameters are set to 'auto'
 		new_subplot_param[i] = false; // stepsizes for newly added parameters are set to 'auto'
+		new_prior_norms[i] = 1.0;
 		new_penalty_limits_lo[i] = -1e30;
 		new_penalty_limits_hi[i] = 1e30;
-		new_prior_norms[i] = 1.0;
 		new_use_penalty_limits[i] = false;
+		new_override_limits_lo[i] = -1e30;
+		new_override_limits_hi[i] = 1e30;
+		new_override_prior_limits[i] = false;
 		new_param_names[i] = names[i];
+		new_override_names[i] = "";
 	}
 	for (j=pf,i=pi; i < nparams; i++, j++) {
+		new_paramnums[i] = j;
 		newpriors[j] = new ParamPrior(priors[i]);
 		newtransforms[j] = new ParamTransform(transforms[i]);
 		new_auto_stepsize[j] = auto_stepsize[i];
 		new_hist2d_param[j] = hist2d_param[i];
 		new_subplot_param[j] = subplot_param[i];
 		new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
+		new_prior_norms[j] = prior_norms[i];
 		new_penalty_limits_lo[j] = penalty_limits_lo[i];
 		new_penalty_limits_hi[j] = penalty_limits_hi[i];
-		new_prior_norms[j] = prior_norms[i];
 		new_use_penalty_limits[j] = use_penalty_limits[i];
+		new_override_limits_lo[j] = override_limits_lo[i];
+		new_override_limits_hi[j] = override_limits_hi[i];
+		new_override_prior_limits[j] = override_prior_limits[i];
 		new_param_names[j] = param_names[i];
+		new_override_names[j] = override_names[i];
 		//cout << "Penalty limit " << i << " is now penalty limit " << j << ", which is " << use_penalty_limits[i] << " with range " << penalty_limits_lo[i] << " " << penalty_limits_hi[i] << endl;
 	}
 	if (nparams > 0) {
@@ -218,11 +267,15 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 		delete[] auto_stepsize;
 		delete[] subplot_param;
 		delete[] hist2d_param;
+		delete[] prior_norms;
 		delete[] penalty_limits_lo;
 		delete[] penalty_limits_hi;
-		delete[] prior_norms;
 		delete[] use_penalty_limits;
+		delete[] override_limits_lo;
+		delete[] override_limits_hi;
+		delete[] override_prior_limits;
 		delete[] param_names;
+		delete[] override_names;
 	}
 	priors = newpriors;
 	transforms = newtransforms;
@@ -230,13 +283,20 @@ void ParamSettings::insert_params(const int pi, const int pf, vector<string>& na
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
 	hist2d_param = new_hist2d_param;
+	prior_norms = new_prior_norms;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
-	prior_norms = new_prior_norms;
 	use_penalty_limits = new_use_penalty_limits;
+	override_limits_lo = new_override_limits_lo;
+	override_limits_hi = new_override_limits_hi;
+	override_prior_limits = new_override_prior_limits;
 	param_names = new_param_names;
+	override_names = new_override_names;
 	nparams = new_nparams;
+	update_reference_paramnums(new_paramnums);
+	delete[] new_paramnums;
 }
+
 bool ParamSettings::remove_params(const int pi, const int pf)
 {
 	if (pf > nparams) return false;
@@ -246,42 +306,58 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 		return true;
 	}
 	int new_nparams = nparams - np;
+	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
+	for (i=0; i < nparams; i++) new_paramnums[i] = -1;
 	ParamPrior** newpriors = new ParamPrior*[new_nparams];
 	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
 	double* new_stepsizes = new double[new_nparams];
 	bool* new_auto_stepsize = new bool[new_nparams];
 	bool* new_subplot_param = new bool[new_nparams];
 	bool* new_hist2d_param = new bool[new_nparams];
+	double* new_prior_norms = new double[new_nparams];
 	double* new_penalty_limits_lo = new double[new_nparams];
 	double* new_penalty_limits_hi = new double[new_nparams];
-	double* new_prior_norms = new double[new_nparams];
 	bool* new_use_penalty_limits = new bool[new_nparams];
+	double* new_override_limits_lo = new double[new_nparams];
+	double* new_override_limits_hi = new double[new_nparams];
+	bool* new_override_prior_limits = new bool[new_nparams];
 	string* new_param_names = new string[new_nparams];
+	string* new_override_names = new string[new_nparams];
 	for (i=0; i < pi; i++) {
+		new_paramnums[i] = i;
 		newpriors[i] = new ParamPrior(priors[i]);
 		newtransforms[i] = new ParamTransform(transforms[i]);
 		new_stepsizes[i] = stepsizes[i];
 		new_auto_stepsize[i] = auto_stepsize[i];
 		new_subplot_param[i] = subplot_param[i];
 		new_hist2d_param[i] = hist2d_param[i];
+		new_prior_norms[i] = prior_norms[i];
 		new_penalty_limits_lo[i] = penalty_limits_lo[i];
 		new_penalty_limits_hi[i] = penalty_limits_hi[i];
-		new_prior_norms[i] = prior_norms[i];
 		new_use_penalty_limits[i] = use_penalty_limits[i];
+		new_override_limits_lo[i] = override_limits_lo[i];
+		new_override_limits_hi[i] = override_limits_hi[i];
+		new_override_prior_limits[i] = override_prior_limits[i];
 		new_param_names[i] = param_names[i];
+		new_override_names[i] = override_names[i];
 	}
 	for (i=pf,j=pi; i < nparams; i++, j++) {
+		new_paramnums[i] = j;
 		newpriors[j] = new ParamPrior(priors[i]);
 		newtransforms[j] = new ParamTransform(transforms[i]);
 		new_stepsizes[j] = stepsizes[i];
 		new_auto_stepsize[j] = auto_stepsize[i];
 		new_subplot_param[j] = subplot_param[i];
 		new_hist2d_param[j] = hist2d_param[i];
+		new_prior_norms[j] = prior_norms[i];
 		new_penalty_limits_lo[j] = penalty_limits_lo[i];
 		new_penalty_limits_hi[j] = penalty_limits_hi[i];
-		new_prior_norms[j] = prior_norms[i];
 		new_use_penalty_limits[j] = use_penalty_limits[i];
+		new_override_limits_lo[j] = override_limits_lo[i];
+		new_override_limits_hi[j] = override_limits_hi[i];
+		new_override_prior_limits[j] = override_prior_limits[i];
 		new_param_names[j] = param_names[i];
+		new_override_names[j] = override_names[i];
 	}
 	for (i=0; i < nparams; i++) {
 		delete priors[i];
@@ -293,23 +369,33 @@ bool ParamSettings::remove_params(const int pi, const int pf)
 	delete[] auto_stepsize;
 	delete[] subplot_param;
 	delete[] hist2d_param;
+	delete[] prior_norms;
 	delete[] penalty_limits_lo;
 	delete[] penalty_limits_hi;
-	delete[] prior_norms;
 	delete[] use_penalty_limits;
+	delete[] override_limits_lo;
+	delete[] override_limits_hi;
+	delete[] override_prior_limits;
 	delete[] param_names;
+	delete[] override_names;
 	priors = newpriors;
 	transforms = newtransforms;
 	stepsizes = new_stepsizes;
 	auto_stepsize = new_auto_stepsize;
 	subplot_param = new_subplot_param;
 	hist2d_param = new_hist2d_param;
+	prior_norms = new_prior_norms;
 	penalty_limits_lo = new_penalty_limits_lo;
 	penalty_limits_hi = new_penalty_limits_hi;
-	prior_norms = new_prior_norms;
 	use_penalty_limits = new_use_penalty_limits;
+	override_limits_lo = new_override_limits_lo;
+	override_limits_hi = new_override_limits_hi;
+	override_prior_limits = new_override_prior_limits;
 	param_names = new_param_names;
+	override_names = new_override_names;
 	nparams = new_nparams;
+	update_reference_paramnums(new_paramnums);
+	delete[] new_paramnums;
 	return true;
 }
 void ParamSettings::add_dparam(string dparam_name)
@@ -383,17 +469,7 @@ void ParamSettings::print_priors()
 		extra_length = max_length - param_names[i].length();
 		for (int j=0; j < extra_length; j++) cout << " ";
 		if ((nparams > 10) and (i < 10)) cout << " ";
-		if (priors[i]->prior==UNIFORM_PRIOR) cout << "uniform prior";
-		else if (priors[i]->prior==LOG_PRIOR) cout << "log prior";
-		else if (priors[i]->prior==GAUSS_PRIOR) {
-			cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ", sigma=" << priors[i]->gaussian_sig << ")";
-		}
-		else if (priors[i]->prior==GAUSS2_PRIOR) {
-			cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
-		} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
-			cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
-		}
-		else die("Prior type unknown");
+		if (!output_prior(i)) die("Prior type unknown");
 		if (transforms[i]->transform==NONE) ;
 		else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
 		else if (transforms[i]->transform==GAUSS_TRANSFORM) cout << ", gaussian transformation (mean=" << transforms[i]->gaussian_pos << ", sigma=" << transforms[i]->gaussian_sig << ")";
@@ -403,6 +479,28 @@ void ParamSettings::print_priors()
 		cout << endl;
 	}
 }
+
+bool ParamSettings::output_prior(const int i)
+{
+	if (priors[i]->prior==UNIFORM_PRIOR) {
+		cout << "uniform prior";
+		if ((transforms[i]->transform != NONE) and (transforms[i]->include_jacobian)) {
+			cout << " in " << param_names[i];
+		}
+	}
+	else if (priors[i]->prior==LOG_PRIOR) cout << "log prior";
+	else if (priors[i]->prior==GAUSS_PRIOR) {
+		cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ",sigma=" << priors[i]->gaussian_sig << ")";
+	}
+	else if (priors[i]->prior==GAUSS2_PRIOR) {
+		cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
+	} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
+		cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
+	} else return false;
+	if (transforms[i]->include_jacobian==true) cout << " (including Jacobian in likelihood)";
+	return true;
+}
+
 
 void ParamSettings::print_stepsizes()
 {
@@ -1617,9 +1715,10 @@ void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmat
 	jac_tot[1][0] = -jac_tot[1][0];
 }
 
-void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
+	// if using ellipticity components, (eparam,theta) are actually (e1,e2)
 	
 	LensProfile* new_lens;
 
@@ -1644,7 +1743,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			//alphaptr = new Alpha();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			alphaptr = new Alpha(mass_parameter, scale1, scale2, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
+			alphaptr = new Alpha(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
 			new_lens = alphaptr;
 			break;
 		case SHEAR:
@@ -1674,9 +1773,11 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
 			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case SERSIC_LENS:
-			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, logslope_param, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case DOUBLE_SERSIC_LENS:
+			new_lens = new DoubleSersicLens(zl, zs, mass_parameter, special_param1, scale1, logslope_param, scale2, special_param2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case CORED_SERSIC_LENS:
-			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, scale2, special_param1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, logslope_param, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TESTMODEL: // Model for testing purposes
 			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
 		default:
@@ -1711,7 +1812,7 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 		case CORED_SERSIC:
 			new_lens = new Cored_SersicLens((Cored_Sersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case DOUBLE_SERSIC:
-			warn("Spawning lens from double Sersic model is currently not supported"); spawn_lens = false; break;
+			new_lens = new DoubleSersicLens((DoubleSersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case SB_MULTIPOLE:
 			warn("cannot spawn lens from SB multipole"); spawn_lens = false; break;
 		case SHAPELET:
@@ -1805,7 +1906,7 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 
 void QLens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
 {
-	create_and_add_lens(SHEAR,-1,zl,zs,0,0,0,shear_p1,shear_p2,xc,yc);
+	create_and_add_lens(SHEAR,-1,zl,zs,0,0,0,0,shear_p1,shear_p2,xc,yc);
 }
 
 void QLens::add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode)
@@ -1815,7 +1916,7 @@ void QLens::add_ptmass_lens(const double zl, const double zs, const double mass_
 
 void QLens::add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc)
 {
-	create_and_add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,xc,yc);
+	create_and_add_lens(SHEET,-1,zl,zs,mass_parameter,0,0,0,0,0,xc,yc);
 }
 
 void QLens::add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term)
@@ -6475,14 +6576,14 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
 		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit.empty()) or (image_data==NULL))) {
-			warn("cannot do fit; image data points have not been defined");
+			warn("image data points have not been defined");
 			return false;
 		}
 		if ((image_data==NULL) and (include_imgpos_chisq)) { warn("cannot evaluate image position chi-square; no image data has been defined"); return false; }
 		else if ((image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data has been defined"); return false; }
 		else if ((image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data has been defined"); return false; }
 	} else {
-		if (image_pixel_data==NULL) { warn("cannot do fit; image data pixels have not been loaded"); return false; }
+		if (image_pixel_data==NULL) { warn("image data pixels have not been loaded"); return false; }
 		if (source_fit_mode==Shapelet_Source) {
 			bool found_shapelet = false;
 			for (int i=0; i < n_sb; i++) {
@@ -6592,6 +6693,8 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				fitmodel->lens_list[i] = new CoreCusp((CoreCusp*) lens_list[i]); break;
 			case SERSIC_LENS:
 				fitmodel->lens_list[i] = new SersicLens((SersicLens*) lens_list[i]); break;
+			case DOUBLE_SERSIC_LENS:
+				fitmodel->lens_list[i] = new DoubleSersicLens((DoubleSersicLens*) lens_list[i]); break;
 			case CORED_SERSIC_LENS:
 				fitmodel->lens_list[i] = new Cored_SersicLens((Cored_SersicLens*) lens_list[i]); break;
 			case PTMASS:
@@ -6730,56 +6833,55 @@ void QLens::update_anchored_parameters_and_redshift_data()
 	reset_grid();
 }
 
-bool QLens::update_fitmodel(const double* params)
+bool QLens::update_model(const double* params)
 {
 	bool status = true;
-	if (ellipticity_gradient) fitmodel->contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
+	if (ellipticity_gradient) contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
 	int i, index=0;
 	for (i=0; i < nlens; i++) {
-		fitmodel->lens_list[i]->update_fit_parameters(params,index,status);
+		lens_list[i]->update_fit_parameters(params,index,status);
 	}
 	if (source_fit_mode==Point_Source) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
-				if (fitmodel->vary_sourcepts_x[i]) fitmodel->sourcepts_fit[i][0] = params[index++];
-				if (fitmodel->vary_sourcepts_y[i]) fitmodel->sourcepts_fit[i][1] = params[index++];
+				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = params[index++];
+				if (vary_sourcepts_y[i]) sourcepts_fit[i][1] = params[index++];
 			}
 		}
 	} else if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 		for (i=0; i < n_sb; i++) {
-			fitmodel->sb_list[i]->update_fit_parameters(params,index,status);
+			sb_list[i]->update_fit_parameters(params,index,status);
 		}
 	} else if (source_fit_mode == Pixellated_Source) {
-		if ((vary_regularization_parameter) and (regularization_method != None)) fitmodel->regularization_parameter = params[index++];
-		if (vary_pixel_fraction) fitmodel->pixel_fraction = params[index++];
-		if (vary_srcgrid_xshift) fitmodel->srcgrid_xshift = params[index++];
-		if (vary_srcgrid_yshift) fitmodel->srcgrid_yshift = params[index++];
-		if (vary_srcgrid_size_scale) fitmodel->srcgrid_size_scale = params[index++];
-		if (vary_magnification_threshold) fitmodel->pixel_magnification_threshold = params[index++];
+		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
+		if (vary_pixel_fraction) pixel_fraction = params[index++];
+		if (vary_srcgrid_xshift) srcgrid_xshift = params[index++];
+		if (vary_srcgrid_yshift) srcgrid_yshift = params[index++];
+		if (vary_srcgrid_size_scale) srcgrid_size_scale = params[index++];
+		if (vary_magnification_threshold) pixel_magnification_threshold = params[index++];
 	}
-	fitmodel->update_anchored_parameters_and_redshift_data();
-	//fitmodel->print_source_list(false);
+	update_anchored_parameters_and_redshift_data();
 	if (source_fit_mode == Shapelet_Source) {
-		if ((vary_regularization_parameter) and (regularization_method != None)) fitmodel->regularization_parameter = params[index++];
+		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
 	}
 	if (vary_hubble_parameter) {
-		fitmodel->hubble = params[index++];
-		if (fitmodel->hubble < 0) status = false; // do not allow negative Hubble parameter
-		fitmodel->set_cosmology(fitmodel->omega_matter,0.04,fitmodel->hubble,2.215);
+		hubble = params[index++];
+		if (hubble < 0) status = false; // do not allow negative Hubble parameter
+		set_cosmology(omega_matter,0.04,hubble,2.215);
 	}
 	if (vary_omega_matter_parameter) {
-		fitmodel->omega_matter = params[index++];
-		if (fitmodel->omega_matter < 0) status = false; // do not allow negative Hubble parameter
-		fitmodel->set_cosmology(fitmodel->omega_matter,0.04,fitmodel->hubble,2.215);
+		omega_matter = params[index++];
+		if (omega_matter < 0) status = false; // do not allow negative Hubble parameter
+		set_cosmology(omega_matter,0.04,hubble,2.215);
 	}
 	if (vary_syserr_pos_parameter) {
-		fitmodel->syserr_pos = params[index++];
-		if (fitmodel->syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
+		syserr_pos = params[index++];
+		if (syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
 	}
 	if (vary_wl_shear_factor_parameter) {
-		fitmodel->wl_shear_factor = params[index++];
+		wl_shear_factor = params[index++];
 	}
-	if ((ellipticity_gradient) and (fitmodel->contours_overlap)) {
+	if ((ellipticity_gradient) and (contours_overlap)) {
 		status = false;
 		//warn("contours overlap in ellipticity gradient model");
 	}
@@ -6955,7 +7057,6 @@ double QLens::chisq_pos_image_plane()
 	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
 #endif
 
-	//cout << "Running chisq..." << endl;
 	if (group_np > 1) {
 		if (group_np > n_redshift_groups) die("Number of MPI processes per group cannot be greater than number of source planes in data being fit");
 		mpi_chunk = n_redshift_groups / group_np;
@@ -7780,19 +7881,19 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	//}
 	if (nlens==0) {
 		if (n_sb==0) {
-			warn("cannot do fit; no lens or source models have been defined");
+			warn("no lens or source models have been defined");
 			return false;
 		} else {
 			bool all_unlensed = true;
 			for (int i=0; i < n_sb; i++) if (sb_list[i]->is_lensed) all_unlensed = false;
 			if (!all_unlensed) {
-				warn("cannot do fit; background sources have been defined, but no lens models have been defined");
+				warn("background sources have been defined, but no lens models have been defined");
 				return false;
 			}
 		}
 	}
 	get_n_fit_parameters(n_fit_parameters);
-	if (n_fit_parameters==0) { warn("cannot do fit; no parameters are being varied"); return false; }
+	if (n_fit_parameters==0) { warn("no parameters are being varied"); return false; }
 	fitparams.input(n_fit_parameters);
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
@@ -7842,7 +7943,7 @@ bool QLens::setup_limits()
 	lower_limits_initial.input(n_fit_parameters);
 	int index=0;
 	for (int i=0; i < nlens; i++) {
-		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("cannot do fit; limits have not been defined for lens %i",i); return false; }
+		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for lens %i",i); return false; }
 	}
 	if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
 	if (source_fit_mode==Point_Source) {
@@ -7866,7 +7967,7 @@ bool QLens::setup_limits()
 		}
 	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 		for (int i=0; i < n_sb; i++) {
-			if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("cannot do fit; limits have not been defined for source %i",i); return false; }
+			if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
 		}
 		int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
 		if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
@@ -7880,6 +7981,7 @@ bool QLens::setup_limits()
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
+		// The way limits are handled here is really ugly. The limits should just be handled in the ParamSettings class. IMPLEMENT THIS!!!!!!!!!!!
 		if (source_fit_mode==Pixellated_Source) {
 			if (vary_pixel_fraction) {
 				lower_limits[index] = pixel_fraction_lower_limit;
@@ -7950,6 +8052,8 @@ bool QLens::setup_limits()
 	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
 	param_settings->transform_limits(lower_limits.array(),upper_limits.array());
 	param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
+	param_settings->override_limits(lower_limits.array(),upper_limits.array());
+	param_settings->override_limits(lower_limits_initial.array(),upper_limits_initial.array());
 	param_settings->set_prior_norms(lower_limits.array(),upper_limits.array());
 	for (int i=0; i < n_fit_parameters; i++) {
 		if (lower_limits[i] > upper_limits[i]) {
@@ -8159,6 +8263,58 @@ void QLens::create_parameter_value_string(string &pvals)
 		if (i < n_derived_params-1) pvals += " ";
 	}
 }
+
+bool QLens::output_parameter_values()
+{
+	if (setup_fit_parameters(false)==false) return false;
+	if (mpi_id==0) {
+		for (int i=0; i < n_fit_parameters; i++) {
+			cout << i << ". " << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
+		}
+		cout << endl;
+	}
+	return true;
+}
+
+bool QLens::update_parameter_value(const int param_num, const double param_val)
+{
+	if (setup_fit_parameters(false)==false) return false;
+	if (param_num >= n_fit_parameters) return false;
+	double newparams[n_fit_parameters];
+	double new_transformed_params[n_fit_parameters];
+	for (int i=0; i < n_fit_parameters; i++) newparams[i] = fitparams[i];
+	newparams[param_num] = param_val;
+	bool status = true;
+	param_settings->inverse_transform_parameters(newparams,new_transformed_params);
+	if (update_model(new_transformed_params)==false) status = false;
+	return status;
+}
+
+
+bool QLens::output_parameter_prior_ranges()
+{
+	if (setup_fit_parameters(true)==false) return false;
+	int max_length=0;
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (transformed_parameter_names[i].length() > max_length) max_length = transformed_parameter_names[i].length();
+	}
+	int extra_length;
+ 
+	if (mpi_id==0) {
+		for (int i=0; i < n_fit_parameters; i++) {
+			cout << i << ". " << transformed_parameter_names[i] << ": ";
+			extra_length = max_length - transformed_parameter_names[i].length();
+			for (int j=0; j < extra_length; j++) cout << " ";
+			if ((n_fit_parameters > 10) and (i < 10)) cout << " ";
+			if (!param_settings->output_prior(i)) return false;
+			cout << ", [" << lower_limits[i] << "," << upper_limits[i] << "]" << endl;
+		}
+		cout << endl;
+	}
+	return true;
+}
+
+
 
 bool QLens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 {
@@ -8677,7 +8833,9 @@ double QLens::chi_square_fit_powell()
 		}
 
 		cout << "\nBest-fit model: 2*loglike = " << chisq_bestfit << " (after " << chisq_evals << " evals)" << endl;
-		update_fitmodel(fitparams.array());
+		double transformed_params[n_fit_parameters];
+		fitmodel->param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
+		fitmodel->update_model(transformed_params);
 		for (int i=0; i < nlens; i++) {
 			fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 		}
@@ -10072,6 +10230,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	int i, index=0;
 	double transformed_params[n_fit_parameters];
 	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
+	// Maybe instead of the following code, just run update_model(transformed_params)? Look into this and implement if it works!!
 	bool status;
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(transformed_params,index,status);
@@ -10356,7 +10515,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		}
 		//fitmodel->param_settings->print_penalty_limits();
 		if (penalty_incurred) return 1e30;
-		if (update_fitmodel(transformed_params)==false) return 1e30;
+		if (fitmodel->update_model(transformed_params)==false) return 1e30;
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
 				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
@@ -10496,7 +10655,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 double QLens::fitmodel_loglike_extended_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
-	double loglike, chisq=0, chisq0;
+	double loglike=0, chisq=0, chisq0;
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
@@ -10509,7 +10668,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
-		if (update_fitmodel(transformed_params)==false) {
+		if (fitmodel->update_model(transformed_params)==false) {
 			chisq = 2e30;
 		}
 		if (group_id==0) {
@@ -10519,20 +10678,23 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 		}
 	}
-	if (chisq != 2e30) {
+	if (einstein_radius_prior) {
+		loglike += fitmodel->get_einstein_radius_prior(false);
+		if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
+	}
+	if ((chisq != 2e30) and (loglike < 1e10)) {
 		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
 		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 	}
 
 	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
 	fitmodel->raw_chisq = chisq0;
-	loglike = chisq/2.0;
+	loglike += chisq/2.0;
 	if (params != NULL) {
 		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike = fitmodel_custom_prior();
 	}
-	if (einstein_radius_prior) loglike += fitmodel->get_einstein_radius_prior(false);
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (use_ansi_characters) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0;
@@ -10558,7 +10720,7 @@ double QLens::loglike_point_source(double* params)
 			if ((transformed_params[i] < param_settings->penalty_limits_lo[i]) or (transformed_params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
 		}
 	}
-	if (update_fitmodel(transformed_params)==false) return 1e30;
+	if (fitmodel->update_model(transformed_params)==false) return 1e30;
 	if (group_id==0) {
 		if (logfile.is_open()) {
 			for (int i=0; i < n_fit_parameters; i++) logfile << params[i] << " ";
@@ -10621,7 +10783,7 @@ double QLens::fitmodel_loglike_extended_source_test(double* params)
 			if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
 		}
 	}
-	if (update_fitmodel(transformed_params)==false) return 1e30;
+	if (fitmodel->update_model(transformed_params)==false) return 1e30;
 
 	if (group_id==0) {
 		if (fitmodel->logfile.is_open()) {
@@ -10644,7 +10806,7 @@ void QLens::fitmodel_calculate_derived_params(double* params, double* derived_pa
 	if (n_derived_params==0) return;
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (update_fitmodel(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
+	if (fitmodel->update_model(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
 }
 
@@ -11968,9 +12130,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 
-	// fix it so it uses the biggest r value from the masked region!!!!!
 	for (int i=0; i < nlens; i++) {
-		if (lens_list[i]->n_fourier_modes > 0) lens_list[i]->spline_fourier_mode_integrals(0.01,2.8);
+		if (lens_list[i]->n_fourier_modes > 0) lens_list[i]->spline_fourier_mode_integrals(0.01*image_pixel_data->emask_rmax,image_pixel_data->emask_rmax);
 	}
 #ifdef USE_OPENMP
 		if (show_wtime) {
