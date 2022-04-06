@@ -10753,6 +10753,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid data pixel surface brightness noise");
 				data_pixel_noise = pnoise;
+				SB_Profile::SB_noise = pnoise;
 				if (image_pixel_data != NULL) image_pixel_data->set_noise(pnoise);
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "data pixel surface brightness dispersion = " << data_pixel_noise << endl;
@@ -10764,6 +10765,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid simulated pixel surface brightness dispersion");
 				sim_pixel_noise = pnoise;
+				if (data_pixel_noise==0) SB_Profile::SB_noise = pnoise;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Simulated pixel surface brightness dispersion = " << sim_pixel_noise << endl;
 			} else Complain("must specify either zero or one argument (simulated pixel surface brightness noise)");

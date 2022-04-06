@@ -17,6 +17,7 @@ bool SB_Profile::fourier_use_eccentric_anomaly = true;
 bool SB_Profile::fourier_sb_perturbation = false; // if true, add fourier modes to the surface brightness, rather than the elliptical radius
 double SB_Profile::zoom_split_factor = 2;
 double SB_Profile::zoom_scale = 4;
+double SB_Profile::SB_noise = 0.1; // used to help determine subpixel splittings to resolve SB profiles (zoom mode)
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in)
@@ -1369,145 +1370,194 @@ double SB_Profile::surface_brightness(double x, double y)
 
 double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
 {
-	// Note: at present this does not include Fourier modes or ellipticity gradients
-	//double pt1[0], pt2[0], pt1[1], pt2[1];
 	bool subgrid = false;
-	//pt1[0] = x - pixel_xlength/2;
-	//pt2[0] = x + pixel_xlength/2;
-	//pt1[1] = y - pixel_ylength/2;
-	//pt2[1] = y + pixel_ylength/2;
+	bool contains_sbcenter = false;
+	int xsplit, ysplit;
 
-	double scale = zoom_scale*length_scale();
-	lensvector sbcenter; sbcenter[0] = x_center; sbcenter[1] = y_center;
+	lensvector sbcenter;
+	sbcenter[0] = x_center;
+	sbcenter[1] = y_center;
+
 	lensvector d1, d2, d3;
 	double product1, product2, product3;
-	lensvector scpt1, scpt2, scpt3, scpt4;
-	//cout << "SCALE : " << scale << endl;
-	d1[0] = pt1[0]-centerpt[0];
-	d1[1] = pt1[1]-centerpt[1];
-	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
-	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
-	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
-	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
-	//cout << "WTF? " << d2.norm() << " " << (20*scale) << endl;
-	scpt1 = pt1 + d2;
-	//scpt1 = centerpt + d2;
+	double r[4];
+	d1[0] = sbcenter[0]-pt1[0];
+	d1[1] = sbcenter[1]-pt1[1];
+	r[0] = d1.norm();
+	d2[0] = sbcenter[0]-pt2[0];
+	d2[1] = sbcenter[1]-pt2[1];
+	r[1] = d2.norm();
+	d3[0] = sbcenter[0]-pt3[0];
+	d3[1] = sbcenter[1]-pt3[1];
+	r[2] = d3.norm();
 
-	d1[0] = pt2[0]-centerpt[0];
-	d1[1] = pt2[1]-centerpt[1];
-	d1 = pt2-centerpt;
-	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
-	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
-	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
-	scpt2 = pt2 + d2;
-	//scpt2 = centerpt + d2;
-
-	d1[0] = pt3[0]-centerpt[0];
-	d1[1] = pt3[1]-centerpt[1];
-	d1 = pt3-centerpt;
-	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
-	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
-	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
-	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
-	scpt3 = pt3 + d2;
-	//scpt3 = centerpt + d2;
-
-	d1[0] = pt4[0]-centerpt[0];
-	d1[1] = pt4[1]-centerpt[1];
-	d1 = pt4-centerpt;
-	d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
-	d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
-	//d2 = d1 * (3*scale/d1.norm()); // vector along d1 with length given by scale
-	//cout << "ANLGE: " << d1.angle() << " " << d2.angle() << endl;
-	scpt4 = pt4 + d2;
-	//scpt4 = centerpt + d2;
-
-	d1[0] = sbcenter[0] - scpt3[0];
-	d1[1] = sbcenter[1] - scpt3[1];
-	d2[0] = sbcenter[0] - scpt2[0];
-	d2[1] = sbcenter[1] - scpt2[1];
-	d3[0] = sbcenter[0] - scpt1[0];
-	d3[1] = sbcenter[1] - scpt1[1];
+	// Let's see if the cell contains the SB center inside it
 	product1 = d1 ^ d2;
 	product2 = d3 ^ d1;
 	product3 = d2 ^ d3;
-	if ((product1 > 0) and (product2 > 0) and (product3 > 0)) subgrid = true;
-	else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) subgrid = true;
+	if ((product1 > 0) and (product2 > 0) and (product3 > 0)) contains_sbcenter = true;
+	else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) contains_sbcenter = true;
 	else {
-		d3[0] = sbcenter[0] - scpt4[0];
-		d3[1] = sbcenter[1] - scpt4[1];
+		d3[0] = sbcenter[0]-pt3[0];
+		d3[1] = sbcenter[1]-pt3[1];
+		r[3] = d3.norm();
+		product2 = d3 ^ d1;
+		product3 = d2 ^ d3;
+		if ((product1 > 0) and (product2 > 0) and (product3 > 0)) contains_sbcenter = true;
+		else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) contains_sbcenter = true;
+	}
+	double rmin = 1e30, rmax = -1e30;
+	for (int i=0; i < 4; i++) {
+		if (r[i] > rmax) rmax = r[i];
+		if (r[i] < rmin) rmin = r[i];
+	}
+
+	if (contains_sbcenter) rmin = 0;
+	//d1[0] = centerpt[0]-sbcenter[0];
+	//d1[1] = centerpt[1]-sbcenter[1];
+	//double center_r = d1.norm();
+
+	if ((rmax-rmin) < length_scale()) {
+		const int max_split = 4;
+		if (contains_sbcenter) {
+			// If the pixel contains the SB center, just split the max number of times and call it a day
+			subgrid = true;
+			xsplit = max_split;
+			ysplit = max_split;
+		} else {
+			// If pixels are smaller than the half-light radius, we will estimate the curvature and use this to find the optimal subpixel scale that makes the
+			// error in the estimated (integrated) SB over the subpixel smaller than the epsilon/6 of the pixel noise; we use this to determine # of splittings
+			const double epsilon = 1; // in principle we could allow the user to change this to make the subgridding more aggressive. Implement later?
+			double rminsq=rmin*rmin, rmaxsq=rmax*rmax;
+			double sbderiv1, sbderiv2, h = 1e-5;
+			if (rminsq <= h) sbderiv1 = 2*rmin*(sb_rsq(rminsq + h) - sb_rsq(rminsq))/(h);
+			else sbderiv1 = 2*rmin*(sb_rsq(rminsq + h) - sb_rsq(rminsq-h))/(2*h);
+			if (rmaxsq <= h) sbderiv2 = 2*rmax*(sb_rsq(rmaxsq + h) - sb_rsq(rmaxsq))/(h);
+			else sbderiv2 = 2*rmax*(sb_rsq(rmaxsq + h) - sb_rsq(rmaxsq-h))/(2*h);
+			double sbcurv_approx = sbderiv2-sbderiv1;
+			double optimal_scale = 4*epsilon*SB_noise/sbcurv_approx;
+			// Ideally, if the pixel size is greater than optimal scale, you'd increase the splittings, calculate sbcurv_approx again, and iterate until
+			// pixel size is small enough. But this seems to work well enough as it is.
+			double npix_approx = (rmax-rmin)/optimal_scale;
+			if (npix_approx > 1) {
+				subgrid = true;
+				xsplit = ((int) npix_approx) + 1;
+				ysplit = ((int) npix_approx) + 1;
+				if (xsplit > max_split) xsplit = max_split; // limit on number of splittings
+				if (ysplit > max_split) ysplit = max_split; // limit on number of splittings
+			}
+			//if (npix_approx > 1) cout << "r= " << center_r << " sbcurv_approx=" << sbcurv_approx << " delta_R=" << (rmax-rmin) << " OPTIMAL SCALE: " << optimal_scale << " npix_approx=" << npix_approx << endl;
+		}
+	} else {
+		// The following algorithm is for source pixels that are large compared to the half-light radius of the SB profile
+		// Revisit this later? Seems a bit shoddy, and not very trustworthy for lensed sources, but maybe good enough for unlensed sources.
+		double scale = zoom_scale*length_scale();
+		lensvector scpt1, scpt2, scpt3, scpt4;
+		d1[0] = pt1[0]-centerpt[0];
+		d1[1] = pt1[1]-centerpt[1];
+		d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+		d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+		scpt1 = pt1 + d2;
+
+		d1[0] = pt2[0]-centerpt[0];
+		d1[1] = pt2[1]-centerpt[1];
+		d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+		d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+		scpt2 = pt2 + d2;
+
+		d1[0] = pt3[0]-centerpt[0];
+		d1[1] = pt3[1]-centerpt[1];
+		d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+		d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+		scpt3 = pt3 + d2;
+
+		d1[0] = pt4[0]-centerpt[0];
+		d1[1] = pt4[1]-centerpt[1];
+		d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
+		d2[1] = d1[1] * (scale/d1.norm()); // vector along d1 with length given by scale
+		scpt4 = pt4 + d2;
+
+		d1[0] = sbcenter[0] - scpt3[0];
+		d1[1] = sbcenter[1] - scpt3[1];
+		d2[0] = sbcenter[0] - scpt2[0];
+		d2[1] = sbcenter[1] - scpt2[1];
+		d3[0] = sbcenter[0] - scpt1[0];
+		d3[1] = sbcenter[1] - scpt1[1];
+		product1 = d1 ^ d2;
 		product2 = d3 ^ d1;
 		product3 = d2 ^ d3;
 		if ((product1 > 0) and (product2 > 0) and (product3 > 0)) subgrid = true;
 		else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) subgrid = true;
+		else {
+			d3[0] = sbcenter[0] - scpt4[0];
+			d3[1] = sbcenter[1] - scpt4[1];
+			product2 = d3 ^ d1;
+			product3 = d2 ^ d3;
+			if ((product1 > 0) and (product2 > 0) and (product3 > 0)) subgrid = true;
+			else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) subgrid = true;
+		}
+
+		// Now find the middle point of each side, and see if it is close enough to sbcenter. This could still fail if the
+		// cell is very large, and sbcenter is only close to some off-center point on one of the edges, but hopefully it's
+		// enough to get the job done.
+		if (!subgrid) {
+			d1[0] = 0.5*(pt1[0] + pt2[0]);
+			d1[1] = 0.5*(pt1[1] + pt2[1]);
+			d2[0] = d1[0] - sbcenter[0];
+			d2[1] = d1[1] - sbcenter[1];
+			if (d2.norm() < scale) subgrid = true;
+
+			d1[0] = 0.5*(pt1[0] + pt3[0]);
+			d1[1] = 0.5*(pt1[1] + pt3[1]);
+			d2[0] = d1[0] - sbcenter[0];
+			d2[1] = d1[1] - sbcenter[1];
+			if (d2.norm() < scale) subgrid = true;
+
+			d1[0] = 0.5*(pt2[0] + pt4[0]);
+			d1[1] = 0.5*(pt2[1] + pt4[1]);
+			d2[0] = d1[0] - sbcenter[0];
+			d2[1] = d1[1] - sbcenter[1];
+			if (d2.norm() < scale) subgrid = true;
+
+			d1[0] = 0.5*(pt3[0] + pt4[0]);
+			d1[1] = 0.5*(pt3[1] + pt4[1]);
+			d2[0] = d1[0] - sbcenter[0];
+			d2[1] = d1[1] - sbcenter[1];
+			if (d2.norm() < scale) subgrid = true;
+		}
+
+		if (!subgrid) {
+			double pixel_xlength, pixel_ylength;
+			d1 = pt2 - pt1;
+			d2 = pt4 - pt3;
+			pixel_xlength = dmax(d1.norm(),d2.norm());
+			d1 = pt3 - pt1;
+			d2 = pt4 - pt2;
+			pixel_ylength = dmax(d1.norm(),d2.norm());
+			double lscale = 0.01*length_scale();
+			xsplit = ((int) (zoom_split_factor*pixel_xlength/lscale)) + 1;
+			ysplit = ((int) (zoom_split_factor*pixel_ylength/lscale)) + 1;
+		}
 	}
-
-	// Now find the middle point of each side, and see if it is close enough to sbcenter
-	// This could still fail if the cell is very large, and sbcenter is only close to some off-center point
-	// on one of the edges, but hopefully it's enough to get the job done.
-	if (!subgrid) {
-		d1[0] = 0.5*(pt1[0] + pt2[0]);
-		d1[1] = 0.5*(pt1[1] + pt2[1]);
-		d2[0] = d1[0] - sbcenter[0];
-		d2[1] = d1[1] - sbcenter[1];
-		if (d2.norm() < scale) subgrid = true;
-
-		d1[0] = 0.5*(pt1[0] + pt3[0]);
-		d1[1] = 0.5*(pt1[1] + pt3[1]);
-		d2[0] = d1[0] - sbcenter[0];
-		d2[1] = d1[1] - sbcenter[1];
-		if (d2.norm() < scale) subgrid = true;
-
-		d1[0] = 0.5*(pt2[0] + pt4[0]);
-		d1[1] = 0.5*(pt2[1] + pt4[1]);
-		d2[0] = d1[0] - sbcenter[0];
-		d2[1] = d1[1] - sbcenter[1];
-		if (d2.norm() < scale) subgrid = true;
-
-		d1[0] = 0.5*(pt3[0] + pt4[0]);
-		d1[1] = 0.5*(pt3[1] + pt4[1]);
-		d2[0] = d1[0] - sbcenter[0];
-		d2[1] = d1[1] - sbcenter[1];
-		if (d2.norm() < scale) subgrid = true;
-	}
-
 	if (!subgrid) return surface_brightness(centerpt[0],centerpt[1]);
-	//if (subgrid) cout << "Subgridding! pt=" << centerpt[0] << "," << centerpt[1] << endl;
-	double pixel_xlength, pixel_ylength;
-	d1 = pt2 - pt1;
-	d2 = pt4 - pt3;
-	pixel_xlength = dmax(d1.norm(),d2.norm());
-	d1 = pt3 - pt1;
-	d2 = pt4 - pt2;
-	pixel_ylength = dmax(d1.norm(),d2.norm());
-	int xsplit, ysplit;
-	double lscale = length_scale();
-	xsplit = ((int) (zoom_split_factor*pixel_xlength/lscale)) + 1;
-	ysplit = ((int) (zoom_split_factor*pixel_ylength/lscale)) + 1;
-	//cout << "HI " << xsplit << " " << ysplit << endl;
-	//nsplit = imax(xsplit,ysplit);
-	//cout << "nsplit=" << nsplit << endl;
 	double sb = 0;
 	double u0, w0, xs, ys;
 	int ii,jj;
-	//double sbadd;
-	//ofstream testsplit("testsplit.dat");
 
+	// This splitting algorithm allows for the 'pixel' to not be rectangular, as in lensed sources. But it's still dicey for lensed 
+	// sources since the subpixels in the source plane won't look exactly the same as splitting in the image plane and mapping each
+	// subpixel to the source plane. It's always better (but costlier) to split the image pixels and then ray trace the subpixels to
+	// the source plane.
 	for (ii=0; ii < xsplit; ii++) {
 		u0 = ((double) (1+2*ii))/(2*xsplit);
 		for (jj=0; jj < ysplit; jj++) {
-			//xs = u0*pt1[0] + (1-u0)*pt2[0];
 			w0 = ((double) (1+2*jj))/(2*ysplit);
 			xs = (pt1[0]*u0 + pt2[0]*(1-u0))*w0 + (pt3[0]*u0 + pt4[0]*(1-u0))*(1-w0);
 			ys = (pt1[1]*u0 + pt2[1]*(1-u0))*w0 + (pt3[1]*u0 + pt4[1]*(1-u0))*(1-w0);
-			//ys = w0*pt1[1] + (1-w0)*pt2[1];
-			//sbadd = surface_brightness(xs,ys);
 			sb += surface_brightness(xs,ys);
-			//testsplit << xs << " " << ys << endl;
 		}
 	}
 	sb /= (xsplit*ysplit);
-	//if (sb > 0) cout << "sb=" << sb << endl;
 
 	return sb;
 }

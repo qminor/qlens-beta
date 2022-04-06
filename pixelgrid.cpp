@@ -3111,7 +3111,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				stringstream pxnoise_str;
 				pxnoise_str << pxnoise_string;
 				pxnoise_str >> pixel_noise;
-				if (lens != NULL) lens->data_pixel_noise = pixel_noise;
+				if (lens != NULL) {
+					lens->data_pixel_noise = pixel_noise;
+					SB_Profile::SB_noise = pixel_noise;
+				}
 			} else if (cardstring.find("PSFSIG ") != string::npos) {
 				string psfwidth_string = cardstring.substr(11);
 				stringstream psfwidth_str;
@@ -6107,18 +6110,9 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			mapped_source_pixels[i][j].clear();
-			if (lens->split_imgpixels) {
-				if ((fit_to_data) and (lens->image_pixel_data)) {
-					if (lens->image_pixel_data->in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-					else {
-						nsplits[i][j] = 1; // only one splitting used for extended mask by default (maybe allow user to adjust this?)
-					}
-				} else {
-					nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-				}
-			}
 		}
 	}
+	set_nsplits(lens->image_pixel_data,lens->default_imgpixel_nsplit,lens->split_imgpixels);
 }
 
 inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
@@ -6545,6 +6539,7 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			fit_to_data[i][j] = pixel_data.in_mask[i][j];
+			mapped_source_pixels[i][j].clear();
 		}
 	}
 	//double mask_min_r = 1e30;
@@ -6559,39 +6554,7 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 	//if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
 	if (lens) {
-		//NOTE: this code is also in setup_ray_tracing_arrays(). Ugly redundancy!!! FIX LATER
-		for (i=0; i < x_N; i++) {
-			for (j=0; j < y_N; j++) {
-				mapped_source_pixels[i][j].clear();
-				if (lens->split_imgpixels) {
-					if (lens->image_pixel_data) {
-						if (pixel_data.in_mask[i][j]) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-						else {
-							nsplits[i][j] = 2;
-							//double r = sqrt(SQR(center_pts[i][j][0]) + SQR(center_pts[i][j][1]));
-							//if (r < mask_min_r) nsplits[i][j] = imax(4,lens->default_imgpixel_nsplit); // this is a hack so central images get decent number of splittings
-							/*
-							for (int k=0; k < lens->n_sb; k++) {
-								if (!lens->sb_list[k]->is_lensed) {
-									//cout << "Trying lens " << k << endl;
-									SB_Profile* sbptr = lens->sb_list[k];
-									double xc,yc;
-									sbptr->get_center_coords(xc,yc);
-									if ((xc > corner_pts[i][j][0]) and (xc < corner_pts[i+1][j][0]) and (yc > corner_pts[i][j][1]) and (yc < corner_pts[i][j+1][1])) {
-										//nsplits[i][j] = imax(6,lens->default_imgpixel_nsplit);
-										//die("worked at x=(%g,%g) and y=(%g,%g)",corner_pts[i][j][0],corner_pts[i+1][j][0],corner_pts[i][j][1],corner_pts[i][j+1][1]);
-										break;
-									}
-								}
-							}
-							*/
-						}
-					} else {
-						nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-					}
-				}
-			}
-		}
+		set_nsplits(&pixel_data,lens->default_imgpixel_nsplit,lens->split_imgpixels);
 	}
 
 }
@@ -6633,6 +6596,25 @@ void ImagePixelGrid::deactivate_extended_mask()
 	}
 	//cout << "NFIT: " << n << endl;
 	//cout << "NEXT: " << m << endl;
+}
+
+void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const bool split_pixels)
+{
+	int i,j;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (split_pixels) {
+				if ((fit_to_data) and (pixel_data)) {
+					if (pixel_data->in_mask[i][j]) nsplits[i][j] = default_nsplit;
+					else {
+						nsplits[i][j] = 1; // so extended mask pixels don't get split (make this customizable by user?)
+					}
+				} else {
+					nsplits[i][j] = default_nsplit;
+				}
+			}
+		}
+	}
 }
 
 void ImagePixelGrid::reset_nsplit()
