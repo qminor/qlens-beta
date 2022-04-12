@@ -6112,7 +6112,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 			mapped_source_pixels[i][j].clear();
 		}
 	}
-	set_nsplits(lens->image_pixel_data,lens->default_imgpixel_nsplit,lens->split_imgpixels);
+	set_nsplits(lens->image_pixel_data,lens->default_imgpixel_nsplit,lens->emask_imgpixel_nsplit,lens->split_imgpixels);
 }
 
 inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
@@ -6554,7 +6554,7 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 	//if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
 	if (lens) {
-		set_nsplits(&pixel_data,lens->default_imgpixel_nsplit,lens->split_imgpixels);
+		set_nsplits(&pixel_data,lens->default_imgpixel_nsplit,lens->emask_imgpixel_nsplit,lens->split_imgpixels);
 	}
 
 }
@@ -6598,7 +6598,7 @@ void ImagePixelGrid::deactivate_extended_mask()
 	//cout << "NEXT: " << m << endl;
 }
 
-void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const bool split_pixels)
+void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels)
 {
 	int i,j;
 	for (i=0; i < x_N; i++) {
@@ -6606,9 +6606,7 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 			if (split_pixels) {
 				if ((fit_to_data) and (pixel_data)) {
 					if (pixel_data->in_mask[i][j]) nsplits[i][j] = default_nsplit;
-					else {
-						nsplits[i][j] = 1; // so extended mask pixels don't get split (make this customizable by user?)
-					}
+					else nsplits[i][j] = emask_nsplit; // so extended mask pixels don't get split (make this customizable by user?)
 				} else {
 					nsplits[i][j] = default_nsplit;
 				}
@@ -6680,88 +6678,6 @@ void ImagePixelGrid::redo_lensing_calculations()
 	if (ntot_cells_check != ntot_cells) die("ntot_cells does not equal the value assigned when image grid created");
 	if (ntot_corners_check != ntot_corners) die("ntot_corners does not equal the value assigned when image grid created");
 
-	//cout << ntot_corners << " " << ntot_cells << endl;
-	/*
-	int *extended_mask_i = new int[ntot_cells];
-	int *extended_mask_j = new int[ntot_cells];
-	int *extended_mask_corner_i = new int[ntot_corners];
-	int *extended_mask_corner_j = new int[ntot_corners];
-	int *extended_mask_corner = new int[ntot_cells];
-	int *extended_mask_corner_up = new int[ntot_cells];
-	int **nvals = new int*[x_N];
-	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
-	int **ncvals = new int*[x_N+1];
-	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
-	*/
-	
-	/*
-	n_cell=0;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			if (lens->image_pixel_data->extended_mask[i][j]) {
-				extended_mask_i[n_cell] = i;
-				extended_mask_j[n_cell] = j;
-				nvals[i][j] = n_cell;
-				n_cell++;
-			} else {
-				nvals[i][j] = -1;
-			}
-		}
-	}
-
-	n_corner=0;
-	for (j=0; j < y_N+1; j++) {
-		for (i=0; i < x_N+1; i++) {
-			ncvals[i][j] = -1;
-			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
-			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (lens->image_pixel_data->extended_mask[i][j-1])) or (lens->image_pixel_data->extended_mask[i-1][j-1])) {
-				extended_mask_corner_i[n_corner] = i;
-				extended_mask_corner_j[n_corner] = j;
-				if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
-				if (j > (y_N+1)) die("FUCK! corner j is huge from the get-go");
-				//if ((i < x_N) and (j < y_N)) extended_mask_corner[nvals[i][j]] = n_corner;
-				ncvals[i][j] = n_corner;
-				n_corner++;
-			}
-		}
-	}
-	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
-	for (int n=0; n < ntot_cells; n++) {
-		i = extended_mask_i[n];
-		j = extended_mask_j[n];
-		extended_mask_corner[n] = ncvals[i][j];
-		extended_mask_corner_up[n] = ncvals[i][j+1];
-	}
-	for (int n=0; n < ntot_corners; n++) {
-		i = extended_mask_corner_i[n];
-		j = extended_mask_corner_j[n];
-		if (i > (x_N+1)) die("FUCK! corner i is huge");
-		if (j > (y_N+1)) die("FUCK! corner j is huge");
-	}
-
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			mapped_source_pixels[i][j].clear();
-			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-		}
-	}
-	*/
-	//cout << "cells: " << ntot_cells << " tot: " << (x_N*y_N) << endl;
-	//cout << "corners: " << ntot_corners << " tot: " << ((x_N+1)*(y_N+1)) << endl;
-	//ntot_corners = (x_N+1)*(y_N+1);
-	//ntot_cells = x_N*y_N;
-	/*
-	defx_corners = new double[ntot_corners];
-	defy_corners = new double[ntot_corners];
-	defx_centers = new double[ntot_cells];
-	defy_centers = new double[ntot_cells];
-	area_tri1 = new double[ntot_cells];
-	area_tri2 = new double[ntot_cells];
-	twistx = new double[ntot_cells];
-	twisty = new double[ntot_cells];
-	twiststat = new int[ntot_cells];
-	*/
-
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = ntot_corners / lens->group_np;
 	mpi_start = lens->group_id*mpi_chunk;
@@ -6815,10 +6731,9 @@ void ImagePixelGrid::redo_lensing_calculations()
 			//i = n_cell % x_N;
 			j = extended_mask_j[n_cell];
 			i = extended_mask_i[n_cell];
-			//cout << "TEST: " << i << " " << j << " " << ii << "  " << jj << endl;
-			if (!lens->split_imgpixels) {
+			//if (!lens->split_imgpixels) {
 				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
-			}
+			//}
 
 			//n = j*(x_N+1)+i;
 			//n_yp = (j+1)*(x_N+1)+i;
@@ -6911,10 +6826,10 @@ void ImagePixelGrid::redo_lensing_calculations()
 		i = extended_mask_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
-		if (!lens->split_imgpixels) {
+		//if (!lens->split_imgpixels) {
 			center_sourcepts[i][j][0] = defx_centers[n];
 			center_sourcepts[i][j][1] = defy_centers[n];
-		}
+		//}
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
@@ -7174,8 +7089,10 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				xsavg = center_sourcepts[i][j][0];
+				ysavg = center_sourcepts[i][j][1];
 				//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				xcavg += area*abs(sb)*xsavg;
@@ -7195,8 +7112,10 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				xsavg = center_sourcepts[i][j][0];
+				ysavg = center_sourcepts[i][j][1];
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				rsqavg += area*abs(sb)*rsq;
@@ -7223,8 +7142,10 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				ntot++;
-				xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-				ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+				xsavg = center_sourcepts[i][j][0];
+				ysavg = center_sourcepts[i][j][1];
 				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				if (sqrt(rsq) > 2*sig) {
 					nout++;
@@ -8926,7 +8847,10 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for calculating PSF convolution of image: " << wtime << endl;
+		if (mpi_id==0) {
+			if (foreground) cout << "Wall time for calculating PSF convolution of foreground: " << wtime << endl;
+			else cout << "Wall time for calculating PSF convolution of image: " << wtime << endl;
+		}
 	}
 #endif
 

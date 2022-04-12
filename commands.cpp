@@ -1705,8 +1705,8 @@ void QLens::process_commands(bool read_file)
 					cout << "cc_reset -- (no arguments) delete the current critical curve spline\n"; // obsolete--should probably remove
 				else if (words[1]=="integral_method")
 					cout << "integral_method <method> [npoints]\n\n"
-						"Set integration method (either 'patterson', 'romberg' or 'gauss') which is used for lens models\n"
-						"where numerical quadrature is required for the lensing calculations. See below for a description of\n"
+						"Set integration method (either 'patterson', 'fejer', 'romberg' or 'gauss') which is used for lens\n"
+						"models where numerical quadrature is required for the lensing calculations. See below for a description\n"
 						"of each method. If gauss is selected, can set number of points = [npoints]. For patterson or romberg,\n"
 						"which are both adaptive quadrature methods, the required error tolerance is controlled by the setting\n"
 						"'integral_tolerance'. If no arguments are given, prints current integration method.\n\n"
@@ -1716,23 +1716,25 @@ void QLens::process_commands(bool read_file)
 						"   quadrature and successively add points to achieve higher order, giving nested quadrature rules.\n"
 						"   The maximum number of allowed points is 512, so QLens will give a warning if tolerance has not\n"
 						"   been reached after 512 points (this may happen for density profiles with very steep central cusps).\n\n"
+						"\033[4mfejer\033[0m: Fejer quadrature is an open-interval version of Clenshaw-Curtis quadrature,\n"
+						"   which can be nearly as fast as Gauss-Patterson but allows for a higher number of function\n"
+						"   evaluations (up to ~6000).\n\n"
 						"\033[4mromberg\033[0m: Romberg integration uses Newton-Cotes rules of successively higher orders and\n"
 						"   generates an estimated value and error using Richardson extrapolation. Generally a lot more\n"
-						"   points are required compared to 'patterson' or 'gauss' to achieve the same accuracy, but in\n"
-						"   principle there is no limit to the number of points that can be used to achieve the desired\n"
+						"   points are required compared to 'patterson', 'gauss' or 'fejer' to achieve the same accuracy, but\n"
+						"   in principle there is no limit to the number of points that can be used to achieve the desired\n"
 						"   integral tolerance.\n\n"
-						"\033[4mgauss\033[0m: Gaussian quadrature is a non-adaptive method that uses a fixed number of points, and hence\n"
-						"   is not recommended in general for lens model fitting although it can be useful for diagnostic\n"
-						"   purposes, e.g. testing a new lens model.\n\n";
+						"\033[4mgauss\033[0m: Gaussian quadrature is a non-adaptive method that uses a fixed number of points,\n"
+						"   which can be specified with an additional argument [npoints] (default=20).\n\n";
 				else if (words[1]=="integral_tolerance")
 					cout << "integral_tolerance <tolerance>\n\n"
 						"Set tolerance limit for numerical integration, specifically for the adaptive quadrature methods\n"
-						"'patterson' (Gauss-Patterson quadrature) and 'romberg' (Romberg integration). For patterson, the\n"
-						"integration stops when the difference between successive quadrature estimates is smaller than the\n"
-						"specified tolerance. Note that the tolerance is thus the estimated error in second-to-last iteration,\n"
-						"and hence the error in the final estimate is usually a great deal smaller than the specified tol-\n"
-						"erance. For romberg, the error returned using Richardson extrapolation is required to be less than\n"
-						"the specified tolerance.\n";
+						"'patterson' (Gauss-Patterson quadrature), 'fejer' and 'romberg'. For 'patterson', the integration\n"
+						"stops when the difference between successive quadrature estimates is smaller than the specified\n"
+						"tolerance. Note that the tolerance is thus the estimated error in second-to-last iteration, and\n"
+						"hence the error in the final estimate is usually a great deal smaller than the specified tol-\n"
+						"erance. For 'romberg', the error returned using Richardson extrapolation is required to be less\n"
+						"than the specified tolerance.\n";
 				else if (words[1]=="major_axis_along_y")
 					cout << "major_axis_along_y <on/off>\n\n"
 						"Specify whether to orient major axis of lenses along the y-direction (if on) or x-direction\n"
@@ -11043,6 +11045,16 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
 			} else Complain("must specify either zero or one argument (default number of image pixel splittings)");
+		}
+		else if (words[0]=="emask_nsplit")
+		{
+			if (nwords == 2) {
+				int nt;
+				if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
+				emask_imgpixel_nsplit = nt;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "number of extended mask image pixel splittings = " << emask_imgpixel_nsplit << endl;
+			} else Complain("must specify either zero or one argument (number of extended mask image pixel splittings)");
 		}
 		else if (words[0]=="galsubgrid")
 		{

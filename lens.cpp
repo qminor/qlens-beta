@@ -936,6 +936,7 @@ QLens::QLens() : UCMC()
 	activate_unmapped_source_pixels = true;
 	regrid_if_unmapped_source_subpixels = false;
 	default_imgpixel_nsplit = 2;
+	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
 
 	use_cc_spline = false;
@@ -1260,6 +1261,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
 	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
+	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
 	split_imgpixels = lens_in->split_imgpixels;
 
 	use_cc_spline = lens_in->use_cc_spline;
@@ -1793,10 +1795,10 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 		warn("cannot spawn lens unless 'fourier_sbmode' is turned on");
 		return false;
 	}
-	if (LensProfile::orient_major_axis_north) {
-		warn("cannot spawn lens unless 'major_axis_along_y' is turned off");
-		return false;
-	}
+	//if (LensProfile::orient_major_axis_north) {
+		//warn("cannot spawn lens unless 'major_axis_along_y' is turned off");
+		//return false;
+	//}
 
 	if (SB_Profile::fourier_use_eccentric_anomaly) warn("spawned lens must use polar angle for Fourier modes; to ensure that angular structure is identical to source model, set 'fourier_ecc_anomaly' off");
 	// NOTE: the source object should store its intrinsic redshift, which should be used as the lens redshift here! Implement this soon!
@@ -12123,19 +12125,23 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 
-		double fspline_wtime0, fspline_wtime;
 #ifdef USE_OPENMP
+		double fspline_wtime0;
 		if (show_wtime) {
 			fspline_wtime0 = omp_get_wtime();
 		}
 #endif
 
+	bool splined_fourier_integrals = false;
 	for (int i=0; i < nlens; i++) {
-		if (lens_list[i]->n_fourier_modes > 0) lens_list[i]->spline_fourier_mode_integrals(0.01*image_pixel_data->emask_rmax,image_pixel_data->emask_rmax);
+		if (lens_list[i]->n_fourier_modes > 0) {
+			lens_list[i]->spline_fourier_mode_integrals(0.01*image_pixel_data->emask_rmax,image_pixel_data->emask_rmax);
+			splined_fourier_integrals = true;
+		}
 	}
 #ifdef USE_OPENMP
-		if (show_wtime) {
-			fspline_wtime = omp_get_wtime() - fspline_wtime0;
+		if ((show_wtime) and (splined_fourier_integrals)) {
+			double fspline_wtime = omp_get_wtime() - fspline_wtime0;
 			if (mpi_id==0) cout << "Wall time for splining Fourier integrals: " << fspline_wtime << endl;
 		}
 #endif

@@ -232,7 +232,7 @@ class ImagePixelGrid : public Sort
 	void deactivate_extended_mask();
 	void setup_ray_tracing_arrays();
 	void delete_ray_tracing_arrays();
-	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const bool split_pixels);
+	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void reset_nsplit();
 
 	~ImagePixelGrid();
