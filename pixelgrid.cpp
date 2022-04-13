@@ -1086,8 +1086,9 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	int src_raytrace_i, src_raytrace_j;
 	int img_i, img_j;
 
-	//int ntot = image_pixel_grid->x_N * image_pixel_grid->y_N;
+	long int ntot_cells = image_pixel_grid->ntot_cells;
 
+	/*
 	long int ntot = 0;
 	for (i=0; i < image_pixel_grid->x_N; i++) {
 		for (j=0; j < image_pixel_grid->y_N; j++) {
@@ -1109,18 +1110,19 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			}
 		}
 	}
+	cout << "NTOT: " << ntot << " " << ntot_cells << endl;
+	*/
 
-
-	int *overlap_matrix_row_nn = new int[ntot];
-	vector<double> *overlap_matrix_rows = new vector<double>[ntot];
-	vector<int> *overlap_matrix_index_rows = new vector<int>[ntot];
+	int *overlap_matrix_row_nn = new int[ntot_cells];
+	vector<double> *overlap_matrix_rows = new vector<double>[ntot_cells];
+	vector<int> *overlap_matrix_index_rows = new vector<int>[ntot_cells];
 	vector<double> *overlap_area_matrix_rows;
-	overlap_area_matrix_rows = new vector<double>[ntot];
+	overlap_area_matrix_rows = new vector<double>[ntot_cells];
 
 	int mpi_chunk, mpi_start, mpi_end;
-	mpi_chunk = ntot / lens->group_np;
+	mpi_chunk = ntot_cells / lens->group_np;
 	mpi_start = lens->group_id*mpi_chunk;
-	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot % lens->group_np); // assign the remainder elements to the last mpi process
+	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 	mpi_end = mpi_start + mpi_chunk;
 
 	int overlap_matrix_nn;
@@ -1144,8 +1146,8 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 			overlap_matrix_row_nn[n] = 0;
 			//img_j = n / image_pixel_grid->x_N;
 			//img_i = n % image_pixel_grid->x_N;
-			img_j = mask_j[n];
-			img_i = mask_i[n];
+			img_j = image_pixel_grid->masked_pixels_j[n];
+			img_i = image_pixel_grid->masked_pixels_i[n];
 
 			corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
 			corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
@@ -1232,23 +1234,23 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 
 	double *overlap_matrix = new double[overlap_matrix_nn];
 	int *overlap_matrix_index = new int[overlap_matrix_nn];
-	int *image_pixel_location_overlap = new int[ntot+1];
+	int *image_pixel_location_overlap = new int[ntot_cells+1];
 	double *overlap_area_matrix;
 	overlap_area_matrix = new double[overlap_matrix_nn];
 
 #ifdef USE_MPI
 	int id, chunk, start, end, length;
 	for (id=0; id < lens->group_np; id++) {
-		chunk = ntot / lens->group_np;
+		chunk = ntot_cells / lens->group_np;
 		start = id*chunk;
-		if (id == lens->group_np-1) chunk += (ntot % lens->group_np); // assign the remainder elements to the last mpi process
+		if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 		MPI_Bcast(overlap_matrix_row_nn + start,chunk,MPI_INT,id,sub_comm);
 	}
 #endif
 
 	image_pixel_location_overlap[0] = 0;
 	int n,l;
-	for (n=0; n < ntot; n++) {
+	for (n=0; n < ntot_cells; n++) {
 		image_pixel_location_overlap[n+1] = image_pixel_location_overlap[n] + overlap_matrix_row_nn[n];
 	}
 
@@ -1264,9 +1266,9 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 
 #ifdef USE_MPI
 	for (id=0; id < lens->group_np; id++) {
-		chunk = ntot / lens->group_np;
+		chunk = ntot_cells / lens->group_np;
 		start = id*chunk;
-		if (id == lens->group_np-1) chunk += (ntot % lens->group_np); // assign the remainder elements to the last mpi process
+		if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 		end = start + chunk;
 		length = image_pixel_location_overlap[end] - image_pixel_location_overlap[start];
 		MPI_Bcast(overlap_matrix + image_pixel_location_overlap[start],length,MPI_DOUBLE,id,sub_comm);
@@ -1276,11 +1278,11 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	MPI_Comm_free(&sub_comm);
 #endif
 
-	for (n=0; n < ntot; n++) {
+	for (n=0; n < ntot_cells; n++) {
 		//img_j = n / image_pixel_grid->x_N;
 		//img_i = n % image_pixel_grid->x_N;
-		img_j = mask_j[n];
-		img_i = mask_i[n];
+		img_j = image_pixel_grid->masked_pixels_j[n];
+		img_i = image_pixel_grid->masked_pixels_i[n];
 		for (l=image_pixel_location_overlap[n]; l < image_pixel_location_overlap[n+1]; l++) {
 			nsrc = overlap_matrix_index[l];
 			j = nsrc / u_N;
@@ -1327,8 +1329,6 @@ void SourcePixelGrid::calculate_pixel_magnifications()
 	delete[] overlap_area_matrix_rows;
 	delete[] area_matrix;
 	delete[] high_sn_area_matrix;
-	delete[] mask_i;
-	delete[] mask_j;
 }
 
 double SourcePixelGrid::get_lowest_mag_sourcept(double &xsrc, double &ysrc)
@@ -6026,10 +6026,10 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
-				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
+				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
@@ -6047,12 +6047,12 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	twisty = new double[ntot_cells];
 	twiststat = new int[ntot_cells];
 
-	extended_mask_i = new int[ntot_cells];
-	extended_mask_j = new int[ntot_cells];
-	extended_mask_corner_i = new int[ntot_corners];
-	extended_mask_corner_j = new int[ntot_corners];
-	extended_mask_corner = new int[ntot_cells];
-	extended_mask_corner_up = new int[ntot_cells];
+	masked_pixels_i = new int[ntot_cells];
+	masked_pixels_j = new int[ntot_cells];
+	masked_pixel_corner_i = new int[ntot_corners];
+	masked_pixel_corner_j = new int[ntot_corners];
+	masked_pixel_corner = new int[ntot_cells];
+	masked_pixel_corner_up = new int[ntot_cells];
 	ncvals = new int*[x_N+1];
 	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
 
@@ -6060,10 +6060,10 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
-			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
-				extended_mask_i[n_cell] = i;
-				extended_mask_j[n_cell] = j;
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
+			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+				masked_pixels_i[n_cell] = i;
+				masked_pixels_j[n_cell] = j;
 				n_cell++;
 			}
 		}
@@ -6075,8 +6075,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 			for (i=0; i < x_N+1; i++) {
 				ncvals[i][j] = -1;
 				if (((i < x_N) and (j < y_N)) or ((j < y_N) and (i > 0)) or ((i < x_N) and (j > 0)) or ((i > 0) and (j > 0))) {
-					extended_mask_corner_i[n_corner] = i;
-					extended_mask_corner_j[n_corner] = j;
+					masked_pixel_corner_i[n_corner] = i;
+					masked_pixel_corner_j[n_corner] = j;
 					ncvals[i][j] = n_corner;
 					n_corner++;
 				}
@@ -6086,10 +6086,10 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				ncvals[i][j] = -1;
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
-					extended_mask_corner_i[n_corner] = i;
-					extended_mask_corner_j[n_corner] = j;
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+					masked_pixel_corner_i[n_corner] = i;
+					masked_pixel_corner_j[n_corner] = j;
 					if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
 					if (j > (y_N+1)) die("FUCK! corner j is huge from the get-go");
 					ncvals[i][j] = n_corner;
@@ -6100,14 +6100,14 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	}
 	//cout << "corner count: " << n_corner << " " << ntot_corners << endl;
 	for (int n=0; n < ntot_cells; n++) {
-		i = extended_mask_i[n];
-		j = extended_mask_j[n];
-		extended_mask_corner[n] = ncvals[i][j];
-		extended_mask_corner_up[n] = ncvals[i][j+1];
+		i = masked_pixels_i[n];
+		j = masked_pixels_j[n];
+		masked_pixel_corner[n] = ncvals[i][j];
+		masked_pixel_corner_up[n] = ncvals[i][j+1];
 	}
 	for (int n=0; n < ntot_corners; n++) {
-		i = extended_mask_corner_i[n];
-		j = extended_mask_corner_j[n];
+		i = masked_pixel_corner_i[n];
+		j = masked_pixel_corner_j[n];
 		if (i > (x_N+1)) die("FUCK! corner i is huge");
 		if (j > (y_N+1)) die("FUCK! corner j is huge");
 	}
@@ -6179,12 +6179,12 @@ void ImagePixelGrid::delete_ray_tracing_arrays()
 	delete[] twisty;
 	delete[] twiststat;
 
-	delete[] extended_mask_i;
-	delete[] extended_mask_j;
-	delete[] extended_mask_corner_i;
-	delete[] extended_mask_corner_j;
-	delete[] extended_mask_corner;
-	delete[] extended_mask_corner_up;
+	delete[] masked_pixels_i;
+	delete[] masked_pixels_j;
+	delete[] masked_pixel_corner_i;
+	delete[] masked_pixel_corner_j;
+	delete[] masked_pixel_corner;
+	delete[] masked_pixel_corner_up;
 	if (lens->split_imgpixels) {
 		delete[] extended_mask_subcell_i;
 		delete[] extended_mask_subcell_j;
@@ -6351,8 +6351,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 		for (n=mpi_start; n < mpi_end; n++) {
 			//j = n / (x_N+1);
 			//i = n % (x_N+1);
-			j = extended_mask_corner_j[n];
-			i = extended_mask_corner_i[n];
+			j = masked_pixel_corner_j[n];
+			i = masked_pixel_corner_i[n];
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
 			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
@@ -6376,16 +6376,16 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
 			//j = n_cell / x_N;
 			//i = n_cell % x_N;
-			j = extended_mask_j[n_cell];
-			i = extended_mask_i[n_cell];
+			j = masked_pixels_j[n_cell];
+			i = masked_pixels_i[n_cell];
 			if (!lens->split_imgpixels) {
 				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 
 			//n = j*(x_N+1)+i;
 			//n_yp = (j+1)*(x_N+1)+i;
-			n = extended_mask_corner[n_cell];
-			n_yp = extended_mask_corner_up[n_cell];
+			n = masked_pixel_corner[n_cell];
+			n_yp = masked_pixel_corner_up[n_cell];
 			d1[0] = defx_corners[n] - defx_corners[n+1];
 			d1[1] = defy_corners[n] - defy_corners[n+1];
 			d2[0] = defx_corners[n_yp] - defx_corners[n];
@@ -6473,8 +6473,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 	for (n=0; n < ntot_corners; n++) {
 		//j = n / (x_N+1);
 		//i = n % (x_N+1);
-		j = extended_mask_corner_j[n];
-		i = extended_mask_corner_i[n];
+		j = masked_pixel_corner_j[n];
+		i = masked_pixel_corner_i[n];
 		corner_sourcepts[i][j][0] = defx_corners[n];
 		corner_sourcepts[i][j][1] = defy_corners[n];
 		//if ((lens->image_pixel_data->in_mask[i][j]) or ((i>0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((j>0) and (lens->image_pixel_data->in_mask[i][j-1]))) ;
@@ -6486,8 +6486,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 	}
 	for (n=0; n < ntot_cells; n++) {
 		//n_cell = j*x_N+i;
-		j = extended_mask_j[n];
-		i = extended_mask_i[n];
+		j = masked_pixels_j[n];
+		i = masked_pixels_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
 		if (!lens->split_imgpixels) {
@@ -7566,7 +7566,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								}
 							}
 
-							//if (nsplit==6) die("splitting 6 at %g,%g",center_pts[i][j][0],center_pts[i][j][1]);
 							subpixel_xlength = pixel_xlength/nsplit;
 							subpixel_ylength = pixel_ylength/nsplit;
 							for (ii=0; ii < nsplit; ii++) {

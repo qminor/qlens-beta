@@ -204,7 +204,7 @@ class ImagePixelGrid : public Sort
 	double *defx_subpixel_centers, *defy_subpixel_centers;
 	double *twistx, *twisty;
 	int *twiststat;
-	int *extended_mask_i, *extended_mask_j, *extended_mask_corner_i, *extended_mask_corner_j, *extended_mask_corner, *extended_mask_corner_up;
+	int *masked_pixels_i, *masked_pixels_j, *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
 	int *extended_mask_subcell_i, *extended_mask_subcell_j, *extended_mask_subcell_index;
 	int **ncvals;
 
