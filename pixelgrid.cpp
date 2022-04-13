@@ -5812,62 +5812,8 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 {
 	source_fit_mode = mode;
 	ray_tracing_method = method;
-	xy_N = x_N*y_N;
-	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-	else n_active_pixels = xy_N;
-	corner_pts = new lensvector*[x_N+1];
-	corner_sourcepts = new lensvector*[x_N+1];
-	center_pts = new lensvector*[x_N];
-	center_sourcepts = new lensvector*[x_N];
-	maps_to_source_pixel = new bool*[x_N];
-	pixel_index = new int*[x_N];
-	pixel_index_fgmask = new int*[x_N];
-	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
-	surface_brightness = new double*[x_N];
-	foreground_surface_brightness = new double*[x_N];
-	source_plane_triangle1_area = new double*[x_N];
-	source_plane_triangle2_area = new double*[x_N];
-	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	if (lens_in->split_imgpixels) {
-		nsplits = new int*[x_N];
-		subpixel_maps_to_srcpixel = new bool**[x_N];
-	}
-	twist_pts = new lensvector*[x_N];
-	twist_status = new int*[x_N];
+	setup_pixel_arrays();
 
-	int i,j,k;
-	for (i=0; i <= x_N; i++) {
-		corner_pts[i] = new lensvector[y_N+1];
-		corner_sourcepts[i] = new lensvector[y_N+1];
-	}
-	for (i=0; i < x_N; i++) {
-		center_pts[i] = new lensvector[y_N];
-		center_sourcepts[i] = new lensvector[y_N];
-		maps_to_source_pixel[i] = new bool[y_N];
-		pixel_index[i] = new int[y_N];
-		pixel_index_fgmask[i] = new int[y_N];
-		surface_brightness[i] = new double[y_N];
-		foreground_surface_brightness[i] = new double[y_N];
-		source_plane_triangle1_area[i] = new double[y_N];
-		source_plane_triangle2_area[i] = new double[y_N];
-		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) {
-			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-			nsplits[i] = new int[y_N];
-		}
-		twist_pts[i] = new lensvector[y_N];
-		twist_status[i] = new int[y_N];
-		for (j=0; j < y_N; j++) {
-			surface_brightness[i][j] = 0;
-			foreground_surface_brightness[i][j] = 0;
-			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
-			if (lens_in->split_imgpixels) {
-				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
-			}
-		}
-	}
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
 
@@ -5882,112 +5828,190 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		wtime0 = omp_get_wtime();
 	}
 #endif
-
-	if (lens->islens()) {
-		#pragma omp parallel
-		{
-			int thread;
-#ifdef USE_OPENMP
-			thread = omp_get_thread_num();
-#else
-			thread = 0;
-#endif
-			double x,y;
-			lensvector d1,d2,d3,d4;
-			#pragma omp for private(i,j) schedule(dynamic)
-			for (j=0; j <= y_N; j++) {
-				y = ymin + j*pixel_ylength;
-				for (i=0; i <= x_N; i++) {
-					x = xmin + i*pixel_xlength;
-					if ((i < x_N) and (j < y_N)) {
-						center_pts[i][j][0] = x + 0.5*pixel_xlength;
-						center_pts[i][j][1] = y + 0.5*pixel_ylength;
-						lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-					}
-					corner_pts[i][j][0] = x;
-					corner_pts[i][j][1] = y;
-					lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-				}
+	double x,y;
+int i,j;
+	for (j=0; j <= y_N; j++) {
+		y = ymin + j*pixel_ylength;
+		for (i=0; i <= x_N; i++) {
+			x = xmin + i*pixel_xlength;
+			if ((i < x_N) and (j < y_N)) {
+				center_pts[i][j][0] = x + 0.5*pixel_xlength;
+				center_pts[i][j][1] = y + 0.5*pixel_ylength;
 			}
-			//if (source_fit_mode==Pixellated_Source) {
-				#pragma omp for private(i,j) schedule(dynamic)
-				for (j=0; j < y_N; j++) {
-					for (i=0; i < x_N; i++) {
-						d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-						d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-						d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-						d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-						d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-						d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-						d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-						d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
-						// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
-						// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
-						twist_status[i][j] = 0;
-						double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
-						xa=corner_sourcepts[i][j][0];
-						ya=corner_sourcepts[i][j][1];
-						xb=corner_sourcepts[i][j+1][0];
-						yb=corner_sourcepts[i][j+1][1];
-						xc=corner_sourcepts[i+1][j+1][0];
-						yc=corner_sourcepts[i+1][j+1][1];
-						xd=corner_sourcepts[i+1][j][0];
-						yd=corner_sourcepts[i+1][j][1];
-						slope1 = (yb-ya)/(xb-xa);
-						slope2 = (yc-yd)/(xc-xd);
-						twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
-						twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-						if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
-							twist_status[i][j] = 1;
-							d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
-							d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
-							d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
-							d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
-						} else {
-							slope1 = (yd-ya)/(xd-xa);
-							slope2 = (yc-yb)/(xc-xb);
-							twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
-							twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-							if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
-								twist_status[i][j] = 2;
-								d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
-								d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
-								d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
-								d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
-							}
-						}
-
-						source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-						source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
-						//cout << source_plane_triangle1_area[i][j] << endl;
-					}
-				}
-			//}
+			corner_pts[i][j][0] = x;
+			corner_pts[i][j][1] = y;
 		}
-	} else {
-		double x,y;
-		for (j=0; j <= y_N; j++) {
-			y = ymin + j*pixel_ylength;
-			for (i=0; i <= x_N; i++) {
-				x = xmin + i*pixel_xlength;
-				if ((i < x_N) and (j < y_N)) {
-					center_pts[i][j][0] = x + 0.5*pixel_xlength;
-					center_pts[i][j][1] = y + 0.5*pixel_ylength;
-				}
-				corner_pts[i][j][0] = x;
-				corner_pts[i][j][1] = y;
-			}
-		}
-
 	}
+	fit_to_data = NULL;
+	setup_ray_tracing_arrays();
+	if (lens->islens()) calculate_sourcepts_and_areas();
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
 		if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
 	}
 #endif
+}
+
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+{
+	source_fit_mode = mode;
+	ray_tracing_method = method;
+
+	x_N = x_N_in / reduce_factor;
+	y_N = y_N_in / reduce_factor;
+
+	setup_pixel_arrays();
+
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
+	pixel_xlength = (xmax-xmin)/x_N;
+	pixel_ylength = (ymax-ymin)/y_N;
+	pixel_area = pixel_xlength*pixel_ylength;
+	triangle_area = 0.5*pixel_xlength*pixel_ylength;
+
+	int i,j;
+	double x,y;
+	int ii,jj;
+	for (j=0; j <= y_N; j++) {
+		y = ymin + j*pixel_ylength;
+		for (i=0; i <= x_N; i++) {
+			x = xmin + i*pixel_xlength;
+			if ((i < x_N) and (j < y_N)) {
+				center_pts[i][j][0] = x + 0.5*pixel_xlength;
+				center_pts[i][j][1] = y + 0.5*pixel_ylength;
+				//if (lens->islens()) lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
+			}
+			corner_pts[i][j][0] = x;
+			corner_pts[i][j][1] = y;
+			//if (lens->islens()) lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
+			if ((i < x_N) and (j < y_N)) {
+				surface_brightness[i][j] = 0;
+				for (ii=0; ii < reduce_factor; ii++) {
+					for (jj=0; jj < reduce_factor; jj++) {
+						surface_brightness[i][j] += sb_in[i*reduce_factor+ii][j*reduce_factor+jj];
+					}
+				}
+				surface_brightness[i][j] /= SQR(reduce_factor);
+			}
+		}
+	}
 	fit_to_data = NULL;
 	setup_ray_tracing_arrays();
+	if (lens->islens()) calculate_sourcepts_and_areas();
+}
+
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
+{
+	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
+	lens = lens_in;
+	source_fit_mode = mode;
+	ray_tracing_method = method;
+	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
+
+	setup_pixel_arrays();
+
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
+
+	pixel_xlength = (xmax-xmin)/x_N;
+	pixel_ylength = (ymax-ymin)/y_N;
+	max_sb = -1e30;
+	pixel_area = pixel_xlength*pixel_ylength;
+	triangle_area = 0.5*pixel_xlength*pixel_ylength;
+
+	int i,j;
+	double x,y;
+	for (j=0; j <= y_N; j++) {
+		y = pixel_data.yvals[j];
+		for (i=0; i <= x_N; i++) {
+			x = pixel_data.xvals[i];
+			if ((i < x_N) and (j < y_N)) {
+				center_pts[i][j][0] = x + 0.5*pixel_xlength;
+				center_pts[i][j][1] = y + 0.5*pixel_ylength;
+				surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
+				if (!ignore_mask) {
+					if (!include_extended_mask) fit_to_data[i][j] = pixel_data.in_mask[i][j];
+					else fit_to_data[i][j] = pixel_data.extended_mask[i][j];
+				}
+				else fit_to_data[i][j] = true;
+				if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
+			}
+			corner_pts[i][j][0] = x;
+			corner_pts[i][j][1] = y;
+		}
+	}
+	setup_ray_tracing_arrays();
+}
+
+void ImagePixelGrid::setup_pixel_arrays()
+{
+	xy_N = x_N*y_N;
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	else n_active_pixels = xy_N;
+
+	corner_pts = new lensvector*[x_N+1];
+	corner_sourcepts = new lensvector*[x_N+1];
+	center_pts = new lensvector*[x_N];
+	center_sourcepts = new lensvector*[x_N];
+	fit_to_data = new bool*[x_N];
+	maps_to_source_pixel = new bool*[x_N];
+	pixel_index = new int*[x_N];
+	pixel_index_fgmask = new int*[x_N];
+	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
+	surface_brightness = new double*[x_N];
+	foreground_surface_brightness = new double*[x_N];
+	source_plane_triangle1_area = new double*[x_N];
+	source_plane_triangle2_area = new double*[x_N];
+	//max_nsplit = imax(24,lens->default_imgpixel_nsplit);
+	max_nsplit = lens->default_imgpixel_nsplit;
+	if (lens->split_imgpixels) {
+		nsplits = new int*[x_N];
+		subpixel_maps_to_srcpixel = new bool**[x_N];
+		subpixel_center_pts = new lensvector**[x_N];
+		subpixel_center_sourcepts = new lensvector**[x_N];
+	}
+	twist_pts = new lensvector*[x_N];
+	twist_status = new int*[x_N];
+
+	int i,j,k;
+	for (i=0; i <= x_N; i++) {
+		corner_pts[i] = new lensvector[y_N+1];
+		corner_sourcepts[i] = new lensvector[y_N+1];
+	}
+	for (i=0; i < x_N; i++) {
+		center_pts[i] = new lensvector[y_N];
+		center_sourcepts[i] = new lensvector[y_N];
+		maps_to_source_pixel[i] = new bool[y_N];
+		fit_to_data[i] = new bool[y_N];
+		pixel_index[i] = new int[y_N];
+		pixel_index_fgmask[i] = new int[y_N];
+		surface_brightness[i] = new double[y_N];
+		foreground_surface_brightness[i] = new double[y_N];
+		source_plane_triangle1_area[i] = new double[y_N];
+		source_plane_triangle2_area[i] = new double[y_N];
+		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
+		if (lens->split_imgpixels) {
+			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+			subpixel_center_pts[i] = new lensvector*[y_N];
+			subpixel_center_sourcepts[i] = new lensvector*[y_N];
+			nsplits[i] = new int[y_N];
+		}
+		twist_pts[i] = new lensvector[y_N];
+		twist_status[i] = new int[y_N];
+		for (j=0; j < y_N; j++) {
+			surface_brightness[i][j] = 0;
+			foreground_surface_brightness[i][j] = 0;
+			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
+			if (lens->split_imgpixels) {
+				//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
+				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
+				subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
+				subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
+				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
+			}
+		}
+	}
 }
 
 void ImagePixelGrid::setup_ray_tracing_arrays()
@@ -6002,10 +6026,10 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
+				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
@@ -6029,8 +6053,6 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	extended_mask_corner_j = new int[ntot_corners];
 	extended_mask_corner = new int[ntot_cells];
 	extended_mask_corner_up = new int[ntot_cells];
-	nvals = new int*[x_N];
-	for (i=0; i < x_N; i++) nvals[i] = new int[y_N];
 	ncvals = new int*[x_N+1];
 	for (i=0; i < x_N+1; i++) ncvals[i] = new int[y_N+1];
 
@@ -6038,14 +6060,11 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
-			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				extended_mask_i[n_cell] = i;
 				extended_mask_j[n_cell] = j;
-				nvals[i][j] = n_cell;
 				n_cell++;
-			} else {
-				nvals[i][j] = -1;
 			}
 		}
 	}
@@ -6067,13 +6086,12 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				ncvals[i][j] = -1;
-				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					extended_mask_corner_i[n_corner] = i;
 					extended_mask_corner_j[n_corner] = j;
 					if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
 					if (j > (y_N+1)) die("FUCK! corner j is huge from the get-go");
-					//if ((i < x_N) and (j < y_N)) extended_mask_corner[nvals[i][j]] = n_corner;
 					ncvals[i][j] = n_corner;
 					n_corner++;
 				}
@@ -6113,6 +6131,70 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 		}
 	}
 	set_nsplits(lens->image_pixel_data,lens->default_imgpixel_nsplit,lens->emask_imgpixel_nsplit,lens->split_imgpixels);
+
+	ntot_subpixels = 0;
+	if (lens->split_imgpixels) { 
+
+		for (j=0; j < y_N; j++) {
+			for (i=0; i < x_N; i++) {
+				if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+					ntot_subpixels += SQR(nsplits[i][j]);
+				}
+			}
+		}
+
+		extended_mask_subcell_i = new int[ntot_subpixels];
+		extended_mask_subcell_j = new int[ntot_subpixels];
+		extended_mask_subcell_index = new int[ntot_subpixels];
+
+		int n_subpixel = 0;
+		int k;
+		for (j=0; j < y_N; j++) {
+			for (i=0; i < x_N; i++) {
+				if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+					for (k=0; k < SQR(nsplits[i][j]); k++) {
+						extended_mask_subcell_i[n_subpixel] = i;
+						extended_mask_subcell_j[n_subpixel] = j;
+						extended_mask_subcell_index[n_subpixel] = k;
+						n_subpixel++;
+					}
+				}
+			}
+		}
+
+		defx_subpixel_centers = new double[ntot_subpixels];
+		defy_subpixel_centers = new double[ntot_subpixels];
+	}
+}
+
+void ImagePixelGrid::delete_ray_tracing_arrays()
+{
+	delete[] defx_corners;
+	delete[] defy_corners;
+	delete[] defx_centers;
+	delete[] defy_centers;
+	delete[] area_tri1;
+	delete[] area_tri2;
+	delete[] twistx;
+	delete[] twisty;
+	delete[] twiststat;
+
+	delete[] extended_mask_i;
+	delete[] extended_mask_j;
+	delete[] extended_mask_corner_i;
+	delete[] extended_mask_corner_j;
+	delete[] extended_mask_corner;
+	delete[] extended_mask_corner_up;
+	if (lens->split_imgpixels) {
+		delete[] extended_mask_subcell_i;
+		delete[] extended_mask_subcell_j;
+		delete[] extended_mask_subcell_index;
+		delete[] defx_subpixel_centers;
+		delete[] defy_subpixel_centers;
+	}
+	int i;
+	for (i=0; i < x_N+1; i++) delete[] ncvals[i];
+	delete[] ncvals;
 }
 
 inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, const double& b)
@@ -6122,275 +6204,416 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 	return false;
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+void ImagePixelGrid::calculate_sourcepts_and_areas()
 {
-	source_fit_mode = mode;
-	ray_tracing_method = method;
-
-	x_N = x_N_in / reduce_factor;
-	y_N = y_N_in / reduce_factor;
-
-	xy_N = x_N*y_N;
-	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-	else n_active_pixels = xy_N;
-
-	corner_pts = new lensvector*[x_N+1];
-	corner_sourcepts = new lensvector*[x_N+1];
-	center_pts = new lensvector*[x_N];
-	center_sourcepts = new lensvector*[x_N];
-	maps_to_source_pixel = new bool*[x_N];
-	pixel_index = new int*[x_N];
-	pixel_index_fgmask = new int*[x_N];
-	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
-	surface_brightness = new double*[x_N];
-	foreground_surface_brightness = new double*[x_N];
-	source_plane_triangle1_area = new double*[x_N];
-	source_plane_triangle2_area = new double*[x_N];
-	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	if (lens_in->split_imgpixels) {
-		nsplits = new int*[x_N];
-		subpixel_maps_to_srcpixel = new bool**[x_N];
-	}
-	twist_pts = new lensvector*[x_N];
-	twist_status = new int*[x_N];
-
-	int i,j,k;
-	for (i=0; i <= x_N; i++) {
-		corner_pts[i] = new lensvector[y_N+1];
-		corner_sourcepts[i] = new lensvector[y_N+1];
-	}
-	for (i=0; i < x_N; i++) {
-		center_pts[i] = new lensvector[y_N];
-		center_sourcepts[i] = new lensvector[y_N];
-		maps_to_source_pixel[i] = new bool[y_N];
-		pixel_index[i] = new int[y_N];
-		pixel_index_fgmask[i] = new int[y_N];
-		surface_brightness[i] = new double[y_N];
-		foreground_surface_brightness[i] = new double[y_N];
-		source_plane_triangle1_area[i] = new double[y_N];
-		source_plane_triangle2_area[i] = new double[y_N];
-		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) {
-			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-			nsplits[i] = new int[y_N];
+	/*
+	int i,j;
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		double x,y;
+		lensvector d1,d2,d3,d4;
+		int ii,jj,nsplit;
+		int subcell_index;
+		double u0, w0;
+		lensvector *center_pt, *center_srcpt;
+		#pragma omp for private(i,j,center_pt,center_srcpt) schedule(dynamic)
+		for (j=0; j <= y_N; j++) {
+			for (i=0; i <= x_N; i++) {
+				if (((i < x_N) and (j < y_N)) and (lens->image_pixel_data->extended_mask[i][j])) {
+					if (lens->split_imgpixels) {
+						center_pt = subpixel_center_pts[i][j];
+						center_srcpt = subpixel_center_sourcepts[i][j];
+						for (subcell_index=0; subcell_index < SQR(nsplits[i][j]); subcell_index++) {
+							lens->find_sourcept(*(center_pt++),*(center_srcpt++),thread,imggrid_zfactors,imggrid_betafactors);
+						}
+					} else {
+						lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
+					}
+				}
+				lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
+			}
 		}
-		twist_pts[i] = new lensvector[y_N];
-		twist_status[i] = new int[y_N];
+		#pragma omp for private(i,j) schedule(dynamic)
 		for (j=0; j < y_N; j++) {
-			maps_to_source_pixel[i][j] = true;
-			foreground_surface_brightness[i][j] = 0;
-			if (lens_in->split_imgpixels) {
-				nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
+			for (i=0; i < x_N; i++) {
+				d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
+				d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
+				d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
+				d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
+				d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
+				d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
+				d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
+				d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
+				// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
+				// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
+				twist_status[i][j] = 0;
+				double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+				xa=corner_sourcepts[i][j][0];
+				ya=corner_sourcepts[i][j][1];
+				xb=corner_sourcepts[i][j+1][0];
+				yb=corner_sourcepts[i][j+1][1];
+				xc=corner_sourcepts[i+1][j+1][0];
+				yc=corner_sourcepts[i+1][j+1][1];
+				xd=corner_sourcepts[i+1][j][0];
+				yd=corner_sourcepts[i+1][j][1];
+				slope1 = (yb-ya)/(xb-xa);
+				slope2 = (yc-yd)/(xc-xd);
+				twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
+				twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+				if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
+					twist_status[i][j] = 1;
+					d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
+					d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
+					d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
+					d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
+				} else {
+					slope1 = (yd-ya)/(xd-xa);
+					slope2 = (yc-yb)/(xc-xb);
+					twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+					twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
+					if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
+						twist_status[i][j] = 2;
+						d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
+						d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
+						d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
+						d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
+					}
+				}
+
+				source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
+				source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
+				//cout << source_plane_triangle1_area[i][j] << endl;
 			}
 		}
 	}
-	//if ((lens->active_image_pixel_i != NULL) and (lens->active_image_pixel_j != NULL)) {
-		//for (i=0; i < x_N; i++) {
-			//for (j=0; j < y_N; j++) {
-				//maps_to_source_pixel[i][j] = false;
+*/
+
+// Below is the MPI'd version, which does not ray trace the subpixel's. Maybe implement this someday and use the MPI'd version in case
+// anyone wants to do likelihood evaluations over multiple nodes.
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
+#endif
+
+	//long int ntot_cells_check = 0;
+	//long int ntot_corners_check = 0;
+	//for (i=0; i < x_N+1; i++) {
+		//for (j=0; j < y_N+1; j++) {
+			//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells_check++;
+			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
+			////if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_check++;
+			////if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
+				//ntot_corners_check++;
 			//}
 		//}
-		//for (k=0; k < lens->image_npixels; k++) {
-			//i = lens->active_image_pixel_i[k];
-			//j = lens->active_image_pixel_j[k];
-			//pixel_index[i][j] = k;
-			//maps_to_source_pixel[i][j] = true;
-		//}
 	//}
+	//if (ntot_cells_check != ntot_cells) die("ntot_cells does not equal the value assigned when image grid created");
+	//if (ntot_corners_check != ntot_corners) die("ntot_corners does not equal the value assigned when image grid created");
 
-	imggrid_zfactors = lens->reference_zfactors;
-	imggrid_betafactors = lens->default_zsrc_beta_factors;
-	pixel_xlength = (xmax-xmin)/x_N;
-	pixel_ylength = (ymax-ymin)/y_N;
-	pixel_area = pixel_xlength*pixel_ylength;
-	triangle_area = 0.5*pixel_xlength*pixel_ylength;
+	int i,j,k,n,n_cell,n_corner,n_yp;
 
-	double x,y;
-	int ii,jj;
-	lensvector d1,d2,d3,d4;
-	for (j=0; j <= y_N; j++) {
-		y = ymin + j*pixel_ylength;
-		for (i=0; i <= x_N; i++) {
-			x = xmin + i*pixel_xlength;
-			if ((i < x_N) and (j < y_N)) {
-				center_pts[i][j][0] = x + 0.5*pixel_xlength;
-				center_pts[i][j][1] = y + 0.5*pixel_ylength;
-				if (lens->islens()) lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
-			}
-			corner_pts[i][j][0] = x;
-			corner_pts[i][j][1] = y;
-			if (lens->islens()) lens->find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
-			if ((i < x_N) and (j < y_N)) {
-				surface_brightness[i][j] = 0;
-				for (ii=0; ii < reduce_factor; ii++) {
-					for (jj=0; jj < reduce_factor; jj++) {
-						surface_brightness[i][j] += sb_in[i*reduce_factor+ii][j*reduce_factor+jj];
-					}
-				}
-				surface_brightness[i][j] /= SQR(reduce_factor);
-			}
+	int mpi_chunk, mpi_start, mpi_end;
+	mpi_chunk = ntot_corners / lens->group_np;
+	mpi_start = lens->group_id*mpi_chunk;
+	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end = mpi_start + mpi_chunk;
+
+	int mpi_chunk2, mpi_start2, mpi_end2;
+	mpi_chunk2 = ntot_cells / lens->group_np;
+	mpi_start2 = lens->group_id*mpi_chunk2;
+	if (lens->group_id == lens->group_np-1) mpi_chunk2 += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end2 = mpi_start2 + mpi_chunk2;
+
+	//cout << "NTOT_SUBPIXELS=" << ntot_subpixels << endl;
+	int mpi_chunk3, mpi_start3, mpi_end3;
+	mpi_chunk3 = ntot_subpixels / lens->group_np;
+	mpi_start3 = lens->group_id*mpi_chunk3;
+	if (lens->group_id == lens->group_np-1) mpi_chunk3 += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end3 = mpi_start3 + mpi_chunk3;
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		lensvector d1,d2,d3,d4;
+		//int ii,jj;
+		#pragma omp for private(n,i,j) schedule(dynamic)
+		for (n=mpi_start; n < mpi_end; n++) {
+			//j = n / (x_N+1);
+			//i = n % (x_N+1);
+			j = extended_mask_corner_j[n];
+			i = extended_mask_corner_i[n];
+			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
+			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
-	}
-
-	if (lens->islens()) {
-		if (source_fit_mode==Pixellated_Source) {
-			for (j=0; j < y_N; j++) {
-				for (i=0; i < x_N; i++) {
-					d1[0] = corner_sourcepts[i][j][0] - corner_sourcepts[i+1][j][0];
-					d1[1] = corner_sourcepts[i][j][1] - corner_sourcepts[i+1][j][1];
-					d2[0] = corner_sourcepts[i][j+1][0] - corner_sourcepts[i][j][0];
-					d2[1] = corner_sourcepts[i][j+1][1] - corner_sourcepts[i][j][1];
-					d3[0] = corner_sourcepts[i+1][j+1][0] - corner_sourcepts[i][j+1][0];
-					d3[1] = corner_sourcepts[i+1][j+1][1] - corner_sourcepts[i][j+1][1];
-					d4[0] = corner_sourcepts[i+1][j][0] - corner_sourcepts[i+1][j+1][0];
-					d4[1] = corner_sourcepts[i+1][j][1] - corner_sourcepts[i+1][j+1][1];
-
-					// Now check whether the cell is twisted by mapping around a critical curve. We do this by extending opposite sides along lines
-					// and finding where they intersect; if the intersection point lies within the cell, the pixel is twisted
-					twist_status[i][j] = 0;
-					double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
-					xa=corner_sourcepts[i][j][0];
-					ya=corner_sourcepts[i][j][1];
-					xb=corner_sourcepts[i][j+1][0];
-					yb=corner_sourcepts[i][j+1][1];
-					xc=corner_sourcepts[i+1][j+1][0];
-					yc=corner_sourcepts[i+1][j+1][1];
-					xd=corner_sourcepts[i+1][j][0];
-					yd=corner_sourcepts[i+1][j][1];
-					slope1 = (yb-ya)/(xb-xa);
-					slope2 = (yc-yd)/(xc-xd);
-					twist_pts[i][j][0] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
-					twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-					if ((test_if_between(twist_pts[i][j][0],xa,xb)) and (test_if_between(twist_pts[i][j][1],ya,yb)) and (test_if_between(twist_pts[i][j][0],xc,xd)) and (test_if_between(twist_pts[i][j][1],yc,yd))) {
-						twist_status[i][j] = 1;
-						d2[0] = twist_pts[i][j][0] - corner_sourcepts[i][j][0];
-						d2[1] = twist_pts[i][j][1] - corner_sourcepts[i][j][1];
-						d4[0] = twist_pts[i][j][0] - corner_sourcepts[i+1][j+1][0];
-						d4[1] = twist_pts[i][j][1] - corner_sourcepts[i+1][j+1][1];
-					} else {
-						slope1 = (yd-ya)/(xd-xa);
-						slope2 = (yc-yb)/(xc-xb);
-						twist_pts[i][j][0] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
-						twist_pts[i][j][1] = (twist_pts[i][j][0]-xa)*slope1+ya;
-						if ((test_if_between(twist_pts[i][j][0],xa,xd)) and (test_if_between(twist_pts[i][j][1],ya,yd)) and (test_if_between(twist_pts[i][j][0],xb,xc)) and (test_if_between(twist_pts[i][j][1],yb,yc))) {
-							twist_status[i][j] = 2;
-							d1[0] = corner_sourcepts[i][j][0] - twist_pts[i][j][0];
-							d1[1] = corner_sourcepts[i][j][1] - twist_pts[i][j][1];
-							d3[0] = corner_sourcepts[i+1][j+1][0] - twist_pts[i][j][0];
-							d3[1] = corner_sourcepts[i+1][j+1][1] - twist_pts[i][j][1];
-						}
-					}
-
-					source_plane_triangle1_area[i][j] = 0.5*abs(d1 ^ d2);
-					source_plane_triangle2_area[i][j] = 0.5*abs(d3 ^ d4);
+#ifdef USE_MPI
+		#pragma omp master
+		{
+			if (lens->group_np > 1) {
+				int id, chunk, start;
+				for (id=0; id < lens->group_np; id++) {
+					chunk = ntot_corners / lens->group_np;
+					start = id*chunk;
+					if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+					MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+					MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
 				}
 			}
 		}
+		#pragma omp barrier
+#endif
+		#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
+		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
+			//j = n_cell / x_N;
+			//i = n_cell % x_N;
+			j = extended_mask_j[n_cell];
+			i = extended_mask_i[n_cell];
+			if (!lens->split_imgpixels) {
+				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+			}
+
+			//n = j*(x_N+1)+i;
+			//n_yp = (j+1)*(x_N+1)+i;
+			n = extended_mask_corner[n_cell];
+			n_yp = extended_mask_corner_up[n_cell];
+			d1[0] = defx_corners[n] - defx_corners[n+1];
+			d1[1] = defy_corners[n] - defy_corners[n+1];
+			d2[0] = defx_corners[n_yp] - defx_corners[n];
+			d2[1] = defy_corners[n_yp] - defy_corners[n];
+			d3[0] = defx_corners[n_yp+1] - defx_corners[n_yp];
+			d3[1] = defy_corners[n_yp+1] - defy_corners[n_yp];
+			d4[0] = defx_corners[n+1] - defx_corners[n_yp+1];
+			d4[1] = defy_corners[n+1] - defy_corners[n_yp+1];
+
+			twiststat[n_cell] = 0;
+			double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
+			xa=defx_corners[n];
+			ya=defy_corners[n];
+			xb=defx_corners[n_yp];
+			yb=defy_corners[n_yp];
+			xc=defx_corners[n_yp+1];
+			yc=defy_corners[n_yp+1];
+			xd=defx_corners[n+1];
+			yd=defy_corners[n+1];
+			slope1 = (yb-ya)/(xb-xa);
+			slope2 = (yc-yd)/(xc-xd);
+			twistx[n_cell] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
+			twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
+			if ((test_if_between(twistx[n_cell],xa,xb)) and (test_if_between(twisty[n_cell],ya,yb)) and (test_if_between(twistx[n_cell],xc,xd)) and (test_if_between(twisty[n_cell],yc,yd))) {
+				twiststat[n_cell] = 1;
+				d2[0] = twistx[n_cell] - defx_corners[n];
+				d2[1] = twisty[n_cell] - defy_corners[n];
+				d4[0] = twistx[n_cell] - defx_corners[n_yp+1];
+				d4[1] = twisty[n_cell] - defy_corners[n_yp+1];
+			} else {
+				slope1 = (yd-ya)/(xd-xa);
+				slope2 = (yc-yb)/(xc-xb);
+				twistx[n_cell] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
+				twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
+				if ((test_if_between(twistx[n_cell],xa,xd)) and (test_if_between(twisty[n_cell],ya,yd)) and (test_if_between(twistx[n_cell],xb,xc)) and (test_if_between(twisty[n_cell],yb,yc))) {
+					twiststat[n_cell] = 2;
+					d1[0] = defx_corners[n] - twistx[n_cell];
+					d1[1] = defy_corners[n] - twisty[n_cell];
+					d3[0] = defx_corners[n_yp+1] - twistx[n_cell];
+					d3[1] = defy_corners[n_yp+1] - twisty[n_cell];
+				}
+			}
+
+			area_tri1[n_cell] = 0.5*abs(d1 ^ d2);
+			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
+		}
+
+		if (lens->split_imgpixels) {
+			int n_subcell;
+			#pragma omp for private(i,j,k,n_subcell) schedule(dynamic)
+			for (n_subcell=mpi_start3; n_subcell < mpi_end3; n_subcell++) {
+				j = extended_mask_subcell_j[n_subcell];
+				i = extended_mask_subcell_i[n_subcell];
+				k = extended_mask_subcell_index[n_subcell];
+				lens->find_sourcept(subpixel_center_pts[i][j][k],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
+			}
+		}
+	}
+#ifdef USE_MPI
+	if (lens->group_np > 1) {
+		int id, chunk, start;
+		for (id=0; id < lens->group_np; id++) {
+			chunk = ntot_cells / lens->group_np;
+			start = id*chunk;
+			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
+			if (!lens->split_imgpixels) {
+				MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			} else {
+				chunk = ntot_subpixels / lens->group_np;
+				start = id*chunk;
+				if (id == lens->group_np-1) chunk += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
+				MPI_Bcast(defx_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			}
+			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
+		}
+	}
+	MPI_Comm_free(&sub_comm);
+#endif
+	for (n=0; n < ntot_corners; n++) {
+		//j = n / (x_N+1);
+		//i = n % (x_N+1);
+		j = extended_mask_corner_j[n];
+		i = extended_mask_corner_i[n];
+		corner_sourcepts[i][j][0] = defx_corners[n];
+		corner_sourcepts[i][j][1] = defy_corners[n];
+		//if ((lens->image_pixel_data->in_mask[i][j]) or ((i>0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((j>0) and (lens->image_pixel_data->in_mask[i][j-1]))) ;
+		//else {
+			// sabotage to see if extended mask corners are still being used
+			//corner_sourcepts[i][j][0] = -1e30;
+			//corner_sourcepts[i][j][1] = -1e30;
+		//}
+	}
+	for (n=0; n < ntot_cells; n++) {
+		//n_cell = j*x_N+i;
+		j = extended_mask_j[n];
+		i = extended_mask_i[n];
+		source_plane_triangle1_area[i][j] = area_tri1[n];
+		source_plane_triangle2_area[i][j] = area_tri2[n];
+		if (!lens->split_imgpixels) {
+			center_sourcepts[i][j][0] = defx_centers[n];
+			center_sourcepts[i][j][1] = defy_centers[n];
+		}
+		twist_pts[i][j][0] = twistx[n];
+		twist_pts[i][j][1] = twisty[n];
+		twist_status[i][j] = twiststat[n];
 	}
 
-	fit_to_data = NULL;
-	setup_ray_tracing_arrays();
+	if (lens->split_imgpixels) {
+		for (n=0; n < ntot_subpixels; n++) {
+			j = extended_mask_subcell_j[n];
+			i = extended_mask_subcell_i[n];
+			k = extended_mask_subcell_index[n];
+			//cout << "CHECKING2: " << defy_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+			//if (subpixel_center_sourcepts[i][j][k][0] != defx_subpixel_centers[n]) cout << "wrong defx: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][0] << endl;
+			//if (subpixel_center_sourcepts[i][j][k][1] != defy_subpixel_centers[n]) cout << "wrong defy: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+			subpixel_center_sourcepts[i][j][k][0] = defx_subpixel_centers[n];
+			subpixel_center_sourcepts[i][j][k][1] = defy_subpixel_centers[n];
+		}
+	}
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
+void ImagePixelGrid::redo_lensing_calculations()
 {
-	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
-	lens = lens_in;
-	source_fit_mode = mode;
-	ray_tracing_method = method;
-	pixel_data.get_grid_params(xmin,xmax,ymin,ymax,x_N,y_N);
-
-	xy_N = x_N*y_N;
-	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-	else n_active_pixels = xy_N;
-
-	corner_pts = new lensvector*[x_N+1];
-	corner_sourcepts = new lensvector*[x_N+1];
-	center_pts = new lensvector*[x_N];
-	center_sourcepts = new lensvector*[x_N];
-	fit_to_data = new bool*[x_N];
-	maps_to_source_pixel = new bool*[x_N];
-	pixel_index = new int*[x_N];
-	pixel_index_fgmask = new int*[x_N];
-	mapped_source_pixels = new vector<SourcePixelGrid*>*[x_N];
-	surface_brightness = new double*[x_N];
-	foreground_surface_brightness = new double*[x_N];
-	source_plane_triangle1_area = new double*[x_N];
-	source_plane_triangle2_area = new double*[x_N];
-	max_nsplit = imax(24,lens_in->default_imgpixel_nsplit);
-	if (lens_in->split_imgpixels) {
-		nsplits = new int*[x_N];
-		subpixel_maps_to_srcpixel = new bool**[x_N];
-	}
-	twist_pts = new lensvector*[x_N];
-	twist_status = new int*[x_N];
-
-	int i,j,k;
-	for (i=0; i <= x_N; i++) {
-		corner_pts[i] = new lensvector[y_N+1];
-		corner_sourcepts[i] = new lensvector[y_N+1];
-	}
-	for (i=0; i < x_N; i++) {
-		center_pts[i] = new lensvector[y_N];
-		center_sourcepts[i] = new lensvector[y_N];
-		maps_to_source_pixel[i] = new bool[y_N];
-		fit_to_data[i] = new bool[y_N];
-		pixel_index[i] = new int[y_N];
-		pixel_index_fgmask[i] = new int[y_N];
-		surface_brightness[i] = new double[y_N];
-		foreground_surface_brightness[i] = new double[y_N];
-		source_plane_triangle1_area[i] = new double[y_N];
-		source_plane_triangle2_area[i] = new double[y_N];
-		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens_in->split_imgpixels) {
-			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-			nsplits[i] = new int[y_N];
-		}
-		twist_pts[i] = new lensvector[y_N];
-		twist_status[i] = new int[y_N];
-		for (j=0; j < y_N; j++) {
-			surface_brightness[i][j] = 0;
-			foreground_surface_brightness[i][j] = 0;
-			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
-			if (lens_in->split_imgpixels) {
-				//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
-			}
-		}
-	}
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
+#ifdef USE_OPENMP
+	double wtime0, wtime;
+	if (lens->show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
+	calculate_sourcepts_and_areas();
 
-	pixel_xlength = (xmax-xmin)/x_N;
-	pixel_ylength = (ymax-ymin)/y_N;
-	max_sb = -1e30;
-	pixel_area = pixel_xlength*pixel_ylength;
-	triangle_area = 0.5*pixel_xlength*pixel_ylength;
+#ifdef USE_OPENMP
+	if (lens->show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
+	}
+#endif
+}
 
-	double x,y;
-	for (j=0; j <= y_N; j++) {
-		y = pixel_data.yvals[j];
-		for (i=0; i <= x_N; i++) {
-			x = pixel_data.xvals[i];
-			if ((i < x_N) and (j < y_N)) {
-				center_pts[i][j][0] = x + 0.5*pixel_xlength;
-				center_pts[i][j][1] = y + 0.5*pixel_ylength;
-				surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
-				if (!ignore_mask) {
-					if (!include_extended_mask) fit_to_data[i][j] = pixel_data.in_mask[i][j];
-					else fit_to_data[i][j] = pixel_data.extended_mask[i][j];
-				}
-				else fit_to_data[i][j] = true;
-				if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
-			}
-			corner_pts[i][j][0] = x;
-			corner_pts[i][j][1] = y;
+void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming when not using pixellated or shapelet sources
+{
+	// Update this so it uses the extended mask!! DO THIS!!!!!!!!
+	imggrid_zfactors = lens->reference_zfactors;
+	imggrid_betafactors = lens->default_zsrc_beta_factors;
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
+#endif
+
+#ifdef USE_OPENMP
+	double wtime0, wtime;
+	if (lens->show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	int i,j,n,n_cell,n_yp;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 		}
 	}
-	setup_ray_tracing_arrays();
+	long int ntot_corners = (x_N+1)*(y_N+1);
+	long int ntot_cells = x_N*y_N;
+	double *defx_corners, *defy_corners;
+	defx_corners = new double[ntot_corners];
+	defy_corners = new double[ntot_corners];
+
+	int mpi_chunk, mpi_start, mpi_end;
+	mpi_chunk = ntot_corners / lens->group_np;
+	mpi_start = lens->group_id*mpi_chunk;
+	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end = mpi_start + mpi_chunk;
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		lensvector d1,d2,d3,d4;
+		#pragma omp for private(n,i,j) schedule(dynamic)
+		for (n=mpi_start; n < mpi_end; n++) {
+			j = n / (x_N+1);
+			i = n % (x_N+1);
+			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+		}
+	}
+#ifdef USE_MPI
+		#pragma omp master
+		{
+			int id, chunk, start;
+			for (id=0; id < lens->group_np; id++) {
+				chunk = ntot_corners / lens->group_np;
+				start = id*chunk;
+				if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+				MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+			}
+		}
+		#pragma omp barrier
+#endif
+	for (n=0; n < ntot_corners; n++) {
+		j = n / (x_N+1);
+		i = n % (x_N+1);
+		corner_sourcepts[i][j][0] = defx_corners[n];
+		corner_sourcepts[i][j][1] = defy_corners[n];
+	}
+
+#ifdef USE_OPENMP
+	if (lens->show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
+	}
+#endif
+	delete[] defx_corners;
+	delete[] defy_corners;
 }
 
 void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
@@ -6556,7 +6779,6 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data)
 	if (lens) {
 		set_nsplits(&pixel_data,lens->default_imgpixel_nsplit,lens->emask_imgpixel_nsplit,lens->split_imgpixels);
 	}
-
 }
 
 void ImagePixelGrid::include_all_pixels()
@@ -6600,15 +6822,27 @@ void ImagePixelGrid::deactivate_extended_mask()
 
 void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels)
 {
-	int i,j;
+	int i,j,ii,jj,nsplit,subcell_index;
+	double u0,w0;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (split_pixels) {
 				if ((fit_to_data) and (pixel_data)) {
-					if (pixel_data->in_mask[i][j]) nsplits[i][j] = default_nsplit;
-					else nsplits[i][j] = emask_nsplit; // so extended mask pixels don't get split (make this customizable by user?)
+					if (pixel_data->in_mask[i][j]) nsplit = default_nsplit;
+					else nsplit = emask_nsplit; // so extended mask pixels don't get split (make this customizable by user?)
 				} else {
-					nsplits[i][j] = default_nsplit;
+					nsplit = default_nsplit;
+				}
+				nsplits[i][j] = nsplit;
+				subcell_index = 0;
+				for (ii=0; ii < nsplit; ii++) {
+					for (jj=0; jj < nsplit; jj++) {
+						u0 = ((double) (1+2*ii))/(2*nsplit);
+						w0 = ((double) (1+2*jj))/(2*nsplit);
+						subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+						subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+						subcell_index++;
+					}
 				}
 			}
 		}
@@ -6623,331 +6857,6 @@ void ImagePixelGrid::reset_nsplit()
 			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
 		}
 	}
-}
-
-void ImagePixelGrid::redo_lensing_calculations()
-{
-	imggrid_zfactors = lens->reference_zfactors;
-	imggrid_betafactors = lens->default_zsrc_beta_factors;
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
-#endif
-
-#ifdef USE_OPENMP
-	double wtime0, wtime;
-	if (lens->show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-
-	int i,j,n,n_cell,n_corner,n_yp;
-
-	// for debugging, set to -5000 beforehand
-	/*
-	for (i=0; i < x_N+1; i++) {
-		for (j=0; j < y_N+1; j++) {
-			corner_sourcepts[i][j][0] = -5000;
-			corner_sourcepts[i][j][1] = -5000;
-			if ((i < x_N) and (j < y_N)) {
-				source_plane_triangle1_area[i][j] = -5000;
-				source_plane_triangle2_area[i][j] = -5000;
-				center_sourcepts[i][j][0] = -5000;
-				center_sourcepts[i][j][1] = -5000;
-				twist_pts[i][j][0] = -5000;
-				twist_pts[i][j][1] = -5000;
-				twist_status[i][j] = -5000;
-			}
-		}
-	}
-	*/
-
-	long int ntot_cells_check = 0;
-	long int ntot_corners_check = 0;
-	for (i=0; i < x_N+1; i++) {
-		for (j=0; j < y_N+1; j++) {
-			if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells_check++;
-			if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-			//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_check++;
-			//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
-				ntot_corners_check++;
-			}
-		}
-	}
-	if (ntot_cells_check != ntot_cells) die("ntot_cells does not equal the value assigned when image grid created");
-	if (ntot_corners_check != ntot_corners) die("ntot_corners does not equal the value assigned when image grid created");
-
-	int mpi_chunk, mpi_start, mpi_end;
-	mpi_chunk = ntot_corners / lens->group_np;
-	mpi_start = lens->group_id*mpi_chunk;
-	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-	mpi_end = mpi_start + mpi_chunk;
-
-	int mpi_chunk2, mpi_start2, mpi_end2;
-	mpi_chunk2 = ntot_cells / lens->group_np;
-	mpi_start2 = lens->group_id*mpi_chunk2;
-	if (lens->group_id == lens->group_np-1) mpi_chunk2 += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-	mpi_end2 = mpi_start2 + mpi_chunk2;
-
-	#pragma omp parallel
-	{
-		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
-		thread = 0;
-#endif
-		lensvector d1,d2,d3,d4;
-		//int ii,jj;
-		#pragma omp for private(n,i,j) schedule(dynamic)
-		for (n=mpi_start; n < mpi_end; n++) {
-			//j = n / (x_N+1);
-			//i = n % (x_N+1);
-			j = extended_mask_corner_j[n];
-			i = extended_mask_corner_i[n];
-			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
-		}
-#ifdef USE_MPI
-		#pragma omp master
-		{
-			if (lens->group_np > 1) {
-				int id, chunk, start;
-				for (id=0; id < lens->group_np; id++) {
-					chunk = ntot_corners / lens->group_np;
-					start = id*chunk;
-					if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-					MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-					MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-				}
-			}
-		}
-		#pragma omp barrier
-#endif
-		#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
-		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
-			//j = n_cell / x_N;
-			//i = n_cell % x_N;
-			j = extended_mask_j[n_cell];
-			i = extended_mask_i[n_cell];
-			//if (!lens->split_imgpixels) {
-				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
-			//}
-
-			//n = j*(x_N+1)+i;
-			//n_yp = (j+1)*(x_N+1)+i;
-			n = extended_mask_corner[n_cell];
-			n_yp = extended_mask_corner_up[n_cell];
-			d1[0] = defx_corners[n] - defx_corners[n+1];
-			d1[1] = defy_corners[n] - defy_corners[n+1];
-			d2[0] = defx_corners[n_yp] - defx_corners[n];
-			d2[1] = defy_corners[n_yp] - defy_corners[n];
-			d3[0] = defx_corners[n_yp+1] - defx_corners[n_yp];
-			d3[1] = defy_corners[n_yp+1] - defy_corners[n_yp];
-			d4[0] = defx_corners[n+1] - defx_corners[n_yp+1];
-			d4[1] = defy_corners[n+1] - defy_corners[n_yp+1];
-
-			twiststat[n_cell] = 0;
-			double xa,ya,xb,yb,xc,yc,xd,yd,slope1,slope2;
-			xa=defx_corners[n];
-			ya=defy_corners[n];
-			xb=defx_corners[n_yp];
-			yb=defy_corners[n_yp];
-			xc=defx_corners[n_yp+1];
-			yc=defy_corners[n_yp+1];
-			xd=defx_corners[n+1];
-			yd=defy_corners[n+1];
-			slope1 = (yb-ya)/(xb-xa);
-			slope2 = (yc-yd)/(xc-xd);
-			twistx[n_cell] = (yd-ya+xa*slope1-xd*slope2)/(slope1-slope2);
-			twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
-			if ((test_if_between(twistx[n_cell],xa,xb)) and (test_if_between(twisty[n_cell],ya,yb)) and (test_if_between(twistx[n_cell],xc,xd)) and (test_if_between(twisty[n_cell],yc,yd))) {
-				twiststat[n_cell] = 1;
-				d2[0] = twistx[n_cell] - defx_corners[n];
-				d2[1] = twisty[n_cell] - defy_corners[n];
-				d4[0] = twistx[n_cell] - defx_corners[n_yp+1];
-				d4[1] = twisty[n_cell] - defy_corners[n_yp+1];
-			} else {
-				slope1 = (yd-ya)/(xd-xa);
-				slope2 = (yc-yb)/(xc-xb);
-				twistx[n_cell] = (yb-ya+xa*slope1-xb*slope2)/(slope1-slope2);
-				twisty[n_cell] = (twistx[n_cell]-xa)*slope1+ya;
-				if ((test_if_between(twistx[n_cell],xa,xd)) and (test_if_between(twisty[n_cell],ya,yd)) and (test_if_between(twistx[n_cell],xb,xc)) and (test_if_between(twisty[n_cell],yb,yc))) {
-					twiststat[n_cell] = 2;
-					d1[0] = defx_corners[n] - twistx[n_cell];
-					d1[1] = defy_corners[n] - twisty[n_cell];
-					d3[0] = defx_corners[n_yp+1] - twistx[n_cell];
-					d3[1] = defy_corners[n_yp+1] - twisty[n_cell];
-				}
-			}
-
-			area_tri1[n_cell] = 0.5*abs(d1 ^ d2);
-			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
-		}
-	}
-#ifdef USE_MPI
-	if (lens->group_np > 1) {
-		int id, chunk, start;
-		for (id=0; id < lens->group_np; id++) {
-			chunk = ntot_cells / lens->group_np;
-			start = id*chunk;
-			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-			if (!lens->split_imgpixels) {
-				MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-			}
-			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
-		}
-	}
-	MPI_Comm_free(&sub_comm);
-#endif
-	for (n=0; n < ntot_corners; n++) {
-		//j = n / (x_N+1);
-		//i = n % (x_N+1);
-		j = extended_mask_corner_j[n];
-		i = extended_mask_corner_i[n];
-		corner_sourcepts[i][j][0] = defx_corners[n];
-		corner_sourcepts[i][j][1] = defy_corners[n];
-		//if ((lens->image_pixel_data->in_mask[i][j]) or ((i>0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((j>0) and (lens->image_pixel_data->in_mask[i][j-1]))) ;
-		//else {
-			// sabotage to see if extended mask corners are still being used
-			//corner_sourcepts[i][j][0] = -1e30;
-			//corner_sourcepts[i][j][1] = -1e30;
-		//}
-	}
-	for (n=0; n < ntot_cells; n++) {
-		//n_cell = j*x_N+i;
-		j = extended_mask_j[n];
-		i = extended_mask_i[n];
-		source_plane_triangle1_area[i][j] = area_tri1[n];
-		source_plane_triangle2_area[i][j] = area_tri2[n];
-		//if (!lens->split_imgpixels) {
-			center_sourcepts[i][j][0] = defx_centers[n];
-			center_sourcepts[i][j][1] = defy_centers[n];
-		//}
-		twist_pts[i][j][0] = twistx[n];
-		twist_pts[i][j][1] = twisty[n];
-		twist_status[i][j] = twiststat[n];
-	}
-
-#ifdef USE_OPENMP
-	if (lens->show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
-	}
-#endif
-}
-
-void ImagePixelGrid::delete_ray_tracing_arrays()
-{
-	delete[] defx_corners;
-	delete[] defy_corners;
-	delete[] defx_centers;
-	delete[] defy_centers;
-	delete[] area_tri1;
-	delete[] area_tri2;
-	delete[] twistx;
-	delete[] twisty;
-	delete[] twiststat;
-
-	delete[] extended_mask_i;
-	delete[] extended_mask_j;
-	delete[] extended_mask_corner_i;
-	delete[] extended_mask_corner_j;
-	delete[] extended_mask_corner;
-	delete[] extended_mask_corner_up;
-	int i;
-	for (i=0; i < x_N; i++) delete[] nvals[i];
-	delete[] nvals;
-	for (i=0; i < x_N+1; i++) delete[] ncvals[i];
-	delete[] ncvals;
-}
-
-void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming
-{
-	// Update this so it uses the extended mask!! DO THIS!!!!!!!!
-	imggrid_zfactors = lens->reference_zfactors;
-	imggrid_betafactors = lens->default_zsrc_beta_factors;
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
-#endif
-
-#ifdef USE_OPENMP
-	double wtime0, wtime;
-	if (lens->show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
-	int i,j,n,n_cell,n_yp;
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-		}
-	}
-	long int ntot_corners = (x_N+1)*(y_N+1);
-	long int ntot_cells = x_N*y_N;
-	double *defx_corners, *defy_corners;
-	defx_corners = new double[ntot_corners];
-	defy_corners = new double[ntot_corners];
-
-	int mpi_chunk, mpi_start, mpi_end;
-	mpi_chunk = ntot_corners / lens->group_np;
-	mpi_start = lens->group_id*mpi_chunk;
-	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-	mpi_end = mpi_start + mpi_chunk;
-
-	#pragma omp parallel
-	{
-		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
-		thread = 0;
-#endif
-		lensvector d1,d2,d3,d4;
-		#pragma omp for private(n,i,j) schedule(dynamic)
-		for (n=mpi_start; n < mpi_end; n++) {
-			j = n / (x_N+1);
-			i = n % (x_N+1);
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
-		}
-	}
-#ifdef USE_MPI
-		#pragma omp master
-		{
-			int id, chunk, start;
-			for (id=0; id < lens->group_np; id++) {
-				chunk = ntot_corners / lens->group_np;
-				start = id*chunk;
-				if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-				MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-			}
-		}
-		#pragma omp barrier
-#endif
-	for (n=0; n < ntot_corners; n++) {
-		j = n / (x_N+1);
-		i = n % (x_N+1);
-		corner_sourcepts[i][j][0] = defx_corners[n];
-		corner_sourcepts[i][j][1] = defy_corners[n];
-	}
-
-#ifdef USE_OPENMP
-	if (lens->show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
-	}
-#endif
-	delete[] defx_corners;
-	delete[] defy_corners;
 }
 
 bool ImagePixelData::test_if_in_fit_region(const double& x, const double& y)
@@ -7081,7 +6990,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin, sb;
 	double xsavg, ysavg;
-	int i,j;
+	int i,j,k,nsp;
 	//ofstream wtf("wtf.dat");
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
@@ -7091,8 +7000,20 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-				xsavg = center_sourcepts[i][j][0];
-				ysavg = center_sourcepts[i][j][1];
+				// You repeat this code three times in this function! GET RID OF THE REDUNDANCIES!!!!
+				if (!lens->split_imgpixels) {
+					xsavg = center_sourcepts[i][j][0];
+					ysavg = center_sourcepts[i][j][1];
+				} else {
+					xsavg=ysavg=0;
+					nsp = SQR(nsplits[i][j]);
+					for (k=0; k < nsp; k++) {
+						xsavg += subpixel_center_sourcepts[i][j][k][0];
+						ysavg += subpixel_center_sourcepts[i][j][k][1];
+					}
+					xsavg /= nsp;
+					ysavg /= nsp;
+				}
 				//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				xcavg += area*abs(sb)*xsavg;
@@ -7114,8 +7035,20 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-				xsavg = center_sourcepts[i][j][0];
-				ysavg = center_sourcepts[i][j][1];
+				if (!lens->split_imgpixels) {
+					xsavg = center_sourcepts[i][j][0];
+					ysavg = center_sourcepts[i][j][1];
+				} else {
+					xsavg=ysavg=0;
+					nsp = SQR(nsplits[i][j]);
+					for (k=0; k < nsp; k++) {
+						xsavg += subpixel_center_sourcepts[i][j][k][0];
+						ysavg += subpixel_center_sourcepts[i][j][k][1];
+					}
+					xsavg /= nsp;
+					ysavg /= nsp;
+				}
+
 				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				rsqavg += area*abs(sb)*rsq;
@@ -7144,8 +7077,20 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 				ntot++;
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-				xsavg = center_sourcepts[i][j][0];
-				ysavg = center_sourcepts[i][j][1];
+				if (!lens->split_imgpixels) {
+					xsavg = center_sourcepts[i][j][0];
+					ysavg = center_sourcepts[i][j][1];
+				} else {
+					xsavg=ysavg=0;
+					nsp = SQR(nsplits[i][j]);
+					for (k=0; k < nsp; k++) {
+						xsavg += subpixel_center_sourcepts[i][j][k][0];
+						ysavg += subpixel_center_sourcepts[i][j][k][1];
+					}
+					xsavg /= nsp;
+					ysavg /= nsp;
+				}
+
 				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
 				if (sqrt(rsq) > 2*sig) {
 					nout++;
@@ -7798,8 +7743,14 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] twist_pts[i];
 		if (lens->split_imgpixels) {
 			delete[] nsplits[i];
-			for (int j=0; j < y_N; j++) delete[] subpixel_maps_to_srcpixel[i][j];
+			for (int j=0; j < y_N; j++) {
+				delete[] subpixel_maps_to_srcpixel[i][j];
+				delete[] subpixel_center_pts[i][j];
+				delete[] subpixel_center_sourcepts[i][j];
+			}
 			delete[] subpixel_maps_to_srcpixel[i];
+			delete[] subpixel_center_pts[i];
+			delete[] subpixel_center_sourcepts[i];
 		}
 	}
 	delete[] center_pts;
@@ -7813,6 +7764,8 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] source_plane_triangle2_area;
 	if (lens->split_imgpixels) {
 		delete[] subpixel_maps_to_srcpixel;
+		delete[] subpixel_center_pts;
+		delete[] subpixel_center_sourcepts;
 		delete[] nsplits;
 	}
 	delete[] twist_status;
@@ -8019,6 +7972,8 @@ void QLens::clear_pixel_matrices_dense()
 }
 */
 
+// THIS NEEDS TO BE UPDATED, THE SAME WAY THE LMATRIX_SHAPELETS WAS: SUBPIXEL SOURCEPTS HAVE BEEN STORED DURING RAY TRACING AND SHOULD BE USED HERE
+// DO THIS!!!!!!!!!!
 void QLens::assign_Lmatrix(bool verbal)
 {
 	int img_index;
@@ -8240,7 +8195,7 @@ void QLens::assign_Lmatrix(bool verbal)
 void QLens::assign_Lmatrix_shapelets(bool verbal)
 {
 	int img_index;
-	int index;
+	//int index;
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -8254,23 +8209,13 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 
 	SB_Profile** shapelet;
 	shapelet = new SB_Profile*[n_shapelets];
+	bool at_least_one_lensed_shapelet = false;
 	for (i=0,j=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
 			shapelet[j++] = sb_list[i];
+			if (sb_list[i]->is_lensed) at_least_one_lensed_shapelet = true;
 		}
 	}
-
-	/*
-	int max_nsplit = image_pixel_grid->max_nsplit;
-	lensvector ***corner_srcpts;
-	corner_srcpts = new lensvector**[max_nsplit+1];
-	for (i=0; i < max_nsplit+1; i++) {
-		corner_srcpts[i] = new lensvector*[max_nsplit+1];
-		for (j=0; j < max_nsplit+1; j++) {
-			corner_srcpts[i][j] = new lensvector[nthreads];
-		}
-	}
-	*/
 
 	#pragma omp parallel
 	{
@@ -8280,53 +8225,37 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 #else
 		thread = 0;
 #endif
-		int ii,jj,nsplit;
-		double u0, w0, cell;
+		int nsubpix,subcell_index;
+		//double u0, w0, cell;
+		lensvector *center_srcpt, *center_pt;
 
 		if (split_imgpixels) {
-			#pragma omp for private(img_index,i,j,k,ii,jj,nsplit,index,u0,w0,cell) schedule(dynamic)
+			#pragma omp for private(img_index,i,j,k,nsubpix,center_srcpt,center_pt) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
-				index=0;
+				//index=0;
 				i = active_image_pixel_i[img_index];
 				j = active_image_pixel_j[img_index];
 				//source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],thread);
 
-				nsplit = image_pixel_grid->nsplits[i][j];
-				cell = 1.0/nsplit;
-				lensvector center, center_srcpt, corner;
-
-				/*
-				for (ii=0; ii < nsplit; ii++) {
-					for (jj=0; jj < nsplit; jj++) {
-						u0 = ((double) ii)/nsplit;
-						w0 = ((double) jj)/nsplit;
-						corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
-						corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
-						find_sourcept(corner,corner_srcpts[ii+1][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
-
-						if (ii==0) {
-							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
-							corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
-							find_sourcept(corner,corner_srcpts[ii][jj+1][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+				nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
+				center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
+				center_pt = image_pixel_grid->subpixel_center_pts[i][j];
+				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+					//if (at_least_one_lensed_shapelet) find_sourcept(center_pt[subcell_index],center_srcpt[subcell_index],thread,reference_zfactors,default_zsrc_beta_factors);
+					double *Lmatptr = Lmatrix_dense.subarray(img_index);
+					for (k=0; k < n_shapelets; k++) {
+						if (shapelet[k]->is_lensed) {
+							//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
+							shapelet[k]->calculate_Lmatrix_elements(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1],Lmatptr,1.0/nsubpix);
 						} else {
-							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
-							corner[1] = (w0+cell)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0+cell))*image_pixel_grid->corner_pts[i][j+1][1];
-							lensvector check;
-							find_sourcept(corner,check,thread,reference_zfactors,default_zsrc_beta_factors);
-						}
-						if (jj==0) {
-							corner[0] = (u0+cell)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0+cell))*image_pixel_grid->corner_pts[i+1][j][0];
-							corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
-							find_sourcept(corner,corner_srcpts[ii+1][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
-						}
-						if ((ii==0) and (jj==0)) {
-							corner[0] = (u0)*image_pixel_grid->corner_pts[i][j][0] + (1-(u0))*image_pixel_grid->corner_pts[i+1][j][0];
-							corner[1] = (w0)*image_pixel_grid->corner_pts[i][j][1] + (1-(w0))*image_pixel_grid->corner_pts[i][j+1][1];
-							find_sourcept(corner,corner_srcpts[ii][jj][thread],thread,reference_zfactors,default_zsrc_beta_factors);
+							shapelet[k]->calculate_Lmatrix_elements(center_pt[subcell_index][0],center_pt[subcell_index][1],Lmatptr,1.0/nsubpix);
 						}
 					}
 				}
-				*/
+
+				/*
+				cell = 1.0/nsplit;
+				lensvector center, center_srcpt, corner;
 
 				for (ii=0; ii < nsplit; ii++) {
 					for (jj=0; jj < nsplit; jj++) {
@@ -8334,23 +8263,19 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 						w0 = ((double) (1+2*jj))*cell/2;
 						center[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
 						center[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+						if (at_least_one_lensed_shapelet) find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
 						double *Lmatptr = Lmatrix_dense.subarray(img_index);
 						for (k=0; k < n_shapelets; k++) {
 							if (shapelet[k]->is_lensed) {
-								find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
-								//cout << center[0] << "," << center[1] << " " << image_pixel_grid->center_pts[i][j][0] << "," << image_pixel_grid->center_pts[i][j][1] << endl;
-								//cout << center_srcpt[0] << "," << center_srcpt[1] << " " << image_pixel_grid->center_sourcepts[i][j][0] << "," << image_pixel_grid->center_sourcepts[i][j][1] << endl;
+								//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
 								shapelet[k]->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatptr,1.0/(nsplit*nsplit));
-								//if (img_index==0) cout << Lmatrix_dense[img_index][0] << endl;
 							} else {
 								shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0/(nsplit*nsplit));
 							}
 						}
-						//for (src_index=0; src_index < source_npixels; src_index++) {
-							//Lmatrix_dense[img_index][src_index] += (shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index) / (nsplit*nsplit));
-						//}
 					}
 				}
+				*/
 			}
 		} else {
 			lensvector center, center_srcpt;
@@ -8368,26 +8293,10 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 						center = image_pixel_grid->center_pts[i][j];
 						shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0);
 					}
-					//for (src_index=0; src_index < source_npixels; src_index++) {
-						//Lmatrix_dense[img_index][src_index] = shapelet->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],src_index);
-						//double checksb = shapelet->surface_brightness(center_srcpt[0],center_srcpt[1])/0.094;
-						//cout << "CHECKING: " << Lmatrix_dense[img_index][src_index] << " " << checksb << endl;
-						//if ((img_index==60) and (src_index==2)) cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
-						//cout << "HI " << i << " " << j << " " << centerpt[0] << " " << centerpt[1] << " " << center[0] << " " << center[1] << " " << Lmatrix_dense[img_index][src_index] << endl;
-					//}
 				}
 			}
 		}
 	}
-	/*
-	for (i=0; i < max_nsplit+1; i++) {
-		for (j=0; j < max_nsplit+1; j++) {
-			delete[] corner_srcpts[i][j];
-		}
-		delete[] corner_srcpts[i];
-	}
-	delete[] corner_srcpts;
-	*/
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -8396,17 +8305,6 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 	}
 #endif
 	delete[] shapelet;
-
-	//ofstream Lout("lmwtf.dat");
-	//for (i=0; i < source_npixels; i++) {
-		//for (j=0; j < image_npixels; j++) {
-			//Lout << Lmatrix_dense[j][i] << " ";
-		//}
-		//Lout << endl;
-	//}
-	//die();
-//
-
 }
 
 /*

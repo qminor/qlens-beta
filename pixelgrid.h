@@ -182,6 +182,9 @@ class ImagePixelGrid : public Sort
 	lensvector **corner_sourcepts;
 	lensvector **center_pts;
 	lensvector **center_sourcepts;
+	lensvector ***subpixel_center_pts;
+	lensvector ***subpixel_center_sourcepts;
+
 	double **surface_brightness;
 	double **foreground_surface_brightness;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
@@ -198,12 +201,15 @@ class ImagePixelGrid : public Sort
 	int **twist_status;
 	lensvector **twist_pts;
 	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
+	double *defx_subpixel_centers, *defy_subpixel_centers;
 	double *twistx, *twisty;
 	int *twiststat;
 	int *extended_mask_i, *extended_mask_j, *extended_mask_corner_i, *extended_mask_corner_j, *extended_mask_corner, *extended_mask_corner_up;
-	int **nvals, **ncvals;
+	int *extended_mask_subcell_i, *extended_mask_subcell_j, *extended_mask_subcell_index;
+	int **ncvals;
 
 	long int ntot_corners, ntot_cells;
+	long int ntot_subpixels;
 
 	vector<SourcePixelGrid*> **mapped_source_pixels;
 	RayTracingMethod ray_tracing_method;
@@ -230,8 +236,10 @@ class ImagePixelGrid : public Sort
 	void include_all_pixels();
 	void activate_extended_mask();
 	void deactivate_extended_mask();
+	void setup_pixel_arrays();
 	void setup_ray_tracing_arrays();
 	void delete_ray_tracing_arrays();
+	void calculate_sourcepts_and_areas();
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void reset_nsplit();
 
