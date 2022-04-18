@@ -52,6 +52,7 @@ enum DerivedParamType {
 	Mass3dR,
 	Einstein,
 	Einstein_Mass,
+	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
 	Perturbation_Radius,
@@ -1441,6 +1442,8 @@ struct DerivedParam
 			name = "re_zsrc"; latex_name = "R_{e}";
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == Kappa_Re) {
+			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
 			name = "lensparam"; latex_name = "\\lambda";
 		} else if (derived_param_type == AvgLogSlope) {
@@ -1494,6 +1497,11 @@ struct DerivedParam
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param,false);
+		} else if (derived_param_type == Kappa_Re) {
+			double reav=0;
+			lens_in->einstein_radius_of_primary_lens(lens_in->reference_zfactors[lens_in->lens_redshift_idx[lens_in->primary_lens_number]],reav);
+			if (reav <= 0) return 0.0;
+			else return lens_in->total_kappa(reav,-1,false);
 		} else if (derived_param_type == LensParam) {
 			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
 		}
@@ -1551,6 +1559,8 @@ struct DerivedParam
 			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == Einstein_Mass) {
 			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Kappa_Re) {
+			cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << endl;
 		} else if (derived_param_type == LensParam) {
 			cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << endl;
 		} else if (derived_param_type == AvgLogSlope) {

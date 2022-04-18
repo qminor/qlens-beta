@@ -6632,12 +6632,12 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
 	string y_filename = outfile_root + ".y";
-	string src_filename = outfile_root + "_srcpts.dat";
+	//string src_filename = outfile_root + "_srcpts.dat";
 
 	ofstream pixel_image_file; lens->open_output_file(pixel_image_file,sb_filename);
 	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
 	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
-	ofstream pixel_src_file; lens->open_output_file(pixel_src_file,src_filename);
+	//ofstream pixel_src_file; lens->open_output_file(pixel_src_file,src_filename);
 	pixel_image_file << setiosflags(ios::scientific);
 	for (int i=0; i <= x_N; i++) {
 		pixel_xvals << corner_pts[i][0][0] << endl;
@@ -6664,8 +6664,8 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 						else pixel_image_file << "NaN";
 					}
 					else pixel_image_file << residual;
-					lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
-					if (abs(residual) > 0.02) pixel_src_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << residual << endl;
+					//lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],0,imggrid_zfactors,imggrid_betafactors);
+					//if (abs(residual) > 0.02) pixel_src_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << residual << endl;
 				}
 			} else {
 				pixel_image_file << "NaN";
@@ -7057,24 +7057,18 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	}
 	//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
 	rsqavg /= totsurf;
-	int nn = lens->get_shapelet_nn();
-	const double window_scaling = 1.2;
 	double sig = sqrt(abs(rsqavg));
-	if (lens->shapelet_scale_mode==0)
-		scale = sig;
-	else if (lens->shapelet_scale_mode==1)
-		scale = window_scaling*sig/sqrt(nn);
-	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
 	xcenter = xcavg;
 	ycenter = ycavg;
 
 	int ntot=0, nout=0;
+	double xd,xmax=-1e30;
+	double yd,ymax=-1e30;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				ntot++;
+			if ((fit_to_data==NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 				if (!lens->split_imgpixels) {
@@ -7091,15 +7085,31 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 					ysavg /= nsp;
 				}
 
-				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
-				if (sqrt(rsq) > 2*sig) {
-					nout++;
+				xd = abs(xsavg-xcavg);
+				yd = abs(ysavg-ycavg);
+				if (xd > xmax) xmax = xd;
+				if (yd > ymax) ymax = yd;
+				if ((lens->image_pixel_data->in_mask[i][j]) and (abs(sb) > 5*pixel_noise)) {
+					ntot++;
+					rsq = SQR(xd) + SQR(yd);
+					if (sqrt(rsq) > 2*sig) {
+						nout++;
+					}
 				}
 			}
 		}
 	}
 	double fout = nout / ((double) ntot);
 	if ((verbal) and (lens->mpi_id==0)) cout << "Fraction of 2-sigma outliers for shapelets: " << fout << endl;
+	double maxdist = dmax(xd,yd);
+
+	int nn = lens->get_shapelet_nn();
+	const double window_scaling = 0.9;
+	if (lens->shapelet_scale_mode==0)
+		scale = sig;
+	else if (lens->shapelet_scale_mode==1)
+		scale = window_scaling*maxdist/sqrt(nn); // uses outermost (ray-traced) pixel in extended mask to set scale
+	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
 
 	int ii, jj, il, ih, jl, jh;
 	const double window_size_for_srcarea = 1;
@@ -7138,8 +7148,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double minscale_res = sqrt(min_area);
 	recommended_nsplit = 2*sqrt(max_area*nn)/sig; // this is so the smallest source fluctuations get at least 2x2 ray tracing coverage
 	int recommended_nn;
-	if (lens->shapelet_scale_mode==0) recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
-	else recommended_nn = (int) (window_scaling*sig/(minscale_res)) + 1;
+	recommended_nn = ((int) (SQR(sig / minscale_res))) + 1;
 	if ((verbal) and (lens->mpi_id==0)) {
 		cout << "expected minscale_res=" << minscale_res << ", found at (x=" << xcmin << ",y=" << ycmin << ") recommended_nn=" << recommended_nn << " (at least)" << endl;
 		cout << "number of splittings should be at least " << recommended_nsplit << " to capture all source fluctuations" << endl;

@@ -214,6 +214,9 @@ void QLens::process_commands(bool read_file)
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
 						"include_emask_in_chisq -- include extended mask pixels in inversion and chi-square\n"
+						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
+						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
+						"emask_nsplit -- specify number of pixel splittings for the extended mask (if 'split_imgpixels' is on)\n"
 						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
@@ -1068,6 +1071,7 @@ void QLens::process_commands(bool read_file)
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
+							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
 							"lensparam -- The value of parameter <paramnum> for lens [lens#] using default pmode\n"
 							"r_perturb -- The critical curve perturbation radius of perturbing lens [lens#]; assumes lens 0 is primary\n"
@@ -7301,6 +7305,9 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(Einstein_Mass,dparam_arg,lensnum,-1,use_kpc);
+							} else if (words[3]=="kappa_re") {
+								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
+								add_derived_param(Kappa_Re,-1e30,-1,-1,false);
 							} else if (words[3]=="lensparam") {
 								int paramnum;
 								if (nwords != 6) Complain("derived parameter lensparam requires two arguments (paramnum,lens_number)");
@@ -8836,6 +8843,7 @@ void QLens::process_commands(bool read_file)
 				bool omit_foreground = false;
 				bool show_all_pixels = false;
 				bool show_extended_mask = false;
+				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
 				bool omit_source = false;
 				int reduce_factor = 1;
