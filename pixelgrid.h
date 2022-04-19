@@ -204,11 +204,11 @@ class ImagePixelGrid : public Sort
 	double *defx_subpixel_centers, *defy_subpixel_centers;
 	double *twistx, *twisty;
 	int *twiststat;
-	int *masked_pixels_i, *masked_pixels_j, *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
+	int *masked_pixels_i, *masked_pixels_j, *emask_pixels_i, *emask_pixels_j, *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
 	int *extended_mask_subcell_i, *extended_mask_subcell_j, *extended_mask_subcell_index;
 	int **ncvals;
 
-	long int ntot_corners, ntot_cells;
+	long int ntot_corners, ntot_cells, ntot_cells_emask;
 	long int ntot_subpixels;
 
 	vector<SourcePixelGrid*> **mapped_source_pixels;
@@ -239,7 +239,7 @@ class ImagePixelGrid : public Sort
 	void setup_pixel_arrays();
 	void setup_ray_tracing_arrays();
 	void delete_ray_tracing_arrays();
-	void calculate_sourcepts_and_areas();
+	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false);
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void reset_nsplit();
 

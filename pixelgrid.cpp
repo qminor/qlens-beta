@@ -5844,7 +5844,7 @@ int i,j;
 	}
 	fit_to_data = NULL;
 	setup_ray_tracing_arrays();
-	if (lens->islens()) calculate_sourcepts_and_areas();
+	if (lens->islens()) calculate_sourcepts_and_areas(true);
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -5898,7 +5898,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	}
 	fit_to_data = NULL;
 	setup_ray_tracing_arrays();
-	if (lens->islens()) calculate_sourcepts_and_areas();
+	if (lens->islens()) calculate_sourcepts_and_areas(true);
 }
 
 ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
@@ -5963,14 +5963,12 @@ void ImagePixelGrid::setup_pixel_arrays()
 	foreground_surface_brightness = new double*[x_N];
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
-	//max_nsplit = imax(24,lens->default_imgpixel_nsplit);
-	max_nsplit = lens->default_imgpixel_nsplit;
-	if (lens->split_imgpixels) {
-		nsplits = new int*[x_N];
-		subpixel_maps_to_srcpixel = new bool**[x_N];
-		subpixel_center_pts = new lensvector**[x_N];
-		subpixel_center_sourcepts = new lensvector**[x_N];
-	}
+	max_nsplit = imax(12,lens->default_imgpixel_nsplit);
+	//max_nsplit = lens->default_imgpixel_nsplit;
+	nsplits = new int*[x_N];
+	subpixel_maps_to_srcpixel = new bool**[x_N];
+	subpixel_center_pts = new lensvector**[x_N];
+	subpixel_center_sourcepts = new lensvector**[x_N];
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -5991,25 +5989,21 @@ void ImagePixelGrid::setup_pixel_arrays()
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_source_pixels[i] = new vector<SourcePixelGrid*>[y_N];
-		if (lens->split_imgpixels) {
-			subpixel_maps_to_srcpixel[i] = new bool*[y_N];
-			subpixel_center_pts[i] = new lensvector*[y_N];
-			subpixel_center_sourcepts[i] = new lensvector*[y_N];
-			nsplits[i] = new int[y_N];
-		}
+		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
+		subpixel_center_pts[i] = new lensvector*[y_N];
+		subpixel_center_sourcepts[i] = new lensvector*[y_N];
+		nsplits[i] = new int[y_N];
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
 		for (j=0; j < y_N; j++) {
 			surface_brightness[i][j] = 0;
 			foreground_surface_brightness[i][j] = 0;
 			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
-			if (lens->split_imgpixels) {
-				//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
-				subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
-				subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
-				subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
-				for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
-			}
+			//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
+			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
+			subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
+			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
+			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
 	}
 }
@@ -6020,27 +6014,34 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 
 	if ((!fit_to_data) or (lens->image_pixel_data == NULL)) {
 		ntot_cells = x_N*y_N;
+		ntot_cells_emask = x_N*y_N;
 		ntot_corners = (x_N+1)*(y_N+1);
 	} else {
 		ntot_cells = 0;
+		ntot_cells_emask = 0;
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
 				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) ntot_cells++;
-				//if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells++;
 				if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->in_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->in_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->in_mask[i-1][j-1]))) {
-				//if (((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (lens->image_pixel_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (lens->image_pixel_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (lens->image_pixel_data->extended_mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
 		}
+
+		for (i=0; i < x_N+1; i++) {
+			for (j=0; j < y_N+1; j++) {
+				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_emask++;
+			}
+		}
+
 	}
 
 	// The following is used for the ray tracing
 	defx_corners = new double[ntot_corners];
 	defy_corners = new double[ntot_corners];
-	defx_centers = new double[ntot_cells];
-	defy_centers = new double[ntot_cells];
+	defx_centers = new double[ntot_cells_emask];
+	defy_centers = new double[ntot_cells_emask];
 	area_tri1 = new double[ntot_cells];
 	area_tri2 = new double[ntot_cells];
 	twistx = new double[ntot_cells];
@@ -6049,6 +6050,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 
 	masked_pixels_i = new int[ntot_cells];
 	masked_pixels_j = new int[ntot_cells];
+	emask_pixels_i = new int[ntot_cells_emask];
+	emask_pixels_j = new int[ntot_cells_emask];
 	masked_pixel_corner_i = new int[ntot_corners];
 	masked_pixel_corner_j = new int[ntot_corners];
 	masked_pixel_corner = new int[ntot_cells];
@@ -6061,9 +6064,19 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->in_mask[i][j])) {
-			//if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				masked_pixels_i[n_cell] = i;
 				masked_pixels_j[n_cell] = j;
+				n_cell++;
+			}
+		}
+	}
+
+	n_cell=0;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+				emask_pixels_i[n_cell] = i;
+				emask_pixels_j[n_cell] = j;
 				n_cell++;
 			}
 		}
@@ -6181,6 +6194,8 @@ void ImagePixelGrid::delete_ray_tracing_arrays()
 
 	delete[] masked_pixels_i;
 	delete[] masked_pixels_j;
+	delete[] emask_pixels_i;
+	delete[] emask_pixels_j;
 	delete[] masked_pixel_corner_i;
 	delete[] masked_pixel_corner_j;
 	delete[] masked_pixel_corner;
@@ -6204,8 +6219,9 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 	return false;
 }
 
-void ImagePixelGrid::calculate_sourcepts_and_areas()
+void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_centers)
 {
+	// if raytrace_pixel_centers==true, this will ray-trace the pixel centers even if split_imgpixels is on
 	/*
 	int i,j;
 	#pragma omp parallel
@@ -6330,12 +6346,17 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 	if (lens->group_id == lens->group_np-1) mpi_chunk2 += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
 	mpi_end2 = mpi_start2 + mpi_chunk2;
 
-	//cout << "NTOT_SUBPIXELS=" << ntot_subpixels << endl;
 	int mpi_chunk3, mpi_start3, mpi_end3;
 	mpi_chunk3 = ntot_subpixels / lens->group_np;
 	mpi_start3 = lens->group_id*mpi_chunk3;
 	if (lens->group_id == lens->group_np-1) mpi_chunk3 += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
 	mpi_end3 = mpi_start3 + mpi_chunk3;
+
+	int mpi_chunk4, mpi_start4, mpi_end4;
+	mpi_chunk4 = ntot_cells_emask / lens->group_np;
+	mpi_start4 = lens->group_id*mpi_chunk4;
+	if (lens->group_id == lens->group_np-1) mpi_chunk4 += (ntot_cells_emask % lens->group_np); // assign the remainder elements to the last mpi process
+	mpi_end4 = mpi_start4 + mpi_chunk4;
 
 	#pragma omp parallel
 	{
@@ -6378,9 +6399,6 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 			//i = n_cell % x_N;
 			j = masked_pixels_j[n_cell];
 			i = masked_pixels_i[n_cell];
-			if (!lens->split_imgpixels) {
-				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
-			}
 
 			//n = j*(x_N+1)+i;
 			//n_yp = (j+1)*(x_N+1)+i;
@@ -6433,6 +6451,17 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 			area_tri2[n_cell] = 0.5*abs(d3 ^ d4);
 		}
 
+		if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
+			#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
+			for (n_cell=mpi_start4; n_cell < mpi_end4; n_cell++) {
+				//j = n_cell / x_N;
+				//i = n_cell % x_N;
+				j = emask_pixels_j[n_cell];
+				i = emask_pixels_i[n_cell];
+				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+			}
+		}
+
 		if (lens->split_imgpixels) {
 			int n_subcell;
 			#pragma omp for private(i,j,k,n_subcell) schedule(dynamic)
@@ -6447,19 +6476,23 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 #ifdef USE_MPI
 	if (lens->group_np > 1) {
 		int id, chunk, start;
+		int id2, chunk2, start2;
 		for (id=0; id < lens->group_np; id++) {
 			chunk = ntot_cells / lens->group_np;
 			start = id*chunk;
 			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-			if (!lens->split_imgpixels) {
-				MPI_Bcast(defx_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-			} else {
-				chunk = ntot_subpixels / lens->group_np;
-				start = id*chunk;
-				if (id == lens->group_np-1) chunk += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
-				MPI_Bcast(defx_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
+				chunk2 = ntot_cells_emask / lens->group_np;
+				start2 = id*chunk2;
+				MPI_Bcast(defx_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
+			}
+			if (lens->split_imgpixels) {
+				chunk2 = ntot_subpixels / lens->group_np;
+				start2 = id*chunk2;
+				if (id == lens->group_np-1) chunk2 += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
+				MPI_Bcast(defx_subpixel_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
+				MPI_Bcast(defy_subpixel_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
 			}
 			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
 			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
@@ -6490,15 +6523,19 @@ void ImagePixelGrid::calculate_sourcepts_and_areas()
 		i = masked_pixels_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
-		if (!lens->split_imgpixels) {
-			center_sourcepts[i][j][0] = defx_centers[n];
-			center_sourcepts[i][j][1] = defy_centers[n];
-		}
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
 	}
-
+	if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
+		for (n=0; n < ntot_cells_emask; n++) {
+			//n_cell = j*x_N+i;
+			j = emask_pixels_j[n];
+			i = emask_pixels_i[n];
+			center_sourcepts[i][j][0] = defx_centers[n];
+			center_sourcepts[i][j][1] = defy_centers[n];
+		}
+	}
 	if (lens->split_imgpixels) {
 		for (n=0; n < ntot_subpixels; n++) {
 			j = extended_mask_subcell_j[n];
@@ -6844,6 +6881,8 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 						subcell_index++;
 					}
 				}
+			} else {
+				nsplits[i][j] = 1;
 			}
 		}
 	}
@@ -7749,17 +7788,15 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] source_plane_triangle2_area[i];
 		delete[] twist_status[i];
 		delete[] twist_pts[i];
-		if (lens->split_imgpixels) {
-			delete[] nsplits[i];
-			for (int j=0; j < y_N; j++) {
-				delete[] subpixel_maps_to_srcpixel[i][j];
-				delete[] subpixel_center_pts[i][j];
-				delete[] subpixel_center_sourcepts[i][j];
-			}
-			delete[] subpixel_maps_to_srcpixel[i];
-			delete[] subpixel_center_pts[i];
-			delete[] subpixel_center_sourcepts[i];
+		delete[] nsplits[i];
+		for (int j=0; j < y_N; j++) {
+			delete[] subpixel_maps_to_srcpixel[i][j];
+			delete[] subpixel_center_pts[i][j];
+			delete[] subpixel_center_sourcepts[i][j];
 		}
+		delete[] subpixel_maps_to_srcpixel[i];
+		delete[] subpixel_center_pts[i];
+		delete[] subpixel_center_sourcepts[i];
 	}
 	delete[] center_pts;
 	delete[] center_sourcepts;
@@ -7770,12 +7807,10 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] surface_brightness;
 	delete[] source_plane_triangle1_area;
 	delete[] source_plane_triangle2_area;
-	if (lens->split_imgpixels) {
-		delete[] subpixel_maps_to_srcpixel;
-		delete[] subpixel_center_pts;
-		delete[] subpixel_center_sourcepts;
-		delete[] nsplits;
-	}
+	delete[] subpixel_maps_to_srcpixel;
+	delete[] subpixel_center_pts;
+	delete[] subpixel_center_sourcepts;
+	delete[] nsplits;
 	delete[] twist_status;
 	delete[] twist_pts;
 	if (fit_to_data != NULL) {
@@ -8255,35 +8290,13 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 						if (shapelet[k]->is_lensed) {
 							//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
 							shapelet[k]->calculate_Lmatrix_elements(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1],Lmatptr,1.0/nsubpix);
+							//shapelet[k]->calculate_Lmatrix_elements(image_pixel_grid->center_sourcepts[i][j][0],image_pixel_grid->center_sourcepts[i][j][1],Lmatptr,1.0/nsubpix);
+							//cout << "cell " << i << "," << j << ": " << image_pixel_grid->center_sourcepts[i][j][0] << " " << image_pixel_grid->center_sourcepts[i][j][1] << " vs " << center_pt[subcell_index][0] << " " << center_pt[subcell_index][1] << endl;
 						} else {
 							shapelet[k]->calculate_Lmatrix_elements(center_pt[subcell_index][0],center_pt[subcell_index][1],Lmatptr,1.0/nsubpix);
 						}
 					}
 				}
-
-				/*
-				cell = 1.0/nsplit;
-				lensvector center, center_srcpt, corner;
-
-				for (ii=0; ii < nsplit; ii++) {
-					for (jj=0; jj < nsplit; jj++) {
-						u0 = ((double) (1+2*ii))*cell/2;
-						w0 = ((double) (1+2*jj))*cell/2;
-						center[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
-						center[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
-						if (at_least_one_lensed_shapelet) find_sourcept(center,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
-						double *Lmatptr = Lmatrix_dense.subarray(img_index);
-						for (k=0; k < n_shapelets; k++) {
-							if (shapelet[k]->is_lensed) {
-								//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
-								shapelet[k]->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatptr,1.0/(nsplit*nsplit));
-							} else {
-								shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0/(nsplit*nsplit));
-							}
-						}
-					}
-				}
-				*/
 			}
 		} else {
 			lensvector center, center_srcpt;
@@ -8293,6 +8306,7 @@ void QLens::assign_Lmatrix_shapelets(bool verbal)
 				j = active_image_pixel_j[img_index];
 
 				double *Lmatptr = Lmatrix_dense.subarray(img_index);
+				//cout << "cell " << i << "," << j << ": " << image_pixel_grid->center_sourcepts[i][j][0] << " " << image_pixel_grid->center_sourcepts[i][j][1] << endl;
 				for (k=0; k < n_shapelets; k++) {
 					if (shapelet[k]->is_lensed) {
 						center_srcpt = image_pixel_grid->center_sourcepts[i][j];

@@ -1280,7 +1280,7 @@ void QLens::process_commands(bool read_file)
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
 								"savesrc').\n";
 						else if (words[2]=="plotimg")
-							cout << "sbmap plotimg (optional: [-fits] [-residual] [-contour=#] [-replot] [-nosrc] [-nocc] [-reduce2/4/8])\n"
+							cout << "sbmap plotimg (optional: [-fits] [-res] [-emask] [-nomask] [-contour=#] [-nocc] [-reduce2/4/8])\n"
 								"sbmap plotimg [-...] [image_file]\n"
 								"sbmap plotimg [-...] [source_file] [image_file]\n\n"
 								"Plot a lensed pixel image from a pixellated source surface brightness distribution under\n"
@@ -1295,7 +1295,7 @@ void QLens::process_commands(bool read_file)
 								"by sim_pixel_noise.\n\n"
 								"Optional arguments:\n"
 								"  [-fits] plots to FITS files; filename(s) must be specified with this option\n"
-								"  [-residual] plots residual image by subtracting from the data image\n"
+								"  [-res] plots residual image by subtracting from the data image\n"
 								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
 								"  [-emask] plot image (or residuals) using extended mask defined by 'emask_n_neighbors'\n"
@@ -11031,9 +11031,14 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_imgpixels' command; must specify 'on' or 'off'");
 				set_switch(split_imgpixels,setword);
-				if (image_pixel_grid) {
-					delete image_pixel_grid;
-					image_pixel_grid = NULL;
+				//if (image_pixel_grid) {
+					//delete image_pixel_grid;
+					//image_pixel_grid = NULL;
+				//}
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -11049,6 +11054,12 @@ void QLens::process_commands(bool read_file)
 					int nt;
 					if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
 					default_imgpixel_nsplit = nt;
+				}
+				// Assuming here the imgpixel_nsplit has been changed...
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
