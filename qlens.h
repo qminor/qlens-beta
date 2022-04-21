@@ -540,7 +540,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sim_err_pos, sim_err_flux, sim_err_td;
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 	bool split_imgpixels;
+	bool split_high_mag_imgpixels;
 	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
+	double imgpixel_mag_threshold, imgpixel_sb_threshold;
 
 	bool fits_format;
 	double data_pixel_size;

@@ -232,16 +232,17 @@ class ImagePixelGrid : public Sort
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
 	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	void set_fit_window(ImagePixelData& pixel_data);
+	void set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
 	void include_all_pixels();
 	void activate_extended_mask();
 	void deactivate_extended_mask();
 	void setup_pixel_arrays();
+	void set_null_ray_tracing_arrays();
 	void setup_ray_tracing_arrays();
+	void setup_subpixel_ray_tracing_arrays();
 	void delete_ray_tracing_arrays();
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false);
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
-	void reset_nsplit();
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations();

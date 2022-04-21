@@ -11042,6 +11042,24 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="split_himag_imgpixels")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Split high-magnification image pixels when ray tracing: " << display_switch(split_high_mag_imgpixels) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_himag_imgpixels' command; must specify 'on' or 'off'");
+				set_switch(split_high_mag_imgpixels,setword);
+				//if (image_pixel_grid) {
+					//delete image_pixel_grid;
+					//image_pixel_grid = NULL;
+				//}
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="imgpixel_nsplit")
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
@@ -11074,6 +11092,40 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "number of extended mask image pixel splittings = " << emask_imgpixel_nsplit << endl;
 			} else Complain("must specify either zero or one argument (number of extended mask image pixel splittings)");
+		}
+		else if (words[0]=="imgpixel_mag_threshold")
+		{
+			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
+			if (nwords == 2) {
+				double thresh;
+				if (!(ws[1] >> thresh)) Complain("invalid number of image pixel splittings");
+				imgpixel_mag_threshold = thresh;
+				// Assuming here the imgpixel_mag_threshold has been changed...
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "magnification threshold for splitting image pixels = " << imgpixel_mag_threshold << endl;
+			} else Complain("must specify either zero or one argument (magnification threshold for image pixel splittings)");
+		}
+		else if (words[0]=="imgpixel_sb_threshold")
+		{
+			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
+			if (nwords == 2) {
+				double thresh;
+				if (!(ws[1] >> thresh)) Complain("invalid number of image pixel splittings");
+				imgpixel_sb_threshold = thresh;
+				// Assuming here the imgpixel_sb_threshold has been changed...
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "surface brightness threshold for splitting image pixels = " << imgpixel_sb_threshold << endl;
+			} else Complain("must specify either zero or one argument (surface brightness threshold for image pixel splittings)");
 		}
 		else if (words[0]=="galsubgrid")
 		{

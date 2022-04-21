@@ -938,6 +938,9 @@ QLens::QLens() : UCMC()
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
+	split_high_mag_imgpixels = false;
+	imgpixel_mag_threshold = 4;
+	imgpixel_sb_threshold = 0.5;
 
 	use_cc_spline = false;
 	auto_ccspline = false;
@@ -1263,6 +1266,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
 	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
 	split_imgpixels = lens_in->split_imgpixels;
+	split_high_mag_imgpixels = lens_in->split_high_mag_imgpixels;
+	imgpixel_mag_threshold = lens_in->imgpixel_mag_threshold;
+	imgpixel_sb_threshold = lens_in->imgpixel_sb_threshold;
+
 
 	use_cc_spline = lens_in->use_cc_spline;
 	auto_ccspline = lens_in->auto_ccspline;
@@ -12492,7 +12499,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		int old_imgpixel_nsplit = default_imgpixel_nsplit;
 		if (default_imgpixel_nsplit > 2) {
 			default_imgpixel_nsplit = 2; // it's waaaay too slow if many splittings
-			image_pixel_grid->reset_nsplit();
+			int nsplit = (split_high_mag_imgpixels) ? 1 : default_imgpixel_nsplit;
+			int emask_nsplit = (split_high_mag_imgpixels) ? 1 : emask_imgpixel_nsplit;
+			image_pixel_grid->set_nsplits(image_pixel_data,nsplit,emask_nsplit,split_imgpixels);
+
 		}
 		if (source_fit_mode==Pixellated_Source) {
 			clear_lensing_matrices();
@@ -12535,7 +12545,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		if (default_imgpixel_nsplit != old_imgpixel_nsplit) {
 			default_imgpixel_nsplit = old_imgpixel_nsplit;
-			image_pixel_grid->reset_nsplit();
+			int nsplit = (split_high_mag_imgpixels) ? 1 : default_imgpixel_nsplit;
+			int emask_nsplit = (split_high_mag_imgpixels) ? 1 : emask_imgpixel_nsplit;
+			image_pixel_grid->set_nsplits(image_pixel_data,nsplit,emask_nsplit,split_imgpixels);
 		}
 		double max_external_sb = -1e30, max_sb = -1e30;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
