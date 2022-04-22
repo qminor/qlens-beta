@@ -309,6 +309,9 @@ void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 	stepsizes[n_params-1] = 0.1; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
 
+	angle_param.resize(n_params);
+	angle_param[n_params-1] = false;
+
 	//delete[] param;
 	//param = new double*[n_params];
 	//assign_param_pointers();
@@ -318,6 +321,9 @@ void SB_Profile::add_boxiness_parameter(const double c0_in, const bool vary_c0)
 	new_param[n_params-1] = &c0;
 	delete[] param;
 	param = new_param;
+	reset_anchor_lists();
+	assign_param_pointers();
+	assign_paramnames();
 }
 
 void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
@@ -345,12 +351,17 @@ void SB_Profile::add_truncation_radius(const double rt_in, const bool vary_rt)
 	latex_param_subscripts[n_params-1] = "t";
 	stepsizes[n_params-1] = 0.1; // arbitrary
 	set_auto_penalty_limits[n_params-1] = false;
+	angle_param.resize(n_params);
+	angle_param[n_params-1] = false;
 
 	double **new_param = new double*[n_params];
 	for (int i=0; i < n_params-1; i++) new_param[i] = param[i];
 	new_param[n_params-1] = &rt;
 	delete[] param;
 	param = new_param;
+	reset_anchor_lists();
+	assign_param_pointers();
+	assign_paramnames();
 
 	//delete[] param;
 	//param = new double*[n_params];
@@ -632,14 +643,14 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 		set_geometric_param_pointers_egrad(param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
 	}
 
-	if (include_boxiness_parameter) param[qi++] = &c0;
-	if (include_truncation_radius) param[qi++] = &rt;
 	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			param[qi++] = &fourier_mode_cosamp[i];
 			param[qi++] = &fourier_mode_sinamp[i];
 		}
 	}
+	if (include_boxiness_parameter) param[qi++] = &c0;
+	if (include_truncation_radius) param[qi++] = &rt;
 }
 
 bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
@@ -2134,7 +2145,10 @@ void SB_Profile::print_vary_parameters()
 	}
 	bool parameter_anchored = false;
 	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter_to_source[i]) parameter_anchored = true;
+		if (anchor_parameter_to_source[i]) {
+			parameter_anchored = true;
+			cout << "Parameter " << i << " is anchored" << endl;
+		}
 	}
 	if (parameter_anchored) {
 		cout << "   anchored parameters: ";

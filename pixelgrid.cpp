@@ -5808,7 +5808,7 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 
 /***************************************** Functions in class ImagePixelGrid ****************************************/
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
 {
 	source_fit_mode = mode;
 	ray_tracing_method = method;
@@ -5822,16 +5822,8 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	pixel_area = pixel_xlength*pixel_ylength;
 	triangle_area = 0.5*pixel_xlength*pixel_ylength;
 
-/*
-#ifdef USE_OPENMP
-	double wtime0, wtime;
-	if (lens->show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-	*/
 	double x,y;
-int i,j;
+	int i,j;
 	for (j=0; j <= y_N; j++) {
 		y = ymin + j*pixel_ylength;
 		for (i=0; i <= x_N; i++) {
@@ -5845,16 +5837,22 @@ int i,j;
 		}
 	}
 	fit_to_data = NULL;
-	/*
-	setup_ray_tracing_arrays();
-	if (lens->islens()) calculate_sourcepts_and_areas(true);
+	if (raytrace) {
 #ifdef USE_OPENMP
-	if (lens->show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
-	}
+		double wtime0, wtime;
+		if (lens->show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
 #endif
-	*/
+		setup_ray_tracing_arrays();
+		//if (lens->islens()) calculate_sourcepts_and_areas(true); // uncomment this after revising find_surface_brightness function so it doesn't raytrace twice
+#ifdef USE_OPENMP
+		if (lens->show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (lens->mpi_id==0) cout << "Wall time for creating and ray-tracing image pixel grid: " << wtime << endl;
+		}
+#endif
+	}
 }
 
 ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
@@ -5906,7 +5904,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	if (lens->islens()) calculate_sourcepts_and_areas(true);
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask, const bool verbal)
 {
 	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
 	lens = lens_in;
@@ -5946,7 +5944,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 			corner_pts[i][j][1] = y;
 		}
 	}
-	setup_ray_tracing_arrays();
+	setup_ray_tracing_arrays(verbal);
 }
 
 void ImagePixelGrid::setup_pixel_arrays()
@@ -6042,7 +6040,7 @@ void ImagePixelGrid::set_null_ray_tracing_arrays()
 	ncvals = NULL;
 }
 
-void ImagePixelGrid::setup_ray_tracing_arrays()
+void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 {
 	int i,j,n,n_cell,n_corner;
 
@@ -6194,25 +6192,27 @@ void ImagePixelGrid::setup_ray_tracing_arrays()
 	if (lens->split_imgpixels) { 
 		// if split_high_mag_imgpixels is on, this part will be deferred until after the ray-traced pixel areas have been
 		// calculated (to get magnifications to use as criterion on whether to split or nit)
-		setup_subpixel_ray_tracing_arrays();
+		setup_subpixel_ray_tracing_arrays(verbal);
 	}
 }
 
-void ImagePixelGrid::setup_subpixel_ray_tracing_arrays()
+void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 {
 	ntot_subpixels = 0;
 	int i,j;
-	//int nsplitpix = 0;
+	int nsplitpix = 0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				ntot_subpixels += SQR(nsplits[i][j]);
-				//if (nsplits[i][j] > 1) nsplitpix++;
+				if ((verbal) and (nsplits[i][j] > 1)) nsplitpix++;
 			}
 		}
 	}
-	//cout << "Number of split pixels: " << nsplitpix << endl;
-	//cout << "Total number of subpixels: " << ntot_subpixels << endl;
+	if ((verbal) and (lens->mpi_id==0)) {
+		cout << "Number of split image pixels: " << nsplitpix << endl;
+		cout << "Total number of image pixels/subpixels: " << ntot_subpixels << endl;
+	}
 
 	if (extended_mask_subcell_i != NULL) delete[] extended_mask_subcell_i;
 	if (extended_mask_subcell_j != NULL) delete[] extended_mask_subcell_j;
@@ -6285,7 +6285,7 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 	return false;
 }
 
-void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_centers)
+void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_centers, const bool verbal)
 {
 	// if raytrace_pixel_centers==true, this will ray-trace the pixel centers even if split_imgpixels is on
 	/*
@@ -6556,7 +6556,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 		//}
 	}
 	int ii,jj;
-	double u0,w0;
+	double u0,w0,mag;
 	int subcell_index;
 	for (n=0; n < ntot_cells; n++) {
 		//n_cell = j*x_N+i;
@@ -6568,8 +6568,9 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
 		if (lens->split_high_mag_imgpixels) {
+			mag = pixel_area/(area_tri1[n]+area_tri2[n]);
 			//cout << "TRYING " << mag << " " << lens->image_pixel_data->surface_brightness[i][j] << endl;
-			if ((lens->image_pixel_data->in_mask[i][j]) and ((pixel_area/(area_tri1[n]+area_tri2[n])) > lens->imgpixel_mag_threshold) and ((lens->image_pixel_data == NULL) or (lens->image_pixel_data->surface_brightness[i][j] > lens->imgpixel_sb_threshold))) {
+			if ((lens->image_pixel_data->in_mask[i][j]) and ((mag > lens->imgpixel_himag_threshold) or (mag < lens->imgpixel_lomag_threshold)) and ((lens->image_pixel_data == NULL) or (lens->image_pixel_data->surface_brightness[i][j] > lens->imgpixel_sb_threshold))) {
 				nsplits[i][j] = lens->default_imgpixel_nsplit;
 				subcell_index = 0;
 				for (ii=0; ii < nsplits[i][j]; ii++) {
@@ -6589,7 +6590,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			}
 		}
 	}
-	if (lens->split_high_mag_imgpixels) setup_subpixel_ray_tracing_arrays();
+	if (lens->split_high_mag_imgpixels) setup_subpixel_ray_tracing_arrays(verbal);
 
 	int mpi_chunk3, mpi_start3, mpi_end3;
 	mpi_chunk3 = ntot_subpixels / lens->group_np;
@@ -6653,7 +6654,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 	}
 }
 
-void ImagePixelGrid::redo_lensing_calculations()
+void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 {
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
@@ -6664,7 +6665,7 @@ void ImagePixelGrid::redo_lensing_calculations()
 	}
 #endif
 	if (source_fit_mode==Pixellated_Source) n_active_pixels = 0;
-	calculate_sourcepts_and_areas();
+	calculate_sourcepts_and_areas(false,verbal);
 
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
@@ -7695,9 +7696,10 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 							sb=0;
 							nsplit = nsplits[i][j];
-							if ((!foreground_only) and (at_least_one_lensed_src)) {
-								lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
-							}
+							//if (nsplit > 10) die("WTF");
+							//if ((!foreground_only) and (at_least_one_lensed_src)) {
+								//lens->find_sourcept(center_pts[i][j],center_sourcepts[i][j],thread,imggrid_zfactors,imggrid_betafactors);
+							//}
 
 							// Now check to see if center of foreground galaxy is in or next to the pixel; if so, make sure it has at least four splittings so its
 							// surface brightness is well-reproduced

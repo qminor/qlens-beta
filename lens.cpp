@@ -939,7 +939,8 @@ QLens::QLens() : UCMC()
 	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
 	split_high_mag_imgpixels = false;
-	imgpixel_mag_threshold = 4;
+	imgpixel_lomag_threshold = 0.1;
+	imgpixel_himag_threshold = 4;
 	imgpixel_sb_threshold = 0.5;
 
 	use_cc_spline = false;
@@ -1267,7 +1268,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
 	split_imgpixels = lens_in->split_imgpixels;
 	split_high_mag_imgpixels = lens_in->split_high_mag_imgpixels;
-	imgpixel_mag_threshold = lens_in->imgpixel_mag_threshold;
+	imgpixel_lomag_threshold = lens_in->imgpixel_lomag_threshold;
+	imgpixel_himag_threshold = lens_in->imgpixel_himag_threshold;
 	imgpixel_sb_threshold = lens_in->imgpixel_sb_threshold;
 
 
@@ -1738,7 +1740,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 
 	Alpha* alphaptr;
 	Shear* shearptr;
-	Truncated_NFW* tnfwptr;
+	//Truncated_NFW* tnfwptr;
 	switch (name) {
 		case PTMASS:
 			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
@@ -1765,11 +1767,12 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		case nfw:
 			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case TRUNCATED_nfw:
-			tnfwptr = new Truncated_NFW(pmode,special_param1);
-			tnfwptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
-			new_lens = tnfwptr;
-			break;
-			//new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
+			//tnfwptr = new Truncated_NFW(pmode,special_param1); // this doesn't work yet...doesn't load lens redshift
+			//cout << "HMM " << mass_parameter << " " << scale1 << " " << scale2 << " " << eparam << " " << theta << " " << xc << " " << yc << endl;
+			//tnfwptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
+			//new_lens = tnfwptr;
+			//break;
+			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
 		case CORED_nfw:
 			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case PJAFFE:
@@ -11799,7 +11802,9 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		ymax += 1e-10;
 	}
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
+	bool raytrace = true;
+	if (use_data) raytrace = false;
+	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace);
 	if (use_data) image_pixel_grid->set_fit_window((*image_pixel_data)); 
 	if (active_image_pixel_i != NULL) {
 		delete[] active_image_pixel_i;
@@ -12064,7 +12069,7 @@ double QLens::invert_surface_brightness_map_from_data(bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image surface brightness data has been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
-	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion);
+	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, verbal);
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	double chisq0;
 	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
@@ -12153,8 +12158,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 
-	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations();
-	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners();
+	if ((source_fit_mode==Pixellated_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
+	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
 
 	int i,j;
 	double chisq = 0;

@@ -5279,8 +5279,6 @@ void QLens::process_commands(bool read_file)
 					fourier_Bmvals.push_back(Bm);
 					remove_word(i+1);
 					remove_word(i);
-					//astr = words[i].substr(pos0+8);
-					//int pos, lnum, pnum;
 					fourier_nmodes++;
 				}
 			}
@@ -5568,13 +5566,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
-						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
@@ -5726,13 +5724,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
-						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
@@ -5801,13 +5799,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
-						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
@@ -5875,13 +5873,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
-						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
@@ -5950,13 +5948,13 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
-						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=fourier_nmodes-1; i >= 0; i--) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
 						if ((fgrad) and (!read_fgrad_params(vary_parameters,egrad_mode,fourier_nmodes,fourier_mvals,fgrad_params,nparams_to_vary,vary_flags,sb_list[n_sb-1]->get_sbprofile_nparams()+sb_list[n_sb-1]->get_egrad_nparams(),parameter_anchors,parameter_anchor_i,n_bspline_coefs,fgrad_knots,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read Fourier gradient parameters");
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
+						if (include_boxiness_parameter) sb_list[n_sb-1]->add_boxiness_parameter(c0val,false);
+						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
@@ -11098,8 +11096,8 @@ void QLens::process_commands(bool read_file)
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
 			if (nwords == 2) {
 				double thresh;
-				if (!(ws[1] >> thresh)) Complain("invalid number of image pixel splittings");
-				imgpixel_mag_threshold = thresh;
+				if (!(ws[1] >> thresh)) Complain("invalid himag threshold for image pixel splittings");
+				imgpixel_himag_threshold = thresh;
 				// Assuming here the imgpixel_mag_threshold has been changed...
 				if (image_pixel_grid != NULL) {
 					image_pixel_grid->delete_ray_tracing_arrays();
@@ -11107,7 +11105,24 @@ void QLens::process_commands(bool read_file)
 					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 				}
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "magnification threshold for splitting image pixels = " << imgpixel_mag_threshold << endl;
+				if (mpi_id==0) cout << "high magnification threshold for splitting image pixels = " << imgpixel_himag_threshold << endl;
+			} else Complain("must specify either zero or one argument (magnification threshold for image pixel splittings)");
+		}
+		else if (words[0]=="imgpixel_lomag_threshold")
+		{
+			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
+			if (nwords == 2) {
+				double thresh;
+				if (!(ws[1] >> thresh)) Complain("invalid lomag threshold for image pixel splittings");
+				imgpixel_lomag_threshold = thresh;
+				// Assuming here the imgpixel_mag_threshold has been changed...
+				if (image_pixel_grid != NULL) {
+					image_pixel_grid->delete_ray_tracing_arrays();
+					image_pixel_grid->setup_ray_tracing_arrays();
+					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "high magnification threshold for splitting image pixels = " << imgpixel_lomag_threshold << endl;
 			} else Complain("must specify either zero or one argument (magnification threshold for image pixel splittings)");
 		}
 		else if (words[0]=="imgpixel_sb_threshold")

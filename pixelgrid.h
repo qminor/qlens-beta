@@ -225,9 +225,9 @@ class ImagePixelGrid : public Sort
 	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false);
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false, const bool verbal = false);
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
@@ -238,14 +238,14 @@ class ImagePixelGrid : public Sort
 	void deactivate_extended_mask();
 	void setup_pixel_arrays();
 	void set_null_ray_tracing_arrays();
-	void setup_ray_tracing_arrays();
-	void setup_subpixel_ray_tracing_arrays();
+	void setup_ray_tracing_arrays(const bool verbal = false);
+	void setup_subpixel_ray_tracing_arrays(const bool verbal = false);
 	void delete_ray_tracing_arrays();
-	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false);
+	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 
 	~ImagePixelGrid();
-	void redo_lensing_calculations();
+	void redo_lensing_calculations(const bool verbal = false);
 	void redo_lensing_calculations_corners();
 	void assign_required_data_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
 

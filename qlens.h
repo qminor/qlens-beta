@@ -542,7 +542,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool split_imgpixels;
 	bool split_high_mag_imgpixels;
 	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
-	double imgpixel_mag_threshold, imgpixel_sb_threshold;
+	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
 
 	bool fits_format;
 	double data_pixel_size;
