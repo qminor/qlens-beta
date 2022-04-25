@@ -3049,19 +3049,6 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
 			delete[] high_sn_pixel;
 		}
-		if (in_mask != NULL) {
-			for (i=0; i < npixels_x; i++) delete[] in_mask[i];
-			delete[] in_mask;
-		}
-		if (extended_mask != NULL) {
-			for (i=0; i < npixels_x; i++) delete[] extended_mask[i];
-			delete[] extended_mask;
-		}
-		if (foreground_mask != NULL) {
-			for (i=0; i < npixels_x; i++) delete[] foreground_mask[i];
-			delete[] foreground_mask;
-		}
-
 		int nkeys;
 		fits_get_hdrspace(fptr, &nkeys, NULL, &status); // get # of keywords
 
@@ -3145,6 +3132,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 			}
 		}
 
+		bool new_dimensions = true;
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
@@ -3153,9 +3141,27 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				kk=0;
 				long fpixel[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-				npixels_x = naxes[0];
-				npixels_y = naxes[1];
-				n_required_pixels = npixels_x*npixels_y;
+
+				if ((npixels_x != naxes[0]) or (npixels_y != naxes[1])) {
+					if (in_mask != NULL) {
+						for (i=0; i < npixels_x; i++) delete[] in_mask[i];
+						delete[] in_mask;
+					}
+					if (extended_mask != NULL) {
+						for (i=0; i < npixels_x; i++) delete[] extended_mask[i];
+						delete[] extended_mask;
+					}
+					if (foreground_mask != NULL) {
+						for (i=0; i < npixels_x; i++) delete[] foreground_mask[i];
+						delete[] foreground_mask;
+					}
+					npixels_x = naxes[0];
+					npixels_y = naxes[1];
+					n_required_pixels = npixels_x*npixels_y;
+				} else {
+					new_dimensions = false;
+				}
+
 				n_high_sn_pixels = n_required_pixels; // this will be recalculated in assign_high_sn_pixels() function
 				xvals = new double[npixels_x+1];
 				yvals = new double[npixels_y+1];
@@ -3179,19 +3185,25 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				pixels = new double[npixels_x];
 				surface_brightness = new double*[npixels_x];
 				high_sn_pixel = new bool*[npixels_x];
-				in_mask = new bool*[npixels_x];
-				extended_mask = new bool*[npixels_x];
-				foreground_mask = new bool*[npixels_x];
+				if (new_dimensions) {
+					in_mask = new bool*[npixels_x];
+					extended_mask = new bool*[npixels_x];
+					foreground_mask = new bool*[npixels_x];
+				}
 				for (i=0; i < npixels_x; i++) {
 					surface_brightness[i] = new double[npixels_y];
 					high_sn_pixel[i] = new bool[npixels_y];
-					in_mask[i] = new bool[npixels_y];
-					extended_mask[i] = new bool[npixels_y];
-					foreground_mask[i] = new bool[npixels_y];
+					if (new_dimensions) {
+						in_mask[i] = new bool[npixels_y];
+						extended_mask[i] = new bool[npixels_y];
+						foreground_mask[i] = new bool[npixels_y];
+						for (j=0; j < npixels_y; j++) {
+							in_mask[i][j] = true;
+							extended_mask[i][j] = true;
+							foreground_mask[i][j] = true;
+						}
+					}
 					for (j=0; j < npixels_y; j++) {
-						in_mask[i][j] = true;
-						extended_mask[i][j] = true;
-						foreground_mask[i][j] = true;
 						high_sn_pixel[i][j] = true;
 					}
 				}
@@ -7240,9 +7252,9 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	int nn = lens->get_shapelet_nn();
 	const double window_scaling = 0.9;
 	if (lens->shapelet_scale_mode==0)
-		scale = sig;
+		scale = sig; // uses the dispersion of source SB to set scale (WARNING: might not cover all of lensed pixels in mask if n_shapelets is too small!!)
 	else if (lens->shapelet_scale_mode==1)
-		scale = window_scaling*maxdist/sqrt(nn); // uses outermost (ray-traced) pixel in extended mask to set scale
+		scale = window_scaling*maxdist/sqrt(nn); // uses outermost pixel in extended mask to set scale (WARNING: MIGHT CAUSE SOURCE TO BE UNDER-RESOLVED if n_shapelet is too small!!!!!)
 	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
 
 	int ii, jj, il, ih, jl, jh;

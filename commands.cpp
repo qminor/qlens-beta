@@ -6241,7 +6241,7 @@ void QLens::process_commands(bool read_file)
 						else Complain("invalid argument to 'fit method' command; must specify valid fit method");
 					} else Complain("invalid number of arguments; can only specify fit method type");
 				}
-				else if (words[1]=="regularization") {
+				else if ((words[1]=="regularization") or (words[1]=="reg")) {
 					if (nwords==2) {
 						if (mpi_id==0) {
 							if (regularization_method==None) cout << "Regularization method: none" << endl;
@@ -6253,7 +6253,13 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords==3) {
 						if (!(ws[2] >> setword)) Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
-						if (setword=="none") regularization_method = None;
+						if ((setword=="none") or (setword=="off")) {
+							regularization_method = None;
+							if (optimize_regparam) {
+								optimize_regparam = false;
+								if (mpi_id==0) cout << "NOTE: Turning 'optimize_regparam' off" << endl;
+							}
+						}
 						else if (setword=="norm") regularization_method = Norm;
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="curvature") regularization_method = Curvature;
@@ -7892,7 +7898,7 @@ void QLens::process_commands(bool read_file)
 						}
 					//}
 				}
-			} else Complain("plot_sbprofile requires at least 3 parameters (rmin, rmax, steps, (optional) sb_profile_outname)");
+			} else Complain("plot_sbprofile requires at least 3 parameters (rmin, rmax, steps, (optional) src=# or sb_profile_outname)");
 		}
 		else if (words[0]=="plotshear")
 		{
@@ -8471,6 +8477,8 @@ void QLens::process_commands(bool read_file)
 						break;
 					}
 				}
+				string range;
+				extract_word_starts_with('[',2,range); // allow for range to be specified (if it's not, then range is set to "")
 
 				if (words[1]=="mkplotsrc") { plot_source = true; set_npix = 200; }
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
@@ -8500,9 +8508,9 @@ void QLens::process_commands(bool read_file)
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
 						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
-							run_plotter_range("srcpixel","");
+							run_plotter_range("srcpixel","",range);
 						} else {
-							run_plotter_range("srcpixel_nocc","");
+							run_plotter_range("srcpixel_nocc","",range);
 						}
 						if (set_title) plot_title = "";
 					}
@@ -9188,8 +9196,10 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile::integration_warnings) << endl;
 			} else if (nwords==2) {
 				string setword;
+				bool warn;
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'integration_warnings' command");
-				else set_switch(LensProfile::integration_warnings,setword);
+				else set_switch(warn,setword);
+				set_integral_convergence_warnings(warn);
 			}
 			else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

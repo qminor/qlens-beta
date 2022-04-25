@@ -939,8 +939,8 @@ QLens::QLens() : UCMC()
 	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
 	split_high_mag_imgpixels = false;
-	imgpixel_lomag_threshold = 0.1;
-	imgpixel_himag_threshold = 4;
+	imgpixel_lomag_threshold = 0;
+	imgpixel_himag_threshold = 0;
 	imgpixel_sb_threshold = 0.5;
 
 	use_cc_spline = false;
@@ -10874,6 +10874,18 @@ void QLens::set_integral_tolerance(const double& acc)
 	}
 }
 
+void QLens::set_integral_convergence_warnings(const bool warn)
+{
+	LensProfile::integration_warnings = warn;
+	if (nlens > 0) {
+		for (int i=0; i < nlens; i++) {
+			lens_list[i]->set_integral_warnings(); // this is for integrations used for derived parameters etc.
+		}
+	}
+}
+
+
+
 void QLens::reassign_lensparam_pointers_and_names()
 {
 	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
@@ -12016,7 +12028,7 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		int nn = get_shapelet_nn();
 		double minscale_shapelet = scale/sqrt(nn);
 		double maxscale_shapelet = scale*sqrt(nn);
-		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << endl;
+		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << " (SCALE_MODE=" << shapelet_scale_mode << ")" << endl;
 	}
 
 }
@@ -12370,7 +12382,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				//}
 			//}
 		//}
-		if (optimize_regparam) optimize_regularization_parameter(verbal);
+		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;

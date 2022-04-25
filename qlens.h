@@ -1223,6 +1223,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void delete_ccspline();
 	void set_Gauss_NN(const int& nn);
 	void set_integral_tolerance(const double& acc);
+	void set_integral_convergence_warnings(const bool warn);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
 	void set_analytic_bestfit_src(bool setting) {

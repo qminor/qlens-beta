@@ -381,6 +381,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_center(double xc_in, double yc_in) { x_center = xc_in; y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
 	void set_integral_tolerance(const double acc);
+	void set_integral_warnings();
 	void set_perturber(bool ispert) { perturber = ispert; }
 	void set_lensed_center(bool lensed_xcyc) {
 		lensed_center_coords = lensed_xcyc;

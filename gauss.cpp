@@ -2162,7 +2162,7 @@ double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), doub
 
 	if (level==9) {
 		converged = false;
-		if (show_convergence_warning) warn("Gauss-Patterson quadrature did not achieve desired tolerance after NMAX=511 points");
+		if (show_convergence_warning) warn("Gauss-Patterson quadrature did not acccchieve desired tolerance after NMAX=511 points");
 	}
 	return abdif*result;
 }

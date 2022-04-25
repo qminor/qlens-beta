@@ -344,7 +344,7 @@ void LensProfile::copy_integration_tables(const LensProfile* lens_in)
 		weights[i] = *(wptr++);
 		points[i] = *(pptr++);
 	}
-	SetGaussPatterson(integral_tolerance,true);
+	SetGaussPatterson(integral_tolerance,integration_warnings);
 
 	cc_tolerance = integral_tolerance;
 	cc_tolerance_outer = integral_tolerance; // doesn't get used in qlens (as of yet) since there are no nested integrals
@@ -1258,7 +1258,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 		temppat = pat_tolerance;
 		SetGaussPatterson(quadtolerance,false);
 		mass3d = 4*M_PI*AdaptiveQuad(mptr,Rmin,r,menc_converged);
-		SetGaussPatterson(temppat,true);
+		SetGaussPatterson(temppat,integration_warnings);
 		delete[] logxvals;
 		delete rho3d_logx_spline;
 		if (iter > 0) {
@@ -1272,7 +1272,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 	if (!convergence_everywhere) {
 		if ((converge_at_small_r==false) and (!trouble_at_small_and_large_r)) {
 			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,quadtolerance);
-		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
+		} else warn("Gauss-Patterson quadrature did not ACHIEVE desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
 	}
 	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
 
@@ -1289,7 +1289,7 @@ double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
 	double (GaussPatterson::*mptr)(double);
 	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile::mass3d_r_integrand_analytic);
 	mass3d = 4*M_PI*AdaptiveQuad(mptr,0,r,menc_converged);
-	SetGaussPatterson(temppat,true);
+	SetGaussPatterson(temppat,integration_warnings);
 	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
 	return mass3d;
 }
@@ -1320,7 +1320,7 @@ double LensProfile::calculate_scaled_density_3d(const double r, const double tol
 	double temppat = pat_tolerance;
 	SetGaussPatterson(tolerance,false);
 	double ans = -(2*r/M_PI)*AdaptiveQuad(mptr,0,1,converged);
-	SetGaussPatterson(temppat,true);
+	SetGaussPatterson(temppat,integration_warnings);
 	return ans;
 }
 
@@ -1375,7 +1375,7 @@ void LensProfile::set_integration_parameters(const int &nn, const double &acc)
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
 	SetGaussLegendre(nn);
 	integral_tolerance = acc;
-	SetGaussPatterson(acc,true);
+	SetGaussPatterson(acc,integration_warnings);
 	SetClenshawCurtis(default_fejer_nlevels,acc,false);
 }
 
@@ -1385,6 +1385,11 @@ void LensProfile::set_integral_tolerance(const double acc) {
 	set_cc_tolerance(acc);
 }
 
+void LensProfile::set_integral_warnings() {
+	// this is integration warnings for derived parameters etc.
+	set_pat_warnings(integration_warnings);
+	set_cc_warnings(integration_warnings);
+}
 
 void LensProfile::update_meta_parameters_and_pointers()
 {
