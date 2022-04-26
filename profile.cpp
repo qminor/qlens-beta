@@ -1272,7 +1272,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 	if (!convergence_everywhere) {
 		if ((converge_at_small_r==false) and (!trouble_at_small_and_large_r)) {
 			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,quadtolerance);
-		} else warn("Gauss-Patterson quadrature did not ACHIEVE desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
+		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
 	}
 	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
 

@@ -7131,79 +7131,98 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 
 void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal)
 {
-	double xcavg=0, ycavg=0;
-	double totsurf=0;
+	double xcavg, ycavg;
+	double totsurf;
 	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin, sb;
 	double xsavg, ysavg;
 	int i,j,k,nsp;
+	double rsq, rsqavg;
+	double sig = 1e30;
+	int npts=0, npts_old, iter=0;
 	//ofstream wtf("wtf.dat");
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-				// You repeat this code three times in this function! GET RID OF THE REDUNDANCIES!!!!
-				if (!lens->split_imgpixels) {
-					xsavg = center_sourcepts[i][j][0];
-					ysavg = center_sourcepts[i][j][1];
-				} else {
-					xsavg=ysavg=0;
-					nsp = SQR(nsplits[i][j]);
-					for (k=0; k < nsp; k++) {
-						xsavg += subpixel_center_sourcepts[i][j][k][0];
-						ysavg += subpixel_center_sourcepts[i][j][k][1];
+	do {
+		// will use 3-sigma clipping to estimate center and dispersion of source
+		npts_old = npts;
+		xcavg = 0;
+		ycavg = 0;
+		totsurf = 0;
+		npts=0;
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
+				//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
+					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					// You repeat this code three times in this function! GET RID OF THE REDUNDANCIES!!!!
+					if (!lens->split_imgpixels) {
+						xsavg = center_sourcepts[i][j][0];
+						ysavg = center_sourcepts[i][j][1];
+					} else {
+						xsavg=ysavg=0;
+						nsp = SQR(nsplits[i][j]);
+						for (k=0; k < nsp; k++) {
+							xsavg += subpixel_center_sourcepts[i][j][k][0];
+							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						}
+						xsavg /= nsp;
+						ysavg /= nsp;
 					}
-					xsavg /= nsp;
-					ysavg /= nsp;
+					//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
+					area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+						xcavg += area*abs(sb)*xsavg;
+						ycavg += area*abs(sb)*ysavg;
+						totsurf += area*abs(sb);
+						npts++;
+					}
+					//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 				}
-				//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
-				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				xcavg += area*abs(sb)*xsavg;
-				ycavg += area*abs(sb)*ysavg;
-				totsurf += area*abs(sb);
-				//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 			}
 		}
-	}
-	//wtf.close();
-	xcavg /= totsurf;
-	ycavg /= totsurf;
-	double rsq, rsqavg=0;
-	// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-			if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-				if (!lens->split_imgpixels) {
-					xsavg = center_sourcepts[i][j][0];
-					ysavg = center_sourcepts[i][j][1];
-				} else {
-					xsavg=ysavg=0;
-					nsp = SQR(nsplits[i][j]);
-					for (k=0; k < nsp; k++) {
-						xsavg += subpixel_center_sourcepts[i][j][k][0];
-						ysavg += subpixel_center_sourcepts[i][j][k][1];
+		//wtf.close();
+		xcavg /= totsurf;
+		ycavg /= totsurf;
+		rsqavg=0;
+		// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+				//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
+					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					if (!lens->split_imgpixels) {
+						xsavg = center_sourcepts[i][j][0];
+						ysavg = center_sourcepts[i][j][1];
+					} else {
+						xsavg=ysavg=0;
+						nsp = SQR(nsplits[i][j]);
+						for (k=0; k < nsp; k++) {
+							xsavg += subpixel_center_sourcepts[i][j][k][0];
+							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						}
+						xsavg /= nsp;
+						ysavg /= nsp;
 					}
-					xsavg /= nsp;
-					ysavg /= nsp;
-				}
 
-				area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-				rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
-				rsqavg += area*abs(sb)*rsq;
+					area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+						rsqavg += area*abs(sb)*rsq;
+					}
+				}
 			}
 		}
-	}
-	//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
-	rsqavg /= totsurf;
-	double sig = sqrt(abs(rsqavg));
+		//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
+		rsqavg /= totsurf;
+		sig = sqrt(abs(rsqavg));
+		//cout << "Iteration " << iter << ": sig=" << sig << ", npts=" << npts << endl;
+		iter++;
+	} while (npts != npts_old);
 	xcenter = xcavg;
 	ycenter = ycavg;
 

@@ -2860,7 +2860,7 @@ void QLens::add_source_object(SB_ProfileName name, const int emode, const double
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
-void QLens::add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate)
+void QLens::add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate, const int pmode)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2869,7 +2869,7 @@ void QLens::add_shapelet_source(const double amp00, const double sig_x, const do
 		delete[] sb_list;
 	}
 
-	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, nonlinear_amp00, truncate, this);
+	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, nonlinear_amp00, truncate, pmode, this);
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
@@ -12015,7 +12015,8 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 	}
 	double sig,xc,yc,nsplit;
 	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,verbal);
-	if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
+	//if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
+	if (auto_shapelet_scaling) shapelet->update_scale_parameter(sig);
 	if (auto_shapelet_center) {
 		shapelet->update_specific_parameter("xc",xc);
 		shapelet->update_specific_parameter("yc",yc);
@@ -12023,8 +12024,7 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 	if ((mpi_id==0) and (verbal)) {
 		if (auto_shapelet_scaling) cout << "auto shapelet scaling: sig=" << sig << ", xc=" << xc << ", yc=" << yc << endl;
 		else if (auto_shapelet_center) cout << "auto shapelet center: xc=" << xc << ", yc=" << yc << endl;
-		double scale;
-		shapelet->get_specific_parameter("sigma",scale);
+		double scale = shapelet->get_scale_parameter();
 		int nn = get_shapelet_nn();
 		double minscale_shapelet = scale/sqrt(nn);
 		double maxscale_shapelet = scale*sqrt(nn);

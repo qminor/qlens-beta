@@ -33,9 +33,10 @@ SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 }
 
-void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source)
+void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in)
 {
 	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
+	parameter_mode = pmode_in;
 	center_anchored_to_lens = false;
 	center_anchored_to_source = false;
 	if (is_elliptical_source) {
@@ -77,6 +78,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	sb_number = sb_in->sb_number;
 	set_nparams(sb_in->n_params);
 	sbprofile_nparams = sb_in->sbprofile_nparams;
+	parameter_mode = sb_in->parameter_mode;
 	center_anchored_to_lens = sb_in->center_anchored_to_lens;
 	center_anchor_lens = sb_in->center_anchor_lens;
 	center_anchored_to_source = sb_in->center_anchored_to_source;
@@ -2031,6 +2033,16 @@ double SB_Profile::surface_brightness_zeroth_order(double x, double y)
 	return 0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+double SB_Profile::get_scale_parameter()
+{
+	return 0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+void SB_Profile::update_scale_parameter(const double scale)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
 void SB_Profile::update_indxptr(const int newval)
 {
 	return;
@@ -2736,15 +2748,21 @@ double DoubleSersic::length_scale()
 	return sqrt(Reff1*Reff1 + Reff2*Reff2);
 }
 
-Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, QLens* lens_in)
+Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, const int parameter_mode_in, QLens* lens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
 	nonlinear_amp00 = nonlinear_amp00_in;
 	int npar = (nonlinear_amp00) ? 6 : 5;
-	setup_base_source_properties(npar,1,false);
+	setup_base_source_properties(npar,1,false,parameter_mode_in);
 	lens = lens_in;
-	sig = sig_in;
+	if (parameter_mode==0) {
+		sig = scale_in;
+		sig_factor = 1.0;
+	} else {
+		sig_factor = scale_in;
+		sig = 1.0; // this will be set automatically using the 'find_shapelet_scaling_parameters' function in lens.cpp
+	}
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
 	amps = new double*[n_shapelets];
@@ -2757,34 +2775,6 @@ Shapelet::Shapelet(const double &amp00, const double &sig_in, const double &q_in
 	amps[0][0] = amp00;
 	truncate_at_3sigma = truncate;
 
-/*
-	// testing stuff
-	if (n_shapelets == 1) {
-		amps[0][0] = amp00; 
-	} else if (n_shapelets == 2) {
-		//amps[0][1] = amp00;
-		amps[1][0] = amp00;
-	}
-	else if (n_shapelets == 3) {
-		//amps[0][2] = amp00;
-		amps[2][2] = amp00;
-	}
-	else if (n_shapelets == 4) {
-		//amps[0][3] = amp00;
-		//amps[0][0] = amp00;
-		amps[3][2] = amp00;
-	}
-	else if (n_shapelets == 5) {
-		amps[4][3] = amp00;
-	}
-	else if (n_shapelets == 9) {
-		amps[0][0] = amp00; 
-		amps[4][2] = 0.5*amp00;
-		amps[3][6] = 0.3*amp00;
-		amps[8][8] = 0.2*amp00;
-	}
-*/
-
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
 }
@@ -2794,6 +2784,7 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 	n_shapelets = sb_in->n_shapelets;
 	indxptr = &n_shapelets;
 	sig = sb_in->sig;
+	sig_factor = sb_in->sig_factor;
 	amps = new double*[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) amps[i] = new double[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) {
@@ -2818,7 +2809,11 @@ void Shapelet::assign_paramnames()
 	if (nonlinear_amp00) {
 		paramnames[indx] = "amp00"; latex_paramnames[indx] = "\\alpha"; latex_param_subscripts[indx] = "00"; indx++;
 	}
-	paramnames[indx] = "sigma"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = ""; indx++;
+	if (parameter_mode==0) {
+		paramnames[indx] = "sigma"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = ""; indx++;
+	} else {
+		paramnames[indx] = "sigfac"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "\\sigma"; indx++;
+	}
 	set_geometric_paramnames(indx);
 }
 
@@ -2826,7 +2821,11 @@ void Shapelet::assign_param_pointers()
 {
 	int indx=0;
 	if (nonlinear_amp00) param[indx++] = &amps[0][0];
-	param[indx++] = &sig;
+	if (parameter_mode==0) {
+		param[indx++] = &sig;
+	} else {
+		param[indx++] = &sig_factor;
+	}
 	set_geometric_param_pointers(indx);
 }
 
@@ -2834,7 +2833,11 @@ void Shapelet::set_auto_stepsizes()
 {
 	int indx=0;
 	if (nonlinear_amp00) stepsizes[indx++] = 0.1;
-	stepsizes[indx++] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
+	if (parameter_mode==0) {
+		stepsizes[indx++] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
+	} else {
+		stepsizes[indx++] = (sig_factor != 0) ? 0.1*sig_factor : 0.1; // arbitrary
+	}
 	set_geometric_param_auto_stepsizes(indx);
 }
 
@@ -3019,6 +3022,20 @@ void Shapelet::get_amplitudes(double *ampvec)
 	}
 }
 */
+
+double Shapelet::get_scale_parameter()
+{
+	return sig;
+}
+
+void Shapelet::update_scale_parameter(const double scale)
+{
+	if (parameter_mode==0) {
+		sig = scale;
+	} else {
+		sig = sig_factor*scale;
+	}
+}
 
 void Shapelet::update_indxptr(const int newval)
 {

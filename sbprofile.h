@@ -66,7 +66,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	void set_nparams(const int &n_params_in, const bool resize = false);
 	void reset_anchor_lists();
-	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source);
+	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in = 0);
 	void copy_base_source_data(const SB_Profile* sb_in);
 	//bool spawn_lens_model(Alpha* lens_model);
 
@@ -116,6 +116,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	int *indxptr; // points to important integer values for subclasses that uses them (e.g. shapelets)
 	QLens* lens;
+	int parameter_mode; // allows for different parametrizations
 
 	SB_Profile() : qx_parameter(1), param(0) { lens = NULL; }
 	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in);
@@ -230,6 +231,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
 	virtual double surface_brightness_zeroth_order(double x, double y);
+	virtual double get_scale_parameter();
+	virtual void update_scale_parameter(const double scale);
+
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
 	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
 
@@ -378,6 +382,7 @@ class Shapelet : public SB_Profile
 {
 	private:
 	double sig; // sig is the average dispersion of the (0,0) shapelet which is Gaussian
+	double sig_factor; // used in pmode=2; sigma is set using a scaling factor of the dispersion of the source SB, instead of sigma itself
 	double **amps; // shapelet amplitudes
 	int n_shapelets;
 	bool truncate_at_3sigma; // this truncates the shapelets at r = 2*sigma to eliminate edge effects
@@ -385,7 +390,7 @@ class Shapelet : public SB_Profile
 
 	public:
 	Shapelet() : SB_Profile() { amps = NULL; }
-	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, QLens* lens_in);
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, const int parameter_mode_in, QLens* lens_in);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (amps != NULL) {
@@ -411,6 +416,8 @@ class Shapelet : public SB_Profile
 	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
+	double get_scale_parameter();
+	void update_scale_parameter(const double scale);
 	void update_indxptr(const int newval);
 	bool get_special_command_arg(string &arg);
 

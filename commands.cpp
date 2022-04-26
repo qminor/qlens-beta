@@ -5027,7 +5027,7 @@ void QLens::process_commands(bool read_file)
 			bool vary_parameters = false;
 			bool anchor_source_center = false;
 			int anchornum; // in case new source is being anchored to existing lens
-			int pmode = 0; // Parameter modes are currently not used by any of the source models, but it is used when spawning a lens model from a source
+			int pmode = 0;
 			int emode = -1;
 			bool egrad = false;
 			int egrad_mode = -1;
@@ -5614,9 +5614,13 @@ void QLens::process_commands(bool read_file)
 				if (nwords > 7) Complain("more than 5 parameters not allowed for model shapelet");
 				if (nmax <= 0) Complain("nmax cannot be negative");
 				if (nwords >= 5) {
-					double sig;
+					double scale;
 					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[pi++] >> sig)) Complain("invalid sigma parameter for model shapelet");
+					if (pmode==0) {
+						if (!(ws[pi++] >> scale)) Complain("invalid sigma parameter for model shapelet");
+					} else {
+						if (!(ws[pi++] >> scale)) Complain("invalid sigfac parameter for model shapelet");
+					}
 					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model shapelet");
 					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= (pi+1)) {
@@ -5639,7 +5643,7 @@ void QLens::process_commands(bool read_file)
 					param_vals.input(nparams_to_vary);
 					//param_vals[0]=amp00; // currently cannot vary amp00 as a free parameter (it would have to be removed from the source amplitudes when inverting)
 					int indx=0;
-					param_vals[indx++]=sig;
+					param_vals[indx++]=scale;
 					param_vals[indx++]=q;
 					param_vals[indx++]=theta;
 					param_vals[indx++]=xc;
@@ -5657,7 +5661,7 @@ void QLens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_shapelet_source(amp00, sig, q, theta, xc, yc, nmax, false, truncate);
+						add_shapelet_source(amp00, scale, q, theta, xc, yc, nmax, false, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) {
