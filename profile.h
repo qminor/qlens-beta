@@ -254,6 +254,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		fourier_integral_left_sin_spline = NULL;
 		fourier_integral_right_cos_spline = NULL;
 		fourier_integral_right_sin_spline = NULL;
+		use_concentration_prior = false;
 	}
 	void setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in);
 
@@ -331,11 +332,13 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	// the following function MUST be redefined in all derived classes
 	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 
-	// these functions can be redefined in the derived classes, but don't have to be
+	// some of these functions can be redefined in the derived classes
 	virtual double kappa_rsq_deriv(const double rsq);
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
+	bool use_concentration_prior;
+	virtual double concentration_prior(); // in NFW-like models, uses mass-concentration relation c(M,z) as a prior
 	double average_log_slope(const double rmin, const double rmax);
 	double average_log_slope_3d(const double rmin, const double rmax);
 	virtual bool calculate_total_scaled_mass(double& total_mass);
@@ -625,6 +628,7 @@ class NFW : public LensProfile
 	void get_parameters_pmode(const int pmode_in, double* params);
 
 	double calculate_scaled_mass_3d(const double r);
+	double concentration_prior();
 	bool output_cosmology_info(const int lens_number = -1);
 };
 

@@ -3257,6 +3257,13 @@ void QLens::process_commands(bool read_file)
 					bool set_median_concentration = false;
 					bool no_cmed_anchoring = false; // if set_median_concentration = true, then this says to only set the initial c200 this way, but not anchor to cmed
 					double cmed_factor = 1.0;
+					bool use_cm_prior = false;
+					for (int i=nwords-1; i > 1; i--) {
+						if (words[i]=="-cmprior") {
+							use_cm_prior = true;
+							remove_word(i);
+						}
+					}
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
 						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
@@ -3284,6 +3291,7 @@ void QLens::process_commands(bool read_file)
 							} else if (words[3]=="cmed") { set_median_concentration = true; }
 							else if (words[3]=="cmed*") { set_median_concentration = true; no_cmed_anchoring = true; }
 							else if (!(ws[3] >> p2)) Complain("invalid c parameter for model nfw");
+							if ((set_median_concentration) and (use_cm_prior)) Complain("cannot fix c to median c(M,z) if concentration-mass prior is also being used");
 						} else {
 							if (!(ws[2] >> p1)) Complain("invalid ks parameter for model nfw");
 							if (!(ws[3] >> p2)) Complain("invalid rs parameter for model nfw");
@@ -3367,6 +3375,9 @@ void QLens::process_commands(bool read_file)
 							if (set_median_concentration) {
 								lens_list[nlens-1]->assign_special_anchored_parameters(lens_list[nlens-1],cmed_factor,true);
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
+							} else if (use_cm_prior) {
+								lens_list[nlens-1]->use_concentration_prior = true;
+								if (!concentration_prior) concentration_prior = true; // this tells qlens that at least one of the lenses has a c(M,z) prior
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);

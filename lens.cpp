@@ -778,6 +778,7 @@ QLens::QLens() : UCMC()
 	einstein_radius_prior = false;
 	einstein_radius_low_threshold = 0;
 	einstein_radius_high_threshold = 1000;
+	concentration_prior = false;
 	extended_mask_n_neighbors = -1;
 	include_extended_mask_in_inversion = false;
 	zero_sb_extended_mask_prior = false;
@@ -1111,6 +1112,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	einstein_radius_prior = lens_in->einstein_radius_prior;
 	einstein_radius_low_threshold = lens_in->einstein_radius_low_threshold;
 	einstein_radius_high_threshold = lens_in->einstein_radius_high_threshold;
+	concentration_prior = lens_in->concentration_prior;
 	extended_mask_n_neighbors = lens_in->extended_mask_n_neighbors;
 	include_extended_mask_in_inversion = lens_in->include_extended_mask_in_inversion;
 	zero_sb_extended_mask_prior = lens_in->zero_sb_extended_mask_prior;
@@ -10705,7 +10707,12 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	if (params != NULL) {
 		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
-		if (use_custom_prior) loglike = fitmodel_custom_prior();
+		if (concentration_prior) {
+			for (int i=0; i < nlens; i++) {
+				if ((lens_list[i]->lenstype==nfw) and (lens_list[i]->use_concentration_prior)) loglike += lens_list[i]->concentration_prior();
+			}
+		}
+		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (use_ansi_characters) cout << "\033[2A" << flush;

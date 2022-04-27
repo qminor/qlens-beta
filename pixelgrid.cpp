@@ -7150,10 +7150,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		npts=0;
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-				//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
 					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 					// You repeat this code three times in this function! GET RID OF THE REDUNDANCIES!!!!
@@ -7190,9 +7188,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
-				//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb) > 5*pixel_noise)) {
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
 					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 					if (!lens->split_imgpixels) {
@@ -7222,7 +7218,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		sig = sqrt(abs(rsqavg));
 		//cout << "Iteration " << iter << ": sig=" << sig << ", npts=" << npts << endl;
 		iter++;
-	} while (npts != npts_old);
+	} while ((iter < 6) and (npts != npts_old));
 	xcenter = xcavg;
 	ycenter = ycavg;
 
@@ -7231,7 +7227,6 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double yd,ymax=-1e30;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
 			if ((fit_to_data==NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
@@ -7254,7 +7249,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 				yd = abs(ysavg-ycavg);
 				if (xd > xmax) xmax = xd;
 				if (yd > ymax) ymax = yd;
-				if ((lens->image_pixel_data->in_mask[i][j]) and (abs(sb) > 5*pixel_noise)) {
+				if ((lens->image_pixel_data->in_mask[i][j]) and (abs(surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
 					ntot++;
 					rsq = SQR(xd) + SQR(yd);
 					if (sqrt(rsq) > 2*sig) {

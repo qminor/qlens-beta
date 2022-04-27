@@ -979,6 +979,14 @@ double NFW::calculate_scaled_mass_3d(const double r)
 	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
 }
 
+double NFW::concentration_prior()
+{
+	double log_medc = log(lens->median_concentration_dutton(m200,zlens));
+	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
+	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
+	return (SQR((log(c200)-log_medc)/(ln10*sig_logc))/2 + (sig_logc*M_SQRT_2PI)); // returning -log(prior)
+}
+
 bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
@@ -1014,6 +1022,10 @@ bool NFW::output_cosmology_info(const int lens_number)
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
 	//cout << "c(z=5) = " << c200 << endl;
+	if (use_concentration_prior) {
+		double cmprior = exp(-concentration_prior());
+		cout << "concentration-mass prior P(logc|M,z) = " << cmprior << endl;
+	}
 
 	cout << endl;
 	return true;

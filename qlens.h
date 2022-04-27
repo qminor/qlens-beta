@@ -413,6 +413,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double outside_sb_prior_threshold;
 	bool einstein_radius_prior;
+	bool concentration_prior;
 	double einstein_radius_low_threshold;
 	double einstein_radius_high_threshold;
 	int extended_mask_n_neighbors;

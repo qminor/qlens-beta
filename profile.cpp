@@ -1082,6 +1082,11 @@ void LensProfile::set_center_if_lensed_coords()
 	}
 }
 
+double LensProfile::concentration_prior()
+{
+	return 0; // this prior is only used in the NFW-like models
+}
+
 bool LensProfile::output_cosmology_info(const int lens_number)
 {
 	bool mass_converged, rhalf_converged;
@@ -3491,6 +3496,7 @@ void LensProfile::print_parameters()
 	string aux_paramname;
 	get_auxiliary_parameter(aux_paramname,aux_param);
 	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
+	if (use_concentration_prior) cout << " (c(M,z) prior defined)" << endl;
 	cout << endl;
 }
 
