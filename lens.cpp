@@ -769,6 +769,13 @@ QLens::QLens() : UCMC()
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
 	psf_threshold = 1e-1;
+	fft_convolution = false;
+	setup_fft_convolution = false;
+	psf_zvec = NULL;
+	fft_ni = 0;
+	fft_nj = 0;
+	fft_imin = 0;
+	fft_jmin = 0;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -1103,6 +1110,20 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	psf_convolution_mpi = lens_in->psf_convolution_mpi;
 	use_input_psf_matrix = lens_in->use_input_psf_matrix;
 	psf_threshold = lens_in->psf_threshold;
+	fft_convolution = lens_in->fft_convolution;
+	setup_fft_convolution = lens_in->setup_fft_convolution;
+	fft_ni = lens_in->fft_ni;
+	fft_nj = lens_in->fft_nj;
+	fft_imin = lens_in->fft_imin;
+	fft_jmin = lens_in->fft_jmin;
+	if (setup_fft_convolution) {
+		int nzvec = 2*fft_ni*fft_nj;
+		psf_zvec = new double[nzvec];
+		for (int i=0; i < nzvec; i++) psf_zvec[i] = lens_in->psf_zvec[i];
+	} else {
+		psf_zvec = NULL;
+	}
+
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
@@ -12020,8 +12041,8 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 			break; // currently only one shapelet source supported
 		}
 	}
-	double sig,xc,yc,nsplit;
-	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,verbal);
+	double sig,xc,yc,nsplit,sig_src,scaled_maxdist;
+	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,verbal,sig_src,scaled_maxdist);
 	//if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
 	if (auto_shapelet_scaling) shapelet->update_scale_parameter(sig);
 	if (auto_shapelet_center) {
@@ -12035,6 +12056,18 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		int nn = get_shapelet_nn();
 		double minscale_shapelet = scale/sqrt(nn);
 		double maxscale_shapelet = scale*sqrt(nn);
+		//cout << "MAXSCALE = " << maxscale << ", MAXDIST = " << scaled_maxdist << endl;
+		if ((verbal) and (mpi_id==0)) {
+			if (maxscale_shapelet < scaled_maxdist) {
+			cerr << endl;
+			warn("maximum scale of shapelets (%g) is smaller than estimated distance to the outermost ray-traced pixel (%g); this may affect chi-square\n********** to fix this, either reduce the size of the mask (if possible) or increase the shapelet order n_shapelet\n",maxscale_shapelet,scaled_maxdist);
+			}
+			if (scale > sig_src) {
+				cerr << endl;
+				warn("scale of shapelets (%g) is larger than dispersion of ray-traced surface brightness (%g); this could potentially affect quality of fit\n",scale,sig_src);
+			}
+		}
+
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << " (SCALE_MODE=" << shapelet_scale_mode << ")" << endl;
 	}
 
@@ -12047,8 +12080,8 @@ bool QLens::set_shapelet_imgpixel_nsplit()
 	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion);
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	image_pixel_grid->redo_lensing_calculations();
-	double sig,xc,yc,nsplit;
-	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,false);
+	double sig,xc,yc,nsplit,sig_src,maxdist;
+	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,false,sig_src,maxdist);
 	default_imgpixel_nsplit = (((int) nsplit)+3);
 	return true;
 }
@@ -14041,6 +14074,7 @@ QLens::~QLens()
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	if (group_leader != NULL) delete[] group_leader;
+	if (psf_zvec != NULL) delete[] psf_zvec;
 }
 
 /***********************************************************************************************************************/

@@ -403,6 +403,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool mcmc_logfile;
 	bool open_chisq_logfile;
 	bool psf_convolution_mpi;
+	bool fft_convolution;
 	bool use_mumps_subcomm;
 	bool n_image_prior;
 	double n_images_at_sbmax, pixel_avg_n_image;
@@ -717,6 +718,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
 	double *sbprofile_surface_brightness;
+	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
@@ -792,6 +794,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
 	double psf_threshold;
+	bool setup_fft_convolution;
+	double *psf_zvec; // for convolutions using FFT
+	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
+	int fft_imin, fft_jmin, fft_ni, fft_nj;
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	void initialize_pixel_matrices(bool verbal);
@@ -803,6 +809,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	//void PSF_convolution_image_pixel_vector(bool verbal = false);
 	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
+	bool setup_convolution_FFT(const bool verbal);
+	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
+	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();

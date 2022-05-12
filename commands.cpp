@@ -547,9 +547,9 @@ void QLens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="nfw")
-						cout << "lens nfw <ks> <rs> <q/e> [theta] [x-center] [y-center]           (pmode=0)\n"
-								  "lens nfw <mvir> <c> <q/e> [theta] [x-center] [y-center]          (pmode=1)\n"
-								  "lens nfw <mvir> <rs_kpc> <q/e> [theta] [x-center] [y-center]     (pmode=2)\n\n"
+						cout << "lens nfw <ks> <rs> <q/e> [theta] [x-center] [y-center]             (pmode=0)\n"
+								  "lens nfw <mvir> <c> <q/e> [theta] [x-center] [y-center] [-cmprior] (pmode=1)\n"
+								  "lens nfw <mvir> <rs_kpc> <q/e> [theta] [x-center] [y-center]       (pmode=2)\n\n"
 							"where <ks/mvir> is the mass parameter, <rs> is the scale radius (or <c>=concentration for pmode=1),\n"
 							"<q/e> is the axis ratio or ellipticity (depending on the ellipticity mode), and [theta] is the angle\n"
 							"of rotation (counterclockwise, in degrees) about the center (all defaults = 0).\n"
@@ -557,7 +557,8 @@ void QLens::process_commands(bool read_file)
 							"2014) by entering 'cmed' for the parameter, or it can be set to some factor of cmed using 'fac*cmed'; e.g., to\n"
 							"set it to twice the median concentration, enter '2*cmed'. The concentration will be anchored, so it is updated\n"
 							"automatically if mvir or z are changed, so that it always takes the median value for given mvir,z. To set the\n"
-							"initial concentration as a factor of cmed but *without* subsequent anchoring, add a '*' (e.g. '1*cmed*)'.\n\n"
+							"initial concentration as a factor of cmed but *without* subsequent anchoring, add a '*' (e.g. '1*cmed*)'.\n"
+							"You can also include a concentration-mass prior (using scatter in logc of 0.110 dex) with argument '-cmprior'.\n\n"
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="tnfw")
@@ -10412,6 +10413,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Point spread function (PSF) input threshold = " << psf_threshold << endl;
 			} else Complain("can only specify up to one argument for PSF input threshold");
 		}
+		else if (words[0]=="fft_convolution")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use FFT to calculate PSF convolutions: " << display_switch(fft_convolution) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'fft_convolution' command; must specify 'on' or 'off'");
+				set_switch(fft_convolution,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="pixel_fraction")
 		{
 			double frac, frac_ll, frac_ul;
@@ -10875,16 +10885,20 @@ void QLens::process_commands(bool read_file)
 				remove_word(nwords-1);
 			}
 			if (nwords == 2) {
-				if (words[1]=="all") emask_n = -1;
+				if (words[1]=="all") {
+					extended_mask_n_neighbors = emask_n = -1;
+				}
 				else if (words[1]=="interior") {
 					only_interior_pixels = true;
 					add_to_emask = true;
 					emask_n = 1000;
 				}
-				else if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
-				if ((emask_n != -1) and (adaptive_grid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
-				extended_mask_n_neighbors = emask_n;
-				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(extended_mask_n_neighbors,add_to_emask,only_interior_pixels);
+				else {
+					if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
+					if ((emask_n != -1) and (adaptive_grid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
+					extended_mask_n_neighbors = emask_n;
+				}
+				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(emask_n,add_to_emask,only_interior_pixels);
 				int npix;
 				if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask();
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;

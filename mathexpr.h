@@ -6,7 +6,7 @@
 #define EULER 2.71828182846
 #define ln10 2.30258509299
 
-const double M_2PI = 6.28318530718;
+const double M_2PI = 6.28318530717959;
 const double M_HALFPI = 1.57079632679;
 const double M_SQRT_PI = 1.77245385091;
 const double M_SQRT_2PI = 2.50662827463;
