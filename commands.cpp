@@ -2415,6 +2415,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data) {
 					n_image_pixels_x = image_pixel_data->npixels_x;
 					n_image_pixels_y = image_pixel_data->npixels_y;
+					if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 				} else Complain("image pixel data has not been loaded");
 			} else if (nwords == 3) {
 				int npx, npy;
@@ -2422,6 +2423,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> npy)) Complain("invalid number of pixels");
 				n_image_pixels_x = npx;
 				n_image_pixels_y = npy;
+				if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 			} else Complain("two arguments required to set 'img_npixels' (npixels_x, npixels_y), or else use '-data' argument");
 		}
 		else if (words[0]=="src_npixels")
@@ -5394,6 +5396,7 @@ void QLens::process_commands(bool read_file)
 					update_specific_parameters = true;
 					for (int i=0; i < n_updates; i++)
 						if (sb_list[src_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in source " << src_number);
+					if ((sb_list[src_number]->sbtype==SHAPELET) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays(); // shapelet number of amp's may have changed, so redo FFT convolution setup
 				}
 			}
 			else if ((nwords > 1) and (words[1]=="changevary"))
@@ -5672,6 +5675,7 @@ void QLens::process_commands(bool read_file)
 
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
+						if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
 						add_shapelet_source(amp00, scale, q, theta, xc, yc, nmax, false, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
@@ -10420,6 +10424,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'fft_convolution' command; must specify 'on' or 'off'");
 				set_switch(fft_convolution,setword);
+				if ((!fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="pixel_fraction")

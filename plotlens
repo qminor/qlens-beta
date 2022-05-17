@@ -915,9 +915,9 @@ fi
 echo -en "$PLOTLINE" >$PLOTDIR/$PLOTFILE
 gnuplot -persist $PLOTDIR/$PLOTFILE >/dev/null 2>&1
 
-if [[ $FILENAME == "" ]]; then
-	rm $PLOTDIR/$PLOTFILE
-fi
+#if [[ $FILENAME == "" ]]; then
+	#rm $PLOTDIR/$PLOTFILE
+#fi
 
 if [ -f $PLOTDIR/imgdat_notitles.dat ]; then rm $PLOTDIR/imgdat_notitles.dat; fi
 

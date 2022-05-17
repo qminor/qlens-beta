@@ -770,12 +770,6 @@ QLens::QLens() : UCMC()
 	use_input_psf_matrix = false;
 	psf_threshold = 1e-1;
 	fft_convolution = false;
-	setup_fft_convolution = false;
-	psf_zvec = NULL;
-	fft_ni = 0;
-	fft_nj = 0;
-	fft_imin = 0;
-	fft_jmin = 0;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -1111,19 +1105,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	use_input_psf_matrix = lens_in->use_input_psf_matrix;
 	psf_threshold = lens_in->psf_threshold;
 	fft_convolution = lens_in->fft_convolution;
-	setup_fft_convolution = lens_in->setup_fft_convolution;
-	fft_ni = lens_in->fft_ni;
-	fft_nj = lens_in->fft_nj;
-	fft_imin = lens_in->fft_imin;
-	fft_jmin = lens_in->fft_jmin;
-	if (setup_fft_convolution) {
-		int nzvec = 2*fft_ni*fft_nj;
-		psf_zvec = new double[nzvec];
-		for (int i=0; i < nzvec; i++) psf_zvec[i] = lens_in->psf_zvec[i];
-	} else {
-		psf_zvec = NULL;
-	}
-
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
@@ -2896,6 +2877,7 @@ void QLens::add_shapelet_source(const double amp00, const double sig_x, const do
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
 void QLens::add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
@@ -2972,6 +2954,9 @@ void QLens::remove_source_object(int sb_number)
 		lens_list[i]->unanchor_parameter(sb_list[sb_number]); // this unanchors the lens if any of its parameters are anchored to the source being deleted
 	}
 
+	if (sb_list[sb_number]->sbtype==SHAPELET) {
+		if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
+	}
 	delete sb_list[sb_number];
 	delete[] sb_list;
 	n_sb--;
@@ -3006,6 +2991,7 @@ void QLens::clear_source_objects()
 		n_sb = 0;
 		update_parameter_list(); // this is necessary to keep the parameter priors, transforms preserved
 		get_parameter_names(); // parameter names must be updated whenever source models are removed/added
+		if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's may have changed, will need to redo FFT setup
 	}
 }
 
@@ -6814,6 +6800,11 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
+
+	//if ((fft_convolution) and (setup_fft_convolution)) {
+		//fitmodel->copy_FFT_convolution_arrays(this);
+		////cleanup_FFT_convolution_arrays();
+	//}
 
 	// testing out copying plimits from lens to fitmodel
 	//get_n_fit_parameters(n_fit_parameters);
@@ -14074,7 +14065,10 @@ QLens::~QLens()
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	if (group_leader != NULL) delete[] group_leader;
-	if (psf_zvec != NULL) delete[] psf_zvec;
+	//if (psf_zvec != NULL) delete[] psf_zvec;
+#ifdef USE_FFTW
+	//if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // not necessary to cleanup unless we need to redo the FFT arrays
+#endif
 }
 
 /***********************************************************************************************************************/
