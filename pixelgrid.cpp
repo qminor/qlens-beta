@@ -28,7 +28,7 @@
 #endif
 
 #ifdef USE_FFTW
-#ifdef MKL
+#ifdef USE_MKL
 #include "fftw/fftw3.h"
 #else
 #include "fftw3.h"
