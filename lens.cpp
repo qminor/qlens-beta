@@ -8434,6 +8434,11 @@ double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//fitmodel->lens_list[0]->update_specific_parameter("mstar",3.5e11);
+	//fitparams[0] = 11.67;
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//fitparams[0] = 11.4;
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
 	if (!show_status) display_chisq_status = default_display_status;
 	//if ((mpi_id==0) and (show_status)) {
@@ -10710,7 +10715,15 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	}
 	if ((chisq != 2e30) and (loglike < 1e10)) {
 		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
-		else chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
+		else {
+			chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
+			//if (fft_convolution) {
+				//fft_convolution = false;
+				//double chisq2 = fitmodel->invert_image_surface_brightness_map(chisq0,false);
+				//if (mpi_id==0) cout << "CHISQ_COMP: " << chisq << " " << chisq2 << endl;
+				//fft_convolution = true;
+			//}
+		}
 	}
 
 	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter

@@ -25,8 +25,13 @@
 #include <complex>
 #define USE_COMM_WORLD -987654
 
+
 #ifdef USE_FFTW
+#ifdef MKL
+#include "fftw/fftw3.h"
+#else
 #include "fftw3.h"
+#endif
 #endif
 
 #ifdef USE_OPENMP

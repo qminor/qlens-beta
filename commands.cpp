@@ -10889,7 +10889,7 @@ void QLens::process_commands(bool read_file)
 				add_to_emask = true;
 				remove_word(nwords-1);
 			}
-			if (nwords == 2) {
+			if (nwords >= 2) {
 				if (words[1]=="all") {
 					extended_mask_n_neighbors = emask_n = -1;
 				}
@@ -10897,6 +10897,9 @@ void QLens::process_commands(bool read_file)
 					only_interior_pixels = true;
 					add_to_emask = true;
 					emask_n = 1000;
+					if (nwords > 2) {
+						if (!(ws[2] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
+					}
 				}
 				else {
 					if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");

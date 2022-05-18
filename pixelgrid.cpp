@@ -28,7 +28,11 @@
 #endif
 
 #ifdef USE_FFTW
+#ifdef MKL
+#include "fftw/fftw3.h"
+#else
 #include "fftw3.h"
+#endif
 #endif
 
 #include <cmath>
@@ -9179,7 +9183,6 @@ void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 			Lmatrix_psf[i] = new double[source_npixels];
 			for (j=0; j < source_npixels; j++) Lmatrix_psf[i][j] = 0;
 		}
-
 
 #ifdef USE_OPENMP
 		if (show_wtime) {
