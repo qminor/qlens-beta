@@ -4008,7 +4008,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 			}
 		}
 	}
-	double r0, r;
+	double r0=0, r;
 	int emask_npix, emask_npix0;
 	for (k=0; k < n_neighbors; k++) {
 		emask_npix0 = get_size_of_extended_mask();
@@ -4019,36 +4019,45 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if ((i < npixels_x-1) and (!req[i+1][j])) {
 						if (!extended_mask[i+1][j]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i+1]) + SQR(pixel_ycvals[j]));
-							if ((only_interior_neighbors) and (r > r0)) ;
+							if ((only_interior_neighbors) and (r > r0)) {
+								cout << "NOT adding pixel " << (i+1) << " " << j << " " << r << " vs " << r0 << endl;
+							}
 							else {
 								extended_mask[i+1][j] = true;
+								cout << "Adding pixel " << (i+1) << " " << j << " " << r0 << endl;
 							}
 						}
 					}
 					if ((i > 0) and (!req[i-1][j])) {
 						if (!extended_mask[i-1][j]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i-1]) + SQR(pixel_ycvals[j]));
-							if ((only_interior_neighbors) and (r > r0)) ;
-							else {
+							if ((only_interior_neighbors) and (r > r0)) {
+								cout << "NOT Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
+							} else {
 								extended_mask[i-1][j] = true;
+								cout << "Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 						}
 					}
 					if ((j < npixels_y-1) and (!req[i][j+1])) {
 						if (!extended_mask[i][j+1]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j+1]));
-							if ((only_interior_neighbors) and (r > r0)) ;
-							else {
+							if ((only_interior_neighbors) and (r > r0)) {
+								cout << "NOT Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
+							} else {
 								extended_mask[i][j+1] = true;
+								cout << "Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							}
 						}
 					}
 					if ((j > 0) and (!req[i][j-1])) {
 						if (!extended_mask[i][j-1]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j-1]));
-							if ((only_interior_neighbors) and (r > r0)) ;
-							else {
+							if ((only_interior_neighbors) and (r > r0)) {
+								cout << "NOT Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
+							} else {
 								extended_mask[i][j-1] = true;
+								cout << "Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							}
 						}
 					}
@@ -4062,6 +4071,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if (((i < npixels_x-1) and (extended_mask[i+1][j])) and ((i > 0) and (extended_mask[i-1][j])) and ((j < npixels_y-1) and (extended_mask[i][j+1])) and ((j > 0) and (extended_mask[i][j-1]))) {
 						if (!extended_mask[i][j]) {
 							extended_mask[i][j] = true;
+							cout << "Filling hole " << i << " " << j << endl;
 						}
 					}
 				}
