@@ -10717,11 +10717,11 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
 		else {
 			chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
-			//if (fft_convolution) {
-				//fft_convolution = false;
+			//if (fitmodel->fft_convolution) {
+				//fitmodel->fft_convolution = false;
 				//double chisq2 = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 				//if (mpi_id==0) cout << "CHISQ_COMP: " << chisq << " " << chisq2 << endl;
-				//fft_convolution = true;
+				//fitmodel->fft_convolution = true;
 			//}
 		}
 	}
