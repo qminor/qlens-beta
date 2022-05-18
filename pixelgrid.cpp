@@ -4019,7 +4019,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if ((i < npixels_x-1) and (!req[i+1][j])) {
 						if (!extended_mask[i+1][j]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i+1]) + SQR(pixel_ycvals[j]));
-							if ((only_interior_neighbors) and (r > r0)) {
+							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								cout << "NOT adding pixel " << (i+1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 							else {
@@ -4031,7 +4031,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if ((i > 0) and (!req[i-1][j])) {
 						if (!extended_mask[i-1][j]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i-1]) + SQR(pixel_ycvals[j]));
-							if ((only_interior_neighbors) and (r > r0)) {
+							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								cout << "NOT Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							} else {
 								extended_mask[i-1][j] = true;
@@ -4042,7 +4042,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if ((j < npixels_y-1) and (!req[i][j+1])) {
 						if (!extended_mask[i][j+1]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j+1]));
-							if ((only_interior_neighbors) and (r > r0)) {
+							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								cout << "NOT Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							} else {
 								extended_mask[i][j+1] = true;
@@ -4053,7 +4053,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 					if ((j > 0) and (!req[i][j-1])) {
 						if (!extended_mask[i][j-1]) {
 							if (only_interior_neighbors) r = sqrt(SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[j-1]));
-							if ((only_interior_neighbors) and (r > r0)) {
+							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								cout << "NOT Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							} else {
 								extended_mask[i][j-1] = true;
