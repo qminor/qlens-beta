@@ -21,12 +21,6 @@
 #include "fitsio.h"
 #endif
 
-#ifdef USE_FFTPACK
-#include "fftpack.h"
-#include "ls_fft.h"
-#include "bluestein.h"
-#endif
-
 #ifdef USE_FFTW
 #ifdef USE_MKL
 #include "fftw/fftw3.h"
@@ -7309,7 +7303,8 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	if (lens->shapelet_scale_mode==0) {
 		scale = sig; // uses the dispersion of source SB to set scale (WARNING: might not cover all of lensed pixels in mask if n_shapelets is too small!!)
 	} else if (lens->shapelet_scale_mode==1) {
-		scale = scaled_maxdist/sqrt(nn); // uses outermost pixel in extended mask to set scale (WARNING: MIGHT CAUSE SOURCE TO BE UNDER-RESOLVED if n_shapelet is too small!!!!!)
+		scale = scaled_maxdist/sqrt(nn); // uses outermost pixel in extended mask to set scale
+		if (scale > sig) scale = sig; // if the above scale is bigger than ray-traced source scale (sig), then just set scale = sig (otherwise source will be under-resolved)
 	}
 	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
 
@@ -8987,52 +8982,6 @@ void QLens::cleanup_FFT_convolution_arrays()
 	setup_fft_convolution = false;
 }
 
-/*
-void QLens::copy_FFT_convolution_arrays(QLens* lens_in)
-{
-	//int i,j;
-	//if (source_fit_mode != Shapelet_Source) die("FFT convolution arrays can only be copied for shapelet sources");
-	fft_ni = lens_in->fft_ni;
-	fft_nj = lens_in->fft_nj;
-	fft_imin = lens_in->fft_imin;
-	fft_jmin = lens_in->fft_jmin;
-	//int ncomplex = fft_nj*(fft_ni/2+1);
-	//int npix_conv = fft_ni*fft_nj;
-#ifdef USE_FFTW
-//	psf_transform = new complex<double>[ncomplex];
-//	for (i=0; i < ncomplex; i++) psf_transform[i] = lens_in->psf_transform[i];
-//	img_rvec = new double[npix_conv];
-//	img_transform = new complex<double>[ncomplex];
-//	//fftplan = lens_in->fftplan;
-//	//fftplan_inverse = lens_in->fftplan_inverse;
-//	for (i=0; i < npix_conv; i++) img_rvec[i] = lens_in->img_rvec[i];
-//
-//	count_shapelet_npixels();
-//	if (source_npixels != lens_in->source_npixels) die("getting different source_npixels from lens_in; cannot copy convolution arrays");
-//	Lmatrix_imgs_rvec = new double*[source_npixels];
-//	Lmatrix_transform = new complex<double>*[source_npixels];
-//	//fftplans_Lmatrix = new fftw_plan[source_npixels];
-//	//fftplans_Lmatrix_inverse = new fftw_plan[source_npixels];
-//	//fftplans_Lmatrix = lens_in->fftplans_Lmatrix;
-//	//fftplans_Lmatrix_inverse = lens_in->fftplans_Lmatrix_inverse;
-//	for (i=0; i < source_npixels; i++) {
-//		Lmatrix_imgs_rvec[i] = new double[npix_conv];
-//		Lmatrix_transform[i] = new complex<double>[ncomplex];
-//		//fftplans_Lmatrix[i] = lens_in->fftplans_Lmatrix[i];
-//		//fftplans_Lmatrix_inverse[i] = lens_in->fftplans_Lmatrix_inverse[i];
-//		for (j=0; j < npix_conv; j++) Lmatrix_imgs_rvec[i][j] = lens_in->Lmatrix_imgs_rvec[i][j];
-//		//for (j=0; j < ncomplex; j++) Lmatrix_transform[i][j] = 0;
-//	}
-#else
-	int npix_conv = fft_ni*fft_nj;
-	psf_zvec = new double[2*npix_conv];
-	for (i=0; i < 2*npix_conv; i++) psf_zvec[i] = lens_in->psf_zvec[i];
-#endif
-	setup_fft_convolution = true;
-	copied_fft_convolution = true;
-}
-*/
-
 void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 {
 #ifdef USE_MPI
@@ -9075,25 +9024,6 @@ void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 #endif
 
 
-//#ifdef USE_OPENMP
-	//if (show_wtime) {
-		//wtime0 = omp_get_wtime();
-	//}
-//#endif
-		//double **Lmatrix_imgs_zvec = new double*[source_npixels];
-		//for (i=0; i < source_npixels; i++) {
-			//Lmatrix_imgs_zvec[i] = new double[nzvec];
-			//for (j=0; j < nzvec; j++) Lmatrix_imgs_zvec[i][j] = 0;
-		//}
-
-//#ifdef USE_OPENMP
-			//if (show_wtime) {
-				//wtime = omp_get_wtime() - wtime0;
-				//if (mpi_id==0) {
-					//cout << "Wall time for setting up PSF convolution of Lmatrix via FFT: " << wtime << endl;
-				//}
-			//}
-//#endif
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			wtime0 = omp_get_wtime();
@@ -9254,284 +9184,6 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	/*
-	const int NN = 64;
-	double* testimg = new double[NN];
-	for (int i=0; i < NN; i++) testimg[i] = 0;
-	testimg[12] = 1;
-	testimg[10] = 1;
-	testimg[11] = 1;
-	testimg[12] = 1;
-	testimg[20] = 1;
-	//testimg[26] = 1;
-	testimg[27] = 1;
-	double* testpsf = new double[NN];
-	for (int i=0; i < NN; i++) testpsf[i] = 0;
-	//testpsf[12] = 1;
-	testpsf[0] = 4;
-	testpsf[1] = 2;
-	//testpsf[20] = 1;
-	//testpsf[24] = 1;
-	testpsf[7] = 2;
-	testpsf[8] = 2;
-	testpsf[9] = 1;
-	testpsf[15] = 1;
-	testpsf[56] = 2;
-	testpsf[57] = 1;
-	testpsf[63] = 1;
-	//testpsf[20] = 1;
-	for (int i=0; i < NN; i++) {
-		if ((i > 0) and (i % 8 == 0)) cout << endl;
-		cout << testimg[i] << " ";
-	}
-	cout << endl;
-
-	// demo fourier transforms, which I'll use to make the convolutions much faster
-	//complex_plan plan;
-	double *zimg = new double[2*NN];
-	double *zpsf = new double[2*NN];
-	double *zconv = new double[2*NN];
-	int i,j;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		zimg[j] = testimg[i];
-		zimg[j+1] = 0;
-		zpsf[j] = testpsf[i];
-		zpsf[j+1] = 0;
-	}
-
-	//cout << "Real part of image:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//if ((i > 0) and (i % 8 == 0)) cout << endl;
-		//cout << zimg[j] << " ";
-	//}
-	//cout << endl;
-	//cout << "Imaginary part of image:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//if ((i > 0) and (i % 8 == 0)) cout << endl;
-		//cout << zimg[j+1] << " ";
-	//}
-	//cout << endl << endl;
-
-	//for (j=0; j < 2*NN; j++) {
-		//if (j%2==0) zpsf[j] = 1;
-	//}
-	//plan = make_complex_plan (NN);
-	//complex_plan_backward(plan, zpsf);
-	//for (j=0; j < 2*NN; j++) {
-		//zpsf[j] /= NN;
-	//}
-
-	//cout << "Real part of PSF:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//if ((i > 0) and (i % 8 == 0)) cout << endl;
-		//cout << zpsf[j] << " ";
-	//}
-	//cout << endl;
-	//cout << "Imaginary part of PSF:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//if ((i > 0) and (i % 8 == 0)) cout << endl;
-		//cout << zpsf[j+1] << " ";
-	//}
-	//cout << endl << endl;
-	//cout << endl;
-
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zimg);
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zpsf);
-	//int nnvec[1];
-	//nnvec[0] = NN;
-	//int *nnvec = new int[1];
-	//nnvec[0] = NN;
-	int nnvec[2] = { 8, 8 };
-	fourier_transform(zimg,2,nnvec,1);
-	fourier_transform(zpsf,2,nnvec,1);
-
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		zconv[j] = zimg[j]*zpsf[j] - zimg[j+1]*zpsf[j+1];
-		zconv[j+1] = zimg[j]*zpsf[j+1] + zimg[j+1]*zpsf[j];
-		zconv[j] /= NN;
-		zconv[j+1] /= NN;
-	}
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zpsf);
-	//complex_plan_backward(plan, zconv);
-	//kill_complex_plan (plan);
-	fourier_transform(zconv,2,nnvec,-1);
-
-	cout << "Real part of convolution:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		if ((i > 0) and (i % 8 == 0)) cout << endl;
-		if (abs(zconv[j]) < 1e-11) zconv[j] = 0;
-		cout << zconv[j] << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of convolution:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		if ((i > 0) and (i % 8 == 0)) cout << endl;
-		if (abs(zconv[j+1]) < 1e-11) zconv[j+1] = 0;
-		cout << zconv[j+1] << " ";
-	}
-	cout << endl;
-	*/
-
-	/*
-	const int NN = 8;
-	double* testimg = new double[NN];
-	testimg[0] = 0;
-	testimg[1] = 0;
-	testimg[2] = 0;
-	testimg[3] = 1;
-	testimg[4] = 0;
-	testimg[5] = 0;
-	testimg[6] = 0;
-	testimg[7] = 0;
-	double* testpsf = new double[NN];
-	testpsf[0] = 3;
-	testpsf[1] = 2;
-	testpsf[2] = 1;
-	testpsf[3] = 0;
-	testpsf[4] = 0;
-	testpsf[5] = 0;
-	testpsf[6] = 1;
-	testpsf[7] = 2;
-
-	for (int i=0; i < NN; i++) {
-		cout << testimg[i] << " ";
-	}
-	cout << endl;
-
-	// demo fourier transforms, which I'll use to make the convolutions much faster
-	//complex_plan plan;
-	double *zimg = new double[2*NN];
-	double *zpsf = new double[2*NN];
-	double *zconv = new double[2*NN];
-	int i,j;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		zimg[j] = testimg[i];
-		zimg[j+1] = 0;
-		zpsf[j] = testpsf[i];
-		//zpsf[j+1] = zpsf[j];
-		zpsf[j+1] = 0;
-	}
-
-	cout << "Real part of image:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zimg[j] << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of image:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zimg[j+1] << " ";
-	}
-	cout << endl << endl;
-
-	//for (j=0; j < 2*NN; j++) {
-		//if (j%2==0) zpsf[j] = 1;
-	//}
-	//plan = make_complex_plan (NN);
-	//complex_plan_backward(plan, zpsf);
-	//for (j=0; j < 2*NN; j++) {
-		//zpsf[j] /= NN;
-	//}
-
-	cout << "Real part of PSF:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zpsf[j] << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of PSF:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zpsf[j+1] << " ";
-	}
-	cout << endl << endl;
-
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zimg);
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zpsf);
-
-
-	//cout << "Real part of transformed image:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//cout << zimg[j] << " ";
-	//}
-	//cout << endl;
-	//cout << "Imaginary part of transformed image:" << endl;
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//cout << zimg[j+1] << " ";
-	//}
-	//cout << endl << endl;
-
-	//for (i=0,j=0; i < NN; i++, j += 2) {
-		//zimg[j] = testimg[i];
-		//zimg[j+1] = 0;
-		//zpsf[j] = testpsf[i];
-		////zpsf[j+1] = zpsf[j];
-		//zpsf[j+1] = 0;
-	//}
-
-	int *nnvec = new int[1];
-	nnvec[0] = NN;
-	fourier_transform(zimg,1,nnvec,1);
-	fourier_transform(zpsf,1,nnvec,1);
-
-	cout << "NR version: " << endl;
-	cout << "Real part of transformed image:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zimg[j] << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of transformed image:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zimg[j+1] << " ";
-	}
-	cout << endl << endl;
-
-	cout << "Real part of transformed PSF:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zpsf[j] << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of transformed PSF:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		cout << zpsf[j+1] << " ";
-	}
-	cout << endl << endl;
-
-	// Pointwise multiplication (note, the complex numbers are multiplied together)
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		zconv[j] = zimg[j]*zpsf[j] - zimg[j+1]*zpsf[j+1];
-		zconv[j+1] = zimg[j]*zpsf[j+1] + zimg[j+1]*zpsf[j];
-	}
-
-	//plan = make_complex_plan (NN);
-	//complex_plan_forward(plan, zpsf);
-	//complex_plan_backward(plan, zconv);
-	//kill_complex_plan (plan);
-	fourier_transform(zconv,1,nnvec,-1);
-
-	cout << "Real part of convolution:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		if (abs(zconv[j]/NN) < 1e-11) zconv[j] = 0;
-		cout << zconv[j]/NN << " ";
-	}
-	cout << endl;
-	cout << "Imaginary part of convolution:" << endl;
-	for (i=0,j=0; i < NN; i++, j += 2) {
-		if (abs(zconv[j+1]/NN) < 1e-11) zconv[j+1] = 0;
-		cout << zconv[j+1]/NN << " ";
-	}
-	cout << endl;
-
-	die();
-	*/
-
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 
 	int nx_half, ny_half;
@@ -9602,7 +9254,6 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 
 #ifdef USE_FFTW
 		fftw_execute(fftplan);
-		//fftw_destroy_plan(p);
 #else
 		int nnvec[2];
 		nnvec[0] = fft_ni;
@@ -9621,7 +9272,6 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			img_transform[i] /= (fft_ni*fft_nj);
 		}
 		fftw_execute(fftplan_inverse);
-		//fftw_destroy_plan(fftplan_inverse);
 #else
 		double rtemp, itemp;
 		for (i=0,j=0; i < (fft_ni*fft_nj); i++, j += 2) {
@@ -9687,8 +9337,6 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			}
 		}
 
-
-
 		double *new_surface_brightness_vector = new double[npix];
 		int i,j,k,l;
 		int psf_k, psf_l;
@@ -9720,7 +9368,6 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 				}
 			}
 			if (totweight != 1.0) new_surface_brightness_vector[img_index1] /= totweight;
-			//cout << "HI " << k << " " << l << " " << totweight << endl;
 		}
 
 #ifdef USE_OPENMP
@@ -9803,7 +9450,6 @@ void QLens::fourier_transform(double* data, const int ndim, int* nn, const int i
 	}
 }
 #undef DSWAP
-
 
 /*
 void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, bool verbal)

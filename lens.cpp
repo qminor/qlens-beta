@@ -12061,6 +12061,13 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		double minscale_shapelet = scale/sqrt(nn);
 		double maxscale_shapelet = scale*sqrt(nn);
 		//cout << "MAXSCALE = " << maxscale << ", MAXDIST = " << scaled_maxdist << endl;
+		//if ((downsize_shapelets) and (maxscale_shapelet > scaled_maxdist))
+		//if (maxscale_shapelet > scaled_maxdist) {
+			//double scale = scaled_maxdist/sqrt(nn);
+			//if (!shapelet->update_specific_parameter("sigma",scale)) {
+				//if (mpi_id==0) warn("could not downsize shapelets to fit ray-traced mask; make sure shapelet is in pmode=0");
+			//}
+		//}
 		if ((verbal) and (mpi_id==0)) {
 			if (maxscale_shapelet < scaled_maxdist) {
 			cerr << endl;
@@ -12071,7 +12078,6 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 				warn("scale of shapelets (%g) is larger than dispersion of ray-traced surface brightness (%g); this could potentially affect quality of fit\n",scale,sig_src);
 			}
 		}
-
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << " (SCALE_MODE=" << shapelet_scale_mode << ")" << endl;
 	}
 
