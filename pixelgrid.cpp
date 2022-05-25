@@ -6861,6 +6861,26 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 		}
 		pixel_image_file << endl;
 	}
+	plot_sourcepts(outfile_root);
+}
+
+void ImagePixelGrid::plot_sourcepts(string outfile_root)
+{
+	string sp_filename = outfile_root + "_spt.dat";
+
+	ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
+	sourcepts_file << setiosflags(ios::scientific);
+	int i,j;
+	double residual;
+
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			//if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
+			if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (lens->image_pixel_data->extended_mask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (lens->image_pixel_data->in_mask[i][j]))) {
+				sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
+			}
+		}
+	}
 }
 
 void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
@@ -7165,6 +7185,11 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 
 void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist)
 {
+	//string sp_filename = "wtf_spt.dat";
+
+	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
+	//sourcepts_file << setiosflags(ios::scientific);
+
 	double xcavg, ycavg;
 	double totsurf;
 	double area, min_area = 1e30, max_area = -1e30;
@@ -7262,7 +7287,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*pixel_noise)) {
-			if ((fit_to_data==NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+			if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (lens->image_pixel_data->extended_mask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (lens->image_pixel_data->in_mask[i][j]))) {
 				//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 				//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 				if (!lens->split_imgpixels) {
@@ -7281,8 +7306,13 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 
 				xd = abs(xsavg-xcavg);
 				yd = abs(ysavg-ycavg);
+
+				//double ri = abs(sqrt(SQR(center_pts[i][j][0]-0.01)+SQR(center_pts[i][j][1])));
+				//if (ri > 0.6) {
 				if (xd > xmax) xmax = xd;
 				if (yd > ymax) ymax = yd;
+					//sourcepts_file << xsavg << " " << ysavg << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << xd << " " << yd << endl;
+				//}
 				if ((lens->image_pixel_data->in_mask[i][j]) and (abs(surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
 					ntot++;
 					rsq = SQR(xd) + SQR(yd);
@@ -7295,15 +7325,15 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	}
 	double fout = nout / ((double) ntot);
 	if ((verbal) and (lens->mpi_id==0)) cout << "Fraction of 2-sigma outliers for shapelets: " << fout << endl;
-	double maxdist = dmax(xd,yd);
+	double maxdist = dmax(xmax,ymax);
 
 	int nn = lens->get_shapelet_nn();
-	const double window_scaling = 0.9;
+	const double window_scaling = 0.7;
 	scaled_maxdist = window_scaling*maxdist;
 	if (lens->shapelet_scale_mode==0) {
 		scale = sig; // uses the dispersion of source SB to set scale (WARNING: might not cover all of lensed pixels in mask if n_shapelets is too small!!)
 	} else if (lens->shapelet_scale_mode==1) {
-		scale = scaled_maxdist/sqrt(nn); // uses outermost pixel in extended mask to set scale
+		scale = 1.000001*scaled_maxdist/sqrt(nn); // uses outermost pixel in extended mask to set scale
 		if (scale > sig) scale = sig; // if the above scale is bigger than ray-traced source scale (sig), then just set scale = sig (otherwise source will be under-resolved)
 	}
 	if (scale > lens->shapelet_max_scale) scale = lens->shapelet_max_scale;
@@ -8159,8 +8189,8 @@ void QLens::count_shapelet_npixels()
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
 			nmax = *(sb_list[i]->indxptr);
+			source_npixels += nmax*nmax;
 		}
-		source_npixels += nmax*nmax;
 	}
 }
 
@@ -10080,7 +10110,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		if (mpi_id==0) cout << "Wall time for Fmatrix MPI communication + construction: " << wtime << endl;
 	}
 #endif
-
 	if ((mpi_id==0) and (verbal)) cout << "Fmatrix now has " << Fmatrix_nn << " elements\n";
 
 	if ((mpi_id==0) and (verbal)) {
@@ -10171,7 +10200,10 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/covariance;
 				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
 				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[pix_i][pix_j])) ; 
-				else Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask])/covariance;
+				else {
+					Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask])/covariance;
+					if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
+				}
 #ifdef USE_MKL
 				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]/sqrt(covariance); // hack to get the covariance in there
 #else
@@ -10268,6 +10300,23 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 		//cout << endl;
 	//}
 
+	/*
+	double Dvec_normsq = 0;
+	double Lmat_normsq = 0;
+	for (i=0; i < image_npixels; i++) Dvec_normsq += SQR(Dvector[i]);
+	for (i=0; i < image_npixels; i++) {
+		for (j=0; j < source_npixels; j++) {
+			Lmat_normsq += SQR(Lmatrix_dense[i][j]);
+		}
+	}
+	double Fmat_normsq = 0;
+	for (i=0; i < ntot; i++) {
+		Fmat_normsq += SQR(Fmatrix_packed[i]);
+	}
+	if ((mpi_id==0) and (verbal)) cout << "Dvector has normsq = " << Dvec_normsq << endl;
+	if ((mpi_id==0) and (verbal)) cout << "Lmatrix has normsq = " << Lmat_normsq << endl;
+	if ((mpi_id==0) and (verbal)) cout << "Fmatrix has normsq = " << Fmat_normsq << endl;
+	*/
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -10306,6 +10355,26 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 
 	//bool status = Cholesky_dcmp(Fmatrix_dense.pointer(),Fmatrix_log_determinant,source_npixels);
+
+	/*
+	int ntot = source_npixels*(source_npixels+1)/2;
+	double Fmat_normsq = 0;
+	for (i=0; i < ntot; i++) {
+		Fmat_normsq += SQR(Fmatrix_packed[i]);
+	}
+	cout << "Fmat normsq = " << Fmat_normsq << endl;
+	ofstream Fout("fwtf.dat");
+	for (i=0; i < ntot; i++) {
+		Fout << Fmatrix_packed[i] << endl;
+	}
+	ofstream Dout("dwtf.dat");
+	for (i=0; i < source_npixels; i++) {
+		Dout << Dvector[i] << endl;
+	}
+	Dout.close();
+	Fout.close();
+	*/
+
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed.array());
 #else
@@ -10323,7 +10392,6 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 
 	//Cholesky_solve(Fmatrix_dense.pointer(),Dvector,source_pixel_vector,source_npixels);
 	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
-
 	int index=0;
 	if (source_fit_mode==Pixellated_Source) source_pixel_grid->update_surface_brightness(index);
 	else if (source_fit_mode==Shapelet_Source) {
@@ -11446,7 +11514,7 @@ void QLens::calculate_image_pixel_surface_brightness_dense(const bool calculate_
 		}
 		if (at_least_one_foreground_src) {
 			calculate_foreground_pixel_surface_brightness();
-			store_foreground_pixel_surface_brightness(); // this stores it in image_pixel_grid->foreground_surface_brightness[i][j]
+			store_foreground_pixel_surface_brightness(); // this stores it in image_pixel_grid->sbprofile_surface_brightness[i][j]
 			//add_foreground_to_image_pixel_vector();
 		} else {
 			for (int img_index=0; img_index < image_npixels_fgmask; img_index++) sbprofile_surface_brightness[img_index] = 0;
@@ -11454,7 +11522,7 @@ void QLens::calculate_image_pixel_surface_brightness_dense(const bool calculate_
 	}
 }
 
-void QLens::calculate_foreground_pixel_surface_brightness()
+void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources)
 {
 	bool subgridded;
 	int img_index;
@@ -11513,12 +11581,13 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 
 			int ii, jj, nsplit;
 			double u0, w0, sb;
-			double U0, W0, U1, W1;
+			//double U0, W0, U1, W1;
 			lensvector center_pt, center_srcpt;
 			lensvector corner1, corner2, corner3, corner4;
 			lensvector corner1_src, corner2_src, corner3_src, corner4_src;
 			double subpixel_xlength, subpixel_ylength;
-			#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,U0,W0,U1,W1,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src) schedule(dynamic)
+			int subpixel_index;
+			#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subpixel_index) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
 				sbprofile_surface_brightness[img_index] = 0;
 
@@ -11543,14 +11612,17 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 
 				subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
 				subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
+				subpixel_index = 0;
 				for (ii=0; ii < nsplit; ii++) {
 					u0 = ((double) (1+2*ii))/(2*nsplit);
 					center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
 					for (jj=0; jj < nsplit; jj++) {
 						w0 = ((double) (1+2*jj))/(2*nsplit);
 						center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+						//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
+						//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;
 						for (int k=0; k < n_sb; k++) {
-							if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+							if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) {
 								if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
 								else {
 									corner1[0] = center_pt[0] - subpixel_xlength/2;
@@ -11564,7 +11636,27 @@ void QLens::calculate_foreground_pixel_surface_brightness()
 									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
 								}
 							}
+							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (source_fit_mode == Shapelet_Source) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
+								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
+								//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+								//sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+								sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][1]);
+								//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+								//else {
+									//corner1[0] = center_srcpt[0] - subpixel_xlength/2;
+									//corner1[1] = center_srcpt[1] - subpixel_ylength/2;
+									//corner2[0] = center_srcpt[0] + subpixel_xlength/2;
+									//corner2[1] = center_srcpt[1] - subpixel_ylength/2;
+									//corner3[0] = center_srcpt[0] - subpixel_xlength/2;
+									//corner3[1] = center_srcpt[1] + subpixel_ylength/2;
+									//corner4[0] = center_srcpt[0] + subpixel_xlength/2;
+									//corner4[1] = center_srcpt[1] + subpixel_ylength/2;
+									//sb += sb_list[k]->surface_brightness_zoom(center_srcpt,corner1,corner2,corner3,corner4);
+								//}
+							}
 						}
+						subpixel_index++;
 					}
 				}
 				sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);

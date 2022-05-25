@@ -10312,10 +10312,10 @@ bool QLens::adopt_model(dvector &fitparams)
 		wl_shear_factor = transformed_params[index++];
 	}
 	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
-	if (source_fit_mode==Shapelet_Source) {
-		// we run the following function so it updates amplitudes (and also sigma, xc, yc if using auto_shapelet_scaling)
-		if (invert_surface_brightness_map_from_data(false)==false) warn("no data loaded; cannot update shapelet amplitudes");
-	}
+	//if (source_fit_mode==Shapelet_Source) {
+		//// we run the following function so it updates amplitudes (and also sigma, xc, yc if using auto_shapelet_scaling)
+		//if (invert_surface_brightness_map_from_data(false)==false) warn("no data loaded; cannot update shapelet amplitudes");
+	//}
 	return true;
 }
 
@@ -11879,7 +11879,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		image_pixel_grid->find_surface_brightness(false,true);
 		if (!omit_foreground) {
 			assign_foreground_mappings(use_data);
-			calculate_foreground_pixel_surface_brightness();
+			calculate_foreground_pixel_surface_brightness(false);
 			store_foreground_pixel_surface_brightness();
 		}
 	} else {
@@ -12442,6 +12442,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		invert_lens_mapping_dense(verbal);
 		calculate_image_pixel_surface_brightness_dense();
+
+		//for (int i=0; i < image_npixels; i++) {
+			//cout << image_surface_brightness[i] << endl;
+		//}
+		//for (j=0; j < source_npixels; j++) {
+			//cout << source_pixel_vector[j] << endl;
+		//}
+
+
+
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;

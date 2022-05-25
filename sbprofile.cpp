@@ -52,6 +52,7 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	ellipticity_gradient = false;
 	fourier_gradient = false;
 	contours_overlap = false; // only relevant for ellipticity gradient mode
+	lensed_center_coords = false;
 	set_nparams(np);
 	sbprofile_nparams = sbprofile_np;
 
@@ -88,6 +89,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	ellipticity_mode = sb_in->ellipticity_mode;
 	ellipticity_gradient = sb_in->ellipticity_gradient;
 	fourier_gradient = sb_in->fourier_gradient;
+	lensed_center_coords = sb_in->lensed_center_coords;
 
 	paramnames = sb_in->paramnames;
 	latex_paramnames = sb_in->latex_paramnames;
@@ -108,6 +110,10 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	if (angle_param_exists) set_angle_radians(sb_in->theta);
 	x_center = sb_in->x_center;
 	y_center = sb_in->y_center;
+	if (lensed_center_coords) {
+		x_center_lensed = sb_in->x_center_lensed;
+		y_center_lensed = sb_in->y_center_lensed;
+	}
 
 	include_limits = sb_in->include_limits;
 	if (include_limits) {
@@ -638,8 +644,14 @@ void SB_Profile::set_geometric_param_pointers(int qi)
 			angle_param[qi++] = true;
 			angle_param_exists = true;
 		}
-		param[qi++] = &x_center;
-		param[qi++] = &y_center;
+		if (!lensed_center_coords) {
+			param[qi++] = &x_center;
+			param[qi++] = &y_center;
+		} else {
+			param[qi++] = &x_center_lensed;
+			param[qi++] = &y_center_lensed;
+		}
+
 	} else {
 		angle_param_exists = true;
 		set_geometric_param_pointers_egrad(param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
@@ -762,6 +774,7 @@ void SB_Profile::update_parameters(const double* params)
 	}
 	update_meta_parameters();
 	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
+	if (lensed_center_coords) set_center_if_lensed_coords();
 }
 
 bool SB_Profile::update_specific_parameter(const string name_in, const double& value)
@@ -803,8 +816,6 @@ bool SB_Profile::update_specific_parameter(const int paramnum, const double& val
 	return true;
 }
 
-
-
 void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
@@ -816,6 +827,7 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 				}
 				else *(param[i]) = fitparams[index++];
 			}
+			if (lensed_center_coords) set_center_if_lensed_coords();
 		}
 		update_meta_parameters();
 	}
@@ -1077,8 +1089,18 @@ void SB_Profile::set_geometric_paramnames(int qi)
 			paramnames[qi] = "q"; latex_paramnames[qi] = "q"; latex_param_subscripts[qi] = suffix; qi++;
 			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = suffix; qi++;
 		}
-		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c," + suffix; qi++;
-		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c," + suffix; qi++;
+		paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c," + suffix;
+		if (lensed_center_coords) {
+			paramnames[qi] += "_l";
+			latex_param_subscripts[qi] += ",l";
+		}
+		qi++;
+		paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c," + suffix;
+		if (lensed_center_coords) {
+			paramnames[qi] += "_l";
+			latex_param_subscripts[qi] += ",l";
+		}
+		qi++;
 	} else {
 		set_geometric_paramnames_egrad(paramnames, latex_paramnames, latex_param_subscripts, qi, ("," + suffix));
 	}
@@ -1107,8 +1129,15 @@ void SB_Profile::set_geometric_parameters(const double &q1_in, const double &q2_
 		if (q > 1) q = 1.0; // don't allow q>1
 		theta = degrees_to_radians(q2_in);
 	}
-	x_center = xc_in;
-	y_center = yc_in;
+	if (!lensed_center_coords) {
+		x_center = xc_in;
+		y_center = yc_in;
+	} else {
+		x_center_lensed = xc_in;
+		y_center_lensed = yc_in;
+		set_center_if_lensed_coords();
+	}
+
 	update_ellipticity_meta_parameters();
 }
 
@@ -1121,6 +1150,17 @@ void SB_Profile::set_geometric_parameters_radians(const double &q_in, const doub
 	set_angle_radians(theta_in);
 	x_center = xc_in;
 	y_center = yc_in;
+}
+
+void SB_Profile::set_center_if_lensed_coords()
+{
+	if (lensed_center_coords) {
+		if (lens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+		lensvector xl;
+		xl[0] = x_center_lensed;
+		xl[1] = y_center_lensed;
+		lens->find_sourcept(xl,x_center,y_center,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+	}
 }
 
 void SB_Profile::calculate_ellipticity_components()
@@ -2235,6 +2275,7 @@ void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits
 	scriptout << "fit source " << model_name << " ";
 	if (!is_lensed) scriptout << "-unlensed ";
 	if (zoom_subgridding) scriptout << "-zoom ";
+	if (lensed_center_coords) scriptout << "-lensed_center ";
 
 	for (int i=0; i < n_params; i++) {
 		if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));

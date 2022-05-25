@@ -35,7 +35,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	protected:
 	SB_ProfileName sbtype;
+	bool lensed_center_coords; // option that makes the coordinates of a lensed image of the source the free parameters
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived surface brightness models
+	double x_center_lensed, y_center_lensed; // used if lensed_center_coords is set to true
 	double epsilon1, epsilon2; // used for defining ellipticity, or else components of ellipticity (epsilon1, epsilon2)
 	double c0; // "boxiness" parameter
 	double rt; // truncation radius parameter
@@ -77,6 +79,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	void set_geometric_parameters_radians(const double &q_in, const double &theta_in, const double &xc_in, const double &yc_in);
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	void set_center_if_lensed_coords();
 	void calculate_ellipticity_components();
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
@@ -245,6 +248,15 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	int get_n_vary_params() { return n_vary_params; }
 	int get_center_anchor_number();
 	void set_include_limits(bool inc) { include_limits = inc; }
+	void set_lensed_center(bool lensed_xcyc) {
+		lensed_center_coords = lensed_xcyc;
+		x_center_lensed = x_center;
+		y_center_lensed = y_center;
+		set_center_if_lensed_coords();
+		assign_paramnames();
+		assign_param_pointers();
+	}
+
 };
 
 class Gaussian : public SB_Profile

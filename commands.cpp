@@ -5043,6 +5043,7 @@ void QLens::process_commands(bool read_file)
 			int anchornum; // in case new source is being anchored to existing lens
 			int pmode = 0;
 			int emode = -1;
+			bool lensed_center_coords = false;
 			bool egrad = false;
 			int egrad_mode = -1;
 			int n_bspline_coefs = 0; // only used for egrad_mode=0 (B-spline mode)
@@ -5078,6 +5079,14 @@ void QLens::process_commands(bool read_file)
 			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per source can't exceed 100 (which will never happen!)
 			int parameter_anchor_i = 0;
 			for (int i=0; i < nmax_anchor; i++) parameter_anchors[i].anchor_object_number = n_sb; // by default, param anchors are to parameters within the new source, unless specified otherwise
+
+			for (int i=nwords-1; i > 1; i--) {
+				if (words[i]=="-lensed_center") {
+					lensed_center_coords = true;
+					remove_word(i);
+				}
+			}
+
 
 			if (words[0]=="fit") {
 				if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
@@ -5591,6 +5600,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
@@ -5754,6 +5764,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
@@ -5829,6 +5840,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
@@ -5903,6 +5915,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
@@ -5978,6 +5991,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
@@ -6108,6 +6122,7 @@ void QLens::process_commands(bool read_file)
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
+						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}

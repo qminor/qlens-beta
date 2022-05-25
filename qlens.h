@@ -853,7 +853,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness(const bool calculate_foreground = true);
-	void calculate_foreground_pixel_surface_brightness();
+	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
 	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness();
 	void store_foreground_pixel_surface_brightness();
