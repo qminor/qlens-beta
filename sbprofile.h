@@ -118,11 +118,11 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	bool* anchor_parameter_to_source;
 
 	int *indxptr; // points to important integer values for subclasses that uses them (e.g. shapelets)
-	QLens* lens;
+	QLens* qlens;
 	int parameter_mode; // allows for different parametrizations
 
-	SB_Profile() : qx_parameter(1), param(0) { lens = NULL; }
-	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in);
+	SB_Profile() : qx_parameter(1), param(0) { qlens = NULL; }
+	SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* qlens_in);
 	SB_Profile(const SB_Profile* sb_in);
 	~SB_Profile() {
 		if (param != NULL) delete[] param;
@@ -204,9 +204,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void copy_parameter_anchors(const SB_Profile* sb_in);
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 
-	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0); // for fitting to isophote data
+	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = "."); // for fitting to isophote data
 	double sbprofile_loglike(double *params);
-	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0);
+	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = ".");
 	double profile_fit_loglike(double *params);
 	double profile_fit_loglike_bspline(double *params);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
@@ -268,7 +268,7 @@ class Gaussian : public SB_Profile
 
 	public:
 	Gaussian() : SB_Profile() {}
-	Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	Gaussian(const Gaussian* sb_in);
 	~Gaussian() {}
 
@@ -296,7 +296,7 @@ class Sersic : public SB_Profile
 
 	public:
 	Sersic() : SB_Profile() {}
-	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	Sersic(const Sersic* sb_in);
 	~Sersic() {}
 
@@ -321,7 +321,7 @@ class CoreSersic : public SB_Profile
 
 	public:
 	CoreSersic() : SB_Profile() {}
-	CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	CoreSersic(const CoreSersic* sb_in);
 	~CoreSersic() {}
 
@@ -347,7 +347,7 @@ class Cored_Sersic : public SB_Profile
 
 	public:
 	Cored_Sersic() : SB_Profile() {}
-	Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	Cored_Sersic(const Cored_Sersic* sb_in);
 	~Cored_Sersic() {}
 
@@ -375,7 +375,7 @@ class DoubleSersic : public SB_Profile
 
 	public:
 	DoubleSersic() : SB_Profile() {}
-	DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	DoubleSersic(const DoubleSersic* sb_in);
 	~DoubleSersic() {}
 
@@ -402,7 +402,7 @@ class Shapelet : public SB_Profile
 
 	public:
 	Shapelet() : SB_Profile() { amps = NULL; }
-	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, const int parameter_mode_in, QLens* lens_in);
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, const int parameter_mode_in, QLens* qlens_in);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (amps != NULL) {
@@ -446,7 +446,7 @@ class SB_Multipole : public SB_Profile
 
 	public:
 	SB_Multipole() : SB_Profile() {}
-	SB_Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* lens_in);
+	SB_Multipole(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* qlens_in);
 	SB_Multipole(const SB_Multipole* sb_in);
 	~SB_Multipole() {}
 
@@ -471,7 +471,7 @@ class TopHat : public SB_Profile
 
 	public:
 	TopHat() : SB_Profile() {}
-	TopHat(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in);
+	TopHat(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
 	TopHat(const TopHat* sb_in);
 	~TopHat() {}
 

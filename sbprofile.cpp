@@ -20,12 +20,12 @@ double SB_Profile::zoom_scale = 4;
 double SB_Profile::SB_noise = 0.1; // used to help determine subpixel splittings to resolve SB profiles (zoom mode)
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* lens_in)
+			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* qlens_in)
 {
 	model_name = "sbspline";
 	sbtype = SB_SPLINE;
 	setup_base_source_properties(6,2,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	qx_parameter = qx_in;
 	f_parameter = f_in;
 	sb_spline.input(splinefile);
@@ -52,6 +52,7 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	ellipticity_gradient = false;
 	fourier_gradient = false;
 	contours_overlap = false; // only relevant for ellipticity gradient mode
+	overlap_log_penalty_prior = 0;
 	lensed_center_coords = false;
 	set_nparams(np);
 	sbprofile_nparams = sbprofile_np;
@@ -75,7 +76,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	set_null_ptrs_and_values();
 	model_name = sb_in->model_name;
 	sbtype = sb_in->sbtype;
-	lens = sb_in->lens;
+	qlens = sb_in->qlens;
 	sb_number = sb_in->sb_number;
 	set_nparams(sb_in->n_params);
 	sbprofile_nparams = sb_in->sbprofile_nparams;
@@ -203,7 +204,7 @@ bool SB_Profile::spawn_lens_model(Alpha* lens_model)
 	cout << "About to spawn..." << endl;
 	lens_model = new Alpha();
 	lens_model->initialize_parameters(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
-	cout << "Spawned lens model..." << endl;
+	cout << "Spawned qlens model..." << endl;
 	cout << "LENS NAME from SB: " << lens_model->get_model_name() << endl;
 	return true;
 }
@@ -494,11 +495,14 @@ bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int eg
 	assign_param_pointers();
 	assign_paramnames();
 
-	if (lens != NULL) lens->ellipticity_gradient = true;
+	if (qlens != NULL) qlens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
 		warn("contours overlap for chosen ellipticity gradient parameters");
-		if (lens != NULL) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			qlens->contours_overlap = true;
+			qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+		}
 	}
 	return true;
 }
@@ -613,12 +617,16 @@ bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const dvector&
 	assign_param_pointers();
 	assign_paramnames();
 
-	if (lens != NULL) lens->ellipticity_gradient = true;
+	if (qlens != NULL) qlens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
 		warn("contours overlap for chosen ellipticity gradient parameters");
-		if (lens != NULL) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			qlens->contours_overlap = true;
+			qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+		}
 	}
+
 	return true;
 }
 
@@ -773,7 +781,7 @@ void SB_Profile::update_parameters(const double* params)
 		else *(param[i]) = params[i];
 	}
 	update_meta_parameters();
-	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
+	if (qlens != NULL) qlens->update_anchored_parameters_and_redshift_data();
 	if (lensed_center_coords) set_center_if_lensed_coords();
 }
 
@@ -1155,11 +1163,11 @@ void SB_Profile::set_geometric_parameters_radians(const double &q_in, const doub
 void SB_Profile::set_center_if_lensed_coords()
 {
 	if (lensed_center_coords) {
-		if (lens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
 		lensvector xl;
 		xl[0] = x_center_lensed;
 		xl[1] = y_center_lensed;
-		lens->find_sourcept(xl,x_center,y_center,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+		qlens->find_sourcept(xl,x_center,y_center,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 	}
 }
 
@@ -1191,7 +1199,14 @@ void SB_Profile::update_ellipticity_meta_parameters()
 		y_center = geometric_param[3][0];
 		update_egrad_meta_parameters();
 		check_for_overlapping_contours();
-		if ((lens != NULL) and (contours_overlap)) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			if (contours_overlap) {
+				qlens->contours_overlap = true;
+				qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+			} else {
+				qlens->contours_overlap = false;
+			}
+		}
 	}
 }
 
@@ -1218,14 +1233,14 @@ double SB_Profile::sb_rsq(const double rsq) // this function should be redefined
 
 void SB_Profile::shift_angle_90()
 {
-	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
+	// do this if the major axis orientation is changed (so the qlens angles values are changed appropriately, even though the qlens doesn't change)
 	theta += M_HALFPI;
 	while (theta > M_PI) theta -= M_PI;
 }
 
 void SB_Profile::shift_angle_minus_90()
 {
-	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
+	// do this if the major axis orientation is changed (so the qlens angles values are changed appropriately, even though the qlens doesn't change)
 	theta -= M_HALFPI;
 	while (theta <= -M_PI) theta += M_PI;
 }
@@ -1620,7 +1635,7 @@ double SB_Profile::surface_brightness_r(const double r)
 	return sb_rsq(r*r);
 }
 
-bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts, const int mpi_np, const int mpi_id)
+bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts, const int mpi_np, const int mpi_id, const string fit_output_dir)
 {
 	// nested sampling: fitmode = 0
 	// downhill simplex: fitmode = 1 or higher
@@ -1653,7 +1668,28 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&SB_Profile::sbprofile_loglike);
 		InputPoint(fitparams,lower_limits.array(),upper_limits.array(),sbprofile_nparams);
 		double lnZ;
-		MonoSample("sbprofile",n_livepts,lnZ,fitparams,param_errors,false);
+		string filename = fit_output_dir + "/" + "sbprofile";
+
+		string pnumfile_str = filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << sbprofile_nparams << " " << 0 << endl;
+		pnumfile.close();
+
+		string pnamefile_str = filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (int i=0; i < sbprofile_nparams; i++) {
+			pnamefile << paramnames[i] << endl;
+		}
+		pnamefile.close();
+
+		string prange_str = filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (int i=0; i < sbprofile_nparams; i++) {
+			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+		}
+		prangefile.close();
+
+		MonoSample(filename.c_str(),n_livepts,lnZ,fitparams,param_errors,false);
 		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 	} else {
 		double (Simplex::*loglikeptr)(double*);
@@ -1664,7 +1700,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 			fitparams[i] = *(param[i]);
 		}
 		double chisq_tolerance = 1e-4;
-		if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
+		if (qlens != NULL) chisq_tolerance = qlens->chisq_tolerance;
 		initialize_simplex(fitparams,sbprofile_nparams,stepsizes,chisq_tolerance);
 		simplex_set_display_bfpont(true);
 		simplex_set_function(loglikeptr);
@@ -1704,7 +1740,7 @@ double SB_Profile::sbprofile_loglike(double *params)
 	return loglike;
 }
 
-bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode_in, const int n_livepts, const bool optimize_knots, const int mpi_np, const int mpi_id)
+bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode_in, const int n_livepts, const bool optimize_knots, const int mpi_np, const int mpi_id, const string fit_output_dir)
 {
 	// nested sampling: fitmode = 0
 	// downhill simplex: fitmode = 1 or higher
@@ -1885,8 +1921,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 		double chisq_bestfit;
 		//double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 
-		string fit_output_dir, fit_output_filename, egrad_istring;
-		fit_output_dir = ".";
+		string fit_output_filename, egrad_istring;
 		stringstream egrad_istr;
 		egrad_istr << egrad_param;
 		egrad_istr >> egrad_istring;
@@ -1945,7 +1980,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 				}
 			}
 			double chisq_tolerance = 1e-4;
-			if (lens != NULL) chisq_tolerance = lens->chisq_tolerance;
+			if (qlens != NULL) chisq_tolerance = qlens->chisq_tolerance;
 
 			initialize_simplex(fitparams,profile_fit_nparams,stepsizes,chisq_tolerance);
 			simplex_set_display_bfpont(true);
@@ -2001,7 +2036,6 @@ void SB_Profile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta
 		}
 	}
 }
-
 
 double SB_Profile::profile_fit_loglike(double *params)
 {
@@ -2346,12 +2380,12 @@ inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scri
 
 /********************************* Specific SB_Profile models (derived classes) *********************************/
 
-Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "gaussian";
 	sbtype = GAUSSIAN;
 	setup_base_source_properties(6,2,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	max_sb = max_sb_in;
 	sig_x = sig_x_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -2419,12 +2453,12 @@ double Gaussian::length_scale()
 	return sig_x;
 }
 
-Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "sersic";
 	sbtype = SERSIC;
 	setup_base_source_properties(7,3,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	n = n_in;
 	Reff = Reff_in;
 	s0 = s0_in;
@@ -2497,12 +2531,12 @@ double Sersic::length_scale()
 	return Reff;
 }
 
-Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+Cored_Sersic::Cored_Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "csersic";
 	sbtype = CORED_SERSIC;
 	setup_base_source_properties(8,4,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	n = n_in;
 	Reff = Reff_in;
 	s0 = s0_in;
@@ -2590,12 +2624,12 @@ double Cored_Sersic::length_scale()
 	return Reff;
 }
 
-CoreSersic::CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in,	const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+CoreSersic::CoreSersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &rc_in,	const double &gamma_in, const double &alpha_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "Csersic";
 	sbtype = CORE_SERSIC;
 	setup_base_source_properties(10,6,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	n = n_in;
 	Reff = Reff_in;
 	s0 = s0_in;
@@ -2688,12 +2722,12 @@ double CoreSersic::length_scale()
 	return Reff;
 }
 
-DoubleSersic::DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+DoubleSersic::DoubleSersic(const double &s0_in, const double &delta_s_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "dsersic";
 	sbtype = DOUBLE_SERSIC;
 	setup_base_source_properties(10,6,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	s0 = s0_in;
 	delta_s = delta_s_in;
 	n1 = n1_in;
@@ -2789,14 +2823,14 @@ double DoubleSersic::length_scale()
 	return sqrt(Reff1*Reff1 + Reff2*Reff2);
 }
 
-Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, const int parameter_mode_in, QLens* lens_in)
+Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
 	nonlinear_amp00 = nonlinear_amp00_in;
 	int npar = (nonlinear_amp00) ? 6 : 5;
 	setup_base_source_properties(npar,1,false,parameter_mode_in);
-	lens = lens_in;
+	qlens = qlens_in;
 	if (parameter_mode==0) {
 		sig = scale_in;
 		sig_factor = 1.0;
@@ -3017,8 +3051,8 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 					//Rmatrix_elements[n] = 1.0;
 					//*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
 					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
-					//Rmatrix_elements[n] = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig);
-					//Rmatrix_elements[n] = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig);
+					//*Rmatrix_elements = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig*sig*sig);
+					//*Rmatrix_elements = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig*sig*sig);
 					//Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
 					if (*Rmatrix_elements < 0) die("negative element!!!");
 					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
@@ -3122,7 +3156,7 @@ bool Shapelet::get_special_command_arg(string &arg)
 }
 
 
-SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* lens_in)
+SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* qlens_in)
 {
 	model_name = "sbmpole";
 	sbtype = SB_MULTIPOLE;
@@ -3133,7 +3167,7 @@ SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m
 	//special_parameter_command = "m=" + mstring;
 	sine_term = sine;
 	setup_base_source_properties(5,0,false);
-	lens = lens_in;
+	qlens = qlens_in;
 
 	r0 = r0_in;
 	m = m_in;
@@ -3223,12 +3257,12 @@ double SB_Multipole::length_scale()
 	return r0;
 }
 
-TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* lens_in)
+TopHat::TopHat(const double &sb_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "tophat";
 	sbtype = TOPHAT;
 	setup_base_source_properties(6,2,true);
-	lens = lens_in;
+	qlens = qlens_in;
 	sb = sb_in; rad = rad_in;
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 }

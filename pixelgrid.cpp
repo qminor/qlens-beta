@@ -3263,6 +3263,70 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 #endif
 }
 
+void ImagePixelData::save_data_fits(string fits_filename, const bool subimage, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+	int i,j,kk;
+	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix = -64, naxis = 2;
+	int min_i=0, min_j=0, max_i=npixels_x-1, max_j=npixels_y-1;
+	if (subimage) {
+		min_i = (int) ((xmin_in-xmin) * npixels_x / (xmax-xmin));
+		if (min_i < 0) min_i = 0;
+		max_i = (int) ((xmax_in-xmin) * npixels_x / (xmax-xmin));
+		if (max_i > (npixels_x-1)) max_i = npixels_x-1;
+		min_j = (int) ((ymin_in-ymin) * npixels_y / (ymax-ymin));
+		if (min_j < 0) min_j = 0;
+		max_j = (int) ((ymax_in-ymin) * npixels_y / (ymax-ymin));
+		if (max_j > (npixels_y-1)) max_j = npixels_y-1;
+	}
+	int npix_x = max_i-min_i+1;
+	int npix_y = max_j-min_j+1;
+	cout << "imin=" << min_i << " imax=" << max_i << " jmin=" << min_j << " jmax=" << max_j << " npix_x=" << npix_x << " npix_y=" << npix_y << endl;
+	long naxes[2] = {npix_x,npix_y};
+	double *pixels;
+	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
+
+	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+	{
+		if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				pixels = new double[npix_x];
+
+				for (fpixel[1]=1, j=min_j; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				{
+					for (i=min_i, kk=0; i <= max_i; i++, kk++) {
+						pixels[kk] = surface_brightness[i][j];
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+				}
+				delete[] pixels;
+			}
+			if (lens->data_pixel_size > 0)
+				fits_write_key(outfptr, TDOUBLE, "PXSIZE", &lens->data_pixel_size, "length of square pixels (in arcsec)", &status);
+			if (lens->data_pixel_noise != 0)
+				fits_write_key(outfptr, TDOUBLE, "PXNOISE", &lens->data_pixel_noise, "pixel surface brightness noise", &status);
+			if (lens->data_info != "") {
+				string comment = "ql: " + lens->data_info;
+				fits_write_comment(outfptr, comment.c_str(), &status);
+			}
+		}
+		fits_close_file(outfptr, &status);
+	} 
+
+	if (status) fits_report_error(stderr, status); // print any error message
+#endif
+}
+
 void ImagePixelData::get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
 {
 	if (xvals==NULL) die("cannot get image pixel data parameters; no data has been loaded");
@@ -3311,7 +3375,6 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 	int bitpix, naxis;
 	long naxes[2] = {1,1};
 	double *pixels;
-	double x, y, xstep, ystep;
 	int n_maskpixels = 0;
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
@@ -3379,7 +3442,6 @@ bool ImagePixelData::save_mask_fits(string fits_filename)
 	int bitpix = -64, naxis = 2;
 	long naxes[2] = {npixels_x,npixels_y};
 	double *pixels;
-	double x, y, xstep, ystep;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
 
 	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
@@ -3434,7 +3496,6 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	int nx, ny;
 	long naxes[2] = {1,1};
 	double *pixels;
-	double x, y, xstep, ystep;
 	double peak_sb = -1e30;
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
@@ -6894,7 +6955,6 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 	int bitpix = -64, naxis = 2;
 	long naxes[2] = {x_N,y_N};
 	double *pixels;
-	double x, y, xstep, ystep;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
 
 	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
@@ -7275,7 +7335,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
 		rsqavg /= totsurf;
 		sig = sqrt(abs(rsqavg));
-		//cout << "Iteration " << iter << ": sig=" << sig << ", npts=" << npts << endl;
+		//cout << "Iteration " << iter << ": sig=" << sig << ", xc=" << xcavg << ", yc=" << ycavg << ", npts=" << npts << endl;
 		iter++;
 	} while ((iter < 6) and (npts != npts_old));
 	xcenter = xcavg;
@@ -7328,8 +7388,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double maxdist = dmax(xmax,ymax);
 
 	int nn = lens->get_shapelet_nn();
-	const double window_scaling = 0.7;
-	scaled_maxdist = window_scaling*maxdist;
+	scaled_maxdist = lens->shapelet_window_scaling*maxdist;
 	if (lens->shapelet_scale_mode==0) {
 		scale = sig; // uses the dispersion of source SB to set scale (WARNING: might not cover all of lensed pixels in mask if n_shapelets is too small!!)
 	} else if (lens->shapelet_scale_mode==1) {
@@ -11694,7 +11753,7 @@ void QLens::store_image_pixel_surface_brightness()
 	}
 }
 
-void QLens::store_foreground_pixel_surface_brightness()
+void QLens::store_foreground_pixel_surface_brightness() // note, foreground_surface_brightness could also include source objects that aren't shapelets (if in shapelet mode)
 {
 	int i,j;
 	for (int img_index=0; img_index < image_npixels_fgmask; img_index++) {

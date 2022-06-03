@@ -24,10 +24,10 @@ bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
 int LensProfile::fourier_spline_npoints = 336;
 
-LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* lens_in)
+LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* qlens_in)
 {
 	setup_lens_properties();
-	setup_cosmology(lens_in,zlens_in,zsrc_in);
+	setup_cosmology(qlens_in,zqlens_in,zsrc_in);
 	set_integration_parameters(nn,acc);
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -66,6 +66,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	n_fourier_modes = 0;
 	ellipticity_gradient = false;
 	contours_overlap = false; // only relevant for ellipticity gradient mode
+	overlap_log_penalty_prior = 0;
 	lensed_center_coords = false;
 	analytic_3d_density = false; // this will be changed to 'true' for certain models (e.g. NFW)
 	perturber = false; // default
@@ -81,12 +82,12 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 
 void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const double zsrc_in)
 {
-	lens = qlens_in;
+	qlens = qlens_in;
 	zlens = zlens_in;
 	zlens_current = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
+	sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
 	//update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
 }
 
@@ -103,7 +104,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *always* get called by any derived class when copying another lens object
 {
-	lens = lens_in->lens;
+	qlens = lens_in->qlens;
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
@@ -428,9 +429,9 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool 
 
 bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
 {
-	if (lens == NULL) return false;
+	if (qlens == NULL) return false;
 	if (!center_anchored) center_anchored = true;
-	center_anchor_lens = lens->lens_list[center_anchor_lens_number];
+	center_anchor_lens = qlens->lens_list[center_anchor_lens_number];
 	x_center = center_anchor_lens->x_center;
 	y_center = center_anchor_lens->y_center;
 	return true;
@@ -464,8 +465,8 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	else new_vary_flags[n_params-1] = false; // if no vary flag is given for redshift, then assume it's not being varied
 	if (vary_parameters(new_vary_flags)==false) return false;
 	
-	if (lens != NULL)
-		return lens->register_lens_vary_parameters(lens_number); // The problem here is that returning 'false' might mean different errors. Hmmm
+	if (qlens != NULL)
+		return qlens->register_lens_vary_parameters(lens_number); // The problem here is that returning 'false' might mean different errors. Hmmm
 	return true;
 }
 
@@ -478,8 +479,8 @@ void LensProfile::get_vary_flags(boolvector &vary_flags)
 bool LensProfile::register_vary_flags()
 {
 	// This function is called if there are already vary flags that have been set before adding the lens to the list
-	if ((n_vary_params > 0) and (lens != NULL))
-		return lens->register_lens_vary_parameters(lens_number);
+	if ((n_vary_params > 0) and (qlens != NULL))
+		return qlens->register_lens_vary_parameters(lens_number);
 	else return false;
 }
 
@@ -621,7 +622,7 @@ void LensProfile::update_parameters(const double* params)
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
-	if (lens != NULL) lens->update_anchored_parameters_and_redshift_data();
+	if (qlens != NULL) qlens->update_anchored_parameters_and_redshift_data();
 }
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
@@ -867,7 +868,7 @@ void LensProfile::copy_special_parameter_anchor(const LensProfile *lens_in)
 
 void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile* param_anchor_lens)
 {
-	if (paramnum >= n_params) die("Parameter does not exist for this lens");
+	if (paramnum >= n_params) die("Parameter does not exist for this qlens");
 	if (anchor_paramnum >= param_anchor_lens->n_params) die("Parameter does not exist for lens you are anchoring to");
 	if (anchor_parameter_to_source[paramnum]) { warn("cannot anchor a parameter to both a lens and a source object"); return; }
 	anchor_parameter_to_lens[paramnum] = true;
@@ -1074,9 +1075,9 @@ void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2
 void LensProfile::set_center_if_lensed_coords()
 {
 	if (lensed_center_coords) {
-		if (lens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
 		lensvector xl;
-		lens->map_to_lens_plane(lens->lens_redshift_idx[lens_number],x_center_lensed,y_center_lensed,xl,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+		qlens->map_to_lens_plane(qlens->lens_redshift_idx[lens_number],x_center_lensed,y_center_lensed,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 		x_center = xl[0];
 		y_center = xl[1];
 	}
@@ -1094,11 +1095,11 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		double kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
+		double kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1552,8 +1553,8 @@ void LensProfile::set_angle_radians(const double &theta_in)
 void LensProfile::update_zlens_meta_parameters()
 {
 	if (zlens != zlens_current) {
-		sigma_cr = lens->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/lens->angular_diameter_distance(zlens);
+		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
 		zlens_current = zlens;
 	}
 }
@@ -1598,7 +1599,14 @@ void LensProfile::update_ellipticity_meta_parameters()
 		y_center = geometric_param[3][0];
 		update_egrad_meta_parameters();
 		check_for_overlapping_contours();
-		if ((lens != NULL) and (contours_overlap)) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			if (contours_overlap) {
+				qlens->contours_overlap = true;
+				qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+			} else {
+				qlens->contours_overlap = false;
+			}
+		}
 	}
 }
 
@@ -1929,11 +1937,14 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	update_ellipticity_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
-	if (lens != NULL) lens->ellipticity_gradient = true;
+	if (qlens != NULL) qlens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
 		warn("contours overlap for chosen ellipticity gradient parameters");
-		if (lens != NULL) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			qlens->contours_overlap = true;
+			qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+		}
 	}
 	return true;
 }
@@ -2025,11 +2036,14 @@ bool LensProfile::enable_fourier_gradient(dvector& fourier_params, const dvector
 	assign_param_pointers();
 	assign_paramnames();
 
-	if (lens != NULL) lens->ellipticity_gradient = true;
+	if (qlens != NULL) qlens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
 		warn("contours overlap for chosen ellipticity gradient parameters");
-		if (lens != NULL) lens->contours_overlap = true;
+		if (qlens != NULL) {
+			qlens->contours_overlap = true;
+			qlens->contour_overlap_log_penalty_prior = overlap_log_penalty_prior;
+		}
 	}
 	return true;
 }
@@ -2428,7 +2442,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 {
 	if ((!converged) and (integration_warnings)) {
 		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
-			if (lens->mpi_id==0) {
+			if (qlens->mpi_id==0) {
 				if (integral_method==Gauss_Patterson_Quadrature) {
 					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
 					if (numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
@@ -2445,7 +2459,7 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 					if (i != n_params-1) cout << ", ";
 				}
 				cout << "     " << endl;
-				if (lens->use_ansi_characters) {
+				if (qlens->use_ansi_characters) {
 					cout << "\033[2A";
 				}
 			}

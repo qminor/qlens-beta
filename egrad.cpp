@@ -347,6 +347,7 @@ bool EllipticityGradient::setup_fourier_grad_params(const int n_modes, const ive
 
 void EllipticityGradient::check_for_overlapping_contours()
 {
+	contours_overlap = false;
 	int i, j, n_contours = 100, npoints = 100;
 	double xi, ximin, ximax, xistep;
 	double qq, th, qprev, thprev, ep, costh, sinth;
@@ -365,7 +366,11 @@ void EllipticityGradient::check_for_overlapping_contours()
 
 	qq = geometric_param[0][0];
 	th = geometric_param[1][0];
+	double dev,maxdev;
+	overlap_log_penalty_prior=0;
+	bool this_contour_overlaps;
 	for (i=0, xi=ximin; i < n_contours; i++, xi += xistep) {
+		this_contour_overlaps = false;
 		qprev = qq;
 		thprev = th;
 		xisqprev = SQR(xi-xistep);
@@ -374,6 +379,7 @@ void EllipticityGradient::check_for_overlapping_contours()
 		if (i==0) continue;
 		costh = cos(th-thprev);
 		sinth = sin(th-thprev);
+		maxdev = -1e30;
 		for (j=0, phi=0; j < npoints-1; j++, phi += phistep) {
 			double xisqcheck;
 			if (egrad_ellipticity_mode==0) {
@@ -393,12 +399,18 @@ void EllipticityGradient::check_for_overlapping_contours()
 			}
 			if (xisqtest < xisqprev) {
 				// a point in the contour is inside the previous ellipse (at smaller xi), indicating contours have crossed
-				contours_overlap = true;
-				return;
+				if (!this_contour_overlaps) this_contour_overlaps = true;
+				dev = xisqprev - xisqtest;
+				if (dev > maxdev) maxdev = dev;
+				//return;
 			}
 		}
+		if (this_contour_overlaps) {
+			if (!contours_overlap) contours_overlap = true;
+			overlap_log_penalty_prior += 1e10*(maxdev+1); //we add +1 as an incentive to eliminate the overlap altogether during parameter search
+		}
 	}
-	contours_overlap = false;
+	//if (contours_overlap) cout << "OVERLAP! log_penalty_prior = " << overlap_log_penalty_prior << endl;
 }
 
 void EllipticityGradient::ellipticity_function(const double xi, double& ep, double& angle)
@@ -1020,4 +1032,64 @@ void EllipticityGradient::set_fourier_paramnums(int *paramnum, int paramnum0)
 		}
 	}
 }
+
+void EllipticityGradient::output_egrad_values_and_knots(ofstream& scriptout)
+{
+	int i,j;
+	if ((ellipticity_gradient) and (egrad_mode==0)) {
+		scriptout << n_egrad_params[0] << " " << xi_initial_egrad << " " << xi_final_egrad << " 1 -enter_knots" << endl << endl;
+		for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+			scriptout << pow(10,geometric_knots[0][i]); // gives the elliptical radius values
+			if (i < n_bspline_knots_tot-1) scriptout << " ";
+		}
+		scriptout << " # q-knots" << endl;
+		for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+			scriptout << pow(10,geometric_knots[1][i]); // gives the elliptical radius values
+			if (i < n_bspline_knots_tot-1) scriptout << " ";
+		}
+		scriptout << " # theta-knots" << endl << endl;
+
+		scriptout << "# q and theta B-spline param values/flags" << endl;
+		for (i=0; i < n_egrad_params[0]; i++) scriptout << geometric_param[0][i] << " ";
+		scriptout << "  ";
+		for (i=0; i < n_egrad_params[1]; i++) scriptout << radians_to_degrees(geometric_param[1][i]) << " ";
+
+		scriptout << endl;
+		for (j=0; j < 2; j++) {
+			for (i=0; i < n_egrad_params[j]; i++) scriptout << "1 "; // vary flags
+			scriptout << "  ";
+		}
+		scriptout << endl << endl;
+
+		if (fourier_gradient) {
+			for (j=0; j < n_fourier_grad_modes; j++) {
+				stringstream mvalstr;
+				string mvalstring;
+				mvalstr << fourier_grad_mvals[j];
+				mvalstr >> mvalstring;
+				for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+					scriptout << pow(10,fourier_knots[0][i]); // gives the elliptical radius values
+					if (i < n_bspline_knots_tot-1) scriptout << " ";
+				}
+				scriptout << " # A" << mvalstring << "-knots " << endl;
+				for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+					scriptout << pow(10,fourier_knots[1][i]); // gives the elliptical radius values
+					if (i < n_bspline_knots_tot-1) scriptout << " ";
+				}
+				scriptout << " # B" << mvalstring << "-knots " << endl << endl;
+
+				scriptout << "# A" << mvalstring << " and B" << mvalstring << " B-spline param values/flags" << endl;
+				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j][i] << " ";
+				scriptout << "  ";
+				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j+1][i] << " ";
+				scriptout << endl;
+				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+				scriptout << "  ";
+				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+				scriptout << endl << endl;
+			}
+		}
+	}
+}
+
 

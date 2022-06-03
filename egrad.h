@@ -15,6 +15,7 @@ class EllipticityGradient : public Brent
 	protected:
 	bool ellipticity_gradient; // if true, then allows a gradient in both ellipticity and position angle
 	bool contours_overlap; // relevant for ellipticity gradient mode
+	double overlap_log_penalty_prior;
 	int egrad_ellipticity_mode; // same as ellipticity_mode in LensProfile, but only allows modes 0 or 1 right now
 	int egrad_mode;
 	double xi_initial_egrad, xi_final_egrad, xi_ref_egrad; // keeps track of the region where ellipticity/PA is changing
@@ -77,6 +78,7 @@ class EllipticityGradient : public Brent
 	double elliptical_radius_root(const double x, const double y);
 	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const string suffix = "");
 	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const string suffix = "");
+	void output_egrad_values_and_knots(ofstream& outfile);
 
 	private:
 	double elliptical_radius_root_eq(const double xi, const double &xi_root_x, const double &xi_root_y);

@@ -314,6 +314,7 @@ struct ImagePixelData : public Sort
 	}
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
+	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(string fits_filename);
 	bool save_mask_fits(string fits_filename);
 	void copy_mask(ImagePixelData* data);

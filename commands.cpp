@@ -2272,20 +2272,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="read")
 		{
 			if (nwords == 2) {
-				if (infile->is_open()) {
-					if (n_infiles==10) Complain("cannot open more than 10 files at once");
-					infile++;
-				}
-				infile->open(words[1].c_str());
-				if (infile->is_open()) {
-					if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
-					read_from_file = true;
-					n_infiles++;
-				}
-				else {
-					cerr << "input file '" << words[1] << "' could not be opened" << endl;
-					if (n_infiles > 0) infile--;
-				}
+				if (!open_script_file(words[1])) Complain("input file '" << words[1] << "' could not be opened");
 			} else if (nwords == 1) {
 				Complain("must specify filename for input file to be read");
 			} else Complain("invalid number of arguments; must specify one filename to be read");
@@ -7427,6 +7414,8 @@ void QLens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
+					// This is becoming obsolete, since loading parameters from chain is simpler ("fit adopt_chain_bestfit").
+					// We should extend that method to optimizations, and then eliminate "load_bestfit" altogether
 					if (nwords <= 3) {
 						string scriptfile_str;
 						if (nwords==3) {
@@ -8451,6 +8440,24 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
 				} else Complain("too many arguments to 'sbmap loadimg'");
 				if (!load_image_surface_brightness_grid(filename)) Complain("could not load image data");
+			}
+			else if (words[1]=="saveimg")
+			{
+				string filename;
+				if (nwords==2) filename = "img_pixel";
+				else if (nwords>=3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
+					if (nwords==3) {
+						image_pixel_data->save_data_fits(filename);
+					} else if (nwords==7) {
+						double xmin, xmax, ymin, ymax;
+						if (!(ws[3] >> xmin)) Complain("invalid xmin argument for 'sbmap saveimg'");
+						if (!(ws[4] >> xmax)) Complain("invalid xmax argument for 'sbmap saveimg'");
+						if (!(ws[5] >> ymin)) Complain("invalid ymin argument for 'sbmap saveimg'");
+						if (!(ws[6] >> ymax)) Complain("invalid ymax argument for 'sbmap saveimg'");
+						image_pixel_data->save_data_fits(filename,true,xmin,xmax,ymin,ymax);
+					} else Complain("too many arguments to 'sbmap loadimg'");
+				}
 			}
 			else if (words[1]=="loadmask")
 			{
@@ -11321,6 +11328,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "shapelet_max_scale = " << shapelet_max_scale << endl;
 			} else Complain("must specify either zero or one argument (shapelet_max_scale)");
 		}
+		else if (words[0]=="shapelet_window_scalefac")
+		{
+			double param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid shapelet_window_scalefac");
+				shapelet_window_scaling = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "shapelet_window_scalefac = " << shapelet_window_scaling << endl;
+			} else Complain("must specify either zero or one argument (shapelet_window_scalefac)");
+		}
 		else if (words[0]=="optimize_regparam")
 		{
 			if (nwords==1) {
@@ -11514,12 +11531,18 @@ void QLens::process_commands(bool read_file)
 			//else image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
 			//isodata.plot_isophote_parameters(output_label);
 		} else if (words[0]=="test") {
-			if (n_sb == 0) Complain("need a source object to spawn a lens");
-			int pmode = 0;
+			double scalefac = 1;
 			if (nwords > 1) {
-				if (!(ws[1] >> pmode)) Complain("invalid pmode");
+				if (!(ws[1] >> scalefac)) Complain("invalid scalefac");
 			}
-			spawn_lens_from_source_object(0,lens_redshift,source_redshift,pmode,true,true,0.1,10);
+			output_scaled_percentiles_from_egrad_fits(0.0115,0.0155,scalefac,false,true);
+
+			//if (n_sb == 0) Complain("need a source object to spawn a lens");
+			//int pmode = 0;
+			//if (nwords > 1) {
+				//if (!(ws[1] >> pmode)) Complain("invalid pmode");
+			//}
+			//spawn_lens_from_source_object(0,lens_redshift,source_redshift,pmode,true,true,0.1,10);
 			/*
 			dvector efunc_params;
 			dvector lower_limits, upper_limits;
@@ -11661,14 +11684,15 @@ void QLens::process_commands(bool read_file)
 			IsophoteData isodata;
 			if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
 
+			double xc_avg = xc_i, yc_avg = yc_i; // these will be updated if avg_center is set to true
 			if (!fix_center) {
 				double* skip_outlier = new double[isodata.n_xivals];
 				for (int i=0; i < isodata.n_xivals; i++) {
 					skip_outlier[i] = false;
 				}
 				bool at_least_one_outlier;
-				double xc_avg, xc_invsqr;
-				double yc_avg, yc_invsqr;
+				double xc_invsqr, xc_err;
+				double yc_invsqr, yc_err;
 				int it=0;
 				do {
 					xc_avg=0;
@@ -11707,6 +11731,8 @@ void QLens::process_commands(bool read_file)
 					}
 					it++;
 				} while (at_least_one_outlier);
+				xc_err = 3*sqrt(1.0/xc_invsqr);
+				yc_err = 3*sqrt(1.0/yc_invsqr);
 				if (avg_center) {
 					if (sbptr != NULL) {
 						sbptr->update_specific_parameter("xc",xc_avg);
@@ -11718,8 +11744,8 @@ void QLens::process_commands(bool read_file)
 					if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
 					if (mpi_id==0) {
 						cout << "Centroid estimate:" << endl;
-						cout << "avg xc: " << xc_avg << endl;
-						cout << "avg yc: " << yc_avg << endl;
+						cout << "avg xc: " << xc_avg << " +/- " << xc_err << " # 3-sigma error" << endl;
+						cout << "avg yc: " << yc_avg << " +/- " << yc_err << " # 3-sigma error" << endl;
 					}
 				}
 				delete[] skip_outlier;
@@ -11735,6 +11761,9 @@ void QLens::process_commands(bool read_file)
 			IsophoteData isodata0(isodata);
 			// the remaining code is to apply the PSF correction
 			int sbprofile_fit_iter = 0; // keeps track of how many sbprofile fits have been done, so it does nested sampling on iter=0 and simplex afterwards
+			bool include_ellipticity_gradient = false;
+			bool include_fourier_gradient = false;
+
 			if (psf_iterations > 0) {
 				int n_xivals = isodata.n_xivals;
 				//double iso_qvals[n_xivals];
@@ -11760,8 +11789,8 @@ void QLens::process_commands(bool read_file)
 					qvals[i] = new double[nn_q];
 				}
 
-				bool include_ellipticity_gradient = sbptr->ellipticity_gradient;
-				bool include_fourier_gradient = sbptr->fourier_gradient;
+				include_ellipticity_gradient = sbptr->ellipticity_gradient;
+				include_fourier_gradient = sbptr->fourier_gradient;
 
 				double A4update;
 				for (i=0; i < n_xivals; i++) {
@@ -11777,60 +11806,60 @@ void QLens::process_commands(bool read_file)
 				//dvector lower_limits, upper_limits;
 				//boolvector varyflags;
 				do {
-					if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << "Fitting SB profile from isophote fit:" << endl;
-					if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id)) Complain("sbprofile fit failed");
+					if (mpi_id==0) cout << "Fitting SB profile from isophote fit:" << endl;
+					if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id,fit_output_dir)) Complain("sbprofile fit failed");
 					sbptr->print_parameters();
 					if (include_ellipticity_gradient) {
 						if (mpi_id==0) cout << endl << "Fitting q profile from isophote fit:";
 						if ((sbprofile_fit_iter==-1) and (optimize_knots_before_nest)) {
 							cout << " (will optimize knots first)" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,0,1,n_sbfit_livepts,true,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,0,1,n_sbfit_livepts,true,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						} else {
 							if ((sbprofile_fit_iter==1) and (optimize_knots)) cout << " (will optimize knots first)";
 							cout << endl;
 						}
-						if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+						if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 						if (mpi_id==0) cout << endl << "Fitting theta profile from isophote fit:";
 						if ((sbprofile_fit_iter==-1) and (optimize_knots_before_nest)) {
 							cout << " (will optimize knots first)" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,1,1,n_sbfit_livepts,true,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,1,1,n_sbfit_livepts,true,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						} else {
 							if ((sbprofile_fit_iter==1) and (optimize_knots)) cout << " (will optimize knots first)";
 							cout << endl;
 						}
-						if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+						if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 
 						if (include_fourier_gradient) {
 							if (include_fourier_m3_mode) {
-								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=3 cosine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (mpi_id==0) cout << endl << "Fitting Fourier m=3 cosine profile from isophote fit:" << endl;
+								if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
-								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=3 sine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (mpi_id==0) cout << endl << "Fitting Fourier m=3 sine profile from isophote fit:" << endl;
+								if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 							}
-							if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=4 cosine profile from isophote fit:" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (mpi_id==0) cout << endl << "Fitting Fourier m=4 cosine profile from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 							if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
-							if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=4 sine profile from isophote fit:" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (mpi_id==0) cout << endl << "Fitting Fourier m=4 sine profile from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 							if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 							if (n_higher_harmonics >= 3) {
 								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=5 cosine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=5 sine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 							}
 							if (n_higher_harmonics >= 4) {
 								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=6 cosine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 								if ((mpi_id==0) and (sbprofile_fit_iter==0)) cout << endl << "Fitting Fourier m=6 sine profile from isophote fit:" << endl;
-								if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+								if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 								if (sbprofile_fit_iter==0) sbptr->print_parameters(); // just to see if parameters are in the ballpark after first fit
 							}
 						}
@@ -11851,8 +11880,10 @@ void QLens::process_commands(bool read_file)
 					double B4_avg=0, B4_invsqr=0;
 					double A3_avg=0, A3_invsqr=0;
 					double B3_avg=0, B3_invsqr=0;
-					double xc_avg=0, xc_invsqr=0;
-					double yc_avg=0, yc_invsqr=0;
+					xc_avg = 0;
+					yc_avg = 0;
+					double xc_invsqr=0;
+					double yc_invsqr=0;
 
 					double A5_avg=0, A5_invsqr=0;
 					double B5_avg=0, B5_invsqr=0;
@@ -12132,30 +12163,30 @@ void QLens::process_commands(bool read_file)
 			delete[] skip;
 
 			if (((fit_sbprofile) or (psf_iterations > 0)) and (sbptr != NULL) and (!nested_sampling_on_final_iter)) { // if we finished with nested sampling, we don't need to redo the fits here
-				if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id)) Complain("sbprofile fit failed");
+				if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id,fit_output_dir)) Complain("sbprofile fit failed");
 				if ((sbptr != NULL) and (sbptr->ellipticity_gradient)) {
 					if (mpi_id==0) cout << "Fitting q profile from isophote fit..." << endl;
-					if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+					if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 					if (mpi_id==0) cout << "Fitting theta profile from isophote fit..." << endl;
-					if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+					if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 					if (sbptr->fourier_gradient) {
 						if (include_fourier_m3_mode) {
 							if (mpi_id==0) cout << "Fitting Fourier m=3 profiles from isophote fit:" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
-							if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						}
 						if (mpi_id==0) cout << "Fitting Fourier m=4 profiles from isophote fit:" << endl;
-						if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
-						if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+						if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+						if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						if (n_higher_harmonics >= 3) {
 							if (mpi_id==0) cout << "Fitting Fourier m=5 profiles from isophote fit:" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
-							if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						}
 						if (n_higher_harmonics >= 4) {
 							if (mpi_id==0) cout << "Fitting Fourier m=6 profiles from isophote fit:" << endl;
-							if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
-							if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
 						}
 
 					}
@@ -12164,6 +12195,16 @@ void QLens::process_commands(bool read_file)
 
 			if (mpi_id==0) cout << "Plotting..." << endl;
 			isodata.plot_isophote_parameters(output_label);
+			if (nested_sampling_on_final_iter) {
+				bool include_m3_fgrad = false;
+				double scale_factor = 30;
+				double xcavg, ycavg;
+				sbptr->get_specific_parameter("xc",xcavg);		
+				sbptr->get_specific_parameter("yc",ycavg);		
+				if ((include_fourier_gradient) and (include_fourier_m3_mode)) include_m3_fgrad = true;
+				output_scaled_percentiles_from_egrad_fits(xcavg,ycavg,scale_factor,include_m3_fgrad,include_fourier_gradient);
+				if (mpi_id==0) cout << "Knot values and B-spline coefficient posterior limits (scaled by " << scale_factor << ") have been output to a file" << endl;
+			}
 
 			//find_bestfit_smooth_model(2);
 			//fit_los_despali();
@@ -12378,6 +12419,13 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 		enter_params_and_varyflags = false;
 		if (mpi_id==0) cout << "Enter n_bspline_coefficients, ximin, ximax, paramflag:" << endl;
 		if (read_command(false)==false) return false;
+		if ((nwords<=2) and (words[0]=="read_isofit_data")) {
+			string isofit_data_dir = fit_output_dir;
+			if (nwords==2) isofit_data_dir = words[1];
+			string scriptfile = isofit_data_dir + "/isofit_knots_limits.in";
+			if (!open_script_file(scriptfile)) return false;
+			if (read_command(false)==false) return false;
+		}
 		for (int i=nwords-1; i > 1; i--) {
 			if (words[i]=="-linear_knots") {
 				linear_xivals = true;
@@ -12710,23 +12758,6 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 	return true;
 }
 
-
-
-bool QLens::open_command_file(char *filename)
-{
-	if (infile->is_open()) {
-		if (n_infiles==10) {
-			warn("cannot open more than 10 files at once");
-			return false;
-		}
-		infile++;
-	}
-	infile->open(filename);
-	if (infile->is_open()) n_infiles++;
-	else if (n_infiles > 0) infile--;
-	return (infile->is_open()) ? true : false;
-}
-
 void QLens::remove_equal_sign(void)
 {
 	int pos;
@@ -12920,6 +12951,26 @@ void QLens::run_plotter_range(string plotcommand, string range, string extra_com
 		system(command.c_str());
 	}
 }
+
+bool QLens::open_script_file(string filename)
+{
+	if (infile->is_open()) {
+		if (n_infiles==10) die("cannot open more than 10 files at once");
+		infile++;
+	}
+	infile->open(filename.c_str());
+	if (infile->is_open()) {
+		if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
+		read_from_file = true;
+		n_infiles++;
+	}
+	else {
+		if (n_infiles > 0) infile--;
+		return false;
+	}
+	return true;
+}
+
 
 void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists)
 {

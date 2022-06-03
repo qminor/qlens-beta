@@ -700,6 +700,7 @@ QLens::QLens() : UCMC()
 	source_redshift = 2.0;
 	ellipticity_gradient = false;
 	contours_overlap = false; // required for ellipticity gradient mode to check that contours don't overlap
+	contour_overlap_log_penalty_prior = 0;
 	syserr_pos = 0.0;
 	wl_shear_factor = 1.0;
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
@@ -768,7 +769,7 @@ QLens::QLens() : UCMC()
 	open_chisq_logfile = false;
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
-	psf_threshold = 1e-1;
+	psf_threshold = 0;
 	fft_convolution = false;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -857,6 +858,7 @@ QLens::QLens() : UCMC()
 	auto_shapelet_scaling = true;
 	auto_shapelet_center = true;
 	shapelet_scale_mode = 0;
+	shapelet_window_scaling = 0.8;
 	shapelet_max_scale = 1.0;
 	ray_tracing_method = Interpolate;
 	weight_interpolation_by_imgplane_area = true;
@@ -1049,6 +1051,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	source_redshift = lens_in->source_redshift;
 	ellipticity_gradient = lens_in->ellipticity_gradient;
 	contours_overlap = lens_in->contours_overlap; // required for ellipticity gradient mode to check that contours don't overlap
+	contour_overlap_log_penalty_prior = lens_in->contour_overlap_log_penalty_prior;
 	user_changed_zsource = lens_in->user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = lens_in->auto_zsource_scaling;
 	reference_source_redshift = lens_in->reference_source_redshift; // this is the source redshift with respect to which the lens models are defined
@@ -1188,6 +1191,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
 	auto_shapelet_center = lens_in->auto_shapelet_center;
 	shapelet_scale_mode = lens_in->shapelet_scale_mode;
+	shapelet_window_scaling = lens_in->shapelet_window_scaling;
 	shapelet_max_scale = lens_in->shapelet_max_scale;
 	weight_interpolation_by_imgplane_area = lens_in->weight_interpolation_by_imgplane_area;
 	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
@@ -6731,7 +6735,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			default:
 				die("lens type not supported for fitting");
 		}
-		fitmodel->lens_list[i]->lens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
+		fitmodel->lens_list[i]->qlens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
 
 	fitmodel->n_sb = n_sb;
@@ -6758,7 +6762,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				default:
 					die("surface brightness profile type not supported for fitting");
 			}
-			fitmodel->sb_list[i]->lens = fitmodel; // point to the fitmodel
+			fitmodel->sb_list[i]->qlens = fitmodel; // point to the fitmodel
 		}
 	}
 
@@ -6859,9 +6863,10 @@ void QLens::update_anchored_parameters_and_redshift_data()
 	reset_grid();
 }
 
-bool QLens::update_model(const double* params)
+double QLens::update_model(const double* params)
 {
 	bool status = true;
+	double log_penalty_prior = 0;
 	if (ellipticity_gradient) contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
 	int i, index=0;
 	for (i=0; i < nlens; i++) {
@@ -6907,13 +6912,14 @@ bool QLens::update_model(const double* params)
 	if (vary_wl_shear_factor_parameter) {
 		wl_shear_factor = params[index++];
 	}
+	if (status==false) log_penalty_prior = 1e30;
 	if ((ellipticity_gradient) and (contours_overlap)) {
-		status = false;
+		log_penalty_prior += contour_overlap_log_penalty_prior;
 		//warn("contours overlap in ellipticity gradient model");
 	}
 
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
-	return status;
+	return log_penalty_prior;
 }
 
 void QLens::output_analytic_srcpos(lensvector *beta_i)
@@ -8312,7 +8318,7 @@ bool QLens::update_parameter_value(const int param_num, const double param_val)
 	newparams[param_num] = param_val;
 	bool status = true;
 	param_settings->inverse_transform_parameters(newparams,new_transformed_params);
-	if (update_model(new_transformed_params)==false) status = false;
+	if (update_model(new_transformed_params) != 0.0) status = false;
 	return status;
 }
 
@@ -10138,6 +10144,129 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
+bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
+{
+	if (n_sb==0) return false;
+	string scriptfile = fit_output_dir + "/isofit_knots_limits.in";
+	ofstream scriptout(scriptfile.c_str());
+	sb_list[0]->output_egrad_values_and_knots(scriptout);
+	
+	int i,j,k,nparams;
+	int n_profile_params = 3;
+	if (include_m3_fmode) n_profile_params += 2;
+	if (include_m4_fmode) n_profile_params += 2;
+	string label[n_profile_params];
+	label[0] = "sbprofile"; // SB profile 
+	label[1] = "egrad_profile0"; // axis ratio q
+	label[2] = "egrad_profile1"; // angle theta
+	i = 3;
+	if (include_m3_fmode) {
+		label[i++] = "egrad_profile4"; // A3 fourier mode
+		label[i++] = "egrad_profile5"; // B3 fourier mode
+	}
+	if (include_m4_fmode) {
+		label[i++] = "egrad_profile6"; // A4 fourier mode
+		label[i++] = "egrad_profile7"; // B4 fourier mode
+	}
+
+	for (k=0; k < n_profile_params; k++) {
+		string pnumfile_str = fit_output_dir + "/" + label[k] + ".nparam";
+		ifstream pnumfile(pnumfile_str.c_str());
+		if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+		pnumfile >> nparams;
+		pnumfile.close();
+
+		static const int n_characters = 5000;
+		char dataline[n_characters];
+		double *params = new double[nparams];
+
+		string chain_str = fit_output_dir + "/" + label[k];
+		ifstream chain_file(chain_str.c_str());
+
+		unsigned long n_points=0;
+		while (!chain_file.eof()) {
+			chain_file.getline(dataline,n_characters);
+			if (dataline[0]=='#') continue;
+			n_points++;
+		}
+		chain_file.close();
+
+		double **weights = new double*[nparams];
+		double **paramvals = new double*[nparams];
+		for (i=0; i < nparams; i++) {
+			paramvals[i] = new double[n_points];
+			weights[i] = new double[n_points]; // each parameter has a copy of all the weights since they'll be sorted differently for each parameter to get percentiles
+		}
+
+		chain_file.open(chain_str.c_str());
+		j=0;
+		double weight, tot=0;
+		while (!chain_file.eof()) {
+			chain_file.getline(dataline,n_characters);
+			if (dataline[0]=='#') continue;
+
+			istringstream datastream(dataline);
+			datastream >> weight;
+			tot += weight;
+			for (i=0; i < nparams; i++) {
+				datastream >> paramvals[i][j];
+				weights[i][j] = weight;
+			}
+			j++;
+		}
+		chain_file.close();
+
+		if (k==0) scriptout << "# SB-profile param limits" << endl;
+		else if (k==1) scriptout << "# q B-spline param limits" << endl;
+		else if (k==2) scriptout << "# theta B-spline param limits" << endl;
+		else if (label[k]=="egrad_profile4") scriptout << "# A3 B-spline param limits" << endl;
+		else if (label[k]=="egrad_profile5") scriptout << "# B3 B-spline param limits" << endl;
+		else if (label[k]=="egrad_profile6") scriptout << "# A4 B-spline param limits" << endl;
+		else if (label[k]=="egrad_profile7") scriptout << "# B4 B-spline param limits" << endl;
+
+		double lopct, hipct, medpct, lowerr, hierr, scaled_lopct, scaled_hipct;
+		for (i=0; i < nparams; i++) {
+			sort(n_points,paramvals[i],weights[i]);
+			lopct = find_percentile(n_points, 0.02275, tot, paramvals[i], weights[i]);
+			hipct = find_percentile(n_points, 0.97725, tot, paramvals[i], weights[i]);
+			medpct = find_percentile(n_points, 0.5, tot, paramvals[i], weights[i]);
+			lowerr = pct_scaling*(medpct - lopct);
+			hierr = pct_scaling*(hipct - medpct);
+			scaled_lopct = medpct - lowerr;
+			scaled_hipct = medpct + hierr;
+			if ((k==1) and (scaled_hipct > 1)) scaled_hipct = 1; // q cannot exceed 1
+			if ((k==1) and (scaled_lopct < 0.05)) scaled_lopct = 0.05; // q shouldn't get too close to zero
+
+			//cout << "Param " << i << ": " << lopct[i] << " " << hipct[i] << endl;
+			scriptout << scaled_lopct << " " << scaled_hipct << endl;
+		}
+		scriptout << endl;
+		if (k==2) {
+			// Now output ranges in (xc,yc)
+			double xlo, xhi, ylo, yhi;
+			xlo = xcavg - data_pixel_size/2;
+			xhi = xcavg + data_pixel_size/2;
+			ylo = ycavg - data_pixel_size/2;
+			yhi = ycavg + data_pixel_size/2;
+			scriptout << "# xc, yc limits" << endl;
+			scriptout << xlo << " " << xhi << endl;
+			scriptout << ylo << " " << yhi << endl;
+			scriptout << endl;
+		}
+		for (i=0; i < nparams; i++) {
+			delete[] paramvals[i];
+			delete[] weights[i];
+		}
+		delete[] paramvals;
+		delete[] weights;
+	}
+	scriptout << "source update 0 xc=" << xcavg << " yc=" << ycavg << endl << endl;
+
+	return true;
+}
+
+
+
 void QLens::test_fitmodel_invert()
 {
 	if (setup_fit_parameters(false)==false) return;
@@ -10533,6 +10662,8 @@ double QLens::get_einstein_radius_prior(const bool verbal)
 double QLens::fitmodel_loglike_point_source(double* params)
 {
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
+	double loglike, chisq_total=0, chisq;
+	double log_penalty_prior;
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
@@ -10546,7 +10677,10 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		}
 		//fitmodel->param_settings->print_penalty_limits();
 		if (penalty_incurred) return 1e30;
-		if (fitmodel->update_model(transformed_params)==false) return 1e30;
+		log_penalty_prior = fitmodel->update_model(transformed_params);
+		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
+		else if (log_penalty_prior > 0) loglike += log_penalty_prior;
+
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
 				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
@@ -10555,7 +10689,6 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		}
 	}
 
-	double loglike, chisq_total=0, chisq;
 	if (include_imgpos_chisq) {
 		bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
 		double rms_err;
@@ -10657,7 +10790,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 	}
 	raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
 	fitmodel->raw_chisq = chisq_total;
-	loglike = chisq_total/2.0;
+	loglike += chisq_total/2.0;
 	if (chisq*0.0 != 0.0) {
 		warn("chi-square is returning NaN (%g)",chisq);
 	}
@@ -10687,6 +10820,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 {
 	double transformed_params[n_fit_parameters];
 	double loglike=0, chisq=0, chisq0;
+	double log_penalty_prior;
 	if (params != NULL) {
 		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
 		for (int i=0; i < n_fit_parameters; i++) {
@@ -10699,9 +10833,10 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
-		if (fitmodel->update_model(transformed_params)==false) {
-			chisq = 2e30;
-		}
+		log_penalty_prior = fitmodel->update_model(transformed_params);
+		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
+		else if (log_penalty_prior > 0) loglike += log_penalty_prior;
+
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
 				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
@@ -10711,18 +10846,12 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	}
 	if (einstein_radius_prior) {
 		loglike += fitmodel->get_einstein_radius_prior(false);
-		if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
+		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
-	if ((chisq != 2e30) and (loglike < 1e10)) {
+	if (loglike < 1e30) {
 		if ((source_fit_mode==Pixellated_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
 		else {
 			chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
-			//if (fitmodel->fft_convolution) {
-				//fitmodel->fft_convolution = false;
-				//double chisq2 = fitmodel->invert_image_surface_brightness_map(chisq0,false);
-				//if (mpi_id==0) cout << "CHISQ_COMP: " << chisq << " " << chisq2 << endl;
-				//fitmodel->fft_convolution = true;
-			//}
 		}
 	}
 
@@ -10764,7 +10893,7 @@ double QLens::loglike_point_source(double* params)
 			if ((transformed_params[i] < param_settings->penalty_limits_lo[i]) or (transformed_params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
 		}
 	}
-	if (fitmodel->update_model(transformed_params)==false) return 1e30;
+	if (fitmodel->update_model(transformed_params) != 0.0) return 1e30;
 	if (group_id==0) {
 		if (logfile.is_open()) {
 			for (int i=0; i < n_fit_parameters; i++) logfile << params[i] << " ";
@@ -10827,7 +10956,7 @@ double QLens::fitmodel_loglike_extended_source_test(double* params)
 			if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) return 1e30;
 		}
 	}
-	if (fitmodel->update_model(transformed_params)==false) return 1e30;
+	if (fitmodel->update_model(transformed_params) != 0.0) return 1e30;
 
 	if (group_id==0) {
 		if (fitmodel->logfile.is_open()) {
@@ -10850,7 +10979,7 @@ void QLens::fitmodel_calculate_derived_params(double* params, double* derived_pa
 	if (n_derived_params==0) return;
 	double transformed_params[n_fit_parameters];
 	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (fitmodel->update_model(transformed_params)==false) warn("derived params for point incurring penalty chi-square may give absurd results");
+	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
 	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
 }
 

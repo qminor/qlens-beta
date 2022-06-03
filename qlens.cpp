@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
 	lens.set_quit_after_error(quit_if_error);
 	if (suppress_plots) lens.set_suppress_plots(true);
 	if (read_from_file) {
-		if (lens.open_command_file(input_filename)==false) {
+		if (lens.open_script_file(input_filename)==false) {
 			cerr << "Error: could not open input file '" << input_filename << "'\n\n";
 			exit(1);
 		}

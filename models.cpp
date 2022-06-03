@@ -368,10 +368,10 @@ bool Alpha::output_cosmology_info(const int lens_number)
 	if (alpha != 1.0) return false;
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 	double kpc_to_km = 3.086e16;
@@ -483,7 +483,7 @@ void PseudoJaffe::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==1) set_abs_params_from_sigma0();
 		else if (parameter_mode==2) set_abs_params_from_mtot();
 	}
@@ -682,10 +682,10 @@ bool PseudoJaffe::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 	double sigma, r_tidal, r_core, mtot, rhalf;
@@ -820,7 +820,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		rs_kpc = rs / kpc_to_arcsec;
 		ds = ks * sigma_cr_kpc / rs_kpc;
 		// Using a root-finder to solve for c, then m200 can be solved for
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	}
 
 	if (pmode==2) {
@@ -847,7 +847,7 @@ void NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 	}
@@ -859,17 +859,17 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
+	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
+		//c200 = qlens->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -906,7 +906,7 @@ void NFW::set_model_specific_integration_pointers()
 void NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -915,7 +915,7 @@ void NFW::set_ks_c200_from_m200_rs()
 void NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -981,7 +981,7 @@ double NFW::calculate_scaled_mass_3d(const double r)
 
 double NFW::concentration_prior()
 {
-	double log_medc = log(lens->median_concentration_dutton(m200,zlens));
+	double log_medc = log(qlens->median_concentration_dutton(m200,zlens));
 	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
 	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
 	return (SQR((log(c200)-log_medc)/(ln10*sig_logc))/2 + (sig_logc*M_SQRT_2PI)); // returning -log(prior)
@@ -991,10 +991,10 @@ bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1004,7 +1004,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1017,7 +1017,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sun\n";
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec)" << endl;
-	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//c200 = r200/rs_kpc;
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
@@ -1211,7 +1211,7 @@ void Truncated_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
 		else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200();
 	}
@@ -1222,18 +1222,18 @@ void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, con
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
-	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
+	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another qlens at all
+	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void Truncated_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
+		//c200 = qlens->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1283,7 +1283,7 @@ void Truncated_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==4) rt_kpc = tau_s * rs_kpc;
 	rt = rt_kpc * kpc_to_arcsec;
@@ -1295,7 +1295,7 @@ void Truncated_NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc, rs_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==2) rt_kpc = tau200 * rvir_kpc;
@@ -1362,10 +1362,10 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1378,7 +1378,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		if (parameter_mode == 2) rt_kpc = tau200 * r200;
 		if (parameter_mode == 4) rt_kpc = tau_s * rs_kpc;
 	} else {
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1393,7 +1393,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec) (NOTE: ignores truncation)" << endl;
 
-	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//zlens = 5;
 	//update_zlens_meta_parameters();
 	//c200 = r200/rs_kpc;
@@ -1552,7 +1552,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==3) {
 			set_ks_rs_from_m200_c200_rckpc();
 		} else if (parameter_mode==2) {
@@ -1575,14 +1575,14 @@ void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const d
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_bullock(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 
 void Cored_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		c200 = lens->median_concentration_bullock(m200,zlens);
+		c200 = qlens->median_concentration_bullock(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1627,7 +1627,7 @@ void Cored_NFW::set_model_specific_integration_pointers()
 void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	double rcterm;
@@ -1639,7 +1639,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	rc = rc_kpc * kpc_to_arcsec;
@@ -1653,7 +1653,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 void Cored_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	double rcterm;
@@ -1820,10 +1820,10 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1834,7 +1834,7 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		lens->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
+		qlens->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -3110,17 +3110,17 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
 	double rs_kpc, ds, m200, r200, r200_arcsec;
 	rs_kpc = a / kpc_to_arcsec;
 	ds = k0 * sigma_cr_kpc / rs_kpc;
-	r200_const = 200.0*lens->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
+	r200_const = 200.0*qlens->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
 	double (Brent::*r200root)(const double);
 	r200root = static_cast<double (Brent::*)(const double)> (&CoreCusp::r200_root_eq);
 	r200_arcsec = BrentsMethod(r200root, 0.1, 10000, 1e-4);
@@ -3323,10 +3323,10 @@ bool SersicLens::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -3526,10 +3526,10 @@ bool DoubleSersicLens::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -3552,8 +3552,6 @@ bool DoubleSersicLens::output_cosmology_info(const int lens_number)
 	cout << endl;
 	return true;
 }
-
-
 
 /***************************** Cored Sersic profile *****************************/
 
@@ -3738,10 +3736,10 @@ bool Cored_SersicLens::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 

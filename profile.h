@@ -202,7 +202,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	static int default_ellipticity_mode;
 	static int default_fejer_nlevels;
 	static int fourier_spline_npoints;
-	QLens* lens;
+	QLens* qlens;
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
 	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
@@ -516,7 +516,7 @@ class Alpha : public LensProfile
 		setup_lens_properties();
 	}
 	Alpha(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* lens_in);
+			const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* qlens_in);
 	Alpha(const Alpha* lens_in);
 	void initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Alpha(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in) : Alpha() { initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in); }
@@ -566,7 +566,7 @@ class PseudoJaffe : public LensProfile
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* lens_in);
+	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	PseudoJaffe(const PseudoJaffe* lens_in);
 
@@ -614,7 +614,7 @@ class NFW : public LensProfile
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* lens_in);
+	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	NFW(const NFW* lens_in);
 
@@ -655,7 +655,7 @@ class Truncated_NFW : public LensProfile
 		set_null_ptrs_and_values();
 		setup_lens_properties(parameter_mode,truncation_mode);
 	}
-	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, QLens* lens_in);
+	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Truncated_NFW(const Truncated_NFW* lens_in);
 
@@ -698,7 +698,7 @@ class Cored_NFW : public LensProfile
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	Cored_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* lens_in);
+	Cored_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Cored_NFW(const Cored_NFW* lens_in);
 

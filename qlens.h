@@ -470,6 +470,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double hubble_lower_limit, hubble_upper_limit;
 	double omega_matter_lower_limit, omega_matter_upper_limit;
 	bool ellipticity_gradient, contours_overlap;
+	double contour_overlap_log_penalty_prior;
 	bool vary_syserr_pos_parameter;
 	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
 	bool vary_wl_shear_factor_parameter;
@@ -715,6 +716,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
 	int shapelet_scale_mode;
 	double shapelet_max_scale;
+	double shapelet_window_scaling;
 	SourcePixelGrid *source_pixel_grid;
 	void plot_source_pixel_grid(const char filename[]);
 
@@ -1010,6 +1012,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void remove_comments(string& instring);
 	void remove_equal_sign_datafile(vector<string>& datawords, int& n_datawords);
 
+	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
+	void set_verbal_mode(bool echo) { verbal_mode = echo; }
+	bool open_script_file(string filename);
+	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
+	void set_suppress_plots(bool setting) { suppress_plots = setting; }
+
 	void extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word);
 	void extract_word_starts_with(const char initial_character, int starting_word, string& extracted_word) { extract_word_starts_with(initial_character,starting_word,1000,extracted_word); }
 	bool extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words);
@@ -1138,6 +1146,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
+	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double percentile_scale_factor = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
@@ -1158,7 +1167,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
 	bool initialize_fitmodel(const bool running_fit_in);
-	bool update_model(const double* params);
+	double update_model(const double* params);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_loglike_extended_source_test(double* params);
@@ -1318,12 +1327,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 			params[i] = lower_limits[i] + Cube[i]*(upper_limits[i]-lower_limits[i]);
 		}
 	}
-	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
-	bool open_command_file(char *filename);
-	void set_verbal_mode(bool echo) { verbal_mode = echo; }
-	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
-	void set_suppress_plots(bool setting) { suppress_plots = setting; }
-
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 
 	double crit0_interpolate(double theta) { return ccspline[0].splint(theta); }
