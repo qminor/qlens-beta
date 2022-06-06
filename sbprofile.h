@@ -230,6 +230,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
+	virtual void calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
@@ -425,6 +426,7 @@ class Shapelet : public SB_Profile
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
+	void calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet);
 	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);

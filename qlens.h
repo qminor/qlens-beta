@@ -773,6 +773,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_regularization_matrix_dense();
 	void generate_Rmatrix_norm_dense();
 	void generate_Rmatrix_shapelet_gradient();
+	void generate_Rmatrix_shapelet_curvature();
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
 	//void Cholesky_solve(double** a, double* b, double* x, int n);

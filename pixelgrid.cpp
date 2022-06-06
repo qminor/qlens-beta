@@ -9909,6 +9909,10 @@ void QLens::create_regularization_matrix_dense()
 			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_gradient();
 			else die("gradient regularization only implemented for Shapelet mode");
 			break;
+		case Curvature:
+			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_curvature();
+			else die("curvature regularization only implemented for Shapelet mode");
+			break;
 		default:
 			die("Regularization method not recognized for dense matrices");
 	}
@@ -9928,6 +9932,19 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
 			sb_list[i]->calculate_gradient_Rmatrix_elements(Rmatptr, Rmatrix_log_determinant);
+			at_least_one_shapelet = true;
+		}
+	}
+	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
+}
+
+void QLens::generate_Rmatrix_shapelet_curvature()
+{
+	bool at_least_one_shapelet = false;
+	double *Rmatptr = Rmatrix_diags.array();
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->sbtype==SHAPELET) {
+			sb_list[i]->calculate_curvature_Rmatrix_elements(Rmatptr, Rmatrix_log_determinant);
 			at_least_one_shapelet = true;
 		}
 	}

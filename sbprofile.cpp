@@ -2096,6 +2096,10 @@ void SB_Profile::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, 
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+void SB_Profile::calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
 
 void SB_Profile::update_amplitudes(double*& ampvec)
 {
@@ -3049,11 +3053,36 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 				//}
 				//else {
 					//Rmatrix_elements[n] = 1.0;
-					//*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
 					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
-					//*Rmatrix_elements = ((i*i)*q*q + (j*j)/(q*q))/(2*sig*sig*sig*sig);
-					//*Rmatrix_elements = ((6*i*i+3*i+1)*q*q + (6*j*j+3*j+1)/(q*q))/(2*sig*sig*sig*sig);
-					//Rmatrix_elements[n] = ((2*i+1)/q + (2*j+1)*q)/(2*sig*sig);
+					if (*Rmatrix_elements < 0) die("negative element!!!");
+					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
+					Rmatrix_elements++;
+				}
+			}
+		}
+	}
+}
+
+void Shapelet::calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
+{
+	if (!is_lensed) {
+		int elements = n_shapelets*n_shapelets;
+		if (nonlinear_amp00) elements--;
+		for (int i=0; i < elements; i++) *(Rmatrix_elements++) = 0;
+		Rmatrix_elements += elements;
+	} else {
+		if (sig==0) die("sigma cannot be zero!!");
+		if ((q > 1) or (q <= 0)) die("q taking an absurd value");
+		int i,j,n=0;
+		logdet = 0;
+		double ip, jp;
+		for (i=0; i < n_shapelets; i++) {
+			for (j=0; j < n_shapelets; j++) {
+				if ((nonlinear_amp00) and (i==0) and (j==0)) ;
+				else {
+					ip = sqrt(i*(i+1));
+					jp = sqrt(j*(j+1));
+					*Rmatrix_elements = (4*(i*i+j*j) + 3*(i+j) + 6 + 2*i*j + 2*ip*jp + 2*(i+j)*(ip + jp))/(4*SQR(sig*sig));
 					if (*Rmatrix_elements < 0) die("negative element!!!");
 					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
 					Rmatrix_elements++;
