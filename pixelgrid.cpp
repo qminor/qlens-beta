@@ -588,6 +588,14 @@ void SourcePixelGrid::write_surface_brightness_to_file()
 	}
 }
 
+void SourcePixelGrid::get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax)
+{
+	xmin = cell[0][0]->corner_pt[0][0];
+	ymin = cell[0][0]->corner_pt[0][1];
+	xmax = cell[u_N-1][w_N-1]->corner_pt[3][0];
+	ymax = cell[u_N-1][w_N-1]->corner_pt[3][1];
+}
+
 void SourcePixelGrid::plot_surface_brightness(string root)
 {
 	string img_filename = root + ".dat";
@@ -6073,7 +6081,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	foreground_surface_brightness = new double*[x_N];
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
-	max_nsplit = imax(12,lens->default_imgpixel_nsplit);
+	max_nsplit = imax(18,lens->default_imgpixel_nsplit);
 	//max_nsplit = lens->default_imgpixel_nsplit;
 	nsplits = new int*[x_N];
 	subpixel_maps_to_srcpixel = new bool**[x_N];

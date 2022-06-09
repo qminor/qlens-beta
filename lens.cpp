@@ -12165,15 +12165,18 @@ void QLens::update_source_amplitudes_from_shapelets()
 }
 */
 
-void QLens::find_shapelet_scaling_parameters(const bool verbal)
+bool QLens::find_shapelet_scaling_parameters(const bool verbal)
 {
-	SB_Profile* shapelet;
+	SB_Profile* shapelet = NULL;
+	int i_shapelet;
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
 			shapelet = sb_list[i];
+			i_shapelet = i;
 			break; // currently only one shapelet source supported
 		}
 	}
+	if (shapelet==NULL) die("No shapelet source found");
 	double sig,xc,yc,nsplit,sig_src,scaled_maxdist;
 	image_pixel_grid->find_optimal_shapelet_scale(sig,xc,yc,nsplit,verbal,sig_src,scaled_maxdist);
 	//if (auto_shapelet_scaling) shapelet->update_specific_parameter("sigma",sig);
@@ -12209,7 +12212,14 @@ void QLens::find_shapelet_scaling_parameters(const bool verbal)
 		}
 		cout << "shapelet_scale=" << scale << " shapelet_minscale=" << minscale_shapelet << " shapelet_maxscale=" << maxscale_shapelet << " (SCALE_MODE=" << shapelet_scale_mode << ")" << endl;
 	}
-
+	// Just in case any other sources are anchored to shapelet scale/center, update the anchored parameters now
+	bool anchored_source = false;
+	for (int i=0; i < n_sb; i++) {
+		if (i != i_shapelet) {
+			if (sb_list[i]->update_anchored_parameters_to_source(i_shapelet)==true) anchored_source = true;
+		}
+	}
+	return anchored_source;
 }
 
 bool QLens::set_shapelet_imgpixel_nsplit()
@@ -12538,7 +12548,18 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		assign_foreground_mappings();
 		calculate_foreground_pixel_surface_brightness();
 		store_foreground_pixel_surface_brightness();
-		if ((auto_shapelet_scaling) or (auto_shapelet_center)) find_shapelet_scaling_parameters(verbal);
+		if ((auto_shapelet_scaling) or (auto_shapelet_center)) {
+			if (find_shapelet_scaling_parameters(verbal)==true) {
+				// if returned true, then there is a source that is anchored to the shapelet params, so we must rebuild the foreground/sbprofile surface brightness now
+				if ((mpi_id==0) and (verbal)) cout << "Recalculating foreground/sbprofile surface brightness (two more iterations)..." << endl;
+				calculate_foreground_pixel_surface_brightness();
+				store_foreground_pixel_surface_brightness();
+				// one more iteration for good measure
+				find_shapelet_scaling_parameters(verbal);
+				calculate_foreground_pixel_surface_brightness();
+				store_foreground_pixel_surface_brightness();
+			}
+		}
 		initialize_pixel_matrices_shapelets(verbal);
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Number of active image pixels: " << image_npixels << endl;

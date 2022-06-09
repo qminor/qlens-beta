@@ -855,6 +855,21 @@ void SB_Profile::update_anchored_parameters()
 	}
 }
 
+bool SB_Profile::update_anchored_parameters_to_source(const int src_i)
+{
+	bool at_least_one_param_anchored = false;
+	for (int i=0; i < n_params; i++) {
+		if ((anchor_parameter_to_source[i]) and (parameter_anchor_source[i]->sb_number==src_i)) {
+			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+		}
+	}
+	if (at_least_one_param_anchored) {
+		update_meta_parameters();
+	}
+	return at_least_one_param_anchored;
+}
+
 void SB_Profile::update_anchor_center()
 {
 	if (center_anchored_to_lens) {

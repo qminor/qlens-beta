@@ -147,6 +147,7 @@ class SourcePixelGrid
 
 	void fill_n_image_vector_recursive(int& column_j);
 	void plot_surface_brightness(string root);
+	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
 	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y);
 	void store_surface_brightness_grid_data(string root);
 	void write_surface_brightness_to_file();

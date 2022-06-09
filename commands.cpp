@@ -8504,6 +8504,7 @@ void QLens::process_commands(bool read_file)
 				bool plot_source = false;
 				bool zoom_in = false;
 				bool old_auto_srcgrid_npixels = auto_srcgrid_npixels;
+				bool scale_to_srcgrid = false;
 				double old_srcgrid_scale;
 				//bool changed_srcgrid = false;
 				//bool old_auto_srcgrid = false;
@@ -8530,6 +8531,11 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-100") set_npix = 100;
 						else if (args[i]=="-200") set_npix = 200;
 						else if (args[i]=="-300") set_npix = 300;
+						else if (args[i]=="-400") set_npix = 400;
+						else if (args[i]=="-500") set_npix = 500;
+						else if (args[i]=="-600") set_npix = 600;
+						else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
+						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
 						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else Complain("argument '" << args[i] << "' not recognized");
@@ -8547,6 +8553,23 @@ void QLens::process_commands(bool read_file)
 					}
 					create_source_surface_brightness_grid(verbal_mode);
 					if (plot_source) {
+						if (scale_to_srcgrid) {
+							double xmin,xmax,ymin,ymax;
+							if (mpi_id==0) source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
+							if (mpi_id==0) cout << "Source grid dimensions: " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
+							stringstream xminstr,yminstr,xmaxstr,ymaxstr;
+							string xminstring,yminstring,xmaxstring,ymaxstring;
+							xminstr << xmin;
+							yminstr << ymin;
+							xmaxstr << xmax;
+							ymaxstr << ymax;
+							xminstr >> xminstring;
+							yminstr >> yminstring;
+							xmaxstr >> xmaxstring;
+							ymaxstr >> ymaxstring;
+							range = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
+						}
+
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
 						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {

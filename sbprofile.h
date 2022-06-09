@@ -199,6 +199,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void update_parameters(const double* params);
 	virtual void update_fit_parameters(const double* fitparams, int &index, bool& status);
 	void update_anchored_parameters();
+	bool update_anchored_parameters_to_source(const int src_i);
 	void update_anchor_center();
 	void assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source);
 	void copy_parameter_anchors(const SB_Profile* sb_in);
