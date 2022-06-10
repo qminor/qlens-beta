@@ -2133,7 +2133,7 @@ void Shear::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	if (use_shear_component_params) {
 		param[0] = &shear1;
-		param[1] = &shear2;
+		param[1] = &shear2; angle_param[1] = false; angle_param_exists = false;
 		angle_param_exists = false; // since there is no angle parameter in this mode
 	} else {
 		param[0] = &shear; // here, shear is actually the shear magnitude

@@ -993,11 +993,13 @@ void QLens::process_commands(bool read_file)
 						cout << "fit params [-nosci]\n"
 							"fit params update <param_num/name> <param_val>\n"
 							"fit params update <name>=<val> ...\n"
+							"fit params update_all <val1> <val2> ...\n"
 							"fit params rename <param_num/name> <new_name>\n\n"
 							"If no additional argument is given, outputs the current parameter values for all parameters being varied\n"
 							"(to not use scientific notation, add '-nosci' argument; this works even if 'sci_notation' is turned off).\n"
 							"To update parameters, you can specify a parameter number/name followed by its new value, or else you can\n"
 							"update multiple parameters at once using arguments of the form '<name>=<val>', e.g. 'b=1.5 q=0.7' etc.\n"
+							"You can also update parameters in order using 'update_all' (updates will stop at the last parameter entered).\n"
 							"To manually rename a parameter, use 'rename <param_num/name> <new_name>'. Note that for the second argument\n"
 							"you can put the parameter number as displayed in the list, or you can enter the parameter name (the latter\n"
 							"approach is less bug-prone since parameter numbers may change if the model is changed).\n\n";
@@ -2841,7 +2843,17 @@ void QLens::process_commands(bool read_file)
 						set_lens_vary_parameters(lensnum,vary_flags);
 					}
 				}
-				update_specific_parameters = true;
+				update_specific_parameters = true; // this will ensure it skips trying to create a lens model
+			}
+			else if ((nwords > 1) and (words[1]=="change_pmode")) {
+				if (nwords==4) {
+					int lensnum, pm;
+					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change pmode");
+					if (lensnum >= nlens) Complain("specified lens number does not exist");
+					if (!(ws[3] >> pm)) Complain("Invalid parameter mode");
+					lens_list[lensnum]->change_pmode(pm);
+				} else Complain("'lens change_pmode' should have two arguments (lens#, pmode)");
+				update_specific_parameters = true;  // this will ensure it skips trying to create a lens model
 			}
 			if (!update_specific_parameters) {
 				for (int i=3; i < nwords; i++) {
@@ -7056,6 +7068,16 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[4] >> paramval)) Complain("invalid parameter value");
 							if (update_parameter_value(param_num,paramval)==false) Complain("could not update parameter value");
 						}
+					} else if (words[2]=="update_all") {
+						int n_updates = nwords-3;
+						int nparams;
+						double paramval;
+							get_n_fit_parameters(nparams);
+						if (n_updates > nparams) Complain("cannot have more arguments than fit parameters");
+						for (int i=0; i < n_updates; i++) {
+							if (!(ws[i+3] >> paramval)) Complain("invalid value for parameter " << i);
+							if (update_parameter_value(i,paramval)==false) Complain("could not update parameter value for parameter" << i);
+						}
 					} else Complain("argument not recognized for 'fit params'");
 				}
 				else if (words[1]=="priors")
@@ -7077,6 +7099,23 @@ void QLens::process_commands(bool read_file)
 						}
 						output_parameter_prior_ranges();
 						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
+					}
+					else if ((nwords==3) and (words[2]=="limits")) {
+						int nparams;
+						get_n_fit_parameters(nparams);
+						if (nparams==0) Complain("no fit parameters have been defined");
+						double lo, hi;
+						for (int i=0; i < nparams; i++) {
+							string paramname = param_settings->lookup_param_name(i);
+							if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramname << ":\n";
+							if (read_command(false)==false) Complain("parameter limits could not be read"); 
+							if ((nwords==1) and (words[0]=="skip")) continue;
+							else if (nwords >= 2) {
+								if (!(ws[0] >> lo)) Complain("Invalid lower prior limit");
+								if (!(ws[1] >> hi)) Complain("Invalid upper prior limit");
+								param_settings->set_override_prior_limit(i,lo,hi);
+							} else Complain("require lower and upper limits (or 'skip') for parameter '" << paramname << "'");
+						}
 					}
 					else if (nwords >= 4) {
 						int param_num;
@@ -11558,7 +11597,12 @@ void QLens::process_commands(bool read_file)
 			if (nwords > 1) {
 				if (!(ws[1] >> scalefac)) Complain("invalid scalefac");
 			}
-			output_scaled_percentiles_from_egrad_fits(0.0115,0.0155,scalefac,false,true);
+			output_scaled_percentiles_from_chain(scalefac);
+
+			string scriptfile = fit_output_dir + "/scaled_limits.in";
+			open_script_file(scriptfile);
+
+			//output_scaled_percentiles_from_egrad_fits(0.0115,0.0155,scalefac,false,true);
 
 			//if (n_sb == 0) Complain("need a source object to spawn a lens");
 			//int pmode = 0;

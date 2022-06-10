@@ -835,7 +835,6 @@ void SB_Profile::update_fit_parameters(const double* fitparams, int &index, bool
 				}
 				else *(param[i]) = fitparams[index++];
 			}
-			if (lensed_center_coords) set_center_if_lensed_coords();
 		}
 		update_meta_parameters();
 	}
@@ -2186,6 +2185,7 @@ void SB_Profile::print_parameters()
 			else cout << " (egrad=on)";
 		}
 	}
+	if (lensed_center_coords) cout << " (xc=" << x_center << ", yc=" << y_center << ")";
 	cout << endl;
 	if ((ellipticity_gradient) and (egrad_mode==0)) {
 		cout << "   q-knots: ";
@@ -3069,6 +3069,7 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 				//else {
 					//Rmatrix_elements[n] = 1.0;
 					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
+					//*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2);
 					if (*Rmatrix_elements < 0) die("negative element!!!");
 					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
 					Rmatrix_elements++;

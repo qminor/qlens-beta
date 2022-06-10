@@ -337,6 +337,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
+	void change_pmode(const int pmode_in);
 	bool use_concentration_prior;
 	virtual double concentration_prior(); // in NFW-like models, uses mass-concentration relation c(M,z) as a prior
 	double average_log_slope(const double rmin, const double rmax);

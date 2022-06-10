@@ -2305,6 +2305,9 @@ void QLens::update_lens_redshift_data()
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->lensed_center_coords) lens_list[i]->set_center_if_lensed_coords(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
 	}
+	for (int i=0; i < n_sb; i++) {
+		if (sb_list[i]->lensed_center_coords) sb_list[i]->set_center_if_lensed_coords(); // for source objects whose lensed center coordinates are used as parameters (updates true center)
+	}
 }
 
 void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens)
@@ -10266,6 +10269,91 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 }
 
 
+bool QLens::output_scaled_percentiles_from_chain(const double pct_scaling)
+{
+	string scriptfile = fit_output_dir + "/scaled_limits.in";
+	ofstream scriptout(scriptfile.c_str());
+
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	int i,j,nparams;
+	pnumfile >> nparams;
+	pnumfile.close();
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[nparams];
+	string *paramnames = new string[nparams];
+	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+	ifstream pnamefile(pnamefile_str.c_str());
+	for (i=0; i < nparams; i++) {
+		pnamefile >> paramnames[i];
+	}
+
+	string chain_str = fit_output_dir + "/" + fit_output_filename;
+	ifstream chain_file(chain_str.c_str());
+
+	unsigned long n_points=0;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+		n_points++;
+	}
+	chain_file.close();
+
+	double **weights = new double*[nparams];
+	double **paramvals = new double*[nparams];
+	for (i=0; i < nparams; i++) {
+		paramvals[i] = new double[n_points];
+		weights[i] = new double[n_points]; // each parameter has a copy of all the weights since they'll be sorted differently for each parameter to get percentiles
+	}
+
+	chain_file.open(chain_str.c_str());
+	j=0;
+	double weight, tot=0;
+	while (!chain_file.eof()) {
+		chain_file.getline(dataline,n_characters);
+		if (dataline[0]=='#') continue;
+
+		istringstream datastream(dataline);
+		datastream >> weight;
+		tot += weight;
+		for (i=0; i < nparams; i++) {
+			datastream >> paramvals[i][j];
+			weights[i][j] = weight;
+		}
+		j++;
+	}
+	chain_file.close();
+
+	scriptout << "fit priors limits" << endl;
+
+	double lopct, hipct, medpct, lowerr, hierr, scaled_lopct, scaled_hipct;
+	for (i=0; i < nparams; i++) {
+		sort(n_points,paramvals[i],weights[i]);
+		lopct = find_percentile(n_points, 0.02275, tot, paramvals[i], weights[i]);
+		hipct = find_percentile(n_points, 0.97725, tot, paramvals[i], weights[i]);
+		medpct = find_percentile(n_points, 0.5, tot, paramvals[i], weights[i]);
+		lowerr = pct_scaling*(medpct - lopct);
+		hierr = pct_scaling*(hipct - medpct);
+		scaled_lopct = medpct - lowerr;
+		scaled_hipct = medpct + hierr;
+		scriptout << scaled_lopct << " " << scaled_hipct << " # " << paramnames[i] << endl;
+		cout << scaled_lopct << " " << scaled_hipct << " # " << paramnames[i] << endl;
+	}
+	scriptout << endl;
+	cout << "Limits have been output to file '" << scriptfile << "'" << endl;
+	cout << endl;
+	for (i=0; i < nparams; i++) {
+		delete[] paramvals[i];
+		delete[] weights[i];
+	}
+	delete[] paramvals;
+	delete[] weights;
+
+	return true;
+}
 
 void QLens::test_fitmodel_invert()
 {
@@ -12701,7 +12789,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (regularization_parameter != 0) {
 				chisqreg = chisq + regularization_parameter*Es;
 				//cout << "chisqreg=" << chisqreg << endl;
-				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+				chisqreg = regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+				//chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+				chisq += chisqreg;
+				if ((mpi_id==0) and (verbal)) cout << "reg*Es=" << (regularization_parameter*Es) << " n_shapelets*log(regparam)=" << (-source_npixels*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_log_determinant << " sum=" << (chisqreg+Fmatrix_log_determinant) << endl;
 			}
 			chisq += Fmatrix_log_determinant;
 		}
@@ -12822,7 +12913,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "-2*log(ev)=" << chisq << " (without priors)" << endl;
-			if ((vary_pixel_fraction) or (regularization_method != None)) cout << " logdet=" << Fmatrix_log_determinant << endl;
+			if ((vary_pixel_fraction) or (regularization_method != None)) cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "number of image pixels included in chisq = " << count << endl;

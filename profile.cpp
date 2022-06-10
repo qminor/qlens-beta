@@ -1088,6 +1088,14 @@ double LensProfile::concentration_prior()
 	return 0; // this prior is only used in the NFW-like models
 }
 
+void LensProfile::change_pmode(const int pmode_in) // WARNING! This does not check whether pmode exists or not for given lens
+{
+	parameter_mode = pmode_in;
+	assign_param_pointers();
+	assign_paramnames();
+	update_meta_parameters_and_pointers();
+}
+
 bool LensProfile::output_cosmology_info(const int lens_number)
 {
 	bool mass_converged, rhalf_converged;

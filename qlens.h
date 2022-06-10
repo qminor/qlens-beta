@@ -1146,6 +1146,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool adopt_point_from_chain(const unsigned long point_num);
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
+	bool output_scaled_percentiles_from_chain(const double pct_scaling);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
 	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double percentile_scale_factor = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 
@@ -1726,7 +1727,14 @@ struct ParamSettings
 		delete[] transformed_names;
 		return pnum;
 	}
-
+	string lookup_param_name(const int i)
+	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		string name = transformed_names[i];
+		delete[] transformed_names;
+		return name;
+	}
 	bool exclude_hist2d_param(const string pname)
 	{
 		string *transformed_names = new string[nparams];
