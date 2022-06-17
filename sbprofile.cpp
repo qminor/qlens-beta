@@ -1411,15 +1411,15 @@ double SB_Profile::surface_brightness(double x, double y)
 				sinamps = fourier_mode_sinamp.array();
 			}
 
-			if (use_fmode_scaled_amplitudes) {
-				for (int i=0; i < n_fourier_modes; i++) {
-					fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
-				}
-			} else {
+			//if (use_fmode_scaled_amplitudes) {
+				//for (int i=0; i < n_fourier_modes; i++) {
+					//fourier_factor += (cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q))/fourier_mode_mvals[i];
+				//}
+			//} else {
 				for (int i=0; i < n_fourier_modes; i++) {
 					fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi_q) + sinamps[i]*sin(fourier_mode_mvals[i]*phi_q);
 				}
-			}
+			//}
 			if (fourier_gradient) {
 				delete[] cosamps;
 				delete[] sinamps;

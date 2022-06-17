@@ -803,10 +803,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int hmatrix_nn[2];
 
 	bool use_input_psf_matrix;
-	double **psf_matrix;
+	double **psf_matrix, **foreground_psf_matrix;
 	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
-	double psf_threshold;
+	int foreground_psf_npixels_x, foreground_psf_npixels_y;
+	double psf_threshold, foreground_psf_threshold;
 	static bool setup_fft_convolution;
 	static double *psf_zvec; // for convolutions using FFT
 	static int fft_imin, fft_jmin, fft_ni, fft_nj;

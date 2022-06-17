@@ -770,6 +770,7 @@ QLens::QLens() : UCMC()
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
 	psf_threshold = 0;
+	foreground_psf_threshold = 0;
 	fft_convolution = false;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -1107,6 +1108,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	psf_convolution_mpi = lens_in->psf_convolution_mpi;
 	use_input_psf_matrix = lens_in->use_input_psf_matrix;
 	psf_threshold = lens_in->psf_threshold;
+	foreground_psf_threshold = lens_in->foreground_psf_threshold;
 	fft_convolution = lens_in->fft_convolution;
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
@@ -1259,6 +1261,18 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 			for (j=0; j < psf_npixels_y; j++) psf_matrix[i][j] = lens_in->psf_matrix[i][j];
 		}
 	}
+	if (lens_in->foreground_psf_matrix==NULL) foreground_psf_matrix = NULL;
+	else {
+		foreground_psf_npixels_x = lens_in->foreground_psf_npixels_x;
+		foreground_psf_npixels_y = lens_in->foreground_psf_npixels_y;
+		foreground_psf_matrix = new double*[foreground_psf_npixels_x];
+		int i,j;
+		for (i=0; i < foreground_psf_npixels_x; i++) {
+			foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
+			for (j=0; j < foreground_psf_npixels_y; j++) foreground_psf_matrix[i][j] = lens_in->foreground_psf_matrix[i][j];
+		}
+	}
+
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -10147,7 +10161,7 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
-bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
+bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double egrad_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
 {
 	if (n_sb==0) return false;
 	string scriptfile = fit_output_dir + "/isofit_knots_limits.in";
@@ -10220,23 +10234,26 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 		chain_file.close();
 
 		if (k==0) scriptout << "# SB-profile param limits" << endl;
-		else if (k==1) scriptout << "# q B-spline param limits" << endl;
-		else if (k==2) scriptout << "# theta B-spline param limits" << endl;
-		else if (label[k]=="egrad_profile4") scriptout << "# A3 B-spline param limits" << endl;
-		else if (label[k]=="egrad_profile5") scriptout << "# B3 B-spline param limits" << endl;
-		else if (label[k]=="egrad_profile6") scriptout << "# A4 B-spline param limits" << endl;
-		else if (label[k]=="egrad_profile7") scriptout << "# B4 B-spline param limits" << endl;
+		else if (k==1) scriptout << "# q-profile param limits" << endl;
+		else if (k==2) scriptout << "# theta-profile param limits" << endl;
+		else if (label[k]=="egrad_profile4") scriptout << "# A3-profile param limits" << endl;
+		else if (label[k]=="egrad_profile5") scriptout << "# B3-profile param limits" << endl;
+		else if (label[k]=="egrad_profile6") scriptout << "# A4-profile param limits" << endl;
+		else if (label[k]=="egrad_profile7") scriptout << "# B4-profile param limits" << endl;
 
-		double lopct, hipct, medpct, lowerr, hierr, scaled_lopct, scaled_hipct;
+		double lopct, hipct, medpct, lowerr, hierr, scalefac, scaled_lopct, scaled_hipct;
+		if (k==0) scalefac = dmin(5,egrad_pct_scaling); // SB parameter errors are more trustworthy so they don't need to be scaled as much
+		else scalefac = egrad_pct_scaling;
 		for (i=0; i < nparams; i++) {
 			sort(n_points,paramvals[i],weights[i]);
 			lopct = find_percentile(n_points, 0.02275, tot, paramvals[i], weights[i]);
 			hipct = find_percentile(n_points, 0.97725, tot, paramvals[i], weights[i]);
 			medpct = find_percentile(n_points, 0.5, tot, paramvals[i], weights[i]);
-			lowerr = pct_scaling*(medpct - lopct);
-			hierr = pct_scaling*(hipct - medpct);
+			lowerr = scalefac*(medpct - lopct);
+			hierr = scalefac*(hipct - medpct);
 			scaled_lopct = medpct - lowerr;
 			scaled_hipct = medpct + hierr;
+			if ((k==0) and (i==0) and (scaled_lopct < 0)) scaled_lopct = 0.01; // SB normalization is not allowed to be negative
 			if ((k==1) and (scaled_hipct > 1)) scaled_hipct = 1; // q cannot exceed 1
 			if ((k==1) and (scaled_lopct < 0.05)) scaled_lopct = 0.05; // q shouldn't get too close to zero
 
@@ -12041,8 +12058,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 {
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Pixellated_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
+	if ((source_fit_mode != Pixellated_Source) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
-	else if (n_sb==0) { warn("No surface brightness profiles have been defined"); return false; }
 	bool use_data = true;
 	if (image_pixel_data==NULL) use_data = false;
 	if ((image_pixel_data != NULL) and ((n_image_pixels_x != image_pixel_data->npixels_x) or (n_image_pixels_y != image_pixel_data->npixels_y))) {
@@ -12722,7 +12739,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	else covariance = SQR(data_pixel_noise);
 	double dchisq, dchisq2;
 	int img_index;
-	int count=0;
+	int count=0, foreground_count=0;
 	//int n_data_pixels=0;
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
@@ -12730,12 +12747,18 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				//n_data_pixels++;
 				if ((image_pixel_grid->fit_to_data[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					if (at_least_one_foreground_src) chisq += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					if (at_least_one_foreground_src) {
+						chisq += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+						foreground_count++;
+					}
 					else chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
 					count++;
 				} else {
 					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
-					if (at_least_one_foreground_src) chisq += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance;
+					if (at_least_one_foreground_src) {
+						chisq += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance;
+						foreground_count++;
+					}
 					else if (image_pixel_grid->fit_to_data[i][j]) chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
 				}
 			}
@@ -12916,7 +12939,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if ((vary_pixel_fraction) or (regularization_method != None)) cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
 		}
 	}
-	if ((mpi_id==0) and (verbal)) cout << "number of image pixels included in chisq = " << count << endl;
+	if ((mpi_id==0) and (verbal)) {
+		cout << "number of image pixels included in chisq = " << count << endl;
+		if (at_least_one_foreground_src) cout << "number of foreground image pixels included in chisq = " << foreground_count << endl;
+	}
 
 	chisq_it++;
 

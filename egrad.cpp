@@ -1036,57 +1036,98 @@ void EllipticityGradient::set_fourier_paramnums(int *paramnum, int paramnum0)
 void EllipticityGradient::output_egrad_values_and_knots(ofstream& scriptout)
 {
 	int i,j;
-	if ((ellipticity_gradient) and (egrad_mode==0)) {
-		scriptout << n_egrad_params[0] << " " << xi_initial_egrad << " " << xi_final_egrad << " 1 -enter_knots" << endl << endl;
-		for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
-			scriptout << pow(10,geometric_knots[0][i]); // gives the elliptical radius values
-			if (i < n_bspline_knots_tot-1) scriptout << " ";
-		}
-		scriptout << " # q-knots" << endl;
-		for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
-			scriptout << pow(10,geometric_knots[1][i]); // gives the elliptical radius values
-			if (i < n_bspline_knots_tot-1) scriptout << " ";
-		}
-		scriptout << " # theta-knots" << endl << endl;
+	if (ellipticity_gradient) {
+		if (egrad_mode==0) {
+			scriptout << n_egrad_params[0] << " " << xi_initial_egrad << " " << xi_final_egrad << " 1 -enter_knots" << endl << endl;
+			for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+				scriptout << pow(10,geometric_knots[0][i]); // gives the elliptical radius values
+				if (i < n_bspline_knots_tot-1) scriptout << " ";
+			}
+			scriptout << " # q-knots" << endl;
+			for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+				scriptout << pow(10,geometric_knots[1][i]); // gives the elliptical radius values
+				if (i < n_bspline_knots_tot-1) scriptout << " ";
+			}
+			scriptout << " # theta-knots" << endl << endl;
 
-		scriptout << "# q and theta B-spline param values/flags" << endl;
-		for (i=0; i < n_egrad_params[0]; i++) scriptout << geometric_param[0][i] << " ";
-		scriptout << "  ";
-		for (i=0; i < n_egrad_params[1]; i++) scriptout << radians_to_degrees(geometric_param[1][i]) << " ";
-
-		scriptout << endl;
-		for (j=0; j < 2; j++) {
-			for (i=0; i < n_egrad_params[j]; i++) scriptout << "1 "; // vary flags
+			scriptout << "# q and theta B-spline param values/flags" << endl;
+			for (i=0; i < n_egrad_params[0]; i++) scriptout << geometric_param[0][i] << " ";
 			scriptout << "  ";
-		}
-		scriptout << endl << endl;
+			for (i=0; i < n_egrad_params[1]; i++) scriptout << radians_to_degrees(geometric_param[1][i]) << " ";
 
-		if (fourier_gradient) {
-			for (j=0; j < n_fourier_grad_modes; j++) {
-				stringstream mvalstr;
-				string mvalstring;
-				mvalstr << fourier_grad_mvals[j];
-				mvalstr >> mvalstring;
-				for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
-					scriptout << pow(10,fourier_knots[0][i]); // gives the elliptical radius values
-					if (i < n_bspline_knots_tot-1) scriptout << " ";
-				}
-				scriptout << " # A" << mvalstring << "-knots " << endl;
-				for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
-					scriptout << pow(10,fourier_knots[1][i]); // gives the elliptical radius values
-					if (i < n_bspline_knots_tot-1) scriptout << " ";
-				}
-				scriptout << " # B" << mvalstring << "-knots " << endl << endl;
-
-				scriptout << "# A" << mvalstring << " and B" << mvalstring << " B-spline param values/flags" << endl;
-				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j][i] << " ";
+			scriptout << endl;
+			for (j=0; j < 2; j++) {
+				for (i=0; i < n_egrad_params[j]; i++) scriptout << "1 "; // vary flags
 				scriptout << "  ";
-				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j+1][i] << " ";
+			}
+			scriptout << endl << endl;
+
+			if (fourier_gradient) {
+				for (j=0; j < n_fourier_grad_modes; j++) {
+					stringstream mvalstr;
+					string mvalstring;
+					mvalstr << fourier_grad_mvals[j];
+					mvalstr >> mvalstring;
+					for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+						scriptout << pow(10,fourier_knots[0][i]); // gives the elliptical radius values
+						if (i < n_bspline_knots_tot-1) scriptout << " ";
+					}
+					scriptout << " # A" << mvalstring << "-knots " << endl;
+					for (i=bspline_order; i < n_bspline_knots_tot - bspline_order; i++) {
+						scriptout << pow(10,fourier_knots[1][i]); // gives the elliptical radius values
+						if (i < n_bspline_knots_tot-1) scriptout << " ";
+					}
+					scriptout << " # B" << mvalstring << "-knots " << endl << endl;
+				}
+
+				scriptout << "# B-spline param values/flags" << endl;
+				for (j=0; j < n_fourier_grad_modes; j++) {
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j][i] << " ";
+					scriptout << "   ";
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j+1][i] << " ";
+					scriptout << "   ";
+				}
 				scriptout << endl;
-				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
-				scriptout << "  ";
-				for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+				for (j=0; j < n_fourier_grad_modes; j++) {
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+					scriptout << "  ";
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+					scriptout << "   ";
+				}
 				scriptout << endl << endl;
+			}
+		} else if (egrad_mode==1) {
+			scriptout << "# q and theta param values/flags" << endl;
+			for (i=0; i < n_egrad_params[0]; i++) scriptout << geometric_param[0][i] << " ";
+			scriptout << "  ";
+			scriptout << radians_to_degrees(geometric_param[1][0]) << " ";
+			scriptout << radians_to_degrees(geometric_param[1][0]) << " ";
+			scriptout << geometric_param[1][0] << " ";
+			scriptout << geometric_param[1][0] << " ";
+
+			scriptout << endl;
+			for (j=0; j < 2; j++) {
+				for (i=0; i < n_egrad_params[j]; i++) scriptout << "1 "; // vary flags
+				scriptout << "  ";
+			}
+			scriptout << endl << endl;
+
+			if (fourier_gradient) {
+				for (j=0; j < n_fourier_grad_modes; j++) {
+					stringstream mvalstr;
+					string mvalstring;
+					mvalstr << fourier_grad_mvals[j];
+					mvalstr >> mvalstring;
+					scriptout << "# A" << mvalstring << " and B" << mvalstring << " param values/flags" << endl;
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j][i] << " ";
+					scriptout << "  ";
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << fourier_param[j+1][i] << " ";
+					scriptout << endl;
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+					scriptout << "  ";
+					for (i=0; i < n_fourier_grad_params[j]; i++) scriptout << "1 "; // vary flags
+					scriptout << endl << endl;
+				}
 			}
 		}
 	}

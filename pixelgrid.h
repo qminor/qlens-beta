@@ -316,12 +316,13 @@ struct ImagePixelData : public Sort
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool load_mask_fits(string fits_filename);
+	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool add_mask=false);
 	bool save_mask_fits(string fits_filename);
 	void copy_mask(ImagePixelData* data);
 	void set_no_required_data_pixels();
 	void assign_high_sn_pixels();
 	void set_all_required_data_pixels();
+	void set_foreground_mask_to_primary_mask();
 	void invert_mask();
 	bool inside_mask(const double x, const double y);
 	void assign_mask_windows(const double sb_noise_threshold);

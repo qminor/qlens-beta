@@ -79,6 +79,7 @@ class EllipticityGradient : public Brent
 	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const string suffix = "");
 	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const string suffix = "");
 	void output_egrad_values_and_knots(ofstream& outfile);
+	int get_egrad_mode() { return egrad_mode; }
 
 	private:
 	double elliptical_radius_root_eq(const double xi, const double &xi_root_x, const double &xi_root_y);

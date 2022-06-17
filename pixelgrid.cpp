@@ -1483,8 +1483,11 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {
 						nn = cell[i][j]->overlap_pixel_n[k];
-						img_j = nn / image_pixel_grid->x_N;
-						img_i = nn % image_pixel_grid->x_N;
+						//img_j = nn / image_pixel_grid->x_N;
+						//img_i = nn % image_pixel_grid->x_N;
+						img_j = image_pixel_grid->masked_pixels_j[nn];
+						img_i = image_pixel_grid->masked_pixels_i[nn];
+
 						corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
 						corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 						corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
@@ -1521,6 +1524,10 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 								triangle1_weight = triangle1_overlap / image_pixel_grid->source_plane_triangle1_area[img_i][img_j];
 								triangle2_weight = triangle2_overlap / image_pixel_grid->source_plane_triangle2_area[img_i][img_j];
 								weighted_overlap = triangle1_weight + triangle2_weight;
+								if ((triangle2_weight*0.0 != 0.0)) {
+									cout << "HMM (" << img_i << "," << img_j << ") " << triangle2_overlap << " " << image_pixel_grid->source_plane_triangle2_area[img_i][img_j] << endl;
+									cout << "    .... imgpixel: " << image_pixel_grid->center_pts[img_i][img_j][0] << " " << image_pixel_grid->center_pts[img_i][img_j][1] << ", srcpixel: " << cell[i][j]->xcenter << " " << cell[i][j]->ycenter << endl;
+								}
 
 								subcell->total_magnification += weighted_overlap;
 								//cout << "MAG: " << triangle1_overlap << " " << triangle2_overlap << " " << image_pixel_grid->source_plane_triangle1_area[img_i][img_j] << " " << image_pixel_grid->source_plane_triangle2_area[img_i][img_j] << endl;
@@ -1533,11 +1540,13 @@ void SourcePixelGrid::split_subcells_firstlevel(const int splitlevel)
 								}
 							}
 						}
+						if (subcell->total_magnification*0.0 != 0.0) die("BLARGH");
 					}
 					for (l=0; l < cell[i][j]->u_N; l++) {
 						for (m=0; m < cell[i][j]->w_N; m++) {
 							subcell = cell[i][j]->cell[l][m];
 							subcell->total_magnification *= image_pixel_grid->triangle_area / subcell->cell_area;
+							//cout << "subcell mag: " << subcell->total_magnification << endl;
 							subcell->avg_image_pixels_mapped = subcell->total_magnification * subcell->cell_area / image_pixel_grid->pixel_area;
 							if (lens->n_image_prior) subcell->n_images /= subcell->cell_area;
 						}
@@ -1583,8 +1592,11 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 					cell[i][j]->split_cells(2,2,thread);
 					for (k=0; k < cell[i][j]->overlap_pixel_n.size(); k++) {
 						nn = cell[i][j]->overlap_pixel_n[k];
-						img_j = nn / image_pixel_grid->x_N;
-						img_i = nn % image_pixel_grid->x_N;
+						//img_j = nn / image_pixel_grid->x_N;
+						//img_i = nn % image_pixel_grid->x_N;
+						img_j = image_pixel_grid->masked_pixels_j[nn];
+						img_i = image_pixel_grid->masked_pixels_i[nn];
+
 						corners_threads[thread][0] = &image_pixel_grid->corner_sourcepts[img_i][img_j];
 						corners_threads[thread][1] = &image_pixel_grid->corner_sourcepts[img_i][img_j+1];
 						corners_threads[thread][2] = &image_pixel_grid->corner_sourcepts[img_i+1][img_j];
@@ -1636,6 +1648,7 @@ void SourcePixelGrid::split_subcells(const int splitlevel, const int thread)
 						for (m=0; m < cell[i][j]->w_N; m++) {
 							subcell = cell[i][j]->cell[l][m];
 							subcell->total_magnification *= image_pixel_grid->triangle_area / subcell->cell_area;
+							//cout << "subcell mag: " << subcell->total_magnification << endl;
 							subcell->avg_image_pixels_mapped = subcell->total_magnification * subcell->cell_area / image_pixel_grid->pixel_area;
 							if (lens->n_image_prior) subcell->n_images /= subcell->cell_area;
 						}
@@ -3370,7 +3383,7 @@ void ImagePixelData::assign_high_sn_pixels()
 }
 
 
-bool ImagePixelData::load_mask_fits(string fits_filename)
+bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground, const bool add_mask) // if 'add_mask' is true, then doesn't unmask any pixels that are already masked
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -3403,11 +3416,27 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 						break; // jump out of loop on error
 
 					for (i=0; i < naxes[0]; i++) {
-						if (pixels[i] == 0.0) in_mask[i][j] = false;
-						else {
-							in_mask[i][j] = true;
-							n_maskpixels++;
-						//cout << pixels[i] << endl;
+						if (foreground) {
+								if (pixels[i] == 0.0) {
+								if (!add_mask) foreground_mask[i][j] = false;
+								else if (foreground_mask[i][j]==true) n_maskpixels++;
+							}
+							else {
+								foreground_mask[i][j] = true;
+								n_maskpixels++;
+							//cout << pixels[i] << endl;
+							}
+
+						} else {
+							if (pixels[i] == 0.0) {
+								if (!add_mask) in_mask[i][j] = false;
+								else if (in_mask[i][j]==true) n_maskpixels++;
+							}
+							else {
+								in_mask[i][j] = true;
+								n_maskpixels++;
+							//cout << pixels[i] << endl;
+							}
 						}
 					}
 				}
@@ -3419,8 +3448,10 @@ bool ImagePixelData::load_mask_fits(string fits_filename)
 	} 
 
 	if (status) fits_report_error(stderr, status); // print any error message
-	if (image_load_status) n_required_pixels = n_maskpixels;
-	set_extended_mask(lens->extended_mask_n_neighbors);
+	if (!foreground) {
+		if (image_load_status) n_required_pixels = n_maskpixels;
+		set_extended_mask(lens->extended_mask_n_neighbors);
+	}
 	return image_load_status;
 #endif
 }
@@ -3578,6 +3609,46 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 			psf_matrix[i][j] /= normalization;
 		}
 	}
+
+	imid = nx/2;
+	jmid = ny/2;
+	imin = imid;
+	imax = imid;
+	jmin = jmid;
+	jmax = jmid;
+	for (i=0; i < nx; i++) {
+		for (j=0; j < ny; j++) {
+			if (input_psf_matrix[i][j] > foreground_psf_threshold*peak_sb) {
+				if (i < imin) imin=i;
+				if (i > imax) imax=i;
+				if (j < jmin) jmin=j;
+				if (j > jmax) jmax=j;
+			}
+		}
+	}
+	nx_half = (imax-imin+1)/2;
+	ny_half = (jmax-jmin+1)/2;
+	foreground_psf_npixels_x = 2*nx_half+1;
+	foreground_psf_npixels_y = 2*ny_half+1;
+	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
+	for (i=0; i < foreground_psf_npixels_x; i++) foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
+	for (ii=0, i=imid-nx_half; ii < foreground_psf_npixels_x; i++, ii++) {
+		for (jj=0, j=jmid-ny_half; jj < foreground_psf_npixels_y; j++, jj++) {
+			foreground_psf_matrix[ii][jj] = input_psf_matrix[i][j];
+		}
+	}
+	normalization = 0;
+	for (i=0; i < foreground_psf_npixels_x; i++) {
+		for (j=0; j < foreground_psf_npixels_y; j++) {
+			normalization += foreground_psf_matrix[i][j];
+		}
+	}
+	for (i=0; i < psf_npixels_x; i++) {
+		for (j=0; j < psf_npixels_y; j++) {
+			foreground_psf_matrix[i][j] /= normalization;
+		}
+	}
+
 	//for (i=0; i < psf_npixels_x; i++) {
 		//for (j=0; j < psf_npixels_y; j++) {
 			//cout << psf_matrix[i][j] << " ";
@@ -3586,7 +3657,11 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	//}
 	//cout << psf_npixels_x << " " << psf_npixels_y << " " << nx_half << " " << ny_half << endl;
 
-	if ((verbal) and (mpi_id==0)) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << " (input PSF dimensions: " << nx << " " << ny << ")" << endl << endl;
+	if ((verbal) and (mpi_id==0)) {
+		cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << " (input PSF dimensions: " << nx << " " << ny << ")" << endl;
+		cout << "Foreground PSF matrix dimensions: " << foreground_psf_npixels_x << " " << foreground_psf_npixels_y << endl;
+		//cout << "PSF normalization =" << normalization << endl << endl;
+	}
 	for (i=0; i < nx; i++) delete[] input_psf_matrix[i];
 	delete[] input_psf_matrix;
 
@@ -3643,6 +3718,17 @@ void ImagePixelData::set_all_required_data_pixels()
 		}
 	}
 	n_required_pixels = npixels_x*npixels_y;
+}
+
+void ImagePixelData::set_foreground_mask_to_primary_mask()
+{
+	int i,j;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (in_mask[i][j]) foreground_mask[i][j] = true;
+			else foreground_mask[i][j] = false;
+		}
+	}
 }
 
 void ImagePixelData::invert_mask()
@@ -6588,6 +6674,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 		i = masked_pixels_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
+		//if (i==176) cout << "AREAS (" << i << "," << j << "): " << area_tri1[n] << " " << area_tri2[n] << endl;
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
 		twist_status[i][j] = twiststat[n];
@@ -6614,7 +6701,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			}
 		}
 	}
-	if (lens->split_high_mag_imgpixels) setup_subpixel_ray_tracing_arrays(verbal);
+	if ((lens->split_imgpixels) and (lens->split_high_mag_imgpixels)) setup_subpixel_ray_tracing_arrays(verbal);
 
 	int mpi_chunk3, mpi_start3, mpi_end3;
 	mpi_chunk3 = ntot_subpixels / lens->group_np;
@@ -7097,13 +7184,14 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	bool use_noise_threshold = true;
 	if (lens->noise_threshold <= 0) use_noise_threshold = false;
 	double threshold = lens->noise_threshold*pixel_noise;
-	int i,j;
+	int i,j,k,nsp;
 	sourcegrid_xmin=1e30;
 	sourcegrid_xmax=-1e30;
 	sourcegrid_ymin=1e30;
 	sourcegrid_ymax=-1e30;
 	int ii,jj,il,ih,jl,jh,nn;
 	double sbavg;
+	double xsavg, ysavg;
 	static const int window_size_for_sbavg = 0;
 	bool resize_grid;
 	for (i=0; i < x_N; i++) {
@@ -7131,20 +7219,34 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 					if (sbavg <= threshold) resize_grid = false;
 				}
 				if (resize_grid) {
-					if (center_sourcepts[i][j][0] < sourcegrid_xmin) {
-						if (center_sourcepts[i][j][0] > sourcegrid_limit_xmin) sourcegrid_xmin = center_sourcepts[i][j][0];
+					if (!lens->split_imgpixels) {
+						xsavg = center_sourcepts[i][j][0];
+						ysavg = center_sourcepts[i][j][1];
+					} else {
+						xsavg=ysavg=0;
+						nsp = SQR(nsplits[i][j]);
+						for (k=0; k < nsp; k++) {
+							xsavg += subpixel_center_sourcepts[i][j][k][0];
+							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						}
+						xsavg /= nsp;
+						ysavg /= nsp;
+					}
+
+					if (xsavg < sourcegrid_xmin) {
+						if (xsavg > sourcegrid_limit_xmin) sourcegrid_xmin = xsavg;
 						else if (sourcegrid_xmin > sourcegrid_limit_xmin) sourcegrid_xmin = sourcegrid_limit_xmin;
 					}
-					if (center_sourcepts[i][j][0] > sourcegrid_xmax) {
-						if (center_sourcepts[i][j][0] < sourcegrid_limit_xmax) sourcegrid_xmax = center_sourcepts[i][j][0];
+					if (xsavg > sourcegrid_xmax) {
+						if (xsavg < sourcegrid_limit_xmax) sourcegrid_xmax = xsavg;
 						else if (sourcegrid_xmax < sourcegrid_limit_xmax) sourcegrid_xmax = sourcegrid_limit_xmax;
 					}
-					if (center_sourcepts[i][j][1] < sourcegrid_ymin) {
-						if (center_sourcepts[i][j][1] > sourcegrid_limit_ymin) sourcegrid_ymin = center_sourcepts[i][j][1];
+					if (ysavg < sourcegrid_ymin) {
+						if (ysavg > sourcegrid_limit_ymin) sourcegrid_ymin = ysavg;
 						else if (sourcegrid_ymin > sourcegrid_limit_ymin) sourcegrid_ymin = sourcegrid_limit_ymin;
 					}
-					if (center_sourcepts[i][j][1] > sourcegrid_ymax) {
-						if (center_sourcepts[i][j][1] < sourcegrid_limit_ymax) sourcegrid_ymax = center_sourcepts[i][j][1];
+					if (ysavg > sourcegrid_ymax) {
+						if (ysavg < sourcegrid_limit_ymax) sourcegrid_ymax = ysavg;
 						else if (sourcegrid_ymax < sourcegrid_limit_ymax) sourcegrid_ymax = sourcegrid_limit_ymax;
 					}
 				}
@@ -7610,7 +7712,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 				at_least_one_lensed_src = true;
 			}
 		}
-		if (((lensed_sources_only) and (!at_least_one_lensed_src)) or ((foreground_only) and (!at_least_one_foreground_src))) {
+		if ((foreground_only) and (!at_least_one_foreground_src)) {
 			int i,j;
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
@@ -9193,10 +9295,10 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 
 	int nx_half, ny_half;
-	nx_half = psf_npixels_x/2;
-	ny_half = psf_npixels_y/2;
 
 	if ((!foreground) and (fft_convolution)) {
+		nx_half = psf_npixels_x/2;
+		ny_half = psf_npixels_y/2;
 		if (!setup_fft_convolution) {
 			if (!setup_convolution_FFT(verbal)) {
 				warn("PSF convolution FFT failed");
@@ -9320,28 +9422,43 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		int npix;
 		int *pixel_map_i, *pixel_map_j;
 		int **pix_index;
+		double **psf;
+		int psf_nx, psf_ny;
 		if (foreground) {
 			npix = image_npixels_fgmask;
 			pixel_map_i = active_image_pixel_i_fgmask;
 			pixel_map_j = active_image_pixel_j_fgmask;
 			pix_index = image_pixel_grid->pixel_index_fgmask;
+			psf = foreground_psf_matrix;
+			psf_nx = foreground_psf_npixels_x;
+			psf_ny = foreground_psf_npixels_y;
+			if (use_input_psf_matrix) {
+				if (foreground_psf_matrix == NULL) return;
+			}
 		}
 		else {
 			npix = image_npixels;
 			pixel_map_i = active_image_pixel_i;
 			pixel_map_j = active_image_pixel_j;
 			pix_index = image_pixel_grid->pixel_index;
+			psf = psf_matrix;
+			psf_nx = psf_npixels_x;
+			psf_ny = psf_npixels_y;
+			if (use_input_psf_matrix) {
+				if (psf_matrix == NULL) return;
+			}
 		}
-		if (use_input_psf_matrix) {
-			if (psf_matrix == NULL) return;
-		}
-		else {
+
+		if (!use_input_psf_matrix) {
 			if ((psf_width_x==0) and (psf_width_y==0)) return;
 			else if (generate_PSF_matrix()==false) {
 				if (verbal) warn("could not generate_PSF matrix");
 				return;
 			}
 		}
+
+		nx_half = psf_nx/2;
+		ny_half = psf_ny/2;
 
 		double *new_surface_brightness_vector = new double[npix];
 		int i,j,k,l;
@@ -9356,18 +9473,18 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			totweight = 0;
 			k = pixel_map_i[img_index1];
 			l = pixel_map_j[img_index1];
-			for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
+			for (psf_k=0; psf_k < psf_nx; psf_k++) {
 				i = k + nx_half - psf_k;
 				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
-					for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
+					for (psf_l=0; psf_l < psf_ny; psf_l++) {
 						j = l + ny_half - psf_l;
 						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 							// THIS IS VERY CLUMSY! RE-IMPLEMENT IN A MORE ELEGANT WAY?
 							if (((foreground) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_data->foreground_mask[i][j]))) or  
 							((!foreground) and (image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])))) {
 								img_index2 = pix_index[i][j];
-								new_surface_brightness_vector[img_index1] += psf_matrix[psf_k][psf_l]*surface_brightness_vector[img_index2];
-								totweight += psf_matrix[psf_k][psf_l];
+								new_surface_brightness_vector[img_index1] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
+								totweight += psf[psf_k][psf_l];
 							}
 						}
 					}
