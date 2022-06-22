@@ -781,7 +781,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 
 	dmatrix Lmatrix_dense;
-	dvector Rmatrix_diags;
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
 	dvector temp_src; // used when optimizing the regularization parameter
@@ -849,6 +848,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix(bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal);
 	void invert_lens_mapping_UMFPACK(bool verbal);
+	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
 	void indexx(int* arr, int* indx, int nn);
 
@@ -1149,7 +1149,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
 	bool output_scaled_percentiles_from_chain(const double pct_scaling);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
-	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double percentile_scale_factor = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
+	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);

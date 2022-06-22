@@ -5963,7 +5963,7 @@ void ImagePixelData::add_point_image_from_centroid(ImageData* point_image_data, 
 }
 */
 
-void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask)
+void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask, bool show_foreground_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -5984,6 +5984,18 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
 				if ((!show_only_mask) or (extended_mask == NULL) or (extended_mask[i][j])) {
+					pixel_image_file << surface_brightness[i][j];
+				} else {
+					pixel_image_file << "NaN";
+				}
+				if (i < npixels_x-1) pixel_image_file << " ";
+			}
+			pixel_image_file << endl;
+		}
+	} else if (show_foreground_mask) {
+		for (j=0; j < npixels_y; j++) {
+			for (i=0; i < npixels_x; i++) {
+				if ((!show_only_mask) or (foreground_mask == NULL) or (foreground_mask[i][j])) {
 					pixel_image_file << surface_brightness[i][j];
 				} else {
 					pixel_image_file << "NaN";
@@ -9935,10 +9947,9 @@ void QLens::create_regularization_matrix_dense()
 {
 	//Rmatrix_dense.input(source_npixels,source_npixels);
 	//Rmatrix_dense = 0;
-	Rmatrix_diags.input(source_npixels);
 	switch (regularization_method) {
 		case Norm:
-			generate_Rmatrix_norm_dense(); break;
+			generate_Rmatrix_norm(); break;
 		case Gradient:
 			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_gradient();
 			else die("gradient regularization only implemented for Shapelet mode");
@@ -9955,34 +9966,56 @@ void QLens::create_regularization_matrix_dense()
 void QLens::generate_Rmatrix_norm_dense()
 {
 	//for (int i=0; i < source_npixels; i++) Rmatrix_dense[i][i] = 1;
-	for (int i=0; i < source_npixels; i++) Rmatrix_diags[i] = 1;
+	Rmatrix = new double[Rmatrix_nn];
+	Rmatrix_index = new int[Rmatrix_nn];
+	Rmatrix_nn = source_npixels+1;
+
+	for (int i=0; i < source_npixels; i++) {
+		Rmatrix[i] = 1;
+		Rmatrix_index[i] = source_npixels;
+	}
 	Rmatrix_log_determinant = 0;
 }
 
 void QLens::generate_Rmatrix_shapelet_gradient()
 {
 	bool at_least_one_shapelet = false;
-	double *Rmatptr = Rmatrix_diags.array();
+	Rmatrix_nn = 3*source_npixels+1; // actually it will be slightly less than this due to truncation at shapelets with i=n_shapelets-1 or j=n_shapelets-1
+
+	Rmatrix = new double[Rmatrix_nn];
+	Rmatrix_index = new int[Rmatrix_nn];
+
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
-			sb_list[i]->calculate_gradient_Rmatrix_elements(Rmatptr, Rmatrix_log_determinant);
+			sb_list[i]->calculate_gradient_Rmatrix_elements(Rmatrix, Rmatrix_index);
 			at_least_one_shapelet = true;
+			break;
 		}
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
+	Rmatrix_nn = Rmatrix_index[source_npixels];
+	//for (int i=0; i <= source_npixels; i++) cout << Rmatrix[i] << " " << Rmatrix_index[i] << endl;
+	//cout << "Rmatrix_nn=" << Rmatrix_nn << " source_npixels=" << source_npixels << endl;
+	Rmatrix_determinant_UMFPACK();
 }
 
 void QLens::generate_Rmatrix_shapelet_curvature()
 {
+	Rmatrix_nn = source_npixels+1;
+
+	Rmatrix = new double[Rmatrix_nn];
+	Rmatrix_index = new int[Rmatrix_nn];
+
 	bool at_least_one_shapelet = false;
-	double *Rmatptr = Rmatrix_diags.array();
 	for (int i=0; i < n_sb; i++) {
 		if (sb_list[i]->sbtype==SHAPELET) {
-			sb_list[i]->calculate_curvature_Rmatrix_elements(Rmatptr, Rmatrix_log_determinant);
+			sb_list[i]->calculate_curvature_Rmatrix_elements(Rmatrix, Rmatrix_index);
 			at_least_one_shapelet = true;
 		}
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
+	Rmatrix_nn = Rmatrix_index[source_npixels];
+	Rmatrix_determinant_UMFPACK();
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
@@ -10278,10 +10311,13 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	double *i_n = new double[ntot];
 	double *j_n = new double[ntot];
 	double **Ltrans = new double*[source_npixels];
+	//int **ncheck = new int*[source_npixels];
 	n=0;
 	for (i=0; i < source_npixels; i++) {
 		Ltrans[i] = new double[image_npixels];
+		//ncheck[j] = new int[source_npixels];
 		for (j=0; j <= i; j++) {
+			//ncheck[i][j] = n;
 			i_n[n] = i;
 			j_n[n] = j;
 			n++;
@@ -10364,7 +10400,9 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 		double *fpmatptr;
 		double *lmatptr1, *lmatptr2;
 		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
-		for (n=0; n < ntot; n++) {
+		
+	
+	for (n=0; n < ntot; n++) {
 			i = i_n[n];
 			j = j_n[n];
 			//fmatptr = &Fmatrix_dense[i][j];
@@ -10376,10 +10414,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 				(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
 			}
 			(*fpmatptr) /= covariance;
-			if ((regularization_method != None) and (!optimize_regparam) and (i==j)) {
-				(*fpmatptr) += effective_reg_parameter*Rmatrix_diags[i]; // with Shapelets, the regularization matrix is diagonal due to orthogonality
-			}
-			//(*fmatptr) = (*fpmatptr);
 			//cout << i << "," << j << ": " << Fmatrix_dense[i][j] << endl;
 		}
 #endif
@@ -10388,14 +10422,19 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 #ifdef USE_MKL
    cblas_dsyrk(CblasRowMajor,CblasLower,CblasNoTrans,source_npixels,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked,source_npixels);
    LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_stacked,source_npixels,Fmatrix_packed.array());
-   int indx_diag=0;
+#endif
+
+   int k,indx_start=0;
    if ((regularization_method != None) and (!optimize_regparam)) {
       for (i=0; i < source_npixels; i++) {
-         Fmatrix_packed[indx_diag] += effective_reg_parameter*Rmatrix_diags[i];
-         indx_diag += i+2;
+         Fmatrix_packed[indx_start+i] += effective_reg_parameter*Rmatrix[i];
+			for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
+				Fmatrix_packed[indx_start+Rmatrix_index[k]] += effective_reg_parameter*Rmatrix[k];
+				//if (ncheck[i][Rmatrix_index[k]] != indx_start+Rmatrix_index[k]) warn("FUCK ME (%i vs %i)",ncheck[i][Rmatrix_index[k]],indx_start+Rmatrix_index[k]);
+			}
+			indx_start += i+1;
       }
    }
-#endif
 
 	//cout << "Dvector (from dense:)" << endl;
 	//for (j=0; j < source_npixels; j++) {
@@ -10541,12 +10580,15 @@ void QLens::optimize_regularization_parameter(const bool verbal)
 	regularization_parameter = pow(10,logreg_min);
 	if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing: " << regularization_parameter << endl;
 
-	int indx=0;
-	for (int i=0; i < source_npixels; i++) {
-		//Fmatrix_dense[i][i] += regularization_parameter*Rmatrix_dense[i][i];
-		Fmatrix_packed[indx] += regularization_parameter*Rmatrix_diags[i];
-		indx += i+2;
+   int k,indx_start=0;
+	for (i=0; i < source_npixels; i++) {
+		Fmatrix_packed[indx_start+i] += regularization_parameter*Rmatrix[i];
+		for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
+			Fmatrix_packed[indx_start+Rmatrix_index[k]] += regularization_parameter*Rmatrix[k];
+		}
+		indx_start += i+1;
 	}
+
 	delete[] img_minus_sbprofile;
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -10583,10 +10625,13 @@ double QLens::chisq_regparam(const double logreg)
 	//}
 	//die();
 
-	int indx=0;
+   int k,indx_start=0;
 	for (i=0; i < source_npixels; i++) {
-		Fmatrix_packed_copy[indx] += regularization_parameter*Rmatrix_diags[i];
-		indx += i+2;
+		Fmatrix_packed_copy[indx_start+i] += regularization_parameter*Rmatrix[i];
+		for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
+			Fmatrix_packed_copy[indx_start+Rmatrix_index[k]] += regularization_parameter*Rmatrix[k];
+		}
+		indx_start += i+1;
 	}
 
 	double Fmatrix_logdet;
@@ -10629,12 +10674,19 @@ double QLens::chisq_regparam(const double logreg)
 		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[i])/covariance;
 		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
 		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[img_index_fgmask])/covariance;
+		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
 	}
 	for (i=0; i < source_npixels; i++) {
-		Es_times_two += Rmatrix_diags[i] * SQR(temp_src[i]); // so far we just use diagonal Rmatrix
+		Es_times_two += Rmatrix[i]*SQR(temp_src[i]);
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			Es_times_two += 2 * temp_src[i] * Rmatrix[j] * temp_src[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+		}
 	}
+	//cout << "regparam: "<< regularization_parameter << endl;
 	//cout << "chisqreg: " << (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant) << endl;
+	//cout << "reg*Es_times_two=" << (regularization_parameter*Es_times_two) << " n_shapelets*log(regparam)=" << (-source_npixels*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_logdet << endl;
+
 	return (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
 }
 
@@ -11094,150 +11146,16 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal)
 			source_pixel_vector[i] = temp[i];
 		}
 	}
-	if (calculate_determinant) {
-		double mantissa, exponent;
-		status = umfpack_di_get_determinant (&mantissa, &exponent, Numeric, Info) ;
-		if (status < 0) {
-			die("WTF!");
-		}
-		umfpack_di_free_numeric(&Numeric);
-		Fmatrix_log_determinant = log(mantissa) + exponent*log(10);
 
-		int Rmatrix_nonzero_elements = Rmatrix_index[source_npixels]-1;
-		int Rmatrix_offdiags = Rmatrix_index[source_npixels]-1-source_npixels;
-		int Rmatrix_unsymmetric_nonzero_elements = source_npixels + 2*Rmatrix_offdiags;
-		if (Rmatrix_nonzero_elements==0) {
-			cout << "nsource_pixels=" << source_npixels << endl;
-			die("Rmatrix has zero size");
-		}
-
-		// Now we construct the transpose of Rmatrix so we can cast it into "unsymmetric" format for UMFPACK (by including offdiagonals on either side of diagonal elements)
-		double *Rmatrix_transpose = new double[Rmatrix_nonzero_elements+1];
-		int *Rmatrix_transpose_index = new int[Rmatrix_nonzero_elements+1];
-
-		n2=Rmatrix_index[0];
-		for (j=0; j < n2-1; j++) Rmatrix_transpose[j] = Rmatrix[j];
-		n_offdiag = Rmatrix_index[n2-1] - Rmatrix_index[0];
-		offdiag_indx = new int[n_offdiag];
-		offdiag_indx_transpose = new int[n_offdiag];
-		for (i=0; i < n_offdiag; i++) offdiag_indx[i] = Rmatrix_index[n2+i];
-		indexx(offdiag_indx,offdiag_indx_transpose,n_offdiag);
-		for (j=n2, k=0; j < Rmatrix_index[n2-1]; j++, k++) {
-			Rmatrix_transpose_index[j] = offdiag_indx_transpose[k];
-		}
-		jp=0;
-		for (k=Rmatrix_index[0]; k < Rmatrix_index[n2-1]; k++) {
-			m = Rmatrix_transpose_index[k] + n2;
-			Rmatrix_transpose[k] = Rmatrix[m];
-			for (j=jp; j < Rmatrix_index[m]+1; j++)
-				Rmatrix_transpose_index[j]=k;
-			jp = Rmatrix_index[m] + 1;
-			jl=0;
-			ju=n2-1;
-			while (ju-jl > 1) {
-				jm = (ju+jl)/2;
-				if (Rmatrix_index[jm] > m) ju=jm; else jl=jm;
-			}
-			Rmatrix_transpose_index[k]=jl;
-		}
-		for (j=jp; j < n2; j++) Rmatrix_transpose_index[j] = Rmatrix_index[n2-1];
-		for (j=0; j < n2-1; j++) {
-			jl = Rmatrix_transpose_index[j+1] - Rmatrix_transpose_index[j];
-			noff=Rmatrix_transpose_index[j];
-			inc=1;
-			do {
-				inc *= 3;
-				inc++;
-			} while (inc <= jl);
-			do {
-				inc /= 3;
-				for (k=noff+inc; k < noff+jl; k++) {
-					iv = Rmatrix_transpose_index[k];
-					v = Rmatrix_transpose[k];
-					m=k;
-					while (Rmatrix_transpose_index[m-inc] > iv) {
-						Rmatrix_transpose_index[m] = Rmatrix_transpose_index[m-inc];
-						Rmatrix_transpose[m] = Rmatrix_transpose[m-inc];
-						m -= inc;
-						if (m-noff+1 <= inc) break;
-					}
-					Rmatrix_transpose_index[m] = iv;
-					Rmatrix_transpose[m] = v;
-				}
-			} while (inc > 1);
-		}
-		delete[] offdiag_indx;
-		delete[] offdiag_indx_transpose;
-
-		int *Rmatrix_unsymmetric_cols = new int[source_npixels+1];
-		int *Rmatrix_unsymmetric_indices = new int[Rmatrix_unsymmetric_nonzero_elements];
-		double *Rmatrix_unsymmetric = new double[Rmatrix_unsymmetric_nonzero_elements];
-		indx=0;
-		Rmatrix_unsymmetric_cols[0] = 0;
-		for (i=0; i < source_npixels; i++) {
-			for (j=Rmatrix_transpose_index[i]; j < Rmatrix_transpose_index[i+1]; j++) {
-				Rmatrix_unsymmetric[indx] = Rmatrix_transpose[j];
-				Rmatrix_unsymmetric_indices[indx] = Rmatrix_transpose_index[j];
-				indx++;
-			}
-			Rmatrix_unsymmetric_indices[indx] = i;
-			Rmatrix_unsymmetric[indx] = Rmatrix[i];
-			indx++;
-			for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-				Rmatrix_unsymmetric[indx] = Rmatrix[j];
-				//cout << "Row " << i << ", column " << Rmatrix_index[j] << ": " << Rmatrix[j] << " " << Rmatrix_unsymmetric[indx] << " (element " << indx << ")" << endl;
-				Rmatrix_unsymmetric_indices[indx] = Rmatrix_index[j];
-				indx++;
-			}
-			Rmatrix_unsymmetric_cols[i+1] = indx;
-		}
-
-		for (i=0; i < source_npixels; i++) {
-			sort(Rmatrix_unsymmetric_cols[i+1]-Rmatrix_unsymmetric_cols[i],Rmatrix_unsymmetric_indices+Rmatrix_unsymmetric_cols[i],Rmatrix_unsymmetric+Rmatrix_unsymmetric_cols[i]);
-			//cout << "Row " << i << ": " << endl;
-			//cout << Rmatrix_unsymmetric_cols[i] << " ";
-			//for (j=Rmatrix_unsymmetric_cols[i]; j < Rmatrix_unsymmetric_cols[i+1]; j++) {
-				//cout << Rmatrix_unsymmetric_indices[j] << " ";
-			//}
-			//cout << endl;
-			//for (j=Rmatrix_unsymmetric_cols[i]; j < Rmatrix_unsymmetric_cols[i+1]; j++) {
-				//cout << Rmatrix_unsymmetric[j] << " ";
-			//}
-			//cout << endl;
-		}
-		//cout << endl;
-
-		if (indx != Rmatrix_unsymmetric_nonzero_elements) die("WTF! Wrong number of nonzero elements");
-
-		status = umfpack_di_symbolic(source_npixels, source_npixels, Rmatrix_unsymmetric_cols, Rmatrix_unsymmetric_indices, Rmatrix_unsymmetric, &Symbolic, Control, Info);
-		if (status < 0) {
-			umfpack_di_report_info (Control, Info) ;
-			umfpack_di_report_status (Control, status) ;
-			die("Error inputting matrix");
-		}
-		status = umfpack_di_numeric(Rmatrix_unsymmetric_cols, Rmatrix_unsymmetric_indices, Rmatrix_unsymmetric, Symbolic, &Numeric, Control, Info);
-		if (status < 0) {
-			umfpack_di_report_info (Control, Info) ;
-			umfpack_di_report_status (Control, status) ;
-			die("Error inputting matrix");
-		}
-		umfpack_di_free_symbolic(&Symbolic);
-
-		status = umfpack_di_get_determinant (&mantissa, &exponent, Numeric, Info) ;
-		//cout << "Rmatrix mantissa=" << mantissa << ", exponent=" << exponent << endl;
-		if (status < 0) {
-			die("Could not calculate determinant");
-		}
-		Rmatrix_log_determinant = log(mantissa) + exponent*log(10);
-		//cout << "Rmatrix_logdet=" << Rmatrix_log_determinant << endl;
-		delete[] Rmatrix_transpose;
-		delete[] Rmatrix_transpose_index;
-		delete[] Rmatrix_unsymmetric_cols;
-		delete[] Rmatrix_unsymmetric_indices;
-		delete[] Rmatrix_unsymmetric;
+	double mantissa, exponent;
+	status = umfpack_di_get_determinant (&mantissa, &exponent, Numeric, Info) ;
+	if (status < 0) {
+		die("Could not get determinant using UMFPACK");
 	}
 	umfpack_di_free_numeric(&Numeric);
+	Fmatrix_log_determinant = log(mantissa) + exponent*log(10);
 
+	if (calculate_determinant) Rmatrix_determinant_UMFPACK();
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -11253,6 +11171,157 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal)
 	delete[] Fmatrix_unsymmetric;
 	int index=0;
 	source_pixel_grid->update_surface_brightness(index);
+#endif
+}
+
+void QLens::Rmatrix_determinant_UMFPACK()
+{
+#ifndef USE_UMFPACK
+	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
+#else
+	double mantissa, exponent;
+	int i,j,status;
+   void *Symbolic, *Numeric;
+	double Control [UMFPACK_CONTROL];
+	double Info [UMFPACK_INFO];
+   umfpack_di_defaults (Control);
+	Control[UMFPACK_STRATEGY] = UMFPACK_STRATEGY_SYMMETRIC;
+	int Rmatrix_nonzero_elements = Rmatrix_index[source_npixels]-1;
+	int Rmatrix_n_offdiags = Rmatrix_index[source_npixels]-1-source_npixels;
+	int Rmatrix_unsymmetric_nonzero_elements = source_npixels + 2*Rmatrix_n_offdiags;
+	if (Rmatrix_nonzero_elements==0) {
+		cout << "nsource_pixels=" << source_npixels << endl;
+		die("Rmatrix has zero size");
+	}
+
+	int k,jl,jm,jp,ju,m,n2,noff,inc,iv;
+	double v;
+
+	// Now we construct the transpose of Rmatrix so we can cast it into "unsymmetric" format for UMFPACK (by including offdiagonals on either side of diagonal elements)
+	double *Rmatrix_transpose = new double[Rmatrix_nonzero_elements+1];
+	int *Rmatrix_transpose_index = new int[Rmatrix_nonzero_elements+1];
+
+	n2=Rmatrix_index[0];
+	for (j=0; j < n2-1; j++) Rmatrix_transpose[j] = Rmatrix[j];
+	int n_offdiag = Rmatrix_index[n2-1] - Rmatrix_index[0];
+	int *offdiag_indx = new int[n_offdiag];
+	int *offdiag_indx_transpose = new int[n_offdiag];
+	for (i=0; i < n_offdiag; i++) offdiag_indx[i] = Rmatrix_index[n2+i];
+	indexx(offdiag_indx,offdiag_indx_transpose,n_offdiag);
+	for (j=n2, k=0; j < Rmatrix_index[n2-1]; j++, k++) {
+		Rmatrix_transpose_index[j] = offdiag_indx_transpose[k];
+	}
+	jp=0;
+	for (k=Rmatrix_index[0]; k < Rmatrix_index[n2-1]; k++) {
+		m = Rmatrix_transpose_index[k] + n2;
+		Rmatrix_transpose[k] = Rmatrix[m];
+		for (j=jp; j < Rmatrix_index[m]+1; j++)
+			Rmatrix_transpose_index[j]=k;
+		jp = Rmatrix_index[m] + 1;
+		jl=0;
+		ju=n2-1;
+		while (ju-jl > 1) {
+			jm = (ju+jl)/2;
+			if (Rmatrix_index[jm] > m) ju=jm; else jl=jm;
+		}
+		Rmatrix_transpose_index[k]=jl;
+	}
+	for (j=jp; j < n2; j++) Rmatrix_transpose_index[j] = Rmatrix_index[n2-1];
+	for (j=0; j < n2-1; j++) {
+		jl = Rmatrix_transpose_index[j+1] - Rmatrix_transpose_index[j];
+		noff=Rmatrix_transpose_index[j];
+		inc=1;
+		do {
+			inc *= 3;
+			inc++;
+		} while (inc <= jl);
+		do {
+			inc /= 3;
+			for (k=noff+inc; k < noff+jl; k++) {
+				iv = Rmatrix_transpose_index[k];
+				v = Rmatrix_transpose[k];
+				m=k;
+				while (Rmatrix_transpose_index[m-inc] > iv) {
+					Rmatrix_transpose_index[m] = Rmatrix_transpose_index[m-inc];
+					Rmatrix_transpose[m] = Rmatrix_transpose[m-inc];
+					m -= inc;
+					if (m-noff+1 <= inc) break;
+				}
+				Rmatrix_transpose_index[m] = iv;
+				Rmatrix_transpose[m] = v;
+			}
+		} while (inc > 1);
+	}
+	delete[] offdiag_indx;
+	delete[] offdiag_indx_transpose;
+
+	int *Rmatrix_unsymmetric_cols = new int[source_npixels+1];
+	int *Rmatrix_unsymmetric_indices = new int[Rmatrix_unsymmetric_nonzero_elements];
+	double *Rmatrix_unsymmetric = new double[Rmatrix_unsymmetric_nonzero_elements];
+	int indx=0;
+	Rmatrix_unsymmetric_cols[0] = 0;
+	for (i=0; i < source_npixels; i++) {
+		for (j=Rmatrix_transpose_index[i]; j < Rmatrix_transpose_index[i+1]; j++) {
+			Rmatrix_unsymmetric[indx] = Rmatrix_transpose[j];
+			Rmatrix_unsymmetric_indices[indx] = Rmatrix_transpose_index[j];
+			indx++;
+		}
+		Rmatrix_unsymmetric_indices[indx] = i;
+		Rmatrix_unsymmetric[indx] = Rmatrix[i];
+		indx++;
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			Rmatrix_unsymmetric[indx] = Rmatrix[j];
+			//cout << "Row " << i << ", column " << Rmatrix_index[j] << ": " << Rmatrix[j] << " " << Rmatrix_unsymmetric[indx] << " (element " << indx << ")" << endl;
+			Rmatrix_unsymmetric_indices[indx] = Rmatrix_index[j];
+			indx++;
+		}
+		Rmatrix_unsymmetric_cols[i+1] = indx;
+	}
+
+	for (i=0; i < source_npixels; i++) {
+		sort(Rmatrix_unsymmetric_cols[i+1]-Rmatrix_unsymmetric_cols[i],Rmatrix_unsymmetric_indices+Rmatrix_unsymmetric_cols[i],Rmatrix_unsymmetric+Rmatrix_unsymmetric_cols[i]);
+		//cout << "Row " << i << ": " << endl;
+		//cout << Rmatrix_unsymmetric_cols[i] << " ";
+		//for (j=Rmatrix_unsymmetric_cols[i]; j < Rmatrix_unsymmetric_cols[i+1]; j++) {
+			//cout << Rmatrix_unsymmetric_indices[j] << " ";
+		//}
+		//cout << endl;
+		//for (j=Rmatrix_unsymmetric_cols[i]; j < Rmatrix_unsymmetric_cols[i+1]; j++) {
+			//cout << Rmatrix_unsymmetric[j] << " ";
+		//}
+		//cout << endl;
+	}
+	//cout << endl;
+
+	if (indx != Rmatrix_unsymmetric_nonzero_elements) die("WTF! Wrong number of nonzero elements");
+
+	status = umfpack_di_symbolic(source_npixels, source_npixels, Rmatrix_unsymmetric_cols, Rmatrix_unsymmetric_indices, Rmatrix_unsymmetric, &Symbolic, Control, Info);
+	if (status < 0) {
+		umfpack_di_report_info (Control, Info) ;
+		umfpack_di_report_status (Control, status) ;
+		die("Error inputting matrix");
+	}
+	status = umfpack_di_numeric(Rmatrix_unsymmetric_cols, Rmatrix_unsymmetric_indices, Rmatrix_unsymmetric, Symbolic, &Numeric, Control, Info);
+	if (status < 0) {
+		umfpack_di_report_info (Control, Info) ;
+		umfpack_di_report_status (Control, status) ;
+		die("Error inputting matrix");
+	}
+	umfpack_di_free_symbolic(&Symbolic);
+
+	status = umfpack_di_get_determinant (&mantissa, &exponent, Numeric, Info) ;
+	//cout << "Rmatrix mantissa=" << mantissa << ", exponent=" << exponent << endl;
+	if (status < 0) {
+		die("Could not calculate determinant");
+	}
+	Rmatrix_log_determinant = log(mantissa) + exponent*log(10);
+	//cout << "Rmatrix_logdet=" << Rmatrix_log_determinant << endl;
+	delete[] Rmatrix_transpose;
+	delete[] Rmatrix_transpose_index;
+	delete[] Rmatrix_unsymmetric_cols;
+	delete[] Rmatrix_unsymmetric_indices;
+	delete[] Rmatrix_unsymmetric;
+	umfpack_di_free_numeric(&Numeric);
 #endif
 }
 

@@ -8356,7 +8356,9 @@ bool QLens::output_parameter_prior_ranges()
 			for (int j=0; j < extra_length; j++) cout << " ";
 			if ((n_fit_parameters > 10) and (i < 10)) cout << " ";
 			if (!param_settings->output_prior(i)) return false;
-			cout << ", [" << lower_limits[i] << "," << upper_limits[i] << "]" << endl;
+			cout << ", [" << lower_limits[i] << "," << upper_limits[i] << "]";
+			if ((fitparams[i] < lower_limits[i]) or (fitparams[i] > upper_limits[i])) cout << " *NOTE*: current value (" << fitparams[i] << ") is outside prior range" << endl;
+			cout << endl;
 		}
 		cout << endl;
 	}
@@ -10161,7 +10163,7 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
-bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double egrad_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
+bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling, const double fmode_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
 {
 	if (n_sb==0) return false;
 	string scriptfile = fit_output_dir + "/isofit_knots_limits.in";
@@ -10196,6 +10198,17 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 		static const int n_characters = 5000;
 		char dataline[n_characters];
 		double *params = new double[nparams];
+		double *priorlo = new double[nparams];
+		double *priorhi = new double[nparams];
+
+		string prangefile_str = fit_output_dir + "/" + label[k] + ".ranges";
+		ifstream prangefile(prangefile_str.c_str());
+		if (!prangefile.is_open()) { warn("could not open file '%s'",prangefile_str.c_str()); return false; }
+
+		for (i=0; i < nparams; i++) {
+			prangefile >> priorlo[i];
+			prangefile >> priorhi[i];
+		}
 
 		string chain_str = fit_output_dir + "/" + label[k];
 		ifstream chain_file(chain_str.c_str());
@@ -10242,8 +10255,9 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 		else if (label[k]=="egrad_profile7") scriptout << "# B4-profile param limits" << endl;
 
 		double lopct, hipct, medpct, lowerr, hierr, scalefac, scaled_lopct, scaled_hipct;
-		if (k==0) scalefac = dmin(5,egrad_pct_scaling); // SB parameter errors are more trustworthy so they don't need to be scaled as much
-		else scalefac = egrad_pct_scaling;
+		if (k==0) scalefac = dmin(5,qtheta_pct_scaling); // SB parameter errors are more trustworthy so they don't need to be scaled as much
+		else if ((k==1) or (k==2)) scalefac = qtheta_pct_scaling; // SB parameter errors are more trustworthy so they don't need to be scaled as much
+		else scalefac = fmode_pct_scaling;
 		for (i=0; i < nparams; i++) {
 			sort(n_points,paramvals[i],weights[i]);
 			lopct = find_percentile(n_points, 0.02275, tot, paramvals[i], weights[i]);
@@ -10256,6 +10270,11 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 			if ((k==0) and (i==0) and (scaled_lopct < 0)) scaled_lopct = 0.01; // SB normalization is not allowed to be negative
 			if ((k==1) and (scaled_hipct > 1)) scaled_hipct = 1; // q cannot exceed 1
 			if ((k==1) and (scaled_lopct < 0.05)) scaled_lopct = 0.05; // q shouldn't get too close to zero
+			if (k != 2) {
+				// Don't allow scaled posterior ranges to go outside prior ranges (unless these are angle params, which are trickier to deal with)
+				if (scaled_lopct < priorlo[i]) scaled_lopct = priorlo[i];
+				if (scaled_hipct > priorhi[i]) scaled_hipct = priorhi[i];
+			}
 
 			//cout << "Param " << i << ": " << lopct[i] << " " << hipct[i] << endl;
 			scriptout << scaled_lopct << " " << scaled_hipct << endl;
@@ -10279,6 +10298,8 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 		}
 		delete[] paramvals;
 		delete[] weights;
+		delete[] priorlo;
+		delete[] priorhi;
 	}
 	scriptout << "source update 0 xc=" << xcavg << " yc=" << ycavg << endl << endl;
 
@@ -12806,8 +12827,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	} else if (source_fit_mode==Shapelet_Source) {
 		double chisqreg, Es=0;
 		if (regularization_method != None) {
+			//for (i=0; i < source_npixels; i++) {
+				//Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
+			//}
 			for (i=0; i < source_npixels; i++) {
-				Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
+				Es += Rmatrix[i]*SQR(source_pixel_vector[i]);
+				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+					Es += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+				}
 			}
 			if (regularization_parameter != 0) {
 				chisqreg = chisq + regularization_parameter*Es;

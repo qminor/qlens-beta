@@ -1500,7 +1500,7 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 	//double center_r = d1.norm();
 
 	if ((rmax-rmin) < length_scale()) {
-		const int max_split = 4;
+		const int max_split = 20;
 		if (contains_sbcenter) {
 			// If the pixel contains the SB center, just split the max number of times and call it a day
 			subgrid = true;
@@ -1525,8 +1525,18 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 				subgrid = true;
 				xsplit = ((int) npix_approx) + 1;
 				ysplit = ((int) npix_approx) + 1;
-				if (xsplit > max_split) xsplit = max_split; // limit on number of splittings
-				if (ysplit > max_split) ysplit = max_split; // limit on number of splittings
+				if (xsplit > max_split) {
+					//cout << "xsplit wants to be " << xsplit << endl;
+					xsplit = max_split; // limit on number of splittings
+				}
+				if (ysplit > max_split) {
+					//cout << "ysplit wants to be " << ysplit << endl;
+					ysplit = max_split; // limit on number of splittings
+				}
+
+				//double xavg = (pt1[0] + pt2[0] + pt3[0] + pt4[0])/4;
+				//double yavg = (pt1[1] + pt2[1] + pt3[1] + pt4[1])/4;
+				//cout << "xsplit= " << xsplit << " ysplit=" << ysplit << " (x=" << xavg << ",y=" << yavg << ",maxsplit=" << max_split << ")" << endl;
 			}
 			//if (npix_approx > 1) cout << "r= " << center_r << " sbcurv_approx=" << sbcurv_approx << " delta_R=" << (rmax-rmin) << " OPTIMAL SCALE: " << optimal_scale << " npix_approx=" << npix_approx << endl;
 		}
@@ -2105,12 +2115,19 @@ void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+/*
 void SB_Profile::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
+*/
 
-void SB_Profile::calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
+void SB_Profile::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
@@ -3046,6 +3063,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	delete[] hermvals_y;
 }
 
+/*
 void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
 {
 	if (!is_lensed) {
@@ -3056,7 +3074,7 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 	} else {
 		if (sig==0) die("sigma cannot be zero!!");
 		if ((q > 1) or (q <= 0)) die("q taking an absurd value");
-		int i,j,n=0;
+		int i,j;
 		logdet = 0;
 		for (i=0; i < n_shapelets; i++) {
 			for (j=0; j < n_shapelets; j++) {
@@ -3069,7 +3087,6 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 				//else {
 					//Rmatrix_elements[n] = 1.0;
 					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
-					//*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2);
 					if (*Rmatrix_elements < 0) die("negative element!!!");
 					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
 					Rmatrix_elements++;
@@ -3078,34 +3095,51 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, do
 		}
 	}
 }
+*/
 
-void Shapelet::calculate_curvature_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
+void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
 {
-	if (!is_lensed) {
-		int elements = n_shapelets*n_shapelets;
-		if (nonlinear_amp00) elements--;
-		for (int i=0; i < elements; i++) *(Rmatrix_elements++) = 0;
-		Rmatrix_elements += elements;
-	} else {
-		if (sig==0) die("sigma cannot be zero!!");
-		if ((q > 1) or (q <= 0)) die("q taking an absurd value");
-		int i,j,n=0;
-		logdet = 0;
-		double ip, jp;
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				if ((nonlinear_amp00) and (i==0) and (j==0)) ;
-				else {
-					ip = sqrt(i*(i+1));
-					jp = sqrt(j*(j+1));
-					*Rmatrix_elements = (4*(i*i+j*j) + 3*(i+j) + 6 + 2*i*j + 2*ip*jp + 2*(i+j)*(ip + jp))/(4*SQR(sig*sig));
-					if (*Rmatrix_elements < 0) die("negative element!!!");
-					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
-					Rmatrix_elements++;
-				}
+	if (sig==0) die("sigma cannot be zero!!");
+	int i,j,n=0;
+	int indx = n_shapelets*n_shapelets + 1;
+	double norm = 1.0/(2*sig*sig);
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			Rmatrix[n] = norm*((2*i+1) + (2*j+1));
+			Rmatrix_index[n] = indx;
+
+			if (i > 1) {
+				Rmatrix_index[indx] = n - 2*n_shapelets;
+				Rmatrix[indx] = -norm*sqrt(i*(i-1));
+				indx++;
 			}
+			if (j > 1) {
+				Rmatrix_index[indx] = n - 2;
+				Rmatrix[indx] = -norm*sqrt(j*(j-1));
+				indx++;
+			}
+			n++;
 		}
 	}
+	Rmatrix_index[n] = indx;
+}
+
+void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
+{
+	if (sig==0) die("sigma cannot be zero!!");
+	int i,j,n=0;
+	double ip, jp;
+	int indx = n_shapelets*n_shapelets + 1;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			ip = sqrt(i*(i+1));
+			jp = sqrt(j*(j+1));
+			Rmatrix[n] = (4*(i*i+j*j) + 3*(i+j) + 6 + 2*i*j + 2*ip*jp + 2*(i+j)*(ip + jp))/(4*SQR(sig*sig));
+			Rmatrix_index[n] = indx;
+			n++;
+		}
+	}
+	Rmatrix_index[n] = indx;
 }
 
 void Shapelet::update_amplitudes(double*& ampvec)

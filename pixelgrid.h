@@ -368,7 +368,7 @@ struct ImagePixelData : public Sort
 	bool Cholesky_dcmp(double** a, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);
-	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false);
+	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false);
 };
 
 

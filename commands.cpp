@@ -4939,8 +4939,8 @@ void QLens::process_commands(bool read_file)
 										enter_limits = false;
 									}
 									else if ((j >= egrad_theta_i) and (j < egrad_theta_f)) {
-										lower[i] = -90;
-										upper[i] = 90;
+										lower[i] = -180;
+										upper[i] = 180;
 										enter_limits = false;
 									}
 									else if ((fgrad) and (j >= fgrad_amp_i) and (j < fgrad_amp_f)) {
@@ -6194,8 +6194,8 @@ void QLens::process_commands(bool read_file)
 									enter_limits = false;
 								}
 								else if ((j >= egrad_theta_i) and (j < egrad_theta_f)) {
-									lower[i] = -90;
-									upper[i] = 90;
+									lower[i] = -180;
+									upper[i] = 180;
 									enter_limits = false;
 								}
 								else if ((fgrad) and (j >= fgrad_amp_i) and (j < fgrad_amp_f)) {
@@ -6942,7 +6942,7 @@ void QLens::process_commands(bool read_file)
 						run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
-				else if (words[1]=="run")
+				else if ((words[1]=="run") or (words[1]=="process_chain"))
 				{
 					int nparams;
 					get_n_fit_parameters(nparams);
@@ -6950,13 +6950,22 @@ void QLens::process_commands(bool read_file)
 					bool resume = false;
 					bool skip_run = false;
 					bool no_errors = false;
-					if (nwords > 2) {
-						if (nwords==3) {
-							if (words[2]=="-resume") resume = true;
-							else if (words[2]=="-process") skip_run = true;
-							else if (words[2]=="-noerrs") no_errors = true;
-							else Complain("invalid argument after 'fit run'");
-						} else Complain("only one (optional) argument allowed after 'fit run'");
+					bool adopt_bestfit = false;
+					if (words[1]=="process_chain") {
+						if (nwords > 2) Complain("no arguments allowed for 'fit process_chain'");
+						skip_run = true;
+					} else if (nwords > 2) { // the following arguments apply only to 'fit run'
+						vector<string> args;
+						if (extract_word_starts_with('-',2,nwords-1,args)==true)
+						{
+							for (int i=0; i < args.size(); i++) {
+								if (args[i]=="-resume") resume = true;
+								else if (args[i]=="-adopt") adopt_bestfit = true;
+								else if (args[i]=="-process") skip_run = true;
+								else if (args[i]=="-noerrs") no_errors = true;
+								else Complain("argument '" << args[i] << "' not recognized");
+							}
+						}
 					}
 					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
 					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
@@ -6973,6 +6982,7 @@ void QLens::process_commands(bool read_file)
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
 					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
+					if ((adopt_bestfit) and (adopt_model(bestfitparams)==false)) Complain("could not adopt best-fit model");
 				}
 				else if (words[1]=="chisq")
 				{
@@ -8523,7 +8533,7 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-add") add_mask = true;
-						if (args[i]=="-fg") foreground_mask = true;
+						else if (args[i]=="-fg") foreground_mask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -8672,6 +8682,7 @@ void QLens::process_commands(bool read_file)
 				bool show_mask_only = true;
 				bool show_isofit = false;
 				bool show_extended_mask = false;
+				bool show_foreground_mask = false;
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				bool set_title = false;
 				bool plot_contours = false;
@@ -8694,6 +8705,7 @@ void QLens::process_commands(bool read_file)
 						if (args[i]=="-nomask") show_mask_only = false;
 						else if (args[i]=="-isofit") show_isofit = true;
 						else if (args[i]=="-emask") show_extended_mask = true;
+						else if (args[i]=="-fgmask") show_foreground_mask = true;
 						else if ((pos = args[i].find("-contour=")) != string::npos) {
 							string ncontstring = args[i].substr(pos+9);
 							stringstream ncontstr;
@@ -8727,15 +8739,15 @@ void QLens::process_commands(bool read_file)
 				if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
 
 				if (nwords == 2) {
-					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask);
+					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask);
 					if (show_isofit) run_plotter_range("datapixel_ellfit",range,contstring);
 					else run_plotter_range("datapixel",range,contstring);
 				} else if (nwords == 3) {
 					if (terminal==TEXT) {
-						image_pixel_data->plot_surface_brightness(words[2],show_mask_only,show_extended_mask);
+						image_pixel_data->plot_surface_brightness(words[2],show_mask_only,show_extended_mask,show_foreground_mask);
 					}
 					else {
-						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask);
+						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask);
 						run_plotter_file("datapixel",words[2],range,contstring);
 					}
 				}
@@ -11636,12 +11648,12 @@ void QLens::process_commands(bool read_file)
 			if (nwords > 1) {
 				if (!(ws[1] >> scalefac)) Complain("invalid scalefac");
 			}
-			output_scaled_percentiles_from_chain(scalefac);
+			//output_scaled_percentiles_from_chain(scalefac);
 
-			string scriptfile = fit_output_dir + "/scaled_limits.in";
-			open_script_file(scriptfile);
+			//string scriptfile = fit_output_dir + "/scaled_limits.in";
+			//open_script_file(scriptfile);
 
-			//output_scaled_percentiles_from_egrad_fits(0.0115,0.0155,scalefac,false,true);
+			output_scaled_percentiles_from_egrad_fits(-0.035979,-0.0102676,scalefac,5,true,true);
 
 			//if (n_sb == 0) Complain("need a source object to spawn a lens");
 			//int pmode = 0;
@@ -11682,6 +11694,7 @@ void QLens::process_commands(bool read_file)
 			bool fix_center = false;
 			bool avg_center = false;
 			double posterior_output_scalefac = 20;
+			double fmode_posterior_output_scalefac = 5; // Fourier modes have higher uncertainties already, so scaling should be lower
 			bool fit_sbprofile = false; // note that during PSF-correction iterations, sbprofile will be fit regardless
 			bool no_optimize = false; // if true, do not switch to downhill simplex mode when varying SB profile params during PSF iterations
 			bool nested_sampling_on_final_iter = false;
@@ -12313,7 +12326,7 @@ void QLens::process_commands(bool read_file)
 				sbptr->get_specific_parameter("xc",xcavg);		
 				sbptr->get_specific_parameter("yc",ycavg);		
 				if ((include_fourier_gradient) and (include_fourier_m3_mode)) include_m3_fgrad = true;
-				output_scaled_percentiles_from_egrad_fits(xcavg,ycavg,posterior_output_scalefac,include_m3_fgrad,include_fourier_gradient);
+				output_scaled_percentiles_from_egrad_fits(xcavg,ycavg,posterior_output_scalefac,fmode_posterior_output_scalefac,include_m3_fgrad,include_fourier_gradient);
 				if (mpi_id==0) {
 					int egmode = sbptr->get_egrad_mode();
 					if (egmode==0) {
