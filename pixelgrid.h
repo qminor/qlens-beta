@@ -316,8 +316,8 @@ struct ImagePixelData : public Sort
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool add_mask=false);
-	bool save_mask_fits(string fits_filename);
+	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
+	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false);
 	void copy_mask(ImagePixelData* data);
 	void set_no_required_data_pixels();
 	void assign_high_sn_pixels();
@@ -333,6 +333,7 @@ struct ImagePixelData : public Sort
 	void reset_extended_mask();
 	void set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false);
 	void set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
+	void activate_partner_image_pixels();
 	void find_extended_mask_rmax();
 	void set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
 

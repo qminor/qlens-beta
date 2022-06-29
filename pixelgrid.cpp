@@ -3383,7 +3383,7 @@ void ImagePixelData::assign_high_sn_pixels()
 }
 
 
-bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground, const bool add_mask) // if 'add_mask' is true, then doesn't unmask any pixels that are already masked
+bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground, const bool emask, const bool add_mask) // if 'add_mask' is true, then doesn't unmask any pixels that are already masked
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -3417,16 +3417,25 @@ bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground,
 
 					for (i=0; i < naxes[0]; i++) {
 						if (foreground) {
-								if (pixels[i] == 0.0) {
+							if (pixels[i] == 0.0) {
 								if (!add_mask) foreground_mask[i][j] = false;
 								else if (foreground_mask[i][j]==true) n_maskpixels++;
 							}
 							else {
 								foreground_mask[i][j] = true;
 								n_maskpixels++;
-							//cout << pixels[i] << endl;
+								//cout << pixels[i] << endl;
 							}
-
+						} else if (emask) {
+							if (pixels[i] == 0.0) {
+								if (!add_mask) extended_mask[i][j] = false;
+								else if (extended_mask[i][j]==true) n_maskpixels++;
+							}
+							else {
+								extended_mask[i][j] = true;
+								n_maskpixels++;
+								//cout << pixels[i] << endl;
+							}
 						} else {
 							if (pixels[i] == 0.0) {
 								if (!add_mask) in_mask[i][j] = false;
@@ -3434,6 +3443,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground,
 							}
 							else {
 								in_mask[i][j] = true;
+								if (!extended_mask[i][j]) extended_mask[i][j] = true; // the extended mask MUST contain all the primary mask pixels
 								n_maskpixels++;
 							//cout << pixels[i] << endl;
 							}
@@ -3450,7 +3460,7 @@ bool ImagePixelData::load_mask_fits(string fits_filename, const bool foreground,
 	if (status) fits_report_error(stderr, status); // print any error message
 	if (!foreground) {
 		if (image_load_status) n_required_pixels = n_maskpixels;
-		set_extended_mask(lens->extended_mask_n_neighbors);
+		//set_extended_mask(lens->extended_mask_n_neighbors);
 	}
 	return image_load_status;
 #endif
@@ -3470,7 +3480,7 @@ void ImagePixelData::copy_mask(ImagePixelData* data)
 }
 
 
-bool ImagePixelData::save_mask_fits(string fits_filename)
+bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground, const bool emask)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
@@ -3498,8 +3508,16 @@ bool ImagePixelData::save_mask_fits(string fits_filename)
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
 					for (i=0; i < npixels_x; i++) {
-						if (in_mask[i][j]) pixels[i] = 1.0;
-						else pixels[i] = 0.0;
+						if (foreground) {
+							if (foreground_mask[i][j]) pixels[i] = 1.0;
+							else pixels[i] = 0.0;
+						} else if (emask) {
+							if (extended_mask[i][j]) pixels[i] = 1.0;
+							else pixels[i] = 0.0;
+						} else {
+							if (in_mask[i][j]) pixels[i] = 1.0;
+							else pixels[i] = 0.0;
+						}
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
@@ -4139,7 +4157,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 	if (n_neighbors < 0) {
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
-				extended_mask[i][j] = true;
+				if (foreground_mask[i][j]) extended_mask[i][j] = true;
 			}
 		}
 		return;
@@ -4172,7 +4190,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 								//cout << "NOT adding pixel " << (i+1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 							else {
-								extended_mask[i+1][j] = true;
+								if (foreground_mask[i+1][j]) extended_mask[i+1][j] = true;
 								//cout << "Adding pixel " << (i+1) << " " << j << " " << r0 << endl;
 							}
 						}
@@ -4183,7 +4201,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							} else {
-								extended_mask[i-1][j] = true;
+								if (foreground_mask[i-1][j]) extended_mask[i-1][j] = true;
 								//cout << "Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -4194,7 +4212,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							} else {
-								extended_mask[i][j+1] = true;
+								if (foreground_mask[i][j+1]) extended_mask[i][j+1] = true;
 								//cout << "Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -4205,7 +4223,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							} else {
-								extended_mask[i][j-1] = true;
+								if (foreground_mask[i][j-1]) extended_mask[i][j-1] = true;
 								//cout << "Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -4219,7 +4237,7 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 				if (!extended_mask[i][j]) {
 					if (((i < npixels_x-1) and (extended_mask[i+1][j])) and ((i > 0) and (extended_mask[i-1][j])) and ((j < npixels_y-1) and (extended_mask[i][j+1])) and ((j > 0) and (extended_mask[i][j-1]))) {
 						if (!extended_mask[i][j]) {
-							extended_mask[i][j] = true;
+							if (foreground_mask[i][j]) extended_mask[i][j] = true;
 							//cout << "Filling hole " << i << " " << j << endl;
 						}
 					}
@@ -4245,6 +4263,87 @@ void ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 	find_extended_mask_rmax();
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
+}
+
+void ImagePixelData::activate_partner_image_pixels()
+{
+	int i,j,k,ii,jj,n_images;
+	bool found_itself;
+	double xstep = xvals[1] - xvals[0];
+	double ystep = yvals[1] - yvals[0];
+	double rsq, outermost_rsq = 0, innermost_rsq = 100000;
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			found_itself = false;
+			if (extended_mask[i][j]) {
+				rsq = SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[i]);
+				if (rsq > outermost_rsq) outermost_rsq = rsq;
+				if (rsq < innermost_rsq) innermost_rsq = rsq;
+				lensvector pos,src;
+				pos[0] = pixel_xcvals[i];
+				pos[1] = pixel_ycvals[j];
+				lens->find_sourcept(pos,src,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+				image *img = lens->get_images(src, n_images, false);
+				for (k=0; k < n_images; k++) {
+					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
+					ii = (int) ((img[k].pos[0] - xvals[0]) / xstep);
+					jj = (int) ((img[k].pos[1] - yvals[0]) / ystep);
+					if ((ii < 0) or (jj < 0) or (ii > npixels_x) or (jj > npixels_y)) continue;
+					if ((ii==i) and (jj==j)) {
+						found_itself = true;
+						continue;
+					}
+					if ((!extended_mask[ii][jj]) and (foreground_mask[ii][jj])) { // any pixels that are not in the foreground mask shouldn't be in emask either
+						extended_mask[ii][jj] = true;
+						rsq = SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[i]);
+						if (rsq > outermost_rsq) outermost_rsq = rsq;
+						if (rsq < innermost_rsq) innermost_rsq = rsq;
+					}
+				}
+				if (found_itself) cout << "Found itself! Yay!" << endl;
+				else cout << "NOTE: pixel couldn't find itself" << endl;
+			}
+		}
+	}
+
+	// Now, we check pixels still not in the extended mask and see if any of them have partner images inside the extended mask; if so, activate it
+	outermost_rsq = SQR(sqrt(outermost_rsq) + 0.05);
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (!foreground_mask[i][j]) continue;
+			rsq = SQR(pixel_xcvals[i]) + SQR(pixel_ycvals[i]);
+			if ((rsq < outermost_rsq) and (rsq > innermost_rsq) and (!extended_mask[i][j])) {
+				lensvector pos,src;
+				pos[0] = pixel_xcvals[i];
+				pos[1] = pixel_ycvals[j];
+				lens->find_sourcept(pos,src,0,lens->reference_zfactors,lens->default_zsrc_beta_factors);
+				image *img = lens->get_images(src, n_images, false);
+				for (k=0; k < n_images; k++) {
+					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
+					ii = (int) ((img[k].pos[0] - xvals[0]) / xstep);
+					jj = (int) ((img[k].pos[1] - yvals[0]) / ystep);
+					if ((ii < 0) or (jj < 0) or (ii > npixels_x) or (jj > npixels_y)) continue;
+					if ((ii==i) and (jj==j)) continue;
+					if (extended_mask[ii][jj]) extended_mask[i][j] = true;
+				}
+			}
+		}
+	}
+
+	// check for any lingering "holes" in the mask and activate them
+	for (i=0; i < npixels_x; i++) {
+		for (j=0; j < npixels_y; j++) {
+			if (!extended_mask[i][j]) {
+				if (((i < npixels_x-1) and (extended_mask[i+1][j])) and ((i > 0) and (extended_mask[i-1][j])) and ((j < npixels_y-1) and (extended_mask[i][j+1])) and ((j > 0) and (extended_mask[i][j-1]))) {
+					if (!extended_mask[i][j]) {
+						extended_mask[i][j] = true;
+						//cout << "Filling hole " << i << " " << j << endl;
+					}
+				}
+			}
+		}
+	}
+
 }
 
 void ImagePixelData::set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset)

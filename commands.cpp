@@ -8528,21 +8528,24 @@ void QLens::process_commands(bool read_file)
 			{
 				bool add_mask = false;
 				bool foreground_mask = false;
+				bool emask = false;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-add") add_mask = true;
 						else if (args[i]=="-fg") foreground_mask = true;
+						else if (args[i]=="-emask") emask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
+				if ((emask) and (foreground_mask)) Complain("cannot load both emask and foreground mask at the same time");
 				string filename;
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->load_mask_fits(filename,foreground_mask,add_mask)==false) Complain("could not load mask file");
+				if (image_pixel_data->load_mask_fits(filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
 				if (mpi_id==0) {
 					if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_required_pixels << endl;
 					else {
@@ -8553,12 +8556,24 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="savemask")
 			{
+				bool foreground_mask = false;
+				bool emask = false;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-fg") foreground_mask = true;
+						else if (args[i]=="-emask") emask = true;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+				if ((emask) and (foreground_mask)) Complain("cannot load both emask and foreground mask at the same time");
 				string filename;
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap savemask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->save_mask_fits(filename)==false) Complain("mask could not be saved");
+				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask)==false) Complain("mask could not be saved");
 			}
 			else if (words[1]=="loadpsf")
 			{
@@ -8605,7 +8620,7 @@ void QLens::process_commands(bool read_file)
 				string range;
 				extract_word_starts_with('[',2,range); // allow for range to be specified (if it's not, then range is set to "")
 
-				if (words[1]=="mkplotsrc") { plot_source = true; set_npix = 200; }
+				if (words[1]=="mkplotsrc") { plot_source = true; set_npix = 600; }
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
@@ -8616,6 +8631,9 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-400") set_npix = 400;
 						else if (args[i]=="-500") set_npix = 500;
 						else if (args[i]=="-600") set_npix = 600;
+						else if (args[i]=="-700") set_npix = 700;
+						else if (args[i]=="-800") set_npix = 800;
+						else if (args[i]=="-1000") set_npix = 1000;
 						else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
 						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
@@ -8883,6 +8901,11 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch);
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask() << endl;
+			}
+			else if (words[1]=="activate_partner_imgpixels")
+			{
+				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
+				image_pixel_data->activate_partner_image_pixels();
 			}
 			else if (words[1]=="unset_emask_annulus")
 			{
