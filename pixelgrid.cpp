@@ -9193,12 +9193,12 @@ void QLens::cleanup_FFT_convolution_arrays()
 		delete[] fftplans_Lmatrix_inverse;
 		fftw_destroy_plan(fftplan);
 		fftw_destroy_plan(fftplan_inverse);
-	}
 #else
-	delete[] psf_zvec;
+		delete[] psf_zvec;
 #endif
-	fft_imin=fft_jmin=fft_ni=fft_nj=0;
-	setup_fft_convolution = false;
+		fft_imin=fft_jmin=fft_ni=fft_nj=0;
+		setup_fft_convolution = false;
+	}
 }
 
 void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
