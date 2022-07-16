@@ -4,7 +4,7 @@
 #include "errors.h"
 #include "mathexpr.h"
 #include "pixelgrid.h"
-#include "delauney.h"
+//#include "delauney.h"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -11698,6 +11698,7 @@ void QLens::process_commands(bool read_file)
 			sb_list[0]->vary_parameters(varyflags);
 			sb_list[0]->set_limits(lower_limits,upper_limits);
 			*/
+			/*
 		} else if (words[0]=="test2") {
 			const int nn = 10;
 			double xin[nn] = { 1, 5, 9, 2, 12, 18, 3, 5, 8, 4 };
@@ -11721,6 +11722,7 @@ void QLens::process_commands(bool read_file)
 				testout << xin[k] << " " << yin[k] << endl;
 				testout << endl;
 			}
+			*/
 		} else if (words[0]=="isofit") {
 			if (image_pixel_data == NULL) Complain("image pixel data not loaded");
 			if (nwords < 8) Complain("need 6 args");
