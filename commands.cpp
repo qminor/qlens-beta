@@ -4,6 +4,7 @@
 #include "errors.h"
 #include "mathexpr.h"
 #include "pixelgrid.h"
+#include "delauney.h"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -623,7 +624,8 @@ void QLens::process_commands(bool read_file)
 							"Note that for theta=0, the major axis of the lens is along the " << LENS_AXIS_DIR << " (the direction of the\n"
 							"major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="sersic")
-						cout << "lens sersic <kappa_e> <R_eff> <n> <q/e> [theta] [x-center] [y-center]\n\n"
+						cout << "lens sersic <kappa_e> <R_eff> <n> <q/e> [theta] [x-center] [y-center]   (pmode=0)\n"
+								  "lens sersic <Mstar> <R_eff> <n> <q/e> [theta] [x-center] [y-center]     (pmode=1)\n\n"
 							"The sersic profile is defined by kappa = kappa_e * exp(-b*((R/R_eff)^(1/n)-1)), where kappa_e is the\n"
 							"kappa value at the effective (half-mass) radius R_eff, and b is a factor automatically determined from\n"
 							"the value for n to ensure that R_eff contains half the total mass (from Cardone et al. 2003). Here,\n"
@@ -11696,6 +11698,29 @@ void QLens::process_commands(bool read_file)
 			sb_list[0]->vary_parameters(varyflags);
 			sb_list[0]->set_limits(lower_limits,upper_limits);
 			*/
+		} else if (words[0]=="test2") {
+			const int nn = 10;
+			double xin[nn] = { 1, 5, 9, 2, 12, 18, 3, 5, 8, 4 };
+			double yin[nn] = { 11, 2, 19, 9, 3, 10, 2, 12, 8, 7 };
+         Delauney *triangles = new Delauney(xin, yin, nn);
+			triangles->Process();
+			int triN = triangles->TriNum();
+			int *tris = new int[3*triN];
+			triangles->InputValues(tris);
+			delete triangles;
+			cout << "Triangles:" << endl;
+			int i=0, j=0;
+			int k;
+			ofstream testout("testdel.dat");
+			for (i=0; i < triN; i++) {
+				k = tris[j++];
+				testout << xin[k] << " " << yin[k] << endl;
+				k = tris[j++];
+				testout << xin[k] << " " << yin[k] << endl;
+				k = tris[j++];
+				testout << xin[k] << " " << yin[k] << endl;
+				testout << endl;
+			}
 		} else if (words[0]=="isofit") {
 			if (image_pixel_data == NULL) Complain("image pixel data not loaded");
 			if (nwords < 8) Complain("need 6 args");

@@ -10788,7 +10788,7 @@ double QLens::get_einstein_radius_prior(const bool verbal)
 double QLens::fitmodel_loglike_point_source(double* params)
 {
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
-	double loglike, chisq_total=0, chisq;
+	double loglike=0, chisq_total=0, chisq;
 	double log_penalty_prior;
 	double transformed_params[n_fit_parameters];
 	if (params != NULL) {
@@ -11019,6 +11019,7 @@ double QLens::loglike_point_source(double* params)
 			if ((transformed_params[i] < param_settings->penalty_limits_lo[i]) or (transformed_params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
 		}
 	}
+	//if (update_fitmodel(transformed_params)==false) return 1e30;
 	if (fitmodel->update_model(transformed_params) != 0.0) return 1e30;
 	if (group_id==0) {
 		if (logfile.is_open()) {

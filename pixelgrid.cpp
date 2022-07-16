@@ -9178,9 +9178,9 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 void QLens::cleanup_FFT_convolution_arrays()
 {
 	if (setup_fft_convolution) {
+#ifdef USE_FFTW
 		delete[] psf_transform;
 		psf_transform = NULL;
-#ifdef USE_FFTW
 		for (int i=0; i < source_npixels; i++) {
 			delete[] Lmatrix_imgs_rvec[i];
 			delete[] Lmatrix_transform[i];
