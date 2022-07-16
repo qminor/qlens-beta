@@ -930,6 +930,7 @@ QLens::QLens() : UCMC()
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
 	psf_matrix = NULL;
+	foreground_psf_matrix = NULL;
 	inversion_nthreads = 1;
 	adaptive_grid = false;
 	pixel_magnification_threshold = 7;
