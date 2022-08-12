@@ -9,12 +9,6 @@ namespace py = pybind11;
 
 class Lens_Wrap: public QLens {
 public:
-#ifdef USE_MPI
-	MPI_Comm *subgroup_comm;
-	MPI_Group *subgroup;
-	MPI_Comm *onegroup_comm;
-	MPI_Group *onegroup;
-#endif
 
     Lens_Wrap() : QLens()
 	 {
@@ -42,9 +36,8 @@ public:
 		QLens::allocate_multithreaded_variables(n_omp_threads);
 
 #ifdef USE_MPI
-		subgroup_comm = new MPI_Comm[ngroups];
-		subgroup = new MPI_Group[ngroups];
-
+		MPI_Comm subgroup_comm[ngroups];
+		MPI_Group subgroup[ngroups];
 		int subgroup_size[ngroups];
 		int *subgroup_rank[ngroups];
 		int subgroup_id, subgroup_id_sum;
@@ -72,8 +65,8 @@ public:
 			}
 		}
 
-		onegroup_comm = new MPI_Comm[mpi_np];
-		onegroup = new MPI_Group[mpi_np];
+		MPI_Comm onegroup_comm[mpi_np];
+		MPI_Group onegroup[mpi_np];
 		int onegroup_size[mpi_np];
 		int *onegroup_rank[mpi_np];
 		int onegroup_id, onegroup_id_sum;
@@ -220,10 +213,6 @@ public:
 
 #ifdef USE_MPI
 		MPI_Finalize();
-		//delete[] subgroup_comm;
-		//delete[] subgroup;
-		//delete[] onegroup_comm;
-		//delete[] onegroup;
 #endif
 	 }
         

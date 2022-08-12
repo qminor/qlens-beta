@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <cmath>
 #include <string>
@@ -197,7 +198,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		for (j=0; j < mpi_np; j++) nlines_per_file[i][j] = 0;
 	}
 	smoothWidth = 1.0;
-	double temp;
+	long double temp;
 	points = new double **[numOfFiles];
 	chi2 = new double *[numOfFiles];
 	mults = new double*[numOfFiles];
@@ -904,6 +905,7 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 {
 	int i, j, f;
 	ofstream out(name);
+	out << setprecision(16);
 	double *axis = matrix <double> (N);
 	double *like  = matrix <double> (N);
 	double *lpro = matrix <double> (N, 1e100);
@@ -2715,6 +2717,9 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		outg.open((name+string("_hist.dat")).c_str());
 		outx.open((name+string("_hist.x")).c_str());
 		outy.open((name+string("_hist.y")).c_str());
+		outg << setprecision(16);
+		outy << setprecision(16);
+		outx << setprecision(16);
 		for (i = 0; i < xN; i++)
 		{
 			outx << ((xl + (i + 0.5)*stepx)) << endl;
@@ -2889,6 +2894,9 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 			ofstream outsg(name);
 			ofstream outsx((name+string("_x")).c_str());
 			ofstream outsy((name+string("_y")).c_str());
+			outsg << setprecision(16);
+			outsy << setprecision(16);
+			outsx << setprecision(16);
 			
 			for (i = 0; i <= smoothSize; i++)
 			{
@@ -2909,6 +2917,7 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 				outsg << endl;
 			}
 			ofstream outcont((name+string("_cont")).c_str());
+			outcont << setprecision(16);
 			for (i = linesNum-1; i >= 0; i--)
 			{
 				outcont << sigmas[i] << "   ";

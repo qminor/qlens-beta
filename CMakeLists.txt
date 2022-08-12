@@ -77,6 +77,7 @@ set(QLENS_HEADERS
 set(QLENS_CORE_SOURCES 
     ${PROJECT_SOURCE_DIR}/src/profile.cpp 
     ${PROJECT_SOURCE_DIR}/src/sbprofile.cpp 
+    ${PROJECT_SOURCE_DIR}/src/egrad.cpp 
     ${PROJECT_SOURCE_DIR}/src/models.cpp 
     ${PROJECT_SOURCE_DIR}/src/lens.cpp 
     ${PROJECT_SOURCE_DIR}/src/imgsrch.cpp 

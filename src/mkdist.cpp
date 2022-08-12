@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
 	}
 	if (file_label=="-T") show_transform_usage();
 	string output_dir = ".";
+	double pct_scaling = 1; // used if one wants to scale the uncertainties by a given factor
 	//string output_dir = "chains_" + file_label;
 	//struct stat sb;
 	//stat(output_dir.c_str(),&sb);
@@ -127,7 +128,12 @@ int main(int argc, char *argv[])
 						output_cl = true;
 						if (*(argv[i]+1)=='2') { cl_2sigma = true; argv[i]++; }
 						break;
-					case 'u': show_uncertainties_as_percentiles = true; break;
+					case 'u':
+						show_uncertainties_as_percentiles = true;
+						if (sscanf(argv[i], "u%lf", &pct_scaling)==1) {
+							argv[i] = advance(argv[i]);
+						}
+						break;
 					case 'P': run_python_script = true; break;
 					case 'x': exclude_derived_params = true; break;
 					case 'i': output_chain_header = true; break; // Deprecated
@@ -358,36 +364,38 @@ int main(int argc, char *argv[])
 	paramnames_file.close();
 
 	string *latex_param_names = new string[nparams];
-	string latex_paramnames_filename = file_root + ".latex_paramnames";
-	ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
-	string dummy;
-	const int n_characters = 1024;
-	char line[n_characters];
-	for (i=0; i < nparams; i++) {
-		if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		istringstream instream(line);
-		if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-		while (instream >> dummy) latex_param_names[i] += " " + dummy;
-	}
-	latex_paramnames_file.close();
-
-	if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
-
-	if (mpi_id==0) {
-		string out_paramnames_filename = file_root + ".py_paramnames";
-		ofstream paramnames_out(out_paramnames_filename.c_str());
-		for (i=0; i < nparams_eff; i++) {
-			paramnames_out << param_names[i] << endl;
+	if ((make_1d_posts) or (make_2d_posts)) {
+		string latex_paramnames_filename = file_root + ".latex_paramnames";
+		ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
+		string dummy;
+		const int n_characters = 1024;
+		char line[n_characters];
+		for (i=0; i < nparams; i++) {
+			if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			istringstream instream(line);
+			if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			while (instream >> dummy) latex_param_names[i] += " " + dummy;
 		}
-		paramnames_out.close();
+		latex_paramnames_file.close();
 
-		string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
-		ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
-		for (i=0; i < nparams_eff; i++) {
-			latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
+
+		if (mpi_id==0) {
+			string out_paramnames_filename = file_root + ".py_paramnames";
+			ofstream paramnames_out(out_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				paramnames_out << param_names[i] << endl;
+			}
+			paramnames_out.close();
+
+			string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
+			ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+			}
+			latex_paramnames_out.close();
 		}
-		latex_paramnames_out.close();
 	}
 
 	bool *hist2d_active_params = new bool[nparams_eff];
@@ -702,10 +710,16 @@ int main(int argc, char *argv[])
 						hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
 					}
 					halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
-					if (show_uncertainties_as_percentiles)
-						cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
-					else
+					if (show_uncertainties_as_percentiles) {
+						double lowerr = pct_scaling*(halfpct[i] - lowcl[i]);
+						double hierr = pct_scaling*(hicl[i] - halfpct[i]);
+						double lowpct = halfpct[i] - lowerr;
+						double hipct = halfpct[i] + hierr;
+						//cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
+						cout << param_names[i] << ": " << halfpct[i] << " " << lowpct << " " << hipct << endl;
+					} else {
 						cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+					}
 				}
 				cout << endl;
 				delete[] halfpct;

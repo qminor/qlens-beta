@@ -332,7 +332,8 @@ ClenshawCurtis::ClenshawCurtis()
 	cc_lvals = NULL;
 	cc_funcs = NULL;
 	cc_funcs2 = NULL;
-	SetClenshawCurtis(12,1e-6,true);
+	show_convergence_warning = true;
+	//SetClenshawCurtis(12,1e-6,true);
 }
 
 void ClenshawCurtis::SetClenshawCurtis(const int nlevels_in, const double tol_in, const bool include_endpoints_in, const bool show_warnings)
@@ -512,7 +513,8 @@ GaussPatterson::GaussPatterson()
 	pat_orders = NULL;
 	pat_funcs = NULL;
 	pat_funcs2 = NULL;
-	SetGaussPatterson(1e-6,true);
+	show_convergence_warning = true;
+	//SetGaussPatterson(1e-6,true);
 }
 
 void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warnings)

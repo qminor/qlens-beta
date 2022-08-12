@@ -6,9 +6,10 @@
 #define EULER 2.71828182846
 #define ln10 2.30258509299
 
-const double M_2PI = 6.28318530718;
+const double M_2PI = 6.28318530717959;
 const double M_HALFPI = 1.57079632679;
 const double M_SQRT_PI = 1.77245385091;
+const double M_SQRT_2PI = 2.50662827463;
 const double M_SQRT_HALFPI = 1.25331413732;
 const double M_4PI = 12.5663706144;
 
@@ -17,6 +18,7 @@ inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
 inline int imin(const int &a, const int &b) { return (a < b ? a : b); }
 inline int imax(const int &a, const int &b) { return (a > b ? a : b); }
 inline double SQR(const double s) { return s*s; }
+inline int INTSQR(const int s) { return s*s; }
 inline double CUBE(const double s) { return s*s*s; }
 inline double QUARTIC(const double s) { return s*s*s*s; }
 inline int sign(const double &a) { return (a < 0 ? -1 : a > 0 ? 1 : 0); }

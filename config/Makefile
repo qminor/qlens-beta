@@ -10,6 +10,11 @@
 #MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
 #POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
+#FITPACKDIR=./contrib/fitpack
+#F77=gfortran
+#.f.o:
+	#$(F77) -c -o  $@ $<
+
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
 CCOMP = g++
@@ -19,8 +24,7 @@ CCOMP = g++
 OPTS = -Wno-write-strings -O3 -std=c++11
 OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #OPTS = -w -g
-#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
-#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
+#FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
 FLAGS = -DUSE_READLINE
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  -lm -lreadline
@@ -42,7 +46,7 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = profile.o sbprofile.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
+objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
 				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
 				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
@@ -67,16 +71,16 @@ mumps:
 qlens.o: qlens.cpp qlens.h
 	$(CC) -c qlens.cpp
 
-commands.o: commands.cpp qlens.h lensvec.h profile.h
+commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h egrad.h pixelgrid.h
 	$(CC_NO_OPT) -c commands.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -85,13 +89,16 @@ cg.o: cg.cpp cg.h
 mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
 	$(CC) -c mcmchdr.cpp
 
-profile.o: profile.h profile.cpp lensvec.h
+egrad.o: egrad.cpp egrad.h 
+	$(CC) -c egrad.cpp
+
+profile.o: profile.h profile.cpp lensvec.h egrad.h
 	$(CC) -c profile.cpp
 
-models.o: profile.h models.cpp
+models.o: models.cpp profile.h 
 	$(CC) -c models.cpp
 
-sbprofile.o: sbprofile.h sbprofile.cpp
+sbprofile.o: sbprofile.cpp sbprofile.h egrad.h
 	$(CC) -c sbprofile.cpp
 
 errors.o: errors.cpp errors.h

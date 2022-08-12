@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include "profile.h"
+#include "sbprofile.h"
 #include "mathexpr.h"
 #include "errors.h"
 #include "GregsMathHdr.h"
@@ -22,9 +23,8 @@ Alpha::Alpha(const double zlens_in, const double zsrc_in, const double &bb, cons
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
-	initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void Alpha::setup_lens_properties(const int parameter_mode, const int subclass)
@@ -32,7 +32,7 @@ void Alpha::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = ALPHA;
 	model_name = "alpha";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -64,7 +64,7 @@ void Alpha::assign_paramnames()
 	paramnames[0] = "b";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "";
 	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
 	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Alpha::assign_param_pointers()
@@ -72,7 +72,7 @@ void Alpha::assign_param_pointers()
 	param[0] = &b;
 	param[1] = &alpha;
 	param[2] = &s;
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Alpha::update_meta_parameters()
@@ -87,13 +87,11 @@ void Alpha::update_meta_parameters()
 
 void Alpha::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.1*b;
-	stepsizes[1] = 0.1;
-	stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.1*b;
-	stepsizes[6] = 0.1*b;
-	stepsizes[7] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.1*b;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Alpha::set_auto_ranges()
@@ -101,7 +99,7 @@ void Alpha::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Alpha::set_model_specific_integration_pointers()
@@ -109,33 +107,35 @@ void Alpha::set_model_specific_integration_pointers()
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq);
-	if (alpha==1.0) {
-		kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq_iso);
-		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_iso);
-		if (q != 1.0) {
-			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_iso);
-			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
-			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
-		}
-	} else if (s==0.0) {
-		potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
-		if (q != 1.0) {
-			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
-			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
-			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
-			def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&Alpha::deflection_and_hessian_elliptical_nocore);
+	if (!ellipticity_gradient) {
+		if (alpha==1.0) {
+			kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::kapavg_spherical_rsq_iso);
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_iso);
+			if (q != 1.0) {
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_iso);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_iso);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_iso);
+			}
+		} else if (s==0.0) {
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Alpha::potential_spherical_rsq_nocore);
+			if (q != 1.0) {
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Alpha::deflection_elliptical_nocore);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Alpha::hessian_elliptical_nocore);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&Alpha::potential_elliptical_nocore);
+				def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&Alpha::deflection_and_hessian_elliptical_nocore);
+			}
 		}
 	}
 }
 
 double Alpha::kappa_rsq(const double rsq)
 {
-	return (0.5 * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2));
+	return ((2-alpha) * pow(b*b/(s*s+rsq), alpha/2) / 2);
 }
 
 double Alpha::kappa_rsq_deriv(const double rsq)
 {
-	return (-0.25 * alpha * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2 + 1)) / (b*b);
+	return (-alpha * (2-alpha) * pow(b*b/(s*s+rsq), alpha/2 + 1)) / (4*b*b);
 }
 
 double Alpha::kapavg_spherical_rsq(const double rsq)
@@ -368,10 +368,10 @@ bool Alpha::output_cosmology_info(const int lens_number)
 	if (alpha != 1.0) return false;
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 	double kpc_to_km = 3.086e16;
@@ -391,9 +391,8 @@ PseudoJaffe::PseudoJaffe(const double zlens_in, const double zsrc_in, const doub
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void PseudoJaffe::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -421,7 +420,7 @@ void PseudoJaffe::setup_lens_properties(const int parameter_mode, const int subc
 	lenstype = PJAFFE;
 	model_name = "pjaffe";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -459,7 +458,7 @@ void PseudoJaffe::assign_paramnames()
 		paramnames[1] = "a_kpc"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "kpc";
 		paramnames[2] = "s_kpc"; latex_paramnames[2] = "s"; latex_param_subscripts[2] = "kpc";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void PseudoJaffe::assign_param_pointers()
@@ -477,14 +476,14 @@ void PseudoJaffe::assign_param_pointers()
 		param[1] = &a_kpc;
 		param[2] = &s_kpc;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void PseudoJaffe::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==1) set_abs_params_from_sigma0();
 		else if (parameter_mode==2) set_abs_params_from_mtot();
 	}
@@ -545,8 +544,8 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 		params[1] = a;
 		params[2] = s;
 	}
-	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+	for (int i=lensprofile_nparams; i < n_params; i++) {
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -561,23 +560,21 @@ void PseudoJaffe::get_parameters_pmode(const int pmode, double* params)
 
 void PseudoJaffe::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*b;
-		stepsizes[1] = 0.2*b;
-		stepsizes[2] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*b;
+		stepsizes[index++] = 0.2*b;
+		stepsizes[index++] = 0.02*b; // this one is a bit arbitrary, but hopefully reasonable enough
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*sigma0;
-		stepsizes[1] = 0.2*b/kpc_to_arcsec;
-		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*sigma0;
+		stepsizes[index++] = 0.2*b/kpc_to_arcsec;
+		stepsizes[index++] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
 	} else {
-		stepsizes[0] = 0.2*mtot;
-		stepsizes[1] = 0.2*b/kpc_to_arcsec;
-		stepsizes[2] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
+		stepsizes[index++] = 0.2*mtot;
+		stepsizes[index++] = 0.2*b/kpc_to_arcsec;
+		stepsizes[index++] = 0.02*b/kpc_to_arcsec; // this one is a bit arbitrary, but hopefully reasonable enough
 	}
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.2*b;
-	stepsizes[6] = 0.2*b;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void PseudoJaffe::set_auto_ranges()
@@ -585,17 +582,19 @@ void PseudoJaffe::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void PseudoJaffe::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::kapavg_spherical_rsq);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PseudoJaffe::potential_spherical_rsq);
-	if (q != 1.0) {
-		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
-		hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&PseudoJaffe::hessian_elliptical);
-		potptr = static_cast<double (LensProfile::*)(const double,const double)> (&PseudoJaffe::potential_elliptical);
+	if (!ellipticity_gradient) {
+		if (q != 1.0) {
+			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&PseudoJaffe::deflection_elliptical);
+			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&PseudoJaffe::hessian_elliptical);
+			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&PseudoJaffe::potential_elliptical);
+		}
 	}
 }
 
@@ -683,10 +682,10 @@ bool PseudoJaffe::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 	double sigma, r_tidal, r_core, mtot, rhalf;
@@ -735,9 +734,8 @@ double PseudoJaffe::rho3d_r_integrand_analytic(const double r)
 NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -763,7 +761,7 @@ void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = nfw;
 	model_name = "nfw";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -796,7 +794,7 @@ void NFW::assign_paramnames()
 		paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 	}
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void NFW::assign_param_pointers()
@@ -811,7 +809,7 @@ void NFW::assign_param_pointers()
 		param[0] = &ks;
 		param[1] = &rs;
 	}
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void NFW::get_parameters_pmode(const int pmode, double* params)
@@ -822,7 +820,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		rs_kpc = rs / kpc_to_arcsec;
 		ds = ks * sigma_cr_kpc / rs_kpc;
 		// Using a root-finder to solve for c, then m200 can be solved for
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	}
 
 	if (pmode==2) {
@@ -835,8 +833,8 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		params[0] = ks;
 		params[1] = rs;
 	}
-	for (int i=2; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+	for (int i=lensprofile_nparams; i < n_params; i++) {
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -849,7 +847,7 @@ void NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 	}
@@ -861,44 +859,42 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
+	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
+		//c200 = qlens->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
 
 void NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
 	}
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void NFW::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void NFW::set_model_specific_integration_pointers()
@@ -910,7 +906,7 @@ void NFW::set_model_specific_integration_pointers()
 void NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -919,7 +915,7 @@ void NFW::set_ks_c200_from_m200_rs()
 void NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -983,14 +979,22 @@ double NFW::calculate_scaled_mass_3d(const double r)
 	return 4*M_PI*ks*rs*rs*(log(1+r/rs) - r/(r+rs));
 }
 
+double NFW::concentration_prior()
+{
+	double log_medc = log(qlens->median_concentration_dutton(m200,zlens));
+	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
+	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
+	return (SQR((log(c200)-log_medc)/(ln10*sig_logc))/2 + (sig_logc*M_SQRT_2PI)); // returning -log(prior)
+}
+
 bool NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1000,7 +1004,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1013,11 +1017,15 @@ bool NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sun\n";
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec)" << endl;
-	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//c200 = r200/rs_kpc;
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
 	//cout << "c(z=5) = " << c200 << endl;
+	if (use_concentration_prior) {
+		double cmprior = exp(-concentration_prior());
+		cout << "concentration-mass prior P(logc|M,z) = " << cmprior << endl;
+	}
 
 	cout << endl;
 	return true;
@@ -1028,9 +1036,8 @@ bool NFW::output_cosmology_info(const int lens_number)
 Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void Truncated_NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -1073,7 +1080,7 @@ void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int su
 	tstr << subclass;
 	tstr >> tstring;
 	special_parameter_command = "tmode=" + tstring;
-	setup_base_lens_properties(8,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1128,7 +1135,7 @@ void Truncated_NFW::assign_paramnames()
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "rt"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "t";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Truncated_NFW::assign_param_pointers()
@@ -1154,7 +1161,7 @@ void Truncated_NFW::assign_param_pointers()
 		param[1] = &rs;
 		param[2] = &rt;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
@@ -1186,8 +1193,8 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 		params[2] = rt;
 	}
-	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+	for (int i=lensprofile_nparams; i < n_params; i++) {
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -1204,7 +1211,7 @@ void Truncated_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
 		else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200();
 	}
@@ -1215,50 +1222,48 @@ void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, con
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
-	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	//c200 = factor*lens->median_concentration_bullock(m200,zlens);
+	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another qlens at all
+	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void Truncated_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = lens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * lens->median_concentration_dutton(m200,zlens);
+		//c200 = qlens->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
 
 void Truncated_NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==4) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*tau_s;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*tau_s;
 	} else if (parameter_mode==3) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*rt_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*rt_kpc;
 	} else if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*tau200;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*tau200;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*rt_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*rt_kpc;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
-		stepsizes[2] = 0.2*rt;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
+		stepsizes[index++] = 0.2*rt;
 	}
 
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.5;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Truncated_NFW::set_auto_ranges()
@@ -1266,7 +1271,7 @@ void Truncated_NFW::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Truncated_NFW::set_model_specific_integration_pointers()
@@ -1278,7 +1283,7 @@ void Truncated_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==4) rt_kpc = tau_s * rs_kpc;
 	rt = rt_kpc * kpc_to_arcsec;
@@ -1290,7 +1295,7 @@ void Truncated_NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc, rs_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==2) rt_kpc = tau200 * rvir_kpc;
@@ -1357,10 +1362,10 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1373,7 +1378,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		if (parameter_mode == 2) rt_kpc = tau200 * r200;
 		if (parameter_mode == 4) rt_kpc = tau_s * rs_kpc;
 	} else {
-		lens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1388,7 +1393,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec) (NOTE: ignores truncation)" << endl;
 
-	//lens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//zlens = 5;
 	//update_zlens_meta_parameters();
 	//c200 = r200/rs_kpc;
@@ -1408,9 +1413,8 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void Cored_NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -1444,7 +1448,7 @@ void Cored_NFW::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1490,7 +1494,7 @@ void Cored_NFW::assign_paramnames()
 		paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
 		paramnames[2] = "rc"; latex_paramnames[2] = "r"; latex_param_subscripts[2] = "c";
 	}
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Cored_NFW::assign_param_pointers()
@@ -1512,7 +1516,7 @@ void Cored_NFW::assign_param_pointers()
 		param[1] = &rs;
 		param[2] = &rc;
 	}
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
@@ -1534,8 +1538,8 @@ void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs;
 		params[2] = rc;
 	}
-	for (int i=3; i < n_params; i++) {
-		if (i==angle_paramnum) params[i] = radians_to_degrees(*(param[i]));
+	for (int i=lensprofile_nparams; i < n_params; i++) {
+		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 	if (lensed_center_coords) {
@@ -1548,7 +1552,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (lens != NULL) {
+	if (qlens != NULL) {
 		if (parameter_mode==3) {
 			set_ks_rs_from_m200_c200_rckpc();
 		} else if (parameter_mode==2) {
@@ -1571,41 +1575,39 @@ void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const d
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*lens->median_concentration_bullock(m200,zlens);
+	c200 = special_anchor_factor*qlens->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 
 void Cored_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		c200 = lens->median_concentration_bullock(m200,zlens);
+		c200 = qlens->median_concentration_bullock(m200,zlens);
 		update_meta_parameters();
 	}
 }
 
 void Cored_NFW::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==3) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.05*rs_kpc;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.05*rs_kpc;
 	} else if (parameter_mode==2) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*rs_kpc;
-		stepsizes[2] = 0.2*beta;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*rs_kpc;
+		stepsizes[index++] = 0.2*beta;
 	} else if (parameter_mode==1) {
-		stepsizes[0] = 0.2*m200;
-		stepsizes[1] = 0.2*c200;
-		stepsizes[2] = 0.2*beta;
+		stepsizes[index++] = 0.2*m200;
+		stepsizes[index++] = 0.2*c200;
+		stepsizes[index++] = 0.2*beta;
 	} else {
-		stepsizes[0] = 0.2*ks;
-		stepsizes[1] = 0.2*rs;
-		stepsizes[2] = 0.05*rs;
+		stepsizes[index++] = 0.2*ks;
+		stepsizes[index++] = 0.2*rs;
+		stepsizes[index++] = 0.05*rs;
 	}
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.5;
-	stepsizes[7] = 0.1;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Cored_NFW::set_auto_ranges()
@@ -1613,7 +1615,7 @@ void Cored_NFW::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Cored_NFW::set_model_specific_integration_pointers()
@@ -1625,7 +1627,7 @@ void Cored_NFW::set_model_specific_integration_pointers()
 void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	double rcterm;
@@ -1637,7 +1639,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	rc = rc_kpc * kpc_to_arcsec;
@@ -1651,7 +1653,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 void Cored_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*lens->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	double rcterm;
@@ -1818,10 +1820,10 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
@@ -1832,7 +1834,7 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		lens->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
+		qlens->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1857,9 +1859,8 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
-	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void Hernquist::initialize_parameters(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -1877,7 +1878,7 @@ void Hernquist::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = HERNQUIST;
 	model_name = "hern";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -1894,14 +1895,14 @@ void Hernquist::assign_paramnames()
 {
 	paramnames[0] = "ks"; latex_paramnames[0] = "k"; latex_param_subscripts[0] = "s";
 	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Hernquist::assign_param_pointers()
 {
 	param[0] = &ks;
 	param[1] = &rs;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Hernquist::update_meta_parameters()
@@ -1913,19 +1914,17 @@ void Hernquist::update_meta_parameters()
 
 void Hernquist::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*ks;
-	stepsizes[1] = 0.2*rs;
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.2*ks;
+	stepsizes[index++] = 0.2*rs;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Hernquist::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Hernquist::set_model_specific_integration_pointers()
@@ -1977,9 +1976,8 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	set_integration_parameters(nn,acc);
-	initialize_parameters(k0_in,R_d_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(k0_in,R_d_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void ExpDisk::initialize_parameters(const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -1997,7 +1995,7 @@ void ExpDisk::setup_lens_properties(const int parameter_mode, const int subclass
 	lenstype = EXPDISK;
 	model_name = "expdisk";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,true); // number of parameters = 6, is_elliptical_lens = true
+	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
 ExpDisk::ExpDisk(const ExpDisk* lens_in)
@@ -2013,14 +2011,14 @@ void ExpDisk::assign_paramnames()
 {
 	paramnames[0] = "k0";  latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	paramnames[1] = "R_d"; latex_paramnames[1] = "R";       latex_param_subscripts[1] = "d";
-	set_geometric_paramnames(2);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void ExpDisk::assign_param_pointers()
 {
 	param[0] = &k0;
 	param[1] = &R_d;
-	set_geometric_param_pointers(2);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void ExpDisk::update_meta_parameters()
@@ -2032,19 +2030,17 @@ void ExpDisk::update_meta_parameters()
 
 void ExpDisk::set_auto_stepsizes()
 {
-	stepsizes[0] = 0.2*k0;
-	stepsizes[1] = 0.2*R_d;
-	set_auto_eparam_stepsizes(2,3);
-	stepsizes[4] = 0.5; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[5] = 0.5;
-	stepsizes[6] = 0.1;
+	int index = 0;
+	stepsizes[index++] = 0.2*k0;
+	stepsizes[index++] = 0.2*R_d;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void ExpDisk::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
-	set_geometric_param_auto_ranges(2);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void ExpDisk::set_model_specific_integration_pointers()
@@ -2080,8 +2076,8 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
 }
 
 void Shear::initialize_parameters(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in)
@@ -2103,7 +2099,7 @@ void Shear::setup_lens_properties(const int parameter_mode, const int subclass)
 	lenstype = SHEAR;
 	model_name = "shear";
 	special_parameter_command = "";
-	setup_base_lens_properties(5,false); // number of parameters = 4, is_elliptical_lens = false
+	setup_base_lens_properties(5,-1,false); // number of parameters = 4, is_elliptical_lens = false
 }
 
 Shear::Shear(const Shear* lens_in)
@@ -2137,11 +2133,11 @@ void Shear::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	if (use_shear_component_params) {
 		param[0] = &shear1;
-		param[1] = &shear2;
-		angle_paramnum = -1; // since there is no angle parameter in this mode
+		param[1] = &shear2; angle_param[1] = false; angle_param_exists = false;
+		angle_param_exists = false; // since there is no angle parameter in this mode
 	} else {
 		param[0] = &shear; // here, shear is actually the shear magnitude
-		param[1] = &theta; angle_paramnum = 1;
+		param[1] = &theta; angle_param[1] = true; angle_param_exists = true;
 	}
 	if (!lensed_center_coords) {
 		param[2] = &x_center;
@@ -2264,8 +2260,8 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, QLens* cosmo_in, const bool sine)
 {
 	setup_lens_properties(0,m_in);
-	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
 }
 
 void Multipole::initialize_parameters(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine)
@@ -2305,7 +2301,7 @@ void Multipole::setup_lens_properties(const int parameter_mode, const int subcla
 	special_parameter_command = sine_command + " m=" + mstring;
 	model_name = "mpole";
 	m = subclass; // m will be used when assigning the amplitude parameter name (A_m or B_m)
-	setup_base_lens_properties(6,false,0,m); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false,0,m); // number of parameters = 5, is_elliptical_lens = false
 }
 
 Multipole::Multipole(const Multipole* lens_in)
@@ -2351,7 +2347,7 @@ void Multipole::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &A_n; // here, A_n is actually the shear magnitude
 	param[1] = &n;
-	param[2] = &theta; angle_paramnum = 2;
+	param[2] = &theta; angle_param[2] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[3] = &x_center;
 		param[4] = &y_center;
@@ -2636,8 +2632,8 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &p_in, const double &xc_in, const double &yc_in, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	initialize_parameters(p_in,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p_in,xc_in,yc_in);
 }
 
 void PointMass::initialize_parameters(const double &p_in, const double &xc_in, const double &yc_in)
@@ -2658,7 +2654,7 @@ void PointMass::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = PTMASS;
 	model_name = "ptmass";
 	special_parameter_command = "";
-	setup_base_lens_properties(4,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(4,-1,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
 }
 
 PointMass::PointMass(const PointMass* lens_in)
@@ -2702,7 +2698,7 @@ void PointMass::assign_param_pointers()
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void PointMass::set_auto_stepsizes()
@@ -2818,9 +2814,8 @@ double PointMass::kappa_avg_r(const double r)
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	set_integration_parameters(nn,acc);
-	initialize_parameters(mass_param_in,gamma_in,n_in,a_in,s_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(mass_param_in,gamma_in,n_in,a_in,s_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void CoreCusp::initialize_parameters(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -2853,7 +2848,7 @@ void CoreCusp::setup_lens_properties(const int parameter_mode, const int subclas
 	lenstype = CORECUSP;
 	model_name = "corecusp";
 	special_parameter_command = ((parameter_mode==1) ? "re_param" : "");
-	setup_base_lens_properties(10,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
+	setup_base_lens_properties(10,5,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
@@ -2881,7 +2876,7 @@ void CoreCusp::assign_paramnames()
 	paramnames[2] = "n";     latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	paramnames[3] = "a";     latex_paramnames[3] = "a";       latex_param_subscripts[3] = "";
 	paramnames[4] = "s";     latex_paramnames[4] = "s";       latex_param_subscripts[4] = "";
-	set_geometric_paramnames(5);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void CoreCusp::assign_param_pointers()
@@ -2892,7 +2887,7 @@ void CoreCusp::assign_param_pointers()
 	param[2] = &n;
 	param[3] = &a;
 	param[4] = &s;
-	set_geometric_param_pointers(5);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void CoreCusp::update_meta_parameters()
@@ -2954,22 +2949,14 @@ void CoreCusp::update_special_anchored_params()
 
 void CoreCusp::set_auto_stepsizes()
 {
-	if (parameter_mode==1) stepsizes[0] = 0.1*einstein_radius;
-	else stepsizes[0] = 0.1*k0;
-	stepsizes[1] = 0.1;
-	stepsizes[2] = 0.1;
-	stepsizes[3] = 0.1*a;
-	stepsizes[4] = 0.02*a;
-	set_auto_eparam_stepsizes(5,6);
-	if (parameter_mode==1) {
-		// take advantage of the fact that we're keeping track of the Einstein radius
-		stepsizes[7] = 0.1*einstein_radius;
-		stepsizes[8] = 0.1*einstein_radius;
-	} else {
-		stepsizes[7] = 0.1; // arbitrary...maybe we should just calculate Einstein radius before determining stepsizes anyway?
-		stepsizes[8] = 0.1;
-	}
-	stepsizes[9] = 0.1;
+	int index = 0;
+	if (parameter_mode==1) stepsizes[index++] = 0.1*einstein_radius;
+	else stepsizes[index++] = 0.1*k0;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.1*a;
+	stepsizes[index++] = 0.02*a;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void CoreCusp::set_auto_ranges()
@@ -2979,7 +2966,7 @@ void CoreCusp::set_auto_ranges()
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
 	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
-	set_geometric_param_auto_ranges(5);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void CoreCusp::set_model_specific_integration_pointers()
@@ -3123,17 +3110,17 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 {
 	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != lens->lens_redshift) {
+	if (zlens != qlens->lens_redshift) {
 		cout << resetiosflags(ios::scientific);
 		cout << "sigma_crit(z=" << zlens << "): ";
-		if (lens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
 
 	double rs_kpc, ds, m200, r200, r200_arcsec;
 	rs_kpc = a / kpc_to_arcsec;
 	ds = k0 * sigma_cr_kpc / rs_kpc;
-	r200_const = 200.0*lens->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
+	r200_const = 200.0*qlens->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
 	double (Brent::*r200root)(const double);
 	r200root = static_cast<double (Brent::*)(const double)> (&CoreCusp::r200_root_eq);
 	r200_arcsec = BrentsMethod(r200root, 0.1, 10000, 1e-4);
@@ -3166,9 +3153,8 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,Re_in,n_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,Re_in,n_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void SersicLens::initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -3176,7 +3162,7 @@ void SersicLens::initialize_parameters(const double &p1_in, const double &Re_in,
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	if (parameter_mode==0) {
-		kappa_e = p1_in;
+		kappa0 = p1_in;
 	} else {
 		mstar = p1_in;
 	}
@@ -3191,14 +3177,14 @@ void SersicLens::setup_lens_properties(const int parameter_mode, const int subcl
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 SersicLens::SersicLens(const SersicLens* lens_in)
 {
 	copy_base_lensdata(lens_in);
 	if (parameter_mode==0) {
-		kappa_e = lens_in->kappa_e;
+		kappa0 = lens_in->kappa0;
 	} else {
 		mstar = lens_in->mstar;
 	}
@@ -3209,29 +3195,68 @@ SersicLens::SersicLens(const SersicLens* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
+SersicLens::SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	n = sb_in->n;
+	re = sb_in->Reff;
+	b = sb_in->b;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
 void SersicLens::assign_paramnames()
 {
 	if (parameter_mode==0) {
-		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	} else {
 		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
 	}
-	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[1] = "Reff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
-	set_geometric_paramnames(3);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void SersicLens::assign_param_pointers()
 {
 	if (parameter_mode==0) {
-		param[0] = &kappa_e;
+		param[0] = &kappa0;
 	} else {
 		param[0] = &mstar;
 	}
 
 	param[1] = &re;
 	param[2] = &n;
-	set_geometric_param_pointers(3);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void SersicLens::update_meta_parameters()
@@ -3239,25 +3264,26 @@ void SersicLens::update_meta_parameters()
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
-	if (parameter_mode==1) {
-		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+	if (parameter_mode==0) {
+		mstar = (kappa0*sigma_cr*re*re*M_2PI*n*Gamma(2*n)) / pow(b,2*n);
+	} else {
+		kappa0 = (mstar*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
-	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+
+	def_factor = 2*n*re*re*kappa0*pow(b,-2*n);
 }
 
 void SersicLens::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa0;
 	} else {
-		stepsizes[0] = 0.2*mstar;
+		stepsizes[index++] = 0.2*mstar;
 	}
-	stepsizes[1] = 0.2*re;
-	stepsizes[2] = 0.2;
-	set_auto_eparam_stepsizes(3,4);
-	stepsizes[5] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[6] = 0.3;
-	stepsizes[7] = 0.1;
+	stepsizes[index++] = 0.2*re;
+	stepsizes[index++] = 0.2;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void SersicLens::set_auto_ranges()
@@ -3265,7 +3291,7 @@ void SersicLens::set_auto_ranges()
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = false;
-	set_geometric_param_auto_ranges(3);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void SersicLens::set_model_specific_integration_pointers()
@@ -3275,12 +3301,13 @@ void SersicLens::set_model_specific_integration_pointers()
 
 double SersicLens::kappa_rsq(const double rsq)
 {
-	return kappa_e*exp(-b*(pow(rsq/(re*re),0.5/n)-1));
+	return kappa0*exp(-b*pow(rsq/(re*re),0.5/n));
+	//kappa0 = kappa_e*exp(b);
 }
 
 double SersicLens::kappa_rsq_deriv(const double rsq)
 {
-	return -kappa_e*exp(-b*(pow(rsq/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow(rsq,0.5/n-1)/(2*n);
+	return -kappa0*exp(-b*pow(rsq/(re*re),0.5/n))*b*pow(re,-1.0/n)*pow(rsq,0.5/n-1)/(2*n);
 }
 
 double SersicLens::kapavg_spherical_rsq(const double rsq)
@@ -3292,6 +3319,240 @@ double SersicLens::kapavg_spherical_rsq(const double rsq)
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
 
+bool SersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != qlens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	double Reff_kpc = re/kpc_to_arcsec;
+	cout << "R_eff = " << Reff_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
+}
+
+/***************************** Double Sersic profile *****************************/
+
+DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
+{
+	setup_lens_properties(parameter_mode_in);
+
+	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
+	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,delta_k_in,Reff1_in,n1_in,Reff2_in,n2_in,q_in,theta_degrees,xc_in,yc_in);
+}
+
+void DoubleSersicLens::initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
+{
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+
+	if (parameter_mode==0) {
+		kappa0 = p1_in;
+	} else {
+		mstar = p1_in;
+	}
+	delta_k = delta_k_in;
+	n1 = n1_in;
+	Reff1 = Reff1_in;
+	n2 = n2_in;
+	Reff2 = Reff2_in;
+
+	update_meta_parameters_and_pointers();
+}
+
+void DoubleSersicLens::setup_lens_properties(const int parameter_mode, const int subclass)
+{
+	lenstype = DOUBLE_SERSIC_LENS;
+	model_name = "dsersic";
+	special_parameter_command = "";
+	setup_base_lens_properties(11,6,true,parameter_mode); // number of parameters = 10 (not including redshift), is_elliptical_lens = true
+}
+
+DoubleSersicLens::DoubleSersicLens(const DoubleSersicLens* lens_in)
+{
+	copy_base_lensdata(lens_in);
+	if (parameter_mode==0) {
+		kappa0 = lens_in->kappa0;
+	} else {
+		mstar = lens_in->mstar;
+	}
+	delta_k = lens_in->delta_k;
+	n1 = lens_in->n1;
+	Reff1 = lens_in->Reff1;
+	n2 = lens_in->n2;
+	Reff2 = lens_in->Reff2;
+
+	update_meta_parameters_and_pointers();
+}
+
+DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	delta_k = sb_in->delta_s;
+	n1 = sb_in->n1;
+	n2 = sb_in->n2;
+	Reff1 = sb_in->Reff1;
+	Reff2 = sb_in->Reff2;
+	b1 = sb_in->b1;
+	b2 = sb_in->b2;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
+void DoubleSersicLens::assign_paramnames()
+{
+	if (parameter_mode==0) {
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
+	} else {
+		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
+	}
+	paramnames[1] = "delta_k"; latex_paramnames[1] = "\\Delta"; latex_param_subscripts[1] = "\\kappa";
+	paramnames[2] = "Reff1"; latex_paramnames[2] = "R"; latex_param_subscripts[2] = "eff,1";
+	paramnames[3] = "n1"; latex_paramnames[3] = "n"; latex_param_subscripts[3] = "1";
+	paramnames[4] = "Reff2"; latex_paramnames[4] = "R"; latex_param_subscripts[4] = "eff,2";
+	paramnames[5] = "n2"; latex_paramnames[5] = "n"; latex_param_subscripts[5] = "2";
+
+	set_geometric_paramnames(lensprofile_nparams);
+}
+
+void DoubleSersicLens::assign_param_pointers()
+{
+	if (parameter_mode==0) {
+		param[0] = &kappa0;
+	} else {
+		param[0] = &mstar;
+	}
+	param[1] = &delta_k;
+	param[2] = &Reff1;
+	param[3] = &n1;
+	param[4] = &Reff2;
+	param[5] = &n2;
+	set_geometric_param_pointers(lensprofile_nparams);
+}
+
+void DoubleSersicLens::update_meta_parameters()
+{
+	update_zlens_meta_parameters();
+	update_ellipticity_meta_parameters();
+	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
+	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
+	if (parameter_mode==0) {
+		mstar = M_PI*sigma_cr*kappa0*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2));
+	} else {
+		kappa0 = mstar / (M_PI*sigma_cr*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2)));
+	}
+	kappa0_1 = kappa0*(1+delta_k)/2;
+	kappa0_2 = kappa0*(1-delta_k)/2;
+	update_ellipticity_meta_parameters();
+}
+
+void DoubleSersicLens::set_auto_stepsizes()
+{
+	int index = 0;
+	if (parameter_mode==0) {
+		stepsizes[index++] = 0.2*kappa0;
+	} else {
+		stepsizes[index++] = 0.2*mstar;
+	}
+	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.2*Reff1; // arbitrary
+	stepsizes[index++] = 0.2; // arbitrary
+	stepsizes[index++] = 0.2*Reff2; // arbitrary
+	stepsizes[index++] = 0.2; // arbitrary
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void DoubleSersicLens::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = false; penalty_lower_limits[1] = -1e30; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
+	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
+	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
+	set_geometric_param_auto_ranges(lensprofile_nparams);
+}
+
+double DoubleSersicLens::kappa_rsq(const double rsq)
+{
+	return (kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1)) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2)));
+}
+
+double DoubleSersicLens::kappa_rsq_deriv(const double rsq)
+{
+	return -(kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1))*b1*pow(Reff1,-1.0/n1)*pow(rsq,0.5/n1-1)/(2*n1) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2))*b2*pow(Reff2,-1.0/n2)*pow(rsq,0.5/n2-1)/(2*n2));
+}
+
+bool DoubleSersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != qlens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
+
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	cout << "kappa1(r=0) = " << kappa0_1 << endl;
+	cout << "kappa2(r=0) = " << kappa0_2 << endl;
+	double mstar1 = M_PI*sigma_cr*kappa0*(1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1);
+	double mstar2 = M_PI*sigma_cr*kappa0*(1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2);
+	cout << "mstar1 = " << mstar1 << endl;
+	cout << "mstar2 = " << mstar2 << endl;
+
+	double Reff1_kpc = Reff1/kpc_to_arcsec;
+	double Reff2_kpc = Reff2/kpc_to_arcsec;
+	cout << "R_eff1 = " << Reff1_kpc << " kpc" << endl;
+	cout << "R_eff2 = " << Reff2_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
+}
+
 /***************************** Cored Sersic profile *****************************/
 
 Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
@@ -3299,9 +3560,8 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_integration_parameters(nn,acc);
-	initialize_parameters(p1_in,Re_in,n_in,rc_in,q_in,theta_degrees,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(p1_in,Re_in,n_in,rc_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
 void Cored_SersicLens::initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
@@ -3309,7 +3569,7 @@ void Cored_SersicLens::initialize_parameters(const double &p1_in, const double &
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 
 	if (parameter_mode==0) {
-		kappa_e = p1_in;
+		kappa0 = p1_in;
 	} else {
 		mstar = p1_in;
 	}
@@ -3325,14 +3585,14 @@ void Cored_SersicLens::setup_lens_properties(const int parameter_mode, const int
 	lenstype = CORED_SERSIC_LENS;
 	model_name = "csersic";
 	special_parameter_command = "";
-	setup_base_lens_properties(9,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(9,4,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
 Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
 {
 	copy_base_lensdata(lens_in);
 	if (parameter_mode==0) {
-		kappa_e = lens_in->kappa_e;
+		kappa0 = lens_in->kappa0;
 	} else {
 		mstar = lens_in->mstar;
 	}
@@ -3344,23 +3604,63 @@ Cored_SersicLens::Cored_SersicLens(const Cored_SersicLens* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
+Cored_SersicLens::Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	n = sb_in->n;
+	re = sb_in->Reff;
+	b = sb_in->b;
+	rc = sb_in->rc;
+	kappa0 = 3; // arbitrary
+	mstar = 1e12; // arbitrary
+
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+	}
+	update_anchored_parameters();
+}
+
 void Cored_SersicLens::assign_paramnames()
 {
 	if (parameter_mode==0) {
-		paramnames[0] = "kappa_e"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "e";
+		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
 	} else {
 		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
 	}
-	paramnames[1] = "R_eff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
+	paramnames[1] = "Reff";   latex_paramnames[1] = "R";       latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n";       latex_paramnames[2] = "n";       latex_param_subscripts[2] = "";
 	paramnames[3] = "rc";       latex_paramnames[3] = "r";       latex_param_subscripts[3] = "c";
-	set_geometric_paramnames(4);
+	set_geometric_paramnames(lensprofile_nparams);
 }
 
 void Cored_SersicLens::assign_param_pointers()
 {
 	if (parameter_mode==0) {
-		param[0] = &kappa_e;
+		param[0] = &kappa0;
 	} else {
 		param[0] = &mstar;
 	}
@@ -3368,7 +3668,7 @@ void Cored_SersicLens::assign_param_pointers()
 	param[1] = &re;
 	param[2] = &n;
 	param[3] = &rc;
-	set_geometric_param_pointers(4);
+	set_geometric_param_pointers(lensprofile_nparams);
 }
 
 void Cored_SersicLens::update_meta_parameters()
@@ -3376,26 +3676,26 @@ void Cored_SersicLens::update_meta_parameters()
 	update_zlens_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
-	if (parameter_mode==1) {
-		kappa_e = (mstar*exp(-b)*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
+	if (parameter_mode==0) {
+		mstar = (kappa0*sigma_cr*re*re*M_2PI*n*Gamma(2*n)) / pow(b,2*n);
+	} else {
+		kappa0 = (mstar*pow(b,2*n))/(sigma_cr*re*re*M_2PI*n*Gamma(2*n));
 	}
-	def_factor = 2*n*re*re*kappa_e*pow(b,-2*n)*exp(b);
+	def_factor = 2*n*re*re*kappa0*pow(b,-2*n);
 }
 
 void Cored_SersicLens::set_auto_stepsizes()
 {
+	int index = 0;
 	if (parameter_mode==0) {
-		stepsizes[0] = 0.2*kappa_e;
+		stepsizes[index++] = 0.2*kappa0;
 	} else {
-		stepsizes[0] = 0.2*mstar;
+		stepsizes[index++] = 0.2*mstar;
 	}
-	stepsizes[1] = 0.2*re;
-	stepsizes[2] = 0.2;
-	stepsizes[3] = 0.05*re;
-	set_auto_eparam_stepsizes(4,5);
-	stepsizes[6] = 0.3; // these are quite arbitrary--should calculate Einstein radius and use 0.05*r_ein
-	stepsizes[7] = 0.3;
-	stepsizes[8] = 0.1;
+	stepsizes[index++] = 0.2*re;
+	stepsizes[index++] = 0.2;
+	stepsizes[index++] = 0.05*re;
+	set_geometric_param_auto_stepsizes(index);
 }
 
 void Cored_SersicLens::set_auto_ranges()
@@ -3404,7 +3704,7 @@ void Cored_SersicLens::set_auto_ranges()
 	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
 	set_auto_penalty_limits[2] = false;
 	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
-	set_geometric_param_auto_ranges(4);
+	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
 
 void Cored_SersicLens::set_model_specific_integration_pointers()
@@ -3414,12 +3714,12 @@ void Cored_SersicLens::set_model_specific_integration_pointers()
 
 double Cored_SersicLens::kappa_rsq(const double rsq)
 {
-	return kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1));
+	return kappa0*exp(-b*pow((rsq+rc*rc)/(re*re),0.5/n));
 }
 
 double Cored_SersicLens::kappa_rsq_deriv(const double rsq)
 {
-	return -kappa_e*exp(-b*(pow((rsq+rc*rc)/(re*re),0.5/n)-1))*b*pow(re,-1.0/n)*pow((rsq+rc*rc),0.5/n-1)/(2*n);
+	return -kappa0*exp(-b*pow((rsq+rc*rc)/(re*re),0.5/n))*b*pow(re,-1.0/n)*pow((rsq+rc*rc),0.5/n-1)/(2*n);
 }
 
 double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
@@ -3432,15 +3732,37 @@ double Cored_SersicLens::kapavg_spherical_rsq(const double rsq)
 	return def_factor*gamm2n*incgam2n/rsq;  // def_factor is equal to 2*re*alpha_re/Gamma(2n), where alpha_re is the deflection at re
 }
 
+bool Cored_SersicLens::output_cosmology_info(const int lens_number)
+{
+	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
+	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+	if (zlens != qlens->lens_redshift) {
+		cout << resetiosflags(ios::scientific);
+		cout << "sigma_crit(z=" << zlens << "): ";
+		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
+		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
+	}
 
+	if (parameter_mode==0) {
+		cout << "Total stellar mass = " << mstar << endl;
+	} else {
+		cout << "kappa(r=0) = " << kappa0 << endl;
+	}
+	double Reff_kpc = re/kpc_to_arcsec;
+	double rc_kpc = rc/kpc_to_arcsec;
+	cout << "R_eff = " << Reff_kpc << " kpc" << endl;
+	cout << "rc = " << rc_kpc << " kpc" << endl;
+	cout << endl;
+	return true;
+}
 
 /***************************** Mass sheet *****************************/
 
 MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	initialize_parameters(kext_in,xc_in,yc_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(kext_in,xc_in,yc_in);
 }
 
 void MassSheet::initialize_parameters(const double &kext_in, const double &xc_in, const double &yc_in)
@@ -3456,7 +3778,7 @@ void MassSheet::setup_lens_properties(const int parameter_mode, const int subcla
 	lenstype = SHEET;
 	model_name = "sheet";
 	special_parameter_command = "";
-	setup_base_lens_properties(4,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(4,-1,false); // number of parameters = 3, is_elliptical_lens = false
 }
 
 MassSheet::MassSheet(const MassSheet* lens_in)
@@ -3490,7 +3812,7 @@ void MassSheet::assign_param_pointers()
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void MassSheet::set_auto_stepsizes()
@@ -3572,8 +3894,8 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, QLens* cosmo_in)
 {
 	setup_lens_properties();
-	initialize_parameters(defx_in,defy_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	initialize_parameters(defx_in,defy_in);
 }
 
 void Deflection::initialize_parameters(const double &defx_in, const double &defy_in)
@@ -3589,7 +3911,7 @@ void Deflection::setup_lens_properties(const int parameter_mode, const int subcl
 	lenstype = DEFLECTION;
 	model_name = "deflection";
 	special_parameter_command = "";
-	setup_base_lens_properties(3,false); // number of parameters = 2, is_elliptical_lens = false
+	setup_base_lens_properties(3,-1,false); // number of parameters = 2, is_elliptical_lens = false
 	center_defined = false;
 }
 
@@ -3622,7 +3944,7 @@ void Deflection::assign_param_pointers()
 	param[1] = &def_y;
 	param[2] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
-	angle_paramnum = -1; // since there is no angle parameter
+	angle_param_exists = false; // since there is no angle parameter
 }
 
 void Deflection::set_auto_stepsizes()
@@ -3680,7 +4002,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	setup_base_lens_properties(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
 	rscale = rscale0 = rscale_in;
@@ -3816,7 +4138,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 {
 	lenstype = TABULATED;
 	special_parameter_command = "";
-	setup_base_lens_properties(6,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
@@ -3855,7 +4177,7 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	for (i=0; i < grid_logr_N; i++) tabfile >> grid_logrvals[i];
 	for (j=0; j < grid_phi_N; j++) tabfile >> grid_phivals[j];
 
-	rmin_einstein_radius = exp(grid_logrvals[0]);
+	rmin_einstein_radius = exp(2*grid_logrvals[0]);
 	rmax_einstein_radius = exp(grid_logrvals[grid_logr_N-1]);
 
 	for (i=0; i < grid_logr_N; i++) {
@@ -3912,7 +4234,7 @@ void Tabulated_Model::assign_param_pointers()
 	ellipticity_paramnum = -1; // no ellipticity parameter here
 	param[0] = &kscale;
 	param[1] = &rscale;
-	param[2] = &theta; angle_paramnum = 2;
+	param[2] = &theta; angle_param[2] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[3] = &x_center;
 		param[4] = &y_center;
@@ -4270,7 +4592,7 @@ void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_lim
 	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
 
 	for (int i=0; i < n_params-2; i++) {
-		if ((anchor_parameter[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
+		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
 		else {
 			if (i==0) {
 				if (loaded_from_file) scriptout << kscale;
@@ -4282,7 +4604,7 @@ void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_lim
 			}
 			else if (i==2) scriptout << radians_to_degrees(*(param[i]));
 			else scriptout << *(param[i]);
-			if (anchor_parameter[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
+			if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
 			scriptout << " ";
 		}
 	}
@@ -4337,7 +4659,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	special_parameter_command = "";
-	setup_base_lens_properties(7,false); // number of parameters = 3, is_elliptical_lens = false
+	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
@@ -4509,7 +4831,7 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 {
 	lenstype = QTABULATED;
 	special_parameter_command = "";
-	setup_base_lens_properties(7,false); // number of parameters = 5, is_elliptical_lens = false
+	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
 	kscale = kscale_in;
@@ -4627,7 +4949,7 @@ void QTabulated_Model::assign_param_pointers()
 	param[0] = &kscale;
 	param[1] = &rscale;
 	param[2] = &q;
-	param[3] = &theta; angle_paramnum = 3;
+	param[3] = &theta; angle_param[3] = true; angle_param_exists = true;
 	if (!lensed_center_coords) {
 		param[4] = &x_center;
 		param[5] = &y_center;
@@ -5040,7 +5362,6 @@ TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &
 	setup_lens_properties();
 	special_parameter_command = "";
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false
-	set_integration_parameters(nn,acc);
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
 }

@@ -73,8 +73,9 @@ UCMC::UCMC() : Minimize(1.0e-6, 1000), LevenMarq(0.001, 3), Derivative(1.0e-6, 1
 	mpi_id = 0;
 	mpi_np = 1;
 	mpi_ngroups = 1;
-	mpi_group_id = mpi_group_num = 0;
-	mpi_group_leader = NULL;
+	mpi_group_num = 0;
+	mpi_group_leader = new int[1];
+	mpi_group_leader[0] = 0;
 }
 
 #ifdef USE_MPI
@@ -2993,11 +2994,13 @@ void UCMC::MonoSample(const char *name, const int N, double &lnZ, double *best_f
 		}
 	}
 #ifdef USE_MPI
-	for (int group_num=0; group_num < mpi_ngroups; group_num++) {
-		for (i=group_num; i < N; i += mpi_ngroups) {
-			id = mpi_group_leader[group_num];
-			MPI_Bcast(logLikes+i,1,MPI_DOUBLE,id,MPI_COMM_WORLD);
-			MPI_Bcast(points[i],ma,MPI_DOUBLE,id,MPI_COMM_WORLD);
+	if (mpi_np > 1) {
+		for (int group_num=0; group_num < mpi_ngroups; group_num++) {
+			for (i=group_num; i < N; i += mpi_ngroups) {
+				id = mpi_group_leader[group_num];
+				MPI_Bcast(logLikes+i,1,MPI_DOUBLE,id,MPI_COMM_WORLD);
+				MPI_Bcast(points[i],ma,MPI_DOUBLE,id,MPI_COMM_WORLD);
+			}
 		}
 	}
 #endif

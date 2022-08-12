@@ -9,9 +9,6 @@ namespace py = pybind11;
 PYBIND11_MODULE(qlens, m) {
     m.doc() = "QLens Python Plugin"; // optional module docstring
 
-    //py::class_<QLens, std::unique_ptr<QLens, py::nodelete>>(m, "QLens_base")
-        //.def(py::init<>([](){return new QLens();}))
-	 //;
     py::class_<LensProfile>(m, "LensProfile")
         .def(py::init<>([](){return new LensProfile();}))
         .def(py::init<const LensProfile*>())
@@ -179,7 +176,7 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<const QTabulated_Model*>())
         ;
 
-    py::class_<Lens_Wrap>(m, "QLens")
+    py::class_<Lens_Wrap, std::unique_ptr<Lens_Wrap>>(m, "QLens")
         .def(py::init<>([](){return new Lens_Wrap();}))
         .def("imgdata_display", &Lens_Wrap::imgdata_display)
         .def("imgdata_add", &Lens_Wrap::imgdata_add, 
@@ -237,11 +234,11 @@ PYBIND11_MODULE(qlens, m) {
         .def("fitmodel", &Lens_Wrap::print_fit_model)
         .def_readonly("sorted_critical_curve", &Lens_Wrap::sorted_critical_curve)
         .def_readonly("nlens", &Lens_Wrap::nlens)
+		  .def_readwrite("zlens", &Lens_Wrap::lens_redshift)
 		  .def_property("zsrc", &Lens_Wrap::get_source_redshift, &Lens_Wrap::set_source_redshift)
 		  .def_property("zsrc_ref", &Lens_Wrap::get_reference_source_redshift, &Lens_Wrap::set_reference_source_redshift)
 		  .def_property("analytic_bestfit_src", &Lens_Wrap::get_analytic_bestfit_src, &Lens_Wrap::set_analytic_bestfit_src)
 		  .def_readwrite("cc_splitlevels", &Lens_Wrap::cc_splitlevels)
-		  .def_readwrite("zlens", &Lens_Wrap::lens_redshift)
 		  .def_readwrite("imgplane_chisq", &Lens_Wrap::imgplane_chisq)
 		  .def_readwrite("nrepeat", &Lens_Wrap::n_repeats)
 		  .def_readwrite("flux_chisq", &Lens_Wrap::include_flux_chisq)
@@ -250,8 +247,6 @@ PYBIND11_MODULE(qlens, m) {
 		  .def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
 		  .def_readwrite("n_livepts", &Lens_Wrap::n_livepts)
 		  .def_property("sci_notation", &Lens_Wrap::get_sci_notation, &Lens_Wrap::set_sci_notation)
-		  .def_property("fit_label", &Lens_Wrap::get_fit_label, &Lens_Wrap::set_fit_label)
-		  .def_readwrite("fit_output_dir", &Lens_Wrap::fit_output_dir)
 		  .def_readwrite_static("ansi_output", &Lens_Wrap::use_ansi_output_during_fit)
         ;
 

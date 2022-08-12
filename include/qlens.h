@@ -22,7 +22,17 @@
 #include <iomanip>
 #include <sstream>
 #include <fstream>
+#include <complex>
 #define USE_COMM_WORLD -987654
+
+
+#ifdef USE_FFTW
+#ifdef USE_MKL
+#include "fftw/fftw3.h"
+#else
+#include "fftw3.h"
+#endif
+#endif
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -37,7 +47,7 @@ using namespace std;
 enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
 enum inside_cell { Inside, Outside, Edge };
 enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
-enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source, Shapelet_Source };
+enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
@@ -46,11 +56,13 @@ enum RayTracingMethod {
 };
 enum DerivedParamType {
 	KappaR,
+	LambdaR,
 	DKappaR,
 	Mass2dR,
 	Mass3dR,
 	Einstein,
 	Einstein_Mass,
+	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
 	Perturbation_Radius,
@@ -64,6 +76,7 @@ enum DerivedParamType {
 
 class QLens;			// Defined after class Grid
 class SourcePixelGrid;
+class DelaunayGrid;
 class ImagePixelGrid;
 class Defspline;	// ...
 struct ImageData;
@@ -338,6 +351,26 @@ struct WeakLensingData
 	~WeakLensingData();
 };
 
+struct ParamAnchor {
+	bool anchor_param;
+	int paramnum;
+	int anchor_paramnum;
+	bool use_implicit_ratio;
+	bool use_exponent;
+	int anchor_object_number;
+	double ratio;
+	double exponent;
+	ParamAnchor() {
+		anchor_param = false;
+		use_implicit_ratio = false;
+		use_exponent = false;
+		ratio = 1.0;
+		exponent = 1.0;
+	}
+	void shift_down() { paramnum--; }
+};
+
+
 double mcsampler_set_lensptr(QLens* lens_in);
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
 void polychord_prior (double cube[], double theta[], int nDims);
@@ -381,6 +414,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool mcmc_logfile;
 	bool open_chisq_logfile;
 	bool psf_convolution_mpi;
+	bool fft_convolution;
 	bool use_mumps_subcomm;
 	bool n_image_prior;
 	double n_images_at_sbmax, pixel_avg_n_image;
@@ -391,9 +425,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double outside_sb_prior_threshold;
 	bool einstein_radius_prior;
+	bool concentration_prior;
 	double einstein_radius_low_threshold;
 	double einstein_radius_high_threshold;
 	int extended_mask_n_neighbors;
+	bool include_extended_mask_in_inversion;
+	bool zero_sb_extended_mask_prior;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -433,6 +470,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
 	double omega_matter_lower_limit, omega_matter_upper_limit;
+	bool ellipticity_gradient, contours_overlap;
+	double contour_overlap_log_penalty_prior;
 	bool vary_syserr_pos_parameter;
 	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
 	bool vary_wl_shear_factor_parameter;
@@ -502,8 +541,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_parity_in_chisq;
 	bool imgplane_chisq;
 	bool calculate_parameter_errors;
-	bool adaptive_grid;
+	bool adaptive_subgrid;
 	bool use_average_magnification_for_subgridding;
+	int delaunay_mode;
+	bool delaunay_high_sn_mode;
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
 	bool exclude_source_pixels_beyond_fit_window;
@@ -515,7 +556,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sim_err_pos, sim_err_flux, sim_err_td;
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 	bool split_imgpixels;
-	int default_imgpixel_nsplit;
+	bool split_high_mag_imgpixels;
+	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
+	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
 
 	bool fits_format;
 	double data_pixel_size;
@@ -572,7 +615,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE } inversion_method;
 	RayTracingMethod ray_tracing_method;
-	bool weight_interpolation_by_imgplane_area;
 	bool interpolate_sb_3pt;
 	bool parallel_mumps, show_mumps_info;
 
@@ -674,9 +716,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_ccspline;
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
-	bool nonlinear_shapelet_amp00;
 	int shapelet_scale_mode;
+	double shapelet_max_scale;
+	double shapelet_window_scaling;
 	SourcePixelGrid *source_pixel_grid;
+	DelaunayGrid *delaunay_srcgrid;
 	void plot_source_pixel_grid(const char filename[]);
 
 	ImagePixelGrid *image_pixel_grid;
@@ -684,8 +728,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int image_npixels, source_npixels;
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
+	int image_npixels_fgmask;
+	int *active_image_pixel_i_fgmask;
+	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
 	double *sbprofile_surface_brightness;
+	double *img_minus_sbprofile;
+	//double *sbprofile_surface_brightness_fgmask;
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
 
@@ -698,8 +747,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<int> *Lmatrix_index_rows;
 
 	bool assign_pixel_mappings(bool verbal);
+	void assign_foreground_mappings(const bool use_data = true);
 	double *Dvector;
+	int Fmatrix_nn;
 	double *Fmatrix;
+	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
 	double *Rmatrix;
 	int *Rmatrix_index;
@@ -714,26 +766,27 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void convert_Lmatrix_to_dense();
 	void assign_Lmatrix_shapelets(bool verbal);
-	void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
+	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
 	void PSF_convolution_Lmatrix_dense(bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
-	void optimize_regularization_parameter(const bool verbal);
+	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
+	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
 	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void calculate_image_pixel_surface_brightness_dense();
+	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
 	void create_regularization_matrix_dense();
 	void generate_Rmatrix_norm_dense();
 	void generate_Rmatrix_shapelet_gradient();
-	bool Cholesky_dcmp(double** a, double &logdet, int n);
+	void generate_Rmatrix_shapelet_curvature();
+	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
-	void Cholesky_solve(double** a, double* b, double* x, int n);
+	//void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_packed(double* a, double* b, double* x, int n);
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 
 	dmatrix Lmatrix_dense;
-	dvector Rmatrix_diags;
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
 	dvector temp_src; // used when optimizing the regularization parameter
@@ -755,21 +808,43 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int hmatrix_nn[2];
 
 	bool use_input_psf_matrix;
-	double **psf_matrix;
+	double **psf_matrix, **foreground_psf_matrix;
 	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
-	double psf_threshold;
+	int foreground_psf_npixels_x, foreground_psf_npixels_y;
+	double psf_threshold, foreground_psf_threshold;
+	static bool setup_fft_convolution;
+	static double *psf_zvec; // for convolutions using FFT
+	static int fft_imin, fft_jmin, fft_ni, fft_nj;
+#ifdef USE_FFTW
+	static complex<double> *psf_transform;
+	static complex<double> **Lmatrix_transform;
+	static double **Lmatrix_imgs_rvec;
+	static double *img_rvec;
+	static complex<double> *img_transform;
+	static fftw_plan fftplan;
+	static fftw_plan fftplan_inverse;
+	static fftw_plan *fftplans_Lmatrix;
+	static fftw_plan *fftplans_Lmatrix_inverse;
+#endif
+	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	void initialize_pixel_matrices(bool verbal);
 	void initialize_pixel_matrices_shapelets(bool verbal);
+	void count_shapelet_npixels();
 	void clear_pixel_matrices();
 	void clear_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
-	void assign_Lmatrix(bool verbal);
+	void assign_Lmatrix(const bool delaunay, const bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	//void PSF_convolution_image_pixel_vector(bool verbal = false);
-	void PSF_convolution_pixel_vector(double *surface_brightness_vector, bool verbal = false);
+	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
+	bool setup_convolution_FFT(const bool verbal);
+	void cleanup_FFT_convolution_arrays();
+	void copy_FFT_convolution_arrays(QLens* lens_in);
+	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
+	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 	bool generate_PSF_matrix();
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
@@ -777,8 +852,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_norm();
 	void generate_Rmatrix_from_image_plane_curvature();
 	void create_lensing_matrices_from_Lmatrix(bool verbal);
-	void invert_lens_mapping_MUMPS(bool verbal);
-	void invert_lens_mapping_UMFPACK(bool verbal);
+	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
+	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
 	void indexx(int* arr, int* indx, int nn);
 
@@ -786,10 +862,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
-	void calculate_image_pixel_surface_brightness();
-	void calculate_foreground_pixel_surface_brightness();
+	void calculate_image_pixel_surface_brightness(const bool calculate_foreground = true);
+	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
 	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness();
+	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root);
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
@@ -798,18 +875,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(bool verbal);
 	void plot_image_pixel_grid();
-	void find_shapelet_scaling_parameters(const bool verbal);
+	bool find_shapelet_scaling_parameters(const bool verbal);
 	bool set_shapelet_imgpixel_nsplit();
 
 	void update_source_amplitudes_from_shapelets();
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists = false);
+	bool create_sourcegrid_cartesian(const bool verbal, const bool image_grid_already_exists = false);
+	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
+	void create_sourcegrid_from_imggrid_delaunay(const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -834,10 +913,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 #ifdef USE_MPI
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in, const int& mpi_ngroups_in, const int& group_num_in, const int& group_id_in, const int& group_np_in, int* group_leader_in, MPI_Group* group_in, MPI_Comm* comm, MPI_Group* mygroup, MPI_Comm* mycomm);
 #endif
-	void set_mpi_params_small_group(const int& mpi_id_in, const int& mpi_np_in);
 	void set_mpi_params(const int& mpi_id_in, const int& mpi_np_in);
 	void set_nthreads(const int& nthreads_in) { nthreads=nthreads_in; }
-#ifdef USE_MPI
+#ifdef USE_MUMPS
 	static void setup_mumps();
 #endif
 	static void delete_mumps();
@@ -933,15 +1011,22 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
+	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double& xiref, bool& linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots);
+	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
 	void run_plotter(string plotcommand, string extra_command = "");
-	void run_plotter_file(string plotcommand, string filename);
-	void run_plotter_range(string plotcommand, string range);
-	void run_plotter(string plotcommand, string filename, string range);
+	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");
+	void run_plotter_range(string plotcommand, string range, string extra_command = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);
 	void remove_equal_sign_datafile(vector<string>& datawords, int& n_datawords);
+
+	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
+	void set_verbal_mode(bool echo) { verbal_mode = echo; }
+	bool open_script_file(string filename);
+	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
+	void set_suppress_plots(bool setting) { suppress_plots = setting; }
 
 	void extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word);
 	void extract_word_starts_with(const char initial_character, int starting_word, string& extracted_word) { extract_word_starts_with(initial_character,starting_word,1000,extracted_word); }
@@ -972,10 +1057,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
-	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
+	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
+	bool spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper);
+
 	void add_lens(LensProfile *new_lens, const double zl, const double zs);
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
@@ -1023,10 +1110,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
-	void add_source_object(SB_ProfileName name, double sb_norm, double scale, double scale2, double logslope_param, double q, double theta, double xc, double yc);
-	void add_source_object(const char *splinefile, double q, double theta, double qx, double f, double xc, double yc);
+	void add_source_object(SB_ProfileName name, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
+	void add_source_object(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate);
+	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate, const int pmode = 0);
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
@@ -1064,10 +1151,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void multinest(const bool resume_previous, const bool skip_run);
 	void chi_square_twalk();
 	bool add_dparams_to_chain();
+	bool adopt_bestfit_point_from_chain();
 	bool adopt_point_from_chain(const unsigned long point_num);
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
+	bool output_scaled_percentiles_from_chain(const double pct_scaling);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
+	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 
 	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
@@ -1081,11 +1171,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
+	bool output_parameter_values();
+	bool output_parameter_prior_ranges();
+	bool update_parameter_value(const int param_num, const double param_val);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
 	bool initialize_fitmodel(const bool running_fit_in);
-	bool update_fitmodel(const double* params);
+	double update_model(const double* params);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_loglike_extended_source_test(double* params);
@@ -1135,6 +1228,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
+	void plot_sb_profile(int l, double rmin, double rmax, int steps, const char *sname);
+	void plot_total_sbprofile(double rmin, double rmax, int steps, const char *sbname);
 	double total_kappa(const double r, const int lensnum, const bool use_kpc);
 	double total_dkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
@@ -1171,6 +1266,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool isspherical();
 	bool islens() { return (nlens > 0); }
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
+	void set_grid_from_pixels();
+
 	void set_gridsize(double xl, double yl);
 	void set_gridcenter(double xc, double yc);
 	void autogrid(double rmin, double rmax, double frac);
@@ -1180,6 +1277,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void delete_ccspline();
 	void set_Gauss_NN(const int& nn);
 	void set_integral_tolerance(const double& acc);
+	void set_integral_convergence_warnings(const bool warn);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
 	void set_analytic_bestfit_src(bool setting) {
@@ -1240,12 +1338,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 			params[i] = lower_limits[i] + Cube[i]*(upper_limits[i]-lower_limits[i]);
 		}
 	}
-	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
-	bool open_command_file(char *filename);
-	void set_verbal_mode(bool echo) { verbal_mode = echo; }
-	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
-	void set_suppress_plots(bool setting) { suppress_plots = setting; }
-
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 
 	double crit0_interpolate(double theta) { return ccspline[0].splint(theta); }
@@ -1389,6 +1481,8 @@ struct DerivedParam
 		use_kpc_units = usekpc;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
+		} else if (derived_param_type == LambdaR) { // here lambda_R = 1 - <kappa>(R)
+			name = "lambdaR"; latex_name = "\\lambda_R";
 		} else if (derived_param_type == DKappaR) {
 			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == Mass2dR) {
@@ -1399,6 +1493,8 @@ struct DerivedParam
 			name = "re_zsrc"; latex_name = "R_{e}";
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
+		} else if (derived_param_type == Kappa_Re) {
+			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
 			name = "lensparam"; latex_name = "\\lambda";
 		} else if (derived_param_type == AvgLogSlope) {
@@ -1443,6 +1539,7 @@ struct DerivedParam
 	double get_derived_param(QLens* lens_in)
 	{
 		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param,use_kpc_units);
+		else if (derived_param_type == LambdaR) return (1 - lens_in->total_dkappa(funcparam,-1,use_kpc_units));
 		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param,use_kpc_units);
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param,use_kpc_units);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param,use_kpc_units);
@@ -1451,6 +1548,11 @@ struct DerivedParam
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
 			return lens_in->mass2d_r(re,lensnum_param,false);
+		} else if (derived_param_type == Kappa_Re) {
+			double reav=0;
+			lens_in->einstein_radius_of_primary_lens(lens_in->reference_zfactors[lens_in->lens_redshift_idx[lens_in->primary_lens_number]],reav);
+			if (reav <= 0) return 0.0;
+			else return lens_in->total_kappa(reav,-1,false);
 		} else if (derived_param_type == LensParam) {
 			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
 		}
@@ -1495,6 +1597,8 @@ struct DerivedParam
 		if (derived_param_type == KappaR) {
 			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << unitstring << endl;
 			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
+		} else if (derived_param_type == LambdaR) {
+			cout << "One minus average kappa at r = " << funcparam << unitstring << endl;
 		} else if (derived_param_type == DKappaR) {
 			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << unitstring << endl;
 			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
@@ -1506,6 +1610,8 @@ struct DerivedParam
 			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
 		} else if (derived_param_type == Einstein_Mass) {
 			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+		} else if (derived_param_type == Kappa_Re) {
+			cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << endl;
 		} else if (derived_param_type == LensParam) {
 			cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << endl;
 		} else if (derived_param_type == AvgLogSlope) {
@@ -1537,9 +1643,15 @@ struct ParamSettings
 	ParamPrior **priors;
 	ParamTransform **transforms;
 	string *param_names;
+	string *override_names; // this allows to manually set names even after parameter transformations
+	// ParamSettings should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
 	double *prior_norms;
 	double *penalty_limits_lo, *penalty_limits_hi;
 	bool *use_penalty_limits;
+	// It would be nice if penalty limits and override_limits could be merged. The tricky part is that the penalty limits deal with the	
+	// untransformed parameters, while override_limits deal with the transformed parameters. Not sure yet what is the best way to handle this.
+	double *override_limits_lo, *override_limits_hi;
+	bool *override_prior_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
 	bool *hist2d_param;
@@ -1553,28 +1665,36 @@ struct ParamSettings
 		nparams = param_settings_in.nparams;
 		n_dparams = param_settings_in.n_dparams;
 		param_names = new string[nparams];
+		override_names = new string[nparams];
 		priors = new ParamPrior*[nparams];
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
 		auto_stepsize = new bool[nparams];
 		hist2d_param = new bool[nparams];
 		subplot_param = new bool[nparams];
+		prior_norms = new double[nparams];
 		penalty_limits_lo = new double[nparams];
 		penalty_limits_hi = new double[nparams];
-		prior_norms = new double[nparams];
 		use_penalty_limits = new bool[nparams];
+		override_limits_lo = new double[nparams];
+		override_limits_hi = new double[nparams];
+		override_prior_limits = new bool[nparams];
 		for (int i=0; i < nparams; i++) {
 			priors[i] = new ParamPrior(param_settings_in.priors[i]);
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
 			param_names[i] = param_settings_in.param_names[i];
+			override_names[i] = param_settings_in.override_names[i];
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
 			hist2d_param[i] = param_settings_in.hist2d_param[i];
 			subplot_param[i] = param_settings_in.subplot_param[i];
+			prior_norms[i] = param_settings_in.prior_norms[i];
 			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
 			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
-			prior_norms[i] = param_settings_in.prior_norms[i];
 			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
+			override_limits_lo[i] = param_settings_in.override_limits_lo[i];
+			override_limits_hi[i] = param_settings_in.override_limits_hi[i];
+			override_prior_limits[i] = param_settings_in.override_prior_limits[i];
 		}
 		if (n_dparams > 0) {
 			dparam_names = new string[n_dparams];
@@ -1604,15 +1724,26 @@ struct ParamSettings
 	}
 	int lookup_param_number(const string pname)
 	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		int pnum = -1;
 		for (int i=0; i < nparams; i++) {
-			if (param_names[i]==pname) return i;
+			if ((transformed_names[i]==pname) or (param_names[i]==pname)) { pnum = i; break; }
 		}
 		for (int i=0; i < n_dparams; i++) {
-			if (dparam_names[i]==pname) return nparams+i;
+			if (dparam_names[i]==pname) pnum = nparams+i;
 		}
-		return -1;
+		delete[] transformed_names;
+		return pnum;
 	}
-
+	string lookup_param_name(const int i)
+	{
+		string *transformed_names = new string[nparams];
+		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		string name = transformed_names[i];
+		delete[] transformed_names;
+		return name;
+	}
 	bool exclude_hist2d_param(const string pname)
 	{
 		string *transformed_names = new string[nparams];
@@ -1784,6 +1915,7 @@ struct ParamSettings
 		}
 	}
 	void print_priors();
+	bool output_prior(const int i);
 	void print_stepsizes();
 	void print_penalty_limits();
 	void scale_stepsizes(const double fac)
@@ -1842,7 +1974,6 @@ struct ParamSettings
 			penalty_limits_hi[index] = upper[i];
 		}
 	}
-
 	void clear_penalty_limit(const int i)
 	{
 		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
@@ -1878,11 +2009,24 @@ struct ParamSettings
 					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
 				}
 			} else if (transforms[i]->transform==RATIO) {
-				//lower[i] = lower[i]/upper[transforms[i]->ratio_paramnum];
-				//upper[i] = upper[i]/lower[transforms[i]->ratio_paramnum];
-				// CUSTOM LIMITS CAN BE USED HERE:
-				lower[i] = 0; // these can be customized
+				lower[i] = 0; // these can be manually adjusted using 'fit priors range ...'
 				upper[i] = 1; // these can be customized
+			}
+		}
+	}
+	void set_override_prior_limit(const int i, const double lo, const double hi)
+	{
+		if (i >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",i,nparams);
+		override_prior_limits[i] = true;
+		override_limits_lo[i] = lo;
+		override_limits_hi[i] = hi;
+	}
+	void override_limits(double *lower, double *upper)
+	{
+		for (int i=0; i < nparams; i++) {
+			if (override_prior_limits[i]) {
+				lower[i] = override_limits_lo[i];
+				upper[i] = override_limits_hi[i];
 			}
 		}
 	}
@@ -1928,6 +2072,23 @@ struct ParamSettings
 				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
 			}
 		}
+		override_parameter_names(transformed_names); // allows for manually setting parameter names
+	}
+	bool set_override_parameter_name(const int i, const string name)
+	{
+		bool unique_name = true;
+		for (int j=0; j < nparams; j++) {
+			if ((i != j) and (((override_names[j] != "") and (override_names[j]==name)) or (param_names[j]==name))) unique_name = false;
+		}
+		if (!unique_name) return false;
+		override_names[i] = name;
+		return true;
+	}
+	void override_parameter_names(string* names)
+	{
+		for (int i=0; i < nparams; i++) {
+			if (override_names[i] != "") names[i] = override_names[i];
+		}
 	}
 	void transform_stepsizes()
 	{
@@ -1969,6 +2130,32 @@ struct ParamSettings
 			}
 		}
 	}
+	void update_reference_paramnums(int *new_paramnums)
+	{
+		// This updates any parameter numbers that are referenced by the priors or transforms; this is done any time the parameter list is changed
+		int new_paramnum;
+		for (int i=0; i < nparams; i++) {
+			if (priors[i]->prior==GAUSS2_PRIOR) {
+				new_paramnum = new_paramnums[priors[i]->gauss_paramnums[0]];
+				if (new_paramnum==-1) {
+					// parameter no longer exists; revert back to uniform prior
+					priors[i]->set_uniform();
+				} else {
+					priors[i]->gauss_paramnums[0] = new_paramnum;
+					priors[i]->gauss_paramnums[1] = new_paramnum;
+				}
+			}
+			if (transforms[i]->transform==RATIO) {
+				new_paramnum = new_paramnums[transforms[i]->ratio_paramnum];
+				if (new_paramnum==-1) {
+					// parameter no longer exists; remove transformation
+					transforms[i]->set_none();
+				} else {
+					transforms[i]->ratio_paramnum = new_paramnum;
+				}
+			}
+		}
+	}
 	void set_prior_norms(double *lower_limit, double* upper_limit)
 	{
 		// flat priors are automatically given a norm of 1.0, since we'll be transforming to the unit hypercube when doing nested sampling;
@@ -1996,6 +2183,8 @@ struct ParamSettings
 	void clear_params()
 	{
 		if (nparams > 0) {
+			delete[] param_names;
+			delete[] override_names;
 			for (int i=0; i < nparams; i++) {
 				delete priors[i];
 				delete transforms[i];
@@ -2005,12 +2194,19 @@ struct ParamSettings
 			delete[] stepsizes;
 			delete[] auto_stepsize;
 			delete[] subplot_param;
+			delete[] hist2d_param;
+			delete[] prior_norms;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
+			delete[] override_limits_lo;
+			delete[] override_limits_hi;
+			delete[] override_prior_limits;
+
 		}
 		priors = NULL;
 		param_names = NULL;
+		override_names = NULL;
 		transforms = NULL;
 		nparams = 0;
 		stepsizes = NULL;
@@ -2020,6 +2216,8 @@ struct ParamSettings
 	~ParamSettings()
 	{
 		if (nparams > 0) {
+			delete[] param_names;
+			delete[] override_names;
 			for (int i=0; i < nparams; i++) {
 				delete priors[i];
 				delete transforms[i];
@@ -2029,9 +2227,14 @@ struct ParamSettings
 			delete[] stepsizes;
 			delete[] auto_stepsize;
 			delete[] subplot_param;
+			delete[] hist2d_param;
+			delete[] prior_norms;
 			delete[] penalty_limits_lo;
 			delete[] penalty_limits_hi;
 			delete[] use_penalty_limits;
+			delete[] override_limits_lo;
+			delete[] override_limits_hi;
+			delete[] override_prior_limits;
 		}
 		if (n_dparams > 0) {
 			delete[] dparam_names;

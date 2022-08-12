@@ -56,6 +56,7 @@ class GaussPatterson
 			 void SetGaussPatterson(const double tol_in, const bool show_warnings);
 			void set_pat_tolerance_inner(const double tol_in);
 			void set_pat_tolerance_outer(const double tol_in);
+			void set_pat_warnings(const bool warn) { show_convergence_warning = warn; }
 
           ~GaussPatterson();
           double AdaptiveQuad(double (GaussPatterson::*)(double), double, double, bool& converged, bool outer = false);
@@ -79,6 +80,7 @@ class ClenshawCurtis
 			void SetClenshawCurtis(const int nlevels_in, const double tol_in, const bool include_endpoints = true, const bool show_warnings = true);
 			void set_cc_tolerance(const double tol_in);
 			void set_cc_tolerance_outer(const double tol_in);
+			void set_cc_warnings(const bool warn) { show_convergence_warning = warn; }
 
           ~ClenshawCurtis();
           double AdaptiveQuadCC(double (ClenshawCurtis::*)(double), double, double, bool& converged, bool outer = false);

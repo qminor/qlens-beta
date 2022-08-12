@@ -10,6 +10,7 @@ class Brent
 	double BrentsMethod(double (Brent::*func)(const double), const double x1, const double x2, const double tol);
 	double BrentsMethod_Inclusive(double (Brent::*func)(const double), const double x1, const double x2, const double tol, const bool verbose = true);
 	bool BrentsMethod(double (Brent::*func)(const double), double& root, const double x1, const double x2, const double tol);
+	double BrentsMethod(double (Brent::*func)(const double, const double&, const double&), const double &param1, const double &param2, const double x1, const double x2, const double tol);
 };
 
 double BrentsMethod(double (*func)(const double), const double x1, const double x2, const double tol);
