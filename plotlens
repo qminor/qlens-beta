@@ -589,6 +589,16 @@ then
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_nocc" ]]
 then
 	set -- $(head -2 $PLOTDIR/img_pixel.x && head -2 $PLOTDIR/img_pixel.y)
@@ -675,6 +685,16 @@ then
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay_nocc" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_imgpts" ]]
 then

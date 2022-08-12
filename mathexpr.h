@@ -18,6 +18,7 @@ inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
 inline int imin(const int &a, const int &b) { return (a < b ? a : b); }
 inline int imax(const int &a, const int &b) { return (a > b ? a : b); }
 inline double SQR(const double s) { return s*s; }
+inline int INTSQR(const int s) { return s*s; }
 inline double CUBE(const double s) { return s*s*s; }
 inline double QUARTIC(const double s) { return s*s*s*s; }
 inline int sign(const double &a) { return (a < 0 ? -1 : a > 0 ? 1 : 0); }

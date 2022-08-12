@@ -47,7 +47,7 @@ using namespace std;
 enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
 enum inside_cell { Inside, Outside, Edge };
 enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
-enum SourceFitMode { Point_Source, Pixellated_Source, Parameterized_Source, Shapelet_Source };
+enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RayTracingMethod {
@@ -76,6 +76,7 @@ enum DerivedParamType {
 
 class QLens;			// Defined after class Grid
 class SourcePixelGrid;
+class DelaunayGrid;
 class ImagePixelGrid;
 class Defspline;	// ...
 struct ImageData;
@@ -540,8 +541,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_parity_in_chisq;
 	bool imgplane_chisq;
 	bool calculate_parameter_errors;
-	bool adaptive_grid;
+	bool adaptive_subgrid;
 	bool use_average_magnification_for_subgridding;
+	int delaunay_mode;
+	bool delaunay_high_sn_mode;
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
 	bool exclude_source_pixels_beyond_fit_window;
@@ -612,7 +615,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE } inversion_method;
 	RayTracingMethod ray_tracing_method;
-	bool weight_interpolation_by_imgplane_area;
 	bool interpolate_sb_3pt;
 	bool parallel_mumps, show_mumps_info;
 
@@ -718,6 +720,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double shapelet_max_scale;
 	double shapelet_window_scaling;
 	SourcePixelGrid *source_pixel_grid;
+	DelaunayGrid *delaunay_srcgrid;
 	void plot_source_pixel_grid(const char filename[]);
 
 	ImagePixelGrid *image_pixel_grid;
@@ -746,7 +749,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool assign_pixel_mappings(bool verbal);
 	void assign_foreground_mappings(const bool use_data = true);
 	double *Dvector;
+	int Fmatrix_nn;
 	double *Fmatrix;
+	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
 	double *Rmatrix;
 	int *Rmatrix_index;
@@ -765,7 +770,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void PSF_convolution_Lmatrix_dense(bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
-	void optimize_regularization_parameter(const bool verbal);
+	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
+	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
 	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
@@ -830,7 +836,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void clear_pixel_matrices();
 	void clear_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
-	void assign_Lmatrix(bool verbal);
+	void assign_Lmatrix(const bool delaunay, const bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	//void PSF_convolution_image_pixel_vector(bool verbal = false);
 	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
@@ -846,8 +852,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_norm();
 	void generate_Rmatrix_from_image_plane_curvature();
 	void create_lensing_matrices_from_Lmatrix(bool verbal);
-	void invert_lens_mapping_MUMPS(bool verbal);
-	void invert_lens_mapping_UMFPACK(bool verbal);
+	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
 	void indexx(int* arr, int* indx, int nn);
@@ -876,7 +882,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_source_surface_brightness_grid(bool verbal, bool image_grid_already_exists = false);
+	bool create_sourcegrid_cartesian(const bool verbal, const bool image_grid_already_exists = false);
+	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
+	void create_sourcegrid_from_imggrid_delaunay(const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();

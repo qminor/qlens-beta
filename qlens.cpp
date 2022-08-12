@@ -257,6 +257,7 @@ int main(int argc, char *argv[])
 #endif
 	Grid::deallocate_multithreaded_variables();
 	SourcePixelGrid::deallocate_multithreaded_variables();
+	DelaunayGrid::deallocate_multithreaded_variables();
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI
