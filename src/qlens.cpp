@@ -104,15 +104,14 @@ int main(int argc, char *argv[])
 				}
 			}
 		} else {
+			if (read_from_file) {
+				cerr << "Error: QLens cannot open multiple input files at the same time" << endl;
+				exit(1);
+			}
 			read_from_file = true;
 			if (sscanf(argv[i], "%s", input_filename)==1)
 				argv[i] += (1 + strlen(input_filename));
 			argv[i] = advance(argv[i]);
-			ifstream test_open(input_filename);
-			if (!test_open.good()) {
-				cerr << "Error: specified input file '" << input_filename << "' does not exist" << endl;
-				usage_error(mpi_id);
-			}
 		}
 	}
 	if ((load_cosmology_file) and (cosmology.load_params(cosmology_filename)==false)) die();

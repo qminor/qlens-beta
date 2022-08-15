@@ -1024,7 +1024,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
 	void set_verbal_mode(bool echo) { verbal_mode = echo; }
-	bool open_script_file(string filename);
+	bool open_script_file(const string filename);
 	void set_quit_after_reading_file(bool setting) { quit_after_reading_file = setting; }
 	void set_suppress_plots(bool setting) { suppress_plots = setting; }
 
@@ -1113,7 +1113,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_source_object(SB_ProfileName name, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
 	void add_source_object(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate, const int pmode = 0);
+	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();

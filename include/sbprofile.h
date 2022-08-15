@@ -400,11 +400,10 @@ class Shapelet : public SB_Profile
 	double **amps; // shapelet amplitudes
 	int n_shapelets;
 	bool truncate_at_3sigma; // this truncates the shapelets at r = 2*sigma to eliminate edge effects
-	bool nonlinear_amp00;
 
 	public:
 	Shapelet() : SB_Profile() { amps = NULL; }
-	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate_2sig, const int parameter_mode_in, QLens* qlens_in);
+	Shapelet(const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig, const int parameter_mode_in, QLens* qlens_in);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (amps != NULL) {

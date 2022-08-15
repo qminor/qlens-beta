@@ -2859,12 +2859,11 @@ double DoubleSersic::length_scale()
 	return sqrt(Reff1*Reff1 + Reff2*Reff2);
 }
 
-Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool nonlinear_amp00_in, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
+Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
-	nonlinear_amp00 = nonlinear_amp00_in;
-	int npar = (nonlinear_amp00) ? 6 : 5;
+	int npar = 5;
 	setup_base_source_properties(npar,1,false,parameter_mode_in);
 	qlens = qlens_in;
 	if (parameter_mode==0) {
@@ -2903,7 +2902,6 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 			amps[i][j] = sb_in->amps[i][j];
 		}
 	}
-	nonlinear_amp00 = sb_in->nonlinear_amp00;
 	truncate_at_3sigma = sb_in->truncate_at_3sigma;
 	copy_base_source_data(sb_in);
 	update_meta_parameters();
@@ -2917,9 +2915,6 @@ void Shapelet::update_meta_parameters()
 void Shapelet::assign_paramnames()
 {
 	int indx=0;
-	if (nonlinear_amp00) {
-		paramnames[indx] = "amp00"; latex_paramnames[indx] = "\\alpha"; latex_param_subscripts[indx] = "00"; indx++;
-	}
 	if (parameter_mode==0) {
 		paramnames[indx] = "sigma"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = ""; indx++;
 	} else {
@@ -2931,7 +2926,6 @@ void Shapelet::assign_paramnames()
 void Shapelet::assign_param_pointers()
 {
 	int indx=0;
-	if (nonlinear_amp00) param[indx++] = &amps[0][0];
 	if (parameter_mode==0) {
 		param[indx++] = &sig;
 	} else {
@@ -2943,7 +2937,6 @@ void Shapelet::assign_param_pointers()
 void Shapelet::set_auto_stepsizes()
 {
 	int indx=0;
-	if (nonlinear_amp00) stepsizes[indx++] = 0.1;
 	if (parameter_mode==0) {
 		stepsizes[indx++] = (sig != 0) ? 0.1*sig : 0.1; // arbitrary
 	} else {
@@ -2955,9 +2948,7 @@ void Shapelet::set_auto_stepsizes()
 void Shapelet::set_auto_ranges()
 {
 	int indx=0;
-	if (nonlinear_amp00) {
-		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
-	}
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_geometric_param_auto_ranges(indx);
 }
@@ -3044,58 +3035,15 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 		lastfac = fac;
 	}
 	int n=0;
-	if (nonlinear_amp00) {
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				if ((i==0) and (j==0)) ;
-				else *(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
-			}
-		}
-	} else {
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				*(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
-			}
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			*(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
 		}
 	}
 
 	delete[] hermvals_x;
 	delete[] hermvals_y;
 }
-
-/*
-void Shapelet::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
-{
-	if (!is_lensed) {
-		int elements = n_shapelets*n_shapelets;
-		if (nonlinear_amp00) elements--;
-		for (int i=0; i < elements; i++) *(Rmatrix_elements++) = 0;
-		Rmatrix_elements += elements;
-	} else {
-		if (sig==0) die("sigma cannot be zero!!");
-		if ((q > 1) or (q <= 0)) die("q taking an absurd value");
-		int i,j;
-		logdet = 0;
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				if ((nonlinear_amp00) and (i==0) and (j==0)) ;
-				else {
-				//if ((i==0) and (j==0)) {
-					//Rmatrix_elements[n] = 0;
-					//logdet += log(Rmatrix_elements[n]);
-				//}
-				//else {
-					//Rmatrix_elements[n] = 1.0;
-					*Rmatrix_elements = ((2*i+1)*q + (2*j+1)/q)/(2*sig*sig);
-					if (*Rmatrix_elements < 0) die("negative element!!!");
-					if (*Rmatrix_elements > 0) logdet += log(*Rmatrix_elements);
-					Rmatrix_elements++;
-				}
-			}
-		}
-	}
-}
-*/
 
 void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
 {
@@ -3145,24 +3093,12 @@ void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatri
 void Shapelet::update_amplitudes(double*& ampvec)
 {
 	int i,j,k=0;
-	if (nonlinear_amp00) {
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				if ((i==0) and (j==0)) ;
-				else {
-					amps[i][j] = *(ampvec++);
-					//cout << "AMP(" << i << "," << j << "): " << amps[i][j] << endl;
-				}
-			}
-		}
-	} else {
-		for (i=0; i < n_shapelets; i++) {
-			for (j=0; j < n_shapelets; j++) {
-				amps[i][j] = *(ampvec++);
-			}
+
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			amps[i][j] = *(ampvec++);
 		}
 	}
-
 }
 
 /*
@@ -3230,7 +3166,6 @@ bool Shapelet::get_special_command_arg(string &arg)
 	nstr >> nstring;
 	arg = "n=" + nstring;
 	if (truncate_at_3sigma) arg += " -truncate";
-	if (nonlinear_amp00) arg += " -vary_amp0";
 	return true;
 }
 
