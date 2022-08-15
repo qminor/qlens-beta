@@ -12379,11 +12379,13 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 		}
 	}
 
+#ifdef USE_MPI
 	if (use_mumps_subcomm) {
 		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(sub_comm);
 	} else {
 		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(this_comm);
 	}
+#endif
 	mumps_solver->job = JOB_INIT; // initialize
 	mumps_solver->sym = 2; // specifies that matrix is symmetric and positive-definite
 	//cout << "ICNTL = " << mumps_solver->icntl[13] << endl;
