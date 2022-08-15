@@ -795,8 +795,8 @@ void QLens::process_commands(bool read_file)
 							"            or more point sources are used as fit parameters.\n"
 							"cartesian -- the source galaxy is modeled with a Cartesian pixel grid, whose pixels can be split\n"
 							"             into subpixels in regions of high magnification if 'adaptive_subgrid' is on.\n"
-							"delaunay -- the source galaxy is modeled with a grid produced from ray-traced corners of image\n"
-							"            pixels, from which a Delaunay triangulation is used to find the lensed surface brightness.\n"
+							"delaunay -- the source galaxy is modeled with a grid produced from ray-traced image pixels/sub-pixels,\n"
+							"            from which a Delaunay triangulation is used to find the lensed surface brightness.\n"
 							"sbprofile -- an analytic model is used for the source galaxy's surface brightness profile (via the\n"
 							"             'source' commands) rather than a pixellated source.\n"
 							"shapelet -- shapelet basis functions are used to represent the source galaxy, whose amplitudes\n"
@@ -5707,7 +5707,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
-						add_shapelet_source(amp00, scale, q, theta, xc, yc, nmax, false, truncate, pmode);
+						add_shapelet_source(amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						if (unlensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) {
@@ -6444,8 +6444,8 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="delaunay") source_fit_mode = Delaunay_Source;
 						else if (setword=="sbprofile") source_fit_mode = Parameterized_Source;
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
-						else Complain("invalid argument; must specify valid source mode (ptsource, pixel, sbprofile, shapelet)");
-					} else Complain("invalid number of arguments; can only specify fit source mode (ptsource, pixel, sbprofile, shapelet)");
+						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
+					} else Complain("invalid number of arguments; can only specify fit source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
 				}
 				else if (words[1]=="findimg")
 				{
@@ -13313,13 +13313,38 @@ void QLens::run_plotter_range(string plotcommand, string range, string extra_com
 	}
 }
 
-bool QLens::open_script_file(string filename)
+bool QLens::open_script_file(const string filename)
 {
 	if (infile->is_open()) {
 		if (n_infiles==10) die("cannot open more than 10 files at once");
 		infile++;
 	}
 	infile->open(filename.c_str());
+	if (!infile->is_open()) infile->open(("../inifile/" + filename).c_str());
+	if (!infile->is_open()) {
+		// Now we look for any directories in the PATH variable that have 'qlens' in the name
+		size_t pos = 0;
+		size_t pos2 = 0;
+		int i, ndirs = 1;
+		char *env = getenv("PATH");
+		string envstring(env);
+		while ((pos = envstring.find(':')) != string::npos) {
+			ndirs++;
+			envstring.replace(pos,1," ");
+		}
+		istringstream dirstream(envstring);
+		string dirstring[ndirs];
+		ndirs=0;
+		while (dirstream >> dirstring[ndirs]) ndirs++; // it's possible ndirs will be zero, which is why we recount it here
+		for (i=0; i < ndirs; i++) {
+			pos=pos2=0;
+			if (((pos = dirstring[i].find("qlens")) != string::npos) or ((pos2 = dirstring[i].find("kappa")) != string::npos)) {
+				infile->open((dirstring[i] + "/" + filename).c_str());
+				if (!infile->is_open()) infile->open((dirstring[i] + "/../inifile/" + filename).c_str());
+				if (infile->is_open()) break;
+			}
+		}
+	}
 	if (infile->is_open()) {
 		if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
 		read_from_file = true;

@@ -195,7 +195,9 @@ class DelaunayGrid
 	bool *active_pixel;
 	int *active_index;
 	Triangle *triangle;
+	double avg_area;
 	double srcpixel_xmin, srcpixel_xmax, srcpixel_ymin, srcpixel_ymax;
+	int img_imin, img_imax, img_jmin, img_jmax;
 
 	bool activate_unmapped_source_pixels;
 
@@ -214,6 +216,7 @@ class DelaunayGrid
 	bool test_if_inside(const int tri_number, const lensvector& pt);
 	void record_adjacent_triangles_xy();
 	void assign_surface_brightness();
+	void fill_surface_brightness_vector();
 	void update_surface_brightness(int& index);
 	int find_closest_vertex(const int tri_number, const lensvector& pt);
 	double sum_edge_sqrlengths(const double min_sb);
@@ -224,7 +227,9 @@ class DelaunayGrid
 	void calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false);
+	void generate_gmatrices();
 	void generate_hmatrices();
+	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
 
 	~DelaunayGrid();
 };

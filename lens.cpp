@@ -883,7 +883,7 @@ QLens::QLens() : UCMC()
 	vary_regularization_parameter = false;
 	optimize_regparam = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
-	optimize_regparam_minlog = -2;
+	optimize_regparam_minlog = -1;
 	optimize_regparam_maxlog = 4;
 	psf_width_x = 0;
 	psf_width_y = 0;
@@ -2894,7 +2894,7 @@ void QLens::add_source_object(SB_ProfileName name, const int emode, const double
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
-void QLens::add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool nonlinear_amp00, const bool truncate, const int pmode)
+void QLens::add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	if (n_sb > 0) {
@@ -2903,7 +2903,7 @@ void QLens::add_shapelet_source(const double amp00, const double sig_x, const do
 		delete[] sb_list;
 	}
 
-	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, nonlinear_amp00, truncate, pmode, this);
+	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, truncate, pmode, this);
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
@@ -5550,6 +5550,33 @@ bool QLens::load_image_data(string filename)
 {
 	int i,j,k;
 	ifstream data_infile(filename.c_str());
+
+	if (!data_infile.is_open()) data_infile.open(("../data/" + filename).c_str());
+	if (!data_infile.is_open()) {
+		// Now we look for any directories in the PATH variable that have 'qlens' in the name
+		size_t pos = 0;
+		size_t pos2 = 0;
+		int i, ndirs = 1;
+		char *env = getenv("PATH");
+		string envstring(env);
+		while ((pos = envstring.find(':')) != string::npos) {
+			ndirs++;
+			envstring.replace(pos,1," ");
+		}
+		istringstream dirstream(envstring);
+		string dirstring[ndirs];
+		ndirs=0;
+		while (dirstream >> dirstring[ndirs]) ndirs++; // it's possible ndirs will be zero, which is why we recount it here
+		for (i=0; i < ndirs; i++) {
+			pos=pos2=0;
+			if (((pos = dirstring[i].find("qlens")) != string::npos) or ((pos2 = dirstring[i].find("kappa")) != string::npos)) {
+				data_infile.open((dirstring[i] + "/" + filename).c_str());
+				if (!data_infile.is_open()) data_infile.open((dirstring[i] + "/../data/" + filename).c_str());
+				if (data_infile.is_open()) break;
+			}
+		}
+	}
+
 	if (!data_infile.is_open()) { warn("Error: input file '%s' could not be opened",filename.c_str()); return false; }
 
 	int n_datawords;
@@ -7394,7 +7421,6 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			delete[] closest_distsqrs;
 		}
 	}
-	if (closest_chivals.size() != 2*n_matched_images_part) die("WTFWEFAEFL:KASEL:FKAWEL:KFWEL:FK!");
 	//cout << "HI THERE " << closest_chivals.size() << " " << n_matched_images_part << endl;
 	if ((mpi_id==0) and (verbose)) cout << endl;
 #ifdef USE_MPI
@@ -12339,6 +12365,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	} else if (source_fit_mode==Delaunay_Source) {
 		at_least_one_lensed_src = true;
 		image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrid);
+		delaunay_srcgrid->set_image_pixel_grid(image_pixel_grid);
 	} else {
 		at_least_one_lensed_src = false;
 		for (int k=0; k < n_sb; k++) {
@@ -12838,7 +12865,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		initialize_pixel_matrices(verbal);
 		if (regularization_method != None) create_regularization_matrix();
 		if (inversion_method==DENSE) {
-			if (regularization_method != None) create_regularization_matrix_dense();
+			if (regularization_method != None) create_regularization_matrix_dense(); // right now this only works for norm regularization (for pixellated source)
 			convert_Lmatrix_to_dense();
 			PSF_convolution_Lmatrix_dense(verbal);
 		} else {
@@ -12903,9 +12930,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 		initialize_pixel_matrices(verbal);
-		if (regularization_method != None) create_regularization_matrix(); // regularization with Delaunay grid has not yet been implemented
+		if (regularization_method != None) create_regularization_matrix();
 		if (inversion_method==DENSE) {
-			//if (regularization_method != None) create_regularization_matrix_dense();
+			if (regularization_method != None) create_regularization_matrix_dense(); // right now this only works for norm regularization (for pixellated source)
 			convert_Lmatrix_to_dense();
 			PSF_convolution_Lmatrix_dense(verbal);
 		} else {
@@ -12946,14 +12973,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		vectorize_image_pixel_surface_brightness();
 		PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 		store_image_pixel_surface_brightness();
-
-		if (n_image_prior) {
-			create_sourcegrid_cartesian(verbal,true);
-			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
-			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-			source_pixel_grid->calculate_pixel_magnifications();
-			source_pixel_grid->find_avg_n_images();
-		}
 	} else {
 		// Shapelet source mode
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -12980,7 +12999,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);
-		// note, if nonlinear_shapelet_amp00==true, the following function will also put the shapelet amp00 into sbprofile_surface_brightness
 
 		if (regularization_method != None) create_regularization_matrix_dense();
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
@@ -13003,87 +13021,27 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
 		}
 #endif
-		if (n_image_prior) {
+	}
+
+	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
+		if ((mpi_id==0) and (verbal)) cout << "Trying sourcegrid creation..." << endl;
 #ifdef USE_OPENMP
-			double srcgrid_wtime0, srcgrid_wtime;
-			if (show_wtime) {
-				srcgrid_wtime0 = omp_get_wtime();
-			}
-#endif
-			create_sourcegrid_cartesian(verbal,true);
-#ifdef USE_OPENMP
+		double srcgrid_wtime0, srcgrid_wtime;
 		if (show_wtime) {
-			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-			if (mpi_id==0) cout << "wall time for source grid creation: " << srcgrid_wtime << endl;
+			srcgrid_wtime0 = omp_get_wtime();
 		}
 #endif
-			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
-			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-			source_pixel_grid->calculate_pixel_magnifications();
-			source_pixel_grid->find_avg_n_images();
-		}
-
-		/*
-		int i,j,n,npix=0;
-		for (n=0; n < image_pixel_grid->ntot_corners; n++) {
-			j = image_pixel_grid->masked_pixel_corner_j[n];
-			i = image_pixel_grid->masked_pixel_corner_i[n];
-			if (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1))) {
-			//if (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0))) {
-				npix++;
-			}
-		}
-		double *srcpts_x = new double[npix];
-		double *srcpts_y = new double[npix];
-		npix = 0;
-		ofstream wtf("wtfpts.dat");
-		for (n=0; n < image_pixel_grid->ntot_corners; n++) {
-			j = image_pixel_grid->masked_pixel_corner_j[n];
-			i = image_pixel_grid->masked_pixel_corner_i[n];
-			if (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1))) {
-			//if (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0))) {
-				srcpts_x[npix] = image_pixel_grid->corner_sourcepts[i][j][0];
-				srcpts_y[npix] = image_pixel_grid->corner_sourcepts[i][j][1];
-				wtf << image_pixel_grid->corner_sourcepts[i][j][0] << " " << image_pixel_grid->corner_sourcepts[i][j][1] << " " << endl;
-				//wtf << image_pixel_grid->corner_pts[i][j][0] << " " << image_pixel_grid->corner_pts[i][j][1] << " " << image_pixel_grid->corner_sourcepts[i][j][0] << " " << image_pixel_grid->corner_sourcepts[i][j][1] << " " << endl;
-				npix++;
-			}
-		}
-		wtf.close();
-		cout << "DELAUNEY! n=" << npix << endl;
-
-		ofstream splitpixout("spix.dat");
-		int k;
-		for (n=0; n < image_pixel_grid->ntot_subpixels; n++) {
-			j = image_pixel_grid->extended_mask_subcell_j[n];
-			i = image_pixel_grid->extended_mask_subcell_i[n];
-			k = image_pixel_grid->extended_mask_subcell_index[n];
-			//cout << "CHECKING2: " << defy_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
-			//if (subpixel_center_sourcepts[i][j][k][0] != defx_subpixel_centers[n]) cout << "wrong defx: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][0] << endl;
-			//if (subpixel_center_sourcepts[i][j][k][1] != defy_subpixel_centers[n]) cout << "wrong defy: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
-			splitpixout << image_pixel_grid->subpixel_center_sourcepts[i][j][k][0] << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][1] << endl;
-		}
-		splitpixout.close();
-
-		if (delaunay_srcgrid != NULL) delete delaunay_srcgrid;
-		
+		create_sourcegrid_cartesian(verbal,true);
 #ifdef USE_OPENMP
-			double srcgrid_wtime0, srcgrid_wtime;
-			if (show_wtime) {
-				srcgrid_wtime0 = omp_get_wtime();
-			}
+	if (show_wtime) {
+		srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+		if (mpi_id==0) cout << "wall time for source grid creation: " << srcgrid_wtime << endl;
+	}
 #endif
-		delaunay_srcgrid = new DelaunayGrid(this,srcpts_x,srcpts_y,npix,n_image_pixels_x,n_image_pixels_y);
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-			if (mpi_id==0) cout << "wall time for Delaunay grid creation: " << srcgrid_wtime << endl;
-		}
-#endif
-
-		delete[] srcpts_x;
-		delete[] srcpts_y;
-		*/
+		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
+		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+		source_pixel_grid->calculate_pixel_magnifications();
+		source_pixel_grid->find_avg_n_images();
 	}
 
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
@@ -13196,14 +13154,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 	bool sb_outside_window = false;
 	if (outside_sb_prior) {
-		int old_imgpixel_nsplit = default_imgpixel_nsplit;
-		if (default_imgpixel_nsplit > 2) {
-			default_imgpixel_nsplit = 2; // it's waaaay too slow if many splittings
-			int nsplit = (split_high_mag_imgpixels) ? 1 : default_imgpixel_nsplit;
-			int emask_nsplit = (split_high_mag_imgpixels) ? 1 : emask_imgpixel_nsplit;
-			image_pixel_grid->set_nsplits(image_pixel_data,nsplit,emask_nsplit,split_imgpixels);
-
-		}
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 			clear_lensing_matrices();
 			clear_pixel_matrices();
@@ -13212,7 +13162,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			assign_pixel_mappings(verbal);
 			initialize_pixel_matrices(verbal);
 			PSF_convolution_Lmatrix(verbal);
-			source_pixel_grid->fill_surface_brightness_vector();
+			if (source_fit_mode==Cartesian_Source) source_pixel_grid->fill_surface_brightness_vector();
+			else delaunay_srcgrid->fill_surface_brightness_vector();
 			calculate_image_pixel_surface_brightness(false);
 		} else if (source_fit_mode==Shapelet_Source) {
 #ifdef USE_OPENMP
@@ -13243,12 +13194,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 			store_image_pixel_surface_brightness();
 		}
-		if (default_imgpixel_nsplit != old_imgpixel_nsplit) {
-			default_imgpixel_nsplit = old_imgpixel_nsplit;
-			int nsplit = (split_high_mag_imgpixels) ? 1 : default_imgpixel_nsplit;
-			int emask_nsplit = (split_high_mag_imgpixels) ? 1 : emask_imgpixel_nsplit;
-			image_pixel_grid->set_nsplits(image_pixel_data,nsplit,emask_nsplit,split_imgpixels);
-		}
 		double max_external_sb = -1e30, max_sb = -1e30;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
@@ -13260,8 +13205,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				}
 			}
 		}
+		 
 		// NOTE: by default, outside_sb_prior_noise_frac is a REALLY big number so it isn't used. But it can be changed by the user
 		double outside_sb_threshold = dmin(outside_sb_prior_noise_frac*data_pixel_noise,outside_sb_prior_threshold*max_sb);
+		int isb, jsb;
 		if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
@@ -13271,6 +13218,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 					if (abs(image_surface_brightness[img_index]) >= outside_sb_threshold) {
 						if (abs(image_surface_brightness[img_index]) > max_external_sb) {
 							 max_external_sb = abs(image_surface_brightness[img_index]);
+							 isb=i; jsb=j;
 						}
 					}
 				}
@@ -13282,7 +13230,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			sb_outside_window = true;
 			chisq_penalty = pow(1+abs((max_external_sb-outside_sb_threshold)/outside_sb_threshold),60) - 1.0;
 			chisq += chisq_penalty;
-			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region, resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
+			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grid->center_pts[isb][jsb][0] << "," << image_pixel_grid->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 		}
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
@@ -14719,6 +14667,7 @@ QLens::~QLens()
 	if (Rmatrix != NULL) delete[] Rmatrix;
 	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
+	if (delaunay_srcgrid != NULL) delete delaunay_srcgrid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	if (group_leader != NULL) delete[] group_leader;
 	//if (psf_zvec != NULL) delete[] psf_zvec;

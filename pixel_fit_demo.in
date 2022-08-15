@@ -1,5 +1,5 @@
 fit label sim_pixelfit      # This labels the files that will be produced by the lens fitting
-fit source_mode pixel       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
+fit source_mode cartesian       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
 fit method simplex          # downhill simplex method (plus optional simulated annealing)
 data_pixel_size 0.049
 inversion_method umfpack
