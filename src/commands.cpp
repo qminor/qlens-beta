@@ -6677,6 +6677,10 @@ void QLens::process_commands(bool read_file)
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					bool omit_source = false;
+					bool omit_cc = false;
+					bool old_cc_setting = show_cc;
+					bool old_plot_srcplane = plot_srcplane;
 					string range1, range2;
 					extract_word_starts_with('[',2,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					extract_word_starts_with('[',2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -6691,7 +6695,18 @@ void QLens::process_commands(bool read_file)
 							break;
 						}
 					}
-
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						int pos;
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-nosrc") omit_source = true;
+							else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
+							else Complain("argument '" << args[i] << "' not recognized");
+						}
+					}
+					if (omit_source) plot_srcplane = false;
+					if (omit_cc) show_cc = false;
 
 					int dataset;
 					bool show_multiple = false;
@@ -6826,7 +6841,9 @@ void QLens::process_commands(bool read_file)
 								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("imgfits",words[3],range1);
 								else run_plotter_file("imgfit",words[3],range1);
 							}
-							else run_plotter_file("imgfit_nocc",words[3],range1);
+							else {
+								run_plotter_file("imgfit_nocc",words[3],range1);
+							}
 							if (plot_srcplane) {
 								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcfits",words[2],range2);
 								else run_plotter_file("srcfit",words[2],range2);
@@ -6836,11 +6853,13 @@ void QLens::process_commands(bool read_file)
 						if (show_cc) {
 							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",range1);
 							else run_plotter("imgfit",range1);
+							if (plot_srcplane) {
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
+								else run_plotter("srcfit",range2);
+							}
 						}
-						else run_plotter("imgfit_nocc",range1);
-						if (plot_srcplane) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
-							else run_plotter("srcfit",range2);
+						else {
+							run_plotter("imgfit_nocc",range1);
 						}
 					}
 					show_imgsrch_grid = false;
@@ -6848,6 +6867,8 @@ void QLens::process_commands(bool read_file)
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
+					if (omit_source) plot_srcplane = old_plot_srcplane;
+					if (omit_cc) show_cc = old_cc_setting;
 					if (set_title) plot_title = "";
 				}
 				else if (words[1]=="plotshear")

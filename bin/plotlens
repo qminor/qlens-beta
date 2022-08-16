@@ -320,10 +320,16 @@ then
 	else
 		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
 	fi
+
 elif [[ $COMMAND == "imgfit_nocc" ]]
 then
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE t 'images', '$PLOTDIR/imgdat.dat' w points pt $PTTYPE ps $PTSIZE t 'data'"
-	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images', '$PLOTDIR/imgdat.dat' w points pt $PTTYPE ps $PTSIZE lc 2 t 'data'"
+	grep -v \" $PLOTDIR/imgdat.dat >$PLOTDIR/imgdat_notitles.dat
+	if [[ $SHOW_GRID == 1 ]]; then
+		PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'\nplot $RANGE '$PLOTDIR/xgrid.dat' w lines lc 1, for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	else
+		PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'\nplot $RANGE for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 3 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	fi
+	KEYPLOT="set title ' '\nplot [][1e12:2e12] for [IDX=1:STATS_blocks] '$PLOTDIR/imgdat.dat' index (IDX-1) u 1:2 w points pt 6 ps $PTSIZE lc 2 t columnheader(1), for [IDX=1:STATS_blocks] '$PLOTDIR/imgs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
@@ -338,6 +344,20 @@ then
 	grep -v \" $PLOTDIR/srcs.dat >$PLOTDIR/imgdat_notitles.dat
 	PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'\nplot $RANGE '$PLOTDIR/crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] '$PLOTDIR/srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/crit.dat' u 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', for [IDX=1:STATS_blocks] '$PLOTDIR/srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	if [[ $TERM != "" ]]; then
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		else
+			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		fi
+	else
+		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "srcfit_nocc" ]]
+then
+	grep -v \" $PLOTDIR/srcs.dat >$PLOTDIR/imgdat_notitles.dat
+	PLOTCOMMAND="stats '$PLOTDIR/imgdat_notitles.dat'\nplot $RANGE for [IDX=1:STATS_blocks] '$PLOTDIR/srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
+	KEYPLOT="set title ' '\nplot [][1e12:2e12] for [IDX=1:STATS_blocks] '$PLOTDIR/srcs.dat' index (IDX-1) u 1:2 w points pt $PTTYPE ps $PTSIZE lc 1 t columnheader(1)"
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
