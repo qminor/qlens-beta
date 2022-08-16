@@ -4,6 +4,7 @@ project(qlen VERSION 1.0.0 LANGUAGES C CXX Fortran)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(USE_MKL "Use MKL?" ON)
 cmake_policy(SET CMP0057 NEW)
 cmake_policy(SET CMP0074 NEW)
 
@@ -55,6 +56,10 @@ if (NOT ${result} STREQUAL "0")
     message(SEND_ERROR "Cannot make symlink, mesg=${result}")
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+
+endif (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+
 set(QLENS_COMPILE_FLAGS
     "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -std=c++11"
 )
@@ -62,6 +67,7 @@ set(QLENS_COMPILE_FLAGS
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
 
 set(QLENS_COMPILE_DEFINITIONS 
+    "USE_FITPACK"
 )
 
 set(QLENS_INCLUDE_DIRS
@@ -97,6 +103,17 @@ set(QLENS_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/curfit.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpback.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpbspl.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpchec.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpcurf.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpdisc.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpgivs.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpknot.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fprati.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fprota.f  
+    ${PROJECT_SOURCE_DIR}/contrib/fitpack/splev.f
     #${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
@@ -225,6 +242,11 @@ if(NOT MPI_DISABLE)
         message(STATUS "${Red}MPI not found${ColourReset}")
     endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 endif(NOT MPI_DISABLE)
+
+if (USE_MKL AND (CMAKE_CXX_COMPILER_ID STREQUAL "Intel"))
+    message(STATUS "USING MKL LIBRARIES")
+    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MKL")
+endif(USE_MKL)
 
 message("")
 message("*** TCMalloc ***")
