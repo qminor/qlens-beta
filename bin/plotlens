@@ -144,6 +144,12 @@ fi
 
 SETTERM="$SETTERM\nset sample 30000"
 
+if [[ $COMMAND == "imgpixel" ]]; then
+	if [[ $INCLUDE_CONTOURS == 1 ]]; then
+		COMMAND="imgpixel_nocc"
+	fi
+fi
+
 if [[ $COMMAND == "crit" ]]
 then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
@@ -169,6 +175,36 @@ then
 		else
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
 		fi
+	else
+		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "sbprofile" ]]
+then
+	PLOTCOMMAND="set logscale xy\nplot $RANGE '$PLOTDIR/sbprof.dat' w lines lw $LINEWIDTH lc 0 t 'surface brightness profile'"
+	if [[ $TERM != "" ]]; then
+		KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/sbprof.dat' w lines lw $LINEWIDTH lc 0 t 'surface brightness profile'"
+		PLOTLINE="$SETTERM\nset multiplot\nunset key"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$PLOTLINE\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel"
+		else
+			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		fi
+		PLOTLINE="$PLOTLINE\n$KEYPLOT"
+	else
+		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "kappaprofile" ]]
+then
+	PLOTCOMMAND="set logscale xy\nplot $RANGE '$PLOTDIR/kappaprof.dat' w lines lw $LINEWIDTH lc 0 t 'kappa profile'"
+	if [[ $TERM != "" ]]; then
+		KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/kappaprof.dat' w lines lw $LINEWIDTH lc 0 t 'kappa profile'"
+		PLOTLINE="$SETTERM\nset multiplot\nunset key"
+		if [[ $KEY != -1 ]]; then
+			PLOTLINE="$PLOTLINE\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel"
+		else
+			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		fi
+		PLOTLINE="$PLOTLINE\n$KEYPLOT"
 	else
 		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
 	fi
@@ -553,6 +589,16 @@ then
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_nocc" ]]
 then
 	set -- $(head -2 $PLOTDIR/img_pixel.x && head -2 $PLOTDIR/img_pixel.y)
@@ -561,8 +607,23 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
-	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	if [[ $INCLUDE_CONTOURS == 1 ]]; then
+		MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", min}' <$PLOTDIR/img_pixel.dat`
+		MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", max}' <$PLOTDIR/img_pixel.dat`
+		STEP=`bc <<< "scale=15; (($MAX)-($MIN))/$NCONT"`
+		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
+		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
+		Cf=`bc <<< "scale=15; $MAX-$STEP"`
+
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
+		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	else
+		PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	fi
 elif [[ $COMMAND == "datapixel" ]]
 then
 	set -- $(head -2 $PLOTDIR/data_pixel.x && head -2 $PLOTDIR/data_pixel.y)
@@ -571,8 +632,50 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
-	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	if [[ $INCLUDE_CONTOURS == 1 ]]; then
+		MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", min}' <$PLOTDIR/data_pixel.dat`
+		MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", max}' <$PLOTDIR/data_pixel.dat`
+		STEP=`bc <<< "scale=15; (($MAX)-($MIN))/$NCONT"`
+		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
+		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
+		Cf=`bc <<< "scale=15; $MAX-$STEP"`
+
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
+		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	else
+		#PLOTCOMMAND="plot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'annulus.dat' w lines, 'sectors.dat' w dots lc 0"
+		PLOTCOMMAND="plot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	fi
+elif [[ $COMMAND == "datapixel_ellfit" ]]
+then
+	set -- $(head -2 $PLOTDIR/data_pixel.x && head -2 $PLOTDIR/data_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	if [[ $INCLUDE_CONTOURS == 1 ]]; then
+		MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", min}' <$PLOTDIR/data_pixel.dat`
+		MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", max}' <$PLOTDIR/data_pixel.dat`
+		STEP=`bc <<< "scale=15; (($MAX)-($MIN))/$NCONT"`
+		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
+		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
+		Cf=`bc <<< "scale=15; $MAX-$STEP"`
+
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
+		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT', 'ellfit.dat' w points lc 0 t 'isophote fit'"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	else
+		#PLOTCOMMAND="plot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'ellfit.dat' w lines t 'isophote fit', 'ellfit0.dat' w lines t 'initial guess'"
+		PLOTCOMMAND="plot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, 'ellfit.dat' w lines lc 0 t 'isophote fit'"
+		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+	fi
 elif [[ $COMMAND == "srcpixel_nocc" ]]
 then
 	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
@@ -582,6 +685,16 @@ then
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay_nocc" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_imgpts" ]]
 then
@@ -745,14 +858,14 @@ then
 	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
 
 	if [[ $INCLUDE_CONTOURS == 1 ]]; then
-		MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.kappalog`
-		MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.kappalog`
+		MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", min}' <lensmap.kappalog`
+		MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", max}' <lensmap.kappalog`
 		STEP=`bc <<< "scale=15; (($MAX)-($MIN))/$NCONT"`
 		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-		PLOTCOMMAND="set contour\nunset surface\nset cntrparam levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
 		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
@@ -772,13 +885,13 @@ then
 	set -- $(tail -1 lensmap.x && tail -1 lensmap.y)
 	Xf=`bc <<< "scale=15; $1-0.5*$DX"`
 	Yf=`bc <<< "scale=15; $2-0.5*$DY"`
-	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print min}' <lensmap.potlog`
-	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{print max}' <lensmap.potlog`
+	MIN=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", min}' <lensmap.potlog`
+	MAX=`awk 'BEGIN{min=1e30;max=-1e30}{for (i=1; i <= NF; i++) { if ($i > max) max = $i; if ($i < min) min = $i}}END{printf "%.6f", max}' <lensmap.potlog`
 	STEP=`bc <<< "scale=15; (($MAX)-($MIN))/12"`
 	C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 	Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-	PLOTCOMMAND="set contour\nunset surface\nset cntrparam levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+	PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 	PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt';splot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 	PLOTCOMMAND="$PLOTCOMMAND\nreset\nset pm3d map\nunset key\nset palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e')\nset autoscale fix\nset grid"
 	PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\nset xrange [$X0:$Xf]\nset yrange [$Y0:$Yf]\n set size ratio -1\nsplot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"
@@ -822,9 +935,9 @@ fi
 echo -en "$PLOTLINE" >$PLOTDIR/$PLOTFILE
 gnuplot -persist $PLOTDIR/$PLOTFILE >/dev/null 2>&1
 
-if [[ $FILENAME == "" ]]; then
-	rm $PLOTDIR/$PLOTFILE
-fi
+#if [[ $FILENAME == "" ]]; then
+	#rm $PLOTDIR/$PLOTFILE
+#fi
 
 if [ -f $PLOTDIR/imgdat_notitles.dat ]; then rm $PLOTDIR/imgdat_notitles.dat; fi
 

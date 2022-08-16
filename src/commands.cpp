@@ -6444,8 +6444,8 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="delaunay") source_fit_mode = Delaunay_Source;
 						else if (setword=="sbprofile") source_fit_mode = Parameterized_Source;
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
-						else Complain("invalid argument; must specify valid source mode (ptsource, pixel, sbprofile, shapelet)");
-					} else Complain("invalid number of arguments; can only specify fit source mode (ptsource, pixel, sbprofile, shapelet)");
+						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
+					} else Complain("invalid number of arguments; can only specify fit source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
 				}
 				else if (words[1]=="findimg")
 				{
@@ -13333,7 +13333,6 @@ bool QLens::open_script_file(const string filename)
 			envstring.replace(pos,1," ");
 		}
 		istringstream dirstream(envstring);
-		//stringstream dirstr[ndirs];
 		string dirstring[ndirs];
 		ndirs=0;
 		while (dirstream >> dirstring[ndirs]) ndirs++; // it's possible ndirs will be zero, which is why we recount it here

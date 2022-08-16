@@ -1,109 +1,11 @@
 # QLens (beta version)
-QLens is a software package for modeling and simulating strong gravitational lens systems. Both pixel image modeling (using pixellated source reconstruction) and point image modeling (with option to include fluxes, time delays, and multiple sources at different redshifts) are supported. QLens includes 14 different analytic lens models to use for model fitting, including 10 different density profiles where ellipticity can be introduced into either the projected density or the lensing potential. Multiplane lensing (i.e. multiple lenses at different redshifts) is also supported in QLens. For lens models that require numerical integration, adaptive Gauss-Patterson quadrature (or alternatively, Romberg integration) is used to achieve the desired accuracy. For each model, there is also an option to speed up the computations by tabulating the lensing properties over a grid of polar coordinates and ellipticity so that interpolation can be used instead of integration. Chi-square optimization can be performed with the downhill simplex method (plus optional simulated annealing) or Powell's method; for Bayesian parameter estimation, nested sampling or an adaptive Metropolis-Hastings MCMC algorithm (T-Walk) can be used to infer the Bayesian evidence and posteriors. These calculations can be parallelized with MPI and OpenMP to run on a computing cluster. An additional tool, mkdist, generates 1D and 2D posterior plots in each parameter, or if an optimization was done, approximate posteriors can be plotted using the Fisher matrix. The QLens package includes an introductory tutorial [qlens\_tutorial.pdf](help/qlens_tutorial.pdf) that is meant to be readable for undergraduates and beginning graduate students with little or no experience with gravitational lensing concepts.
+QLens is a software package for modeling and simulating strong gravitational lens systems. Both pixel image modeling (using pixellated source reconstruction) and point image modeling (with option to include fluxes, time delays, and multiple sources at different redshifts) are supported. QLens includes 14 different analytic lens models to use for model fitting, including 10 different density profiles where ellipticity can be introduced into either the projected density or the lensing potential. Multiplane lensing (i.e. multiple lenses at different redshifts) is also supported in QLens. For lens models that require numerical integration, adaptive Gauss-Patterson quadrature (or alternatively, Romberg integration) is used to achieve the desired accuracy. For each model, there is also an option to speed up the computations by tabulating the lensing properties over a grid of polar coordinates and ellipticity so that interpolation can be used instead of integration. Chi-square optimization can be performed with the downhill simplex method (plus optional simulated annealing) or Powell's method; for Bayesian parameter estimation, nested sampling or an adaptive Metropolis-Hastings MCMC algorithm (T-Walk) can be used to infer the Bayesian evidence and posteriors. These calculations can be parallelized with MPI and OpenMP to run on a computing cluster. An additional tool, mkdist, generates 1D and 2D posterior plots in each parameter, or if an optimization was done, approximate posteriors can be plotted using the Fisher matrix. The QLens package includes an introductory tutorial [qlens\_tutorial.pdf](qlens_tutorial.pdf) that is meant to be readable for undergraduates and beginning graduate students with little or no experience with gravitational lensing concepts.
 
-## Table of Contents
-
-- [Installation](#install)
-  - [Building](#build)
-  - [Python Interface](#python)
-  - [Required Packages](#packages)
-  
-- [Change Log](#change)
-
-<a name="install"></a>
-## Installation
-
-<a name="build"></a>
-### Building 
-To build, run:
-```sh
-mkdir build
-cd build
-cmake ..
-make deps
-make qlens-all
-```
-If you are having trouble geting qlens to link, try the following `cmake` options:
-```sh
-cmake -DCMAKE_C_COMPILER=path/to/c/compiler
-      -DCMAKE_CXX_COMPILER=path/to/cxx/compiler
-      -DCMAKE_Fortran_COMPILER=path/to/fortran/compiler
-      -DTCMALLOC_ROOT_DIR=path/to/TCMalloc/library
-      -DCFITSIO_ROOT_DIR=path/to/CFitsio/root
-      -DMUMPS_ROOT=path/to/mumps/root
-      -DSCALAPACK_ROOT=path/to/scalapack/root
-      -DBLACS_ROOT_DIR=path/to/blac/root
-      -DUMFPACK=path/to/UMFPACK/root
-      -DPolychord_HINT_DIR=path/to/PolyChord/root
-      -DMULTINEST_HINT=path/MultiNest/root ..
-```
-
-And if you have any toubles, don't forget to save the `cmake` and `make` outputs:
-```sh
-cmake .. >& cmake_out
-make qlens-all VERBOSE=1 >& make_out
-```
-
-<a name="python"></a>
-### Python Interface 
-
-There's currently a python interface (the python module is located in the "python/" folder).
-To build:
-```sh
-mkdir build
-cd build
-cmake ..
-make deps
-make python
-```
-
-If you want to specify a specific python version, replace the above cmake command with:
-```sh
-cmake -DPYTHON_EXECUTABLE=full_path_to_my_executable ..
-```
-If you do this, you may need to supply the path to the python include files:
-```sh
-cmake -DPYTHON_EXECUTABLE=full_path_to_my_executable -DPYTHON_INCLUDE_DIR=full_path_to_python_include_directory ..
-```
-
-For example:
-```sh
-mkdir build
-cd build
-cmake -DPYTHON_EXECUTABLE=/usr/bin/python ..
-make deps
-make python
-```
-Or 
-```sh
-cmake -DPYTHON_EXECUTABLE=`which python` ..
-```
-if your python installation is in a non-standard location.
-
-You can put the module in the python path by adding the following line to .bashrc:
-```sh
-export PYTHONPATH=$(PYTHONPATH):path_to_nstarorbits/python
-```
-
-TCMalloc can also have conflicts the the malloc version python uses.  If using TCMalloc, call python using the `LD_PRELOAD` environment variable set to the TCMalloc library path:
-```sh
-LD_PRELOAD=path\to\tcmalloc\libtcmalloc.so python my_python_file.py
-```
-Or on mac, use the `DYLD_INSERT_LIBRARIES` variable:
-```sh
-DYLD_INSERT_LIBRARIES=path\to\tcmalloc\libtcmalloc.so python my_python_file.py
-```
-
-Right now, the python interface excludes MUMPS or MPI when compiling.
-
-<a name="packages"></a>
-### Required Packages
 Required packages for basic, out-of-the-box configuration:
 * GNU Readline &mdash; for command-line interface
 * gnuplot &mdash; for generating and viewing plots from within QLens
 
 Optional packages:
-* PyBind11: A C++ / python interface.
 * OpenMP &mdash; used for multithreading likelihood evaluations, useful especially for lens models that require numerical integration for lensing calculations, or if source pixel reconstruction is being used.
 * MPI &mdash; for running multiple MCMC chains simultaneously using twalk, or increasing acceptance ratio during nested sampling; a subset of MPI processes can also be used to parallelize the likelihood if source pixel reconstruction is used, or if multiple source points are being fit at different redshifts
 * CFITSIO library &mdash; for reading and writing FITS files
@@ -113,25 +15,7 @@ Optional packages:
 * MultiNest &mdash; for multimodal nested sampling, using a more advanced algorithm than the native nested sampler in QLens
 * PolyChord &mdash; for multimodal nested sampling, performs better for a large number of parameters
 
-Right now, you can download and compile some of these packages with the following build commands:
-```sh
-make pybind11       # downloads PyBind11
-make mumps          # downloads and compiles MUMPS
-make multinest      # downloads and compiles MultiNest
-make make polychord # downloads and compiles PolyChord
-make deps           # downloads and compiles the above packages (not MUMPS for cmake versions < 3.19)
-```
-And if something goes wrong with the installation, you can wipe it with:
-```sh
-make pybind11-distclean      
-make mumps-distclean        
-make multinest-distclean      
-make make polychord-distclean 
-make deps-distclean            
-```
-
-<a name="change"></a>
-## change log (Aug. 8, 2018)
+# change log (Aug. 8, 2018)
 
 Upgrades since Jul. 15:
 

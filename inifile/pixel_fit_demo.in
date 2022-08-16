@@ -1,5 +1,5 @@
 fit label sim_pixelfit      # This labels the files that will be produced by the lens fitting
-fit source_mode pixel       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
+fit source_mode cartesian       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
 fit method simplex          # downhill simplex method (plus optional simulated annealing)
 data_pixel_size 0.049
 inversion_method umfpack
@@ -9,7 +9,7 @@ data_pixel_noise 0.00941285
 #src_npixels 60 60                # This fixes the number of source pixels; otherwise it is set from "pixel_fraction" (see below)
 #srcgrid -.257 0.12 -.37 0.026    # Fixes the source grid; otherwise, source grid is automatically positioned and sized during fit
 
-adaptive_grid off              # adaptive Cartesian grid--probably not necessary unless you're including a subhalo and the
+adaptive_subgrid off              # adaptive Cartesian grid is probably not necessary unless you're including a subhalo and the
                                #     magnification gets high
 fit regularization curvature    # the options are "norm", "gradient" and "curvature" (See Suyu et al. 2006 for details)
 

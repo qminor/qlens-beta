@@ -1365,7 +1365,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
-	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
 	double x = xvec[0], y = xvec[1];
 	lensmatrix *jac = &jacs[thread];
 	lensvector *def_tot = &defs[thread];

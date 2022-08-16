@@ -42,7 +42,7 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
+objects = profile.o sbprofile.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
 				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
 				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
@@ -78,16 +78,16 @@ mumps:
 qlens.o: qlens.cpp qlens.h
 	$(CC) -c qlens.cpp
 
-commands.o: commands.cpp qlens.h lensvec.h profile.h egrad.h
+commands.o: commands.cpp qlens.h lensvec.h profile.h
 	$(CC_NO_OPT) -c commands.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -96,16 +96,13 @@ cg.o: cg.cpp cg.h
 mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
 	$(CC) -c mcmchdr.cpp
 
-egrad.o: egrad.cpp egrad.h 
-	$(CC) -c egrad.cpp
-
-profile.o: profile.h profile.cpp lensvec.h egrad.h
+profile.o: profile.h profile.cpp lensvec.h
 	$(CC) -c profile.cpp
 
 models.o: profile.h models.cpp
 	$(CC) -c models.cpp
 
-sbprofile.o: sbprofile.cpp sbprofile.h egrad.h
+sbprofile.o: sbprofile.h sbprofile.cpp
 	$(CC) -c sbprofile.cpp
 
 errors.o: errors.cpp errors.h
