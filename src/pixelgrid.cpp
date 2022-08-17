@@ -442,6 +442,7 @@ SourcePixelGrid::SourcePixelGrid(QLens* lens_in, lensvector** xij, const int& i,
 	maps_to_image_pixel = false;
 	maps_to_image_window = false;
 	active_pixel = false;
+	surface_brightness = 0;
 	lens = lens_in;
 
 	corner_pt[0] = xij[i][j];
@@ -454,17 +455,30 @@ SourcePixelGrid::SourcePixelGrid(QLens* lens_in, lensvector** xij, const int& i,
 	find_cell_area();
 }
 
-void SourcePixelGrid::assign_surface_brightness()
+void SourcePixelGrid::assign_surface_brightness_from_analytic_source()
 {
 	int i,j;
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness();
+			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness_from_analytic_source();
 			else {
 				cell[i][j]->surface_brightness = 0;
 				for (int k=0; k < lens->n_sb; k++) {
 					if (lens->sb_list[k]->is_lensed) cell[i][j]->surface_brightness += lens->sb_list[k]->surface_brightness(cell[i][j]->center_pt[0],cell[i][j]->center_pt[1]);
 				}
+			}
+		}
+	}
+}
+
+void SourcePixelGrid::assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid)
+{
+	int i,j;
+	for (j=0; j < w_N; j++) {
+		for (i=0; i < u_N; i++) {
+			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness_from_delaunay_grid(delaunay_grid);
+			else {
+				cell[i][j]->surface_brightness = delaunay_grid->find_lensed_surface_brightness(cell[i][j]->center_pt,-1,-1,0); // it would be nice to use Greg's method for searching so it doesn't start from an arbitrary triangle...but it's pretty fast as-is
 			}
 		}
 	}
@@ -3116,7 +3130,7 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 		//if (!foundyp) warn("could not find triangle in +y direction for vertex %i",i);
 		//if (!foundym) warn("could not find triangle in -y direction for vertex %i",i);
 
-		if ((!foundxp) and (!foundxm) and (!foundyp) and (!foundym)) warn("could not find triangle in -x,+x,-y,+y directions for vertex %i",i);
+		if ((!foundxp) and (!foundxm) and (!foundyp) and (!foundym)) warn("could not find triangle in -x,+x,-y,+y directions for vertex %i for regularization",i);
 
 		/*
 		//if ((x > -0.02) and (x < 0.02) and (y > -0.1) and (y < -0.16)) {
@@ -3134,7 +3148,6 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 			}
 		//}
 		*/
-		if ((!foundxp) and (!foundyp) and (!foundxm) and (!foundym)) warn("no neighbor triangles found suitable for regularization!");
 	}
 }
 
@@ -3293,7 +3306,7 @@ double DelaunayGrid::sum_edge_sqrlengths(const double min_sb_frac)
 	return sum;
 }
 
-void DelaunayGrid::assign_surface_brightness()
+void DelaunayGrid::assign_surface_brightness_from_analytic_source()
 {
 	//cout << "Sourcepts: " << n_srcpts << endl;
 	int i,k;
@@ -3432,8 +3445,6 @@ void DelaunayGrid::calculate_Lmatrix(const int img_index, const int image_pixel_
 
 	index += 3;
 }
-
-
 
 double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread)
 {

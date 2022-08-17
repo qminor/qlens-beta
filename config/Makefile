@@ -12,12 +12,12 @@
 
 #FITPACKDIR=./contrib/fitpack
 #F77=gfortran
-#.src/f.o:
+#.f.o:
 	#$(F77) -c -o  $@ $<
 
 # Version without MUMPS
 default: qlens mkdist cosmocalc 
-CCOMP = g++ -I./include	
+CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
@@ -46,105 +46,105 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = src/profile.o src/sbprofile.o src/egrad.o src/models.o src/qlens.o src/commands.o src/lens.o src/imgsrch.o src/pixelgrid.o \
-				src/cg.o src/mcmchdr.o src/errors.o src/brent.o src/sort.o src/gauss.o src/romberg.o src/spline.o \
-				src/trirectangle.o src/GregsMathHdr.o src/hyp_2F1.o src/cosmo.o \
-				src/simplex.o src/powell.o src/mcmceval.o
+objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
+				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
+				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+				simplex.o powell.o mcmceval.o
 
-mkdist_objects = src/mkdist.o
-mkdist_shared_objects = src/GregsMathHdr.o src/errors.o src/mcmceval.o
-cosmocalc_objects = src/cosmocalc.o
-cosmocalc_shared_objects = src/errors.o src/spline.o src/romberg.o src/cosmo.o src/brent.o
+mkdist_objects = mkdist.o
+mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
+cosmocalc_objects = cosmocalc.o
+cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
-	$(CL) -o bin/qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
+	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
 mkdist: $(mkdist_objects) $(mkdist_shared_objects)
-	$(CC) -o bin/mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
+	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
 
 cosmocalc: $(cosmocalc_objects)
-	$(CC) -o bin/cosmocalc $(cosmocalc_objects) $(cosmocalc_shared_objects) -lm
+	$(CC) -o cosmocalc $(cosmocalc_objects) $(cosmocalc_shared_objects) -lm
 
 mumps:
 	(cd MUMPS_5.0.1; $(MAKE))
 
-src/qlens.o: src/qlens.cpp include/qlens.h
-	$(CC) -o src/qlens.o -c src/qlens.cpp
+qlens.o: qlens.cpp qlens.h
+	$(CC) -c qlens.cpp
 
-src/commands.o: src/commands.cpp include/qlens.h include/lensvec.h include/profile.h include/sbprofile.h include/egrad.h include/pixelgrid.h
-	$(CC_NO_OPT) -o src/commands.o -c src/commands.cpp
+commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h egrad.h pixelgrid.h
+	$(CC_NO_OPT) -c commands.cpp
 
-src/lens.o: src/lens.cpp include/profile.h include/sbprofile.h include/qlens.h include/pixelgrid.h include/lensvec.h include/matrix.h include/simplex.h include/powell.h include/mcmchdr.h include/cosmo.h
-	$(CC) -o src/lens.o -c src/lens.cpp
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h
+	$(CC) -c lens.cpp
 
-src/imgsrch.o: src/imgsrch.cpp include/qlens.h include/lensvec.h
-	$(CC) -o src/imgsrch.o -c src/imgsrch.cpp
+imgsrch.o: imgsrch.cpp qlens.h lensvec.h
+	$(CC) -c imgsrch.cpp
 
-src/pixelgrid.o: src/pixelgrid.cpp include/profile.h include/sbprofile.h include/lensvec.h include/pixelgrid.h include/qlens.h include/matrix.h include/cg.h include/egrad.h
-	$(CC) -o src/pixelgrid.o -c src/pixelgrid.cpp
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h
+	$(CC) -c pixelgrid.cpp
 
-src/cg.o: src/cg.cpp include/cg.h
-	$(CC) -o src/cg.o -c src/cg.cpp
+cg.o: cg.cpp cg.h
+	$(CC) -c cg.cpp
 
-src/mcmchdr.o: src/mcmchdr.cpp include/mcmchdr.h include/GregsMathHdr.h include/random.h
-	$(CC) -o src/mcmchdr.o -c src/mcmchdr.cpp
+mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
+	$(CC) -c mcmchdr.cpp
 
-src/egrad.o: src/egrad.cpp include/egrad.h 
-	$(CC) -o src/egrad.o -c src/egrad.cpp
+egrad.o: egrad.cpp egrad.h 
+	$(CC) -c egrad.cpp
 
-src/profile.o: include/profile.h src/profile.cpp include/lensvec.h include/egrad.h
-	$(CC) -o src/profile.o -c src/profile.cpp
+profile.o: profile.h profile.cpp lensvec.h egrad.h
+	$(CC) -c profile.cpp
 
-src/models.o: src/models.cpp include/profile.h 
-	$(CC) -o src/models.o -c src/models.cpp
+models.o: models.cpp profile.h 
+	$(CC) -c models.cpp
 
-src/sbprofile.o: src/sbprofile.cpp include/sbprofile.h include/egrad.h
-	$(CC) -o src/sbprofile.o -c src/sbprofile.cpp
+sbprofile.o: sbprofile.cpp sbprofile.h egrad.h
+	$(CC) -c sbprofile.cpp
 
-src/errors.o: src/errors.cpp include/errors.h
-	$(CC) -o src/errors.o -c src/errors.cpp
+errors.o: errors.cpp errors.h
+	$(CC) -c errors.cpp
 
-src/brent.o: include/brent.h src/brent.cpp
-	$(CC) -o src/brent.o -c src/brent.cpp
+brent.o: brent.h brent.cpp
+	$(CC) -c brent.cpp
 
-src/simplex.o: include/simplex.h include/rand.h src/simplex.cpp
-	$(CC) -o src/simplex.o -c src/simplex.cpp
+simplex.o: simplex.h rand.h simplex.cpp
+	$(CC) -c simplex.cpp
 
-src/powell.o: include/powell.h src/powell.cpp
-	$(CC) -o src/powell.o -c src/powell.cpp
+powell.o: powell.h powell.cpp
+	$(CC) -c powell.cpp
 
-src/sort.o: include/sort.h src/sort.cpp
-	$(CC) -o src/sort.o -c src/sort.cpp
+sort.o: sort.h sort.cpp
+	$(CC) -c sort.cpp
 
-src/gauss.o: src/gauss.cpp include/gauss.h
-	$(CC) -o src/gauss.o -c src/gauss.cpp
+gauss.o: gauss.cpp gauss.h
+	$(CC) -c gauss.cpp
 
-src/romberg.o: src/romberg.cpp include/romberg.h
-	$(CC) -o src/romberg.o -c src/romberg.cpp
+romberg.o: romberg.cpp romberg.h
+	$(CC) -c romberg.cpp
 
-src/spline.o: src/spline.cpp include/spline.h include/errors.h
-	$(CC) -o src/spline.o -c src/spline.cpp
+spline.o: spline.cpp spline.h errors.h
+	$(CC) -c spline.cpp
 
-src/trirectangle.o: src/trirectangle.cpp include/lensvec.h include/trirectangle.h
-	$(CC) -o src/trirectangle.o -c src/trirectangle.cpp
+trirectangle.o: trirectangle.cpp lensvec.h trirectangle.h
+	$(CC) -c trirectangle.cpp
 
-src/GregsMathHdr.o: src/GregsMathHdr.cpp include/GregsMathHdr.h
-	$(CC) -o src/GregsMathHdr.o -c src/GregsMathHdr.cpp
+GregsMathHdr.o: GregsMathHdr.cpp GregsMathHdr.h
+	$(CC) -c GregsMathHdr.cpp
 
-src/mcmceval.o: src/mcmceval.cpp include/mcmceval.h include/GregsMathHdr.h include/random.h include/errors.h
-	$(CC) -o src/mcmceval.o -c src/mcmceval.cpp
+mcmceval.o: mcmceval.cpp mcmceval.h GregsMathHdr.h random.h errors.h
+	$(CC) -c mcmceval.cpp
 
-src/mkdist.o: src/mkdist.cpp include/mcmceval.h include/errors.h
-	$(CC) -o src/mkdist.o -c src/mkdist.cpp
+mkdist.o: mkdist.cpp mcmceval.h errors.h
+	$(CC) -c mkdist.cpp
 
-src/hyp_2F1.o: src/hyp_2F1.cpp include/hyp_2F1.h include/complex_functions.h
-	$(CC) -o src/hyp_2F1.o -c src/hyp_2F1.cpp
+hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
+	$(CC) -c hyp_2F1.cpp
 
-src/cosmocalc.o: src/cosmocalc.cpp include/errors.h include/cosmo.h
-	$(CC) -o src/cosmocalc.o -c src/cosmocalc.cpp
+cosmocalc.o: cosmocalc.cpp errors.h cosmo.h
+	$(CC) -c cosmocalc.cpp
 
-src/cosmo.o: src/cosmo.cpp include/cosmo.h
-	$(CC) -o src/cosmo.o -c src/cosmo.cpp
+cosmo.o: cosmo.cpp cosmo.h
+	$(CC) -c cosmo.cpp
 
 clean_qlens:
 	rm qlens $(objects)
@@ -153,7 +153,7 @@ clean:
 	rm qlens mkdist cosmocalc $(objects) $(mkdist_objects) $(cosmocalc_objects)
 
 clmain:
-	rm src/qlens.o
+	rm qlens.o
 
 vim_run:
 	qlens
