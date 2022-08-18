@@ -12740,8 +12740,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
-	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
+	image_pixel_grid->redo_lensing_calculations(verbal);
+	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
+	//else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
 
 	int i,j;
 	double chisq = 0;
@@ -13032,6 +13033,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 	}
+		//if (mpi_id==0) {
+		//// for testing purposes
+			//image_pixel_grid->plot_surface_brightness("img_pixel",false,false);
+			//run_plotter_range("imgpixel","","");
+		//}
 
 	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
 		if ((mpi_id==0) and (verbal)) cout << "Trying sourcegrid creation..." << endl;
