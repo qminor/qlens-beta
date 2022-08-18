@@ -3130,7 +3130,7 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 		//if (!foundyp) warn("could not find triangle in +y direction for vertex %i",i);
 		//if (!foundym) warn("could not find triangle in -y direction for vertex %i",i);
 
-		if ((!foundxp) and (!foundxm) and (!foundyp) and (!foundym)) warn("could not find triangle in -x,+x,-y,+y directions for vertex %i for regularization",i);
+		//if ((!foundxp) and (!foundxm) and (!foundyp) and (!foundym)) warn("could not find triangle in -x,+x,-y,+y directions for vertex %i for regularization",i);
 
 		/*
 		//if ((x > -0.02) and (x < 0.02) and (y > -0.1) and (y < -0.16)) {
