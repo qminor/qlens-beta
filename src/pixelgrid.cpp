@@ -2963,8 +2963,8 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 	maps_to_image_pixel = new bool[n_srcpts];
 	active_pixel = new bool[n_srcpts];
 	active_index = new int[n_srcpts];
-	ivals = new int[n_srcpts];
-	jvals = new int[n_srcpts];
+	imggrid_ivals = new int[n_srcpts];
+	imggrid_jvals = new int[n_srcpts];
 	for (int i=0; i < 4; i++) adj_triangles[i] = new int[n_srcpts];
 	int n;
 	srcpixel_xmin=srcpixel_ymin=1e30;
@@ -2981,8 +2981,8 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		maps_to_image_pixel[n] = false;
 		active_pixel[n] = true;
 		active_index[n] = -1;
-		ivals[n] = ivals_in[n];
-		jvals[n] = jvals_in[n];
+		imggrid_ivals[n] = ivals_in[n];
+		imggrid_jvals[n] = jvals_in[n];
 		adj_triangles[0][n] = -1; // +x direction
 		adj_triangles[1][n] = -1; // -x direction
 		adj_triangles[2][n] = -1; // +y direction
@@ -2993,8 +2993,8 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 	img_imax = -30000;
 	img_jmax = -30000;
 
-	if ((ivals != NULL) and (jvals != NULL)) {
-		// ivals and jvals aid the ray-tracing by locating a source pixel whose position in the image plane is near the point
+	if ((imggrid_ivals != NULL) and (imggrid_jvals != NULL)) {
+		// imggrid_ivals and imggrid_jvals aid the ray-tracing by locating a source pixel whose position in the image plane is near the point
 		// being ray-traced; this gives a starting point when searching through the triangles
 		int i,j;
 		img_ni = ni+1; // add one since we're doing pixel corners
@@ -3006,13 +3006,13 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		}
 
 		for (n=0; n < n_srcpts; n++) {
-			if (ivals[n] >= img_ni) die("fuck me i (%i vs %i)",ivals[n],img_ni);
-			if (jvals[n] >= img_nj) die("fuck me j");
-			img_index_ij[ivals[n]][jvals[n]] = n;
-			if (ivals[n] < img_imin) img_imin = ivals[n];
-			if (ivals[n] > img_imax) img_imax = ivals[n];
-			if (jvals[n] < img_jmin) img_jmin = jvals[n];
-			if (jvals[n] > img_jmax) img_jmax = jvals[n];
+			if (imggrid_ivals[n] >= img_ni) die("fuck me i (%i vs %i)",imggrid_ivals[n],img_ni);
+			if (imggrid_jvals[n] >= img_nj) die("fuck me j");
+			img_index_ij[imggrid_ivals[n]][imggrid_jvals[n]] = n;
+			if (imggrid_ivals[n] < img_imin) img_imin = imggrid_ivals[n];
+			if (imggrid_ivals[n] > img_imax) img_imax = imggrid_ivals[n];
+			if (imggrid_jvals[n] < img_jmin) img_jmin = imggrid_jvals[n];
+			if (imggrid_jvals[n] > img_jmax) img_jmax = imggrid_jvals[n];
 		}
 	} else {
 		img_index_ij = NULL;
@@ -3291,8 +3291,8 @@ double DelaunayGrid::sum_edge_sqrlengths(const double min_sb_frac)
 	for (i=0; i < n_triangles; i++) {
 		if (use_sb) {
 			for (j=0; j < 3; j++) {
-				iv[j] = ivals[triangle[i].vertex_index[j]];
-				jv[j] = jvals[triangle[i].vertex_index[j]];
+				iv[j] = imggrid_ivals[triangle[i].vertex_index[j]];
+				jv[j] = imggrid_jvals[triangle[i].vertex_index[j]];
 			}
 			if ((sb[iv[0]][jv[0]] < min_sb) or (sb[iv[1]][jv[1]] < min_sb) or (sb[iv[2]][jv[2]] < min_sb)) continue;
 		}
@@ -3822,9 +3822,12 @@ DelaunayGrid::~DelaunayGrid()
 	delete[] srcpts;
 	delete[] surface_brightness;
 	delete[] triangle;
+	delete[] maps_to_image_pixel;
+	delete[] active_pixel;
+	delete[] active_index;
 	delete[] shared_triangles;
-	delete[] ivals;
-	delete[] jvals;
+	delete[] imggrid_ivals;
+	delete[] imggrid_jvals;
 	delete[] adj_triangles[0];
 	delete[] adj_triangles[1];
 	delete[] adj_triangles[2];
@@ -9234,7 +9237,6 @@ bool QLens::assign_pixel_mappings(bool verbal)
 		}
 	}
 	if (image_pixel_index != image_npixels) die("Number of active pixels (%i) doesn't seem to match image_npixels (%i)",image_pixel_index,image_npixels);
-		//cout << "HI4" << endl;
 
 	if ((verbal) and (mpi_id==0)) {
 		if (source_fit_mode==Delaunay_Source) cout << "source # of pixels: " << delaunay_srcgrid->n_srcpts << ", # of active pixels: " << source_npixels << endl;

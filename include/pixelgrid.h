@@ -190,8 +190,8 @@ class DelaunayGrid
 	double *surface_brightness;	
 	lensvector *srcpts;
 	int *adj_triangles[4];
-	int *ivals;
-	int *jvals;
+	int *imggrid_ivals;
+	int *imggrid_jvals;
 	bool *maps_to_image_pixel;
 	bool *active_pixel;
 	int *active_index;
@@ -209,7 +209,7 @@ class DelaunayGrid
 	//double prod1, prod2, prod3;
 
 	public:
-	DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals = NULL, int* jvals = NULL, const int ni=0, const int nj=0);
+	DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	int search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle);

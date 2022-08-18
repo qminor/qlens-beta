@@ -12251,6 +12251,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		delaunay_srcgrid = srcgrid1;
 	}
 
+	delete[] include_in_delaunay_grid;
 	delete[] srcpts1_x;
 	delete[] srcpts1_y;
 	delete[] srcpts2_x;
@@ -12649,8 +12650,8 @@ double QLens::invert_surface_brightness_map_from_data(bool verbal)
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, verbal);
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
-	double chisq0;
-	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
+	double chisq,chisq0;
+	chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
 
 	if (chisq == 2e30) {
