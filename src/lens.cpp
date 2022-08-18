@@ -13038,6 +13038,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			//image_pixel_grid->plot_surface_brightness("img_pixel",false,false);
 			//run_plotter_range("imgpixel","","");
 		//}
+		//
 
 	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
 		if ((mpi_id==0) and (verbal)) cout << "Trying sourcegrid creation..." << endl;
