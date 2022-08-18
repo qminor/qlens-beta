@@ -418,6 +418,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_mumps_subcomm;
 	bool n_image_prior;
 	double n_images_at_sbmax, pixel_avg_n_image;
+	int n_image_prior_npixels;
 	double sbmin, sbmax;
 	double n_image_threshold;
 	double max_pixel_sb;
@@ -882,7 +883,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const bool verbal, const bool image_grid_already_exists = false);
+	bool create_sourcegrid_cartesian(const bool verbal, const bool assign_sb_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
 	void create_sourcegrid_from_imggrid_delaunay(const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);

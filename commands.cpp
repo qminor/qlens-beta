@@ -214,6 +214,7 @@ void QLens::process_commands(bool read_file)
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
+						"nimg_prior_npixels -- # of pixels per side for sourcegrid used for nimg_prior\n"
 						"include_emask_in_chisq -- include extended mask pixels in inversion and chi-square\n"
 						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
 						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
@@ -701,7 +702,7 @@ void QLens::process_commands(bool read_file)
 							"fit run\n"
 							"fit chisq\n"
 							"fit findimg [sourcept_num]\n"
-							"fit plotimg [src=#]\n"
+							"fit plotimg [src=#] [-nosrc]\n"
 							"fit plotsrc [src=#]\n"
 							"fit plotshear\n"
 							"fit data_imginfo       (NEED TO WRITE HELP DOCS FOR THIS)\n"
@@ -809,7 +810,7 @@ void QLens::process_commands(bool read_file)
 							"sourcept_num corresponds to the number assigned to a given source point which is listed by the 'fit'\n"
 							"command (to set the initial values for the model source points, use the 'fit sourcept' command).\n";
 					else if (words[2]=="plotimg")
-						cout << "fit plotimg [src=#]\n"
+						cout << "fit plotimg [src=#] [-nosrc]\n"
 							"fit plotimg [src=#] <sourcepic_file> <imagepic_file>\n\n"
 							"Plot the images produced by the current lens model and source point(s) specified by [src=#] to the\n"
 							"screen, along with the image data that is being fit (listed by the 'imgdata' command). If no\n"
@@ -2435,6 +2436,17 @@ void QLens::process_commands(bool read_file)
 				srcgrid_npixels_y = npy;
 				auto_srcgrid_npixels = false;
 			} else Complain("invalid arguments to 'src_npixels' (type 'help src_npixels' for usage information)");
+		}
+		else if (words[0]=="nimg_prior_npixels")
+		{
+			// This is the number of pixels (along x and y) for the sourcegrid created for the nimg_prior; not used if fitting with cartesian sourcegrid
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Number of source pixels per side for nimg_prior = " << n_image_prior_npixels << endl;
+			} else if (nwords == 2) {
+				int npix;
+				if (!(ws[1] >> npix)) Complain("invalid number of pixels");
+				n_image_prior_npixels = npix;
+			} else Complain("only one argument allowed for 'nimg_prior_npixels'");
 		}
 		else if (words[0]=="autogrid")
 		{
@@ -6677,6 +6689,10 @@ void QLens::process_commands(bool read_file)
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					bool omit_source = false;
+					bool omit_cc = false;
+					bool old_cc_setting = show_cc;
+					bool old_plot_srcplane = plot_srcplane;
 					string range1, range2;
 					extract_word_starts_with('[',2,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					extract_word_starts_with('[',2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -6691,7 +6707,18 @@ void QLens::process_commands(bool read_file)
 							break;
 						}
 					}
-
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						int pos;
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-nosrc") omit_source = true;
+							else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
+							else Complain("argument '" << args[i] << "' not recognized");
+						}
+					}
+					if (omit_source) plot_srcplane = false;
+					if (omit_cc) show_cc = false;
 
 					int dataset;
 					bool show_multiple = false;
@@ -6826,7 +6853,9 @@ void QLens::process_commands(bool read_file)
 								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("imgfits",words[3],range1);
 								else run_plotter_file("imgfit",words[3],range1);
 							}
-							else run_plotter_file("imgfit_nocc",words[3],range1);
+							else {
+								run_plotter_file("imgfit_nocc",words[3],range1);
+							}
 							if (plot_srcplane) {
 								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcfits",words[2],range2);
 								else run_plotter_file("srcfit",words[2],range2);
@@ -6836,11 +6865,13 @@ void QLens::process_commands(bool read_file)
 						if (show_cc) {
 							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",range1);
 							else run_plotter("imgfit",range1);
+							if (plot_srcplane) {
+								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
+								else run_plotter("srcfit",range2);
+							}
 						}
-						else run_plotter("imgfit_nocc",range1);
-						if (plot_srcplane) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
-							else run_plotter("srcfit",range2);
+						else {
+							run_plotter("imgfit_nocc",range1);
 						}
 					}
 					show_imgsrch_grid = false;
@@ -6848,6 +6879,8 @@ void QLens::process_commands(bool read_file)
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 					delete[] srcflux;
 					delete[] srcpts;
+					if (omit_source) plot_srcplane = old_plot_srcplane;
+					if (omit_cc) show_cc = old_cc_setting;
 					if (set_title) plot_title = "";
 				}
 				else if (words[1]=="plotshear")

@@ -775,6 +775,7 @@ QLens::QLens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
+	n_image_prior_npixels = 20; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
 	outside_sb_prior_noise_frac = 1e10; // surface brightness threshold is given as multiple of data pixel noise (1e10 by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
@@ -1118,6 +1119,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
+	n_image_prior_npixels = lens_in->n_image_prior_npixels;
 	outside_sb_prior = lens_in->outside_sb_prior;
 	outside_sb_prior_noise_frac = lens_in->outside_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	outside_sb_prior_threshold = lens_in->outside_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
@@ -1365,7 +1367,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
-	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
 	double x = xvec[0], y = xvec[1];
 	lensmatrix *jac = &jacs[thread];
 	lensvector *def_tot = &defs[thread];
@@ -11962,12 +11963,13 @@ void QLens::find_optimal_sourcegrid_for_analytic_source()
 	}
 }
 
-bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool image_grid_already_exists)
+bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool assign_sb_from_analytic_source, const bool image_grid_already_exists, const bool use_nimg_prior_npixels)
 {
 	bool use_image_pixelgrid = false;
 	if ((adaptive_subgrid) and (nlens==0)) { cerr << "Error: cannot ray trace source for adaptive grid; no lens model has been specified\n"; return false; }
 	if ((adaptive_subgrid) or (((auto_sourcegrid) or (auto_srcgrid_npixels)) and (islens()))) use_image_pixelgrid = true;
-	if (n_sb==0) { warn("no source objects have been specified"); return false; }
+	if ((assign_sb_from_analytic_source) and (n_sb==0)) { warn("no source objects have been specified"); return false; }
+	if ((auto_sourcegrid) and (!assign_sb_from_analytic_source) and (!image_grid_already_exists)) { warn("no image data has been generated from which to automatically set source grid dimensions"); return false; }
 
 	if (use_image_pixelgrid) {
 		if (!image_grid_already_exists) {
@@ -11981,8 +11983,11 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool image_grid
 		}
 
 		int n_imgpixels;
-		if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
-		if (auto_srcgrid_npixels) {
+		if (auto_sourcegrid) {
+			if (assign_sb_from_analytic_source) find_optimal_sourcegrid_for_analytic_source();
+			else image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+		}
+		if ((auto_srcgrid_npixels) and (!use_nimg_prior_npixels)) {
 			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
 				image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
 			else
@@ -12003,7 +12008,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool image_grid
 			return false;
 		}
 	} else {
-		if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
+		if ((auto_sourcegrid) and (assign_sb_from_analytic_source)) find_optimal_sourcegrid_for_analytic_source();
 	}
 
 	if (auto_sourcegrid) {
@@ -12033,7 +12038,11 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool image_grid
 		}
 	}
 
-	SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
+	if (!use_nimg_prior_npixels) {
+		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
+	} else {
+		SourcePixelGrid::set_splitting(n_image_prior_npixels,n_image_prior_npixels,1e-6);
+	}
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
 	if (use_image_pixelgrid) source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
@@ -12046,7 +12055,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool image_grid
 			cout << "# of source pixels after subgridding: " << source_pixel_grid->number_of_pixels << endl;
 		}
 	}
-	source_pixel_grid->assign_surface_brightness();
+	if (assign_sb_from_analytic_source) source_pixel_grid->assign_surface_brightness_from_analytic_source();
 	if ((use_image_pixelgrid) and (!image_grid_already_exists)) {
 		delete image_pixel_grid;
 		image_pixel_grid = NULL;
@@ -12077,7 +12086,7 @@ bool QLens::create_sourcegrid_delaunay(const bool use_mask, const bool verbal)
 #endif
 	if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source(); // this will just be for plotting purposes
 	create_sourcegrid_from_imggrid_delaunay(verbal);
-	delaunay_srcgrid->assign_surface_brightness();
+	delaunay_srcgrid->assign_surface_brightness_from_analytic_source();
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -12242,6 +12251,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		delaunay_srcgrid = srcgrid1;
 	}
 
+	delete[] include_in_delaunay_grid;
 	delete[] srcpts1_x;
 	delete[] srcpts1_y;
 	delete[] srcpts2_x;
@@ -12640,8 +12650,8 @@ double QLens::invert_surface_brightness_map_from_data(bool verbal)
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, verbal);
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
-	double chisq0;
-	double chisq = invert_image_surface_brightness_map(chisq0,verbal);
+	double chisq,chisq0;
+	chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
 
 	if (chisq == 2e30) {
@@ -12730,8 +12740,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
-	else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
+	image_pixel_grid->redo_lensing_calculations(verbal);
+	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
+	//else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
 
 	int i,j;
 	double chisq = 0;
@@ -13022,6 +13033,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 	}
+		//if (mpi_id==0) {
+		//// for testing purposes
+			//image_pixel_grid->plot_surface_brightness("img_pixel",false,false);
+			//run_plotter_range("imgpixel","","");
+		//}
 
 	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
 		if ((mpi_id==0) and (verbal)) cout << "Trying sourcegrid creation..." << endl;
@@ -13031,7 +13047,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			srcgrid_wtime0 = omp_get_wtime();
 		}
 #endif
-		create_sourcegrid_cartesian(verbal,true);
+		if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+			create_sourcegrid_cartesian(verbal,true,true,true);
+		} else if (source_fit_mode==Delaunay_Source) {
+			create_sourcegrid_cartesian(verbal,false,true,true);
+			source_pixel_grid->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrid);
+		}
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
