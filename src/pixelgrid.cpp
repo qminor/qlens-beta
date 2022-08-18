@@ -3164,7 +3164,7 @@ int DelaunayGrid::search_grid(const int initial_srcpixel, const lensvector& pt, 
 	for (n=0; n < n_triangles; n++) {
 		if (test_if_inside(triangle_num,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle; 'inside_triangle' flag reveals if it's actually inside the triangle or not
 	}
-	if (n >= n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
+	if (n > n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
 	return triangle_num;
 }
 
@@ -11573,10 +11573,10 @@ double QLens::chisq_regparam(const double logreg)
 		//wtfout << active_image_pixel_i[i] << " " << active_image_pixel_j[i] << " " << image_surface_brightness[i] << " " << sbprofile_surface_brightness[i] << " " << (image_surface_brightness[i] - sbprofile_surface_brightness[i]) << endl;
 	//}
 	//die();
-	ofstream srcout("tempsrc.dat");
-	for (i=0; i < source_npixels; i++) {
-		srcout << source_pixel_vector[i] << endl;
-	}
+	//ofstream srcout("tempsrc.dat");
+	//for (i=0; i < source_npixels; i++) {
+		//srcout << source_pixel_vector[i] << endl;
+	//}
 
 	int pix_i, pix_j, img_index_fgmask;
 	#pragma omp parallel for private(temp_img,i,j,pix_i,pix_j,img_index_fgmask,Lmatptr) schedule(static) reduction(+:Ed_times_two)
