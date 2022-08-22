@@ -863,7 +863,7 @@ QLens::QLens() : UCMC()
 	shapelet_scale_mode = 0;
 	shapelet_window_scaling = 0.8;
 	shapelet_max_scale = 1.0;
-	delaunay_mode = 0;
+	delaunay_mode = 1;
 	ray_tracing_method = Interpolate;
 	interpolate_sb_3pt = true; // if false, will not use 3-point interpolation even when ray tracing method is set to "interpolate"
 #ifdef USE_MUMPS
@@ -12884,6 +12884,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		calculate_foreground_pixel_surface_brightness();
+		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);
@@ -12951,6 +12952,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		calculate_foreground_pixel_surface_brightness();
+		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);
