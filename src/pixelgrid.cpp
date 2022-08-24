@@ -3747,43 +3747,20 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::find_centroid(double& xavg, double& yavg) 
-{
-	int i;
-	double sbtot=0;
-	xavg=0;
-	yavg=0;
-	for (i=0; i < n_srcpts; i++) {
-		xavg += srcpts[i][0]*surface_brightness[i];
-		yavg += srcpts[i][1]*surface_brightness[i];
-		sbtot += surface_brightness[i];
-	}
-	xavg /= sbtot;
-	yavg /= sbtot;
-}
-
-void DelaunayGrid::plot_surface_brightness(string root, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double grid_scalefac, const int npix, const bool interpolate, const bool adjust_by_centroid) // adjust_by_centroid finds the centroid of the surface brightness and adjusts the center of the grid accordingly
+void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate)
 {
 	string img_filename = root + ".dat";
 	string x_filename = root + ".x";
 	string y_filename = root + ".y";
 
-	double x, y, xmin, xmax, ymin, ymax, xcenter, ycenter, xlength, ylength, pixel_xlength, pixel_ylength;
-
-	if (adjust_by_centroid) {
-		find_centroid(xcenter,ycenter);
-	} else {
-		xcenter = (xmin_in + xmax_in)/2;
-		ycenter = (ymin_in + ymax_in)/2;
-	}
-
-	xlength = grid_scalefac*(xmax_in-xmin_in);
-	ylength = grid_scalefac*(ymax_in-ymin_in);
-	xmin = xcenter - xlength/2;
-	xmax = xcenter + xlength/2;
-	ymin = ycenter - ylength/2;
-	ymax = ycenter + ylength/2;
+	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
 	/*
+	xlength = grid_scalefac*(srcpixel_xmax-srcpixel_xmin);
+	ylength = grid_scalefac*(srcpixel_ymax-srcpixel_ymin);
+	xmin = (srcpixel_xmin+srcpixel_xmax)/2 - xlength/2;
+	ymin = (srcpixel_ymin+srcpixel_ymax)/2 - ylength/2;
+	xmax = (srcpixel_xmin+srcpixel_xmax)/2 + xlength/2;
+	ymax = (srcpixel_ymin+srcpixel_ymax)/2 + ylength/2;
 	int i, j, npts_x, npts_y;
 	npts_x = (int) npix*sqrt(xlength/ylength);
 	npts_y = (int) npts_x*ylength/xlength;
@@ -3796,10 +3773,10 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin_in, co
 	cout << "scaled_ymin=" << ymin << ", scaled_ymax=" << ymax << endl;
 	cout << "npts_x=" << npts_x << ", pixel_xlength=" << pixel_xlength << endl;
 	cout << "npts_y=" << npts_y << ", pixel_ylength=" << pixel_ylength << endl;
+	*/
 
 	xlength = xmax-xmin;
 	ylength = ymax-ymin;
-	*/
 	int i, j, npts_x, npts_y;
 	npts_x = (int) npix*sqrt(xlength/ylength);
 	npts_y = (int) npts_x*ylength/xlength;
@@ -8905,25 +8882,23 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread);
 										else sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(center_srcpt[subcell_index],thread);
 									}
-									for (int k=0; k < lens->n_sb; k++) {
-										if ((!foreground_only) and (lens->sb_list[k]->is_lensed)) {
-											sb += lens->sb_list[k]->surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1]);
-										} else if ((!lensed_sources_only) and (!lens->sb_list[k]->is_lensed)) {
-											if (!lens->sb_list[k]->zoom_subgridding) {
-												sb += lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
-											}
-											else {
-												subpixel_xlength = pixel_xlength/sqrt(nsubpix);
-												subpixel_ylength = pixel_ylength/sqrt(nsubpix);
-												corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-												corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-												corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-												corner2[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-												corner3[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-												corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-												corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-												corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-												sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4);
+									if ((at_least_one_foreground_src) and (!lensed_sources_only)) {
+										for (int k=0; k < lens->n_sb; k++) {
+											if (!lens->sb_list[k]->is_lensed) {
+												if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
+												else {
+													subpixel_xlength = pixel_xlength/sqrt(nsubpix);
+													subpixel_ylength = pixel_ylength/sqrt(nsubpix);
+													corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
+													corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
+													corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
+													corner2[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
+													corner3[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
+													corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
+													corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
+													corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
+													sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4);
+												}
 											}
 										}
 									}
@@ -8944,14 +8919,16 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								else surface_brightness[i][j] = source_pixel_grid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
 							}
 						}
-						for (int k=0; k < lens->n_sb; k++) {
-							if ((!foreground_only) and (lens->sb_list[k]->is_lensed)) {
-								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
-							} else if ((!lensed_sources_only) and (!lens->sb_list[k]->is_lensed)) {
-								if (!lens->sb_list[k]->zoom_subgridding) {
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+						if ((at_least_one_foreground_src) and (!lensed_sources_only)) {
+							for (int k=0; k < lens->n_sb; k++) {
+								if (!lens->sb_list[k]->is_lensed) {
+									if (!lens->sb_list[k]->zoom_subgridding) {
+										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+										//double meansb = lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+										//cout << "ADDING SB " << meansb << endl;
+									}
+									else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
 								}
-								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
 							}
 						}
 					}
@@ -10986,7 +10963,13 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 	Rmatrix_nn = Rmatrix_index[source_npixels];
 	//for (int i=0; i <= source_npixels; i++) cout << Rmatrix[i] << " " << Rmatrix_index[i] << endl;
 	//cout << "Rmatrix_nn=" << Rmatrix_nn << " source_npixels=" << source_npixels << endl;
+#ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+	Rmatrix_determinant_MUMPS();
+#endif
+#endif
 }
 
 void QLens::generate_Rmatrix_shapelet_curvature()
@@ -11005,7 +10988,14 @@ void QLens::generate_Rmatrix_shapelet_curvature()
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
 	Rmatrix_nn = Rmatrix_index[source_npixels];
+#ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+	Rmatrix_determinant_MUMPS();
+#endif
+#endif
+
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
@@ -11078,6 +11068,15 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	mpi_end = mpi_start + mpi_chunk;
 
 	jl_pair jl;
+//#ifdef USE_MKL
+	//sparse_matrix_t *Lsparse;
+	//sparse_matrix_t *Fsparse;
+	//int *image_pixel_end_Lmatrix = new int[image_npixels];
+	//for (i=0; i < image_npixels; i++) image_pixel_end_Lmatrix[i] = image_pixel_location_Lmatrix[i+1];
+	//mkl_sparse_d_create_csr(Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, source_npixels, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
+	//sparse_status_t status;
+	//status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, *Lsparse, Fsparse);
+//#endif
 
 	#pragma omp parallel
 	{
@@ -12355,6 +12354,66 @@ void QLens::Rmatrix_determinant_UMFPACK()
 #endif
 }
 
+void QLens::Rmatrix_determinant_MUMPS()
+{
+#ifndef USE_MUMPS
+	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
+#else
+	int i,j;
+	MUMPS_INT Rmatrix_nonzero_elements = Rmatrix_index[source_npixels]-1;
+	MUMPS_INT *irn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
+	MUMPS_INT *jcn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
+	double *Rmatrix_elements = new double[Rmatrix_nonzero_elements];
+	for (i=0; i < source_npixels; i++) {
+		Rmatrix_elements[i] = Rmatrix[i];
+		irn_reg[i] = i+1;
+		jcn_reg[i] = i+1;
+	}
+	int indx=source_npixels;
+	for (i=0; i < source_npixels; i++) {
+		//cout << "Row " << i << ": diag=" << Rmatrix[i] << endl;
+		//for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			//cout << Rmatrix_index[j] << " ";
+		//}
+		//cout << endl;
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			//cout << Rmatrix[j] << " ";
+			Rmatrix_elements[indx] = Rmatrix[j];
+			irn_reg[indx] = i+1;
+			jcn_reg[indx] = Rmatrix_index[j]+1;
+			indx++;
+		}
+	}
+
+	mumps_solver->job=JOB_INIT; mumps_solver->sym=2;
+	dmumps_c(mumps_solver);
+	mumps_solver->n = source_npixels; mumps_solver->nz = Rmatrix_nonzero_elements; mumps_solver->irn=irn_reg; mumps_solver->jcn=jcn_reg;
+	mumps_solver->a = Rmatrix_elements;
+	mumps_solver->icntl[0]=MUMPS_SILENT;
+	mumps_solver->icntl[1]=MUMPS_SILENT;
+	mumps_solver->icntl[2]=MUMPS_SILENT;
+	mumps_solver->icntl[3]=MUMPS_SILENT;
+	mumps_solver->icntl[32]=1; // calculate determinant
+	mumps_solver->icntl[30]=1; // discard factorized matrices
+	if (parallel_mumps) {
+		mumps_solver->icntl[27]=2; // parallel analysis phase
+		mumps_solver->icntl[28]=2; // parallel analysis phase
+	}
+	mumps_solver->job=4;
+	dmumps_c(mumps_solver);
+	if (mumps_solver->rinfog[11]==0) Rmatrix_log_determinant = -1e20;
+	else Rmatrix_log_determinant = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
+	//cout << "Rmatrix log determinant = " << Rmatrix_log_determinant << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+	//if (mpi_id==0) cout << "Rmatrix log determinant = " << Rmatrix_log_determinant << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+
+	delete[] irn_reg;
+	delete[] jcn_reg;
+	delete[] Rmatrix_elements;
+	mumps_solver->job=JOB_END;
+	dmumps_c(mumps_solver); //Terminate instance
+#endif
+}
+
 void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 {
 #ifdef USE_MPI
@@ -12849,7 +12908,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
 								}
 							}
-							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (source_fit_mode != Parameterized_Source) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (source_fit_mode == Shapelet_Source) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
 								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
 								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
 								//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);

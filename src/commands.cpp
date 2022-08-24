@@ -9348,9 +9348,9 @@ void QLens::process_commands(bool read_file)
 						double xwidth_adj = delaunay_grid_scale*(sourcegrid_xmax-sourcegrid_xmin);
 						double ywidth_adj = delaunay_grid_scale*(sourcegrid_ymax-sourcegrid_ymin);
 						double srcgrid_xc, srcgrid_yc;
-						delaunay_srcgrid->find_centroid(srcgrid_xc,srcgrid_yc);
-						//srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
-						//srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
+						//delaunay_srcgrid->find_centroid(srcgrid_xc,srcgrid_yc);
+						srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
+						srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
 						xmin = srcgrid_xc - xwidth_adj/2;
 						xmax = srcgrid_xc + xwidth_adj/2;
 						ymin = srcgrid_yc - ywidth_adj/2;
@@ -9373,7 +9373,7 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) {
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrid->plot_surface_brightness("src_pixel",sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,delaunay_grid_scale,set_npix,interpolate,true);
+							delaunay_srcgrid->plot_surface_brightness("src_pixel",sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,delaunay_grid_scale,set_npix,interpolate);
 						}
 					}
 					if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
