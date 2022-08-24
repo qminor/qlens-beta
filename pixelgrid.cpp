@@ -3164,7 +3164,7 @@ int DelaunayGrid::search_grid(const int initial_srcpixel, const lensvector& pt, 
 	for (n=0; n < n_triangles; n++) {
 		if (test_if_inside(triangle_num,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle; 'inside_triangle' flag reveals if it's actually inside the triangle or not
 	}
-	if (n >= n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
+	if (n > n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
 	return triangle_num;
 }
 
@@ -10963,7 +10963,13 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 	Rmatrix_nn = Rmatrix_index[source_npixels];
 	//for (int i=0; i <= source_npixels; i++) cout << Rmatrix[i] << " " << Rmatrix_index[i] << endl;
 	//cout << "Rmatrix_nn=" << Rmatrix_nn << " source_npixels=" << source_npixels << endl;
+#ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+	Rmatrix_determinant_MUMPS();
+#endif
+#endif
 }
 
 void QLens::generate_Rmatrix_shapelet_curvature()
@@ -10982,7 +10988,14 @@ void QLens::generate_Rmatrix_shapelet_curvature()
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
 	Rmatrix_nn = Rmatrix_index[source_npixels];
+#ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+	Rmatrix_determinant_MUMPS();
+#endif
+#endif
+
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
@@ -11055,6 +11068,15 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	mpi_end = mpi_start + mpi_chunk;
 
 	jl_pair jl;
+//#ifdef USE_MKL
+	//sparse_matrix_t *Lsparse;
+	//sparse_matrix_t *Fsparse;
+	//int *image_pixel_end_Lmatrix = new int[image_npixels];
+	//for (i=0; i < image_npixels; i++) image_pixel_end_Lmatrix[i] = image_pixel_location_Lmatrix[i+1];
+	//mkl_sparse_d_create_csr(Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, source_npixels, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
+	//sparse_status_t status;
+	//status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, *Lsparse, Fsparse);
+//#endif
 
 	#pragma omp parallel
 	{
@@ -11573,10 +11595,10 @@ double QLens::chisq_regparam(const double logreg)
 		//wtfout << active_image_pixel_i[i] << " " << active_image_pixel_j[i] << " " << image_surface_brightness[i] << " " << sbprofile_surface_brightness[i] << " " << (image_surface_brightness[i] - sbprofile_surface_brightness[i]) << endl;
 	//}
 	//die();
-	ofstream srcout("tempsrc.dat");
-	for (i=0; i < source_npixels; i++) {
-		srcout << source_pixel_vector[i] << endl;
-	}
+	//ofstream srcout("tempsrc.dat");
+	//for (i=0; i < source_npixels; i++) {
+		//srcout << source_pixel_vector[i] << endl;
+	//}
 
 	int pix_i, pix_j, img_index_fgmask;
 	#pragma omp parallel for private(temp_img,i,j,pix_i,pix_j,img_index_fgmask,Lmatptr) schedule(static) reduction(+:Ed_times_two)
@@ -12329,6 +12351,66 @@ void QLens::Rmatrix_determinant_UMFPACK()
 	delete[] Rmatrix_unsymmetric_indices;
 	delete[] Rmatrix_unsymmetric;
 	umfpack_di_free_numeric(&Numeric);
+#endif
+}
+
+void QLens::Rmatrix_determinant_MUMPS()
+{
+#ifndef USE_MUMPS
+	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
+#else
+	int i,j;
+	MUMPS_INT Rmatrix_nonzero_elements = Rmatrix_index[source_npixels]-1;
+	MUMPS_INT *irn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
+	MUMPS_INT *jcn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
+	double *Rmatrix_elements = new double[Rmatrix_nonzero_elements];
+	for (i=0; i < source_npixels; i++) {
+		Rmatrix_elements[i] = Rmatrix[i];
+		irn_reg[i] = i+1;
+		jcn_reg[i] = i+1;
+	}
+	int indx=source_npixels;
+	for (i=0; i < source_npixels; i++) {
+		//cout << "Row " << i << ": diag=" << Rmatrix[i] << endl;
+		//for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			//cout << Rmatrix_index[j] << " ";
+		//}
+		//cout << endl;
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			//cout << Rmatrix[j] << " ";
+			Rmatrix_elements[indx] = Rmatrix[j];
+			irn_reg[indx] = i+1;
+			jcn_reg[indx] = Rmatrix_index[j]+1;
+			indx++;
+		}
+	}
+
+	mumps_solver->job=JOB_INIT; mumps_solver->sym=2;
+	dmumps_c(mumps_solver);
+	mumps_solver->n = source_npixels; mumps_solver->nz = Rmatrix_nonzero_elements; mumps_solver->irn=irn_reg; mumps_solver->jcn=jcn_reg;
+	mumps_solver->a = Rmatrix_elements;
+	mumps_solver->icntl[0]=MUMPS_SILENT;
+	mumps_solver->icntl[1]=MUMPS_SILENT;
+	mumps_solver->icntl[2]=MUMPS_SILENT;
+	mumps_solver->icntl[3]=MUMPS_SILENT;
+	mumps_solver->icntl[32]=1; // calculate determinant
+	mumps_solver->icntl[30]=1; // discard factorized matrices
+	if (parallel_mumps) {
+		mumps_solver->icntl[27]=2; // parallel analysis phase
+		mumps_solver->icntl[28]=2; // parallel analysis phase
+	}
+	mumps_solver->job=4;
+	dmumps_c(mumps_solver);
+	if (mumps_solver->rinfog[11]==0) Rmatrix_log_determinant = -1e20;
+	else Rmatrix_log_determinant = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
+	//cout << "Rmatrix log determinant = " << Rmatrix_log_determinant << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+	//if (mpi_id==0) cout << "Rmatrix log determinant = " << Rmatrix_log_determinant << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+
+	delete[] irn_reg;
+	delete[] jcn_reg;
+	delete[] Rmatrix_elements;
+	mumps_solver->job=JOB_END;
+	dmumps_c(mumps_solver); //Terminate instance
 #endif
 }
 

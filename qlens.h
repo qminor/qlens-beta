@@ -855,6 +855,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix(bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
+	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
 	void indexx(int* arr, int* indx, int nn);

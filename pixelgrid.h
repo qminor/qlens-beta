@@ -227,6 +227,7 @@ class DelaunayGrid
 	void record_srcpixel_mappings();
 	void calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
+	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false);
 	void generate_gmatrices();
 	void generate_hmatrices();

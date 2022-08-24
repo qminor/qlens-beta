@@ -9276,7 +9276,12 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="plotsrc")
 			{
 				int set_npix = 600; // this is only relevant for a Delaunay source, for which the plotting resolution needs to be given (since it's plotted to Cartesian pixels)
+				bool delaunay = false;
+				bool zoom_in = false;
+				double zoomfactor = 2;
 				bool interpolate = false;
+				double old_srcgrid_scale;
+				double delaunay_grid_scale = 1;
 				bool set_title = false;
 				string temp_title;
 				for (int i=1; i < nwords-1; i++) {
@@ -9304,6 +9309,10 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-2000") set_npix = 2000;
 						else if (args[i]=="-3000") set_npix = 3000;
 						else if (args[i]=="-4000") set_npix = 4000;
+						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
+						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
+						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
+						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
 						//else if (args[i]=="-nomask") use_mask = false;
 						//else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
 						//else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
@@ -9316,14 +9325,37 @@ void QLens::process_commands(bool read_file)
 				}
 
 				if ((source_fit_mode!=Cartesian_Source) and (source_fit_mode!=Delaunay_Source)) Complain("'sbmap plotsrc' is for pixellated sources (cartesian/delaunay); for sbprofile/shapelet mode, use 'sbmap mkplotsrc'");
+				if (source_fit_mode==Delaunay_Source) delaunay = true;
 				if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) Complain("No Cartesian source surface brightness map has been created");
 				if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) Complain("No Cartesian source surface brightness map has been created");
+				if (zoom_in) {
+					if (delaunay) {
+						delaunay_grid_scale /= zoomfactor;
+					} else {
+						old_srcgrid_scale = srcgrid_size_scale;
+						srcgrid_size_scale = 1.0/zoomfactor;
+					}
+				}
+
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
-				if ((source_fit_mode==Cartesian_Source) and (range1 == "")) {
+				if (range1 == "") {
 				//if ((range1 == "") and ((!show_cc) or (!islens()))) {
 					double xmin,xmax,ymin,ymax;
-					source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
+					if (source_fit_mode==Cartesian_Source) {
+						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
+					} else {
+						double xwidth_adj = delaunay_grid_scale*(sourcegrid_xmax-sourcegrid_xmin);
+						double ywidth_adj = delaunay_grid_scale*(sourcegrid_ymax-sourcegrid_ymin);
+						double srcgrid_xc, srcgrid_yc;
+						//delaunay_srcgrid->find_centroid(srcgrid_xc,srcgrid_yc);
+						srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
+						srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
+						xmin = srcgrid_xc - xwidth_adj/2;
+						xmax = srcgrid_xc + xwidth_adj/2;
+						ymin = srcgrid_yc - ywidth_adj/2;
+						ymax = srcgrid_yc + ywidth_adj/2;
+					}
 					stringstream xminstr,yminstr,xmaxstr,ymaxstr;
 					string xminstring,yminstring,xmaxstring,ymaxstring;
 					xminstr << xmin;
@@ -9341,7 +9373,7 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) {
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrid->plot_surface_brightness("src_pixel",sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,1,set_npix,interpolate);
+							delaunay_srcgrid->plot_surface_brightness("src_pixel",sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,delaunay_grid_scale,set_npix,interpolate);
 						}
 					}
 					if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
@@ -9366,6 +9398,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
+				if ((zoom_in) and (!delaunay)) srcgrid_size_scale = old_srcgrid_scale;
 				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="invert")
