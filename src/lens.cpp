@@ -12788,6 +12788,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				sourcegrid_ymin = srcgrid_yc - ywidth_adj/2;
 				sourcegrid_ymax = srcgrid_yc + ywidth_adj/2;
 			}
+			if ((mpi_id==0) and (verbal)) {
+				cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
+			}
 		}
 		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 		if (source_pixel_grid != NULL) delete source_pixel_grid;
@@ -12825,7 +12828,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 			if ((mpi_id==0) and (verbal)) {
 				cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
-				cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
 			}
 		}
 		if (adaptive_subgrid) {

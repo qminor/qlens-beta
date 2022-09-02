@@ -11,6 +11,7 @@
 
 #ifdef USE_MKL
 #include "mkl.h"
+#include "mkl_spblas.h"
 #endif
 
 #ifdef USE_UMFPACK
@@ -1838,75 +1839,93 @@ bool SourcePixelGrid::bisection_search_interpolate(lensvector &input_center_pt, 
 
 bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread, const int& image_pixel_i, const int& image_pixel_j)
 {
+	bool image_pixel_maps_to_source_grid = false;
 	// when splitting image pixels, there could be multiple entries in the Lmatrix array that belong to the same source pixel; you might save computational time if these can be consolidated (by adding them together). Try this out later
 	imin[thread]=0; imax[thread]=u_N-1;
 	jmin[thread]=0; jmax[thread]=w_N-1;
-	if (bisection_search_interpolate(input_center_pt,thread)==false) return false;
-
-	bool image_pixel_maps_to_source_grid = false;
-	int i,j,side;
-	SourcePixelGrid* cellptr;
-	int oldsize = mapped_cartesian_srcpixels.size();
-	for (j=jmin[thread]; j <= jmax[thread]; j++) {
-		for (i=imin[thread]; i <= imax[thread]; i++) {
-			if ((input_center_pt[0] >= cell[i][j]->corner_pt[0][0]) and (input_center_pt[0] < cell[i][j]->corner_pt[2][0]) and (input_center_pt[1] >= cell[i][j]->corner_pt[0][1]) and (input_center_pt[1] < cell[i][j]->corner_pt[3][1])) {
-				if (cell[i][j]->cell != NULL) image_pixel_maps_to_source_grid = cell[i][j]->subcell_assign_source_mapping_flags_interpolate(input_center_pt,mapped_cartesian_srcpixels,thread);
-				else {
-					cell[i][j]->maps_to_image_pixel = true;
-					mapped_cartesian_srcpixels.push_back(cell[i][j]);
-					if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
-					if (((input_center_pt[0] > cell[i][j]->center_pt[0]) and (cell[i][j]->neighbor[0] != NULL)) or (cell[i][j]->neighbor[1] == NULL)) {
-						if (cell[i][j]->neighbor[0]->cell != NULL) {
-							side=0;
-							cellptr = cell[i][j]->neighbor[0]->find_nearest_neighbor_cell(input_center_pt,side);
-							cellptr->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cellptr);
+	if (bisection_search_interpolate(input_center_pt,thread)==true) {
+		int i,j,side;
+		SourcePixelGrid* cellptr;
+		int oldsize = mapped_cartesian_srcpixels.size();
+		for (j=jmin[thread]; j <= jmax[thread]; j++) {
+			for (i=imin[thread]; i <= imax[thread]; i++) {
+				if ((input_center_pt[0] >= cell[i][j]->corner_pt[0][0]) and (input_center_pt[0] < cell[i][j]->corner_pt[2][0]) and (input_center_pt[1] >= cell[i][j]->corner_pt[0][1]) and (input_center_pt[1] < cell[i][j]->corner_pt[3][1])) {
+					if (cell[i][j]->cell != NULL) image_pixel_maps_to_source_grid = cell[i][j]->subcell_assign_source_mapping_flags_interpolate(input_center_pt,mapped_cartesian_srcpixels,thread);
+					else {
+						cell[i][j]->maps_to_image_pixel = true;
+						mapped_cartesian_srcpixels.push_back(cell[i][j]);
+						if (!image_pixel_maps_to_source_grid) image_pixel_maps_to_source_grid = true;
+						if (((input_center_pt[0] > cell[i][j]->center_pt[0]) and (cell[i][j]->neighbor[0] != NULL)) or (cell[i][j]->neighbor[1] == NULL)) {
+							if (cell[i][j]->neighbor[0]->cell != NULL) {
+								side=0;
+								cellptr = cell[i][j]->neighbor[0]->find_nearest_neighbor_cell(input_center_pt,side);
+								cellptr->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cellptr);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+							else {
+								cell[i][j]->neighbor[0]->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[0]);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+						} else {
+							if (cell[i][j]->neighbor[1]->cell != NULL) {
+								side=1;
+								cellptr = cell[i][j]->neighbor[1]->find_nearest_neighbor_cell(input_center_pt,side);
+								cellptr->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cellptr);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+							else {
+								cell[i][j]->neighbor[1]->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[1]);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
 						}
-						else {
-							cell[i][j]->neighbor[0]->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[0]);
-						}
-					} else {
-						if (cell[i][j]->neighbor[1]->cell != NULL) {
-							side=1;
-							cellptr = cell[i][j]->neighbor[1]->find_nearest_neighbor_cell(input_center_pt,side);
-							cellptr->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cellptr);
-						}
-						else {
-							cell[i][j]->neighbor[1]->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[1]);
+						if (((input_center_pt[1] > cell[i][j]->center_pt[1]) and (cell[i][j]->neighbor[2] != NULL)) or (cell[i][j]->neighbor[3] == NULL)) {
+							if (cell[i][j]->neighbor[2]->cell != NULL) {
+								side=2;
+								cellptr = cell[i][j]->neighbor[2]->find_nearest_neighbor_cell(input_center_pt,side);
+								cellptr->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cellptr);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+							else {
+								cell[i][j]->neighbor[2]->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[2]);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+						} else {
+							if (cell[i][j]->neighbor[3]->cell != NULL) {
+								side=3;
+								cellptr = cell[i][j]->neighbor[3]->find_nearest_neighbor_cell(input_center_pt,side);
+								cellptr->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cellptr);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
+							else {
+								cell[i][j]->neighbor[3]->maps_to_image_pixel = true;
+								mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[3]);
+								//cout << "Adding to maps " << image_pixel_i << " " << image_pixel_j << endl;
+							}
 						}
 					}
-					if (((input_center_pt[1] > cell[i][j]->center_pt[1]) and (cell[i][j]->neighbor[2] != NULL)) or (cell[i][j]->neighbor[3] == NULL)) {
-						if (cell[i][j]->neighbor[2]->cell != NULL) {
-							side=2;
-							cellptr = cell[i][j]->neighbor[2]->find_nearest_neighbor_cell(input_center_pt,side);
-							cellptr->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cellptr);
-						}
-						else {
-							cell[i][j]->neighbor[2]->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[2]);
-						}
-					} else {
-						if (cell[i][j]->neighbor[3]->cell != NULL) {
-							side=3;
-							cellptr = cell[i][j]->neighbor[3]->find_nearest_neighbor_cell(input_center_pt,side);
-							cellptr->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cellptr);
-						}
-						else {
-							cell[i][j]->neighbor[3]->maps_to_image_pixel = true;
-							mapped_cartesian_srcpixels.push_back(cell[i][j]->neighbor[3]);
-						}
-					}
+					break;
 				}
-				break;
 			}
 		}
+		if ((mapped_cartesian_srcpixels.size() - oldsize) != 3) die("Did not assign enough interpolation cells!");
 	}
-	if ((mapped_cartesian_srcpixels.size() - oldsize) != 3) die("Did not assign enough interpolation cells!");
+	else {
+		mapped_cartesian_srcpixels.push_back(NULL);
+		mapped_cartesian_srcpixels.push_back(NULL);
+		mapped_cartesian_srcpixels.push_back(NULL);
+	}
+	//if ((image_pixel_i==34) and (image_pixel_j==1)) {
+		//if (!image_pixel_maps_to_source_grid) cout << "subpixel didn't map!!!" << endl;
+		//cout << "SIZE: " << mapped_cartesian_srcpixels.size() << endl;
+		//for (int i=0; i < mapped_cartesian_srcpixels.size(); i++) cout << "cell " << i << ": " << mapped_cartesian_srcpixels[i]->active_index << endl;
+	//}
 	return image_pixel_maps_to_source_grid;
 }
 
@@ -1979,11 +1998,19 @@ bool SourcePixelGrid::subcell_assign_source_mapping_flags_interpolate(lensvector
 
 void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
 {
+	//cout << "YO0" << endl;
 	for (int i=0; i < 3; i++) {
+		//cout << "What " << i << endl;
+		//cout << "ii=" << ii << " trying index " << (3*ii+i) << endl;
+		//cout << "imgpix: " << image_pixel_i << " " << image_pixel_j << endl;
+		//cout << "size: " << image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j].size() << endl;
+		if (image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i] == NULL) return; // in this case, subpixel does not map to anything
 		lens->Lmatrix_index_rows[img_index].push_back(image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i]->active_index);
+		//cout << "What? " << i << endl;
 		interpolation_pts[i][thread] = &image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i]->center_pt;
 	}
 
+	//cout << "YO1" << endl;
 	if (lens->interpolate_sb_3pt) {
 		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
 		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
@@ -8654,11 +8681,14 @@ void ImagePixelGrid::assign_required_data_pixels(double srcgrid_xmin, double src
 int ImagePixelGrid::count_nonzero_source_pixel_mappings_cartesian()
 {
 	int tot=0;
-	int i,j,img_index;
+	int i,j,k,img_index;
 	for (img_index=0; img_index < lens->image_npixels; img_index++) {
 		i = lens->active_image_pixel_i[img_index];
 		j = lens->active_image_pixel_j[img_index];
-		tot += mapped_cartesian_srcpixels[i][j].size();
+		for (k=0; k < mapped_cartesian_srcpixels[i][j].size(); k++) {
+			if (mapped_cartesian_srcpixels[i][j][k] != NULL) tot++;
+		}
+		//tot += mapped_cartesian_srcpixels[i][j].size();
 	}
 	return tot;
 }
@@ -8666,11 +8696,14 @@ int ImagePixelGrid::count_nonzero_source_pixel_mappings_cartesian()
 int ImagePixelGrid::count_nonzero_source_pixel_mappings_delaunay()
 {
 	int tot=0;
-	int i,j,img_index;
+	int i,j,k,img_index;
 	for (img_index=0; img_index < lens->image_npixels; img_index++) {
 		i = lens->active_image_pixel_i[img_index];
 		j = lens->active_image_pixel_j[img_index];
-		tot += mapped_delaunay_srcpixels[i][j].size();
+		for (k=0; k < mapped_delaunay_srcpixels[i][j].size(); k++) {
+			if (mapped_delaunay_srcpixels[i][j][k] != -1) tot++;
+		}
+		//tot += mapped_delaunay_srcpixels[i][j].size();
 	}
 	return tot;
 }
@@ -9471,7 +9504,9 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 						}
 					} else {
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+							//cout << "subcell " << subcell_index << ": " << center_srcpt[subcell_index][0] << " " << center_srcpt[subcell_index][1] << endl;
 							source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							//cout << "DONE" << endl;
 						}
 					}
 					Lmatrix_row_nn[img_index] = index;
@@ -11067,17 +11102,217 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	if (group_id == group_np-1) mpi_chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
 	mpi_end = mpi_start + mpi_chunk;
 
-	jl_pair jl;
-//#ifdef USE_MKL
-	//sparse_matrix_t *Lsparse;
-	//sparse_matrix_t *Fsparse;
-	//int *image_pixel_end_Lmatrix = new int[image_npixels];
-	//for (i=0; i < image_npixels; i++) image_pixel_end_Lmatrix[i] = image_pixel_location_Lmatrix[i+1];
-	//mkl_sparse_d_create_csr(Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, source_npixels, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
-	//sparse_status_t status;
-	//status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, *Lsparse, Fsparse);
-//#endif
+/*
+#ifdef USE_MKL
+	const int nrows = 2;
+	const int ncols = 2;
+	int *image_pixel_location_Bmatrix = new int[nrows+1];
+	int *Bmatrix_index = new int[nrows*ncols];
+	double *Bmatrix = new double[nrows*ncols];
+	for (i=0,j=0; i < nrows; i++) {
+		image_pixel_location_Bmatrix[i] = j;
+		for (k=0; k < ncols; k++) {
+			Bmatrix_index[j] = k;
+			Bmatrix[j] = j+1;
+			cout << Bmatrix[j] << " ";
+			j++;
+		}
+		cout << endl;
+	}
+	cout << endl;
+	image_pixel_location_Bmatrix[nrows] = j;
+	int *image_pixel_end_Bmatrix = new int[nrows];
+	for (i=0; i < nrows; i++) image_pixel_end_Bmatrix[i] = image_pixel_location_Bmatrix[i+1];
+	cout << "loc_Bmatrix:" << endl;
+	for (i=0; i < nrows; i++) cout << image_pixel_location_Bmatrix[i] << " ";
+	cout << endl;
+	cout << "end_Bmatrix:" << endl;
+	for (i=0; i < nrows; i++) cout << image_pixel_end_Bmatrix[i] << " ";
+	cout << endl;
+	cout << "Bmatrix_index:" << endl;
+	for (j=0; j < image_pixel_location_Bmatrix[nrows]; j++) cout << Bmatrix_index[j] << " ";
+	cout << endl;
+	cout << "Bmatrix:" << endl;
+	for (j=0; j < image_pixel_location_Bmatrix[nrows]; j++) cout << Bmatrix[j] << " ";
+	cout << endl;
+	//int *srcpixel_location_Fmatrix = new int[ncols+1];
+	//int *srcpixel_end_Fmatrix = new int[ncols+1];
+	//int *Fmatrix_csr_index = new int[nrows*ncols];
+	//double *Fmatrix_csr = new double[nrows*ncols];
 
+	int *srcpixel_location_Fmatrix;
+	int *srcpixel_end_Fmatrix;
+	int *Fmatrix_csr_index;
+	double *Fmatrix_csr;
+
+
+	int nsrc1, nsrc2;
+	sparse_index_base_t indxing;
+	sparse_matrix_t Lsparse;
+	sparse_matrix_t Fsparse;
+	cout << "Creating CSR matrix..." << endl;
+	cout << "ncols=" << ncols << ", nrows=" << nrows << endl;
+	sparse_status_t status;
+	status = mkl_sparse_d_create_csr(&Lsparse, SPARSE_INDEX_BASE_ZERO, nrows, ncols, image_pixel_location_Bmatrix, image_pixel_end_Bmatrix, Bmatrix_index, Bmatrix);
+	if (status==SPARSE_STATUS_SUCCESS) cout << "matrix creation worked!" << endl;
+	else cout << "sparse matrix creation bombed :(" << endl;
+	//status = mkl_sparse_destroy(Lsparse);
+	//if (status==SPARSE_STATUS_SUCCESS) cout << "matrix destruction worked!" << endl;
+	//else cout << "sparse matrix destruction bombed :(" << endl;
+	//die();
+
+	cout << "mkl src_npixels=" << ncols << ", img_npixels=" << nrows << endl;
+
+	double *testx = new double[10];
+	double *testy = new double[10];
+	for (i=0; i < nrows; i++) {
+		testx[i] = 1;
+		testy[i] = 0.5;
+	}
+	for (i=0; i < ncols; i++) {
+		testy[i] = 0.0;
+	}
+
+	//char blergh = 'T';
+	//char matdescr[6];
+	//matdescr[0] = 'G';
+	//matdescr[2] = 'N';
+	//matdescr[3] = 'C';
+	double beta = 0.0;
+	double alpha = 1.0;
+	//mkl_cspblas_dcsrgemv(&blergh, &nrows, Bmatrix, image_pixel_location_Bmatrix, Bmatrix_index, testx, testy);
+	//mkl_dcsrmv (&blergh, &nrows, &ncols, &alpha, matdescr, Bmatrix, Bmatrix_index, image_pixel_location_Bmatrix, image_pixel_end_Bmatrix, testx, &beta, testy);
+
+	//cout << "Survived!" << endl;
+
+	//cout << "Defining matrix descr..." << endl;
+	//matrix_descr descr;
+	//descr.type = SPARSE_MATRIX_TYPE_GENERAL;
+	//cout << "Trying sparse mv..." << endl;
+	//status = mkl_sparse_d_mv(SPARSE_OPERATION_TRANSPOSE, alpha, Lsparse, descr, testx, beta, testy);
+	//cout << "HI!" << endl;
+	//if (status==SPARSE_STATUS_SUCCESS) cout << "mv worked!" << endl;
+	//else {
+		//cout << "mv bombed :(" << endl;
+		//if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
+		//else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
+		//else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
+		//else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
+		//die();
+	//}
+	//cout << testy[0] << " " << testy[1] << endl;
+
+	cout << "Running sparse syrk..." << endl;
+	status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
+	if (status==SPARSE_STATUS_SUCCESS) cout << "syrk worked!" << endl;
+	else {
+		cout << "syrk bombed :(" << endl;
+		if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
+		else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
+		else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
+		else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
+		die();
+	}
+	cout << "Exporting Fmatrix..." << endl;
+	nsrc1 = ncols;
+	nsrc2 = ncols;
+	status = mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
+	if (status==SPARSE_STATUS_SUCCESS) cout << "export worked!" << endl;
+	else cout << "export bombed :(" << endl;
+	cout << "MKL Fmatrix rows =" << nsrc1 << " " << nsrc2 << endl;
+	cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[nsrc1-1] << " elements" << endl;
+	for (i=0; i < ncols; i++) {
+		cout << "Row " << i << " goes from " << srcpixel_location_Fmatrix[i] << " to " << srcpixel_end_Fmatrix[i] << endl;
+		for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
+			cout << "row " << i << ", column " << Fmatrix_csr_index[j] << ": " << Fmatrix_csr[j] << endl;
+		}
+	}
+	die();
+	//if (nsrc1 != ncols) warn("WHAT THE WHAT?! nsrc1 not equal to number of source pixels (%i vs %i)",nsrc1,ncols);
+	//if (nsrc2 != ncols) warn("WHAT THE WHAT?! nsrc2 not equal to number of source pixels (%i vs %i)",nsrc2,ncols);
+#endif
+	*/
+
+
+#ifdef USE_MKL
+	int *srcpixel_location_Fmatrix, *srcpixel_end_Fmatrix, *Fmatrix_csr_index;
+	double *Fmatrix_csr;
+	int nsrc1, nsrc2;
+	sparse_index_base_t indxing;
+	sparse_matrix_t Lsparse;
+	sparse_matrix_t Fsparse;
+	int *image_pixel_end_Lmatrix = new int[image_npixels];
+	for (i=0; i < image_npixels; i++) image_pixel_end_Lmatrix[i] = image_pixel_location_Lmatrix[i+1];
+	//cout << "Creating CSR matrix..." << endl;
+	mkl_sparse_d_create_csr(&Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, source_npixels, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
+	mkl_sparse_order(Lsparse);
+	sparse_status_t status;
+	//cout << "Running sparse syrk..." << endl;
+	status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
+	//if (status==SPARSE_STATUS_SUCCESS) cout << "syrk worked!" << endl;
+	//else {
+		//cout << "syrk bombed :(" << endl;
+		//if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
+		//else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
+		//else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
+		//else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
+		//die();
+	//}
+	//cout << "Exporting Fmatrix..." << endl;
+	mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
+	//if (status==SPARSE_STATUS_SUCCESS) cout << "export worked!" << endl;
+	//else cout << "export bombed :(" << endl;
+
+	if (nsrc1 != source_npixels) warn("WHAT THE WHAT?! nsrc1 not equal to number of source pixels (%i vs %i)",nsrc1,source_npixels);
+	if (nsrc2 != source_npixels) warn("WHAT THE WHAT?! nsrc2 not equal to number of source pixels (%i vs %i)",nsrc2,source_npixels);
+	if ((verbal) and (mpi_id==0)) cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[source_npixels-1] << " elements" << endl;
+	//cout << "Building Fmatrix in diagonal form..." << endl;
+	bool duplicate_column;
+	int dup_k;
+	for (i=0; i < source_npixels; i++) {
+		for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
+			duplicate_column = false;
+			if (Fmatrix_csr_index[j]==i) {
+				Fmatrix_diags[i] += Fmatrix_csr[j]/covariance;
+				//cout << "Adding " << Fmatrix_csr[j] << " to diag " << i << endl;
+			}
+			else if (Fmatrix_csr[j] != 0) {
+				if (Fmatrix_csr_index[j] < i) die("FUCK ME"); // just temporary to make sure it's returning only upper triangular elements..REMOVE THIS LINE LATER
+				for (k=0; k < Fmatrix_index_rows[i].size(); k++) if (Fmatrix_csr_index[j]==Fmatrix_index_rows[i][k]) {
+					duplicate_column = true;
+					dup_k = k;
+				}
+				if (duplicate_column) {
+					Fmatrix_rows[i][k] += Fmatrix_csr[j]/covariance;
+				} else {
+					Fmatrix_rows[i].push_back(Fmatrix_csr[j]/covariance);
+					Fmatrix_index_rows[i].push_back(Fmatrix_csr_index[j]);
+					Fmatrix_row_nn[i]++;
+					Fmatrix_nn_part++;
+				}
+			}
+		}
+	}
+	//cout << "Done!" << endl;
+	//cout << "LMATRIX:" << endl;
+	//for (i=0; i < image_npixels; i++) {
+		//cout << "Row " << i << ":" << endl;
+		//for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+			//cout << Lmatrix_index[j] << " " << Lmatrix[j] << endl;
+		//}
+	//}
+
+	//cout << endl << "FMATRIX:" << endl;
+
+	//for (i=0; i < source_npixels; i++) {
+		//cout << "Row " << i << ":" << endl;
+		//for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
+			//cout << Fmatrix_csr_index[j] << " " << Fmatrix_csr[j] << endl;
+		//}
+	//}
+
+#else
+	jl_pair jl;
 	#pragma omp parallel
 	{
 		int thread;
@@ -11149,6 +11384,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 			}
 			Fmatrix_nn_part += col_i;
 
+			/*
 			if (regularization_method != None) {
 				if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
 				col_i=0;
@@ -11180,6 +11416,42 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 				}
 				Fmatrix_nn_part += col_i;
 			}
+		*/
+		}
+	}
+#endif
+
+	for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
+		if (regularization_method != None) {
+			if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
+			col_i=0;
+			for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
+				new_entry = true;
+				k=0;
+				while ((k < Fmatrix_row_nn[src_index1]) and (new_entry==true)) {
+					if (Rmatrix_index[j]==Fmatrix_index_rows[src_index1][k]) {
+						new_entry = false;
+						col_index = k;
+					}
+					k++;
+				}
+				if (new_entry) {
+					if (!optimize_regparam) {
+						Fmatrix_rows[src_index1].push_back(effective_reg_parameter*Rmatrix[j]);
+					} else {
+						Fmatrix_rows[src_index1].push_back(0);
+						// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
+					}
+					Fmatrix_index_rows[src_index1].push_back(Rmatrix_index[j]);
+					Fmatrix_row_nn[src_index1]++;
+					col_i++;
+				} else {
+					if (!optimize_regparam) {
+						Fmatrix_rows[src_index1][col_index] += effective_reg_parameter*Rmatrix[j];
+					}
+				}
+			}
+			Fmatrix_nn_part += col_i;
 		}
 	}
 
@@ -11254,6 +11526,8 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	if ((mpi_id==0) and (verbal)) {
 		int Fmatrix_ntot = source_npixels*(source_npixels+1)/2;
 		double sparseness = ((double) Fmatrix_nn)/Fmatrix_ntot;
+		cout << "src_npixels = " << source_npixels << endl;
+		cout << "Fmatrix ntot = " << Fmatrix_ntot << endl;
 		cout << "Fmatrix sparseness = " << sparseness << endl;
 	}
 
@@ -11266,6 +11540,49 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		//cout << endl;
 	//}
 
+	bool found;
+/*
+	cout << "LMATRIX:" << endl;
+	for (i=0; i < image_npixels; i++) {
+		for (j=0; j < source_npixels; j++) {
+			found = false;
+			for (k=image_pixel_location_Lmatrix[i]; k < image_pixel_location_Lmatrix[i+1]; k++) {
+				if (Lmatrix_index[k]==j) {
+					found = true;
+					cout << Lmatrix[k] << " ";
+				}
+			}
+			if (!found) cout << "0 ";
+		}
+		cout << endl;
+	}
+	*/	
+
+	//cout << "FMATRIX DIAGS:" << endl;
+	/*
+	cout << "FMATRIX: " << endl;
+	for (i=0; i < source_npixels; i++) {
+		for (j=0; j < source_npixels; j++) {
+			if (i==j) cout << Fmatrix[i] << " ";
+			else {
+				found = false;
+				for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
+					if (Fmatrix_index[k]==j) {
+						found = true;
+						cout << Fmatrix[k] << " ";
+					}
+				}
+				if (!found) cout << "0 ";
+			}
+		}
+		cout << endl;
+	}
+*/
+
+#ifdef USE_MKL
+	mkl_sparse_destroy(Lsparse);
+	mkl_sparse_destroy(Fsparse);
+#endif
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
 	}
