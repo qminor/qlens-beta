@@ -614,7 +614,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
-	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE } inversion_method;
+	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool interpolate_sb_3pt;
 	bool parallel_mumps, show_mumps_info;
@@ -768,8 +768,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void convert_Lmatrix_to_dense();
 	void assign_Lmatrix_shapelets(bool verbal);
 	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
-	void PSF_convolution_Lmatrix_dense(bool verbal);
-	void create_lensing_matrices_from_Lmatrix_dense(bool verbal);
+	void PSF_convolution_Lmatrix_dense(const bool verbal);
+	void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
+	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void invert_lens_mapping_dense(bool verbal);
 	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
 	double chisq_regparam_dense(const double logreg);
@@ -777,8 +778,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
-	void create_regularization_matrix_dense();
-	void generate_Rmatrix_norm_dense();
+	void create_regularization_matrix_shapelet();
 	void generate_Rmatrix_shapelet_gradient();
 	void generate_Rmatrix_shapelet_curvature();
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
@@ -828,6 +828,21 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static fftw_plan *fftplans_Lmatrix;
 	static fftw_plan *fftplans_Lmatrix_inverse;
 #endif
+	static bool setup_fft_convolution_emask;
+	static double *psf_zvec_emask; // for convolutions using FFT
+	static int fft_imin_emask, fft_jmin_emask, fft_ni_emask, fft_nj_emask;
+#ifdef USE_FFTW
+	static complex<double> *psf_transform_emask;
+	static complex<double> **Lmatrix_transform_emask;
+	static double **Lmatrix_imgs_rvec_emask;
+	//static double *img_rvec_emask;
+	//static complex<double> *img_transform_emask;
+	//static fftw_plan fftplan_emask;
+	//static fftw_plan fftplan_inverse_emask;
+	static fftw_plan *fftplans_Lmatrix_emask;
+	static fftw_plan *fftplans_Lmatrix_inverse_emask;
+#endif
+
 	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
@@ -842,6 +857,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//void PSF_convolution_image_pixel_vector(bool verbal = false);
 	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
 	bool setup_convolution_FFT(const bool verbal);
+	bool setup_convolution_FFT_emask(const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
@@ -852,7 +868,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
 	void generate_Rmatrix_from_image_plane_curvature();
-	void create_lensing_matrices_from_Lmatrix(bool verbal);
+	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
 	void Rmatrix_determinant_MUMPS();

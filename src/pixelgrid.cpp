@@ -91,6 +91,17 @@ complex<double> **QLens::Lmatrix_transform;
 double *QLens::img_rvec;
 double **QLens::Lmatrix_imgs_rvec;
 #endif
+bool QLens::setup_fft_convolution_emask;
+double *QLens::psf_zvec_emask;
+int QLens::fft_imin_emask, QLens::fft_jmin_emask, QLens::fft_ni_emask, QLens::fft_nj_emask;
+#ifdef USE_FFTW
+fftw_plan QLens::fftplan_emask, QLens::fftplan_inverse_emask;
+fftw_plan *QLens::fftplans_Lmatrix_emask, *QLens::fftplans_Lmatrix_inverse_emask;
+complex<double> *QLens::psf_transform_emask, *QLens::img_transform_emask;
+complex<double> **QLens::Lmatrix_transform_emask;
+double *QLens::img_rvec_emask;
+double **QLens::Lmatrix_imgs_rvec_emask;
+#endif
 
 ifstream SourcePixelGrid::sb_infile;
 
@@ -1915,8 +1926,7 @@ bool SourcePixelGrid::assign_source_mapping_flags_interpolate(lensvector &input_
 			}
 		}
 		if ((mapped_cartesian_srcpixels.size() - oldsize) != 3) die("Did not assign enough interpolation cells!");
-	}
-	else {
+	} else {
 		mapped_cartesian_srcpixels.push_back(NULL);
 		mapped_cartesian_srcpixels.push_back(NULL);
 		mapped_cartesian_srcpixels.push_back(NULL);
@@ -2633,6 +2643,15 @@ void QLens::generate_Rmatrix_from_hmatrices()
 		delete[] jvals[i];
 		delete[] lvals[i];
 	}
+	if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
+#ifdef USE_UMFPACK
+		Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+		Rmatrix_determinant_MUMPS();
+#endif
+#endif
+	}
 }
 
 void QLens::generate_Rmatrix_from_gmatrices()
@@ -2798,6 +2817,16 @@ void QLens::generate_Rmatrix_from_gmatrices()
 		delete[] jvals[i];
 		delete[] lvals[i];
 	}
+	if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
+#ifdef USE_UMFPACK
+		Rmatrix_determinant_UMFPACK();
+#else
+#ifdef USE_MUMPS
+		Rmatrix_determinant_MUMPS();
+#endif
+#endif
+	}
+
 }
 
 int SourcePixelGrid::assign_indices_and_count_levels()
@@ -10070,6 +10099,136 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 	return true;
 }
 
+bool QLens::setup_convolution_FFT_emask(const bool verbal)
+{
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	int npix;
+	int *pixel_map_i, *pixel_map_j;
+	npix = image_npixels;
+	pixel_map_i = active_image_pixel_i;
+	pixel_map_j = active_image_pixel_j;
+	if (use_input_psf_matrix) {
+		if (psf_matrix == NULL) return false;
+	}
+	else {
+		if ((psf_width_x==0) and (psf_width_y==0)) return false;
+		else if (generate_PSF_matrix()==false) {
+			if (verbal) warn("could not generate_PSF matrix");
+			return false;
+		}
+	}
+	int nx_half, ny_half;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+
+	int i,j,k,img_index;
+	fft_ni_emask = 1;
+	fft_nj_emask = 1;
+	fft_imin_emask = 50000;
+	fft_jmin_emask = 50000;
+	int imax=-1,jmax=-1;
+	int il0, jl0;
+
+	for (img_index=0; img_index < npix; img_index++)
+	{
+		i = pixel_map_i[img_index];
+		j = pixel_map_j[img_index];
+		if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
+			if (i > imax) imax = i;
+			if (j > jmax) jmax = j;
+			if (i < fft_imin_emask) fft_imin_emask = i;
+			if (j < fft_jmin_emask) fft_jmin_emask = j;
+		}
+	}
+	il0 = 1+imax-fft_imin_emask + psf_npixels_x; // will pad with extra zeros to avoid edge effects (wraparound of PSF blurring)
+	jl0 = 1+jmax-fft_jmin_emask + psf_npixels_y;
+
+#ifdef USE_FFTW
+	fft_ni_emask = il0;
+	fft_nj_emask = jl0;
+	if (fft_ni_emask % 2 != 0) fft_ni_emask++;
+	if (fft_nj_emask % 2 != 0) fft_nj_emask++;
+	int ncomplex = fft_nj_emask*(fft_ni_emask/2+1);
+	int npix_conv = fft_ni_emask*fft_nj_emask;
+	double *psf_rvec = new double[npix_conv];
+	//psf_transform_emask = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*ncomplex);
+	psf_transform_emask = new complex<double>[ncomplex];
+	fftw_plan fftplan_psf_emask = fftw_plan_dft_r2c_2d(fft_nj_emask,fft_ni_emask,psf_rvec,reinterpret_cast<fftw_complex*>(psf_transform_emask),FFTW_MEASURE);
+	for (i=0; i < npix_conv; i++) psf_rvec[i] = 0;
+	//img_rvec = new double[npix_conv];
+	//img_transform = new complex<double>[ncomplex];
+	//fftplan = fftw_plan_dft_r2c_2d(fft_nj_emask,fft_ni_emask,img_rvec,reinterpret_cast<fftw_complex*>(img_transform),FFTW_MEASURE);
+	//fftplan_inverse = fftw_plan_dft_c2r_2d(fft_nj_emask,fft_ni_emask,reinterpret_cast<fftw_complex*>(img_transform),img_rvec,FFTW_MEASURE);
+	//for (i=0; i < npix_conv; i++) img_rvec[i] = 0;
+
+	Lmatrix_imgs_rvec_emask = new double*[source_npixels];
+	Lmatrix_transform_emask = new complex<double>*[source_npixels];
+	fftplans_Lmatrix_emask = new fftw_plan[source_npixels];
+	fftplans_Lmatrix_inverse_emask = new fftw_plan[source_npixels];
+	for (i=0; i < source_npixels; i++) {
+		Lmatrix_imgs_rvec_emask[i] = new double[npix_conv];
+		Lmatrix_transform_emask[i] = new complex<double>[ncomplex];
+		fftplans_Lmatrix_emask[i] = fftw_plan_dft_r2c_2d(fft_nj_emask,fft_ni_emask,Lmatrix_imgs_rvec_emask[i],reinterpret_cast<fftw_complex*>(Lmatrix_transform_emask[i]),FFTW_MEASURE);
+		fftplans_Lmatrix_inverse_emask[i] = fftw_plan_dft_c2r_2d(fft_nj_emask,fft_ni_emask,reinterpret_cast<fftw_complex*>(Lmatrix_transform_emask[i]),Lmatrix_imgs_rvec_emask[i],FFTW_MEASURE);
+		for (j=0; j < npix_conv; j++) Lmatrix_imgs_rvec_emask[i][j] = 0;
+	}
+#else
+	while (fft_ni_emask < il0) fft_ni_emask *= 2; // need multiple of 2 to do FFT (not necessary with FFTW, but still seems faster that way)
+	while (fft_nj_emask < jl0) fft_nj_emask *= 2; // need multiple of 2 to do FFT (not necessary with FFTW, but still seems faster that way)
+	psf_zvec_emask = new double[2*fft_ni_emask*fft_nj_emask];
+	for (i=0; i < 2*fft_ni_emask*fft_nj_emask; i++) psf_zvec_emask[i] = 0;
+#endif
+	int zpsf_i, zpsf_j;
+	int l;
+	for (i=-nx_half; i < psf_npixels_x - nx_half; i++) {
+		for (j=-ny_half; j < psf_npixels_y - ny_half; j++) {
+			zpsf_i=i;
+			zpsf_j=j;
+			if (zpsf_i < 0) zpsf_i += fft_ni_emask;
+			if (zpsf_j < 0) zpsf_j += fft_nj_emask;
+#ifdef USE_FFTW
+			l = zpsf_j*fft_ni_emask + zpsf_i;
+			psf_rvec[l] = psf_matrix[nx_half+i][ny_half+j];
+#else
+			k = 2*(zpsf_j*fft_ni_emask + zpsf_i);
+			psf_zvec_emask[k] = psf_matrix[nx_half+i][ny_half+j];
+#endif
+		}
+	}
+	//cout << "PSF_RVEC: " << psf_rvec[0] << " " << psf_rvec[1] << " " << psf_rvec[2] << " " << psf_rvec[3] << endl;
+	//cout << "PSF_ZVEC: " << psf_zvec_emask[0] << " " << psf_zvec_emask[1] << " " << psf_zvec_emask[2] << " " << psf_zvec_emask[3] << endl;
+
+
+#ifdef USE_FFTW
+	fftw_execute(fftplan_psf_emask);
+	//cout << "PSF_RVEC: " << psf_rvec[0] << " " << psf_rvec[1] << " " << psf_rvec[2] << " " << psf_rvec[3] << endl;
+	//cout << "PSF_ZVEC: " << psf_zvec_emask[0] << " " << psf_zvec_emask[1] << " " << psf_zvec_emask[2] << " " << psf_zvec_emask[3] << endl;
+	//cout << "PSF_TRAN: " << real(psf_transform_emask[0]) << " " << imag(psf_transform_emask[0]) << " " << real(psf_transform_emask[1]) << " " << imag(psf_transform_emask[1]) << endl;
+	fftw_destroy_plan(fftplan_psf_emask);
+	delete[] psf_rvec;
+#else
+	int nnvec[2];
+	nnvec[0] = fft_ni_emask;
+	nnvec[1] = fft_nj_emask;
+	fourier_transform(psf_zvec_emask,2,nnvec,1);
+#endif
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) {
+			cout << "Wall time for setting up FFT for convolutions: " << wtime << endl;
+		}
+	}
+#endif
+
+	setup_fft_convolution_emask = true;
+	return true;
+}
+
 void QLens::cleanup_FFT_convolution_arrays()
 {
 	if (setup_fft_convolution) {
@@ -10094,9 +10253,30 @@ void QLens::cleanup_FFT_convolution_arrays()
 		fft_imin=fft_jmin=fft_ni=fft_nj=0;
 		setup_fft_convolution = false;
 	}
+	if (setup_fft_convolution_emask) {
+#ifdef USE_FFTW
+		delete[] psf_transform_emask;
+		psf_transform = NULL;
+		for (int i=0; i < source_npixels; i++) {
+			delete[] Lmatrix_imgs_rvec_emask[i];
+			delete[] Lmatrix_transform_emask[i];
+			fftw_destroy_plan(fftplans_Lmatrix_emask[i]);
+			fftw_destroy_plan(fftplans_Lmatrix_inverse_emask[i]);
+		}
+		delete[] Lmatrix_imgs_rvec_emask;
+		delete[] Lmatrix_transform_emask;
+		delete[] fftplans_Lmatrix_emask;
+		delete[] fftplans_Lmatrix_inverse_emask;
+#else
+		delete[] psf_zvec_emask;
+#endif
+		fft_imin_emask=fft_jmin_emask=fft_ni_emask=fft_nj_emask=0;
+		setup_fft_convolution_emask = false;
+	}
+
 }
 
-void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
+void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -10224,6 +10404,201 @@ void QLens::PSF_convolution_Lmatrix_dense(bool verbal)
 #ifndef USE_FFTW
 		for (i=0; i < source_npixels; i++) delete[] Lmatrix_imgs_zvec[i];
 		delete[] Lmatrix_imgs_zvec;
+#endif
+	} else {
+		if (use_input_psf_matrix) {
+			if (psf_matrix == NULL) return;
+		}
+		else if (generate_PSF_matrix()==false) return;
+
+		double **Lmatrix_psf = new double*[image_npixels];
+		int i,j;
+		for (i=0; i < image_npixels; i++) {
+			Lmatrix_psf[i] = new double[source_npixels];
+			for (j=0; j < source_npixels; j++) Lmatrix_psf[i][j] = 0;
+		}
+
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
+#endif
+
+		int k,l;
+		int psf_k, psf_l;
+		int img_index1, img_index2, src_index, col_index;
+		int index;
+		bool new_entry;
+		int Lmatrix_psf_nn=0;
+		int Lmatrix_psf_nn_part=0;
+		double *lmatptr, *lmatpsfptr, psfval;
+		#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,src_index,psf_k,psf_l,lmatptr,lmatpsfptr,psfval) schedule(static) reduction(+:Lmatrix_psf_nn_part)
+		for (img_index1=0; img_index1 < image_npixels; img_index1++)
+		{ // this loops over columns of the PSF blurring matrix
+			int col_i=0;
+			k = active_image_pixel_i[img_index1];
+			l = active_image_pixel_j[img_index1];
+			for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
+				i = k + nx_half - psf_k;
+				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
+					for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
+						j = l + ny_half - psf_l;
+						psfval = psf_matrix[psf_k][psf_l];
+						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+							if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
+								img_index2 = image_pixel_grid->pixel_index[i][j];
+								lmatptr = Lmatrix_dense.subarray(img_index2);
+								lmatpsfptr = Lmatrix_psf[img_index1];
+								for (src_index=0; src_index < source_npixels; src_index++) {
+									(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// note, the following function sets the pointer in Lmatrix dense to Lmatrix_psf (and deletes the old pointer), so no garbage collection necessary afterwards
+		Lmatrix_dense.input(Lmatrix_psf);
+
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) cout << "Wall time for calculating dense PSF convolution of Lmatrix: " << wtime << endl;
+		}
+#endif
+	}
+}
+
+void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
+{
+#ifdef USE_MPI
+	MPI_Comm sub_comm;
+	if (psf_convolution_mpi) {
+		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+	}
+#endif
+
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+
+	double nx_half, ny_half;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+
+	if (fft_convolution) {
+		if (!setup_fft_convolution_emask) {
+			if (!setup_convolution_FFT_emask(verbal)) {
+				warn("PSF convolution FFT failed for emask");
+				return;	
+			}
+		}
+		int *pixel_map_i, *pixel_map_j;
+		pixel_map_i = active_image_pixel_i;
+		pixel_map_j = active_image_pixel_j;
+
+		int i,j,k,l,img_index;
+
+#ifdef USE_FFTW
+		int ncomplex = fft_nj_emask*(fft_ni_emask/2+1);
+#else
+		int nnvec[2];
+		nnvec[0] = fft_ni_emask;
+		nnvec[1] = fft_nj_emask;
+		int nzvec = 2*fft_ni_emask*fft_nj_emask;
+		double **Lmatrix_imgs_zvec_emask = new double*[source_npixels];
+		for (i=0; i < source_npixels; i++) {
+			Lmatrix_imgs_zvec_emask[i] = new double[nzvec];
+		}
+#endif
+
+
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
+#endif
+		double fwtime0, fwtime;
+		double rtemp, itemp;
+		int npix_conv = fft_ni_emask*fft_nj_emask;
+		double *img_zvec, *img_rvec_emask;
+		complex<double> *img_cvec;
+		int src_index;
+		#pragma omp parallel for private(k,i,j,l,img_index,src_index,img_zvec,img_rvec_emask,img_cvec,rtemp,itemp) schedule(static)
+		for (src_index=0; src_index < source_npixels; src_index++) {
+#ifdef USE_FFTW
+			img_rvec_emask = Lmatrix_imgs_rvec_emask[src_index];
+			img_cvec = Lmatrix_transform_emask[src_index];
+			for (i=0; i < npix_conv; i++) img_rvec_emask[i] = 0;
+#else
+			img_zvec = Lmatrix_imgs_zvec_emask[src_index];
+			for (j=0; j < nzvec; j++) img_zvec[j] = 0;
+#endif
+			for (img_index=0; img_index < image_npixels; img_index++)
+			{
+				i = pixel_map_i[img_index];
+				j = pixel_map_j[img_index];
+				if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
+					i -= fft_imin_emask;
+					j -= fft_jmin_emask;
+#ifdef USE_FFTW
+					l = j*fft_ni_emask + i;
+					img_rvec_emask[l] = Lmatrix_dense[img_index][src_index];
+#else
+					k = 2*(j*fft_ni_emask + i);
+					img_zvec[k] = Lmatrix_dense[img_index][src_index];
+#endif
+
+				}
+			}
+
+#ifdef USE_FFTW
+			fftw_execute(fftplans_Lmatrix_emask[src_index]);
+			for (i=0; i < ncomplex; i++) {
+				img_cvec[i] = img_cvec[i]*psf_transform_emask[i];
+				img_cvec[i] /= npix_conv;
+			}
+			fftw_execute(fftplans_Lmatrix_inverse_emask[src_index]);
+
+#else
+			fourier_transform(img_zvec,2,nnvec,1);
+			for (i=0,j=0; i < npix_conv; i++, j += 2) {
+				rtemp = (img_zvec[j]*psf_zvec_emask[j] - img_zvec[j+1]*psf_zvec_emask[j+1]) / npix_conv;
+				itemp = (img_zvec[j]*psf_zvec_emask[j+1] + img_zvec[j+1]*psf_zvec_emask[j]) / npix_conv;
+				img_zvec[j] = rtemp;
+				img_zvec[j+1] = itemp;
+			}
+			fourier_transform(img_zvec,2,nnvec,-1);
+#endif
+
+			for (img_index=0; img_index < image_npixels; img_index++)
+			{
+				i = pixel_map_i[img_index];
+				j = pixel_map_j[img_index];
+				if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
+					i -= fft_imin_emask;
+					j -= fft_jmin_emask;
+#ifdef USE_FFTW
+					l = j*fft_ni_emask + i;
+					Lmatrix_dense[img_index][src_index] = img_rvec_emask[l];
+#else
+					k = 2*(j*fft_ni_emask + i);
+					Lmatrix_dense[img_index][src_index] = img_zvec[k];
+#endif
+				}
+			}
+		}
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) {
+				cout << "Wall time for calculating PSF convolution of Lmatrix via FFT: " << wtime << endl;
+			}
+		}
+#endif
+#ifndef USE_FFTW
+		for (i=0; i < source_npixels; i++) delete[] Lmatrix_imgs_zvec_emask[i];
+		delete[] Lmatrix_imgs_zvec_emask;
 #endif
 	} else {
 		if (use_input_psf_matrix) {
@@ -10894,26 +11269,17 @@ void QLens::generate_Rmatrix_from_image_plane_curvature()
 
 void QLens::generate_Rmatrix_norm()
 {
-	int i,j;
-	Rmatrix_diag_temp = new double[source_npixels];
-	Rmatrix_row_nn = new int[source_npixels];
-
 	Rmatrix_nn = source_npixels+1;
-	for (i=0; i < source_npixels; i++) {
-		Rmatrix_row_nn[i] = 0;
-		Rmatrix_diag_temp[i] = 1;
-	}
-
 	Rmatrix = new double[Rmatrix_nn];
 	Rmatrix_index = new int[Rmatrix_nn];
-	for (i=0; i < source_npixels; i++) Rmatrix[i] = Rmatrix_diag_temp[i];
 
-	Rmatrix_index[0] = source_npixels+1;
-	for (i=0; i < source_npixels; i++)
-		Rmatrix_index[i+1] = Rmatrix_index[i] + Rmatrix_row_nn[i];
+	for (int i=0; i < source_npixels; i++) {
+		Rmatrix[i] = 1;
+		Rmatrix_index[i] = source_npixels+1;
+	}
+	Rmatrix_index[source_npixels] = source_npixels+1;
 
-	delete[] Rmatrix_row_nn;
-	delete[] Rmatrix_diag_temp;
+	Rmatrix_log_determinant = 0;
 }
 
 void QLens::create_regularization_matrix()
@@ -10948,35 +11314,18 @@ void QLens::create_regularization_matrix()
 	//}
 }
 
-void QLens::create_regularization_matrix_dense()
+void QLens::create_regularization_matrix_shapelet()
 {
 	switch (regularization_method) {
 		case Norm:
 			generate_Rmatrix_norm(); break;
 		case Gradient:
-			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_gradient();
-			else die("gradient regularization for dense matrices only implemented for Shapelet mode");
-			break;
+			generate_Rmatrix_shapelet_gradient(); break;
 		case Curvature:
-			if (source_fit_mode==Shapelet_Source) generate_Rmatrix_shapelet_curvature();
-			else die("curvature regularization for dense matrices only implemented for Shapelet mode");
-			break;
+			generate_Rmatrix_shapelet_curvature(); break;
 		default:
 			die("Regularization method not recognized for dense matrices");
 	}
-}
-
-void QLens::generate_Rmatrix_norm_dense()
-{
-	Rmatrix = new double[Rmatrix_nn];
-	Rmatrix_index = new int[Rmatrix_nn];
-	Rmatrix_nn = source_npixels+1;
-
-	for (int i=0; i < source_npixels; i++) {
-		Rmatrix[i] = 1;
-		Rmatrix_index[i] = source_npixels;
-	}
-	Rmatrix_log_determinant = 0;
 }
 
 void QLens::generate_Rmatrix_shapelet_gradient()
@@ -11033,7 +11382,7 @@ void QLens::generate_Rmatrix_shapelet_curvature()
 
 }
 
-void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
+void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal)
 {
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
@@ -11045,6 +11394,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	double *Fmatrix_stacked; // used only if dense_Fmatrix is set to true
 	//double effective_reg_parameter = regularization_parameter * (1000.0/source_npixels);
 	double effective_reg_parameter = regularization_parameter;
 
@@ -11102,138 +11452,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	if (group_id == group_np-1) mpi_chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
 	mpi_end = mpi_start + mpi_chunk;
 
-/*
-#ifdef USE_MKL
-	const int nrows = 2;
-	const int ncols = 2;
-	int *image_pixel_location_Bmatrix = new int[nrows+1];
-	int *Bmatrix_index = new int[nrows*ncols];
-	double *Bmatrix = new double[nrows*ncols];
-	for (i=0,j=0; i < nrows; i++) {
-		image_pixel_location_Bmatrix[i] = j;
-		for (k=0; k < ncols; k++) {
-			Bmatrix_index[j] = k;
-			Bmatrix[j] = j+1;
-			cout << Bmatrix[j] << " ";
-			j++;
-		}
-		cout << endl;
-	}
-	cout << endl;
-	image_pixel_location_Bmatrix[nrows] = j;
-	int *image_pixel_end_Bmatrix = new int[nrows];
-	for (i=0; i < nrows; i++) image_pixel_end_Bmatrix[i] = image_pixel_location_Bmatrix[i+1];
-	cout << "loc_Bmatrix:" << endl;
-	for (i=0; i < nrows; i++) cout << image_pixel_location_Bmatrix[i] << " ";
-	cout << endl;
-	cout << "end_Bmatrix:" << endl;
-	for (i=0; i < nrows; i++) cout << image_pixel_end_Bmatrix[i] << " ";
-	cout << endl;
-	cout << "Bmatrix_index:" << endl;
-	for (j=0; j < image_pixel_location_Bmatrix[nrows]; j++) cout << Bmatrix_index[j] << " ";
-	cout << endl;
-	cout << "Bmatrix:" << endl;
-	for (j=0; j < image_pixel_location_Bmatrix[nrows]; j++) cout << Bmatrix[j] << " ";
-	cout << endl;
-	//int *srcpixel_location_Fmatrix = new int[ncols+1];
-	//int *srcpixel_end_Fmatrix = new int[ncols+1];
-	//int *Fmatrix_csr_index = new int[nrows*ncols];
-	//double *Fmatrix_csr = new double[nrows*ncols];
-
-	int *srcpixel_location_Fmatrix;
-	int *srcpixel_end_Fmatrix;
-	int *Fmatrix_csr_index;
-	double *Fmatrix_csr;
-
-
-	int nsrc1, nsrc2;
-	sparse_index_base_t indxing;
-	sparse_matrix_t Lsparse;
-	sparse_matrix_t Fsparse;
-	cout << "Creating CSR matrix..." << endl;
-	cout << "ncols=" << ncols << ", nrows=" << nrows << endl;
-	sparse_status_t status;
-	status = mkl_sparse_d_create_csr(&Lsparse, SPARSE_INDEX_BASE_ZERO, nrows, ncols, image_pixel_location_Bmatrix, image_pixel_end_Bmatrix, Bmatrix_index, Bmatrix);
-	if (status==SPARSE_STATUS_SUCCESS) cout << "matrix creation worked!" << endl;
-	else cout << "sparse matrix creation bombed :(" << endl;
-	//status = mkl_sparse_destroy(Lsparse);
-	//if (status==SPARSE_STATUS_SUCCESS) cout << "matrix destruction worked!" << endl;
-	//else cout << "sparse matrix destruction bombed :(" << endl;
-	//die();
-
-	cout << "mkl src_npixels=" << ncols << ", img_npixels=" << nrows << endl;
-
-	double *testx = new double[10];
-	double *testy = new double[10];
-	for (i=0; i < nrows; i++) {
-		testx[i] = 1;
-		testy[i] = 0.5;
-	}
-	for (i=0; i < ncols; i++) {
-		testy[i] = 0.0;
-	}
-
-	//char blergh = 'T';
-	//char matdescr[6];
-	//matdescr[0] = 'G';
-	//matdescr[2] = 'N';
-	//matdescr[3] = 'C';
-	double beta = 0.0;
-	double alpha = 1.0;
-	//mkl_cspblas_dcsrgemv(&blergh, &nrows, Bmatrix, image_pixel_location_Bmatrix, Bmatrix_index, testx, testy);
-	//mkl_dcsrmv (&blergh, &nrows, &ncols, &alpha, matdescr, Bmatrix, Bmatrix_index, image_pixel_location_Bmatrix, image_pixel_end_Bmatrix, testx, &beta, testy);
-
-	//cout << "Survived!" << endl;
-
-	//cout << "Defining matrix descr..." << endl;
-	//matrix_descr descr;
-	//descr.type = SPARSE_MATRIX_TYPE_GENERAL;
-	//cout << "Trying sparse mv..." << endl;
-	//status = mkl_sparse_d_mv(SPARSE_OPERATION_TRANSPOSE, alpha, Lsparse, descr, testx, beta, testy);
-	//cout << "HI!" << endl;
-	//if (status==SPARSE_STATUS_SUCCESS) cout << "mv worked!" << endl;
-	//else {
-		//cout << "mv bombed :(" << endl;
-		//if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
-		//else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
-		//else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
-		//else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
-		//die();
-	//}
-	//cout << testy[0] << " " << testy[1] << endl;
-
-	cout << "Running sparse syrk..." << endl;
-	status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
-	if (status==SPARSE_STATUS_SUCCESS) cout << "syrk worked!" << endl;
-	else {
-		cout << "syrk bombed :(" << endl;
-		if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
-		else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
-		else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
-		else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
-		die();
-	}
-	cout << "Exporting Fmatrix..." << endl;
-	nsrc1 = ncols;
-	nsrc2 = ncols;
-	status = mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
-	if (status==SPARSE_STATUS_SUCCESS) cout << "export worked!" << endl;
-	else cout << "export bombed :(" << endl;
-	cout << "MKL Fmatrix rows =" << nsrc1 << " " << nsrc2 << endl;
-	cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[nsrc1-1] << " elements" << endl;
-	for (i=0; i < ncols; i++) {
-		cout << "Row " << i << " goes from " << srcpixel_location_Fmatrix[i] << " to " << srcpixel_end_Fmatrix[i] << endl;
-		for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
-			cout << "row " << i << ", column " << Fmatrix_csr_index[j] << ": " << Fmatrix_csr[j] << endl;
-		}
-	}
-	die();
-	//if (nsrc1 != ncols) warn("WHAT THE WHAT?! nsrc1 not equal to number of source pixels (%i vs %i)",nsrc1,ncols);
-	//if (nsrc2 != ncols) warn("WHAT THE WHAT?! nsrc2 not equal to number of source pixels (%i vs %i)",nsrc2,ncols);
-#endif
-	*/
-
-
 #ifdef USE_MKL
 	int *srcpixel_location_Fmatrix, *srcpixel_end_Fmatrix, *Fmatrix_csr_index;
 	double *Fmatrix_csr;
@@ -11247,70 +11465,71 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	mkl_sparse_d_create_csr(&Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, source_npixels, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
 	mkl_sparse_order(Lsparse);
 	sparse_status_t status;
-	//cout << "Running sparse syrk..." << endl;
-	status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
-	//if (status==SPARSE_STATUS_SUCCESS) cout << "syrk worked!" << endl;
-	//else {
-		//cout << "syrk bombed :(" << endl;
-		//if (status==SPARSE_STATUS_NOT_INITIALIZED) cout << "Empty handle or matrix array" << endl;
-		//else if (status==SPARSE_STATUS_ALLOC_FAILED) cout << "Allocation failed" << endl;
-		//else if (status==SPARSE_STATUS_INVALID_VALUE) cout << "Input parameters are fucked up" << endl;
-		//else if (status==SPARSE_STATUS_EXECUTION_FAILED) cout << "Execution failed...what the fuck?!" << endl;
-		//die();
-	//}
-	//cout << "Exporting Fmatrix..." << endl;
-	mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
-	//if (status==SPARSE_STATUS_SUCCESS) cout << "export worked!" << endl;
-	//else cout << "export bombed :(" << endl;
+	if (!dense_Fmatrix) {
+		status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
+		mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
 
-	if (nsrc1 != source_npixels) warn("WHAT THE WHAT?! nsrc1 not equal to number of source pixels (%i vs %i)",nsrc1,source_npixels);
-	if (nsrc2 != source_npixels) warn("WHAT THE WHAT?! nsrc2 not equal to number of source pixels (%i vs %i)",nsrc2,source_npixels);
-	if ((verbal) and (mpi_id==0)) cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[source_npixels-1] << " elements" << endl;
-	//cout << "Building Fmatrix in diagonal form..." << endl;
-	bool duplicate_column;
-	int dup_k;
-	for (i=0; i < source_npixels; i++) {
-		for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
-			duplicate_column = false;
-			if (Fmatrix_csr_index[j]==i) {
-				Fmatrix_diags[i] += Fmatrix_csr[j]/covariance;
-				//cout << "Adding " << Fmatrix_csr[j] << " to diag " << i << endl;
-			}
-			else if (Fmatrix_csr[j] != 0) {
-				if (Fmatrix_csr_index[j] < i) die("FUCK ME"); // just temporary to make sure it's returning only upper triangular elements..REMOVE THIS LINE LATER
-				for (k=0; k < Fmatrix_index_rows[i].size(); k++) if (Fmatrix_csr_index[j]==Fmatrix_index_rows[i][k]) {
-					duplicate_column = true;
-					dup_k = k;
+		if ((verbal) and (mpi_id==0)) cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[source_npixels-1] << " elements" << endl;
+		bool duplicate_column;
+		int dup_k;
+		for (i=0; i < source_npixels; i++) {
+			for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
+				duplicate_column = false;
+				if (Fmatrix_csr_index[j]==i) {
+					Fmatrix_diags[i] += Fmatrix_csr[j]/covariance;
+					//cout << "Adding " << Fmatrix_csr[j] << " to diag " << i << endl;
 				}
-				if (duplicate_column) {
-					Fmatrix_rows[i][k] += Fmatrix_csr[j]/covariance;
-				} else {
-					Fmatrix_rows[i].push_back(Fmatrix_csr[j]/covariance);
-					Fmatrix_index_rows[i].push_back(Fmatrix_csr_index[j]);
-					Fmatrix_row_nn[i]++;
-					Fmatrix_nn_part++;
+				else if (Fmatrix_csr[j] != 0) {
+					if (Fmatrix_csr_index[j] < i) die("FUCK ME"); // just temporary to make sure it's returning only upper triangular elements..REMOVE THIS LINE LATER
+					for (k=0; k < Fmatrix_index_rows[i].size(); k++) if (Fmatrix_csr_index[j]==Fmatrix_index_rows[i][k]) {
+						duplicate_column = true;
+						dup_k = k;
+					}
+					if (duplicate_column) {
+						Fmatrix_rows[i][k] += Fmatrix_csr[j]/covariance;
+						die("duplicate!"); // this is not a big deal, but if duplicates never happen, then you might want to redo this part so it allocates memory in one go for each row instead of a bunch of push_back's
+					} else {
+						Fmatrix_rows[i].push_back(Fmatrix_csr[j]/covariance);
+						Fmatrix_index_rows[i].push_back(Fmatrix_csr_index[j]);
+						Fmatrix_row_nn[i]++;
+						Fmatrix_nn_part++;
+					}
 				}
 			}
 		}
+		//cout << "Done!" << endl;
+		//cout << "LMATRIX:" << endl;
+		//for (i=0; i < image_npixels; i++) {
+			//cout << "Row " << i << ":" << endl;
+			//for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+				//cout << Lmatrix_index[j] << " " << Lmatrix[j] << endl;
+			//}
+		//}
+
+		//cout << endl << "FMATRIX:" << endl;
+
+		//for (i=0; i < source_npixels; i++) {
+			//cout << "Row " << i << ":" << endl;
+			//for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
+				//cout << Fmatrix_csr_index[j] << " " << Fmatrix_csr[j] << endl;
+			//}
+		//}
+	} else {
+		int ntot = source_npixels*(source_npixels+1)/2;
+		Fmatrix_packed.input(ntot);
+		Fmatrix_stacked = new double[source_npixels*source_npixels];
+		for (i=0; i < source_npixels*source_npixels; i++) Fmatrix_stacked[i] = 0;
+		mkl_sparse_d_syrkd (SPARSE_OPERATION_TRANSPOSE, Lsparse, 1.0, 0.0, Fmatrix_stacked, SPARSE_LAYOUT_ROW_MAJOR, source_npixels);
+		LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_stacked,source_npixels,Fmatrix_packed.array());
+		int nf=0;
+		for (i=0; i < ntot; i++) {
+			if (Fmatrix_packed[i] != 0) {
+				Fmatrix_packed[i] /= covariance;
+				nf++;
+			}
+		}
+		if ((verbal) and (mpi_id==0)) cout << "Fmatrix_dense has " << nf << " nonzero elements" << endl;
 	}
-	//cout << "Done!" << endl;
-	//cout << "LMATRIX:" << endl;
-	//for (i=0; i < image_npixels; i++) {
-		//cout << "Row " << i << ":" << endl;
-		//for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
-			//cout << Lmatrix_index[j] << " " << Lmatrix[j] << endl;
-		//}
-	//}
-
-	//cout << endl << "FMATRIX:" << endl;
-
-	//for (i=0; i < source_npixels; i++) {
-		//cout << "Row " << i << ":" << endl;
-		//for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
-			//cout << Fmatrix_csr_index[j] << " " << Fmatrix_csr[j] << endl;
-		//}
-	//}
-
 #else
 	jl_pair jl;
 	#pragma omp parallel
@@ -11421,115 +11640,133 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	}
 #endif
 
-	for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
-		if (regularization_method != None) {
-			if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
-			col_i=0;
-			for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
-				new_entry = true;
-				k=0;
-				while ((k < Fmatrix_row_nn[src_index1]) and (new_entry==true)) {
-					if (Rmatrix_index[j]==Fmatrix_index_rows[src_index1][k]) {
-						new_entry = false;
-						col_index = k;
+	if (!dense_Fmatrix) {
+		for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
+			if (regularization_method != None) {
+				if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
+				col_i=0;
+				for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
+					new_entry = true;
+					k=0;
+					while ((k < Fmatrix_row_nn[src_index1]) and (new_entry==true)) {
+						if (Rmatrix_index[j]==Fmatrix_index_rows[src_index1][k]) {
+							new_entry = false;
+							col_index = k;
+						}
+						k++;
 					}
-					k++;
-				}
-				if (new_entry) {
-					if (!optimize_regparam) {
-						Fmatrix_rows[src_index1].push_back(effective_reg_parameter*Rmatrix[j]);
+					if (new_entry) {
+						if (!optimize_regparam) {
+						//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was 0, now adding " << (effective_reg_parameter*Rmatrix[j]) << endl;
+							Fmatrix_rows[src_index1].push_back(effective_reg_parameter*Rmatrix[j]);
+						} else {
+							Fmatrix_rows[src_index1].push_back(0);
+							// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
+						}
+						Fmatrix_index_rows[src_index1].push_back(Rmatrix_index[j]);
+						Fmatrix_row_nn[src_index1]++;
+						col_i++;
 					} else {
-						Fmatrix_rows[src_index1].push_back(0);
-						// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
-					}
-					Fmatrix_index_rows[src_index1].push_back(Rmatrix_index[j]);
-					Fmatrix_row_nn[src_index1]++;
-					col_i++;
-				} else {
-					if (!optimize_regparam) {
-						Fmatrix_rows[src_index1][col_index] += effective_reg_parameter*Rmatrix[j];
+						if (!optimize_regparam) {
+						//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_rows[src_index1][col_index] << ", now adding " << (effective_reg_parameter*Rmatrix[j]) << endl;
+							Fmatrix_rows[src_index1][col_index] += effective_reg_parameter*Rmatrix[j];
+						}
+
 					}
 				}
+				Fmatrix_nn_part += col_i;
 			}
-			Fmatrix_nn_part += col_i;
 		}
-	}
-
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for calculating Fmatrix elements: " << wtime << endl;
-		wtime0 = omp_get_wtime();
-	}
-#endif
 
 #ifdef USE_MPI
-	MPI_Allreduce(&Fmatrix_nn_part, &Fmatrix_nn, 1, MPI_INT, MPI_SUM, sub_comm);
+		MPI_Allreduce(&Fmatrix_nn_part, &Fmatrix_nn, 1, MPI_INT, MPI_SUM, sub_comm);
 #else
-	Fmatrix_nn = Fmatrix_nn_part;
+		Fmatrix_nn = Fmatrix_nn_part;
 #endif
-	Fmatrix_nn += source_npixels+1;
+		Fmatrix_nn += source_npixels+1;
 
-	Fmatrix = new double[Fmatrix_nn];
-	Fmatrix_index = new int[Fmatrix_nn];
+		Fmatrix = new double[Fmatrix_nn];
+		Fmatrix_index = new int[Fmatrix_nn];
 
 #ifdef USE_MPI
-	int id, chunk, start, end, length;
-	for (id=0; id < group_np; id++) {
-		chunk = source_npixels / group_np;
-		start = id*chunk;
-		if (id == group_np-1) chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
-		MPI_Bcast(Fmatrix_row_nn + start,chunk,MPI_INT,id,sub_comm);
-		MPI_Bcast(Fmatrix_diags + start,chunk,MPI_DOUBLE,id,sub_comm);
-	}
-#endif
-
-	Fmatrix_index[0] = source_npixels+1;
-	for (i=0; i < source_npixels; i++) {
-		Fmatrix_index[i+1] = Fmatrix_index[i] + Fmatrix_row_nn[i];
-	}
-	if (Fmatrix_index[source_npixels] != Fmatrix_nn) die("Fmatrix # of elements don't match up (%i vs %i), process %i",Fmatrix_index[source_npixels],Fmatrix_nn,mpi_id);
-
-	for (i=0; i < source_npixels; i++)
-		Fmatrix[i] = Fmatrix_diags[i];
-
-	int indx;
-	for (i=mpi_start; i < mpi_end; i++) {
-		indx = Fmatrix_index[i];
-		for (j=0; j < Fmatrix_row_nn[i]; j++) {
-			Fmatrix[indx+j] = Fmatrix_rows[i][j];
-			Fmatrix_index[indx+j] = Fmatrix_index_rows[i][j];
+		int id, chunk, start, end, length;
+		for (id=0; id < group_np; id++) {
+			chunk = source_npixels / group_np;
+			start = id*chunk;
+			if (id == group_np-1) chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
+			MPI_Bcast(Fmatrix_row_nn + start,chunk,MPI_INT,id,sub_comm);
+			MPI_Bcast(Fmatrix_diags + start,chunk,MPI_DOUBLE,id,sub_comm);
 		}
-	}
+#endif
+
+		Fmatrix_index[0] = source_npixels+1;
+		for (i=0; i < source_npixels; i++) {
+			Fmatrix_index[i+1] = Fmatrix_index[i] + Fmatrix_row_nn[i];
+		}
+		if (Fmatrix_index[source_npixels] != Fmatrix_nn) die("Fmatrix # of elements don't match up (%i vs %i), process %i",Fmatrix_index[source_npixels],Fmatrix_nn,mpi_id);
+
+		for (i=0; i < source_npixels; i++)
+			Fmatrix[i] = Fmatrix_diags[i];
+
+		int indx;
+		for (i=mpi_start; i < mpi_end; i++) {
+			indx = Fmatrix_index[i];
+			for (j=0; j < Fmatrix_row_nn[i]; j++) {
+				Fmatrix[indx+j] = Fmatrix_rows[i][j];
+				Fmatrix_index[indx+j] = Fmatrix_index_rows[i][j];
+			}
+		}
 
 #ifdef USE_MPI
-	for (id=0; id < group_np; id++) {
-		chunk = source_npixels / group_np;
-		start = id*chunk;
-		if (id == group_np-1) chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
-		end = start + chunk;
-		length = Fmatrix_index[end] - Fmatrix_index[start];
-		MPI_Bcast(Fmatrix + Fmatrix_index[start],length,MPI_DOUBLE,id,sub_comm);
-		MPI_Bcast(Fmatrix_index + Fmatrix_index[start],length,MPI_INT,id,sub_comm);
-	}
-	MPI_Comm_free(&sub_comm);
+		for (id=0; id < group_np; id++) {
+			chunk = source_npixels / group_np;
+			start = id*chunk;
+			if (id == group_np-1) chunk += (source_npixels % group_np); // assign the remainder elements to the last mpi process
+			end = start + chunk;
+			length = Fmatrix_index[end] - Fmatrix_index[start];
+			MPI_Bcast(Fmatrix + Fmatrix_index[start],length,MPI_DOUBLE,id,sub_comm);
+			MPI_Bcast(Fmatrix_index + Fmatrix_index[start],length,MPI_INT,id,sub_comm);
+		}
+		MPI_Comm_free(&sub_comm);
 #endif
 
 #ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for Fmatrix MPI communication + construction: " << wtime << endl;
-	}
+		if (show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) cout << "Wall time for Fmatrix MPI communication + construction: " << wtime << endl;
+		}
 #endif
-	if ((mpi_id==0) and (verbal)) cout << "Fmatrix now has " << Fmatrix_nn << " elements\n";
+		if ((mpi_id==0) and (verbal)) cout << "Fmatrix now has " << Fmatrix_nn << " elements\n";
 
-	if ((mpi_id==0) and (verbal)) {
-		int Fmatrix_ntot = source_npixels*(source_npixels+1)/2;
-		double sparseness = ((double) Fmatrix_nn)/Fmatrix_ntot;
-		cout << "src_npixels = " << source_npixels << endl;
-		cout << "Fmatrix ntot = " << Fmatrix_ntot << endl;
-		cout << "Fmatrix sparseness = " << sparseness << endl;
+		if ((mpi_id==0) and (verbal)) {
+			int Fmatrix_ntot = source_npixels*(source_npixels+1)/2;
+			double sparseness = ((double) Fmatrix_nn)/Fmatrix_ntot;
+			cout << "src_npixels = " << source_npixels << endl;
+			cout << "Fmatrix ntot = " << Fmatrix_ntot << endl;
+			cout << "Fmatrix sparseness = " << sparseness << endl;
+		}
+
+	} else {
+		int k,indx_start=0;
+		if ((regularization_method != None) and (!optimize_regparam)) {
+			for (i=0; i < source_npixels; i++) {
+				Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
+				for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
+					//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
+					Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
+				}
+				indx_start += source_npixels-i;
+			}
+		}
 	}
+
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) cout << "Wall time for calculating Fmatrix elements: " << wtime << endl;
+			wtime0 = omp_get_wtime();
+		}
+#endif
 
 	//cout << "FMATRIX (SPARSE):" << endl;
 	//for (i=0; i < source_npixels; i++) {
@@ -11540,8 +11777,8 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 		//cout << endl;
 	//}
 
-	bool found;
 /*
+	bool found;
 	cout << "LMATRIX:" << endl;
 	for (i=0; i < image_npixels; i++) {
 		for (j=0; j < source_npixels; j++) {
@@ -11558,30 +11795,10 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	}
 	*/	
 
-	//cout << "FMATRIX DIAGS:" << endl;
-	/*
-	cout << "FMATRIX: " << endl;
-	for (i=0; i < source_npixels; i++) {
-		for (j=0; j < source_npixels; j++) {
-			if (i==j) cout << Fmatrix[i] << " ";
-			else {
-				found = false;
-				for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
-					if (Fmatrix_index[k]==j) {
-						found = true;
-						cout << Fmatrix[k] << " ";
-					}
-				}
-				if (!found) cout << "0 ";
-			}
-		}
-		cout << endl;
-	}
-*/
-
 #ifdef USE_MKL
 	mkl_sparse_destroy(Lsparse);
-	mkl_sparse_destroy(Fsparse);
+	if (!dense_Fmatrix) mkl_sparse_destroy(Fsparse);
+	else delete[] Fmatrix_stacked;
 #endif
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
@@ -11593,7 +11810,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(bool verbal)
 	delete[] Fmatrix_row_nn;
 }
 
-void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
+void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -11730,18 +11947,19 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(bool verbal)
 	}
 
 #ifdef USE_MKL
-   cblas_dsyrk(CblasRowMajor,CblasLower,CblasNoTrans,source_npixels,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked,source_npixels);
-   LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_stacked,source_npixels,Fmatrix_packed.array());
+   cblas_dsyrk(CblasRowMajor,CblasUpper,CblasNoTrans,source_npixels,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked,source_npixels);
+   LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_stacked,source_npixels,Fmatrix_packed.array());
 #endif
 
    int k,indx_start=0;
    if ((regularization_method != None) and (!optimize_regparam)) {
       for (i=0; i < source_npixels; i++) {
-         Fmatrix_packed[indx_start+i] += effective_reg_parameter*Rmatrix[i];
+         Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
 			for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-				Fmatrix_packed[indx_start+Rmatrix_index[k]] += effective_reg_parameter*Rmatrix[k];
+				//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
+				Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
 			}
-			indx_start += i+1;
+			indx_start += source_npixels-i;
       }
    }
 
@@ -11770,12 +11988,34 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	/*
+	double **Fmat = new double*[source_npixels];
+	int i,j,k;
+	for (i=0; i < source_npixels; i++) {
+		Fmat[i] = new double[i+1];
+	}
+	for (k=0,j=0; j < source_npixels; j++) {
+		for (i=j; i < source_npixels; i++) {
+			Fmat[i][j] = Fmatrix_packed[k++];
+		}
+	}
+	for (k=0,i=0; i < source_npixels; i++) {
+		for (j=0; j <= i; j++) {
+			Fmatrix_packed[k++] = Fmat[i][j];
+		}
+		delete[] Fmat[i];
+	}
+	delete[] Fmat;
+	*/
 
 #ifdef USE_MKL
-   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed.array());
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_packed.array());
+	for (int i=0; i < source_npixels; i++) source_pixel_vector[i] = Dvector[i];
+	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,Fmatrix_packed.array(),source_pixel_vector,1);
 #else
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
+	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
 #endif
 	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 #ifdef USE_OPENMP
@@ -11786,7 +12026,6 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	}
 #endif
 
-	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
 	int index=0;
 	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
 	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->update_surface_brightness(index);
@@ -11803,8 +12042,9 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal)
 {
 #ifdef USE_OPENMP
+	double wtime_opt0, wtime_opt;
 	if (show_wtime) {
-		wtime0 = omp_get_wtime();
+		wtime_opt0 = omp_get_wtime();
 	}
 #endif
 	img_minus_sbprofile = new double[image_npixels];
@@ -11837,13 +12077,14 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing: " << regularization_parameter << endl;
 
    int j,k,indx_start=0;
+
 	if (dense_Fmatrix) {
 		for (i=0; i < source_npixels; i++) {
-			Fmatrix_packed[indx_start+i] += regularization_parameter*Rmatrix[i];
+			Fmatrix_packed[indx_start] += regularization_parameter*Rmatrix[i];
 			for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-				Fmatrix_packed[indx_start+Rmatrix_index[k]] += regularization_parameter*Rmatrix[k];
+				Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += regularization_parameter*Rmatrix[k];
 			}
-			indx_start += i+1;
+			indx_start += source_npixels-i;
 		}
 	} else {
 		for (i=0; i < source_npixels; i++) {
@@ -11866,9 +12107,9 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	delete[] img_minus_sbprofile;
 #ifdef USE_OPENMP
 	if (show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for optimizing regularization parameter: " << wtime << endl;
-		wtime0 = omp_get_wtime();
+		wtime_opt = omp_get_wtime() - wtime_opt0;
+		if (mpi_id==0) cout << "Wall time for optimizing regularization parameter: " << wtime_opt << endl;
+		wtime_opt0 = omp_get_wtime();
 	}
 #endif
 }
@@ -11970,27 +12211,23 @@ double QLens::chisq_regparam_dense(const double logreg)
 
    int k,indx_start=0;
 	for (i=0; i < source_npixels; i++) {
-		Fmatrix_packed_copy[indx_start+i] += regularization_parameter*Rmatrix[i];
+		Fmatrix_packed_copy[indx_start] += regularization_parameter*Rmatrix[i];
 		for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-			Fmatrix_packed_copy[indx_start+Rmatrix_index[k]] += regularization_parameter*Rmatrix[k];
+			Fmatrix_packed_copy[indx_start+Rmatrix_index[k]-i] += regularization_parameter*Rmatrix[k];
 		}
-		indx_start += i+1;
+		indx_start += source_npixels-i;
 	}
-
 	double Fmatrix_logdet;
-
 #ifdef USE_MKL
-   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'L',source_npixels,Fmatrix_packed_copy.array());
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_packed_copy.array());
+	for (int i=0; i < source_npixels; i++) temp_src[i] = Dvector[i];
+	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,Fmatrix_packed_copy.array(),temp_src.array(),1);
 #else
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
+	Cholesky_solve_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
 #endif
 	Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
-
-	//bool status = Cholesky_dcmp(Fmatrix_copy.pointer(),Fmatrix_logdet,source_npixels);
-	//Cholesky_solve(Fmatrix_copy.pointer(),Dvector,temp_src.array(),source_npixels);
-
-	Cholesky_solve_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
 	double *Lmatptr;
@@ -12009,10 +12246,17 @@ double QLens::chisq_regparam_dense(const double logreg)
 		//pix_j = active_image_pixel_j[i];
 		//img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		temp_img = 0;
-		Lmatptr = (Lmatrix_dense.pointer())[i];
-		tempsrcptr = temp_src.array();
-		for (j=0; j < source_npixels; j++) {
-			temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
+		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
+			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
+			Lmatptr = (Lmatrix_dense.pointer())[i];
+			tempsrcptr = temp_src.array();
+			for (j=0; j < source_npixels; j++) {
+				temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
+			}
+		} else {
+			for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+				temp_img += Lmatrix[j]*temp_src[Lmatrix_index[j]];
+			}
 		}
 		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[i])/covariance;
 		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
@@ -12166,6 +12410,7 @@ bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 	return status;
 }
 
+/*
 void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 {
 	logdet = 0;
@@ -12176,6 +12421,7 @@ void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 	}
 	logdet *= 2;
 }
+*/
 
 /*
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
@@ -12193,11 +12439,12 @@ void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 }
 */
 
+/*
 void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 {
 	int i,k;
 	double sum;
-	int *indx = new int[source_npixels];
+	int *indx = new int[n];
 	indx[0] = 0;
 	for (i=0; i < n; i++) {
 		if (i > 0) indx[i] = indx[i-1] + i;
@@ -12208,6 +12455,43 @@ void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 		for (sum=x[i], k=i+1; k < n; k++) sum -= a[indx[k]+i]*x[k];
 		x[i] = sum / a[indx[i]+i];
 	}	 
+	delete[] indx;
+}
+*/
+
+void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
+{
+	logdet = 0;
+	int indx = 0;
+	for (int i=0; i < n; i++) {
+		logdet += log(abs(*(a+indx)));
+		indx += n-i;
+	}
+	logdet *= 2;
+}
+
+// This is an attempt at upper triangular versions (not working yet), but you need to make the Cholesky upper triangular as well...fix later
+void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
+{
+	int i,k;
+	double sum;
+	int *indx = new int[n];
+	cout << "HI0" << endl;
+	indx[n-1] = (n*(n+1))/2 - 1;
+	cout << "HI1" << endl;
+	for (i=n-1; i >= 0; i--) {
+		if (i < n-1) indx[i] = indx[i+1] - n + i;
+		for (sum=b[i], k=1; k < n-1-i; k++) sum -= a[indx[i]+k]*x[k+i];
+		x[i] = sum / a[indx[i]];
+		cout << "Setting y[" << i << "]" << endl;
+	}
+	cout << "HI2" << endl;
+	for (i=0; i < n; i++) {
+		for (sum=x[i], k=i-1; k >= 0; k--) sum -= a[indx[k]+i-k]*x[k];
+		x[i] = sum / a[indx[i]];
+		cout << "Setting x[" << i << "]" << endl;
+	}	 
+	cout << "HI3" << endl;
 	delete[] indx;
 }
 

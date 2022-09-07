@@ -12878,7 +12878,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		initialize_pixel_matrices(verbal);
 		if (regularization_method != None) create_regularization_matrix();
 		if (inversion_method==DENSE) {
-			if (regularization_method != None) create_regularization_matrix_dense(); // right now this only works for norm regularization (for pixellated source)
 			convert_Lmatrix_to_dense();
 			PSF_convolution_Lmatrix_dense(verbal);
 		} else {
@@ -12889,8 +12888,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
+		bool dense_Fmatrix = ((inversion_method==DENSE_FMATRIX) or (inversion_method==DENSE)) ? true : false;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);
-		else create_lensing_matrices_from_Lmatrix(verbal);
+		else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -12899,11 +12899,13 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 #endif
 
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(false,verbal);
+		if ((optimize_regparam) and (regularization_method != None)) {
+			optimize_regularization_parameter(dense_Fmatrix,verbal);
+		}
 
 		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
 		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
-		else if (inversion_method==DENSE) invert_lens_mapping_dense(verbal);
+		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
 		else invert_lens_mapping_CG_method(verbal);
 
 		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
@@ -12946,7 +12948,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		initialize_pixel_matrices(verbal);
 		if (regularization_method != None) create_regularization_matrix();
 		if (inversion_method==DENSE) {
-			if (regularization_method != None) create_regularization_matrix_dense(); // right now this only works for norm regularization (for pixellated source)
 			convert_Lmatrix_to_dense();
 			PSF_convolution_Lmatrix_dense(verbal);
 		} else {
@@ -12957,8 +12958,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
+		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);
-		else create_lensing_matrices_from_Lmatrix(verbal);
+		else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -12967,11 +12969,13 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 #endif
 
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(false,verbal);
+		if ((optimize_regparam) and (regularization_method != None)) {
+			optimize_regularization_parameter(dense_Fmatrix,verbal);
+		}
 
 		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
 		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
-		else if (inversion_method==DENSE) invert_lens_mapping_dense(verbal);
+		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
 		else invert_lens_mapping_CG_method(verbal);
 
 		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
@@ -13015,7 +13019,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);
 
-		if (regularization_method != None) create_regularization_matrix_dense();
+		if (regularization_method != None) create_regularization_matrix_shapelet();
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		create_lensing_matrices_from_Lmatrix_dense(verbal);
 
@@ -13112,7 +13116,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/n_tot_pixels << endl;
-	//double chisqreg;
+	double chisqreg;
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 		//if ((regularization_method != None) and (vary_regularization_parameter)) {
 		if (regularization_method != None) {
@@ -13130,8 +13134,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
 			if (regularization_parameter != 0) {
 				//chisqreg = chisq + regularization_parameter*Es;
+				chisqreg = regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
 				//cout << "chisqreg=" << chisqreg << endl;
-				chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+				chisq += chisqreg;
 				//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			}
 			chisq += Fmatrix_log_determinant;
@@ -13141,7 +13146,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 		}
 	} else if (source_fit_mode==Shapelet_Source) {
-		double chisqreg, Es=0;
+		double Es=0;
 		if (regularization_method != None) {
 			//for (i=0; i < source_npixels; i++) {
 				//Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
@@ -13187,10 +13192,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			else image_pixel_grid->activate_extended_mask(); 
 			assign_pixel_mappings(verbal);
 			initialize_pixel_matrices(verbal);
-			PSF_convolution_Lmatrix(verbal);
+			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
+			if (inversion_method==DENSE) {
+				convert_Lmatrix_to_dense();
+				PSF_convolution_Lmatrix_dense_emask(verbal);
+			}
+			else PSF_convolution_Lmatrix(verbal);
 			if (source_fit_mode==Cartesian_Source) source_pixel_grid->fill_surface_brightness_vector();
 			else delaunay_srcgrid->fill_surface_brightness_vector();
-			calculate_image_pixel_surface_brightness(false);
+			if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense(false);
+			else calculate_image_pixel_surface_brightness(false);
 		} else if (source_fit_mode==Shapelet_Source) {
 #ifdef USE_OPENMP
 			if (show_wtime) {
