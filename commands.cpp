@@ -11588,7 +11588,8 @@ void QLens::process_commands(bool read_file)
 					if (inversion_method==MUMPS) cout << "Lensing inversion method: LDL factorization (MUMPS)" << endl;
 					else if (inversion_method==UMFPACK) cout << "Lensing inversion method: LU factorization (UMFPACK)" << endl;
 					else if (inversion_method==CG_Method) cout << "Lensing inversion method: conjugate gradient method" << endl;
-					else if (inversion_method==DENSE) cout << "Lensing inversion method: Dense matrix inversion" << endl;
+					else if (inversion_method==DENSE) cout << "Lensing inversion method: Dense Fmatrix inversion (w/ dense Lmatrix)" << endl;
+					else if (inversion_method==DENSE_FMATRIX) cout << "Lensing inversion method: Dense Fmatrix inversion (w/ sparse Lmatrix)" << endl;
 					else cout << "Unknown inversion method" << endl;
 				}
 			} else if (nwords==2) {
@@ -11597,6 +11598,7 @@ void QLens::process_commands(bool read_file)
 				else if (setword=="umfpack") inversion_method = UMFPACK;
 				else if (setword=="cg") inversion_method = CG_Method;
 				else if (setword=="dense") inversion_method = DENSE;
+				else if (setword=="fdense") inversion_method = DENSE_FMATRIX;
 				else Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
 			} else Complain("invalid number of arguments; can only inversion method");
 		}
