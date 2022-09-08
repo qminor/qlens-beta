@@ -3056,6 +3056,8 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix
 			Rmatrix[n] = norm*((2*i+1) + (2*j+1));
 			Rmatrix_index[n] = indx;
 
+			/*
+			// off-diagonal elements here are lower triangular, but we need upper triangular. FIX THIS!
 			if (i > 1) {
 				Rmatrix_index[indx] = n - 2*n_shapelets;
 				Rmatrix[indx] = -norm*sqrt(i*(i-1));
@@ -3066,6 +3068,7 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix
 				Rmatrix[indx] = -norm*sqrt(j*(j-1));
 				indx++;
 			}
+			*/
 			n++;
 		}
 	}
