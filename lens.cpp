@@ -12151,16 +12151,27 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 {
 	int i,j,n,npix=0;
-	bool *include_in_delaunay_grid = new bool[image_pixel_grid->ntot_cells];
 	bool include;
 	double avg_sb = -1e30;
 	double sbfrac = 0.6;
-	// we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels, and where to compare grids 1/2
+	int *pixptr_i, *pixptr_j;
+	int npix_in_mask;
+	if (include_extended_mask_in_inversion) {
+		npix_in_mask = image_pixel_grid->ntot_cells_emask;
+		pixptr_i = image_pixel_grid->emask_pixels_i;
+		pixptr_j = image_pixel_grid->emask_pixels_j;
+	} else {
+		npix_in_mask = image_pixel_grid->ntot_cells;
+		pixptr_i = image_pixel_grid->masked_pixels_i;
+		pixptr_j = image_pixel_grid->masked_pixels_j;
+	}
+	bool *include_in_delaunay_grid = new bool[npix_in_mask];
+	// if delaunay_high_sn_mode is on, we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels, and where to compare grids 1/2
 	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*data_pixel_noise);
-	for (n=0; n < image_pixel_grid->ntot_cells; n++) {
+	for (n=0; n < npix_in_mask; n++) {
 		include = false;
-		j = image_pixel_grid->masked_pixels_j[n];
-		i = image_pixel_grid->masked_pixels_i[n];
+		i = pixptr_i[n];
+		j = pixptr_j[n];
 		if (delaunay_mode==0) include = true;
 		else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
 		else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
@@ -12184,9 +12195,9 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 	npix = 0;
 	int subcell_i1, subcell_i2;
 	//ofstream pixout("piximg.dat");
-	for (n=0; n < image_pixel_grid->ntot_cells; n++) {
-		j = image_pixel_grid->masked_pixels_j[n];
-		i = image_pixel_grid->masked_pixels_i[n];
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
 		if (include_in_delaunay_grid[n]) {
 			if (!split_imgpixels) {
 				srcpts1_x[npix] = image_pixel_grid->center_sourcepts[i][j][0];
@@ -12884,7 +12895,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			PSF_convolution_Lmatrix(verbal);
 		}
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
-		calculate_foreground_pixel_surface_brightness();
+		calculate_foreground_pixel_surface_brightness(true);
 		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
@@ -12954,7 +12965,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			PSF_convolution_Lmatrix(verbal);
 		}
 		image_pixel_grid->fill_surface_brightness_vector(); // note that image_pixel_grid just has the data pixel values stored in it
-		calculate_foreground_pixel_surface_brightness();
+		calculate_foreground_pixel_surface_brightness(true);
 		store_foreground_pixel_surface_brightness();
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
