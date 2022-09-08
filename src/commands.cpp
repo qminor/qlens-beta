@@ -11599,10 +11599,11 @@ void QLens::process_commands(bool read_file)
 				else if (setword=="cg") inversion_method = CG_Method;
 				else if (setword=="dense") inversion_method = DENSE;
 				else if (setword=="fdense") {
-#ifndef USE_MKL
+#ifdef USE_MKL
+					inversion_method = DENSE_FMATRIX;
+#else
 					Complain("currently 'fdense' matrix inversion mode is only supported with MKL");
 #endif
-					inversion_method = DENSE_FMATRIX;
 				}
 				else Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
 			} else Complain("invalid number of arguments; can only inversion method");

@@ -8865,6 +8865,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	int i,j;
 	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source)) {
 		bool at_least_one_foreground_src = false;
 		bool at_least_one_lensed_src = false;
@@ -8876,7 +8877,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			}
 		}
 		if ((foreground_only) and (!at_least_one_foreground_src)) {
-			int i,j;
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
 					surface_brightness[i][j] = 0;
@@ -8884,13 +8884,17 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			}
 			return;
 		}
+		for (j=0; j < y_N; j++) {
+			for (i=0; i < x_N; i++) {
+				surface_brightness[i][j] = 0;
+			}
+		}
 
 		if ((source_fit_mode == Cartesian_Source) and (ray_tracing_method == Area_Overlap)) {
 			lensvector **corners = new lensvector*[4];
-			int i,j;
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
-					surface_brightness[i][j] = 0;
+					//surface_brightness[i][j] = 0;
 					corners[0] = &corner_sourcepts[i][j];
 					corners[1] = &corner_sourcepts[i][j+1];
 					corners[2] = &corner_sourcepts[i+1][j];
@@ -8910,7 +8914,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			}
 			delete[] corners;
 		} else { // use interpolation to get surface brightness
-			int i,j;
 			if (lens->split_imgpixels) {
 				#pragma omp parallel
 				{
@@ -8932,7 +8935,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 					#pragma omp for private(i,j,nsubpix,subcell_index,center_pt,center_srcpt,subpixel_xlength,subpixel_ylength,corner1,corner2,corner3,corner4,sb) schedule(dynamic)
 					for (j=0; j < y_N; j++) {
 						for (i=0; i < x_N; i++) {
-							surface_brightness[i][j] = 0;
+							//surface_brightness[i][j] = 0;
 							if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 								sb=0;
 
@@ -8965,16 +8968,15 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										}
 									}
 								}
-								surface_brightness[i][j] = sb / nsubpix;
+								surface_brightness[i][j] += sb / nsubpix;
 							}
 						}
 					}
 				}
 			} else {
-				int i,j;
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
-						surface_brightness[i][j] = 0;
+						//surface_brightness[i][j] = 0;
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
 							if (!foreground_only) {
 								if (source_fit_mode==Delaunay_Source) surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0);
@@ -8999,151 +9001,149 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			}
 		}
 	}
-	else
-	{
-		bool at_least_one_lensed_src = false;
-		for (int k=0; k < lens->n_sb; k++) {
-			if (lens->sb_list[k]->is_lensed) {
-				at_least_one_lensed_src = true;
-			}
+
+	// Now we deal with lensed and unlensed source objects, if they exist
+	bool at_least_one_lensed_src = false;
+	for (int k=0; k < lens->n_sb; k++) {
+		if (lens->sb_list[k]->is_lensed) {
+			at_least_one_lensed_src = true;
 		}
-		int i,j;
-		if (lens->split_imgpixels) {
-			#pragma omp parallel
-			{
-				int thread;
+	}
+	if (lens->split_imgpixels) {
+		#pragma omp parallel
+		{
+			int thread;
 #ifdef USE_OPENMP
-				thread = omp_get_thread_num();
+			thread = omp_get_thread_num();
 #else
-				thread = 0;
+			thread = 0;
 #endif
-				double sb;
-				lensvector corner1, corner2, corner3, corner4;
-				double subpixel_xlength, subpixel_ylength;
+			double sb;
+			lensvector corner1, corner2, corner3, corner4;
+			double subpixel_xlength, subpixel_ylength;
 
-				int nsubpix,subcell_index;
-				lensvector *center_srcpt, *center_pt;
-				#pragma omp for private(i,j,sb,subcell_index,nsubpix,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4) schedule(dynamic)
-				for (j=0; j < y_N; j++) {
-					for (i=0; i < x_N; i++) {
-						surface_brightness[i][j] = 0;
-						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
-							sb=0;
-							nsubpix = INTSQR(nsplits[i][j]);
-							center_srcpt = subpixel_center_sourcepts[i][j];
-							center_pt = subpixel_center_pts[i][j];
-							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-								for (int k=0; k < lens->n_sb; k++) {
-									if (lens->sb_list[k]->is_lensed) {
-										if (!foreground_only) {
-											sb += lens->sb_list[k]->surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1]);
-										}
-									}
-									else if (!lensed_sources_only) {
-										if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
-										else {
-											subpixel_xlength = pixel_xlength/sqrt(nsubpix);
-											subpixel_ylength = pixel_ylength/sqrt(nsubpix);
-											corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-											corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-											corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-											corner2[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-											corner3[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-											corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-											corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-											corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-											sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4);
-										}
-									}
-								}
-							}
-							surface_brightness[i][j] = sb / nsubpix;
-						}
-					}
-				}
-			}
-
-			/*
-			// Testing to see which pixels might need to be split, and what the criterion should be for splitting
-			double sb2;
-			int ncrit=0, nsp=0, nweird=0;
+			int nsubpix,subcell_index;
+			lensvector *center_srcpt, *center_pt;
+			#pragma omp for private(i,j,sb,subcell_index,nsubpix,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4) schedule(dynamic)
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
-					sb2 = 0;
-					for (int k=0; k < lens->n_sb; k++) {
-						if (lens->sb_list[k]->is_lensed) {
-							sb2 += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
-						}
-					}
-					double difx, dify;
-					if ((i > 0) and (i < x_N-1)) difx = dmax(abs(surface_brightness[i+1][j]-surface_brightness[i][j]),abs(surface_brightness[i][j]-surface_brightness[i-1][j]));
-					else difx=0;
-					if ((j > 0) and (j < y_N-1)) dify = dmax(abs(surface_brightness[i][j+1]-surface_brightness[i][j]),abs(surface_brightness[i][j]-surface_brightness[i][j-1]));
-					else dify=0;
-					if (lens->image_pixel_data->in_mask[i][j]) {
-						if (abs(surface_brightness[i][j]-sb2) > (0.5*lens->data_pixel_noise)) {
-							double mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-							cout << "MUST SPLIT! " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << " " << sb2 << " mag=" << mag << " dif: " << difx << " " << dify;
-							if ((mag < 0.1) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) cout << " (LOWMAG) ";
-							if ((mag < 10) or (lens->image_pixel_data->surface_brightness[i][j] < 0.5)) { cout << " (WEIRD)"; nweird++; }
-							else nsp++;
-							cout << endl;
-						} else {
-							double mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-							if ((mag > 10) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) {
-								//cout << "HI MAG! mag=" << mag << " " <<  surface_brightness[i][j] << " dif: " << difx << " " << dify << endl;
-								ncrit++;
-							} else if ((mag < 0.1) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) {
-								cout << "LOW MAG! mag=" << mag << " " <<  lens->image_pixel_data->surface_brightness[i][j] << " dif: " << difx << " " << dify << endl;
-							}
-						}
-					}
-
-				}
-			}
-			cout << "n_criterion=" << ncrit << ", nsplit=" << nsp << ", nweird=" << nweird << endl;
-			*/
-		} else {
-			#pragma omp parallel
-			{
-				int thread;
-#ifdef USE_OPENMP
-				thread = omp_get_thread_num();
-#else
-				thread = 0;
-#endif
-				#pragma omp for private(i,j) schedule(dynamic)
-				for (j=0; j < y_N; j++) {
-					for (i=0; i < x_N; i++) {
-						surface_brightness[i][j] = 0;
-						for (int k=0; k < lens->n_sb; k++) {
-							if (lens->sb_list[k]->is_lensed) {
-								if (!foreground_only) {
-									if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+					//surface_brightness[i][j] = 0;
+					if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
+						sb=0;
+						nsubpix = INTSQR(nsplits[i][j]);
+						center_srcpt = subpixel_center_sourcepts[i][j];
+						center_pt = subpixel_center_pts[i][j];
+						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+							for (int k=0; k < lens->n_sb; k++) {
+								if (lens->sb_list[k]->is_lensed) {
+									if (!foreground_only) {
+										sb += lens->sb_list[k]->surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1]);
+									}
+								}
+								else if (!lensed_sources_only) {
+									if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
 									else {
-										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_sourcepts[i][j],corner_sourcepts[i][j],corner_sourcepts[i+1][j],corner_sourcepts[i][j+1],corner_sourcepts[i+1][j+1]);
-										//if (!subgridded) blergh << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << i << " " << j << endl;
-										//else blergh << "subgrid: " << center_pt[0] << " " << center_pt[1] << " " << i << " " << j << endl;
+										subpixel_xlength = pixel_xlength/sqrt(nsubpix);
+										subpixel_ylength = pixel_ylength/sqrt(nsubpix);
+										corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
+										corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
+										corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
+										corner2[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
+										corner3[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
+										corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
+										corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
+										corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
+										sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4);
 									}
 								}
 							}
-							else if (!lensed_sources_only) {
-								if (!lens->sb_list[k]->zoom_subgridding) {
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-								}
-								else {
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
-
-								}
-							}
 						}
-						//if ((i==0) and (j < 10)) cout << surface_brightness[i][j] << " ";
+						surface_brightness[i][j] += sb / nsubpix;
 					}
 				}
 			}
-			//cout << endl;
-			//double sbtest = lens->sb_list[0]->surface_brightness_test(0.3,0);
 		}
+
+		/*
+		// Testing to see which pixels might need to be split, and what the criterion should be for splitting
+		double sb2;
+		int ncrit=0, nsp=0, nweird=0;
+		for (j=0; j < y_N; j++) {
+			for (i=0; i < x_N; i++) {
+				sb2 = 0;
+				for (int k=0; k < lens->n_sb; k++) {
+					if (lens->sb_list[k]->is_lensed) {
+						sb2 += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+					}
+				}
+				double difx, dify;
+				if ((i > 0) and (i < x_N-1)) difx = dmax(abs(surface_brightness[i+1][j]-surface_brightness[i][j]),abs(surface_brightness[i][j]-surface_brightness[i-1][j]));
+				else difx=0;
+				if ((j > 0) and (j < y_N-1)) dify = dmax(abs(surface_brightness[i][j+1]-surface_brightness[i][j]),abs(surface_brightness[i][j]-surface_brightness[i][j-1]));
+				else dify=0;
+				if (lens->image_pixel_data->in_mask[i][j]) {
+					if (abs(surface_brightness[i][j]-sb2) > (0.5*lens->data_pixel_noise)) {
+						double mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+						cout << "MUST SPLIT! " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << " " << sb2 << " mag=" << mag << " dif: " << difx << " " << dify;
+						if ((mag < 0.1) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) cout << " (LOWMAG) ";
+						if ((mag < 10) or (lens->image_pixel_data->surface_brightness[i][j] < 0.5)) { cout << " (WEIRD)"; nweird++; }
+						else nsp++;
+						cout << endl;
+					} else {
+						double mag = pixel_area / (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+						if ((mag > 10) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) {
+							//cout << "HI MAG! mag=" << mag << " " <<  surface_brightness[i][j] << " dif: " << difx << " " << dify << endl;
+							ncrit++;
+						} else if ((mag < 0.1) and (lens->image_pixel_data->surface_brightness[i][j] > 0.5)) {
+							cout << "LOW MAG! mag=" << mag << " " <<  lens->image_pixel_data->surface_brightness[i][j] << " dif: " << difx << " " << dify << endl;
+						}
+					}
+				}
+
+			}
+		}
+		cout << "n_criterion=" << ncrit << ", nsplit=" << nsp << ", nweird=" << nweird << endl;
+		*/
+	} else {
+		#pragma omp parallel
+		{
+			int thread;
+#ifdef USE_OPENMP
+			thread = omp_get_thread_num();
+#else
+			thread = 0;
+#endif
+			#pragma omp for private(i,j) schedule(dynamic)
+			for (j=0; j < y_N; j++) {
+				for (i=0; i < x_N; i++) {
+					//surface_brightness[i][j] = 0;
+					for (int k=0; k < lens->n_sb; k++) {
+						if (lens->sb_list[k]->is_lensed) {
+							if (!foreground_only) {
+								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
+								else {
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_sourcepts[i][j],corner_sourcepts[i][j],corner_sourcepts[i+1][j],corner_sourcepts[i][j+1],corner_sourcepts[i+1][j+1]);
+									//if (!subgridded) blergh << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << i << " " << j << endl;
+									//else blergh << "subgrid: " << center_pt[0] << " " << center_pt[1] << " " << i << " " << j << endl;
+								}
+							}
+						}
+						else if (!lensed_sources_only) {
+							if (!lens->sb_list[k]->zoom_subgridding) {
+								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+							}
+							else {
+								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1]);
+
+							}
+						}
+					}
+					//if ((i==0) and (j < 10)) cout << surface_brightness[i][j] << " ";
+				}
+			}
+		}
+		//cout << endl;
+		//double sbtest = lens->sb_list[0]->surface_brightness_test(0.3,0);
 	}
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
@@ -13531,7 +13531,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
 								}
 							}
-							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (source_fit_mode == Shapelet_Source) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
 								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
 								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
 								//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
