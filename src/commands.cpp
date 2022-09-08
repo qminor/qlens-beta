@@ -5112,7 +5112,7 @@ void QLens::process_commands(bool read_file)
 
 
 			if (words[0]=="fit") {
-				if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
+				//if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
 				vary_parameters = true;
 				// now remove the "fit" word from the line so we can add sources the same way,
 				// but with vary_parameters==true so we'll prompt for an extra line to vary parameters
@@ -11598,7 +11598,12 @@ void QLens::process_commands(bool read_file)
 				else if (setword=="umfpack") inversion_method = UMFPACK;
 				else if (setword=="cg") inversion_method = CG_Method;
 				else if (setword=="dense") inversion_method = DENSE;
-				else if (setword=="fdense") inversion_method = DENSE_FMATRIX;
+				else if (setword=="fdense") {
+#ifndef USE_MKL
+					Complain("currently 'fdense' matrix inversion mode is only supported with MKL");
+#endif
+					inversion_method = DENSE_FMATRIX;
+				}
 				else Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
 			} else Complain("invalid number of arguments; can only inversion method");
 		}

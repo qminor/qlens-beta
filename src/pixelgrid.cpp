@@ -11845,7 +11845,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 	for (i=0; i < source_npixels; i++) {
 		Ltrans[i] = new double[image_npixels];
 		//ncheck[j] = new int[source_npixels];
-		for (j=0; j <= i; j++) {
+		for (j=i; j < source_npixels; j++) {
 			//ncheck[i][j] = n;
 			i_n[n] = i;
 			j_n[n] = j;
@@ -11988,7 +11988,14 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	/*
+#ifdef USE_MKL
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_packed.array());
+	for (int i=0; i < source_npixels; i++) source_pixel_vector[i] = Dvector[i];
+	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,Fmatrix_packed.array(),source_pixel_vector,1);
+	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
+#else
+	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
+	// we have to switch Fmatrix to a lower triangular version here
 	double **Fmat = new double*[source_npixels];
 	int i,j,k;
 	for (i=0; i < source_npixels; i++) {
@@ -12006,18 +12013,12 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 		delete[] Fmat[i];
 	}
 	delete[] Fmat;
-	*/
 
-#ifdef USE_MKL
-   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_packed.array());
-	for (int i=0; i < source_npixels; i++) source_pixel_vector[i] = Dvector[i];
-	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,Fmatrix_packed.array(),source_pixel_vector,1);
-#else
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_solve_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
+	Cholesky_solve_lower_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_npixels);
+	Cholesky_logdet_lower_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 #endif
-	Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_npixels);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -12222,12 +12223,33 @@ double QLens::chisq_regparam_dense(const double logreg)
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Fmatrix_packed_copy.array());
 	for (int i=0; i < source_npixels; i++) temp_src[i] = Dvector[i];
 	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,Fmatrix_packed_copy.array(),temp_src.array(),1);
+	Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 #else
+	// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
+	// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
+	double **Fmat = new double*[source_npixels];
+	for (i=0; i < source_npixels; i++) {
+		Fmat[i] = new double[i+1];
+	}
+	for (k=0,j=0; j < source_npixels; j++) {
+		for (i=j; i < source_npixels; i++) {
+			Fmat[i][j] = Fmatrix_packed_copy[k++];
+		}
+	}
+	for (k=0,i=0; i < source_npixels; i++) {
+		for (j=0; j <= i; j++) {
+			Fmatrix_packed_copy[k++] = Fmat[i][j];
+		}
+		delete[] Fmat[i];
+	}
+	delete[] Fmat;
+
+
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_solve_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
+	Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_npixels);
+	Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 #endif
-	Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_npixels);
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
 	double *Lmatptr;
@@ -12410,8 +12432,8 @@ bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 	return status;
 }
 
-/*
-void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
+// This is the lower triangular version
+void QLens::Cholesky_logdet_lower_packed(double* a, double &logdet, int n)
 {
 	logdet = 0;
 	int indx = 0;
@@ -12421,7 +12443,6 @@ void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 	}
 	logdet *= 2;
 }
-*/
 
 /*
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
@@ -12439,8 +12460,8 @@ void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 }
 */
 
-/*
-void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
+// This is the lower triangular version
+void QLens::Cholesky_solve_lower_packed(double* a, double* b, double* x, int n)
 {
 	int i,k;
 	double sum;
@@ -12457,7 +12478,6 @@ void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 	}	 
 	delete[] indx;
 }
-*/
 
 void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 {
@@ -12470,6 +12490,7 @@ void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 	logdet *= 2;
 }
 
+/*
 // This is an attempt at upper triangular versions (not working yet), but you need to make the Cholesky upper triangular as well...fix later
 void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 {
@@ -12494,6 +12515,7 @@ void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 	cout << "HI3" << endl;
 	delete[] indx;
 }
+*/
 
 
 void QLens::invert_lens_mapping_CG_method(bool verbal)
