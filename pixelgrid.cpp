@@ -11404,11 +11404,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 
 	int i,j,k,l,m,t;
 
-	vector<jl_pair> **jlvals = new vector<jl_pair>*[nthreads];
-	for (i=0; i < nthreads; i++) {
-		jlvals[i] = new vector<jl_pair>[source_npixels];
-	}
-
 	vector<int> *Fmatrix_index_rows = new vector<int>[source_npixels];
 	vector<double> *Fmatrix_rows = new vector<double>[source_npixels];
 	double *Fmatrix_diags = new double[source_npixels];
@@ -11531,6 +11526,11 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 		if ((verbal) and (mpi_id==0)) cout << "Fmatrix_dense has " << nf << " nonzero elements" << endl;
 	}
 #else
+	vector<jl_pair> **jlvals = new vector<jl_pair>*[nthreads];
+	for (i=0; i < nthreads; i++) {
+		jlvals[i] = new vector<jl_pair>[source_npixels];
+	}
+
 	jl_pair jl;
 	#pragma omp parallel
 	{
@@ -11799,11 +11799,13 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 	mkl_sparse_destroy(Lsparse);
 	if (!dense_Fmatrix) mkl_sparse_destroy(Fsparse);
 	else delete[] Fmatrix_stacked;
-#endif
+	delete[] image_pixel_end_Lmatrix;
+#else
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
 	}
 	delete[] jlvals;
+#endif
 	delete[] Fmatrix_index_rows;
 	delete[] Fmatrix_rows;
 	delete[] Fmatrix_diags;
