@@ -11435,12 +11435,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 		}
 	}
 
-	//cout << "Dvector (from sparse:)" << endl;
-	//for (j=0; j < source_npixels; j++) {
-		//cout << Dvector[j] << " ";
-	//}
-	//cout << endl;
-
 	int mpi_chunk, mpi_start, mpi_end;
 	mpi_chunk = source_npixels / group_np;
 	mpi_start = group_id*mpi_chunk;
@@ -11900,32 +11894,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 		}
 #endif
 
-		/*
-	double maxsb=-1e30;
-	double argh, maxargh=-1e30;
-	int argh_i, sb_i;
-	double arghcheck, checksb;
-	double checksb2;
-	int ii,jj;
-	lensvector center_srcpt;
-	for (i=0; i < image_npixels; i++) {
-		if (image_surface_brightness[i] > maxsb) { maxsb=image_surface_brightness[i]; sb_i = i; }
-		argh = Lmatrix_dense[i][0]*0.094;
-		ii = active_image_pixel_i[i];
-		jj = active_image_pixel_j[i];
-		center_srcpt = image_pixel_grid->center_sourcepts[ii][jj];
-		//center = image_pixel_grid->center_pts[i][j];
-		arghcheck = sb_list[0]->calculate_Lmatrix_element(center_srcpt[0],center_srcpt[1],0)*0.094;
-		checksb = sb_list[0]->surface_brightness(center_srcpt[0],center_srcpt[1]);
-		checksb2 = image_pixel_grid->surface_brightness[ii][jj];
-		if (argh > maxargh) { maxargh=argh; argh_i=i; }
-		//cout << "WTF? "  << i << " " << argh << " " << image_surface_brightness[i] << " " << checksb2 << " " << arghcheck << " " << checksb << endl;
-	}
-	cout << "MAX_SB_DATA=" << maxsb << " (i=" << sb_i << ")" << endl;
-	cout << "MAX_ARGH=" << maxargh << " (i=" << argh_i << ")" << endl;
-	*/
-
-		//double *fmatptr;
 #ifndef USE_MKL
 		// The following is not as fast as the Blas functin dsyrk (below), but it still gets the job done
 		double *fpmatptr;
