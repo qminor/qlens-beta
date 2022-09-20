@@ -77,8 +77,7 @@ set(QLENS_INCLUDE_DIRS
     
 #set(QLENS_LIBRARIES )
 
-set(QLENS_HEADERS
-)
+set(QLENS_HEADERS)
 
 set(QLENS_CORE_SOURCES 
     ${PROJECT_SOURCE_DIR}/src/profile.cpp 
@@ -103,17 +102,6 @@ set(QLENS_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/curfit.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpback.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpbspl.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpchec.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpcurf.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpdisc.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpgivs.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fpknot.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fprati.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/fprota.f  
-    ${PROJECT_SOURCE_DIR}/contrib/fitpack/splev.f
     #${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
@@ -122,6 +110,7 @@ set(QLENS_SOURCES
     ${PROJECT_SOURCE_DIR}/src/qlens.cpp 
     #${PROJECT_SOURCE_DIR}/src/commands.cpp
     $<TARGET_OBJECTS:commands_cpp>
+    $<TARGET_OBJECTS:fitpack>
 )
 
 set(MKDIST_SOURCES
@@ -246,7 +235,7 @@ endif(NOT MPI_DISABLE)
 if (USE_MKL AND (CMAKE_CXX_COMPILER_ID STREQUAL "Intel"))
     message(STATUS "USING MKL LIBRARIES")
     set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MKL")
-endif(USE_MKL)
+endif(USE_MKL AND (CMAKE_CXX_COMPILER_ID STREQUAL "Intel"))
 
 message("")
 message("*** TCMalloc ***")
