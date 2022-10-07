@@ -1571,7 +1571,7 @@ edge_sourcept_status Grid::check_subgrid_neighbor_boundaries(const int& neighbor
 
 void Grid::grid_search_firstlevel(const int& searchlevel)
 {
-	// There seems to be negligible time savings in multi-threading the grid search, so I've commented it out for now.
+	// There seems to be negligible time savings in multi-threading the grid search, and it doesn't seem to be working right, so I've commented it out for now.
 	//#pragma omp parallel
 	//{
 		int thread;
@@ -1933,7 +1933,7 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 		for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 	}
 
-	if (fix_source_flux) srcflux[0] = source_flux;
+	if (!analytic_source_flux) srcflux[0] = source_flux;
 	if (use_analytic_bestfit_src) {
 		output_analytic_srcpos(srcpts);
 	} else {
@@ -2103,13 +2103,6 @@ inline void Grid::SolveLinearEqs(lensmatrix& a, lensvector& b)
 	temp = (-a[1][0]*b[1]+a[1][1]*b[0]) / det;
 	b[1] = (-a[0][1]*b[0]+a[0][0]*b[1]) / det;
 	b[0] = temp;
-}
-
-inline void QLens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
-{
-	deflection(x[0],x[1],f,thread,zfacs,betafacs);
-	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
-	f[1] = source[1] - x[1] + f[1];
 }
 
 inline double Grid::max_component(const lensvector& x) { return dmax(fabs(x[0]),fabs(x[1])); }

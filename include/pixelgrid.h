@@ -293,14 +293,33 @@ class ImagePixelGrid : public Sort
 	static double* imggrid_zfactors;
 	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
+	static int nthreads;
+	static const int max_iterations, max_step_length;
+	static bool *newton_check;
+	static lensvector *fvec;
+	static double image_pos_accuracy;
+
+	bool run_newton(lensvector& xroot, const int& thread);
+	bool LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& p, lensvector& x, double& f, double stpmax, bool &check, const int& thread);
+	bool NewtonsMethod(lensvector& x, bool &check, const int& thread);
+	void SolveLinearEqs(lensmatrix&, lensvector&);
+	bool redundancy(const lensvector&, double &);
+	double max_component(const lensvector&);
+
 	public:
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false);
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false, const bool verbal = false);
+	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
+	static void deallocate_multithreaded_variables();
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
-	bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
+	void generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightnes, const double srcflux);
+	void add_point_images(double *ptimage_surface_brightness, const int npix);
+	void generate_and_add_point_images(const vector<image>& imgs, const double srcflux);
+	void find_image_points(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool verbal);
+	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
 	void include_all_pixels();
 	void activate_extended_mask();

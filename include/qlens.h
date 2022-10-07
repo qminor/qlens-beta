@@ -282,7 +282,6 @@ class Grid : public Brent
 	void assign_all_neighbors();
 	void assign_level_neighbors(int neighbor_level);
 
-	static lensvector *fvec;
 	bool LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& p, lensvector& x, double& f, double stpmax, bool &check, const int& thread);
 	bool NewtonsMethod(lensvector& x, bool &check, const int& thread);
 	void SolveLinearEqs(lensmatrix&, lensvector&);
@@ -290,6 +289,7 @@ class Grid : public Brent
 	double max_component(const lensvector&);
 
 	static const int max_iterations, max_step_length;
+	static lensvector *fvec;
 	static bool *newton_check;
 
 	// make these multithread-safe if you decide to multithread the image searching
@@ -513,6 +513,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<lensvector> sourcepts_fit;
 	vector<lensvector> sourcepts_lower_limit;
 	vector<lensvector> sourcepts_upper_limit;
+	vector<image> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
 	vector<bool> vary_sourcepts_x;
 	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
@@ -564,6 +565,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool fits_format;
 	double data_pixel_size;
 	bool add_simulated_image_data(const lensvector &sourcept);
+	bool add_fit_sourcept(const lensvector &sourcept);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
@@ -579,6 +581,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool datastring_convert(const string& instring, int& outvar);
 	bool datastring_convert(const string& instring, double& outvar);
 	void clear_image_data();
+	void clear_sourcepts();
+
 	void print_image_data(bool include_errors);
 
 	bool autocenter;
@@ -613,7 +617,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
-	enum RegularizationMethod { None, Norm, Gradient, Curvature, Image_Plane_Curvature } regularization_method;
+	enum RegularizationMethod { None, Norm, Gradient, Curvature } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool interpolate_sb_3pt;
@@ -733,6 +737,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *active_image_pixel_i_fgmask;
 	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
+	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
@@ -810,11 +815,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int hmatrix_nn[2];
 
 	bool use_input_psf_matrix;
-	double **psf_matrix, **foreground_psf_matrix;
+	bool use_input_psf_ptsrc_matrix;
+	double **psf_matrix, **psf_ptsrc_matrix, **foreground_psf_matrix;
 	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
+	int psf_ptsrc_npixels_x, psf_ptsrc_npixels_y;
 	int foreground_psf_npixels_x, foreground_psf_npixels_y;
-	double psf_threshold, foreground_psf_threshold;
+	double psf_threshold, psf_ptsrc_threshold, foreground_psf_threshold;
+	int psf_ptsrc_nsplit; // allows for subpixel PSF
 	static bool setup_fft_convolution;
 	static double *psf_zvec; // for convolutions using FFT
 	static int fft_imin, fft_jmin, fft_ni, fft_nj;
@@ -864,11 +872,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 	bool generate_PSF_matrix();
+	bool generate_ptsrc_PSF_matrix();
+
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
-	void generate_Rmatrix_from_image_plane_curvature();
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
@@ -889,7 +898,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root);
 	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
-	double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
+	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(bool verbal);
@@ -901,7 +910,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const bool verbal, const bool assign_sb_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
+	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
 	void create_sourcegrid_from_imggrid_delaunay(const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
@@ -1122,6 +1131,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void print_lens_list(bool show_vary_params);
 	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
 	void output_lens_commands(string filename, const bool use_limits);
+	void print_sourcept_list();
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
@@ -1218,8 +1228,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_weak_lensing_chisq;
 	bool use_analytic_bestfit_src;
 	bool n_images_penalty;
-	bool fix_source_flux;
+	bool analytic_source_flux;
 	double source_flux;
+	bool vary_srcflux;
+	double srcflux_lower_limit, srcflux_upper_limit;
 
 	bool spline_critical_curves(bool verbal);
 	bool spline_critical_curves() { return spline_critical_curves(true); }
@@ -2531,7 +2543,12 @@ inline void QLens::deflection_exclude(const double& x, const double& y, bool* ex
 	}
 }
 
-
+inline void QLens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
+{
+	deflection(x[0],x[1],f,thread,zfacs,betafacs);
+	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
+	f[1] = source[1] - x[1] + f[1];
+}
 
 inline void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs)
 {

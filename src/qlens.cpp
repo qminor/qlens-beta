@@ -37,6 +37,7 @@ int main(int argc, char *argv[])
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
 	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
 	QLens::setup_fft_convolution = false;
 
@@ -256,6 +257,7 @@ int main(int argc, char *argv[])
 #endif
 	Grid::deallocate_multithreaded_variables();
 	SourcePixelGrid::deallocate_multithreaded_variables();
+	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
 	QLens::deallocate_multithreaded_variables();
 

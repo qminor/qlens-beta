@@ -770,15 +770,16 @@ void QLens::process_commands(bool read_file)
 							"'help lens anchoring'.\n";
 					else if (words[2]=="sourcept")
 						cout << "fit sourcept\n"
-							"fit sourcept <sourcept_num>\n"
-							"fit sourcept <x0> <y0>                      (for a single source point)\n"
+							"fit sourcept update                            (change all source point coords)\n"
+							"fit sourcept <sourcept_num>                 (change specific source point coords)\n"
+							"fit sourcept <x0> <y0>  [-add]              (shortcut if only one source point)\n"
 							"fit sourcept auto                           (adopts best fit from source plane chi-sq)\n\n"
-							"Specify the initial fit coordinates for the source points, one for each set of images loaded as\n"
+							"Specify (or list) the coordinates for the source points, one for each set of images loaded as\n"
 							"data (via the 'imgdata' command). If only one source point is being used, these can be given as\n"
 							"arguments on the same line (e.g. 'fit sourcept 1 2.5'); for more than one source point, the\n"
-							"coordinates must be entered on separate lines. For example, if two image sets are loaded, then\n"
+							"coordinates must be entered on separate lines using 'fit sourcept set'. For example, if two image sets are loaded, then\n"
 							"to specify the initial source data points one would type:\n\n"
-							"fit sourcept\n"
+							"fit sourcept set\n"
 							"1 2.5\n"
 							"3.2 -1\n\n"
 							"This sets the initial source point coordinates to (1,2.5) and (3.2,-1). To change a specific source\n"
@@ -786,7 +787,8 @@ void QLens::process_commands(bool read_file)
 							"see using the 'fit' command), then enter the coordinates on the following line. If the fit method\n"
 							"being used requires lower and upper limits on parameters (e.g. for nested sampling or MCMC),\n"
 							"the user will be prompted to give lower and upper limits on x and then y for each source point\n"
-							"(the format for entering limits is similar to 'fit lens'; see 'help fit lens' for description).\n\n";
+							"(the format for entering limits is similar to 'fit lens'; see 'help fit lens' for description).\n"
+							"Finally, if modeling pixel images, you can add a source point using '-add' as last argument.\n\n";
 					else if (words[2]=="source_mode")
 						cout << "fit source_mode <mode>\n\n"
 							"Specify the type of source/lens fitting to use. If no argument is given, prints the current source\n"
@@ -2198,7 +2200,7 @@ void QLens::process_commands(bool read_file)
 					cout << "nimg_penalty: " << display_switch(n_images_penalty) << endl;
 					cout << "chisqtol = " << chisq_tolerance << endl;
 					cout << "srcflux = " << source_flux << endl;
-					cout << "fix_srcflux: " << display_switch(fix_source_flux) << endl;
+					cout << "analytic_srcflux: " << display_switch(analytic_source_flux) << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
 					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
 					cout << "wl_shearfac = " << wl_shear_factor << endl;
@@ -6315,7 +6317,6 @@ void QLens::process_commands(bool read_file)
 							else if (regularization_method==Norm) cout << "Regularization method: norm" << endl;
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
-							else if (regularization_method==Image_Plane_Curvature) cout << "Regularization method: image plane curvature" << endl;
 							else cout << "Unknown regularization method" << endl;
 						}
 					} else if (nwords==3) {
@@ -6330,16 +6331,26 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="norm") regularization_method = Norm;
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="curvature") regularization_method = Curvature;
-						else if (setword=="image_plane_curvature") regularization_method = Image_Plane_Curvature;
 						else Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
 					} else Complain("invalid number of arguments; can only specify regularization method");
 				}
 				else if (words[1]=="sourcept")
 				{
-					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
-					if ((nwords==3) and (words[2]=="auto")) {
+					bool add_to_image = false;
+					if ((nwords==5) and (words[4]=="-add")) {
+						remove_word(4);
+						add_to_image = true;
+					}
+					if ((!add_to_image) and (n_sourcepts_fit==0)) Complain("No image data has been loaded");
+					if (nwords==2) {
+						print_sourcept_list();
+					}
+					else if ((nwords==3) and (words[2]=="auto")) {
 						if (nlens==0) Complain("No lens model has been defined; cannot determine optimal source point");
 						set_analytic_sourcepts();
+					}
+					else if ((nwords==3) and (words[2]=="clear")) {
+						clear_sourcepts();
 					}
 					else if (nwords==4)
 					{
@@ -6347,8 +6358,14 @@ void QLens::process_commands(bool read_file)
 						double xs, ys;
 						if (!(ws[2] >> xs)) Complain("Invalid x-coordinate for initial source point");
 						if (!(ws[3] >> ys)) Complain("Invalid y-coordinate for initial source point");
-						sourcepts_fit[0][0] = xs;
-						sourcepts_fit[0][1] = ys;
+						if (add_to_image) {
+							lensvector srcpt; srcpt[0] = xs; srcpt[1] = ys;
+							if (!add_fit_sourcept(srcpt)) Complain("could not add source point");
+							update_parameter_list();
+						} else {
+							sourcepts_fit[0][0] = xs;
+							sourcepts_fit[0][1] = ys;
+						}
 						if ((fitmethod != POWELL) and (fitmethod != SIMPLEX))
 						{
 							if (mpi_id==0) cout << "Limits for x-coordinate of source point:\n";
@@ -6372,9 +6389,9 @@ void QLens::process_commands(bool read_file)
 						if (use_analytic_bestfit_src) {
 							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
 						}
-					} else if ((nwords==2) or (nwords==3)) {
+					} else if (nwords==3) {
 						int imin = 0, imax = n_sourcepts_fit;
-						if (nwords==3) {
+						if (words[2] != "update") {
 							int srcpt_num;
 							if (!(ws[2] >> srcpt_num)) Complain("Invalid index number for source point");
 							if ((srcpt_num >= n_sourcepts_fit) or (srcpt_num < 0)) Complain("Source point number " << srcpt_num << " does not exist");
@@ -6481,7 +6498,7 @@ void QLens::process_commands(bool read_file)
 					lensvector *srcpts = new lensvector[n_sourcepts_fit];
 					if (include_flux_chisq) {
 						output_model_source_flux(srcflux);
-						if (fix_source_flux) srcflux[0] = source_flux;
+						if (!analytic_source_flux) srcflux[0] = source_flux;
 					} else {
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
@@ -6546,7 +6563,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
 
-					if (fix_source_flux) srcflux[0] = source_flux;
+					if (!analytic_source_flux) srcflux[0] = source_flux;
 					if (use_analytic_bestfit_src) {
 						output_analytic_srcpos(srcpts);
 					} else {
@@ -6620,7 +6637,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
 
-					if (fix_source_flux) srcflux[0] = source_flux;
+					if (!analytic_source_flux) srcflux[0] = source_flux;
 					if (use_analytic_bestfit_src) {
 						output_analytic_srcpos(srcpts);
 					} else {
@@ -6787,7 +6804,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
 					}
 
-					if (fix_source_flux) srcflux[0] = source_flux;
+					if (!analytic_source_flux) srcflux[0] = source_flux;
 					if (use_analytic_bestfit_src) {
 						output_analytic_srcpos(srcpts);
 					} else {
@@ -8711,7 +8728,10 @@ void QLens::process_commands(bool read_file)
 						create_sourcegrid_delaunay(use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					}
-					else create_sourcegrid_cartesian(verbal_mode);
+					else {
+						create_sourcegrid_cartesian(verbal_mode);
+						source_pixel_grid->assign_surface_brightness_from_analytic_source();
+					}
 					if (plot_source) {
 						if ((!delaunay) and (scale_to_srcgrid)) {
 							double xmin,xmax,ymin,ymax;
@@ -9103,7 +9123,6 @@ void QLens::process_commands(bool read_file)
 				bool subcomp = false;
 				bool show_noise_thresh = false;
 				bool set_title = false;
-				bool plot_log = false;
 				bool plot_contours = false;
 				int n_contours = 24;
 				string temp_title;
@@ -9134,7 +9153,6 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-reduce4") reduce_factor = 4;
 						else if (args[i]=="-reduce8") reduce_factor = 8;
 						else if (args[i]=="-mkdata") offload_to_data = true;
-						else if (args[i]=="-log") plot_log = true;
 						else if (args[i]=="-subcomp") subcomp = true;
 						else if ((pos = args[i].find("-contour=")) != string::npos) {
 							string ncontstring = args[i].substr(pos+9);
@@ -9207,7 +9225,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,plot_log)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh)==true)) {
 							if ((subcomp) and (show_cc)) {
 								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							}
@@ -10173,13 +10191,13 @@ void QLens::process_commands(bool read_file)
 				set_switch(n_images_penalty,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="fix_srcflux")
+		else if (words[0]=="analytic_srcflux")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Fix source flux to specified value: " << display_switch(fix_source_flux) << endl;
+				if (mpi_id==0) cout << "Calculate source flux analytically (instead of using 'srcflux'): " << display_switch(analytic_source_flux) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'fix_srcflux' command; must specify 'on' or 'off'");
-				set_switch(fix_source_flux,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_srcflux' command; must specify 'on' or 'off'");
+				set_switch(analytic_source_flux,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="srcflux")
@@ -10188,9 +10206,30 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> srcflux)) Complain("invalid source flux setting");
 				source_flux = srcflux;
+				if ((vary_srcflux) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+					if (mpi_id==0) cout << "Limits for source flux:\n";
+					if (read_command(false)==false) return;
+					double smin,smax;
+					if (nwords != 2) Complain("Must specify two arguments for source flux limits: smin, smax");
+					if (!(ws[0] >> smin)) Complain("Invalid lower limit for source flux");
+					if (!(ws[1] >> smax)) Complain("Invalid upper limit for source flux");
+					if (smin > smax) Complain("lower limit cannot be greater than upper limit");
+					srcflux_lower_limit = smin;
+					srcflux_upper_limit = smax;
+				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "source flux = " << source_flux << endl;
 			} else Complain("must specify either zero or one argument (source flux)");
+		}
+		else if (words[0]=="vary_srcflux")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary source flux: " << display_switch(vary_srcflux) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcflux' command; must specify 'on' or 'off'");
+				set_switch(vary_srcflux,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisq_parity")
 		{
@@ -10744,6 +10783,28 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Point spread function (PSF) input threshold = " << psf_threshold << endl;
 			} else Complain("can only specify up to one argument for PSF input threshold");
+		}
+		else if (words[0]=="psf_ptsrc_threshold")
+		{
+			double threshold;
+			if (nwords == 2) {
+				if (!(ws[1] >> threshold)) Complain("invalid PSF threshold");
+				if (threshold >= 1) Complain("point source psf threshold must be less than 1");
+				psf_ptsrc_threshold = threshold;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Point source PSF input threshold = " << psf_ptsrc_threshold << endl;
+			} else Complain("can only specify up to one argument for point source PSF input threshold");
+		}
+		else if (words[0]=="psf_ptsrc_nsplit")
+		{
+			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
+			if (nwords == 2) {
+				int nsp;
+				if (!(ws[1] >> nsp)) Complain("invalid number of point source PSF pixel splittings");
+				psf_ptsrc_nsplit = nsp;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "default number of point source PSF pixel splittings = " << psf_ptsrc_nsplit << endl;
+			} else Complain("must specify either zero or one argument (default number of point source PSF pixel splittings)");
 		}
 		else if (words[0]=="fft_convolution")
 		{
@@ -13313,6 +13374,7 @@ void QLens::run_plotter(string plotcommand, string extra_command)
 		if (colorbar_max != 1e30) command += " cbmax=" + cbmax;
 		if (plot_square_axes==true) command += " square";
 		if (show_imgsrch_grid==true) command += " grid";
+		cout << command << endl;
 		system(command.c_str());
 	}
 }
