@@ -1,10 +1,6 @@
 #ifndef DELAUNEY_H
 #define DELAUNEY_H
-#include <cmath>
-#include <vector>
 #include "lensvec.h"
-
-using namespace std;
 
 const unsigned char OK = 0x01;
 const unsigned char NOTOK = 0x00;
@@ -19,7 +15,8 @@ const unsigned char BI = 0x10;
 struct Triangle // the final triangulation will be stored in an array of triangle structs
 {
 	lensvector vertex[3];
-	double *sb[3];
+	lensvector circumcenter;
+	double *sb[3]; // pointer to surface brightness values assigned to each vertex
 	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
 	int vertex_index[3];
 	int neighbor_index[3];
@@ -426,99 +423,9 @@ class Delaunay
 				}
 			}
 		}	
-		void FindNeighbors()
-		{
-			// Turns out I don't need this, since Greg already has the neighbors stored in "sides" array in botTris. Oops
-			triangleBase *botPtr2;
-			botPtr = botTris;
-			triangleTree *triptr;
-			int i,j,k,l,nmatch,n_sidematch;
-			int vert[3];
-			bool vertex_match[3];
-			bool side_match[3];
-			for (i = 0; i < nTris; i++, botPtr++)
-			{
-				botPtr2 = botTris;
-				n_sidematch = 0;
-				side_match[0] = side_match[1] = side_match[2] = false;
-				if (botPtr->tri->vertices[0] >= 0 && botPtr->tri->vertices[1] >= 0 && botPtr->tri->vertices[2] >= 0)
-				{
-					vert[0] = botPtr->tri->vertices[0];
-					vert[1] = botPtr->tri->vertices[1];
-					vert[2] = botPtr->tri->vertices[2];
-				} else {
-					cout << "Skipping triangle " << i << " (vertices " << botPtr->tri->vertices[0] << " " << botPtr->tri->vertices[1] << " " << botPtr->tri->vertices[2] << ")" << endl;
-					continue;
-				}
-
-				for (j = 0; j < nTris; j++, botPtr2++)
-				{
-					if (i==j) continue;
-					triptr = botPtr2->tri;
-					if (triptr->vertices[0] >= 0 && triptr->vertices[1] >= 0 && triptr->vertices[2] >= 0)
-					{
-						nmatch = 0;
-						vertex_match[0] = vertex_match[1] = vertex_match[2] = false;
-						for (k=0; k < 3; k++) {
-							for (l=0; l < 3; l++) {
-								if (triptr->vertices[l]==vert[k]) {
-									vertex_match[k] = true;
-									nmatch++;
-									l = 3; // skip to next vertex
-								}
-							}
-						}
-						if (nmatch==1) {
-							cout << "Found 1 vertex match" << endl;
-						} else if (nmatch==2) {
-							cout << "Found 2 vertex match!" << endl;
-							if ((vertex_match[0]==true) and (vertex_match[1]==true)) { side_match[2] = true; botPtr->neighbor_indices[2] = j; if (&botTris[j] != botPtr->sides[2]) cerr << "FUCK" << endl; n_sidematch++; }
-							else if ((vertex_match[1]==true) and (vertex_match[2]==true)) { side_match[0] = true; botPtr->neighbor_indices[0] = j; if (&botTris[j] != botPtr->sides[0]) cerr << "FUCK" << endl; n_sidematch++; }
-							else if ((vertex_match[0]==true) and (vertex_match[2]==true)) { side_match[1] = true; botPtr->neighbor_indices[1] = j; if (&botTris[j] != botPtr->sides[1]) cerr << "FUCK" << endl; n_sidematch++; }
-							else cerr << "WHAT?!?!?!?!?!" << endl;
-						}
-						else if (nmatch==3) cerr << "match 3 vertices? you've got a duplicate triangle!" << endl;
-						if (n_sidematch==3) j = nTris; // skip to next triangle
-					}
-				}
-				if (n_sidematch < 3) cout << "Could only find " << n_sidematch << " matches for triangle " << i << endl;
-				cout << "Indices for triangle " << i << ": " << botPtr->neighbor_indices[0] << " " << botPtr->neighbor_indices[1] << " " << botPtr->neighbor_indices[2] << endl;
-			}
-		}	
-		void print_triangle_neighbors(const int tri_number) {
-			ofstream triside("trisides.dat");
-			int j,k;
-			triside << "#Triangle " << tri_number << endl;
-			j = botTris[tri_number].tri->vertices[0];
-			triside << "# " << x[j] << " " << y[j] << endl;
-			j = botTris[tri_number].tri->vertices[1];
-			triside << "# " << x[j] << " " << y[j] << endl;
-			j = botTris[tri_number].tri->vertices[2];
-			triside << "# " << x[j] << " " << y[j] << endl;
-			triside << endl;
-
-			for (int i=0; i < 3; i++) {
-				k = botTris[tri_number].neighbor_indices[i];
-				if (k >= 0) {
-					triside << "#Triangle " << tri_number << " neighbor " << i << ": triangle " << endl;
-					//botPtr = &botTris[k];
-					botPtr = botTris[tri_number].sides[i];
-					j = botPtr->tri->vertices[0];
-					triside << x[j] << " " << y[j] << " # index " << j << endl;
-					j = botPtr->tri->vertices[1];
-					triside << x[j] << " " << y[j] << " # index " << j << endl;
-					j = botPtr->tri->vertices[2];
-					triside << x[j] << " " << y[j] << " # index " << j << endl;
-					j = botPtr->tri->vertices[0];
-					triside << x[j] << " " << y[j] << endl;
-					triside << endl;
-				} else {
-					triside << "#Triangle " << tri_number << " has no neighbor on side " << i << endl;
-				}
-			}
-		}
 		void store_triangles(Triangle *triangle)
 		{
+			// This stores the triangles in the final triangulation
 			botPtr = botTris;
 			lensvector side1, side2;
 			for (int i = 0; i < nTris; i++, botPtr++)
@@ -543,15 +450,6 @@ class Delaunay
 					side1 = triangle->vertex[1] - triangle->vertex[0];
 					side2 = triangle->vertex[2] - triangle->vertex[1];
 					triangle->area = side1 ^ side2;
-					//int indx0 = botPtr->neighbor_indices[0];
-					//if (indx0 >= 0) indx0 = botTris[indx0].index;
-					//int indx1 = botPtr->neighbor_indices[1];
-					//if (indx1 >= 0) indx1 = botTris[indx1].index;
-					//int indx2 = botPtr->neighbor_indices[2];
-					//if (indx2 >= 0) indx2 = botTris[indx2].index;
-					//if (triangle->neighbor_index[0] != indx0) cerr << "FUCK triangle " << botPtr->index << " neighbor 0 not right; " << triangle->neighbor_index[0] << " vs " << indx0 << endl;
-					//if (triangle->neighbor_index[1] != indx1) cerr << "FUCK triangle " << botPtr->index << " neighbor 1 not right; " << triangle->neighbor_index[1] << " vs " << indx1 << endl;
-					//if (triangle->neighbor_index[2] != indx2) cerr << "FUCK triangle " << botPtr->index << " neighbor 2 not right; " << triangle->neighbor_index[2] << " vs " << indx2 << endl;
 					triangle++;
 				}
 			}

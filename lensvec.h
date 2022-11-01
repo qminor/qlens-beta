@@ -70,6 +70,11 @@ public:
 		v[1] *= num;
 		return *this;
 	}
+	lensvector& operator /= (const double num) {
+		v[0] /= num;
+		v[1] /= num;
+		return *this;
+	}
 	double operator * (const lensvector& b) { return (v[0]*b[0] + v[1]*b[1]); }
 	double operator ^ (const lensvector& b) { return (v[0]*b[1] - v[1]*b[0]); }
 	double norm(void) { return sqrt(v[0]*v[0]+v[1]*v[1]); }

@@ -299,7 +299,7 @@ class ImagePixelGrid : public Sort
 	static lensvector *fvec;
 	static double image_pos_accuracy;
 
-	bool run_newton(lensvector& xroot, const int& thread);
+	bool run_newton(lensvector& xroot, double& mag, const int& thread);
 	bool LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& p, lensvector& x, double& f, double stpmax, bool &check, const int& thread);
 	bool NewtonsMethod(lensvector& x, bool &check, const int& thread);
 	void SolveLinearEqs(lensmatrix&, lensvector&);
@@ -315,10 +315,10 @@ class ImagePixelGrid : public Sort
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
-	void generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightnes, const double srcflux);
+	void generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
 	void add_point_images(double *ptimage_surface_brightness, const int npix);
-	void generate_and_add_point_images(const vector<image>& imgs, const double srcflux);
-	void find_image_points(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool verbal);
+	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
+	void find_image_points(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
 	void set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
 	void include_all_pixels();
@@ -330,6 +330,7 @@ class ImagePixelGrid : public Sort
 	void setup_subpixel_ray_tracing_arrays(const bool verbal = false);
 	void delete_ray_tracing_arrays();
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
+	void ray_trace_pixels();
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 
 	~ImagePixelGrid();
@@ -416,9 +417,10 @@ struct ImagePixelData : public Sort
 	void set_foreground_mask_to_primary_mask();
 	void invert_mask();
 	bool inside_mask(const double x, const double y);
-	void assign_mask_windows(const double sb_noise_threshold);
+	void assign_mask_windows(const double sb_noise_threshold, const int threshold_size = 0);
 	void unset_low_signal_pixels(const double sb_threshold, const bool use_fit);
-	void set_neighbor_pixels(const bool only_interior_neighbors);
+	void set_positive_radial_gradient_pixels();
+	void set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors);
 	void set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
 	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
 	void reset_extended_mask();
