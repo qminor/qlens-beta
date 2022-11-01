@@ -87,7 +87,7 @@ struct DerivedParam;
 
 struct image {
 	lensvector pos;
-	double mag, td;
+	double mag, flux, td;
 	int parity;
 };
 
@@ -513,7 +513,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<lensvector> sourcepts_fit;
 	vector<lensvector> sourcepts_lower_limit;
 	vector<lensvector> sourcepts_upper_limit;
-	vector<image> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
+
+	vector<vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
 	vector<bool> vary_sourcepts_x;
 	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
@@ -565,7 +566,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool fits_format;
 	double data_pixel_size;
 	bool add_simulated_image_data(const lensvector &sourcept);
-	bool add_fit_sourcept(const lensvector &sourcept);
+	bool add_image_data_from_sourcepts();
+	bool add_image_data_from_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
+	bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
@@ -628,10 +631,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_srcgrid_npixels;
 	bool auto_srcgrid_set_pixel_size;
 	double pixel_fraction, pixel_fraction_lower_limit, pixel_fraction_upper_limit;
-	double srcgrid_xshift, srcgrid_xshift_lower_limit, srcgrid_xshift_upper_limit;
-	double srcgrid_yshift, srcgrid_yshift_lower_limit, srcgrid_yshift_upper_limit;
+	double srcpt_xshift, srcpt_xshift_lower_limit, srcpt_xshift_upper_limit;
+	double srcpt_yshift, srcpt_yshift_lower_limit, srcpt_yshift_upper_limit;
 	double srcgrid_size_scale, srcgrid_size_scale_lower_limit, srcgrid_size_scale_upper_limit;
-	bool vary_pixel_fraction, vary_srcgrid_xshift, vary_srcgrid_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
+	bool vary_pixel_fraction, vary_srcpt_xshift, vary_srcpt_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
 	double psf_width_x, psf_width_y, data_pixel_noise, sim_pixel_noise;
 	double sb_threshold; // for creating centroid images from pixel maps
 	double noise_threshold; // for automatic source grid sizing
@@ -730,7 +733,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	ImagePixelGrid *image_pixel_grid;
 	ImagePixelData *image_pixel_data;
-	int image_npixels, source_npixels;
+	int image_npixels, source_npixels, source_n_amps;
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
 	int image_npixels_fgmask;
@@ -794,6 +797,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Cholesky_logdet_lower_packed(double* a, double &logdet, int n);
 
 	dmatrix Lmatrix_dense;
+	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
 	dvector temp_src; // used when optimizing the regularization parameter
@@ -916,7 +920,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -1188,7 +1192,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
 	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 
-	void test_fitmodel_invert();
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
 	double chisq_single_evaluation(bool showdiag, bool show_status);
@@ -1210,7 +1213,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double update_model(const double* params);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_extended_source(double* params);
-	double fitmodel_loglike_extended_source_test(double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
@@ -1232,6 +1234,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double source_flux;
 	bool vary_srcflux;
 	double srcflux_lower_limit, srcflux_upper_limit;
+	bool include_imgfluxes_in_inversion;
 
 	bool spline_critical_curves(bool verbal);
 	bool spline_critical_curves() { return spline_critical_curves(true); }
@@ -1286,7 +1289,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
 	void output_analytic_srcpos(lensvector *beta_i);
-	void set_analytic_sourcepts();
+	void set_analytic_sourcepts(const bool verbal = false);
 
 	static bool respline_at_end;
 	static int resplinesteps;
@@ -1409,7 +1412,8 @@ struct ImageData
 	ImageData() { n_images = 0; }
 	void input(const int &nn);
 	void input(const ImageData& imgs_in);
-	void input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
+	//void input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
+	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
 	void add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
 	void print_list(bool print_errors, bool use_sci);
 	void write_to_file(ofstream &outfile);
