@@ -769,7 +769,7 @@ QLens::QLens() : UCMC()
 	open_chisq_logfile = false;
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
-	psf_threshold = 0;
+	psf_threshold = 0.01;
 	psf_ptsrc_threshold = 1e-2;
 	foreground_psf_threshold = 0;
 	psf_ptsrc_nsplit = 4; // for subpixel evaluation of point source PSF
@@ -1290,6 +1290,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 			psf_matrix[i] = new double[psf_npixels_y];
 			for (j=0; j < psf_npixels_y; j++) psf_matrix[i][j] = lens_in->psf_matrix[i][j];
 		}
+		if (lens_in->psf_spline.is_splined()) psf_spline.input(lens_in->psf_spline);
 	}
 	if (lens_in->foreground_psf_matrix==NULL) foreground_psf_matrix = NULL;
 	else {
@@ -12467,6 +12468,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 	bool use_data = true;
 	if (image_pixel_data==NULL) use_data = false;
+	double blar1 = grid_xlength / n_image_pixels_x;
+	double blar2 = grid_ylength / n_image_pixels_y;
 	if ((image_pixel_data != NULL) and ((n_image_pixels_x != image_pixel_data->npixels_x) or (n_image_pixels_y != image_pixel_data->npixels_y))) {
 		use_data = false;
 		warn("img_npixels does not match number of pixels in data image; showing all pixels (using '-nomask' option)");

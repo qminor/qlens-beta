@@ -3564,8 +3564,6 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 	pts[0] = &triptr->vertex[0];
 	pts[1] = &triptr->vertex[1];
 	pts[2] = &triptr->vertex[2];
-	int srcpt_i = find_closest_vertex(trinum,input_pt);
-	if ((triptr->vertex_index[0] != srcpt_i) and (triptr->vertex_index[1] != srcpt_i) and (triptr->vertex_index[2] != srcpt_i)) warn("none of interpolation points are closest vertex");
 
 	double d, total_sb = 0;
 	d = ((*pts[0])[0]-(*pts[1])[0])*((*pts[1])[1]-(*pts[2])[1]) - ((*pts[1])[0]-(*pts[2])[0])*((*pts[0])[1]-(*pts[1])[1]);
@@ -9429,20 +9427,29 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 
 void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num)
 {
-	double normfac, sigma_fraction = sqrt(-2*log(lens->psf_ptsrc_threshold));
 	int nx_half, ny_half;
-	double nx_half_dec, ny_half_dec;
-	double sigx = lens->psf_width_x;
-	double sigy = lens->psf_width_y;
-	nx_half_dec = sigma_fraction*sigx/pixel_xlength;
-	ny_half_dec = sigma_fraction*sigy/pixel_ylength;
-	//cout << "sigma_frac=" << sigma_fraction << endl;
-	//cout << "nxhalfd=" << nx_half_dec << " nyhalfd=" << ny_half_dec << endl;
-	nx_half = ((int) nx_half_dec);
-	ny_half = ((int) ny_half_dec);
-	if ((nx_half_dec - nx_half) > 0.5) nx_half++;
-	if ((ny_half_dec - ny_half) > 0.5) ny_half++;
-	normfac = 1.0/(M_2PI*sigx*sigy);
+	double normfac, sigx, sigy;
+	int nsplit = lens->psf_ptsrc_nsplit;
+	int nsubpix = nsplit*nsplit;
+	if (lens->use_input_psf_matrix) {
+		if (lens->psf_matrix == NULL) return;
+		nx_half = lens->psf_npixels_x/2;
+		ny_half = lens->psf_npixels_y/2;
+	} else {
+		double sigma_fraction = sqrt(-2*log(lens->psf_ptsrc_threshold));
+		double nx_half_dec, ny_half_dec;
+		sigx = lens->psf_width_x;
+		sigy = lens->psf_width_y;
+		nx_half_dec = sigma_fraction*sigx/pixel_xlength;
+		ny_half_dec = sigma_fraction*sigy/pixel_ylength;
+		//cout << "sigma_frac=" << sigma_fraction << endl;
+		//cout << "nxhalfd=" << nx_half_dec << " nyhalfd=" << ny_half_dec << endl;
+		nx_half = ((int) nx_half_dec);
+		ny_half = ((int) ny_half_dec);
+		if ((nx_half_dec - nx_half) > 0.5) nx_half++;
+		if ((ny_half_dec - ny_half) > 0.5) ny_half++;
+		normfac = 1.0/(M_2PI*sigx*sigy);
+	}
 	//cout << "nxhalf=" << nx_half << " nyhalf=" << ny_half << endl;
 	//int nx = 2*nx_half+1;
 	//int ny = 2*ny_half+1;
@@ -9450,8 +9457,6 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 
 	int i,j,ii,jj,img_i;
 	int i_center, j_center, imin, imax, jmin, jmax;
-	int nsplit = lens->psf_ptsrc_nsplit;
-	int nsubpix = nsplit*nsplit;
 	//cout << "nsplit=" << nsplit << " nsubpix=" << nsubpix << endl;
 	double sb, fluxfac, x, y, x0, y0, u0, w0;
 #ifdef USE_OPENMP
@@ -9474,11 +9479,11 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 	for (img_i=img_i0; img_i < img_if; img_i++) {
 		if ((use_img_fluxes) and (imgs[img_i].flux != -1e30)) {
 			//cout << "USING IMAGE FLUX: " << imgs[img_i].flux << endl;
-			fluxfac = normfac*imgs[img_i].flux;
+			fluxfac = imgs[img_i].flux;
 		} else {
 			//cout << "NOT USING IMAGE FLUX! " << imgs[img_i].flux << " srcflux=" << srcflux << endl;
-			if (srcflux >= 0) fluxfac = normfac*srcflux*abs(imgs[img_i].mag);
-			else fluxfac = normfac; // if srcflux < 0, then normalize to 1 (this will be multiplied by a flux amplitude afterwards)
+			if (srcflux >= 0) fluxfac = srcflux*abs(imgs[img_i].mag);
+			else fluxfac = 1.0; // if srcflux < 0, then normalize to 1 (this will be multiplied by a flux amplitude afterwards)
 		}
 		//cout << "flux=" << flux << endl;
 		x0 = imgs[img_i].pos[0];
@@ -9521,7 +9526,11 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 					for (jj=0; jj < nsplit; jj++) {
 						w0 = ((double) (1+2*jj))/(2*nsplit);
 						y = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
-						sb += fluxfac*exp(-(SQR((x-x0)/sigx) + SQR((y-y0)/sigy))/2);
+						if (lens->use_input_psf_matrix) {
+							sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
+						} else {
+							sb += fluxfac*normfac*exp(-(SQR((x-x0)/sigx) + SQR((y-y0)/sigy))/2);
+						}
 					}
 				}
 				sb /= nsubpix;
@@ -9532,6 +9541,16 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 				}
 			}
 		}
+		//sigx = lens->psf_width_x;
+		//sigy = lens->psf_width_y;
+		//normfac = 1.0/(M_2PI*sigx*sigy);
+		//double sbcheck0 = lens->psf_matrix[nx_half][ny_half]/(pixel_xlength*pixel_ylength);
+		//double sbcheck = lens->interpolate_PSF_matrix(0,0)/(pixel_xlength*pixel_ylength);
+		//double sbcheck2 = normfac;
+		////cout << "normfac_inv: " << (1.0/normfac) << endl;
+		//cout << "SBCHECKS: " << nx_half << " " << ny_half << " " << sbcheck0 << " " << sbcheck << " " << sbcheck2 << endl;
+
+
 		//cout << "TOT=" << tot << endl;
 		//cout << "Added point image" << endl;
 		//cout << "area = " << (nx*ny*pixel_xlength*pixel_ylength) << endl;
@@ -10400,7 +10419,7 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
-	else if (generate_PSF_matrix()==false) return;
+	else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
@@ -10442,10 +10461,10 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 		k = active_image_pixel_i[img_index1];
 		l = active_image_pixel_j[img_index1];
 		for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
-			i = k + nx_half - psf_k;
+			i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
 			if ((i >= 0) and (i < image_pixel_grid->x_N)) {
 				for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
-					j = l + ny_half - psf_l;
+					j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
 					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
 							img_index2 = image_pixel_grid->pixel_index[i][j];
@@ -10613,7 +10632,7 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 	}
 	else {
 		if ((psf_width_x==0) and (psf_width_y==0)) return false;
-		else if (generate_PSF_matrix()==false) {
+		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
 			if (verbal) warn("could not generate_PSF matrix");
 			return false;
 		}
@@ -10736,7 +10755,7 @@ bool QLens::setup_convolution_FFT_emask(const bool verbal)
 	}
 	else {
 		if ((psf_width_x==0) and (psf_width_y==0)) return false;
-		else if (generate_PSF_matrix()==false) {
+		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
 			if (verbal) warn("could not generate_PSF matrix");
 			return false;
 		}
@@ -11023,7 +11042,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			if (use_input_psf_matrix) {
 				if (psf_matrix == NULL) return;
 			}
-			else if (generate_PSF_matrix()==false) return;
+			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
 
 			double **Lmatrix_psf = new double*[image_npixels];
 			int i,j;
@@ -11053,10 +11072,10 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 				k = active_image_pixel_i[img_index1];
 				l = active_image_pixel_j[img_index1];
 				for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
-					i = k + nx_half - psf_k;
+					i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
 					if ((i >= 0) and (i < image_pixel_grid->x_N)) {
 						for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
-							j = l + ny_half - psf_l;
+							j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
 							psfval = psf_matrix[psf_k][psf_l];
 							if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 								if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
@@ -11244,7 +11263,7 @@ void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
 		if (use_input_psf_matrix) {
 			if (psf_matrix == NULL) return;
 		}
-		else if (generate_PSF_matrix()==false) return;
+		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
 
 		double **Lmatrix_psf = new double*[image_npixels];
 		int i,j;
@@ -11274,10 +11293,10 @@ void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
 			k = active_image_pixel_i[img_index1];
 			l = active_image_pixel_j[img_index1];
 			for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
-				i = k + nx_half - psf_k;
+				i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
 				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
 					for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
-						j = l + ny_half - psf_l;
+						j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
 						psfval = psf_matrix[psf_k][psf_l];
 						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 							if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
@@ -11452,7 +11471,7 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 				if (psf_matrix == NULL) return;
 			} else {
 				if ((psf_width_x==0) and (psf_width_y==0)) return;
-				else if (generate_PSF_matrix()==false) {
+				else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
 					if (verbal) warn("could not generate_PSF matrix");
 					return;
 				}
@@ -11482,10 +11501,10 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			k = pixel_map_i[img_index1];
 			l = pixel_map_j[img_index1];
 			for (psf_k=0; psf_k < psf_nx; psf_k++) {
-				i = k + nx_half - psf_k;
+				i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
 				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
 					for (psf_l=0; psf_l < psf_ny; psf_l++) {
-						j = l + ny_half - psf_l;
+						j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
 						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
 							// THIS IS VERY CLUMSY! RE-IMPLEMENT IN A MORE ELEGANT WAY?
 							if (((foreground) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_data->foreground_mask[i][j]))) or  
@@ -11493,12 +11512,14 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 								img_index2 = pix_index[i][j];
 								new_surface_brightness_vector[img_index1] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
 								totweight += psf[psf_k][psf_l];
+								//cout << "PSF: " << psf_k << " " << psf_l << " " << psf[psf_k][psf_l] << endl;
 							}
 						}
 					}
 				}
 			}
 			if (totweight != 1.0) new_surface_brightness_vector[img_index1] /= totweight;
+			//cout << "WEIGHT=" << totweight << endl;
 		}
 
 #ifdef USE_OPENMP
@@ -11511,7 +11532,10 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		}
 #endif
 
-		for (i=0; i < npix; i++) surface_brightness_vector[i] = new_surface_brightness_vector[i];
+		for (i=0; i < npix; i++) {
+			surface_brightness_vector[i] = new_surface_brightness_vector[i];
+			//cout << surface_brightness_vector[i] << endl;
+		}
 		delete[] new_surface_brightness_vector;
 	}
 }
@@ -11582,18 +11606,19 @@ void QLens::fourier_transform(double* data, const int ndim, int* nn, const int i
 }
 #undef DSWAP
 
-bool QLens::generate_PSF_matrix()
+bool QLens::generate_PSF_matrix(const double xstep, const double ystep)
 {
 	//static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
+	if (psf_threshold==0) return false; // need a threshold to determine where to truncate the PSF
 	double sigma_fraction = sqrt(-2*log(psf_threshold));
 	int i,j;
 	int nx_half, ny_half, nx, ny;
 	double x, y, xmax, ymax;
 	if ((psf_width_x==0) or (psf_width_y==0)) return false;
 	double normalization = 0;
-	double xstep, ystep, nx_half_dec, ny_half_dec;
-	xstep = image_pixel_grid->pixel_xlength;
-	ystep = image_pixel_grid->pixel_ylength;
+	double nx_half_dec, ny_half_dec;
+	//xstep = image_pixel_grid->pixel_xlength;
+	//ystep = image_pixel_grid->pixel_ylength;
 	nx_half_dec = sigma_fraction*psf_width_x/xstep;
 	ny_half_dec = sigma_fraction*psf_width_y/ystep;
 	nx_half = ((int) nx_half_dec);
@@ -11602,6 +11627,8 @@ bool QLens::generate_PSF_matrix()
 	if ((ny_half_dec - ny_half) > 0.5) ny_half++;
 	xmax = nx_half*xstep;
 	ymax = ny_half*ystep;
+	//cout << "PIXEL LENGTHS: " << xstep << " " << ystep << endl;
+	//cout << "nxhalf=" << nx_half << " nyhalf=" << ny_half << " xmax=" << xmax << " ymax=" << ymax << endl;
 	nx = 2*nx_half+1;
 	ny = 2*ny_half+1;
 	if (psf_matrix != NULL) {
@@ -11613,10 +11640,13 @@ bool QLens::generate_PSF_matrix()
 	for (i=0; i < nx; i++) psf_matrix[i] = new double[ny];
 	psf_npixels_x = nx;
 	psf_npixels_y = ny;
+	//cout << " NPIXELS: " << nx << " " << ny << endl;
+	//cout << "PSF widths: " << psf_width_x << " " << psf_width_y << endl;
 	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
 		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
 			psf_matrix[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
 			normalization += psf_matrix[i][j];
+			//cout << "creating PSF: " << i << " " << j << " x=" << x << " y=" << y << " " << psf_matrix[i][j] << endl;
 		}
 	}
 	for (i=0; i < nx; i++) {
@@ -11627,47 +11657,50 @@ bool QLens::generate_PSF_matrix()
 	return true;
 }
 
-bool QLens::generate_ptsrc_PSF_matrix()
+bool QLens::spline_PSF_matrix(const double xstep, const double ystep)
 {
-	double sigma_fraction = sqrt(-2*log(psf_ptsrc_threshold));
-	int i,j;
-	int nx_half, ny_half, nx, ny;
-	double x, y, xmax, ymax;
-	if ((psf_width_x==0) or (psf_width_y==0)) return false;
-	double normalization = 0;
-	double xstep, ystep, nx_half_dec, ny_half_dec;
-	xstep = image_pixel_grid->pixel_xlength / psf_ptsrc_nsplit;
-	ystep = image_pixel_grid->pixel_ylength / psf_ptsrc_nsplit;
-	nx_half_dec = sigma_fraction*psf_width_x/xstep;
-	ny_half_dec = sigma_fraction*psf_width_y/ystep;
-	nx_half = ((int) nx_half_dec);
-	ny_half = ((int) ny_half_dec);
-	if ((nx_half_dec - nx_half) > 0.5) nx_half++;
-	if ((ny_half_dec - ny_half) > 0.5) ny_half++;
-	xmax = nx_half*xstep;
-	ymax = ny_half*ystep;
-	nx = 2*nx_half+1;
-	ny = 2*ny_half+1;
-	if (psf_ptsrc_matrix != NULL) {
-		for (i=0; i < psf_ptsrc_npixels_x; i++) delete[] psf_ptsrc_matrix[i];
-		delete[] psf_ptsrc_matrix;
-	}
-	psf_ptsrc_matrix = new double*[nx];
-	for (i=0; i < nx; i++) psf_ptsrc_matrix[i] = new double[ny];
-	psf_ptsrc_npixels_x = nx;
-	psf_ptsrc_npixels_y = ny;
-	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
-		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
-			psf_ptsrc_matrix[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
-			normalization += psf_ptsrc_matrix[i][j];
-		}
-	}
-	for (i=0; i < nx; i++) {
-		for (j=0; j < ny; j++) {
-			psf_ptsrc_matrix[i][j] /= normalization;
-		}
-	}
+	if (psf_matrix==NULL) return false;
+	int i,nx_half,ny_half;
+	double x,y;
+	nx_half = psf_npixels_x/2;
+	ny_half = psf_npixels_y/2;
+	double xmax = nx_half*xstep;
+	double ymax = ny_half*ystep;
+	double *xvals = new double[psf_npixels_x];
+	double *yvals = new double[psf_npixels_y];
+	for (i=0, x=-xmax; i < psf_npixels_x; i++, x += xstep) xvals[i] = x;
+	for (i=0, y=-ymax; i < psf_npixels_y; i++, y += ystep) yvals[i] = y;
+	psf_spline.input(xvals,yvals,psf_matrix,psf_npixels_x,psf_npixels_y);
+	delete[] xvals;
+	delete[] yvals;
 	return true;
+}
+
+double QLens::interpolate_PSF_matrix(const double x, const double y)
+{
+	double psfint;
+	if (psf_spline.is_splined()) {
+		psfint = psf_spline.splint(x,y);
+	} else {
+		double scaled_x, scaled_y;
+		int ii,jj;
+		double nx_half, ny_half;
+		nx_half = psf_npixels_x/2;
+		ny_half = psf_npixels_y/2;
+		scaled_x = (x / image_pixel_grid->pixel_xlength) + nx_half;
+		scaled_y = (y / image_pixel_grid->pixel_ylength) + ny_half;
+		ii = (int) scaled_x;
+		jj = (int) scaled_y;
+		if ((ii < 0) or (jj < 0) or (ii >= psf_npixels_x-1) or (jj >= psf_npixels_y-1)) return 0.0;
+		double tt,TT,uu,UU;
+		tt = scaled_x - ii;
+		TT = 1-tt;
+		uu = scaled_y - jj;
+		UU = 1-uu;
+		psfint = TT*UU*psf_matrix[ii][jj] + tt*UU*psf_matrix[ii+1][jj] + TT*uu*psf_matrix[ii][jj+1] + tt*uu*psf_matrix[ii+1][jj+1];
+	}
+	//cout << "PSFINT: " << psfint << endl;
+	return psfint;
 }
 
 void QLens::generate_Rmatrix_norm()

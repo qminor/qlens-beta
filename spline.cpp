@@ -483,6 +483,40 @@ void Spline2D::input(const dvector& x, const dvector& y, const dmatrix& z)
 	spline();
 }
 
+void Spline2D::input(Spline2D &spline_in)
+{
+	nn = spline_in.nn;
+	mm = spline_in.mm;
+	xarray = new double[mm];
+	yarray = new double[nn];
+	zmatrix = new double*[mm];
+	zspline = new double*[mm];
+	//z2matrix = new double*[nn];
+	//z2spline = new double*[nn];
+
+	for (int i = 0; i < mm; i++) {
+		xarray[i] = spline_in.xarray[i];
+		zmatrix[i] = new double[nn];
+		zspline[i] = new double[nn];
+	}
+
+	for (int j = 0; j < nn; j++) {
+		yarray[j] = spline_in.yarray[j];
+	}
+
+	for (int i = 0; i < mm; i++) {
+		for (int j = 0; j < nn; j++) {
+			zmatrix[i][j] = spline_in.zmatrix[i][j];
+		}
+	}
+
+	for (int i = 0; i < mm; i++) {
+		for (int j = 0; j < nn; j++) {
+			zspline[i][j] = spline_in.zspline[i][j];
+		}
+	}
+}
+
 void Spline2D::input(const char *xyfilename, const char *zfilename)
 {
 	FILE *xyfile;
@@ -521,12 +555,6 @@ void Spline2D::input(const char *xyfilename, const char *zfilename)
 	if ((zfile = fopen(zfilename, "r"))==NULL)
 		die("could not open file '%s' for splining\n", zfilename);
 
-/*
-	for (i=0; i < nn; i++) {
-		z2matrix[i] = new double[mm];
-		z2spline[i] = new double[mm];
-	}
-*/
 	for (i=0; i < mm; i++) {
 		zmatrix[i] = new double[nn];
 		zspline[i] = new double[nn];
