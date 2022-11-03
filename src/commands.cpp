@@ -1248,13 +1248,15 @@ void QLens::process_commands(bool read_file)
 						cout << "sbmap\n"
 							"sbmap plotimg [...]\n"
 							"sbmap mksrc\n"
-							"sbmap mkplotsrc\n"						// WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap mkplotsrc [...]\n"						// WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap savesrc [output_file]\n"
-							"sbmap plotsrc [output_file]\n"
+							"sbmap plotsrc [output_file] [...]\n"  // UPDATE HELP DOCS FOR THIS COMMAND
 							"sbmap loadsrc <source_file>\n"
 							"sbmap loadimg <image_file>\n"
 							"sbmap loadpsf <psf_file>\n"        // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap mkpsf [-spline]\n"                 // WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap spline_psf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap plotdata\n"
 							"sbmap invert\n"
 							"sbmap loadmask <mask_file> [-add]\n"      // WRITE HELP DOCS FOR THIS COMMAND
@@ -8722,6 +8724,30 @@ void QLens::process_commands(bool read_file)
 					delete[] psf_matrix;
 					psf_matrix = NULL;
 				}
+			}
+			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
+			{
+				bool mkpsf = false;
+				bool cubic_spline = false;
+				if (words[1]=="mkpsf") mkpsf = true;	
+				else if (words[1]=="spline_psf") cubic_spline = true;
+				double pixel_xlength, pixel_ylength;
+				if (image_pixel_grid != NULL) {
+					pixel_xlength = image_pixel_grid->pixel_xlength;
+					pixel_ylength = image_pixel_grid->pixel_ylength;
+				} else {
+					pixel_xlength = grid_xlength / n_image_pixels_x;
+					pixel_ylength = grid_ylength / n_image_pixels_y;
+				}
+				if ((mkpsf) and (nwords==3) and (words[2]=="-spline")) cubic_spline = true;
+				if (mkpsf) {
+					if (generate_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("could not generate PSF matrix from analytic model");
+					use_input_psf_matrix = true;
+				}
+				if (cubic_spline) {
+					if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
+				}
+				cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
 			}
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
 			{

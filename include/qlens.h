@@ -820,10 +820,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	bool use_input_psf_matrix;
 	bool use_input_psf_ptsrc_matrix;
-	double **psf_matrix, **psf_ptsrc_matrix, **foreground_psf_matrix;
+	double **psf_matrix, **foreground_psf_matrix;
+	Spline2D psf_spline;
 	bool load_psf_fits(string fits_filename, const bool verbal);
 	int psf_npixels_x, psf_npixels_y;
-	int psf_ptsrc_npixels_x, psf_ptsrc_npixels_y;
 	int foreground_psf_npixels_x, foreground_psf_npixels_y;
 	double psf_threshold, psf_ptsrc_threshold, foreground_psf_threshold;
 	int psf_ptsrc_nsplit; // allows for subpixel PSF
@@ -875,8 +875,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
-	bool generate_PSF_matrix();
-	bool generate_ptsrc_PSF_matrix();
+	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength);
+	bool spline_PSF_matrix(const double xstep, const double ystep);
+	double interpolate_PSF_matrix(const double x, const double y);
 
 	void create_regularization_matrix(void);
 	void generate_Rmatrix_from_gmatrices();

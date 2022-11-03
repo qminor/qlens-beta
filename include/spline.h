@@ -87,6 +87,7 @@ class Spline2D
 		void input(double x[], double y[], double** z, const int m, const int n);
 		void input(const dvector& x, const dvector& y, const dmatrix& z);
 		void input(const char xyfilename[], const char zfilename[]);
+		void input(Spline2D &spline_in);
 		void input_3column(const char xyfilename[], const char zfilename[]);
 		void output(const char xyfilename[], const char zfilename[]);
 		void input(const string xyfilename, const string zfilename) { input(xyfilename.c_str(),zfilename.c_str()); }
@@ -104,6 +105,7 @@ class Spline2D
 		void logprintall(long, long);
 		void set_invert_y(void) { invert_y = true; }
 		double zval(int i, int j) { return zmatrix[i][j]; }
+		bool is_splined() { return (zmatrix != NULL); }
 
 };
 
