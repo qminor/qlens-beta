@@ -8711,7 +8711,7 @@ void QLens::process_commands(bool read_file)
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-				load_psf_fits(filename,verbal_mode);
+				if (!load_psf_fits(filename,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
 			}
 			else if (words[1]=="unloadpsf")
 			{

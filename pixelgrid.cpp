@@ -2038,7 +2038,6 @@ bool SourcePixelGrid::subcell_assign_source_mapping_flags_interpolate(lensvector
 
 void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
 {
-	//cout << "YO0" << endl;
 	for (int i=0; i < 3; i++) {
 		//cout << "What " << i << endl;
 		//cout << "ii=" << ii << " trying index " << (3*ii+i) << endl;
@@ -2050,7 +2049,6 @@ void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const i
 		interpolation_pts[i][thread] = &image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i]->center_pt;
 	}
 
-	//cout << "YO1" << endl;
 	if (lens->interpolate_sb_3pt) {
 		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
 		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
@@ -3448,7 +3446,6 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 		maps_to_image_pixel[triptr->vertex_index[1]] = true;
 		maps_to_image_pixel[triptr->vertex_index[2]] = true;
 	}
-	//cout << "WTF4" << endl;
 	return true;
 }
 
@@ -3775,7 +3772,7 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate)
+void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate_sb)
 {
 	string img_filename = root + ".dat";
 	string x_filename = root + ".x";
@@ -3805,9 +3802,12 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const
 		pt[1] = y;
 		for (i=0, x=xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
 			pt[0] = x;
-			if (interpolate) {
+			if (interpolate_sb) {
 				sb = interpolate_surface_brightness(pt);
 			} else {
+				// The following lines will plot the Voronoi cells that are dual to the Delaunay triangulation. Note however, that when SB interpolation is
+				// performed during ray-tracing, we use the vertices of the triangle that a point lands in, which may not include the closest vertex (i.e. the
+				// Voronoi cell it lies in). Thus, the Voronoi cells are for visualization only, and do not directly show what the ray-traced SB will look like.
 				bool inside_triangle;
 				trinum = search_grid(0,pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
 				srcpt_i = find_closest_vertex(trinum,pt);
@@ -4566,7 +4566,9 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 			}
 		}
 		fits_close_file(fptr, &status);
-	} 
+	} else {
+		return false;
+	}
 	int imid, jmid, imin, imax, jmin, jmax;
 	imid = nx/2;
 	jmid = ny/2;
@@ -4627,27 +4629,7 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	}
 	nx_half = (imax-imin+1)/2;
 	ny_half = (jmax-jmin+1)/2;
-	foreground_psf_npixels_x = 2*nx_half+1;
-	foreground_psf_npixels_y = 2*ny_half+1;
-	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
-	for (i=0; i < foreground_psf_npixels_x; i++) foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
-	for (ii=0, i=imid-nx_half; ii < foreground_psf_npixels_x; i++, ii++) {
-		for (jj=0, j=jmid-ny_half; jj < foreground_psf_npixels_y; j++, jj++) {
-			foreground_psf_matrix[ii][jj] = input_psf_matrix[i][j];
-		}
-	}
-	normalization = 0;
-	for (i=0; i < foreground_psf_npixels_x; i++) {
-		for (j=0; j < foreground_psf_npixels_y; j++) {
-			normalization += foreground_psf_matrix[i][j];
-		}
-	}
-	for (i=0; i < psf_npixels_x; i++) {
-		for (j=0; j < psf_npixels_y; j++) {
-			foreground_psf_matrix[i][j] /= normalization;
-		}
-	}
-
+	setup_foreground_PSF_matrix();
 	//for (i=0; i < psf_npixels_x; i++) {
 		//for (j=0; j < psf_npixels_y; j++) {
 			//cout << psf_matrix[i][j] << " ";
@@ -4667,6 +4649,34 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	if (status) fits_report_error(stderr, status); // print any error message
 	return image_load_status;
 #endif
+}
+
+void QLens::setup_foreground_PSF_matrix()
+{
+	// right now, we're just making foreground PSF same as regular PSF. Maybe later we'll allow for a custom PSF for the foreground galaxy?
+	foreground_psf_npixels_x = psf_npixels_x;
+	foreground_psf_npixels_y = psf_npixels_y;
+	int nx_half = foreground_psf_npixels_x/2;
+	int ny_half = foreground_psf_npixels_y/2;
+	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
+	int i,j;
+	for (i=0; i < foreground_psf_npixels_x; i++) foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
+	for (i=0; i < foreground_psf_npixels_x; i++) {
+		for (j=0; j < foreground_psf_npixels_y; j++) {
+			foreground_psf_matrix[i][j] = psf_matrix[i][j];
+		}
+	}
+	double normalization = 0;
+	for (i=0; i < foreground_psf_npixels_x; i++) {
+		for (j=0; j < foreground_psf_npixels_y; j++) {
+			normalization += foreground_psf_matrix[i][j];
+		}
+	}
+	for (i=0; i < psf_npixels_x; i++) {
+		for (j=0; j < psf_npixels_y; j++) {
+			foreground_psf_matrix[i][j] /= normalization;
+		}
+	}
 }
 
 ImagePixelData::~ImagePixelData()
@@ -8853,6 +8863,11 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 	}
 #endif
 	int i,j;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			surface_brightness[i][j] = 0;
+		}
+	}
 	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source)) {
 		bool at_least_one_foreground_src = false;
 		bool at_least_one_lensed_src = false;
@@ -8863,19 +8878,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 				at_least_one_lensed_src = true;
 			}
 		}
-		if ((foreground_only) and (!at_least_one_foreground_src)) {
-			for (j=0; j < y_N; j++) {
-				for (i=0; i < x_N; i++) {
-					surface_brightness[i][j] = 0;
-				}
-			}
-			return;
-		}
-		for (j=0; j < y_N; j++) {
-			for (i=0; i < x_N; i++) {
-				surface_brightness[i][j] = 0;
-			}
-		}
+		if ((foreground_only) and (!at_least_one_foreground_src)) return;
 
 		if ((source_fit_mode == Cartesian_Source) and (ray_tracing_method == Area_Overlap)) {
 			lensvector **corners = new lensvector*[4];
@@ -10067,7 +10070,6 @@ void QLens::assign_foreground_mappings(const bool use_data)
 		if (mpi_id==0) cout << "Wall time for assigning foreground pixel mappings: " << wtime << endl;
 	}
 #endif
-
 }
 
 void QLens::initialize_pixel_matrices(bool verbal)
@@ -11465,6 +11467,12 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			psf_ny = foreground_psf_npixels_y;
 			if (use_input_psf_matrix) {
 				if (foreground_psf_matrix == NULL) return;
+			} else {
+				if ((psf_width_x==0) and (psf_width_y==0)) return;
+				else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
+					if (verbal) warn("could not generate_PSF matrix");
+					return;
+				}
 			}
 		} else {
 			if (use_input_psf_matrix) {
@@ -11654,6 +11662,7 @@ bool QLens::generate_PSF_matrix(const double xstep, const double ystep)
 			psf_matrix[i][j] /= normalization;
 		}
 	}
+	setup_foreground_PSF_matrix(); // just sets foreground PSF to be same as PSF for lensed images (maybe later allow them to be different?)
 	return true;
 }
 

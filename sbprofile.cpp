@@ -1445,7 +1445,7 @@ double SB_Profile::surface_brightness(double x, double y)
 	}
 	if (include_truncation_radius) sb *= pow(1+pow(xisq/(rt*rt),3),-2);
 
-	if (sb*0.0 != 0.0) die("surface brightness returning NAN");
+	if (sb*0.0 != 0.0) warn("surface brightness returning NAN");
 
 	return sb;
 }
