@@ -13059,6 +13059,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
 		double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
 		double est_pixfrac = est_nmapped / image_npixels;
+		cout << "YO1" << endl;
 		if ((mpi_id==0) and (verbal)) {
 			double pixfrac = ((double) source_n_amps) / image_npixels;
 			cout << "Actual f = " << pixfrac << endl;

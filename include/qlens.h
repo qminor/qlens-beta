@@ -823,6 +823,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double **psf_matrix, **foreground_psf_matrix;
 	Spline2D psf_spline;
 	bool load_psf_fits(string fits_filename, const bool verbal);
+	void setup_foreground_PSF_matrix();
 	int psf_npixels_x, psf_npixels_y;
 	int foreground_psf_npixels_x, foreground_psf_npixels_y;
 	double psf_threshold, psf_ptsrc_threshold, foreground_psf_threshold;
