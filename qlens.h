@@ -800,6 +800,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
+	dvector Rmatrix_packed;
 	dvector temp_src; // used when optimizing the regularization parameter
 
 	double *gmatrix[4];
@@ -922,7 +923,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();

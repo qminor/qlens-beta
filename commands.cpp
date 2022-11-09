@@ -1295,7 +1295,7 @@ void QLens::process_commands(bool read_file)
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
 								"savesrc').\n";
 						else if (words[2]=="plotimg")
-							cout << "sbmap plotimg (optional: [-fits] [-res] [-emask] [-nomask] [-contour=#] [-nocc] [-reduce2/4/8])\n"
+							cout << "sbmap plotimg (optional: [-fits] [-res] [-emask/fgmask] [-nomask] [-contour=#] [-nocc] [-reduce2/4/8])\n"
 								"sbmap plotimg [-...] [image_file]\n"
 								"sbmap plotimg [-...] [source_file] [image_file]\n\n"
 								"Plot a lensed pixel image from a pixellated source surface brightness distribution under the\n"
@@ -1313,7 +1313,7 @@ void QLens::process_commands(bool read_file)
 								"  [-res] plots residual image by subtracting from the data image\n"
 								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
-								"  [-emask] plot image (or residuals) using extended mask defined by 'emask_n_neighbors'\n"
+								"  [-emask/fgmask] plot image (or residuals) using extended/foreground mask\n"
 								"  [-pnoise=#] add simulated pixel noise (for just this plot only; ignores 'sim_pixel_noise' value)\n"
 								"  [-noptsrc] do not include the point source(s) when plotting the lensed images\n"
 								"  [-nosrcplot] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
@@ -9229,6 +9229,7 @@ void QLens::process_commands(bool read_file)
 				bool omit_foreground = false;
 				bool show_all_pixels = false;
 				bool show_extended_mask = false;
+				bool show_foreground_mask = false;
 				bool exclude_ptimgs = false; // by default, we include point images if n_sourcepts_fit > 0
 				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
@@ -9264,6 +9265,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-fg") plot_foreground_only = true;
 						else if (args[i]=="-nofg") omit_foreground = true;
 						else if (args[i]=="-nomask") show_all_pixels = true;
+						else if (args[i]=="-fgmask") show_foreground_mask = true;
 						else if (args[i]=="-emask") show_extended_mask = true;
 						else if (args[i]=="-fits") plot_fits = true;
 						else if ((args[i]=="-nosrc") or (args[i]=="-nosrcplot")) omit_source = true;
@@ -9359,7 +9361,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if ((subcomp) and (show_cc)) {
 								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							}
@@ -9391,9 +9393,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,exclude_ptimgs);
+							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range1,contstring);
 								else run_plotter_file("imgpixel",words[2],range1,contstring);
@@ -9404,11 +9406,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,exclude_ptimgs);
+								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
 								if ((plotted_src) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if ((!replot) and (plotted_src)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring);
@@ -11329,7 +11331,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
 				if ((setword=="on") and (optimize_regparam)) Complain("regparam cannot be varied freely if 'optimize_regparam' is set to 'on'");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'pixel' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regularization_parameter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12213,6 +12215,7 @@ void QLens::process_commands(bool read_file)
 			bool nested_sampling_on_final_iter = false;
 			bool optimize_knots = false;
 			bool optimize_knots_before_nest = true;
+			bool skip_nested_sampling = false;
 			if (!(ws[1] >> xi0)) Complain("wtf?");
 			if (!(ws[2] >> xistep)) Complain("wtf?");
 			if (!(ws[3] >> qi)) Complain("wtf?");
@@ -12229,6 +12232,7 @@ void QLens::process_commands(bool read_file)
 					else if ((words[i]=="-sbprofile")) sampling_mode = 3;
 					else if ((words[i]=="-noopt")) no_optimize = true;
 					else if ((words[i]=="-nest_final")) nested_sampling_on_final_iter = true;
+					else if ((words[i]=="-skipnest")) skip_nested_sampling = true;
 					else if ((words[i]=="-nest_final_optknots")) {
 						nested_sampling_on_final_iter = true;
 						optimize_knots_before_nest = true;
@@ -12399,6 +12403,7 @@ void QLens::process_commands(bool read_file)
 			IsophoteData isodata0(isodata);
 			// the remaining code is to apply the PSF correction
 			int sbprofile_fit_iter = 0; // keeps track of how many sbprofile fits have been done, so it does nested sampling on iter=0 and simplex afterwards
+			if (skip_nested_sampling) sbprofile_fit_iter++;
 			bool include_ellipticity_gradient = false;
 			bool include_fourier_gradient = false;
 
@@ -13311,6 +13316,8 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 			if (!(ws[i] >> fgrad_params[i])) invalid_params = true;
 		}
 		if (invalid_params==true) return false;
+	} else {
+		for (int i=0; i < n_fgrad_params; i++) fgrad_params[i] = 0;
 	}
 
 	nparams_to_vary += n_fgrad_params - 2*n_fmodes;

@@ -2090,14 +2090,14 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 	int i;
 	double tot_interval = 0;
 	for (i=0; i < n_bspline_knots_tot-2*bspline_order-1; i++) {
-		if (abs(params[i]) < profile_fit_min_knot_interval) return 1e30;
+		if (abs(params[i]) < profile_fit_min_knot_interval) { warn("knot interval too small; skipping B-spline fit"); return 1e30; }
 		tot_interval += abs(params[i]);
 		profile_fit_egrad_params[bspline_order+i+1] = profile_fit_egrad_params[bspline_order+i] + abs(params[i]);
 	}
 	for (i=0; i < bspline_order; i++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+i] = profile_fit_egrad_params[n_bspline_knots_tot-bspline_order-1];
 
 	//update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
-	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) return 1e30; // penalty chisq
+	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) { warn("total interval too large (%g); skipping B-spline fit",pow(10,tot_interval)); return 1e30; } // penalty chisq
 
 	double loglike = fit_bspline_curve(profile_fit_egrad_params,profile_fit_bspline_coefs);
 	return loglike;

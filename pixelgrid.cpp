@@ -5132,7 +5132,7 @@ void ImagePixelData::set_required_data_annulus(const double xc, const double yc,
 				theta = M_2PI - theta;
 			}
 			if ((rsq > rminsq) and (rsq < rmaxsq)) {
-				// allow for two possibilities: theta1 < theta2, and theta2 < theta1 (which can happen if, e.g. theta1 is input as negative and theta1 is input as positive)
+				// allow for two possibilities: theta1 < theta2, and theta2 < theta1 (which can happen if, e.g. theta2 is input as negative and theta1 is input as positive)
 				if (((theta2 > theta1) and (theta >= theta1) and (theta <= theta2)) or ((theta1 > theta2) and ((theta >= theta1) or (theta <= theta2)))) {
 					if (!unset) {
 						if (in_mask[i][j] == false) {
@@ -8208,6 +8208,16 @@ void ImagePixelGrid::activate_extended_mask()
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->extended_mask[i][j];
+		}
+	}
+}
+
+void ImagePixelGrid::activate_foreground_mask()
+{
+	int i,j;
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			fit_to_data[i][j] = lens->image_pixel_data->foreground_mask[i][j];
 		}
 	}
 }

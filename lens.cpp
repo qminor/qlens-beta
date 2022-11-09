@@ -12459,7 +12459,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root)
 	return true;
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool offload_to_data, bool show_extended_mask, bool show_noise_thresh, bool exclude_ptimgs, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool verbose)
 {
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
@@ -12497,6 +12497,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	} else if ((show_extended_mask) and (use_data)) {
 		if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
 		else image_pixel_grid->activate_extended_mask(); 
+	} else if ((show_foreground_mask) and (use_data)) {
+		image_pixel_grid->activate_foreground_mask(); 
 	}
 	image_pixel_grid->ray_trace_pixels();
 
@@ -12622,7 +12624,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
-	if (((show_all_pixels) or (show_extended_mask)) and (use_data)) {
+	if (((show_all_pixels) or (show_extended_mask) or (show_foreground_mask)) and (use_data)) {
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
 

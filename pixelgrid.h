@@ -323,6 +323,7 @@ class ImagePixelGrid : public Sort
 	void set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
 	void include_all_pixels();
 	void activate_extended_mask();
+	void activate_foreground_mask();
 	void deactivate_extended_mask();
 	void setup_pixel_arrays();
 	void set_null_ray_tracing_arrays();
