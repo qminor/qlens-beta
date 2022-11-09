@@ -7056,7 +7056,7 @@ double QLens::update_model(const double* params)
 	if (vary_srcflux) {
 		source_flux = params[index++];
 	}
-	if (source_fit_mode == Shapelet_Source) {
+	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode==Delaunay_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
 	}
 	if (vary_hubble_parameter) {
@@ -8007,7 +8007,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_srcpt_xshift) stepsizes[index++] = 0.01;
 	if (vary_srcpt_yshift) stepsizes[index++] = 0.01;
 	if (vary_srcflux) stepsizes[index++] = 0.1;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
@@ -8043,7 +8043,7 @@ void QLens::set_default_plimits()
 	if (vary_srcpt_xshift) index++;
 	if (vary_srcpt_yshift) index++;
 	if (vary_srcflux) index++;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		index++;
 	}
 	if (vary_pixel_fraction) index++;
@@ -8079,7 +8079,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (vary_srcpt_xshift) nparams++;
 	if (vary_srcpt_yshift) nparams++;
 	if (vary_srcflux) nparams++;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) nparams++;
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) nparams++;
 	if (vary_pixel_fraction) nparams++;
 	if (vary_srcgrid_size_scale) nparams++;
 	if (vary_magnification_threshold) nparams++;
@@ -8142,7 +8142,7 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (vary_srcpt_xshift) fitparams[index++] = srcpt_xshift;
 	if (vary_srcpt_yshift) fitparams[index++] = srcpt_yshift;
 	if (vary_srcflux) fitparams[index++] = source_flux;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_srcgrid_size_scale) fitparams[index++] = srcgrid_size_scale;
 	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
@@ -8224,7 +8224,7 @@ bool QLens::setup_limits()
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
-	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Shapelet_Source)) {
+	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) {
 			if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) { warn("lower/upper limits must be set for regularization parameter (see 'regparam') before doing fit"); return false; }
 			lower_limits[index] = regularization_parameter_lower_limit;
@@ -8418,7 +8418,7 @@ void QLens::get_parameter_names()
 		latex_parameter_names.push_back("f");
 		latex_parameter_subscripts.push_back("pixel");
 	}
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		fit_parameter_names.push_back("regparam");
 		latex_parameter_names.push_back("\\lambda");
 		latex_parameter_subscripts.push_back("");
@@ -8901,7 +8901,7 @@ double QLens::chi_square_fit_simplex()
 			fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
 			fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
 		} else warn("source pixel grid was not created during fit");
-	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 		fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
 	}
 
@@ -8954,7 +8954,7 @@ double QLens::chi_square_fit_simplex()
 		if (vary_srcpt_xshift) cout << "source point x-shift = " << fitmodel->srcpt_xshift << endl;
 		if (vary_srcpt_yshift) cout << "source point y-shift = " << fitmodel->srcpt_yshift << endl;
 		if (vary_srcflux) cout << "srcflux = " << fitmodel->source_flux << endl;
-		if ((vary_regularization_parameter) and (source_fit_mode == Cartesian_Source) and (regularization_method != None)) {
+		if ((vary_regularization_parameter) and ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source)) and (regularization_method != None)) {
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
@@ -9068,7 +9068,7 @@ double QLens::chi_square_fit_powell()
 	if (source_fit_mode==Cartesian_Source) {
 		if (mpi_id==0) fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
 		if (mpi_id==0) fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
-	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 		if (mpi_id==0) fitmodel->image_pixel_grid->plot_surface_brightness("img_calc");
 	}
 
@@ -9124,7 +9124,7 @@ double QLens::chi_square_fit_powell()
 		if (vary_srcpt_xshift) cout << "source point x-shift = " << fitmodel->srcpt_xshift << endl;
 		if (vary_srcpt_yshift) cout << "source point y-shift = " << fitmodel->srcpt_yshift << endl;
 		if (vary_srcflux) cout << "srcflux = " << fitmodel->source_flux << endl;
-		if ((vary_regularization_parameter) and (source_fit_mode == Cartesian_Source) and (regularization_method != None)) {
+		if ((vary_regularization_parameter) and (source_fit_mode == Cartesian_Source) and (source_fit_mode==Delaunay_Source) or (regularization_method != None)) {
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
@@ -10735,7 +10735,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	update_anchored_parameters_and_redshift_data();
 	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (source_fit_mode == Shapelet_Source) {
-		if ((vary_regularization_parameter) and (regularization_method != None))
+		if (((vary_regularization_parameter) or (source_fit_mode==Delaunay_Source)) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
 	}
 
@@ -11162,7 +11162,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
 	if (loglike < 1e30) {
-		if ((source_fit_mode==Cartesian_Source) and ((fitmodel->regularization_parameter < 0) or (fitmodel->pixel_fraction <= 0))) chisq = 2e30;
+		if (((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam) and (fitmodel->regularization_parameter < 0)) chisq = 2e30;
 		else {
 			chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 		}
@@ -11504,7 +11504,7 @@ void QLens::output_lens_commands(string filename, const bool print_limits)
 			scriptfile << srcflux_lower_limit << " " << srcflux_upper_limit << endl;
 		}
 	}
-	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Shapelet_Source)) {
+	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 		if (vary_regularization_parameter) {
 			if (!print_limits) {
 				scriptfile << "regparam " << regularization_parameter << endl;
@@ -11612,7 +11612,7 @@ void QLens::print_fit_model()
 			else cout << "Source flux: [" << srcflux_lower_limit << ":" << source_flux << ":" << srcflux_upper_limit << "]\n";
 		}
 	}
-	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Shapelet_Source)) {
+	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 		if (vary_regularization_parameter) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 				cout << "Regularization parameter: " << regularization_parameter << endl;
