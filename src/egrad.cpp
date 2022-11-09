@@ -521,6 +521,7 @@ double EllipticityGradient::fit_bspline_curve(double *knots, double *coefs)
 	int ier = 0;
 	double smoothing = 0;
 	curfit_(&iopt, &n_isophote_datapts, profile_fit_logxivals, profile_fit_data, profile_fit_weights, &logxi_initial, &logxi_final, &bspline_order, &smoothing, &bspline_nmax, &n_bspline_knots_tot, knots, coefs, &minchisq, bspline_work, &lwork, bspline_iwork, &ier);
+
 	if (ier > 0) {
 		if (ier >= 10) {
 			//cout << "KNOTS: " << endl;

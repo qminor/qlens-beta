@@ -24,8 +24,8 @@ inline double QUARTIC(const double s) { return s*s*s*s; }
 inline int sign(const double &a) { return (a < 0 ? -1 : a > 0 ? 1 : 0); }
 inline bool sign_bool(const double &a) { return (a < 0 ? false : a > 0 ? true : true); }
 inline double norm(const double a, const double b) { return sqrt(a*a+b*b); }
-inline double degrees_to_radians(const double theta) { return (0.0174532925199*theta); }
-inline double radians_to_degrees(const double theta) { return (57.2957795131*theta); }
+inline double degrees_to_radians(const double theta) { return (0.017453292519943295*theta); }
+inline double radians_to_degrees(const double theta) { return (57.29577951308232*theta); }
 
 inline double angle(double a, double b) {
 	double c = (a==0.0) ? 0.5*M_PI
