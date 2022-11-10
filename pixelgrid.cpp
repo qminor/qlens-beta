@@ -2672,14 +2672,14 @@ void QLens::generate_Rmatrix_from_hmatrices()
 		delete[] lvals[i];
 	}
 	if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
+#else
 #ifdef USE_UMFPACK
 		Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
-#else
-#ifdef USE_MKL
-		Rmatrix_determinant_MKL();
 #else
 	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
 #endif
@@ -2852,14 +2852,14 @@ void QLens::generate_Rmatrix_from_gmatrices()
 		delete[] lvals[i];
 	}
 	if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
+#else
 #ifdef USE_UMFPACK
 		Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
-#else
-#ifdef USE_MKL
-		Rmatrix_determinant_MKL();
 #else
 	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
 #endif
@@ -11813,14 +11813,14 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 	Rmatrix_nn = Rmatrix_index[source_npixels];
 	//for (int i=0; i <= source_npixels; i++) cout << Rmatrix[i] << " " << Rmatrix_index[i] << endl;
 	//cout << "Rmatrix_nn=" << Rmatrix_nn << " source_npixels=" << source_npixels << endl;
+#ifdef USE_MKL
+	Rmatrix_determinant_MKL();
+#else
 #ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 	Rmatrix_determinant_MUMPS();
-#else
-#ifdef USE_MKL
-	Rmatrix_determinant_MKL();
 #else
 	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
 #endif
@@ -11844,14 +11844,14 @@ void QLens::generate_Rmatrix_shapelet_curvature()
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
 	Rmatrix_nn = Rmatrix_index[source_npixels];
+#ifdef USE_MKL
+	Rmatrix_determinant_MKL();
+#else
 #ifdef USE_UMFPACK
 	Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 	Rmatrix_determinant_MUMPS();
-#else
-#ifdef USE_MKL
-	Rmatrix_determinant_MKL();
 #else
 	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
 #endif
@@ -13832,7 +13832,7 @@ void QLens::Rmatrix_determinant_MKL()
 #else
 	// MKL should use Pardiso to get the Cholesky decomposition, but for the moment, I will just convert to dense matrix and do it that way
 	double *Rmatrix_stacked = new double[source_n_amps*source_n_amps];
-	int i,j,indx,n=source_n_amps;
+	int i,j,indx;
 	for (i=0; i < source_n_amps*source_n_amps; i++) Rmatrix_stacked[i] = 0;
 	for (i=0; i < source_npixels; i++) {
 		indx = i*source_n_amps;
@@ -13840,10 +13840,9 @@ void QLens::Rmatrix_determinant_MKL()
 		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
 			if (Rmatrix_index[j] <= i) die("getting lower triangular indices??!?!?!?!");
 			Rmatrix_stacked[indx+Rmatrix_index[j]] = Rmatrix[j];
-			n++;
 		}
 	}
-	Rmatrix_packed.input(n);
+	Rmatrix_packed.input(source_n_amps*(source_n_amps+1)/2);
 	LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_n_amps,Rmatrix_stacked,source_n_amps,Rmatrix_packed.array());
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Rmatrix_packed.array());
 	Cholesky_logdet_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_n_amps);
