@@ -10734,8 +10734,8 @@ bool QLens::adopt_model(dvector &fitparams)
 	}
 	update_anchored_parameters_and_redshift_data();
 	reset_grid(); // this will force it to redraw the critical curves if needed
-	if (source_fit_mode == Shapelet_Source) {
-		if (((vary_regularization_parameter) or (source_fit_mode==Delaunay_Source)) and (regularization_method != None))
+	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode == Delaunay_Source)) {
+		if ((vary_regularization_parameter) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
 	}
 
@@ -12307,7 +12307,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 			if (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb) include = true;
 		}
 		if (include) npix++;
-		//if (include) npix += 4;
 		include_in_delaunay_grid[n] = include;
 	}
 
@@ -12320,6 +12319,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 
 	npix = 0;
 	int subcell_i1, subcell_i2;
+	int nsubpix;
 	//ofstream pixout("piximg.dat");
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
@@ -12329,20 +12329,13 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 				srcpts1_x[npix] = image_pixel_grid->center_sourcepts[i][j][0];
 				srcpts1_y[npix] = image_pixel_grid->center_sourcepts[i][j][1];
 			} else {
-				subcell_i1 = (i+2*j) % (INTSQR(image_pixel_grid->nsplits[i][j])); // why not just store the square and avoid having to always take the square?
-				subcell_i2 = (i+2*j+2) % (INTSQR(image_pixel_grid->nsplits[i][j])); // why not just store the square and avoid having to always take the square?
-				//for (subcell_i=0; subcell_i < 4; subcell_i++) {
-					srcpts1_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i1][0];
-					srcpts1_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i1][1];
-					srcpts2_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i2][0];
-					srcpts2_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i2][1];
-					//double ptx, pty;
-					//ptx = image_pixel_grid->subpixel_center_pts[i][j][subcell_i][0];
-					//pty = image_pixel_grid->subpixel_center_pts[i][j][subcell_i][1];
-					//pixout << ptx << " " << pty << endl;
-
-					//cout << srcpts_x[npix] << " " << srcpts_y[npix] << endl;
-				//}
+				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+				subcell_i1 = (i+2*j) % nsubpix;
+				subcell_i2 = (i+2*j+2) % nsubpix;
+				srcpts1_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i1][0];
+				srcpts1_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i1][1];
+				srcpts2_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i2][0];
+				srcpts2_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i2][1];
 			}
 			ivals[npix] = i;
 			jvals[npix] = j;

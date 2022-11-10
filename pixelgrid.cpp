@@ -2677,6 +2677,12 @@ void QLens::generate_Rmatrix_from_hmatrices()
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
+#else
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
+#else
+	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+#endif
 #endif
 #endif
 	}
@@ -2851,6 +2857,12 @@ void QLens::generate_Rmatrix_from_gmatrices()
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
+#else
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
+#else
+	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
+#endif
 #endif
 #endif
 	}
@@ -11722,21 +11734,6 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 	return psfint;
 }
 
-void QLens::generate_Rmatrix_norm()
-{
-	Rmatrix_nn = source_npixels+1;
-	Rmatrix = new double[Rmatrix_nn];
-	Rmatrix_index = new int[Rmatrix_nn];
-
-	for (int i=0; i < source_npixels; i++) {
-		Rmatrix[i] = 1;
-		Rmatrix_index[i] = source_npixels+1;
-	}
-	Rmatrix_index[source_npixels] = source_npixels+1;
-
-	Rmatrix_log_determinant = 0;
-}
-
 void QLens::create_regularization_matrix()
 {
 	if (Rmatrix != NULL) delete[] Rmatrix;
@@ -11782,6 +11779,21 @@ void QLens::create_regularization_matrix_shapelet()
 	}
 }
 
+void QLens::generate_Rmatrix_norm()
+{
+	Rmatrix_nn = source_npixels+1;
+	Rmatrix = new double[Rmatrix_nn];
+	Rmatrix_index = new int[Rmatrix_nn];
+
+	for (int i=0; i < source_npixels; i++) {
+		Rmatrix[i] = 1;
+		Rmatrix_index[i] = source_npixels+1;
+	}
+	Rmatrix_index[source_npixels] = source_npixels+1;
+
+	Rmatrix_log_determinant = 0;
+}
+
 void QLens::generate_Rmatrix_shapelet_gradient()
 {
 	bool at_least_one_shapelet = false;
@@ -11806,6 +11818,12 @@ void QLens::generate_Rmatrix_shapelet_gradient()
 #else
 #ifdef USE_MUMPS
 	Rmatrix_determinant_MUMPS();
+#else
+#ifdef USE_MKL
+	Rmatrix_determinant_MKL();
+#else
+	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
+#endif
 #endif
 #endif
 }
@@ -11831,6 +11849,12 @@ void QLens::generate_Rmatrix_shapelet_curvature()
 #else
 #ifdef USE_MUMPS
 	Rmatrix_determinant_MUMPS();
+#else
+#ifdef USE_MKL
+	Rmatrix_determinant_MKL();
+#else
+	die("Currently either compiling with MUMPS or UMFPACK is required to calculate R-matrix determinants");
+#endif
 #endif
 #endif
 
@@ -11925,7 +11949,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 					//cout << "Adding " << Fmatrix_csr[j] << " to diag " << i << endl;
 				}
 				else if (Fmatrix_csr[j] != 0) {
-					if (Fmatrix_csr_index[j] < i) die("FUCK ME"); // just temporary to make sure it's returning only upper triangular elements..REMOVE THIS LINE LATER
 					for (k=0; k < Fmatrix_index_rows[i].size(); k++) if (Fmatrix_csr_index[j]==Fmatrix_index_rows[i][k]) {
 						duplicate_column = true;
 						dup_k = k;
@@ -12356,7 +12379,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 #endif
 
 #ifndef USE_MKL
-		// The following is not as fast as the Blas functin dsyrk (below), but it still gets the job done
+		// The following is not as fast as the Blas function dsyrk (below), but it still gets the job done
 		double *fpmatptr;
 		double *lmatptr1, *lmatptr2;
 		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
@@ -12778,6 +12801,7 @@ bool QLens::Cholesky_dcmp(double** a, double &logdet, int n)
 }
 */
 
+// This does a lower triangular Cholesky decomposition
 bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 {
 	int i,j,k;
@@ -12814,19 +12838,20 @@ bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
 	return status;
 }
 
-// This is the lower triangular version
+// This is for the determinant from the lower triangular version of the decomposition
 void QLens::Cholesky_logdet_lower_packed(double* a, double &logdet, int n)
 {
 	logdet = 0;
 	int indx = 0;
 	for (int i=0; i < n; i++) {
-		logdet += log(abs(*(a+indx)));
+		logdet += log(abs(a[indx]));
 		indx += i+2;
 	}
 	logdet *= 2;
 }
 
 /*
+// This function is kept for reference so you can convert to an upper triangular version (not done yet)...after that you can get rid of this
 void QLens::Cholesky_solve(double** a, double* b, double* x, int n)
 {
 	int i,k;
@@ -12861,19 +12886,20 @@ void QLens::Cholesky_solve_lower_packed(double* a, double* b, double* x, int n)
 	delete[] indx;
 }
 
+// This is for the determinant from the upper triangular version of the decomposition
 void QLens::Cholesky_logdet_packed(double* a, double &logdet, int n)
 {
 	logdet = 0;
 	int indx = 0;
 	for (int i=0; i < n; i++) {
-		logdet += log(abs(*(a+indx)));
+		logdet += log(abs(a[indx]));
 		indx += n-i;
 	}
 	logdet *= 2;
 }
 
 /*
-// This is an attempt at upper triangular versions (not working yet), but you need to make the Cholesky upper triangular as well...fix later
+// This is an attempt at an upper triangular version of Cholesky solve (not working yet), but you need to make the Cholesky decomp upper triangular as well...fix later
 void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 {
 	int i,k;
@@ -13665,7 +13691,7 @@ void QLens::Rmatrix_determinant_UMFPACK()
 		die("Could not calculate determinant");
 	}
 	Rmatrix_log_determinant = log(mantissa) + exponent*log(10);
-	//cout << "Rmatrix_logdet=" << Rmatrix_log_determinant << endl;
+	cout << "Rmatrix_logdet=" << Rmatrix_log_determinant << endl;
 	delete[] Rmatrix_transpose;
 	delete[] Rmatrix_transpose_index;
 	delete[] Rmatrix_unsymmetric_cols;
@@ -13798,6 +13824,32 @@ void QLens::indexx(int* arr, int* indx, int nn)
 	delete[] istack;
 }
 #undef ISWAP
+
+void QLens::Rmatrix_determinant_MKL()
+{
+#ifndef USE_MKL
+	die("QLens requires compilation with MKL (or UMFPACK or MUMPS) for determinants of sparse matrices");
+#else
+	// MKL should use Pardiso to get the Cholesky decomposition, but for the moment, I will just convert to dense matrix and do it that way
+	double *Rmatrix_stacked = new double[source_n_amps*source_n_amps];
+	int i,j,indx,n=source_n_amps;
+	for (i=0; i < source_n_amps*source_n_amps; i++) Rmatrix_stacked[i] = 0;
+	for (i=0; i < source_npixels; i++) {
+		indx = i*source_n_amps;
+		Rmatrix_stacked[indx+i] = Rmatrix[i];
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			if (Rmatrix_index[j] <= i) die("getting lower triangular indices??!?!?!?!");
+			Rmatrix_stacked[indx+Rmatrix_index[j]] = Rmatrix[j];
+			n++;
+		}
+	}
+	Rmatrix_packed.input(n);
+	LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_n_amps,Rmatrix_stacked,source_n_amps,Rmatrix_packed.array());
+   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Rmatrix_packed.array());
+	Cholesky_logdet_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_n_amps);
+	delete[] Rmatrix_stacked;
+#endif
+}
 
 void QLens::clear_lensing_matrices()
 {
