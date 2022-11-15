@@ -2847,18 +2847,19 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const bool exponential_kerne
 #endif
 	int ntot = source_npixels*(source_npixels+1)/2;
 	Rmatrix_packed.input(ntot);
-	//double *Rmatrix_packed_copy = new double[ntot];
 	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->generate_covariance_matrix(Rmatrix_packed.array(),kernel_correlation_length,exponential_kernel);
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
-	//for (int i=0; i < ntot; i++) Rmatrix_packed_copy[i] = Rmatrix_packed[i];
 	// Right now Rmatrix_packed is in fact the covariance matrix, from which we will do a Cholesky decomposition and then invert to get the Rmatrix
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // Cholesky decomposition
+	LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse
 #else
-	die("need to do Cholesky here without MKL");
-#endif
+	repack_Fmatrix_lower();
+	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
+	repack_Fmatrix_upper();
 	Cholesky_invert_upper_packed(Rmatrix_packed.array(),source_npixels); // invert the triangular matrix to get U_inverse
 	upper_triangular_syrk(Rmatrix_packed.array(),source_npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
+#endif
 
 	/*
 	dmatrix cov,cov_inv,prod;
@@ -2893,6 +2894,13 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const bool exponential_kerne
 	cout << endl;
 	delete[] Rmatrix_packed_copy;
 	*/
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating covariance kernel Rmatrix: " << wtime << endl;
+	}
+#endif
+
 }
 
 int SourcePixelGrid::assign_indices_and_count_levels()
@@ -12729,22 +12737,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 #else
 	// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
 	// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
-	double **Fmat = new double*[source_n_amps];
-	for (i=0; i < source_n_amps; i++) {
-		Fmat[i] = new double[i+1];
-	}
-	for (k=0,j=0; j < source_n_amps; j++) {
-		for (i=j; i < source_n_amps; i++) {
-			Fmat[i][j] = Fmatrix_packed_copy[k++];
-		}
-	}
-	for (k=0,i=0; i < source_n_amps; i++) {
-		for (j=0; j <= i; j++) {
-			Fmatrix_packed_copy[k++] = Fmat[i][j];
-		}
-		delete[] Fmat[i];
-	}
-	delete[] Fmat;
+	repack_Fmatrix_lower();
 
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 	if (!status) die("Cholesky decomposition failed");
@@ -13293,6 +13286,52 @@ void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 }
 */
 
+void QLens::repack_Fmatrix_lower()
+{
+	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
+	// we have to switch Fmatrix to a lower triangular version here
+	double **Fmat = new double*[source_n_amps];
+	int i,j,k;
+	for (i=0; i < source_n_amps; i++) {
+		Fmat[i] = new double[i+1];
+	}
+	for (k=0,j=0; j < source_n_amps; j++) {
+		for (i=j; i < source_n_amps; i++) {
+			Fmat[i][j] = Fmatrix_packed[k++];
+		}
+	}
+	for (k=0,i=0; i < source_n_amps; i++) {
+		for (j=0; j <= i; j++) {
+			Fmatrix_packed[k++] = Fmat[i][j];
+		}
+		delete[] Fmat[i];
+	}
+	delete[] Fmat;
+}
+
+void QLens::repack_Fmatrix_upper()
+{
+	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
+	// we have to switch Fmatrix to a lower triangular version here
+	double **Fmat = new double*[source_n_amps];
+	int i,j,k;
+	for (i=0; i < source_n_amps; i++) {
+		Fmat[i] = new double[i+1];
+	}
+	for (k=0,i=0; i < source_n_amps; i++) {
+		for (j=0; j <= i; j++) {
+			Fmat[i][j] = Fmatrix_packed[k++];
+		}
+	}
+	for (k=0,j=0; j < source_n_amps; j++) {
+		for (i=j; i < source_n_amps; i++) {
+			Fmatrix_packed[k++] = Fmat[i][j];
+		}
+	}
+	for (i=0; i < source_n_amps; i++) delete[] Fmat[i];
+	delete[] Fmat;
+}
+
 void QLens::invert_lens_mapping_dense(bool verbal)
 {
 #ifdef USE_OPENMP
@@ -13309,23 +13348,7 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 #else
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
-	double **Fmat = new double*[source_n_amps];
-	int k;
-	for (i=0; i < source_n_amps; i++) {
-		Fmat[i] = new double[i+1];
-	}
-	for (k=0,j=0; j < source_n_amps; j++) {
-		for (i=j; i < source_n_amps; i++) {
-			Fmat[i][j] = Fmatrix_packed[k++];
-		}
-	}
-	for (k=0,i=0; i < source_n_amps; i++) {
-		for (j=0; j <= i; j++) {
-			Fmatrix_packed[k++] = Fmat[i][j];
-		}
-		delete[] Fmat[i];
-	}
-	delete[] Fmat;
+	repack_Fmatrix_lower();
 
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
 	if (!status) die("Cholesky decomposition failed");
