@@ -889,6 +889,10 @@ QLens::QLens() : UCMC()
 	regularization_parameter_lower_limit = 1e30; // These must be specified by user
 	regularization_parameter_upper_limit = 1e30; // These must be specified by user
 	vary_regularization_parameter = false;
+	kernel_correlation_length = 0.1;
+	kernel_correlation_length_lower_limit = 1e30;
+	kernel_correlation_length_upper_limit = 1e30;
+	vary_correlation_length = false;
 	optimize_regparam = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
@@ -925,6 +929,7 @@ QLens::QLens() : UCMC()
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
+	dense_Rmatrix = true;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	Dvector = NULL;
@@ -1230,6 +1235,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	regularization_parameter_lower_limit = lens_in->regularization_parameter_lower_limit;
 	regularization_parameter_upper_limit = lens_in->regularization_parameter_upper_limit;
 	vary_regularization_parameter = lens_in->vary_regularization_parameter;
+	kernel_correlation_length = lens_in->kernel_correlation_length;
+	kernel_correlation_length_upper_limit = lens_in->kernel_correlation_length_upper_limit;
+	kernel_correlation_length_lower_limit = lens_in->kernel_correlation_length_lower_limit;
+	vary_correlation_length = lens_in->vary_correlation_length;
 	optimize_regparam = lens_in->optimize_regparam;
 	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
@@ -1268,6 +1277,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
+	dense_Rmatrix = lens_in->dense_Rmatrix;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	image_surface_brightness = NULL;
@@ -7059,6 +7069,7 @@ double QLens::update_model(const double* params)
 	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode==Delaunay_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
 	}
+	if ((source_fit_mode == Delaunay_Source) and (vary_correlation_length) and (regularization_method != None)) kernel_correlation_length = params[index++];
 	if (vary_hubble_parameter) {
 		hubble = params[index++];
 		if (hubble < 0) status = false; // do not allow negative Hubble parameter
@@ -8010,6 +8021,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
+	if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) kernel_correlation_length = stepsizes[index++] = 0.1;
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_srcgrid_size_scale) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
@@ -8043,9 +8055,8 @@ void QLens::set_default_plimits()
 	if (vary_srcpt_xshift) index++;
 	if (vary_srcpt_yshift) index++;
 	if (vary_srcflux) index++;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
-		index++;
-	}
+	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) index++;
+	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
 	if (vary_pixel_fraction) index++;
 	if (vary_srcgrid_size_scale) index++;
 	if (vary_magnification_threshold) index++;
@@ -8080,6 +8091,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (vary_srcpt_yshift) nparams++;
 	if (vary_srcflux) nparams++;
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) nparams++;
+	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
 	if (vary_pixel_fraction) nparams++;
 	if (vary_srcgrid_size_scale) nparams++;
 	if (vary_magnification_threshold) nparams++;
@@ -8143,6 +8155,7 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (vary_srcpt_yshift) fitparams[index++] = srcpt_yshift;
 	if (vary_srcflux) fitparams[index++] = source_flux;
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
+	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_srcgrid_size_scale) fitparams[index++] = srcgrid_size_scale;
 	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
@@ -8233,6 +8246,14 @@ bool QLens::setup_limits()
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
+		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
+			lower_limits[index] = kernel_correlation_length_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = kernel_correlation_length_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+
 		// The way limits are handled here is really ugly. The limits should just be handled in the ParamSettings class. IMPLEMENT THIS!!!!!!!!!!!
 		if (source_fit_mode==Cartesian_Source) {
 			if (vary_pixel_fraction) {
@@ -8422,6 +8443,11 @@ void QLens::get_parameter_names()
 		fit_parameter_names.push_back("regparam");
 		latex_parameter_names.push_back("\\lambda");
 		latex_parameter_subscripts.push_back("");
+	}
+	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
+		fit_parameter_names.push_back("corrlength");
+		latex_parameter_names.push_back("l");
+		latex_parameter_subscripts.push_back("corr");
 	}
 	if (vary_pixel_fraction) {
 		fit_parameter_names.push_back("pixel_fraction");
@@ -8957,6 +8983,7 @@ double QLens::chi_square_fit_simplex()
 		if ((vary_regularization_parameter) and ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source)) and (regularization_method != None)) {
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
+		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "correlation length = " << fitmodel->kernel_correlation_length << endl;
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_srcgrid_size_scale) cout << "sourcegrid scale = " << fitmodel->srcgrid_size_scale << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
@@ -9127,6 +9154,7 @@ double QLens::chi_square_fit_powell()
 		if ((vary_regularization_parameter) and (source_fit_mode == Cartesian_Source) and (source_fit_mode==Delaunay_Source) or (regularization_method != None)) {
 			cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 		}
+		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "correlation length = " << fitmodel->kernel_correlation_length << endl;
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_srcgrid_size_scale) cout << "source grid scale = " << fitmodel->srcgrid_size_scale << endl;
 		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
@@ -10726,8 +10754,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	if (vary_srcpt_yshift) srcpt_yshift = transformed_params[index++];
 	if (vary_srcflux) source_flux = transformed_params[index++];
 	if (source_fit_mode == Cartesian_Source) {
-		if ((vary_regularization_parameter) and (regularization_method != None))
-			regularization_parameter = transformed_params[index++];
+		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = transformed_params[index++];
 		if (vary_pixel_fraction) pixel_fraction = transformed_params[index++];
 		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
 		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
@@ -10737,6 +10764,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode == Delaunay_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
+		if ((vary_correlation_length) and (regularization_method != None)) kernel_correlation_length = transformed_params[index++];
 	}
 
 	if (vary_hubble_parameter) {
@@ -11621,6 +11649,15 @@ void QLens::print_fit_model()
 				else cout << "Regularization parameter: [" << regularization_parameter_lower_limit << ":" << regularization_parameter << ":" << regularization_parameter_upper_limit << "]\n";
 			}
 		}
+		if (vary_regularization_parameter) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "correlation length: " << kernel_correlation_length << endl;
+			} else {
+				if ((kernel_correlation_length_lower_limit==1e30) or (kernel_correlation_length_upper_limit==1e30)) cout << "\nRegularization parameter: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
+				else cout << "correlation length: [" << kernel_correlation_length_lower_limit << ":" << kernel_correlation_length << ":" << kernel_correlation_length_upper_limit << "]\n";
+			}
+		}
+
 		if (source_fit_mode==Cartesian_Source) {
 			if (vary_magnification_threshold) {
 				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
@@ -13344,57 +13381,43 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/n_tot_pixels << endl;
 	double chisqreg;
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
-		//if ((regularization_method != None) and (vary_regularization_parameter)) {
-		if ((regularization_method != None) and (source_npixels > 0)) {
-			// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
-			//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
-			//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!
+	if ((regularization_method != None) and (source_npixels > 0)) {
+		// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
+		//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
+		//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!
 
+		// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
+		if (regularization_parameter != 0) {
 			double Es=0;
-			for (i=0; i < source_npixels; i++) {
-				Es += Rmatrix[i]*SQR(source_pixel_vector[i]);
-				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-					Es += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+			if (dense_Rmatrix) {
+				double *Rptr, *sptr_i, *sptr_j, *s_end;
+				Rptr = Rmatrix_packed.array();
+				s_end = source_pixel_vector + source_npixels;
+				for (sptr_i=source_pixel_vector; sptr_i != s_end; sptr_i++) {
+					sptr_j = sptr_i;
+					Es += (*sptr_i)*(*(Rptr++))*(*sptr_j++);
+					while (sptr_j != s_end) {
+						Es += 2*(*sptr_i)*(*(Rptr++))*(*(sptr_j++));
+					}
+				}
+			} else {
+				for (i=0; i < source_npixels; i++) {
+					Es += Rmatrix[i]*SQR(source_pixel_vector[i]);
+					for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+						Es += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+					}
 				}
 			}
-			// Es here actually differs from its usual definition by a factor of 1/2, so we do not multiply by 2 (as we would normally do for chisq = -2*log(like))
-			if (regularization_parameter != 0) {
-				//chisqreg = chisq + regularization_parameter*Es;
-				chisqreg = regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
-				//cout << "chisqreg=" << chisqreg << endl;
-				chisq += chisqreg;
-				//cout << "src_np=" << source_n_amps << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
-			}
-			chisq += Fmatrix_log_determinant;
-			if (group_id==0) {
-				if (logfile.is_open()) logfile << "reg=" << regularization_parameter << " chisq_reg=" << chisq << " ";
-				if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
-			}
+			chisqreg = regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+			//cout << "chisqreg=" << chisqreg << endl;
+			chisq += chisqreg;
+			//cout << "src_np=" << source_n_amps << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 		}
-	} else if (source_fit_mode==Shapelet_Source) {
-		double Es=0;
-		if ((regularization_method != None) and (source_npixels > 0)) {
-			//for (i=0; i < source_n_amps; i++) {
-				//Es += Rmatrix_diags[i] * SQR(source_pixel_vector[i]); // with Shapelets, the regularization matrix is diagonal due to orthogonality
-			//}
-			for (i=0; i < source_npixels; i++) {
-				Es += Rmatrix[i]*SQR(source_pixel_vector[i]);
-				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-					Es += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
-				}
-			}
-			if (regularization_parameter != 0) {
-				chisqreg = chisq + regularization_parameter*Es;
-				//cout << "chisqreg=" << chisqreg << endl;
-				chisqreg = regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
-				//chisq += regularization_parameter*Es - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
-				chisq += chisqreg;
-				if ((mpi_id==0) and (verbal)) cout << "reg*Es=" << (regularization_parameter*Es) << " n_shapelets*log(regparam)=" << (-source_npixels*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_log_determinant << " sum=" << (chisqreg+Fmatrix_log_determinant) << endl;
-			}
-			chisq += Fmatrix_log_determinant;
+		chisq += Fmatrix_log_determinant;
+		if (group_id==0) {
+			if (logfile.is_open()) logfile << "reg=" << regularization_parameter << " chisq_reg=" << chisq << " ";
+			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << chisq;
 		}
-		//cout << "Rmatrix_det=" << Rmatrix_log_determinant << " Fmatrix_det=" << Fmatrix_log_determinant << " Es=" << Es << " regparam=" << regularization_parameter << endl << endl << endl;
 	}
 	//if ((mpi_id==0) and (verbal)) cout << "chisqreg=" << chisqreg << ", n_data_pixels=" << n_data_pixels << endl;
 	//chisq += n_data_pixels*log(M_2PI*covariance); // not critical because the data fit window and assumed pixel noise are not varied

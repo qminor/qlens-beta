@@ -231,6 +231,8 @@ class DelaunayGrid
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false);
 	void generate_gmatrices();
 	void generate_hmatrices();
+	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const bool exponential_kernel);
+
 	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
 
 	~DelaunayGrid();

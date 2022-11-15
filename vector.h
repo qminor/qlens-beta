@@ -22,10 +22,12 @@ class Vector
 	inline Vector& operator = (const Vector&);
 	inline Vector& operator = (const T&);
 	void input(const int&);
+	void input_zero(const int&);
 	void resize(const int &n);
 	void input(T*, const int&);
 	T* array(void) { return v; }
 	T* array(void) const { return v; }
+	T* end(void) { return v+nn; }
 	inline T norm(void);
 	int size(void) const { return nn; }
 	void print(void);
@@ -59,6 +61,17 @@ void Vector<T>::input(const int &n)
 		delete[] v;
 	nn = n;
 	v = new T[nn];
+	return;
+}
+
+template <class T>
+void Vector<T>::input_zero(const int &n)
+{
+	if (v != NULL)
+		delete[] v;
+	nn = n;
+	v = new T[nn];
+	for (int i=0; i < nn; i++) v[i] = 0;
 	return;
 }
 

@@ -6332,6 +6332,8 @@ void QLens::process_commands(bool read_file)
 							else if (regularization_method==Norm) cout << "Regularization method: norm" << endl;
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
+							else if (regularization_method==Exponential_Kernel) cout << "Regularization method: exponential kernel" << endl;
+							else if (regularization_method==Squared_Exponential_Kernel) cout << "Regularization method: squared exponential kernel" << endl;
 							else cout << "Unknown regularization method" << endl;
 						}
 					} else if (nwords==3) {
@@ -6346,6 +6348,8 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="norm") regularization_method = Norm;
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="curvature") regularization_method = Curvature;
+						else if (setword=="exp_kernel") regularization_method = Exponential_Kernel;
+						else if (setword=="sqexp_kernel") regularization_method = Squared_Exponential_Kernel;
 						else Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
 					} else Complain("invalid number of arguments; can only specify regularization method");
 				}
@@ -11336,6 +11340,36 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="corrlength")
+		{
+			double corrlength, corrlength_ul, corrlength_ll;
+			if (nwords == 4) {
+				if (!(ws[1] >> corrlength_ll)) Complain("invalid kernel correlation length lower limit");
+				if (!(ws[2] >> corrlength)) Complain("invalid kernel correlation length value");
+				if (!(ws[3] >> corrlength_ul)) Complain("invalid kernel correlation length upper limit");
+				if ((corrlength < corrlength_ll) or (corrlength > corrlength_ul)) Complain("initial kernel correlation length should lie within specified prior limits");
+				kernel_correlation_length = corrlength;
+				kernel_correlation_length_lower_limit = corrlength_ll;
+				kernel_correlation_length_upper_limit = corrlength_ul;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> corrlength)) Complain("invalid kernel correlation length value");
+				kernel_correlation_length = corrlength;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "kernel correlation length = " << kernel_correlation_length << endl;
+			} else Complain("must specify either zero or one argument (kernel correlation length value)");
+		}
+		else if (words[0]=="vary_corrlength")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary correlation length: " << display_switch(vary_correlation_length) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before corrlength can be varied (see 'fit regularization')");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("corrlength can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(vary_correlation_length,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="data_pixel_noise")
 		{
 			double pnoise;
@@ -12009,6 +12043,8 @@ void QLens::process_commands(bool read_file)
 			if (srcnum >= n_sb) Complain("source number does not exist");
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
+		} else if (words[0]=="test2") {
+			//test_inverts();
 		//} else if (words[0]=="test2") {
 			//if (image_pixel_data == NULL) Complain("image pixel data not loaded");
 			//if (nwords < 8) Complain("need 6 args");
