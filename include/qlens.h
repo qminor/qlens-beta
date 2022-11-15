@@ -518,7 +518,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<bool> vary_sourcepts_x;
 	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
+	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
 	bool vary_regularization_parameter;
+	bool vary_correlation_length;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 
@@ -620,7 +622,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
-	enum RegularizationMethod { None, Norm, Gradient, Curvature } regularization_method;
+	enum RegularizationMethod { None, Norm, Gradient, Curvature, Exponential_Kernel, Squared_Exponential_Kernel } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool interpolate_sb_3pt;
@@ -762,6 +764,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *Fmatrix;
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
+	bool dense_Rmatrix;
 	double *Rmatrix;
 	int *Rmatrix_index;
 	double *Rmatrix_diag_temp;
@@ -790,11 +793,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_shapelet_gradient();
 	void generate_Rmatrix_shapelet_curvature();
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
+	//bool Cholesky_dcmp_upper(double** a, double &logdet, int n);
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
 	//void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_lower_packed(double* a, double* b, double* x, int n);
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 	void Cholesky_logdet_lower_packed(double* a, double &logdet, int n);
+	//void test_inverts();
+	//void Cholesky_invert_upper(double** a, const int n);
+	//void Cholesky_invert_lower(double** a, const int n);
+	void Cholesky_invert_upper_packed(double* a, const int n);
+	void upper_triangular_syrk(double* a, const int n);
 
 	dmatrix Lmatrix_dense;
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
@@ -885,9 +894,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
+	void generate_Rmatrix_from_covariance_kernel(const bool exponential_kernel);
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
+	void convert_Rmatrix_to_dense();
+	void Rmatrix_determinant_MKL();
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
