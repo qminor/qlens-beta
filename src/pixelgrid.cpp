@@ -11781,17 +11781,19 @@ void QLens::create_regularization_matrix()
 		default:
 			die("Regularization method not recognized");
 	}
+	if ((dense_Rmatrix) and (inversion_method!=DENSE) and (inversion_method!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
 	if ((!dense_Rmatrix) and (inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
 		// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
 		// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
-#ifdef USE_MKL
-		Rmatrix_determinant_MKL();
-#else
+
 #ifdef USE_UMFPACK
 		Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
+#else
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
 #else
 	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
 #endif
@@ -11815,6 +11817,13 @@ void QLens::create_regularization_matrix()
 void QLens::create_regularization_matrix_shapelet()
 {
 	if (source_npixels==0) return;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	double *Fmatrix_stacked; // used only if dense_Fmatrix is set to true
+
 	dense_Rmatrix = false;
 	switch (regularization_method) {
 		case Norm:
@@ -11826,19 +11835,25 @@ void QLens::create_regularization_matrix_shapelet()
 		default:
 			die("Regularization method not recognized for dense matrices");
 	}
-#ifdef USE_MKL
-		Rmatrix_determinant_MKL();
-#else
 #ifdef USE_UMFPACK
 		Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS();
 #else
+#ifdef USE_MKL
+		Rmatrix_determinant_MKL();
+#else
 	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
 #endif
 #endif
 #endif
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating Rmatrix: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+
 }
 
 void QLens::generate_Rmatrix_norm()
@@ -12149,6 +12164,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 #endif
 
 	if (!dense_Fmatrix) {
+		cout << "YO?" << endl;
 		if (regularization_method != None) {
 			for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
 				if (src_index1 < source_npixels) { // additional source amplitudes are not regularized
@@ -12256,7 +12272,9 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 			cout << "Fmatrix sparseness = " << sparseness << endl;
 		}
 	} else {
+		cout << "HI?" << endl;
 		if (dense_Rmatrix) {
+		cout << "HI2?" << endl;
 			if ((regularization_method != None) and (!optimize_regparam)) {
 				int n_extra_amps = source_n_amps - source_npixels;
 				double *Fptr, *Rptr;
@@ -12271,6 +12289,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 				//for (i=0; i < ntot; i++) Fmatrix_packed[i] += effective_reg_parameter*Rmatrix_packed[i];
 			}
 		} else {
+		cout << "HI3?" << endl;
 			int k,indx_start=0;
 			if ((regularization_method != None) and (!optimize_regparam)) {
 				for (i=0; i < source_npixels; i++) {
