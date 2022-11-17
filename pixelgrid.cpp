@@ -2852,55 +2852,26 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const bool exponential_kerne
 	// Right now Rmatrix_packed is in fact the covariance matrix, from which we will do a Cholesky decomposition and then invert to get the Rmatrix
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // Cholesky decomposition
+	Cholesky_logdet_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_npixels);
+	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
+	//cout << "RLOGDET=" << Rmatrix_log_determinant << endl;
+	//cout << "corrlength=" << kernel_correlation_length << endl;
 	LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse
 #else
-	repack_Fmatrix_lower();
-	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
-	repack_Fmatrix_upper();
+	repack_matrix_lower(Rmatrix_packed);
+	bool status = Cholesky_dcmp_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_n_amps);
+	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
+	repack_matrix_upper(Rmatrix_packed);
 	Cholesky_invert_upper_packed(Rmatrix_packed.array(),source_npixels); // invert the triangular matrix to get U_inverse
 	upper_triangular_syrk(Rmatrix_packed.array(),source_npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
 #endif
 
-	/*
-	dmatrix cov,cov_inv,prod;
-	double *Rmatptr = Rmatrix_packed_copy;
-	cov.input(source_npixels,source_npixels);
-	cov_inv.input(source_npixels,source_npixels);
-	prod.input(source_npixels,source_npixels);
-	int i,j;
-	for (i=0; i < source_npixels; i++) {
-		cov[i][i] = *(Rmatptr++);
-		for (j=i+1; j < source_npixels; j++) {
-			cov[i][j] = *(Rmatptr++);
-			cov[j][i] = cov[i][j];
-		}
-	}
-	Rmatptr = Rmatrix_packed.array();
-	for (i=0; i < source_npixels; i++) {
-		cov_inv[i][i] = *(Rmatptr++);
-		for (j=i+1; j < source_npixels; j++) {
-			cov_inv[i][j] = *(Rmatptr++);
-			cov_inv[j][i] = cov_inv[i][j];
-		}
-	}
-	prod = cov*cov_inv;
-	cout << "THIS SHOULD BE IDENTITY:" << endl;
-	for (i=0; i < 2; i++) {
-		for (j=0; j < source_npixels; j++) {
-			cout << prod[i][j] << " ";
-		}
-		cout << endl;
-	}
-	cout << endl;
-	delete[] Rmatrix_packed_copy;
-	*/
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
 		if (mpi_id==0) cout << "Wall time for calculating covariance kernel Rmatrix: " << wtime << endl;
 	}
 #endif
-
 }
 
 int SourcePixelGrid::assign_indices_and_count_levels()
@@ -11810,8 +11781,9 @@ void QLens::create_regularization_matrix()
 		default:
 			die("Regularization method not recognized");
 	}
-	if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
+	if ((!dense_Rmatrix) and (inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) {
 		// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
+		// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
 #ifdef USE_MKL
 		Rmatrix_determinant_MKL();
 #else
@@ -12481,17 +12453,30 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
    LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_stacked,source_n_amps,Fmatrix_packed.array());
 #endif
 
-   int k,indx_start=0;
-   if ((regularization_method != None) and (!optimize_regparam)) {
-      for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-         Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
-			for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-				//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
-				Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
+	if (dense_Rmatrix) {
+		int n_extra_amps = source_n_amps - source_npixels;
+		double *Fptr, *Rptr;
+		Fptr = Fmatrix_packed.array();
+		Rptr = Rmatrix_packed.array();
+		for (i=0; i < source_npixels; i++) {
+			for (j=i; j < source_npixels; j++) {
+				*(Fptr++) += regularization_parameter*(*(Rptr++));
 			}
-			indx_start += source_n_amps-i;
-      }
-   }
+			Fptr += n_extra_amps;
+		}
+	} else {
+		int k,indx_start=0;
+		if ((regularization_method != None) and (!optimize_regparam)) {
+			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
+				Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
+				for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
+					//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
+					Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
+				}
+				indx_start += source_n_amps-i;
+			}
+		}
+	}
 	//double Ftot = 0;
 	//for (i=0; i < ntot; i++) Ftot += Fmatrix_packed[i];
 	//double ltot = 0;
@@ -12640,43 +12625,16 @@ double QLens::chisq_regparam(const double logreg)
 	else die("can only use MUMPS or UMFPACK for sparse inversions with optimize_regparam on");
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
-	double *Lmatptr;
-	//double *tempsrcptr = temp_src.array();
 
-	//ofstream wtfout("wtfpix.dat");
-	//for (i=0; i < image_npixels; i++) {
-		//wtfout << active_image_pixel_i[i] << " " << active_image_pixel_j[i] << " " << image_surface_brightness[i] << " " << sbprofile_surface_brightness[i] << " " << (image_surface_brightness[i] - sbprofile_surface_brightness[i]) << endl;
-	//}
-	//die();
-	//ofstream srcout("tempsrc.dat");
-	//for (i=0; i < source_n_amps; i++) {
-		//srcout << source_pixel_vector[i] << endl;
-	//}
-
-	int pix_i, pix_j, img_index_fgmask;
-	#pragma omp parallel for private(temp_img,i,j,pix_i,pix_j,img_index_fgmask,Lmatptr) schedule(static) reduction(+:Ed_times_two)
+	#pragma omp parallel for private(temp_img,i,j) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
-		//pix_i = active_image_pixel_i[i];
-		//pix_j = active_image_pixel_j[i];
-		//img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		temp_img = 0;
-		//Lmatptr = (Lmatrix_dense.pointer())[i];
-		//tempsrcptr = temp_src.array();
-		//for (j=0; j < source_n_amps; j++) {
-			//temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
-		//}
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			temp_img += Lmatrix[j]*source_pixel_vector[Lmatrix_index[j]];
 		}
-		//if (image_surface_brightness[i] < 0) image_surface_brightness[i] = 0;
 
-
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[i])/covariance;
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[img_index_fgmask])/covariance;
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
-		//cout << "TEMPIMG: " << temp_img << " " << img_minus_sbprofile[i] << endl;
 	}
 	for (i=0; i < source_npixels; i++) {
 		Es_times_two += Rmatrix[i]*SQR(source_pixel_vector[i]);
@@ -12737,7 +12695,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 #else
 	// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
 	// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
-	repack_Fmatrix_lower();
+	repack_matrix_lower(Fmatrix_dense);
 
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 	if (!status) die("Cholesky decomposition failed");
@@ -12750,18 +12708,8 @@ double QLens::chisq_regparam_dense(const double logreg)
 	double *tempsrcptr = temp_src.array();
 	double *tempsrc_end = temp_src.array() + source_n_amps;
 
-	//ofstream wtfout("wtfpix.dat");
-	//for (i=0; i < image_npixels; i++) {
-		//wtfout << active_image_pixel_i[i] << " " << active_image_pixel_j[i] << " " << image_surface_brightness[i] << " " << sbprofile_surface_brightness[i] << " " << (image_surface_brightness[i] - sbprofile_surface_brightness[i]) << endl;
-	//}
-	//die();
-
-	int pix_i, pix_j, img_index_fgmask;
-	#pragma omp parallel for private(temp_img,i,j,pix_i,pix_j,img_index_fgmask,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
+	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
-		//pix_i = active_image_pixel_i[i];
-		//pix_j = active_image_pixel_j[i];
-		//img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		temp_img = 0;
 		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
 			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
@@ -12775,9 +12723,6 @@ double QLens::chisq_regparam_dense(const double logreg)
 				temp_img += Lmatrix[j]*temp_src[Lmatrix_index[j]];
 			}
 		}
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[i])/covariance;
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
-		//Ed_times_two += SQR(temp_img -  image_surface_brightness[i] + sbprofile_surface_brightness[img_index_fgmask])/covariance;
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
 	}
@@ -13140,65 +13085,6 @@ void QLens::upper_triangular_syrk(double* a, const int n)
 	}
 }
 
-/*
-void QLens::test_inverts()
-{
-	int i,j;
-	dmatrix cov(4,4);
-	dmatrix cov2(4,4);
-	cov[0][0] = 10;
-	cov[0][1] = 2;
-	cov[0][2] = 4;
-	cov[0][3] = 1;
-	cov[1][1] = 10;
-	cov[1][2] = 5;
-	cov[1][3] = 2;
-	cov[2][2] = 10;
-	cov[2][3] = 6;
-	cov[3][3] = 10;
-	for (i=0; i < 4; i++) {
-		for (j=0; j < i; j++) {
-			cov[i][j] = cov[j][i];
-		}
-	}
-	for (i=0; i < 4; i++) {
-		for (j=0; j < 4; j++) {
-			cov2[i][j] = cov[i][j];
-		}
-	}
-	cout << "cov:" << endl;
-	for (i=0; i < 4; i++) {
-		for (j=0; j < 4; j++) {
-			cout << cov[i][j] << " ";
-		}
-		cout << endl;
-	}
-	cout << endl;
-
-	double logdet,logdet2;
-	Cholesky_dcmp(cov.pointer(),logdet,4);
-	cout << "decomp1:" << endl;
-	for (i=0; i < 4; i++) {
-		for (j=0; j < 4; j++) {
-			cout << cov[i][j] << " ";
-		}
-		cout << endl;
-	}
-
-	Cholesky_dcmp_upper(cov2.pointer(),logdet2,4);
-	cout << endl;
-	cout << "decomp2:" << endl;
-	for (i=0; i < 4; i++) {
-		for (j=0; j < 4; j++) {
-			cout << cov2[i][j] << " ";
-		}
-		cout << endl;
-	}
-	cout << endl;
-
-}
-*/
-
 // This is for the determinant from the lower triangular version of the decomposition
 void QLens::Cholesky_logdet_lower_packed(double* a, double &logdet, int n)
 {
@@ -13286,7 +13172,7 @@ void QLens::Cholesky_solve_packed(double* a, double* b, double* x, int n)
 }
 */
 
-void QLens::repack_Fmatrix_lower()
+void QLens::repack_matrix_lower(dvector& packed_matrix)
 {
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
@@ -13297,19 +13183,19 @@ void QLens::repack_Fmatrix_lower()
 	}
 	for (k=0,j=0; j < source_n_amps; j++) {
 		for (i=j; i < source_n_amps; i++) {
-			Fmat[i][j] = Fmatrix_packed[k++];
+			Fmat[i][j] = packed_matrix[k++];
 		}
 	}
 	for (k=0,i=0; i < source_n_amps; i++) {
 		for (j=0; j <= i; j++) {
-			Fmatrix_packed[k++] = Fmat[i][j];
+			packed_matrix[k++] = Fmat[i][j];
 		}
 		delete[] Fmat[i];
 	}
 	delete[] Fmat;
 }
 
-void QLens::repack_Fmatrix_upper()
+void QLens::repack_matrix_upper(dvector& packed_matrix)
 {
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
@@ -13320,12 +13206,12 @@ void QLens::repack_Fmatrix_upper()
 	}
 	for (k=0,i=0; i < source_n_amps; i++) {
 		for (j=0; j <= i; j++) {
-			Fmat[i][j] = Fmatrix_packed[k++];
+			Fmat[i][j] = packed_matrix[k++];
 		}
 	}
 	for (k=0,j=0; j < source_n_amps; j++) {
 		for (i=j; i < source_n_amps; i++) {
-			Fmatrix_packed[k++] = Fmat[i][j];
+			packed_matrix[k++] = Fmat[i][j];
 		}
 	}
 	for (i=0; i < source_n_amps; i++) delete[] Fmat[i];
@@ -13348,7 +13234,7 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 #else
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
-	repack_Fmatrix_lower();
+	repack_matrix_lower(Fmatrix_packed);
 
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
 	if (!status) die("Cholesky decomposition failed");

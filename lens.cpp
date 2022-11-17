@@ -929,7 +929,7 @@ QLens::QLens() : UCMC()
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
-	dense_Rmatrix = true;
+	dense_Rmatrix = false;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	Dvector = NULL;
@@ -6827,7 +6827,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->beta_factors = new double**[n_sourcepts_fit];
 		}
 		for (i=0; i < n_sourcepts_fit; i++) {
-			//cout << "source " << i << " beta matrix:\n";
 			fitmodel->source_redshifts[i] = source_redshifts[i];
 			if (n_lens_redshifts > 0) {
 				fitmodel->zfactors[i] = new double[n_lens_redshifts];
@@ -6836,11 +6835,8 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				for (j=0; j < n_lens_redshifts-1; j++) {
 					fitmodel->beta_factors[i][j] = new double[j+1];
 					for (k=0; k < j+1; k++) fitmodel->beta_factors[i][j][k] = beta_factors[i][j][k];
-					//for (k=0; k < j+1; k++) cout << beta_factors[i][j][k] << " ";
-					//cout << endl;
 				}
 			}
-			//cout << endl;
 		}
 		fitmodel->source_redshift_groups = source_redshift_groups;
 	}
@@ -6953,7 +6949,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				int paramnum = fitmodel->lens_list[i]->parameter_anchor_paramnum[j];
 				fitmodel->lens_list[i]->assign_anchored_parameter(j,paramnum,true,true,lens_list[i]->parameter_anchor_ratio[j],lens_list[i]->parameter_anchor_exponent[j],parameter_anchor_source);
 			}
-
 		}
 	}
 	for (i=0; i < n_sb; i++) {
@@ -6974,23 +6969,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
-	//if ((fft_convolution) and (setup_fft_convolution)) {
-		//fitmodel->copy_FFT_convolution_arrays(this);
-		////cleanup_FFT_convolution_arrays();
-	//}
-
-	// testing out copying plimits from lens to fitmodel
-	//get_n_fit_parameters(n_fit_parameters);
-	//boolvector use_penalty_limits(n_fit_parameters);
-	//dvector lower(n_fit_parameters), upper(n_fit_parameters);
-	//param_settings->get_penalty_limits(use_penalty_limits,lower,upper);
-
-	//for (int i=0; i < n_fit_parameters; i++) { if (use_penalty_limits[i] == true) cout << "Using plimits for " << i << endl; }
-	//if (param_settings->use_penalty_limits[8] == true) cout << "WOWOWWOWOW Using plimits for 8" << endl; 
-	//fitmodel->param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
-
-	//return;
-
 	if (open_chisq_logfile) {
 		string logfile_str = fit_output_dir + "/" + fit_output_filename + ".log";
 		if (group_id==0) {
@@ -7007,11 +6985,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 	}
 
-	//param_settings->print_penalty_limits();
-	//cout << "FITMODEL:" << endl;
-	//fitmodel->param_settings->print_penalty_limits();
 	fitmodel->update_parameter_list();
-	//cout << endl;
 	return true;
 }
 
@@ -7069,7 +7043,9 @@ double QLens::update_model(const double* params)
 	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode==Delaunay_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
 	}
-	if ((source_fit_mode == Delaunay_Source) and (vary_correlation_length) and (regularization_method != None)) kernel_correlation_length = params[index++];
+	if ((source_fit_mode == Delaunay_Source) and (vary_correlation_length) and (regularization_method != None)) {
+		kernel_correlation_length = params[index++];
+	}
 	if (vary_hubble_parameter) {
 		hubble = params[index++];
 		if (hubble < 0) status = false; // do not allow negative Hubble parameter
@@ -8021,7 +7997,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
-	if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) kernel_correlation_length = stepsizes[index++] = 0.1;
+	if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.1;
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_srcgrid_size_scale) stepsizes[index++] = 0.3;
 	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
@@ -10764,7 +10740,8 @@ bool QLens::adopt_model(dvector &fitparams)
 	if ((source_fit_mode == Shapelet_Source) or (source_fit_mode == Delaunay_Source)) {
 		if ((vary_regularization_parameter) and (regularization_method != None))
 			regularization_parameter = transformed_params[index++];
-		if ((vary_correlation_length) and (regularization_method != None)) kernel_correlation_length = transformed_params[index++];
+		if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) 
+			kernel_correlation_length = transformed_params[index++];
 	}
 
 	if (vary_hubble_parameter) {
