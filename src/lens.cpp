@@ -13166,9 +13166,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		initialize_pixel_matrices(verbal);
 		if (regularization_method != None) create_regularization_matrix();
 		if (inversion_method==DENSE) {
-			PSF_convolution_Lmatrix(verbal);
 			convert_Lmatrix_to_dense();
-			//PSF_convolution_Lmatrix_dense(verbal);
+			PSF_convolution_Lmatrix_dense(verbal);
 		} else {
 			PSF_convolution_Lmatrix(verbal);
 		}
