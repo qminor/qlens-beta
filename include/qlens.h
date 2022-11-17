@@ -804,8 +804,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//void Cholesky_invert_lower(double** a, const int n);
 	void Cholesky_invert_upper_packed(double* a, const int n);
 	void upper_triangular_syrk(double* a, const int n);
-	void repack_Fmatrix_lower();
-	void repack_Fmatrix_upper();
+	void repack_matrix_lower(dvector& packed_matrix);
+	void repack_matrix_upper(dvector& packed_matrix);
 
 	dmatrix Lmatrix_dense;
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
