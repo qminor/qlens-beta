@@ -11657,6 +11657,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(delaunay_high_sn_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="delaunay_sbfrac")
+		{
+			if (nwords == 2) {
+				double sbfrac;
+				if (!(ws[1] >> sbfrac)) Complain("invalid himag sbfracold for image pixel splittings");
+				delaunay_high_sn_sbfrac = sbfrac;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "delaunay_sbfrac = " << delaunay_high_sn_sbfrac << endl;
+			} else Complain("must specify either zero or one argument");
+		}
 		else if (words[0]=="split_imgpixels")
 		{
 			if (nwords==1) {
