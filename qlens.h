@@ -550,6 +550,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_average_magnification_for_subgridding;
 	int delaunay_mode;
 	bool delaunay_high_sn_mode;
+	double delaunay_high_sn_sbfrac;
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
 	bool exclude_source_pixels_beyond_fit_window;

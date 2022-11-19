@@ -3318,19 +3318,18 @@ int DelaunayGrid::find_closest_vertex(const int tri_number, const lensvector& pt
 	return indx;
 }
 
-double DelaunayGrid::sum_edge_sqrlengths(const double min_sb_frac)
+double DelaunayGrid::sum_edge_sqrlengths(const double min_sb)
 {
 	lensvector edge;
 	double sum=0;
 	bool use_sb = false;
 	double** sb;
-	double min_sb;
 	int iv[3];
 	int jv[3];
 	if ((lens != NULL) and (lens->image_pixel_data != NULL)) {
 		use_sb = true;
 		sb = lens->image_pixel_data->surface_brightness;
-		min_sb = min_sb_frac*lens->image_pixel_data->find_max_sb();
+		//min_sb = min_sb_frac*lens->image_pixel_data->find_max_sb();
 	}
 	int i,j;
 	// Note, the inside edges (the majority) will be counted twice, but that's ok

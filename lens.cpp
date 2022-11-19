@@ -958,6 +958,7 @@ QLens::QLens() : UCMC()
 	exclude_source_pixels_beyond_fit_window = true;
 	activate_unmapped_source_pixels = true;
 	delaunay_high_sn_mode = false;
+	delaunay_high_sn_sbfrac = 2.0;
 	regrid_if_unmapped_source_subpixels = false;
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
@@ -1327,6 +1328,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
 	delaunay_high_sn_mode = lens_in->delaunay_high_sn_mode;
+	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
 	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
 	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
@@ -12187,7 +12189,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
 	if (use_image_pixelgrid) source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 	if ((mpi_id==0) and (verbal)) {
-		cout << "# of source pixels: " << source_pixel_grid->number_of_pixels << endl;
+		cout << "# of Cartesian source pixels: " << source_pixel_grid->number_of_pixels << endl;
 	}
 	if (adaptive_subgrid) {
 		source_pixel_grid->adaptive_subgrid();
@@ -12292,7 +12294,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 	int i,j,n,npix=0;
 	bool include;
 	double avg_sb = -1e30;
-	double sbfrac = 0.6;
+	double sbfrac = delaunay_high_sn_sbfrac;
 	if (n_sourcepts_fit > 0) sbfrac = 0; // if there are point sources in the data, then we can't use the peak surface brightness in the data image to help construct the Delaunay grid, since the Delaunay grid is only for the extended source
 	int *pixptr_i, *pixptr_j;
 	int npix_in_mask;
@@ -12306,7 +12308,8 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		pixptr_j = image_pixel_grid->masked_pixels_j;
 	}
 	bool *include_in_delaunay_grid = new bool[npix_in_mask];
-	// if delaunay_high_sn_mode is on, we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels, and where to compare grids 1/2
+	// if delaunay_high_sn_mode is on, we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels;
+	// avg_sb is also used to find where to compare grids 1/2
 	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*data_pixel_noise);
 	for (n=0; n < npix_in_mask; n++) {
 		include = false;
@@ -12379,8 +12382,8 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		srcgrid2 = new DelaunayGrid(this,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
 		if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
 
-		double edge_sum1 = srcgrid1->sum_edge_sqrlengths(sbfrac);
-		double edge_sum2 = srcgrid2->sum_edge_sqrlengths(sbfrac);
+		double edge_sum1 = srcgrid1->sum_edge_sqrlengths(avg_sb);
+		double edge_sum2 = srcgrid2->sum_edge_sqrlengths(avg_sb);
 		if (edge_sum1 < edge_sum2) {
 			delete srcgrid2;
 			delaunay_srcgrid = srcgrid1;
