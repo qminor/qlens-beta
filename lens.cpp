@@ -901,7 +901,7 @@ QLens::QLens() : UCMC()
 	optimize_regparam = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
-	optimize_regparam_maxlog = 4;
+	optimize_regparam_maxlog = 3;
 
 	psf_width_x = 0;
 	psf_width_y = 0;
@@ -13166,12 +13166,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None)) {
 			optimize_regularization_parameter(dense_Fmatrix,verbal);
+		} else {
+			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
+			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
+			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
+			else invert_lens_mapping_CG_method(verbal);
 		}
-
-		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
-		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
-		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
-		else invert_lens_mapping_CG_method(verbal);
 
 		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
 		else calculate_image_pixel_surface_brightness();
@@ -13243,12 +13243,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None)) {
 			optimize_regularization_parameter(dense_Fmatrix,verbal);
+		} else {
+			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
+			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
+			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
+			else invert_lens_mapping_CG_method(verbal);
 		}
-
-		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
-		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
-		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
-		else invert_lens_mapping_CG_method(verbal);
 
 		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
 		else calculate_image_pixel_surface_brightness();
@@ -13303,7 +13303,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		create_lensing_matrices_from_Lmatrix_dense(verbal);
 
-		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(true,verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -13311,7 +13310,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 #endif
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		invert_lens_mapping_dense(verbal);
+		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(true,verbal);
+		else invert_lens_mapping_dense(verbal);
 		calculate_image_pixel_surface_brightness_dense();
 		//store_image_pixel_surface_brightness();
 
@@ -13535,7 +13535,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				}
 			}
 		}
-		//cout << "WTF? " << max_sb << " " << max_external_sb << endl;
 		if (max_external_sb > 0) {
 			double chisq_penalty;
 			sb_outside_window = true;

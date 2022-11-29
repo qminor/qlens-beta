@@ -525,6 +525,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_matern_index;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
+	double regopt_chisqmin, regopt_logdet_Fmatrix;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
@@ -749,6 +750,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
+	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
 
@@ -789,7 +791,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	const double brent_sign(const double &a, const double &b) {return b >= 0 ? (a >= 0 ? a : -a) : (a >= 0 ? -a : a);}
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
 	void create_regularization_matrix_shapelet();
@@ -908,6 +909,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
+	void update_source_amplitudes();
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
