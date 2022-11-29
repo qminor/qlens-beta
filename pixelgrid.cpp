@@ -13037,8 +13037,10 @@ double QLens::brents_min_method(double (QLens::*func)(const double), const doubl
 		xmid=0.5*(a+b);
 		tol2 = 2.0 * ((tol1=tol*abs(x)) + ZEPS);
 		if (abs(x-xmid) <= (tol2-0.5*(b-a))) {
-			if ((verbal) and (mpi_id==0)) cout << "Number of regparam optimizing log(L) evaluations: " << (iter+1) << endl;
-			if ((x-ax < tol2) or (bx-x < tol2)) warn("Brent's method converged to edge of bracket in log(regparam), indicating a minimum in log-likelihood was not bracketed");
+			if ((verbal) and (mpi_id==0)) {
+				cout << "Number of regparam optimizing log(L) evaluations: " << (iter+1) << endl;
+				if ((x-ax < tol2) or (bx-x < tol2)) cout << "NOTE: Brent's method converged to edge of bracket in log(regparam), indicating a minimum was not bracketed" << endl;
+			}
 			return x;
 		}
 		if ((w != wprev) and (abs(e) > tol1)) {
