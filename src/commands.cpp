@@ -12000,6 +12000,17 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "regparam_maxlog = " << optimize_regparam_maxlog << endl;
 			} else Complain("must specify either zero or one argument (regparam_maxlog)");
 		}
+		else if (words[0]=="regparam_maxit")
+		{
+			int maxit;
+			if (nwords == 2) {
+				if (!(ws[1] >> maxit)) Complain("invalid regparam_maxit");
+				if (maxit <= 0) Complain("number of iterations for optimizing regparam must be greater than zero");
+				max_regopt_iterations = maxit;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_tol = " << max_regopt_iterations << endl;
+			} else Complain("must specify either zero or one argument (regparam_maxit)");
+		}
 		else if (words[0]=="auto_shapelet_center")
 		{
 			if (nwords==1) {

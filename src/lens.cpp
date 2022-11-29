@@ -902,6 +902,7 @@ QLens::QLens() : UCMC()
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
 	optimize_regparam_maxlog = 3;
+	max_regopt_iterations = 20;
 
 	psf_width_x = 0;
 	psf_width_y = 0;
@@ -1255,6 +1256,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
 	optimize_regparam_maxlog = lens_in->optimize_regparam_maxlog;
+	max_regopt_iterations = lens_in->max_regopt_iterations;
+
 
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;

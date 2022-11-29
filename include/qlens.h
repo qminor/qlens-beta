@@ -526,6 +526,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 	double regopt_chisqmin, regopt_logdet_Fmatrix;
+	int max_regopt_iterations;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
