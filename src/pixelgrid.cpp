@@ -2851,8 +2851,8 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
 	if (show_wtime) {
-		double wtime2 = omp_get_wtime() - wtime0;
-		if (mpi_id==0) cout << "Wall time for calculating covariance matrix: " << wtime2 << endl;
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating covariance matrix: " << wtime << endl;
 	}
 #endif
 
@@ -12158,9 +12158,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 	}
 #endif
 	double *Fmatrix_stacked; // used only if dense_Fmatrix is set to true
-	//double effective_reg_parameter = regularization_parameter * (1000.0/source_n_amps);
-	double effective_reg_parameter = regularization_parameter;
-
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
@@ -12363,7 +12360,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 
 			/*
 			if (regularization_method != None) {
-				if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
+				if (!optimize_regparam) Fmatrix_diags[src_index1] += regularization_parameter*Rmatrix[src_index1];
 				col_i=0;
 				for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
 					new_entry = true;
@@ -12377,7 +12374,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 					}
 					if (new_entry) {
 						if (!optimize_regparam) {
-							Fmatrix_rows[src_index1].push_back(effective_reg_parameter*Rmatrix[j]);
+							Fmatrix_rows[src_index1].push_back(regularization_parameter*Rmatrix[j]);
 						} else {
 							Fmatrix_rows[src_index1].push_back(0);
 							// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
@@ -12387,7 +12384,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 						col_i++;
 					} else {
 						if (!optimize_regparam) {
-							Fmatrix_rows[src_index1][col_index] += effective_reg_parameter*Rmatrix[j];
+							Fmatrix_rows[src_index1][col_index] += regularization_parameter*Rmatrix[j];
 						}
 					}
 				}
@@ -12402,7 +12399,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 		if (regularization_method != None) {
 			for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
 				if (src_index1 < source_npixels) { // additional source amplitudes are not regularized
-					if (!optimize_regparam) Fmatrix_diags[src_index1] += effective_reg_parameter*Rmatrix[src_index1];
+					if (!optimize_regparam) Fmatrix_diags[src_index1] += regularization_parameter*Rmatrix[src_index1];
 					col_i=0;
 					for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
 						new_entry = true;
@@ -12416,8 +12413,8 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 						}
 						if (new_entry) {
 							if (!optimize_regparam) {
-							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was 0, now adding " << (effective_reg_parameter*Rmatrix[j]) << endl;
-								Fmatrix_rows[src_index1].push_back(effective_reg_parameter*Rmatrix[j]);
+							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was 0, now adding " << (regularization_parameter*Rmatrix[j]) << endl;
+								Fmatrix_rows[src_index1].push_back(regularization_parameter*Rmatrix[j]);
 							} else {
 								Fmatrix_rows[src_index1].push_back(0);
 								// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
@@ -12427,8 +12424,8 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 							col_i++;
 						} else {
 							if (!optimize_regparam) {
-							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_rows[src_index1][col_index] << ", now adding " << (effective_reg_parameter*Rmatrix[j]) << endl;
-								Fmatrix_rows[src_index1][col_index] += effective_reg_parameter*Rmatrix[j];
+							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_rows[src_index1][col_index] << ", now adding " << (regularization_parameter*Rmatrix[j]) << endl;
+								Fmatrix_rows[src_index1][col_index] += regularization_parameter*Rmatrix[j];
 							}
 
 						}
@@ -12514,20 +12511,18 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 				Rptr = Rmatrix_packed.array();
 				for (i=0; i < source_npixels; i++) {
 					for (j=i; j < source_npixels; j++) {
-						*(Fptr++) += effective_reg_parameter*(*(Rptr++));
+						*(Fptr++) += regularization_parameter*(*(Rptr++));
 					}
 					Fptr += n_extra_amps;
 				}
-				//for (i=0; i < ntot; i++) Fmatrix_packed[i] += effective_reg_parameter*Rmatrix_packed[i];
 			}
 		} else {
 			int k,indx_start=0;
 			if ((regularization_method != None) and (!optimize_regparam)) {
 				for (i=0; i < source_npixels; i++) {
-					Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
+					Fmatrix_packed[indx_start] += regularization_parameter*Rmatrix[i];
 					for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-						//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
-						Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
+						Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += regularization_parameter*Rmatrix[k];
 					}
 					indx_start += source_n_amps-i;
 				}
@@ -12594,8 +12589,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	//double effective_reg_parameter = regularization_parameter * (1000.0/source_n_amps);
-	double effective_reg_parameter = regularization_parameter;
 
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
@@ -12617,13 +12610,10 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 	double *i_n = new double[ntot];
 	double *j_n = new double[ntot];
 	double **Ltrans = new double*[source_n_amps];
-	//int **ncheck = new int*[source_n_amps];
 	n=0;
 	for (i=0; i < source_n_amps; i++) {
 		Ltrans[i] = new double[image_npixels];
-		//ncheck[j] = new int[source_n_amps];
 		for (j=i; j < source_n_amps; j++) {
-			//ncheck[i][j] = n;
 			i_n[n] = i;
 			j_n[n] = j;
 			n++;
@@ -12718,10 +12708,10 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 		} else {
 			int k,indx_start=0;
 			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-				Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
+				Fmatrix_packed[indx_start] += regularization_parameter*Rmatrix[i];
 				for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-					//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (effective_reg_parameter*Rmatrix[k]) << endl;
-					Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += effective_reg_parameter*Rmatrix[k];
+					//cout << "Fmat row " << i << ", col " << (Rmatrix_index[k]) << ": was " << Fmatrix_packed[indx_start+Rmatrix_index[k]-i] << ", now adding " << (regularization_parameter*Rmatrix[k]) << endl;
+					Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += regularization_parameter*Rmatrix[k];
 				}
 				indx_start += source_n_amps-i;
 			}
@@ -12773,28 +12763,35 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
 	}
 
-	double logreg, logrmin = 0, logrmax = 3;
+	source_pixel_vector_minchisq = new double[source_npixels];
+	regopt_chisqmin = 1e30;
+	regopt_logdet_Fmatrix = 1e30; // this will be changed during optimization
+
 	if (dense_Fmatrix) {
 		int ntot = source_n_amps*(source_n_amps+1)/2;
-		//Fmatrix_copy.input(source_n_amps,source_n_amps);
 		Fmatrix_packed_copy.input(ntot);
 	} else {
-		//Fmatrix_nn = Fmatrix_index[source_n_amps];
 		if (Fmatrix_nn==0) die("Fmatrix length has not been set");
 		Fmatrix_copy = new double[Fmatrix_nn];
 	}
 	temp_src.input(source_n_amps);
 
+	double logreg_min;
 	double (QLens::*chisqreg)(const double);
 	if (dense_Fmatrix) chisqreg = &QLens::chisq_regparam_dense;
 	else chisqreg = &QLens::chisq_regparam;
-	double logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
-	//(this->*chisqreg)(log(regularization_parameter)/ln10);
+	logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
+	//(this->*chisqreg)(log(regularization_parameter)/ln10); // used for testing purposes
 	regularization_parameter = pow(10,logreg_min);
 	if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing: " << regularization_parameter << endl;
 
-   int j,k,indx_start=0;
+	Fmatrix_log_determinant = regopt_logdet_Fmatrix;
+	for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+	update_source_amplitudes();
 
+	/*
+	// Since we are saving the best source solution and logdet(Fmatrix), I don't think we need to add in the regularization here since no more inversion is needed
+   int j,k,indx_start=0;
 	if (dense_Fmatrix) {
 		if (dense_Rmatrix) {
 			int n_extra_amps = source_n_amps - source_npixels;
@@ -12829,12 +12826,14 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			}
 		}
 	}
+	*/
 	if (!dense_Fmatrix) {
 		delete[] Fmatrix_copy;
 		Fmatrix_copy = NULL;
 	}
 
 	delete[] img_minus_sbprofile;
+	delete[] source_pixel_vector_minchisq;
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime_opt = omp_get_wtime() - wtime_opt0;
@@ -12846,7 +12845,7 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 
 double QLens::chisq_regparam(const double logreg)
 {
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	double covariance, chisq; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
 
@@ -12896,12 +12895,18 @@ double QLens::chisq_regparam(const double logreg)
 	//cout << "chisqreg: " << (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_log_determinant - source_n_amps*log(regularization_parameter) - Rmatrix_log_determinant) << endl;
 	//cout << "reg*Es_times_two=" << (regularization_parameter*Es_times_two) << " n_shapelets*log(regparam)=" << (-source_n_amps*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_logdet << endl;
 
-	return (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_log_determinant - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+	chisq = (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_log_determinant - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+	if (chisq < regopt_chisqmin) {
+		regopt_chisqmin = chisq;
+		for (i=0; i < source_n_amps; i++) source_pixel_vector_minchisq[i] = source_pixel_vector[i];
+		regopt_logdet_Fmatrix = Fmatrix_logdet;
+	}
+	return chisq;
 }
 
 double QLens::chisq_regparam_dense(const double logreg)
 {
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	double chisq, covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
 
@@ -12999,69 +13004,89 @@ double QLens::chisq_regparam_dense(const double logreg)
 	//cout << "chisqreg: " << (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_n_amps*log(regularization_parameter) - Rmatrix_log_determinant) << endl;
 	//cout << "reg*Es_times_two=" << (regularization_parameter*Es_times_two) << " n_shapelets*log(regparam)=" << (-source_n_amps*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_logdet << endl;
 
-	return (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+	chisq = (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+	if (chisq < regopt_chisqmin) {
+		regopt_chisqmin = chisq;
+		for (i=0; i < source_n_amps; i++) source_pixel_vector_minchisq[i] = source_pixel_vector[i];
+		regopt_logdet_Fmatrix = Fmatrix_logdet;
+	}
+	return chisq;
 }
 
 double QLens::brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal)
 {
-	double a,b,d=0.0,etemp,fu,fv,fw,fx;
-	double p,q,r,tol1,tol2,u,v,w,x,xm;
+	// (NOTE: I've found that with optimizing the regularization, it always seems to converge even if we ONLY do parabolic
+	// interpolation after the first two iterations. But leaving Brent's method as-is, just to be safe)
+	double a,b,xstep=0.0,etemp,fu,fwprev,fw,fx;
+	double p,q,r,tol1,tol2,u,wprev,w,x,xmid;
 	double e=0.0;
 
 	const int ITMAX = 100;
-	const double CGOLD = 0.3819660;
+	const double CGOLD = 0.3819660; // golden ratio
 	const double ZEPS = 1.0e-10;
+	const double ROOTPREC = 1.0e-8; // square root of machine precision for double floating points
 
 	a = ax;
-	b = ax;
-	x=w=v=bx;
-	fw=fv=fx=(this->*func)(x);
+	b = bx;
+	// in what follows, x is the point with the least function value thus far, while w is the point with the second least function value thus far
+	x=w=wprev=bx-CGOLD*(bx-ax); // start with point closer to the higher regularization (seems to converge better), using golden ratio
+	fw=fwprev=fx=(this->*func)(x);
+	//cout << "Just evaluated f(" << x << ")=" << fx << end;
 	for (int iter=0; iter < ITMAX; iter++)
 	{
-		xm=0.5*(a+b);
+		xmid=0.5*(a+b);
 		tol2 = 2.0 * ((tol1=tol*abs(x)) + ZEPS);
-		if (abs(x-xm) <= (tol2-0.5*(b-a))) {
-			if ((verbal) and (mpi_id==0)) cout << "Number of regparam optimizing iterations: " << iter << endl;
+		if (abs(x-xmid) <= (tol2-0.5*(b-a))) {
+			if ((verbal) and (mpi_id==0)) cout << "Number of regparam optimizing log(L) evaluations: " << (iter+1) << endl;
+			if ((x-ax < tol2) or (bx-x < tol2)) warn("Brent's method converged to edge of bracket in log(regparam), indicating a minimum in log-likelihood was not bracketed");
 			return x;
 		}
-		if (abs(e) > tol1) {
-			r = (x-w)*(fx-fv);
-			q = (x-v)*(fx-fw);
-			p = (x-v)*q - (x-w)*r;
+		if ((w != wprev) and (abs(e) > tol1)) {
+			// try (inverse) parabolic interpolation 
+			r = (x-w)*(fx-fwprev);
+			q = (x-wprev)*(fx-fw);
+			p = (x-wprev)*q - (x-w)*r;
 			q = 2.0*(q-r);
 			if (q > 0.0) p = -p;
 			q = abs(q);
 			etemp = e;
-			e = d;
-			if (abs(p) >= abs(0.5*q*etemp) or p <= q*(a-x) or p >= q*(b-x))
-				d = CGOLD*(e=(x >= xm ? a-x : b-x));
-			else {
-				d = p/q;
-				u = x + d;
-				if (u-a < tol2 or b-u < tol2)
-					d = brent_sign(tol1,xm-x);
+			e = xstep; // xstep is the previous step;
+			if ((abs(p) >= abs(0.5*q*etemp)) or (p <= q*(a-x)) or (p >= q*(b-x))) {
+				// parabolic step either went out of the bounding interval, OR it was greater than half the previous step,
+				// so we'll switch to a golden section step instead
+				xstep = CGOLD*(e=(x >= xmid ? a-x : b-x));
+			} else {
+				// parabolic fit looked good, so take a parabolic step
+				xstep = p/q;
+				u = x + xstep;
+				if ((u-a < tol2) or (b-u < tol2))
+					xstep = ((xmid-x) >= 0 ? (tol1 >= 0 ? tol1 : -tol1) : (tol1 >= 0 ? -tol1 : tol1));
 			}
 		} else {
-			d = CGOLD*(e=(x >= xm ? a-x : b-x));
+			// take golden section step
+			xstep = CGOLD*(e=(x >= xmid ? a-x : b-x));
 		}
-		u = (abs(d) >= tol1 ? x+d : x + brent_sign(tol1,d));
+		if (abs(xstep) >= ROOTPREC) {
+			u = x + xstep;
+		} else {
+			u = x + (xstep >= 0 ? ROOTPREC : (-ROOTPREC));
+		}
 		fu = (this->*func)(u);
+		//cout << "Just evaluated f(" << u << ")=" << fu << end;
 		if (fu <= fx) {
 			if (u >= x) a=x; else b=x;
-			//shft3(v,w,x,u);
-			v=w; w=x; x=u;
-			//shft3(fv,fw,fx,fu);
-			fv = fw; fw = fx; fx=fu;
+			wprev=w; w=x; x=u;
+			fwprev = fw; fw = fx; fx=fu;
 		} else {
 			if (u < x) a=u; else b=u;
 			if (fu <= fw or w == x) {
-				v = w;
+				wprev = w;
 				w = u;
-				fv = fw;
+				fwprev = fw;
 				fw = fu;
-			} else if (fu <= fv or v == x or v == w) {
-				v = u;
-				fv = fu;
+			} else if ((fu <= fwprev) or (wprev == x) or (wprev == w)) {
+				wprev = u;
+				fwprev = fu;
 			}
 		}
 	}
@@ -13498,26 +13523,7 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-
-	int index=0;
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
-	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->update_surface_brightness(index);
-	else if (source_fit_mode==Shapelet_Source) {
-		double* srcpix = source_pixel_vector;
-		for (i=0; i < n_sb; i++) {
-			if (sb_list[i]->sbtype==SHAPELET) {
-				sb_list[i]->update_amplitudes(srcpix);
-			}
-		}
-	}
-	if (include_imgfluxes_in_inversion) {
-		index = source_npixels;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (i=0; i < point_imgs[j].size(); i++) {
-				point_imgs[j][i].flux = source_pixel_vector[index++];
-			}
-		}
-	}
+	update_source_amplitudes();
 }
 
 void QLens::invert_lens_mapping_CG_method(bool verbal)
@@ -13610,17 +13616,7 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 	if ((mpi_id==0) and (verbal)) cout << iterations << " iterations, error=" << error << endl << endl;
 
 	delete[] temp;
-	int index=0;
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
-	else source_pixel_grid->update_surface_brightness(index);
-	if (include_imgfluxes_in_inversion) {
-		index = source_npixels;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (i=0; i < point_imgs[j].size(); i++) {
-				point_imgs[j][i].flux = source_pixel_vector[index++];
-			}
-		}
-	}
+	update_source_amplitudes();
 #ifdef USE_MPI
 	MPI_Comm_free(&sub_comm);
 #endif
@@ -13830,17 +13826,7 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal, bool use_copy)
 	delete[] Fmatrix_unsymmetric_cols;
 	delete[] Fmatrix_unsymmetric_indices;
 	delete[] Fmatrix_unsymmetric;
-	int index=0;
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
-	else source_pixel_grid->update_surface_brightness(index);
-	if (include_imgfluxes_in_inversion) {
-		index = source_npixels;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (i=0; i < point_imgs[j].size(); i++) {
-				point_imgs[j][i].flux = source_pixel_vector[index++];
-			}
-		}
-	}
+	update_source_amplitudes();
 #endif
 }
 
@@ -14058,9 +14044,28 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 	delete[] irn;
 	delete[] jcn;
 	delete[] Fmatrix_elements;
-	int index=0;
+	update_source_amplitudes();
+#endif
+#ifdef USE_MPI
+	MPI_Comm_free(&sub_comm);
+	MPI_Comm_free(&this_comm);
+#endif
+
+}
+
+void QLens::update_source_amplitudes()
+{
+	int i,j,index=0;
 	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
-	else source_pixel_grid->update_surface_brightness(index);
+	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->update_surface_brightness(index);
+	else if (source_fit_mode==Shapelet_Source) {
+		double* srcpix = source_pixel_vector;
+		for (i=0; i < n_sb; i++) {
+			if (sb_list[i]->sbtype==SHAPELET) {
+				sb_list[i]->update_amplitudes(srcpix);
+			}
+		}
+	}
 	if (include_imgfluxes_in_inversion) {
 		index = source_npixels;
 		for (j=0; j < point_imgs.size(); j++) {
@@ -14069,13 +14074,8 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 			}
 		}
 	}
-#endif
-#ifdef USE_MPI
-	MPI_Comm_free(&sub_comm);
-	MPI_Comm_free(&this_comm);
-#endif
-
 }
+
 
 void QLens::Rmatrix_determinant_UMFPACK()
 {
