@@ -6332,6 +6332,7 @@ void QLens::process_commands(bool read_file)
 							else if (regularization_method==Norm) cout << "Regularization method: norm" << endl;
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
+							else if (regularization_method==Matern_Kernel) cout << "Regularization method: Matern kernel" << endl;
 							else if (regularization_method==Exponential_Kernel) cout << "Regularization method: exponential kernel" << endl;
 							else if (regularization_method==Squared_Exponential_Kernel) cout << "Regularization method: squared exponential kernel" << endl;
 							else cout << "Unknown regularization method" << endl;
@@ -6348,6 +6349,7 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="norm") regularization_method = Norm;
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="curvature") regularization_method = Curvature;
+						else if (setword=="matern_kernel") regularization_method = Matern_Kernel;
 						else if (setword=="exp_kernel") regularization_method = Exponential_Kernel;
 						else if (setword=="sqexp_kernel") regularization_method = Squared_Exponential_Kernel;
 						else Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
@@ -11370,6 +11372,36 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="matern_index")
+		{
+			double mat_index, mat_index_ul, mat_index_ll;
+			if (nwords == 4) {
+				if (!(ws[1] >> mat_index_ll)) Complain("invalid kernel Matern index lower limit");
+				if (!(ws[2] >> mat_index)) Complain("invalid kernel Matern index value");
+				if (!(ws[3] >> mat_index_ul)) Complain("invalid kernel Matern index upper limit");
+				if ((mat_index < mat_index_ll) or (mat_index > mat_index_ul)) Complain("initial kernel Matern index should lie within specified prior limits");
+				matern_index = mat_index;
+				matern_index_lower_limit = mat_index_ll;
+				matern_index_upper_limit = mat_index_ul;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> mat_index)) Complain("invalid kernel Matern index value");
+				matern_index = mat_index;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "kernel Matern index = " << matern_index << endl;
+			} else Complain("must specify either zero or one argument (kernel Matern index value)");
+		}
+		else if (words[0]=="vary_matern_index")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary Matern index: " << display_switch(vary_matern_index) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_mat_index' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before mat_index can be varied (see 'fit regularization')");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("mat_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(vary_matern_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="data_pixel_noise")
 		{
 			double pnoise;
@@ -12046,14 +12078,42 @@ void QLens::process_commands(bool read_file)
 			int nn, srcnum;
 			string filename_suffix = "grad";
 			if (!(ws[2] >> srcnum)) Complain("wtf?");
-			if (!(ws[2] >> ximin)) Complain("wtf?");
-			if (!(ws[3] >> ximax)) Complain("wtf?");
-			if (!(ws[4] >> nn)) Complain("wtf?");
+			if (!(ws[3] >> ximin)) Complain("wtf?");
+			if (!(ws[4] >> ximax)) Complain("wtf?");
+			if (!(ws[5] >> nn)) Complain("wtf?");
 			if (nwords==6) filename_suffix = words[5];
 			if (srcnum >= n_sb) Complain("source number does not exist");
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
 		} else if (words[0]=="test2") {
+			/*
+			if (nwords != 3) Complain("need two arguments to 'test2' (nu, x)");
+			cout << setprecision(16);
+			double x, nu, knu;
+			if (!(ws[1] >> nu)) Complain("wtf?");
+			if (!(ws[2] >> x)) Complain("wtf?");
+			//wtime0 = omp_get_wtime();
+			knu = modified_bessel_function(x,nu);
+			//wtime = omp_get_wtime()-wtime0;
+			//cout << "wall time = " << wtime << endl;
+			cout << "K_nu(x) = " << knu << endl;
+			int nl = (int) (nu + 0.5);
+			double xmu = nu-nl;
+			cout << "nl=" << nl << ", xmu=" << xmu << endl;
+
+			double gam1,gam2,gampl,gammi;
+			beschb(xmu,gam1,gam2,gampl,gammi);
+			double gamplcheck, gammicheck;
+			gamplcheck = 1.0/Gamma(1+xmu);
+			gammicheck = 1.0/Gamma(1-xmu);
+			double gam2check = (gammi+gampl)/2;
+			double gam1check = (gammi-gampl)/(2*xmu);
+
+			cout << "gampl=" << gampl << " gammi=" << gammi << endl;
+			cout << "gamplcheck=" << gamplcheck << " gammicheck=" << gammicheck << endl;
+			cout << "gam1=" << gam1 << " gam2=" << gam2 << endl;
+			cout << "gam1check=" << gam1check << " gam2check=" << gam2check << endl;
+			*/
 			//test_inverts();
 		//} else if (words[0]=="test2") {
 			//if (image_pixel_data == NULL) Complain("image pixel data not loaded");

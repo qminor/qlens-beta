@@ -519,8 +519,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
+	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
 	bool vary_regularization_parameter;
 	bool vary_correlation_length;
+	bool vary_matern_index;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 
@@ -623,7 +625,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
-	enum RegularizationMethod { None, Norm, Gradient, Curvature, Exponential_Kernel, Squared_Exponential_Kernel } regularization_method;
+	enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel } regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool interpolate_sb_3pt;
@@ -897,7 +899,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
-	void generate_Rmatrix_from_covariance_kernel(const bool exponential_kernel);
+	void generate_Rmatrix_from_covariance_kernel(const int kernel_type);
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);

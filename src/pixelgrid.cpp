@@ -2838,7 +2838,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	}
 }
 
-void QLens::generate_Rmatrix_from_covariance_kernel(const bool exponential_kernel)
+void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2847,17 +2847,23 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const bool exponential_kerne
 #endif
 	int ntot = source_npixels*(source_npixels+1)/2;
 	Rmatrix_packed.input(ntot);
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->generate_covariance_matrix(Rmatrix_packed.array(),kernel_correlation_length,exponential_kernel);
+	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->generate_covariance_matrix(Rmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index);
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		double wtime2 = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating covariance matrix: " << wtime2 << endl;
+	}
+#endif
+
 	// Right now Rmatrix_packed is in fact the covariance matrix, from which we will do a Cholesky decomposition and then invert to get the Rmatrix
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // Cholesky decomposition
 	Cholesky_logdet_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_npixels);
 	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
-	//cout << "RLOGDET=" << Rmatrix_log_determinant << endl;
-	//cout << "corrlength=" << kernel_correlation_length << endl;
-	LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse
+	LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse; this is where most of the computational burden is
 #else
+	// Doing this without MKL, using the following functions, is MUCH slower (and might be broken right now?)
 	repack_matrix_lower(Rmatrix_packed);
 	bool status = Cholesky_dcmp_packed(Rmatrix_packed.array(),Rmatrix_log_determinant,source_n_amps);
 	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
@@ -3788,20 +3794,246 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const bool exponential_kernel)
+void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index)
+{
+	int i,j;
+	double sqrdist,x,matern_fac;
+	const double epsilon = 1e-7;
+	if (kernel_type==0) {
+		if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
+		matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
+	}
+	double *covptr;
+	int *indx = new int[n_srcpts];
+	indx[0] = 0;
+	for (j=1; j < n_srcpts; j++) indx[j] = indx[j-1] + n_srcpts-j+1; // allows us to find first nonzero column with packed storage
+
+	#pragma omp parallel for private(i,j,sqrdist,x,covptr) schedule(dynamic)
+	for (i=0; i < n_srcpts; i++) {
+		covptr = cov_matrix_packed+indx[i];
+		*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
+		for (j=i+1; j < n_srcpts; j++) {
+			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
+			if (kernel_type==0) {
+				x = sqrt(2*matern_index*sqrdist)/corr_length;
+				*(covptr++) = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
+			} else if (kernel_type==1) {
+				*(covptr++) = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
+			} else {
+				*(covptr++) = exp(-sqrdist/(2*corr_length*corr_length)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
+			}
+		}
+	}
+	delete[] indx;
+}
+
+/*
+void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index)
 {
 	int i,j;
 	double sqrdist;
 	const double epsilon = 1e-7;
+	double *covptr;
+	double matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
+	covptr = cov_matrix_packed;
 	for (i=0; i < n_srcpts; i++) {
-		if (exponential_kernel) *(cov_matrix_packed++) = 1.0;
-		else *(cov_matrix_packed++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
+		if ((kernel_type==0) or (kernel_type==1)) *(covptr++) = 1.0;
+		else *(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		for (j=i+1; j < n_srcpts; j++) {
 			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
-			if (exponential_kernel) *(cov_matrix_packed++) = exp(-sqrt(sqrdist)/corr_length); // exponential kernel
-			else *(cov_matrix_packed++) = exp(-sqrdist/(2*corr_length*corr_length));
+			if (kernel_type==0) {
+				if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
+				double x = sqrt(2*matern_index*sqrdist)/corr_length;
+				//double checkexp = pow(2,1-matern_index)*pow(x,matern_index)*modified_bessel_function(x,matern_index)/Gamma(matern_index); // Matern kernel
+				//double expf = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
+				//cout << "CHECKEXP: " << checkexp << " " << expf << endl;
+				*(covptr) = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
+				//if ((i==0) and (j==1)) cout << "MATERN: " << x << " " << *(covptr) << endl;
+				covptr++;
+			} else if (kernel_type==1) {
+				*(covptr++) = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
+			} else {
+				*(covptr++) = exp(-sqrdist/(2*corr_length*corr_length)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
+			}
 		}
 	}
+
+	if (kernel_type==0) {
+		if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
+		matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
+	}
+	int *indx = new int[n_srcpts];
+	indx[0] = 0;
+	for (j=1; j < n_srcpts; j++) indx[j] = indx[j-1] + n_srcpts-j+1; // allows us to find first nonzero column with packed storage
+
+	double covcheck;
+	//#pragma omp parallel for private(i,j,sqrdist,covptr) schedule(dynamic)
+	for (i=0; i < n_srcpts; i++) {
+		covptr = cov_matrix_packed+indx[i];
+		covptr++;
+		for (j=i+1; j < n_srcpts; j++) {
+			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
+			if (kernel_type==0) {
+				double x = sqrt(2*matern_index*sqrdist)/corr_length;
+				covcheck = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
+				if (covcheck != *(covptr)) {
+					cout << "MISMATCH: " << covcheck << " " << *covptr << endl;
+					//die();
+				}
+					covptr++;
+			} else if (kernel_type==1) {
+				covcheck = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
+				if (covcheck != *(covptr)) warn("FUCK %g %g",covcheck,*covptr);
+					covptr++;
+			} else {
+				covcheck = exp(-sqrdist/(2*corr_length*corr_length)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
+				if (covcheck != *(covptr)) warn("FUCK %g %g",covcheck,*covptr);
+					covptr++;
+			}
+		}
+	}
+	delete[] indx;
+
+}
+*/
+
+double DelaunayGrid::modified_bessel_function(const double x, const double nu)
+{
+	const int MAXIT=10000;
+	const double EPS=1e-12;
+	const double FPMIN=1e-30;
+	const double XMIN=2.0;
+	double a,a1,b,c,d,del,del1,delh,dels,e,f,fact,fact2,ff,gam1,gam2,gammi,gampl,h,p,pimu,q,q1,q2,qnew,rk1,rkmu,rkmup,rktemp,s,sum,sum1,x2,xi,xi2,xmu,xmu2;
+	int i,l,nl;
+
+	if ((x <= 0) or (nu < 0.0)) die("cannot have x <=0 or nu < 0 for modified Bessel function");
+	nl = (int) (nu + 0.5);
+	xmu = nu-nl;
+	xmu2 = xmu*xmu;
+	xi = 1.0/x;
+	xi2 = 2.0*xi;
+	if (h < FPMIN) h = FPMIN;
+	b = xi2*nu;
+	d=0.0;
+	c=h;
+	for (i=0; i < MAXIT; i++) {
+		b += xi2;
+		d=1.0/(b+d);
+		c=b+1.0/c;
+		del=c*d;
+		h=del*h;
+		if (abs(del-1.0) <= EPS) break;
+	}
+	if (i >= MAXIT) die("x too large for Modified bessel function; try asymptotic expansion");
+	fact=nu*xi;
+	for (l=nl-1; l >= 0; l--) {
+		fact -= xi;
+	}
+	if (x < XMIN) {
+		x2=0.5*x;
+		pimu=M_PI*xmu;
+		fact = (abs(pimu) < EPS ? 1.0 : pimu/sin(pimu));
+		d = -log(x2);
+		e=xmu*d;
+		fact2 = (abs(e) < EPS ? 1.0 : sinh(e)/e);
+		if (abs(xmu) > 1e-8) {
+			gampl = 1.0/Gamma(1+xmu);
+			gammi = 1.0/Gamma(1-xmu);
+			gam2 = (gammi+gampl)/2;
+			gam1 = (gammi-gampl)/(2*xmu);
+		} else {
+			beschb(xmu,gam1,gam2,gampl,gammi); // this is faster but not as accurate as the above four lines...unless xmu is close to zero, in which case it's MORE accurate
+		}
+		ff=fact*(gam1*cosh(e)+gam2*fact2*d);
+		sum=ff;
+		e=exp(e);
+		p=0.5*e/gampl;
+		q=0.5/(e*gammi);
+		c=1.0;
+		d=x2*x2;
+		sum1=p;
+		for (i=1; i < MAXIT; i++) {
+			ff = (i*ff+p+q)/(i*i-xmu2);
+			c *= (d/i);
+			p /= (i-xmu);
+			q /= (i+xmu);
+			del=c*ff;
+			sum += del;
+			del1 = c*(p-i*ff);
+			sum1 += del1;
+			if (abs(del) < abs(sum)*EPS) break;
+		}
+		if (i > MAXIT) die("Modified Bessel series failed to converge");
+		rkmu=sum;
+		rk1=sum1*xi2;
+	} else {
+		b=2.0*(1.0+x);
+		d=1.0/b;
+		h=delh=d;
+		q1=0.0;
+		q2=1.0;
+		a1=0.25-xmu2;
+		q=c=a1;
+		a = -a1;
+		s=1.0+q*delh;
+		for (i=1;i < MAXIT; i++) {
+			a -= 2*i;
+			c = -a*c/(i+1.0);
+			qnew=(q1-b*q2)/a;
+			q1=q2;
+			q2=qnew;
+			q += c*qnew;
+			b += 2.0;
+			d=1.0/(b+a*d);
+			delh=(b*d-1.0)*delh;
+			h += delh;
+			dels=q*delh;
+			s += dels;
+			if (abs(dels/s) <= EPS) break;
+		}
+		if (i >= MAXIT) die("Bessel failed to converge in cf2");
+		h=a1*h;
+		rkmu=sqrt(M_PI/(2.0*x))*exp(-x)/s;
+		rk1=rkmu*(xmu+x+0.5-h)*xi;
+	}
+
+	for (i=1; i <= nl; i++) {
+		rktemp=(xmu+i)*xi2*rk1+rkmu;
+		rkmu=rk1;
+		rk1=rktemp;
+	}
+	return rkmu;
+}
+
+void DelaunayGrid::beschb(const double x, double& gam1, double& gam2, double& gampl, double& gammi)
+{
+	const int NUSE1=7, NUSE2=8;
+	static double c1[7] = {
+		-1.142022680371168e0, 6.5165112670737e-3, 3.087090173086e-4, -3.4706269649e-6, -6.9437664e-9, 3.67795e-11, -1.356e-13 };
+	static double c2[8] = {
+		1.843740587300905e0, -7.68528408447867e-2, 1.2719271366546e-3, -4.9717367042e-6, -3.31261198e-8, 2.423096e-10, -1.702e-13, -1.49e-15 };
+	double xx = 8*x*x-1.0;
+	static double *c1p, *c2p;
+	c1p = c1;
+	c2p = c2;
+	gam1=chebev(-1.0,1.0,c1p,NUSE1,xx);
+	gam2=chebev(-1.0,1.0,c2p,NUSE2,xx);
+	gampl = gam2 - x*gam1;
+	gammi = gam2 + x*gam1;
+}
+
+double DelaunayGrid::chebev(const double a, const double b, double* c, const int m, const double x)
+{
+	double d=0.0,dd=0.0,sv,y,y2;
+	int j;
+	if ((x-a)*(x-b) > 0.0) die("x not in range in function chebev");
+	y2 = 2.0*(y=(2.0*x-a-b)/(b-a));
+	for (j=m-1; j > 0; j--) {
+		sv=d;
+		d=y2*d-dd+c[j];
+		dd=sv;
+	}
+	return y*d-dd+0.5*c[0];
 }
 
 void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate_sb)
@@ -11769,13 +12001,17 @@ void QLens::create_regularization_matrix()
 			generate_Rmatrix_from_gmatrices(); break;
 		case Curvature:
 			generate_Rmatrix_from_hmatrices(); break;
+		case Matern_Kernel:
+			dense_Rmatrix = true;
+			generate_Rmatrix_from_covariance_kernel(0);
+			break;
 		case Exponential_Kernel:
 			dense_Rmatrix = true;
-			generate_Rmatrix_from_covariance_kernel(true);
+			generate_Rmatrix_from_covariance_kernel(1);
 			break;
 		case Squared_Exponential_Kernel:
 			dense_Rmatrix = true;
-			generate_Rmatrix_from_covariance_kernel(false);
+			generate_Rmatrix_from_covariance_kernel(2);
 			break;
 		default:
 			die("Regularization method not recognized");
@@ -12467,20 +12703,20 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
    LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_stacked,source_n_amps,Fmatrix_packed.array());
 #endif
 
-	if (dense_Rmatrix) {
-		int n_extra_amps = source_n_amps - source_npixels;
-		double *Fptr, *Rptr;
-		Fptr = Fmatrix_packed.array();
-		Rptr = Rmatrix_packed.array();
-		for (i=0; i < source_npixels; i++) {
-			for (j=i; j < source_npixels; j++) {
-				*(Fptr++) += regularization_parameter*(*(Rptr++));
+	if ((regularization_method != None) and (!optimize_regparam)) {
+		if (dense_Rmatrix) {
+			int n_extra_amps = source_n_amps - source_npixels;
+			double *Fptr, *Rptr;
+			Fptr = Fmatrix_packed.array();
+			Rptr = Rmatrix_packed.array();
+			for (i=0; i < source_npixels; i++) {
+				for (j=i; j < source_npixels; j++) {
+					*(Fptr++) += regularization_parameter*(*(Rptr++));
+				}
+				Fptr += n_extra_amps;
 			}
-			Fptr += n_extra_amps;
-		}
-	} else {
-		int k,indx_start=0;
-		if ((regularization_method != None) and (!optimize_regparam)) {
+		} else {
+			int k,indx_start=0;
 			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
 				Fmatrix_packed[indx_start] += effective_reg_parameter*Rmatrix[i];
 				for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
@@ -12574,8 +12810,8 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		} else {
 			for (i=0; i < source_npixels; i++) {
 				Fmatrix_packed[indx_start] += regularization_parameter*Rmatrix[i];
-				for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-					Fmatrix_packed[indx_start+Rmatrix_index[k]-i] += regularization_parameter*Rmatrix[k];
+				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+					Fmatrix_packed[indx_start+Rmatrix_index[j]-i] += regularization_parameter*Rmatrix[j];
 				}
 				indx_start += source_n_amps-i;
 			}
@@ -12703,8 +12939,8 @@ double QLens::chisq_regparam_dense(const double logreg)
 	double Fmatrix_logdet;
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed_copy.array());
-	for (int i=0; i < source_n_amps; i++) temp_src[i] = Dvector[i];
-	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_n_amps,1,Fmatrix_packed_copy.array(),temp_src.array(),1);
+	for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = Dvector[i];
+	LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_n_amps,1,Fmatrix_packed_copy.array(),source_pixel_vector,1);
 	Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 #else
 	// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
@@ -12713,14 +12949,14 @@ double QLens::chisq_regparam_dense(const double logreg)
 
 	bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,temp_src.array(),source_n_amps);
+	Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,source_pixel_vector,source_n_amps);
 	Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 #endif
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
 	double *Lmatptr;
-	double *tempsrcptr = temp_src.array();
-	double *tempsrc_end = temp_src.array() + source_n_amps;
+	double *tempsrcptr = source_pixel_vector;
+	double *tempsrc_end = source_pixel_vector + source_n_amps;
 
 	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
@@ -12728,13 +12964,13 @@ double QLens::chisq_regparam_dense(const double logreg)
 		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
 			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
 			Lmatptr = (Lmatrix_dense.pointer())[i];
-			tempsrcptr = temp_src.array();
+			tempsrcptr = source_pixel_vector;
 			while (tempsrcptr != tempsrc_end) {
 				temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
 			}
 		} else {
 			for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
-				temp_img += Lmatrix[j]*temp_src[Lmatrix_index[j]];
+				temp_img += Lmatrix[j]*source_pixel_vector[Lmatrix_index[j]];
 			}
 		}
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
@@ -12743,8 +12979,8 @@ double QLens::chisq_regparam_dense(const double logreg)
 	if (dense_Rmatrix) {
 		double *Rptr, *sptr_i, *sptr_j, *s_end;
 		Rptr = Rmatrix_packed.array();
-		s_end = temp_src.array() + source_npixels;
-		for (sptr_i=temp_src.array(); sptr_i != s_end; sptr_i++) {
+		s_end = source_pixel_vector + source_npixels;
+		for (sptr_i=source_pixel_vector; sptr_i != s_end; sptr_i++) {
 			sptr_j = sptr_i;
 			Es_times_two += (*sptr_i)*(*(Rptr++))*(*sptr_j++);
 			while (sptr_j != s_end) {
@@ -12753,9 +12989,9 @@ double QLens::chisq_regparam_dense(const double logreg)
 		}
 	} else {
 		for (i=0; i < source_npixels; i++) {
-			Es_times_two += Rmatrix[i]*SQR(temp_src[i]);
+			Es_times_two += Rmatrix[i]*SQR(source_pixel_vector[i]);
 			for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-				Es_times_two += 2 * temp_src[i] * Rmatrix[j] * temp_src[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+				Es_times_two += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
 			}
 		}
 	}
@@ -12938,7 +13174,7 @@ bool QLens::Cholesky_dcmp_upper_packed(double* a, double &logdet, int n)
 
 	int *indx = new int[n];
 	indx[0] = 0;
-	for (j=0; j < n; j++) if (j > 0) indx[j] = indx[j-1] + n-j;
+	for (j=1; j < n; j++) indx[j] = indx[j-1] + n-j+1;
 
 	a[0] = sqrt(a[0]);
 	for (j=1; j < n; j++) a[j] /= a[0];
