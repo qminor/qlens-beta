@@ -13021,7 +13021,6 @@ double QLens::brents_min_method(double (QLens::*func)(const double), const doubl
 	double p,q,r,tol1,tol2,u,wprev,w,x,xmid;
 	double e=0.0;
 
-	const int ITMAX = 100;
 	const double CGOLD = 0.3819660; // golden ratio
 	const double ZEPS = 1.0e-10;
 	const double ROOTPREC = 1.0e-8; // square root of machine precision for double floating points
@@ -13032,7 +13031,7 @@ double QLens::brents_min_method(double (QLens::*func)(const double), const doubl
 	x=w=wprev=bx-CGOLD*(bx-ax); // start with point closer to the higher regularization (seems to converge better), using golden ratio
 	fw=fwprev=fx=(this->*func)(x);
 	//cout << "Just evaluated f(" << x << ")=" << fx << end;
-	for (int iter=0; iter < ITMAX; iter++)
+	for (int iter=0; iter < max_regopt_iterations; iter++)
 	{
 		xmid=0.5*(a+b);
 		tol2 = 2.0 * ((tol1=tol*abs(x)) + ZEPS);
