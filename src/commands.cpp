@@ -2180,6 +2180,11 @@ void QLens::process_commands(bool read_file)
 					cout << "vary_srcgrid_scale: " << display_switch(vary_srcgrid_size_scale) << endl;
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
+					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
+					cout << "regparam_llo = " << regparam_llo << endl;
+					cout << "vary_regparam_llo: " << display_switch(vary_regparam_llo) << endl;
+					cout << "regparam_lhi = " << regparam_lhi << endl;
+					cout << "vary_regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
 					cout << "outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
 					if (extended_mask_n_neighbors==-1) cout << "emask_n_neighbors = all" << endl;
@@ -9267,6 +9272,7 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
+						else if (args[i]=="-resns") { plot_residual = true; omit_source = true; } // shortcut argument to plot residuals but not source
 						else if (args[i]=="-thresh") show_noise_thresh = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
 						else if (args[i]=="-nofg") omit_foreground = true;
@@ -9336,10 +9342,23 @@ void QLens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
-				if ((nwords != 3) and (source_fit_mode==Cartesian_Source) and (plot_srcplane) and (range1 == "")) { // if nwords==3, then source plane isn't being plotted
+				if ((nwords != 3) and (plot_srcplane) and (range1 == "")) { // if nwords==3, then source plane isn't being plotted
 				//if ((range1 == "") and ((!show_cc) or (!islens()))) {
 					double xmin,xmax,ymin,ymax;
-					source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
+					if (source_fit_mode==Cartesian_Source) {
+						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
+					} else {
+						double xwidth_adj = sourcegrid_xmax-sourcegrid_xmin;
+						double ywidth_adj = sourcegrid_ymax-sourcegrid_ymin;
+						double srcgrid_xc, srcgrid_yc;
+						//delaunay_srcgrid->find_centroid(srcgrid_xc,srcgrid_yc);
+						srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
+						srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
+						xmin = srcgrid_xc - xwidth_adj/2;
+						xmax = srcgrid_xc + xwidth_adj/2;
+						ymin = srcgrid_yc - ywidth_adj/2;
+						ymax = srcgrid_yc + ywidth_adj/2;
+					}
 					stringstream xminstr,yminstr,xmaxstr,ymaxstr;
 					string xminstring,yminstring,xmaxstring,ymaxstring;
 					xminstr << xmin;
@@ -11313,15 +11332,15 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="regparam")
 		{
-			double regparam, regparam_ul, regparam_ll;
+			double regparam, regparam_upper, regparam_lower;
 			if (nwords == 4) {
-				if (!(ws[1] >> regparam_ll)) Complain("invalid regularization parameter lower limit");
+				if (!(ws[1] >> regparam_lower)) Complain("invalid regularization parameter lower limit");
 				if (!(ws[2] >> regparam)) Complain("invalid regularization parameter value");
-				if (!(ws[3] >> regparam_ul)) Complain("invalid regularization parameter upper limit");
-				if ((regparam < regparam_ll) or (regparam > regparam_ul)) Complain("initial regularization parameter should lie within specified prior limits");
+				if (!(ws[3] >> regparam_upper)) Complain("invalid regularization parameter upper limit");
+				if ((regparam < regparam_lower) or (regparam > regparam_upper)) Complain("initial regularization parameter should lie within specified prior limits");
 				regularization_parameter = regparam;
-				regularization_parameter_lower_limit = regparam_ll;
-				regularization_parameter_upper_limit = regparam_ul;
+				regularization_parameter_lower_limit = regparam_lower;
+				regularization_parameter_upper_limit = regparam_upper;
 			} else if (nwords == 2) {
 				if (!(ws[1] >> regparam)) Complain("invalid regularization parameter value");
 				regularization_parameter = regparam;
@@ -11341,6 +11360,111 @@ void QLens::process_commands(bool read_file)
 				set_switch(vary_regularization_parameter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lum_weighted_regularization")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use luminosity-weighted regularization: " << display_switch(use_lum_weighted_regularization) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_regularization' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_regularization requires 'optimize_regparam' to be set to 'on'");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="off") and (use_lum_weighted_regularization)) {
+					if (vary_regparam_llo) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_llo' to 'off'" << endl;
+						vary_regparam_llo = false;
+					}
+					if (vary_regparam_lhi) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
+						vary_regparam_lhi = false;
+					}
+				}
+				set_switch(use_lum_weighted_regularization,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_llo")
+		{
+			double reg_llo, reg_llo_upper, reg_llo_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> reg_llo_lower)) Complain("invalid regparam_llo lower limit");
+				if (!(ws[2] >> reg_llo)) Complain("invalid regparam_llo value");
+				if (!(ws[3] >> reg_llo_upper)) Complain("invalid regparam_llo upper limit");
+				if ((reg_llo < reg_llo_lower) or (reg_llo > reg_llo_upper)) Complain("initial regparam_llo should lie within specified prior limits");
+				regparam_llo = reg_llo;
+				regparam_llo_lower_limit = reg_llo_lower;
+				regparam_llo_upper_limit = reg_llo_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> reg_llo)) Complain("invalid regparam_llo value");
+				regparam_llo = reg_llo;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_llo = " << regparam_llo << endl;
+			} else Complain("must specify either zero or one argument (regparam_llo value)");
+		}
+		else if (words[0]=="vary_regparam_llo")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary regparam_llo: " << display_switch(vary_regparam_llo) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_llo' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_llo can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_llo can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_llo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_llo,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_lhi")
+		{
+			double reg_lhi, reg_lhi_upper, reg_lhi_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> reg_lhi_lower)) Complain("invalid regparam_lhi lower limit");
+				if (!(ws[2] >> reg_lhi)) Complain("invalid regparam_lhi value");
+				if (!(ws[3] >> reg_lhi_upper)) Complain("invalid regparam_lhi upper limit");
+				if ((reg_lhi < reg_lhi_lower) or (reg_lhi > reg_lhi_upper)) Complain("initial regparam_lhi should lie within specified prior limits");
+				regparam_lhi = reg_lhi;
+				regparam_lhi_lower_limit = reg_lhi_lower;
+				regparam_lhi_upper_limit = reg_lhi_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> reg_lhi)) Complain("invalid regparam_lhi value");
+				regparam_lhi = reg_lhi;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_lhi = " << regparam_lhi << endl;
+			} else Complain("must specify either zero or one argument (regparam_lhi value)");
+		}
+		else if (words[0]=="vary_regparam_lhi")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lhi' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lhi can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lhi can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lhi can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_lhi,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_lum_index")
+		{
+			double reg_index;
+			//double reg_index_upper, reg_index_lower;
+			//if (nwords == 4) {
+				//if (!(ws[1] >> reg_index_lower)) Complain("invalid regparam_lum_index lower limit");
+				//if (!(ws[2] >> reg_index)) Complain("invalid regparam_lum_index value");
+				//if (!(ws[3] >> reg_index_upper)) Complain("invalid regparam_lum_index upper limit");
+				//if ((reg_index < reg_index_lower) or (reg_index > reg_index_upper)) Complain("initial regparam_lum_index should lie within specified prior limits");
+				//regparam_lum_index = reg_index;
+				//regparam_lum_index_lower_limit = reg_index_lower;
+				//regparam_lum_index_upper_limit = reg_index_upper;
+			//} else if (nwords == 2) {
+			if (nwords == 2) {
+				if (!(ws[1] >> reg_index)) Complain("invalid regparam_lum_index value");
+				regparam_lum_index = reg_index;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_lum_index = " << regparam_lum_index << endl;
+			} else Complain("must specify either zero or one argument (regparam_lum_index value)");
 		}
 		else if (words[0]=="corrlength")
 		{
@@ -11963,10 +12087,14 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'optimize_regparam' command; must specify 'on' or 'off'");
 				if ((setword=="on") and ((source_fit_mode != Shapelet_Source) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source))) Complain("optimize_regparam only available in pixellated (cartesian, delaunay) or Shapelet source mode");
 				set_switch(optimize_regparam,setword);
-				if (vary_regularization_parameter) {
+				if ((setword=="on") and (vary_regularization_parameter)) {
 					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam' to 'off' and updating parameters" << endl;
 					vary_regularization_parameter = false;
 					update_parameter_list();
+				}
+				if ((setword=="off") and (use_lum_weighted_regularization)) {
+					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
+					use_lum_weighted_regularization = false;
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

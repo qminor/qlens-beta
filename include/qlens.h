@@ -525,8 +525,16 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_matern_index;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
-	double regopt_chisqmin, regopt_logdet_Fmatrix;
+	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
+
+	// the following parameters are used for luminosity-weighted regularization
+	bool use_lum_weighted_regularization;
+	double regparam_lhi, regparam_llo, regparam_lum_index; 
+	double *lumreg_pixel_weights;
+	bool vary_regparam_lhi, vary_regparam_llo;
+	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
+	double regparam_llo_lower_limit, regparam_llo_upper_limit;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
@@ -766,11 +774,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool assign_pixel_mappings(bool verbal);
 	void assign_foreground_mappings(const bool use_data = true);
 	double *Dvector;
+	double *Dvector_cov;
+	double *Dvector_cov_copy;
 	int Fmatrix_nn;
 	double *Fmatrix;
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
 	bool dense_Rmatrix;
+	bool covariance_kernel_regularization;
 	double *Rmatrix;
 	int *Rmatrix_index;
 	double *Rmatrix_diag_temp;
@@ -788,6 +799,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void PSF_convolution_Lmatrix_dense(const bool verbal);
 	void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
+	void generate_Gmatrix();
+	void add_regularization_term_to_dense_Fmatrix();
+
 	void invert_lens_mapping_dense(bool verbal);
 	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
 	double chisq_regparam_dense(const double logreg);
@@ -802,6 +816,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
 	//void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_lower_packed(double* a, double* b, double* x, int n);
+	void LU_logdet_stacked(double* a, double &logdet, int n);
 	void Cholesky_logdet_packed(double* a, double &logdet, int n);
 	void Cholesky_logdet_lower_packed(double* a, double &logdet, int n);
 	//void test_inverts();
@@ -814,8 +829,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	dmatrix Lmatrix_dense;
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
+	dvector Gmatrix_stacked;
+	dvector Gmatrix_stacked_copy;
+	dvector Fmatrix_stacked;
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
+	dvector covmatrix_stacked;
+	dvector covmatrix_packed;
+	dvector covmatrix_factored;
 	dvector Rmatrix_packed;
 	dvector temp_src; // used when optimizing the regularization parameter
 
@@ -877,6 +898,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
+	double Gmatrix_log_determinant;
 	void initialize_pixel_matrices(bool verbal);
 	void initialize_pixel_matrices_shapelets(bool verbal);
 	void count_shapelet_npixels();
@@ -1202,6 +1224,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	public:
 	double chi_square_fit_simplex();
 	double chi_square_fit_powell();
+	void output_fit_results(dvector& stepsizes, const double chisq_bestfit, const int chisq_evals);
 	void nested_sampling();
 	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous, const bool skip_run);
