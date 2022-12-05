@@ -11526,6 +11526,15 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="find_cov_inverse")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Find Rmatrix via taking explicit inverse of covariance matrix (for cov. kernel regularization): " << display_switch(find_covmatrix_inverse) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'find_cov_inverse' command; must specify 'on' or 'off'");
+				set_switch(find_covmatrix_inverse,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="data_pixel_noise")
 		{
 			double pnoise;
