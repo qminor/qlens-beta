@@ -781,7 +781,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
 	bool dense_Rmatrix;
-	bool covariance_kernel_regularization;
+	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
+	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
 	double *Rmatrix;
 	int *Rmatrix_index;
 	double *Rmatrix_diag_temp;

@@ -953,7 +953,7 @@ QLens::QLens() : UCMC()
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
 	dense_Rmatrix = false;
-	covariance_kernel_regularization = false;
+	find_covmatrix_inverse = false;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	Dvector = NULL;
@@ -1323,7 +1323,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
 	dense_Rmatrix = lens_in->dense_Rmatrix;
-	covariance_kernel_regularization = lens_in->covariance_kernel_regularization;
+	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	image_surface_brightness = NULL;
@@ -13435,7 +13435,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			double Es=0;
 			if (use_lum_weighted_regularization) {
 				if (dense_Rmatrix) {
-					if (covariance_kernel_regularization) {
+					if (use_covariance_matrix) {
 						double* s_reg = new double[source_npixels];
 						double* sprime_reg = new double[source_npixels];
 						for (int i=0; i < source_npixels; i++) {
@@ -13473,7 +13473,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 					}
 				}
 
-				if (covariance_kernel_regularization) {
+				if (use_covariance_matrix) {
 					chisqreg = Es;
 				} else {
 					double Rmatrix_logdet_coefficient = 0;
@@ -13487,7 +13487,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				//cout << "Rmat_det_coefficient=" << Rmatrix_logdet_coefficient << " (compare to " << (source_npixels*log(regularization_parameter)) << ") Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			} else {
 				if (dense_Rmatrix) {
-					if (covariance_kernel_regularization) {
+					if (use_covariance_matrix) {
 						double* sprime = new double[source_npixels];
 						for (int i=0; i < source_npixels; i++) sprime[i] = source_pixel_vector[i];
 #ifdef USE_MKL
@@ -13527,7 +13527,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 				//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es=" << Es << " logdet=" << Rmatrix_log_determinant << endl;
 			}
 		}
-		if (!covariance_kernel_regularization) chisq += Fmatrix_log_determinant;
+		if (!use_covariance_matrix) chisq += Fmatrix_log_determinant;
 		else chisq += Gmatrix_log_determinant;
 		if (group_id==0) {
 			if (logfile.is_open()) {
@@ -13648,7 +13648,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) {
 			cout << "-2*log(ev)=" << chisq << " (without priors)" << endl;
 			if ((vary_pixel_fraction) or (regularization_method != None)) {
-				if (covariance_kernel_regularization) cout << " logdet(Gmatrix)=" << Gmatrix_log_determinant << endl;
+				if (use_covariance_matrix) cout << " logdet(Gmatrix)=" << Gmatrix_log_determinant << endl;
 				else cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
 			}
 			if (regularization_method != None) cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant << endl;
