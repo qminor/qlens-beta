@@ -532,9 +532,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_lum_weighted_regularization;
 	double regparam_lhi, regparam_llo, regparam_lum_index; 
 	double *lumreg_pixel_weights;
-	bool vary_regparam_lhi, vary_regparam_llo;
+	bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
 	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
 	double regparam_llo_lower_limit, regparam_llo_upper_limit;
+	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }

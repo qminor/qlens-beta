@@ -12074,6 +12074,7 @@ void QLens::create_regularization_matrix_shapelet()
 	}
 #endif
 	dense_Rmatrix = false;
+	use_covariance_matrix = false; // if true, will use covariance matrix directly instead of Rmatrix
 	switch (regularization_method) {
 		case Norm:
 			generate_Rmatrix_norm(); break;
@@ -12853,10 +12854,18 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		for (i=0; i < source_npixels; i++) {
 			if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
 		}
+		//double sumreglo=0, sumreghi=0, lumtot=0;
 		for (i=0; i < source_npixels; i++) {
 			lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
 			lumreg_pixel_weights[i] = sqrt(regparam_lhi*lumfac + regparam_llo*(1-lumfac));
+			//sumreghi += SQR(source_pixel_vector[i])*lumfac;
+			//sumreglo += SQR(source_pixel_vector[i])*(1-lumfac);
+			//lumtot += SQR(source_pixel_vector[i]);
 		}
+		//double est_reglo = (regularization_parameter*lumtot - regparam_lhi*sumreghi) / sumreglo;
+		//double regstep = abs(regparam_lhi - est_reglo);
+		//double high_reglo = est_reglo + 3*regstep;
+		//cout << "Estimated regparam_lo = " << est_reglo << endl;
 		int j,k,indx_start=0;
 		// Now set F' = F + Lambda*R*Lambda, where the Lambda matrices are diagonal with lumreg_pixel_weights[...] as the diagonal elements
 		if (dense_Fmatrix) {
