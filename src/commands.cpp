@@ -11449,22 +11449,34 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="regparam_lum_index")
 		{
 			double reg_index;
-			//double reg_index_upper, reg_index_lower;
-			//if (nwords == 4) {
-				//if (!(ws[1] >> reg_index_lower)) Complain("invalid regparam_lum_index lower limit");
-				//if (!(ws[2] >> reg_index)) Complain("invalid regparam_lum_index value");
-				//if (!(ws[3] >> reg_index_upper)) Complain("invalid regparam_lum_index upper limit");
-				//if ((reg_index < reg_index_lower) or (reg_index > reg_index_upper)) Complain("initial regparam_lum_index should lie within specified prior limits");
-				//regparam_lum_index = reg_index;
-				//regparam_lum_index_lower_limit = reg_index_lower;
-				//regparam_lum_index_upper_limit = reg_index_upper;
-			//} else if (nwords == 2) {
-			if (nwords == 2) {
+			double reg_index_upper, reg_index_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> reg_index_lower)) Complain("invalid regparam_lum_index lower limit");
+				if (!(ws[2] >> reg_index)) Complain("invalid regparam_lum_index value");
+				if (!(ws[3] >> reg_index_upper)) Complain("invalid regparam_lum_index upper limit");
+				if ((reg_index < reg_index_lower) or (reg_index > reg_index_upper)) Complain("initial regparam_lum_index should lie within specified prior limits");
+				regparam_lum_index = reg_index;
+				regparam_lum_index_lower_limit = reg_index_lower;
+				regparam_lum_index_upper_limit = reg_index_upper;
+			} else if (nwords == 2) {
 				if (!(ws[1] >> reg_index)) Complain("invalid regparam_lum_index value");
 				regparam_lum_index = reg_index;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "regparam_lum_index = " << regparam_lum_index << endl;
 			} else Complain("must specify either zero or one argument (regparam_lum_index value)");
+		}
+		else if (words[0]=="vary_regparam_lum_index")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary regparam_lum_index: " << display_switch(vary_regparam_lum_index) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lum_index' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lum_index can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_lum_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="corrlength")
 		{
