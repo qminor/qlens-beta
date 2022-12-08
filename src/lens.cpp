@@ -12625,6 +12625,24 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		at_least_one_lensed_src = true;
 		image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrid);
 		delaunay_srcgrid->set_image_pixel_grid(image_pixel_grid);
+
+		/*
+		assign_pixel_mappings(true);
+		initialize_pixel_matrices(true);
+		PSF_convolution_Lmatrix(true);
+		delaunay_srcgrid->fill_surface_brightness_vector();
+		calculate_image_pixel_surface_brightness(false);
+		ofstream wtf2out("wtf2b");
+		int i,j,img_index;
+		for (i=0; i < image_pixel_data->npixels_x; i++) {
+			for (j=0; j < image_pixel_data->npixels_y; j++) {
+				if (image_pixel_grid->fit_to_data[i][j]) {
+					img_index = image_pixel_grid->pixel_index[i][j];
+					wtf2out << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
+				}
+			}
+		}
+		*/
 	} else {
 		at_least_one_lensed_src = false;
 		for (int k=0; k < n_sb; k++) {
@@ -12725,13 +12743,19 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		image_pixel_grid->add_pixel_noise(sim_pixel_noise);
 	}
 
+	double chisq_from_residuals;
 	if (output_fits==false) {
-		if (mpi_id==0) image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_noise_thresh);
+		if (mpi_id==0) 
+			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_noise_thresh);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
 	if (((show_all_pixels) or (show_extended_mask) or (show_foreground_mask)) and (use_data)) {
 		image_pixel_grid->set_fit_window((*image_pixel_data));
+	}
+	if ((mpi_id==0) and (plot_residual) and (!output_fits)) {
+		if (data_pixel_noise != 0) chisq_from_residuals /= data_pixel_noise*data_pixel_noise;
+		cout << "chi-square from residuals = " << chisq_from_residuals << endl;
 	}
 
 	sbmax=-1e30;
@@ -13167,7 +13191,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
 		double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
 		double est_pixfrac = est_nmapped / image_npixels;
-		cout << "YO1" << endl;
 		if ((mpi_id==0) and (verbal)) {
 			double pixfrac = ((double) source_n_amps) / image_npixels;
 			cout << "Actual f = " << pixfrac << endl;
@@ -13418,10 +13441,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
 	if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
-	double dchisq, dchisq2;
 	int img_index;
 	int count=0, foreground_count=0;
 	//int n_data_pixels=0;
+	//ofstream wtfout("wtf.dat");
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
 			if ((image_pixel_grid->fit_to_data[i][j]) or ((at_least_one_foreground_src) and (image_pixel_data->foreground_mask[i][j]))) {
@@ -13433,7 +13456,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 						//chisq += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
 						foreground_count++;
 					}
-					else chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					else {
+						chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+						//wtfout << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
+					}
 					//else chisq += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
 					count++;
 				} else {
@@ -13460,7 +13486,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	}
 	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/n_tot_pixels << endl;
 	double chisqreg;
-	if ((regularization_method != None) and (source_npixels > 0)) {
+	if ((source_fit_mode != Parameterized_Source) and (regularization_method != None) and (source_npixels > 0)) {
 		// NOTE: technically, you should have these terms even if you do not vary the regularization parameter, since varying
 		//       the lens parameters and/or the adaptive grid changes the determinants. However, this probably will not affect
 		//       the inferred lens parameters because they are not very sensitive to the regularization. Play with this later!
