@@ -11379,6 +11379,10 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
 						vary_regparam_lhi = false;
 					}
+					if (vary_regparam_lum_index) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
+						vary_regparam_lum_index = false;
+					}
 				}
 				set_switch(use_lum_weighted_regularization,setword);
 				update_parameter_list();
@@ -12245,7 +12249,21 @@ void QLens::process_commands(bool read_file)
 			if (srcnum >= n_sb) Complain("source number does not exist");
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
-		} else if (words[0]=="test2") {
+		} else if (words[0]=="test") {
+			int nstart;
+			double x,y;
+			if (!(ws[1] >> nstart)) Complain("wtf?");
+			if (!(ws[2] >> x)) Complain("wtf?");
+			if (!(ws[3] >> y)) Complain("wtf?");
+			lensvector input_pt;
+			input_pt[0]=x; input_pt[1]=y;
+			bool inside_triangle;
+			int trinum = delaunay_srcgrid->search_grid(nstart,input_pt,inside_triangle);
+			if (inside_triangle) cout << "INSIDE!" << endl;
+			else cout << "NOT INSIDE!" << endl;
+			Triangle *triptr = &delaunay_srcgrid->triangle[trinum];
+			cout << "Triangle " << trinum << " has vertices: " << triptr->vertex[0][0] << " " << triptr->vertex[0][1] << " " << triptr->vertex[1][0] << " " << triptr->vertex[1][1] << " " << triptr->vertex[2][0] << " " << triptr->vertex[2][1] << endl;
+
 			/*
 			if (nwords != 3) Complain("need two arguments to 'test2' (nu, x)");
 			cout << setprecision(16);

@@ -3449,17 +3449,21 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 	//cout << "...found in triangle " << trinum << endl;
 	Triangle *triptr = &triangle[trinum];
 	//cout << "WTF2" << endl;
+	double sqrdist, sqrdistmin=1e30;
+	int kmin;
+	for (k=0; k < 3; k++) {
+		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
+		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
+	}
+	if ((inside_triangle) and (sqrdistmin < 1e-6)) inside_triangle = false;
+
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		double sqrdist, sqrdistmin=1e30;
-		int kmin;
-		for (k=0; k < 3; k++) {
-			sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
-			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
-		}
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
+		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "one point!" << triptr->vertex_index[kmin] << " n=" << n << " " << input_pt[0] << " " << input_pt[1] << endl;
+		//cout << img_pixel_i << " " << img_pixel_j << " one point!" << triptr->vertex_index[kmin] << endl;
 		maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
 		//outfile << img_pixel_i << " " << img_pixel_j << " " << triptr->vertex_index[kmin] << endl;
 	} else {
@@ -3473,6 +3477,8 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 		maps_to_image_pixel[triptr->vertex_index[0]] = true;
 		maps_to_image_pixel[triptr->vertex_index[1]] = true;
 		maps_to_image_pixel[triptr->vertex_index[2]] = true;
+		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "three points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << " n=" << n << " " << input_pt[0] << " " << input_pt[1] << endl;
+		//cout << img_pixel_i << " " << img_pixel_j << " three points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
 	}
 	return true;
 }
@@ -3489,7 +3495,7 @@ void DelaunayGrid::calculate_Lmatrix(const int img_index, const int image_pixel_
 	double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
 	if (d==0) {
 		// in this case the points are all the same
-		lens->Lmatrix_rows[img_index].push_back(1);
+		lens->Lmatrix_rows[img_index].push_back(weight);
 		lens->Lmatrix_rows[img_index].push_back(0);
 		lens->Lmatrix_rows[img_index].push_back(0);
 	} else {
@@ -3540,14 +3546,17 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	bool inside_triangle;
 	int trinum = search_grid(n,input_pt,inside_triangle);
 	Triangle *triptr = &triangle[trinum];
+	double sqrdist, sqrdistmin=1e30;
+	int kmin;
+	for (k=0; k < 3; k++) {
+		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
+		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
+	}
+	if ((inside_triangle) and (sqrdistmin < 1e-6)) inside_triangle = false;
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		double sqrdist, sqrdistmin=1e30;
-		int kmin;
-		for (k=0; k < 3; k++) {
-			sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
-			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
-		}
+		//cout << img_pixel_i << " " << img_pixel_j << " one SB point!" << triptr->vertex_index[kmin] << endl;
+		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "one SB point!" << " " << triptr->vertex_index[kmin] << " " << n << " " << input_pt[0] << " " << input_pt[1] << endl;
 		return *triptr->sb[kmin];
 	}
 	sb[0] = triptr->sb[0];
@@ -3556,6 +3565,8 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	pts[0] = &triptr->vertex[0];
 	pts[1] = &triptr->vertex[1];
 	pts[2] = &triptr->vertex[2];
+	//if ((img_pixel_i==25) and (img_pixel_j==62)) cout << "three SB points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
+	//cout << img_pixel_i << " " << img_pixel_j << " three SB points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
 
 	double d, total_sb = 0;
 	d = ((*pts[0])[0]-(*pts[1])[0])*((*pts[1])[1]-(*pts[2])[1]) - ((*pts[1])[0]-(*pts[2])[0])*((*pts[0])[1]-(*pts[1])[1]);
@@ -8282,7 +8293,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_noise_thresh, bool plot_log)
+double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_noise_thresh, bool plot_log)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -8301,8 +8312,9 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 		pixel_yvals << corner_pts[0][j][1] << endl;
 	}	
 	int i,j;
-	double residual;
+	double residual, tot_residuals = 0;
 
+	//ofstream wtfout("wtf2.dat");
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
@@ -8314,6 +8326,8 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 				} else {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					residual = lens->image_pixel_data->surface_brightness[i][j] - sb;
+					tot_residuals += residual*residual;
+					//wtfout << i << " " << j << " " << (residual*residual) << endl;
 					if (show_noise_thresh) {
 						if (abs(residual) >= lens->data_pixel_noise) pixel_image_file << residual;
 						else pixel_image_file << "NaN";
@@ -8330,6 +8344,7 @@ void ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_resi
 		pixel_image_file << endl;
 	}
 	plot_sourcepts(outfile_root);
+	return tot_residuals;
 }
 
 void ImagePixelGrid::plot_sourcepts(string outfile_root)
@@ -10356,6 +10371,7 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	if (Lmatrix != NULL) die("Lmatrix already initialized");
 	if (source_pixel_vector != NULL) die("source surface brightness vector already initialized");
 	if (image_surface_brightness != NULL) die("image surface brightness vector already initialized");
+	if (active_image_pixel_i == NULL) die("Need to assign pixel mappings before initializing pixel matrices");
 	image_surface_brightness = new double[image_npixels];
 	source_pixel_vector = new double[source_n_amps];
 	point_image_surface_brightness = new double[image_npixels];
@@ -11781,13 +11797,17 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		int i,j,k,l;
 		int psf_k, psf_l;
 		int img_index1, img_index2;
-		double totweight; // we'll use this to keep track of whether the full PSF area is not used (e.g. near borders or near masked pixels), and adjust
+		//double totweight; // I wanted to use this to keep track of whether the full PSF area is not used (e.g. near borders or near masked pixels), and adjust
+		// But I think trying to adjust is dangerous, because there may not be much surface brightness right outside the mask, in which case you will
+		// overcompensate...it would be better to just make the mask a bit larger. For foreground light, this is a trickier business; maybe make the mask a few
+		// pixel layers larger than necessary and then discard the outer pixels? Something to think about
 		// the weighting if necessary
-		#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l,totweight) schedule(static)
+		#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l) schedule(static)
+		//#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l,totweight) schedule(static)
 		for (img_index1=0; img_index1 < npix; img_index1++)
 		{ // this loops over columns of the PSF blurring matrix
 			new_surface_brightness_vector[img_index1] = 0;
-			totweight = 0;
+			//totweight = 0;
 			k = pixel_map_i[img_index1];
 			l = pixel_map_j[img_index1];
 			for (psf_k=0; psf_k < psf_nx; psf_k++) {
@@ -11801,14 +11821,14 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 							((!foreground) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])))) {
 								img_index2 = pix_index[i][j];
 								new_surface_brightness_vector[img_index1] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
-								totweight += psf[psf_k][psf_l];
+								//totweight += psf[psf_k][psf_l];
 								//cout << "PSF: " << psf_k << " " << psf_l << " " << psf[psf_k][psf_l] << endl;
 							}
 						}
 					}
 				}
 			}
-			if (totweight != 1.0) new_surface_brightness_vector[img_index1] /= totweight;
+			//if (totweight != 1.0) new_surface_brightness_vector[img_index1] /= totweight; // not using this anymore...see note above
 			//cout << "WEIGHT=" << totweight << endl;
 		}
 
@@ -14651,6 +14671,8 @@ void QLens::calculate_image_pixel_surface_brightness(const bool calculate_foregr
 			}
 		}
 		if (at_least_one_foreground_src) {
+			if (active_image_pixel_i_fgmask==NULL) die("Need to assign foreground pixel mappings before calculating foreground surface brightness");
+
 			calculate_foreground_pixel_surface_brightness();
 			//add_foreground_to_image_pixel_vector();
 			store_foreground_pixel_surface_brightness(); // this stores it in image_pixel_grid->foreground_surface_brightness[i][j]
@@ -14746,99 +14768,99 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 	}
 #endif
 
-		#pragma omp parallel
-		{
-			int thread;
+	#pragma omp parallel
+	{
+		int thread;
 #ifdef USE_OPENMP
-			thread = omp_get_thread_num();
+		thread = omp_get_thread_num();
 #else
-			thread = 0;
+		thread = 0;
 #endif
 
-			int ii, jj, nsplit;
-			double u0, w0, sb;
-			//double U0, W0, U1, W1;
-			lensvector center_pt, center_srcpt;
-			lensvector corner1, corner2, corner3, corner4;
-			lensvector corner1_src, corner2_src, corner3_src, corner4_src;
-			double subpixel_xlength, subpixel_ylength;
-			int subpixel_index;
-			#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subpixel_index) schedule(dynamic)
-			for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
-				sbprofile_surface_brightness[img_index] = 0;
+		int ii, jj, nsplit;
+		double u0, w0, sb;
+		//double U0, W0, U1, W1;
+		lensvector center_pt, center_srcpt;
+		lensvector corner1, corner2, corner3, corner4;
+		lensvector corner1_src, corner2_src, corner3_src, corner4_src;
+		double subpixel_xlength, subpixel_ylength;
+		int subpixel_index;
+		#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subpixel_index) schedule(dynamic)
+		for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
+			sbprofile_surface_brightness[img_index] = 0;
 
-				i = active_image_pixel_i_fgmask[img_index];
-				j = active_image_pixel_j_fgmask[img_index];
+			i = active_image_pixel_i_fgmask[img_index];
+			j = active_image_pixel_j_fgmask[img_index];
 
-				sb = 0;
+			sb = 0;
 
-				if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
-				else nsplit = 1;
-				// Now check to see if center of foreground galaxy is in or next to the pixel; if so, make sure it has at least four splittings so its
-				// surface brightness is well-reproduced
-				if ((nsplit < 4) and (i > 0) and (i < image_pixel_grid->x_N-1) and (j > 0) and (j < image_pixel_grid->y_N)) {
-					for (k=0; k < n_sb; k++) {
-						if (!sb_list[k]->is_lensed) {
-							double xc, yc;
-							sb_list[k]->get_center_coords(xc,yc);
-							if ((xc > image_pixel_grid->corner_pts[i-1][j][0]) and (xc < image_pixel_grid->corner_pts[i+2][j][0]) and (yc > image_pixel_grid->corner_pts[i][j-1][1]) and (yc < image_pixel_grid->corner_pts[i][j+2][1])) nsplit = 4;
-						} 
-					}
+			if (split_imgpixels) nsplit = image_pixel_grid->nsplits[i][j];
+			else nsplit = 1;
+			// Now check to see if center of foreground galaxy is in or next to the pixel; if so, make sure it has at least four splittings so its
+			// surface brightness is well-reproduced
+			if ((nsplit < 4) and (i > 0) and (i < image_pixel_grid->x_N-1) and (j > 0) and (j < image_pixel_grid->y_N)) {
+				for (k=0; k < n_sb; k++) {
+					if (!sb_list[k]->is_lensed) {
+						double xc, yc;
+						sb_list[k]->get_center_coords(xc,yc);
+						if ((xc > image_pixel_grid->corner_pts[i-1][j][0]) and (xc < image_pixel_grid->corner_pts[i+2][j][0]) and (yc > image_pixel_grid->corner_pts[i][j-1][1]) and (yc < image_pixel_grid->corner_pts[i][j+2][1])) nsplit = 4;
+					} 
 				}
+			}
 
-				subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
-				subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
-				subpixel_index = 0;
-				for (ii=0; ii < nsplit; ii++) {
-					u0 = ((double) (1+2*ii))/(2*nsplit);
-					center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
-					for (jj=0; jj < nsplit; jj++) {
-						w0 = ((double) (1+2*jj))/(2*nsplit);
-						center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
-						//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
-						//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;
-						for (int k=0; k < n_sb; k++) {
-							if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) {
-								if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
-								else {
-									corner1[0] = center_pt[0] - subpixel_xlength/2;
-									corner1[1] = center_pt[1] - subpixel_ylength/2;
-									corner2[0] = center_pt[0] + subpixel_xlength/2;
-									corner2[1] = center_pt[1] - subpixel_ylength/2;
-									corner3[0] = center_pt[0] - subpixel_xlength/2;
-									corner3[1] = center_pt[1] + subpixel_ylength/2;
-									corner4[0] = center_pt[0] + subpixel_xlength/2;
-									corner4[1] = center_pt[1] + subpixel_ylength/2;
-									sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
-								}
-							}
-							else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
-								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
-								//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
-								//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
-								//sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
-								if (split_imgpixels) sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][1]);
-								else sb += sb_list[k]->surface_brightness(image_pixel_grid->center_sourcepts[i][j][0],image_pixel_grid->center_sourcepts[i][j][1]);
-								//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
-								//else {
-									//corner1[0] = center_srcpt[0] - subpixel_xlength/2;
-									//corner1[1] = center_srcpt[1] - subpixel_ylength/2;
-									//corner2[0] = center_srcpt[0] + subpixel_xlength/2;
-									//corner2[1] = center_srcpt[1] - subpixel_ylength/2;
-									//corner3[0] = center_srcpt[0] - subpixel_xlength/2;
-									//corner3[1] = center_srcpt[1] + subpixel_ylength/2;
-									//corner4[0] = center_srcpt[0] + subpixel_xlength/2;
-									//corner4[1] = center_srcpt[1] + subpixel_ylength/2;
-									//sb += sb_list[k]->surface_brightness_zoom(center_srcpt,corner1,corner2,corner3,corner4);
-								//}
+			subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
+			subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
+			subpixel_index = 0;
+			for (ii=0; ii < nsplit; ii++) {
+				u0 = ((double) (1+2*ii))/(2*nsplit);
+				center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+				for (jj=0; jj < nsplit; jj++) {
+					w0 = ((double) (1+2*jj))/(2*nsplit);
+					center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+					//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
+					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;
+					for (int k=0; k < n_sb; k++) {
+						if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) {
+							if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+							else {
+								corner1[0] = center_pt[0] - subpixel_xlength/2;
+								corner1[1] = center_pt[1] - subpixel_ylength/2;
+								corner2[0] = center_pt[0] + subpixel_xlength/2;
+								corner2[1] = center_pt[1] - subpixel_ylength/2;
+								corner3[0] = center_pt[0] - subpixel_xlength/2;
+								corner3[1] = center_pt[1] + subpixel_ylength/2;
+								corner4[0] = center_pt[0] + subpixel_xlength/2;
+								corner4[1] = center_pt[1] + subpixel_ylength/2;
+								sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4);
 							}
 						}
-						subpixel_index++;
+						else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
+							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
+							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
+							//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+							//sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+							if (split_imgpixels) sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][1]);
+							else sb += sb_list[k]->surface_brightness(image_pixel_grid->center_sourcepts[i][j][0],image_pixel_grid->center_sourcepts[i][j][1]);
+							//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
+							//else {
+								//corner1[0] = center_srcpt[0] - subpixel_xlength/2;
+								//corner1[1] = center_srcpt[1] - subpixel_ylength/2;
+								//corner2[0] = center_srcpt[0] + subpixel_xlength/2;
+								//corner2[1] = center_srcpt[1] - subpixel_ylength/2;
+								//corner3[0] = center_srcpt[0] - subpixel_xlength/2;
+								//corner3[1] = center_srcpt[1] + subpixel_ylength/2;
+								//corner4[0] = center_srcpt[0] + subpixel_xlength/2;
+								//corner4[1] = center_srcpt[1] + subpixel_ylength/2;
+								//sb += sb_list[k]->surface_brightness_zoom(center_srcpt,corner1,corner2,corner3,corner4);
+							//}
+						}
 					}
+					subpixel_index++;
 				}
-				sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
 			}
+			sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
 		}
+	}
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
