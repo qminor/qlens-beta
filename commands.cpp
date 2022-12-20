@@ -13,6 +13,14 @@
 #include <sstream>
 #include <cstdlib>
 
+#ifdef USE_FAISS
+#include <faiss/Clustering.h>
+#include <faiss/IndexFlat.h>
+#include <faiss/IndexHNSW.h>
+#include <faiss/utils/distances.h>
+#include <faiss/utils/random.h>
+#endif
+
 #ifdef USE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -2458,6 +2466,26 @@ void QLens::process_commands(bool read_file)
 				srcgrid_npixels_y = npy;
 				auto_srcgrid_npixels = false;
 			} else Complain("invalid arguments to 'src_npixels' (type 'help src_npixels' for usage information)");
+		}
+		else if (words[0]=="n_src_clusters")
+		{
+			int n_clusters;
+			if (nwords == 2) {
+				if (!(ws[1] >> n_clusters)) Complain("invalid number of source clusters for Delaunay grid");
+				n_src_clusters = n_clusters;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Number of source clusters for Delaunay grid = " << n_src_clusters << endl;
+			} else Complain("must specify either zero or one argument (number of source clusters)");
+		}
+		else if (words[0]=="n_cluster_it")
+		{
+			int n_clusters;
+			if (nwords == 2) {
+				if (!(ws[1] >> n_clusters)) Complain("invalid number of clustering iterations for Delaunay grid");
+				n_cluster_iterations = n_clusters;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Number of clustering iterations for Delaunay grid = " << n_cluster_iterations << endl;
+			} else Complain("must specify either zero or one argument (number of clustering iterations)");
 		}
 		else if (words[0]=="nimg_prior_npixels")
 		{
@@ -11848,6 +11876,24 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "delaunay_sbfrac = " << delaunay_high_sn_sbfrac << endl;
 			} else Complain("must specify either zero or one argument");
 		}
+		else if (words[0]=="use_srcpixel_clustering")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use clustering algorithm to find adaptive grid source pixels: " << display_switch(use_srcpixel_clustering) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_srcpixel_clustering' command; must specify 'on' or 'off'");
+				set_switch(use_srcpixel_clustering,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="clustering_rand_init")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use random initialization of clustering algorithm to find adaptive grid source pixels: " << display_switch(clustering_random_initialization) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'clustering_rand_init' command; must specify 'on' or 'off'");
+				set_switch(clustering_random_initialization,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="split_imgpixels")
 		{
 			if (nwords==1) {
@@ -12250,6 +12296,106 @@ void QLens::process_commands(bool read_file)
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
 		} else if (words[0]=="test") {
+			int iter = 20;
+			if (nwords==2) {
+				if (!(ws[1] >> iter)) Complain("wtf?");
+			}
+
+			int i,j,k,n;
+			int *pixptr_i, *pixptr_j;
+			int npix=0,npix_in_mask;
+			npix_in_mask = image_pixel_grid->ntot_cells;
+			pixptr_i = image_pixel_grid->masked_pixels_i;
+			pixptr_j = image_pixel_grid->masked_pixels_j;
+			int nsubpix;
+			for (int n=0; n < npix_in_mask; n++) {
+				i = pixptr_i[n];
+				j = pixptr_j[n];
+				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+				npix += nsubpix;
+			}
+
+			double *srcpts_x = new double[npix];
+			double *srcpts_y = new double[npix];
+			//int *ivals = new int[npix];
+			//int *jvals = new int[npix];
+
+			npix = 0;
+			int subcell_i1, subcell_i2;
+			for (n=0; n < npix_in_mask; n++) {
+				i = pixptr_i[n];
+				j = pixptr_j[n];
+				if (!split_imgpixels) {
+					srcpts_x[npix] = image_pixel_grid->center_sourcepts[i][j][0];
+					srcpts_y[npix] = image_pixel_grid->center_sourcepts[i][j][1];
+					//ivals[npix] = i;
+					//jvals[npix] = j;
+				} else {
+					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+					for (int k=0; k < nsubpix; k++) {
+						srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][0];
+						srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][1];
+						//ivals[npix] = i;
+						//jvals[npix] = j;
+						npix++;
+					}
+				}
+			}
+			
+#ifdef USE_FAISS
+			using namespace faiss;
+			int n_data = npix;
+			int reduce_factor = 4;
+			int n_centroids = image_npixels / reduce_factor;
+			int data_reduce_factor = n_data / n_centroids;
+			n_centroids = n_data / data_reduce_factor;
+			if (n_data % data_reduce_factor != 0) n_centroids++;
+			float *input = new float[2*n_data];
+			float *weights = new float[n_data];
+			float *centroids = new float[2*n_centroids];
+			for (i=0,j=0,k=0; i < n_data; i++) {
+				input[j++] = (float) srcpts_x[i];
+				input[j++] = (float) srcpts_y[i];
+				if (i%data_reduce_factor==0) {
+					centroids[k++] = srcpts_x[i];
+					centroids[k++] = srcpts_y[i];
+				}
+			}
+			int ncent2=2*n_centroids;
+			if (k != 2*n_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
+			for (i=0; i < n_data; i++) weights[i] = 1;
+
+			faiss::ClusteringParameters cp;
+			cp.niter = iter;
+
+			Clustering clus(2,n_centroids,cp);
+			clus.verbose = true;
+			std::unique_ptr<Index> index;
+			index.reset(new IndexFlatL2(2));
+			clus.centroids.resize(2*n_centroids);
+			memcpy(clus.centroids.data(), centroids, sizeof(*centroids) * 2 * n_centroids);
+			clus.train(n_data, input, *index.get(), weights);
+			// on output the index contains the centroids.
+			memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * 2 * n_centroids);
+			cout << "Centroid 1: " << centroids[0] << " " << centroids[1] << endl;
+			cout << "Centroid 2: " << centroids[2] << " " << centroids[3] << endl;
+			cout << "Centroid 3: " << centroids[4] << " " << centroids[5] << endl;
+			cout << "etc." << endl;
+#endif
+			/*
+			ofstream dataout("srcptskm.dat");
+			ofstream centout("centkm.dat");
+			for (i=0,j=0; i < n_data; i++) {
+				dataout << input[j++] << " ";
+				dataout << input[j++] << endl;
+			}
+			for (i=0,j=0; i < n_centroids; i++) {
+				centout << centroids[j++] << " ";
+				centout << centroids[j++] << endl;
+			}
+			*/
+
+			/*
 			int nstart;
 			double x,y;
 			if (!(ws[1] >> nstart)) Complain("wtf?");
@@ -12263,6 +12409,7 @@ void QLens::process_commands(bool read_file)
 			else cout << "NOT INSIDE!" << endl;
 			Triangle *triptr = &delaunay_srcgrid->triangle[trinum];
 			cout << "Triangle " << trinum << " has vertices: " << triptr->vertex[0][0] << " " << triptr->vertex[0][1] << " " << triptr->vertex[1][0] << " " << triptr->vertex[1][1] << " " << triptr->vertex[2][0] << " " << triptr->vertex[2][1] << endl;
+			*/
 
 			/*
 			if (nwords != 3) Complain("need two arguments to 'test2' (nu, x)");
@@ -12355,7 +12502,7 @@ void QLens::process_commands(bool read_file)
 			//if (ecomp_mode) image_pixel_data->fit_isophote_ecomp(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
 			//else image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
 			//isodata.plot_isophote_parameters(output_label);
-		} else if (words[0]=="test") {
+		} else if (words[0]=="test2") {
 			double scalefac = 1;
 			if (nwords > 1) {
 				if (!(ws[1] >> scalefac)) Complain("invalid scalefac");

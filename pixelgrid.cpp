@@ -12875,13 +12875,21 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
 		}
 		//double sumreglo=0, sumreghi=0, lumtot=0;
+		//ofstream lumout("lumfacs.dat");
 		for (i=0; i < source_npixels; i++) {
-			lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			lumreg_pixel_weights[i] = sqrt(regparam_lhi*lumfac + regparam_llo*(1-lumfac));
+			lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
+			//lumout << lumfac << endl;
+			//lumreg_pixel_weights[i] = sqrt(regparam_lhi*lumfac + regparam_llo*(1-lumfac));
+			if (lumfac == 0) lumreg_pixel_weights[i] = 1000000;
+			else lumreg_pixel_weights[i] = sqrt(regparam_lhi)/lumfac;
+			//lumreg_pixel_weights[i] = sqrt(regparam_lhi)*lumfac + sqrt(regparam_llo)*(1-lumfac);
+			//lumreg_pixel_weights[i] = 1.0/(lumfac/sqrt(regparam_lhi) + (1-lumfac)/sqrt(regparam_llo));
+			//lumreg_pixel_weights[i] = 1.0/sqrt(lumfac/regparam_lhi + (1-lumfac)/regparam_llo);
 			//sumreghi += SQR(source_pixel_vector[i])*lumfac;
 			//sumreglo += SQR(source_pixel_vector[i])*(1-lumfac);
 			//lumtot += SQR(source_pixel_vector[i]);
 		}
+		//lumout.close();
 		//double est_reglo = (regularization_parameter*lumtot - regparam_lhi*sumreghi) / sumreglo;
 		//double regstep = abs(regparam_lhi - est_reglo);
 		//double high_reglo = est_reglo + 3*regstep;
@@ -13730,7 +13738,10 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	int i,j;
 #ifdef USE_MKL
 	if (!use_covariance_matrix) {
-		LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed.array());
+		lapack_int status;
+		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed.array());
+		cout << "INVERSION STATUS: " << status << endl;
+		if (status != 0) warn("Matrix was not invertible and/or positive definite");
 		for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_n_amps,1,Fmatrix_packed.array(),source_pixel_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
