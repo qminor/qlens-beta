@@ -12403,7 +12403,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 
 void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 {
-	int i,j,k,n,npix=0;
+	int i,j,k,l,n,npix=0;
 	bool include;
 	double avg_sb = -1e30;
 	double sbfrac = delaunay_high_sn_sbfrac;
@@ -12532,18 +12532,15 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		float *centroids = new float[2*n_src_centroids];
 		int *ivals_centroids = new int[n_src_centroids];
 		int *jvals_centroids = new int[n_src_centroids];
-		for (i=0,j=0,k=0; i < npix; i++) {
+		for (i=0,j=0,k=0,l=0; i < npix; i++) {
 			input[j++] = (float) srcpts1_x[i];
 			input[j++] = (float) srcpts1_y[i];
 			if (i%data_reduce_factor==0) {
-				centroids[k] = srcpts1_x[i];
-				ivals_centroids[k] = ivals[i];
-				jvals_centroids[k] = jvals[i];
-				k++;
-				centroids[k] = srcpts1_y[i];
-				ivals_centroids[k] = ivals[i];
-				jvals_centroids[k] = jvals[i];
-				k++;
+				centroids[k++] = srcpts1_x[i];
+				centroids[k++] = srcpts1_y[i];
+				ivals_centroids[l] = ivals[i];
+				jvals_centroids[l] = jvals[i];
+				l++;
 			}
 		}
 		int ncent2=2*n_src_centroids;
@@ -12576,11 +12573,11 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 		for (i=0,j=0; i < n_src_centroids; i++) {
 			src_centroids_x[i] = (double) centroids[j++];
 			src_centroids_y[i] = (double) centroids[j++];
-			ivals[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Hopefully this won't be a bottleneck
-			jvals[i] = 0;
+			//ivals[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Hopefully this won't be a bottleneck
+			//jvals[i] = 0;
 		}
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << n_src_centroids << endl;
-		delaunay_srcgrid = new DelaunayGrid(this,src_centroids_x,src_centroids_y,n_src_centroids,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
+		delaunay_srcgrid = new DelaunayGrid(this,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
 		delete[] src_centroids_x;
 		delete[] src_centroids_y;
 		delete[] ivals_centroids;
