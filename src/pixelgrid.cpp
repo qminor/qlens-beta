@@ -2857,6 +2857,29 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 		if (mpi_id==0) cout << "Wall time for calculating covariance matrix: " << wtime << endl;
 	}
 #endif
+
+	//const int bignum = 640000;
+	//double *bigarray = new double[bignum];
+	//double *bigarray2 = new double[bignum];
+	//for (int i=0; i < bignum; i++) {
+		//bigarray[i] = RandomNumber();
+		//bigarray2[i] = RandomNumber();
+	//}
+//#ifdef USE_OPENMP
+	//if (show_wtime) {
+		//wtime0 = omp_get_wtime();
+	//}
+//#endif
+	//sort(bignum,bigarray,bigarray2);
+//#ifdef USE_OPENMP
+	//if (show_wtime) {
+		//wtime = omp_get_wtime() - wtime0;
+		//if (mpi_id==0) cout << "Wall time for sorting (TEST): " << wtime << endl;
+	//}
+//#endif
+	//delete[] bigarray;
+	//delete[] bigarray2;
+
 	for (int i=0; i < ntot; i++) covmatrix_factored[i] = covmatrix_packed[i];
 #ifdef USE_MKL
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,covmatrix_factored.array()); // Cholesky decomposition
@@ -3142,6 +3165,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		avg_area += triangle[n].area;
 	}
 	avg_area /= n_triangles;
+
 	delete delaunay_triangles;
 }
 
@@ -3813,11 +3837,12 @@ void DelaunayGrid::generate_gmatrices()
 
 void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index)
 {
+	if (corr_length <= 0) die("cannot have negative or zero correlation length (input value = %g",corr_length);
 	int i,j;
 	double sqrdist,x,matern_fac;
 	const double epsilon = 1e-7;
 	if (kernel_type==0) {
-		if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
+		if (matern_index <= 0) die("Matern kernel index nu must be greater than zero");
 		matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
 	}
 	double *covptr;
@@ -3833,6 +3858,12 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
 			if (kernel_type==0) {
 				x = sqrt(2*matern_index*sqrdist)/corr_length;
+				if (x==0) {
+					cout << "WHAT THE FUCK? x=0... sqrdist=" << sqrdist << " matern_index=" << matern_index << " corr_length=" << corr_length << endl;
+					cout << "i: " << i << " si_x=" << srcpts[i][0] << " si_y=" << srcpts[i][1] << endl;
+					cout << "j: " << j << " sj_x=" << srcpts[j][0] << " sj_y=" << srcpts[j][1] << endl;
+					die();
+				}
 				*(covptr++) = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
 			} else if (kernel_type==1) {
 				*(covptr++) = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
@@ -3923,7 +3954,7 @@ double DelaunayGrid::modified_bessel_function(const double x, const double nu)
 	double a,a1,b,c,d,del,del1,delh,dels,e,f,fact,fact2,ff,gam1,gam2,gammi,gampl,h,p,pimu,q,q1,q2,qnew,rk1,rkmu,rkmup,rktemp,s,sum,sum1,x2,xi,xi2,xmu,xmu2;
 	int i,l,nl;
 
-	if ((x <= 0) or (nu < 0.0)) die("cannot have x <=0 or nu < 0 for modified Bessel function");
+	if ((x <= 0) or (nu < 0.0)) die("cannot have x <=0 or nu < 0 for modified Bessel function (x=%g,nu=%g)",x,nu);
 	nl = (int) (nu + 0.5);
 	xmu = nu-nl;
 	xmu2 = xmu*xmu;
@@ -4375,6 +4406,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				pxnoise_str >> pixel_noise;
 				if (lens != NULL) {
 					lens->data_pixel_noise = pixel_noise;
+					lens->loglike_reference_noise = pixel_noise;
 					SB_Profile::SB_noise = pixel_noise;
 				}
 			} else if (cardstring.find("PSFSIG ") != string::npos) {
@@ -7579,6 +7611,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	subpixel_maps_to_srcpixel = new bool**[x_N];
 	subpixel_center_pts = new lensvector**[x_N];
 	subpixel_center_sourcepts = new lensvector**[x_N];
+	subpixel_sbweights = new double**[x_N];
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -7603,6 +7636,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		subpixel_center_pts[i] = new lensvector*[y_N];
 		subpixel_center_sourcepts[i] = new lensvector*[y_N];
+		subpixel_sbweights[i] = new double*[y_N];
 		nsplits[i] = new int[y_N];
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
@@ -7615,6 +7649,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 			subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
+			subpixel_sbweights[i][j] = new double[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
 	}
@@ -12818,8 +12853,105 @@ void QLens::add_regularization_term_to_dense_Fmatrix()
 	}
 }
 
+double QLens::find_regularization_term(const bool use_lum_weighting)
+{
+	int i,j;
+	double loglike_reg,Es_times_two=0;
+	if (use_lum_weighting) {
+		if (dense_Rmatrix) {
+			if (use_covariance_matrix) {
+				double* s_reg = new double[source_npixels];
+				double* sprime_reg = new double[source_npixels];
+				for (int i=0; i < source_npixels; i++) {
+					s_reg[i] = source_pixel_vector[i]*lumreg_pixel_weights[i];
+					sprime_reg[i] = s_reg[i];
+				}
+#ifdef USE_MKL
+				LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,covmatrix_factored.array(),s_reg,1);
+#else
+				die("Compiling with MKL is currently required for covariance kernel regularization");
+#endif
+				for (i=0; i < source_npixels; i++) Es_times_two += s_reg[i]*sprime_reg[i];
+				delete[] s_reg;
+				delete[] sprime_reg;
+				//loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter);
+			} else {
+				double *Rptr, *sptr_i, *sptr_j, *s_end, *wptr_i, *wptr_j;
+				Rptr = Rmatrix_packed.array();
+				s_end = source_pixel_vector + source_npixels;
+				for (sptr_i=source_pixel_vector, wptr_i=lumreg_pixel_weights; sptr_i != s_end; sptr_i++, wptr_i++) {
+					sptr_j = sptr_i;
+					wptr_j = wptr_i;
+					Es_times_two += (*sptr_i)*(*wptr_i)*(*(Rptr++))*(*wptr_j++)*(*(sptr_j++)); // diagonal element only gets counted once (no factor of 2 here)
+					while (sptr_j != s_end) {
+						Es_times_two += 2*(*sptr_i)*(*wptr_i)*(*(Rptr++))*(*wptr_j++)*(*(sptr_j++));
+					}
+				}
+			}
+		} else {
+			for (i=0; i < source_npixels; i++) {
+				Es_times_two += Rmatrix[i]*SQR(source_pixel_vector[i]*lumreg_pixel_weights[i]);
+				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+					Es_times_two += 2 * source_pixel_vector[i] * lumreg_pixel_weights[i] * Rmatrix[j] * lumreg_pixel_weights[Rmatrix_index[j]] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+				}
+			}
+		}
 
-void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal)
+		if (use_covariance_matrix) {
+			loglike_reg = Es_times_two;
+		} else {
+			double Rmatrix_logdet_coefficient = 0;
+			for (i=0; i < source_npixels; i++) {
+				Rmatrix_logdet_coefficient += 2*log(lumreg_pixel_weights[i]); // Note: this coefficient will reduce to lambda^N_s if regparam_lum_index = 0
+			}
+			loglike_reg = Es_times_two - Rmatrix_logdet_coefficient - Rmatrix_log_determinant;
+		}
+		//cout << "loglike_reg=" << loglike_reg << endl;
+		//cout << "Rmat_det_coefficient=" << Rmatrix_logdet_coefficient << " (compare to " << (source_npixels*log(regularization_parameter)) << ") Es_times_two=" << Es_times_two << " logdet=" << Rmatrix_log_determinant << endl;
+	} else {
+		if (dense_Rmatrix) {
+			if (use_covariance_matrix) {
+				double* sprime = new double[source_npixels];
+				for (int i=0; i < source_npixels; i++) sprime[i] = source_pixel_vector[i];
+#ifdef USE_MKL
+				LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,covmatrix_factored.array(),sprime,1);
+#else
+				die("Compiling with MKL is currently required for covariance kernel regularization");
+#endif
+				for (i=0; i < source_npixels; i++) Es_times_two += source_pixel_vector[i]*sprime[i];
+				delete[] sprime;
+				//loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter);
+				loglike_reg = regularization_parameter*Es_times_two;
+			} else {
+				double *Rptr, *sptr_i, *sptr_j, *s_end;
+				Rptr = Rmatrix_packed.array();
+				s_end = source_pixel_vector + source_npixels;
+				for (sptr_i=source_pixel_vector; sptr_i != s_end; sptr_i++) {
+					sptr_j = sptr_i;
+					Es_times_two += (*sptr_i)*(*(Rptr++))*(*(sptr_j++)); // diagonal element only gets counted once (no factor of 2 here)
+					while (sptr_j != s_end) {
+						Es_times_two += 2*(*sptr_i)*(*(Rptr++))*(*(sptr_j++));
+					}
+				}
+				loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+				//cout << "Es_times_two=" << Es_times_two << " Es_check=" << Escheck << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " loglike_reg=" << (loglike_reg + Gmatrix_log_determinant) << endl;
+			}
+		} else {
+			for (i=0; i < source_npixels; i++) {
+				Es_times_two += Rmatrix[i]*SQR(source_pixel_vector[i]);
+				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+					Es_times_two += 2 * source_pixel_vector[i] * Rmatrix[j] * source_pixel_vector[Rmatrix_index[j]]; // factor of 2 since matrix is symmetric
+				}
+			}
+			loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+		}
+		//cout << "loglike_reg=" << loglike_reg << endl;
+		//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es_times_two=" << Es_times_two << " logdet=" << Rmatrix_log_determinant << endl;
+	}
+	return loglike_reg;
+}
+
+void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid)
 {
 #ifdef USE_OPENMP
 	double wtime_opt0, wtime_opt;
@@ -12827,34 +12959,8 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		wtime_opt0 = omp_get_wtime();
 	}
 #endif
-	img_minus_sbprofile = new double[image_npixels];
-	int i, pix_i, pix_j, img_index_fgmask;
-	for (i=0; i < image_npixels; i++) {
-		pix_i = active_image_pixel_i[i];
-		pix_j = active_image_pixel_j[i];
-		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
-		img_minus_sbprofile[i] = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
-		if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
-	}
-
-	source_pixel_vector_minchisq = new double[source_npixels];
-	regopt_chisqmin = 1e30;
-	regopt_logdet = 1e30; // this will be changed during optimization
-
-	if (dense_Fmatrix) {
-		if (use_covariance_matrix) {
-			Gmatrix_stacked_copy.input(source_n_amps*source_n_amps);
-			Dvector_cov_copy = new double[source_n_amps];
-		} else {
-			int ntot = source_n_amps*(source_n_amps+1)/2;
-			Fmatrix_packed_copy.input(ntot);
-		}
-	} else {
-		if (Fmatrix_nn==0) die("Fmatrix length has not been set");
-		Fmatrix_copy = new double[Fmatrix_nn];
-	}
-	temp_src.input(source_n_amps);
-
+	setup_regparam_optimization(dense_Fmatrix);
+	int i;
 	double logreg_min;
 	double (QLens::*chisqreg)(const double);
 	if (dense_Fmatrix) chisqreg = &QLens::chisq_regparam_dense;
@@ -12867,132 +12973,36 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 	else Fmatrix_log_determinant = regopt_logdet;
 	for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+
+	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
+	//if (use_lum_weighted_regularization) {
+		// we don't use luminosity-weighted regularization with the initial grid, since there's too much overhead and it doesn't make a big difference
+		int lumreg_it = 0;
+		double chisq, chisqprev;
+		if (lumreg_max_it > 0) {
+			chisq = chisq_regparam_lumreg_dense(log(regparam_lhi)/ln10);
+			if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+			lumreg_it++;
+			do {
+				chisqprev = chisq;
+				chisq = chisq_regparam_lumreg_dense(log(regparam_lhi)/ln10);
+				if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+
+				if (chisq > chisqprev) {
+					if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
+					break;
+				}
+			} while ((++lumreg_it < lumreg_max_it) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+		}
+		//for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+		add_lum_weighted_reg_term(dense_Fmatrix,false);
+		if ((verbal) and (lumreg_it >= lumreg_max_it)) warn("exceeded maximum iterations for refining luminosity-weighted regularization");
+	}
 	update_source_amplitudes();
-
-	if (use_lum_weighted_regularization) {
-		double lumfac, max_sb=-1e30;
-		for (i=0; i < source_npixels; i++) {
-			if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
-		}
-		//double sumreglo=0, sumreghi=0, lumtot=0;
-		//ofstream lumout("lumfacs.dat");
-		for (i=0; i < source_npixels; i++) {
-			lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
-			//lumout << lumfac << endl;
-			//lumreg_pixel_weights[i] = sqrt(regparam_lhi*lumfac + regparam_llo*(1-lumfac));
-			if (lumfac == 0) lumreg_pixel_weights[i] = 1000000;
-			else lumreg_pixel_weights[i] = sqrt(regparam_lhi)/lumfac;
-			//lumreg_pixel_weights[i] = sqrt(regparam_lhi)*lumfac + sqrt(regparam_llo)*(1-lumfac);
-			//lumreg_pixel_weights[i] = 1.0/(lumfac/sqrt(regparam_lhi) + (1-lumfac)/sqrt(regparam_llo));
-			//lumreg_pixel_weights[i] = 1.0/sqrt(lumfac/regparam_lhi + (1-lumfac)/regparam_llo);
-			//sumreghi += SQR(source_pixel_vector[i])*lumfac;
-			//sumreglo += SQR(source_pixel_vector[i])*(1-lumfac);
-			//lumtot += SQR(source_pixel_vector[i]);
-		}
-		//lumout.close();
-		//double est_reglo = (regularization_parameter*lumtot - regparam_lhi*sumreghi) / sumreglo;
-		//double regstep = abs(regparam_lhi - est_reglo);
-		//double high_reglo = est_reglo + 3*regstep;
-		//cout << "Estimated regparam_lo = " << est_reglo << endl;
-		int j,k,indx_start=0;
-		// Now set F' = F + Lambda*R*Lambda, where the Lambda matrices are diagonal with lumreg_pixel_weights[...] as the diagonal elements
-		if (dense_Fmatrix) {
-			if (dense_Rmatrix) {
-				if (use_covariance_matrix) {
-					int n_extra_amps = source_n_amps - source_npixels;
-					double *covptr;
-					covptr = covmatrix_stacked.array();
-					for (i=0; i < source_npixels; i++) {
-						for (j=0; j < source_npixels; j++) {
-							*(covptr++) *= 1.0/(lumreg_pixel_weights[i]*lumreg_pixel_weights[j]);
-						}
-						covptr += n_extra_amps;
-					}
-#ifdef USE_MKL
-					cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,source_n_amps,source_n_amps,1.0,covmatrix_stacked.array(),source_n_amps,Fmatrix_stacked.array(),source_n_amps,0,Gmatrix_stacked.array(),source_n_amps);
-					cblas_dsymv(CblasRowMajor,CblasUpper,source_n_amps,1.0,covmatrix_stacked.array(),source_n_amps,Dvector,1,0,Dvector_cov,1);
-#else
-					die("Compiling with MKL is currently required for covariance kernel regularization");
-#endif
-					// Add identity matrix (over the pixel block of the Gmatrix)
-					for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-						Gmatrix_stacked[indx_start] += 1.0;
-						indx_start += source_n_amps+1;
-					}
-				} else {
-					int n_extra_amps = source_n_amps - source_npixels;
-					double *Fptr, *Rptr;
-					Fptr = Fmatrix_packed.array();
-					Rptr = Rmatrix_packed.array();
-					for (i=0; i < source_npixels; i++) {
-						for (j=i; j < source_npixels; j++) {
-							*(Fptr++) += lumreg_pixel_weights[i]*lumreg_pixel_weights[j]*(*(Rptr++));
-						}
-						Fptr += n_extra_amps;
-					}
-				}
-			} else {
-				for (i=0; i < source_npixels; i++) {
-					Fmatrix_packed[indx_start] += SQR(lumreg_pixel_weights[i])*Rmatrix[i];
-					for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-						Fmatrix_packed[indx_start+Rmatrix_index[j]-i] += lumreg_pixel_weights[i]*lumreg_pixel_weights[Rmatrix_index[j]]*Rmatrix[j];
-					}
-					indx_start += source_n_amps-i;
-				}
-			}
-		} else {
-			for (i=0; i < source_npixels; i++) {
-				Fmatrix[i] += SQR(lumreg_pixel_weights[i])*Rmatrix[i];
-				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-					for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
-						if (Rmatrix_index[j]==Fmatrix_index[k]) {
-							Fmatrix[k] += lumreg_pixel_weights[i]*lumreg_pixel_weights[Rmatrix_index[j]]*Rmatrix[j];
-							break;
-						}
-					}
-				}
-			}
-		}
+	if ((use_lum_weighted_srcpixel_clustering) and (pre_srcgrid)) {
+		calculate_pixel_sbweights(); // only need to calculate sb weights for the initial grid, to be used to construct the final pixellation
 	}
 
-	/*
-	// Since we are saving the best source solution and logdet(Fmatrix), I don't think we need to add in the regularization here since no more inversion is needed
-   int j,k,indx_start=0;
-	if (dense_Fmatrix) {
-		if (dense_Rmatrix) {
-			int n_extra_amps = source_n_amps - source_npixels;
-			double *Fptr, *Rptr;
-			Fptr = Fmatrix_packed.array();
-			Rptr = Rmatrix_packed.array();
-			for (i=0; i < source_npixels; i++) {
-				for (j=i; j < source_npixels; j++) {
-					*(Fptr++) += regularization_parameter*(*(Rptr++));
-				}
-				Fptr += n_extra_amps;
-			}
-		} else {
-			for (i=0; i < source_npixels; i++) {
-				Fmatrix_packed[indx_start] += regularization_parameter*Rmatrix[i];
-				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-					Fmatrix_packed[indx_start+Rmatrix_index[j]-i] += regularization_parameter*Rmatrix[j];
-				}
-				indx_start += source_n_amps-i;
-			}
-		}
-	} else {
-		for (i=0; i < source_npixels; i++) {
-			Fmatrix[i] += regularization_parameter*Rmatrix[i];
-			for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-				for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
-					if (Rmatrix_index[j]==Fmatrix_index[k]) {
-						Fmatrix[k] += regularization_parameter*Rmatrix[j];
-						break;
-					}
-				}
-			}
-		}
-	}
-	*/
 	if (!dense_Fmatrix) {
 		delete[] Fmatrix_copy;
 		Fmatrix_copy = NULL;
@@ -13011,6 +13021,200 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		wtime_opt0 = omp_get_wtime();
 	}
 #endif
+}
+
+void QLens::chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix)
+{
+	setup_regparam_optimization(dense_Fmatrix);
+
+	double (QLens::*chisqreg)(const double);
+	if (dense_Fmatrix) chisqreg = &QLens::chisq_regparam_dense;
+	else chisqreg = &QLens::chisq_regparam;
+	(this->*chisqreg)(log(regparam)/ln10);
+	if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
+	else Fmatrix_log_determinant = regopt_logdet;
+	for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+	update_source_amplitudes();
+	if (use_lum_weighted_srcpixel_clustering) {
+		calculate_pixel_sbweights();
+	}
+
+	if (!dense_Fmatrix) {
+		delete[] Fmatrix_copy;
+		Fmatrix_copy = NULL;
+	}
+	if (use_covariance_matrix) {
+		delete[] Dvector_cov_copy;
+		Dvector_cov_copy = NULL;
+	}
+
+	delete[] img_minus_sbprofile;
+	delete[] source_pixel_vector_minchisq;
+}
+
+void QLens::setup_regparam_optimization(const bool dense_Fmatrix)
+{
+	img_minus_sbprofile = new double[image_npixels];
+	int i, pix_i, pix_j, img_index_fgmask;
+	for (i=0; i < image_npixels; i++) {
+		pix_i = active_image_pixel_i[i];
+		pix_j = active_image_pixel_j[i];
+		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
+		img_minus_sbprofile[i] = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
+		if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
+	}
+
+	source_pixel_vector_minchisq = new double[source_npixels];
+	regopt_chisqmin = 1e30;
+	regopt_logdet = 1e30; // this will be changed during optimization
+
+	if (dense_Fmatrix) {
+		if (use_covariance_matrix) {
+			Gmatrix_stacked_copy.input(source_n_amps*source_n_amps);
+			covmatrix_stacked_copy.input(source_n_amps*source_n_amps);
+			Dvector_cov_copy = new double[source_n_amps];
+		} else {
+			int ntot = source_n_amps*(source_n_amps+1)/2;
+			Fmatrix_packed_copy.input(ntot);
+		}
+	} else {
+		if (Fmatrix_nn==0) die("Fmatrix length has not been set");
+		Fmatrix_copy = new double[Fmatrix_nn];
+	}
+	temp_src.input(source_n_amps);
+}
+
+void QLens::add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies)
+{
+	double lumfac, max_sb=-1e30;
+	int i,j,k,indx_start=0;
+	for (i=0; i < source_npixels; i++) {
+		if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
+	}
+	for (i=0; i < source_npixels; i++) {
+		lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
+		//lumreg_pixel_weights[i] = sqrt(regparam_lhi*lumfac + regparam_llo*(1-lumfac));
+		if (lumfac == 0) lumreg_pixel_weights[i] = 1000000;
+		else lumreg_pixel_weights[i] = sqrt(regparam_lhi)/lumfac;
+		//lumreg_pixel_weights[i] = sqrt(regparam_lhi)*lumfac + sqrt(regparam_llo)*(1-lumfac);
+		//lumreg_pixel_weights[i] = 1.0/(lumfac/sqrt(regparam_lhi) + (1-lumfac)/sqrt(regparam_llo));
+		//lumreg_pixel_weights[i] = 1.0/sqrt(lumfac/regparam_lhi + (1-lumfac)/regparam_llo);
+		//sumreghi += SQR(source_pixel_vector[i])*lumfac;
+		//sumreglo += SQR(source_pixel_vector[i])*(1-lumfac);
+		//lumtot += SQR(source_pixel_vector[i]);
+	}
+	double *Fptr, *Gptr, *covptr, *dcovptr;
+	// Now set F' = F + Lambda*R*Lambda, where the Lambda matrices are diagonal with lumreg_pixel_weights[...] as the diagonal elements
+	if (dense_Fmatrix) {
+		if (use_covariance_matrix) {
+			if (use_matrix_copies) {
+				Gptr = Gmatrix_stacked_copy.array();
+				covptr = covmatrix_stacked_copy.array();
+				dcovptr = Dvector_cov_copy;
+			} else {
+				Gptr = Gmatrix_stacked.array();
+				covptr = covmatrix_stacked.array();
+				dcovptr = Dvector_cov;
+			}
+		} else {
+			if (use_matrix_copies) {
+				Fptr = Fmatrix_packed_copy.array();
+			} else {
+				Fptr = Fmatrix_packed.array();
+			}
+		}
+		if (dense_Rmatrix) {
+			if (use_covariance_matrix) {
+				int n_extra_amps = source_n_amps - source_npixels;
+				double *covptr_tmp = covptr;
+				for (i=0; i < source_npixels; i++) {
+					for (j=0; j < source_npixels; j++) {
+						*(covptr_tmp++) *= 1.0/(lumreg_pixel_weights[i]*lumreg_pixel_weights[j]);
+					}
+					covptr_tmp += n_extra_amps;
+				}
+#ifdef USE_MKL
+				cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,source_n_amps,source_n_amps,1.0,covptr,source_n_amps,Fmatrix_stacked.array(),source_n_amps,0,Gptr,source_n_amps);
+				cblas_dsymv(CblasRowMajor,CblasUpper,source_n_amps,1.0,covptr,source_n_amps,Dvector,1,0,dcovptr,1);
+#else
+				die("Compiling with MKL is currently required for covariance kernel regularization");
+#endif
+				// Add identity matrix (over the pixel block of the Gmatrix)
+				for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
+					Gptr[indx_start] += 1.0;
+					indx_start += source_n_amps+1;
+				}
+			} else {
+				int n_extra_amps = source_n_amps - source_npixels;
+				double *Rptr;
+				Rptr = Rmatrix_packed.array();
+				for (i=0; i < source_npixels; i++) {
+					for (j=i; j < source_npixels; j++) {
+						*(Fptr++) += lumreg_pixel_weights[i]*lumreg_pixel_weights[j]*(*(Rptr++));
+					}
+					Fptr += n_extra_amps;
+				}
+			}
+		} else {
+			for (i=0; i < source_npixels; i++) {
+				Fptr[indx_start] += SQR(lumreg_pixel_weights[i])*Rmatrix[i];
+				for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+					Fptr[indx_start+Rmatrix_index[j]-i] += lumreg_pixel_weights[i]*lumreg_pixel_weights[Rmatrix_index[j]]*Rmatrix[j];
+				}
+				indx_start += source_n_amps-i;
+			}
+		}
+	} else {
+		for (i=0; i < source_npixels; i++) {
+			if (use_matrix_copies) {
+				Fptr = Fmatrix_copy;
+			} else {
+				Fptr = Fmatrix;
+			}
+			Fptr[i] += SQR(lumreg_pixel_weights[i])*Rmatrix[i];
+			for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+				for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
+					if (Rmatrix_index[j]==Fmatrix_index[k]) {
+						Fptr[k] += lumreg_pixel_weights[i]*lumreg_pixel_weights[Rmatrix_index[j]]*Rmatrix[j];
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+void QLens::calculate_pixel_sbweights()
+{
+	int npix_in_mask;
+	int *pixptr_i, *pixptr_j;
+	if (include_extended_mask_in_inversion) {
+		npix_in_mask = image_pixel_grid->ntot_cells_emask;
+		pixptr_i = image_pixel_grid->emask_pixels_i;
+		pixptr_j = image_pixel_grid->emask_pixels_j;
+	} else {
+		npix_in_mask = image_pixel_grid->ntot_cells;
+		pixptr_i = image_pixel_grid->masked_pixels_i;
+		pixptr_j = image_pixel_grid->masked_pixels_j;
+	}
+	int i,j,nsubpix;
+	double sb, max_sb = 1e-30;
+	for (int n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		for (int k=0; k < nsubpix; k++) {
+			sb = delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k]);
+			if (sb < 0) sb = 0;
+			if (sb > max_sb) max_sb = sb;
+			image_pixel_grid->subpixel_sbweights[i][j][k] = sb;
+		}
+	}
+	for (int n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		for (int k=0; k < nsubpix; k++) image_pixel_grid->subpixel_sbweights[i][j][k] /= max_sb;
+	}
 }
 
 double QLens::chisq_regparam(const double logreg)
@@ -13076,7 +13280,7 @@ double QLens::chisq_regparam(const double logreg)
 
 double QLens::chisq_regparam_dense(const double logreg)
 {
-	double chisq, covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	double chisq, logdet, covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
 	else covariance = SQR(data_pixel_noise);
 
@@ -13183,6 +13387,8 @@ double QLens::chisq_regparam_dense(const double logreg)
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
 	}
+
+/*
 	if (dense_Rmatrix) {
 		if (use_covariance_matrix) {
 			double* sprime = new double[source_npixels];
@@ -13219,14 +13425,117 @@ double QLens::chisq_regparam_dense(const double logreg)
 	//cout << "reg*Es_times_two=" << (regularization_parameter*Es_times_two) << " n_shapelets*log(regparam)=" << (-source_n_amps*log(regularization_parameter)) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix)=" << Fmatrix_logdet << endl;
 
 	if (use_covariance_matrix)
-		//chisq = (Ed_times_two + regularization_parameter*Es_times_two + Gmatrix_logdet - source_npixels*log(regularization_parameter));
 		chisq = (Ed_times_two + regularization_parameter*Es_times_two + Gmatrix_logdet);
 	else
 		chisq = (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
+		*/
+
+	double loglike_reg = find_regularization_term(false);
+	chisq = Ed_times_two + loglike_reg;
+	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
+	chisq += logdet;
+
 	if (chisq < regopt_chisqmin) {
 		regopt_chisqmin = chisq;
 		for (i=0; i < source_n_amps; i++) source_pixel_vector_minchisq[i] = source_pixel_vector[i];
-		regopt_logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
+		regopt_logdet = logdet;
+	}
+	return chisq;
+}
+
+double QLens::chisq_regparam_lumreg_dense(const double logreg)
+{
+	double chisq, logdet, covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
+	else covariance = SQR(data_pixel_noise);
+
+	regparam_lhi = pow(10,logreg);
+	int i,j;
+
+	if (dense_Rmatrix) {
+		if (!use_covariance_matrix) {
+			for (i=0; i < Fmatrix_packed.size(); i++) {
+				Fmatrix_packed_copy[i] = Fmatrix_packed[i];
+			}
+		} else {
+			for (i=0; i < Gmatrix_stacked.size(); i++) {
+				Gmatrix_stacked_copy[i] = Gmatrix_stacked[i];
+				covmatrix_stacked_copy[i] = covmatrix_stacked[i];
+			}
+			for (i=0; i < source_n_amps; i++) {
+				//Dvector_cov_copy[i] = Dvector_cov[i]/regularization_parameter;
+				Dvector_cov_copy[i] = Dvector_cov[i];
+			}
+		}
+	} else {
+		for (i=0; i < Fmatrix_packed.size(); i++) {
+			Fmatrix_packed_copy[i] = Fmatrix_packed[i];
+		}
+	}
+	add_lum_weighted_reg_term(true,true);
+
+	double Fmatrix_logdet, Gmatrix_logdet;
+	if (!use_covariance_matrix) {
+#ifdef USE_MKL
+		LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed_copy.array());
+		for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = Dvector[i];
+		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_n_amps,1,Fmatrix_packed_copy.array(),source_pixel_vector,1);
+		Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
+#else
+		// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
+		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
+		repack_matrix_lower(Fmatrix_dense);
+
+		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
+		if (!status) die("Cholesky decomposition failed");
+		Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,source_pixel_vector,source_n_amps);
+		Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
+#endif
+	} else {
+#ifdef USE_MKL
+		int *ipiv = new int[source_npixels];
+		LAPACKE_dgetrf(LAPACK_ROW_MAJOR, source_n_amps, source_n_amps, Gmatrix_stacked_copy.array(), source_n_amps, ipiv);
+		for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = Dvector_cov_copy[i];
+		LAPACKE_dgetrs (LAPACK_ROW_MAJOR, 'N', source_n_amps, 1, Gmatrix_stacked_copy.array(), source_n_amps, ipiv, source_pixel_vector, 1);
+		LU_logdet_stacked(Gmatrix_stacked_copy.array(),Gmatrix_logdet,source_n_amps);
+		delete[] ipiv;
+#else
+		die("Currently MKL is required to do covariance kernel regularization");
+#endif
+	}
+
+	double temp_img, Ed_times_two=0,Es_times_two=0;
+	double *Lmatptr;
+	double *tempsrcptr = source_pixel_vector;
+	double *tempsrc_end = source_pixel_vector + source_n_amps;
+
+	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
+	for (i=0; i < image_npixels; i++) {
+		temp_img = 0;
+		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
+			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
+			Lmatptr = (Lmatrix_dense.pointer())[i];
+			tempsrcptr = source_pixel_vector;
+			while (tempsrcptr != tempsrc_end) {
+				temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
+			}
+		} else {
+			for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+				temp_img += Lmatrix[j]*source_pixel_vector[Lmatrix_index[j]];
+			}
+		}
+		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
+		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
+	}
+	double loglike_reg = find_regularization_term(true);
+	chisq = Ed_times_two + loglike_reg;
+	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
+	chisq += logdet;
+
+	if (chisq < regopt_chisqmin) {
+		regopt_chisqmin = chisq;
+		for (i=0; i < source_n_amps; i++) source_pixel_vector_minchisq[i] = source_pixel_vector[i];
+		regopt_logdet = logdet;
 	}
 	return chisq;
 }
@@ -13740,7 +14049,6 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 	if (!use_covariance_matrix) {
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed.array());
-		cout << "INVERSION STATUS: " << status << endl;
 		if (status != 0) warn("Matrix was not invertible and/or positive definite");
 		for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_n_amps,1,Fmatrix_packed.array(),source_pixel_vector,1);

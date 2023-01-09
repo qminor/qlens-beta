@@ -2189,8 +2189,8 @@ void QLens::process_commands(bool read_file)
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
-					cout << "regparam_llo = " << regparam_llo << endl;
-					cout << "vary_regparam_llo: " << display_switch(vary_regparam_llo) << endl;
+					//cout << "regparam_llo = " << regparam_llo << endl;
+					//cout << "vary_regparam_llo: " << display_switch(vary_regparam_llo) << endl;
 					cout << "regparam_lhi = " << regparam_lhi << endl;
 					cout << "vary_regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
@@ -10762,6 +10762,26 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "chi-square required accuracy = " << chisq_tolerance << endl;
 			} else Complain("must specify either zero or one argument (required chi-square accuracy)");
 		}
+		else if (words[0]=="chisqtol_lumreg")
+		{
+			double tol;
+			if (nwords == 2) {
+				if (!(ws[1] >> tol)) Complain("invalid chisqtol_lumreg setting");
+				chisqtol_lumreg=tol;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "chi-square tolerance for convergence of luminosity regularization = " << chisqtol_lumreg << endl;
+			} else Complain("must specify either zero or one argument for chisqtol_lumreg");
+		}
+		else if (words[0]=="lumreg_max_it")
+		{
+			int maxit;
+			if (nwords == 2) {
+				if (!(ws[1] >> maxit)) Complain("invalid lumreg_max_it setting");
+				lumreg_max_it=maxit;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "max number of iterations for luminosity regularization = " << lumreg_max_it << endl;
+			} else Complain("must specify either zero or one argument for lumreg_max_it");
+		}
 		else if (words[0]=="integral_tolerance")
 		{
 			double itolerance;
@@ -11399,10 +11419,10 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_regularization requires 'optimize_regparam' to be set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
-					if (vary_regparam_llo) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_llo' to 'off'" << endl;
-						vary_regparam_llo = false;
-					}
+					//if (vary_regparam_llo) {
+						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_llo' to 'off'" << endl;
+						//vary_regparam_llo = false;
+					//}
 					if (vary_regparam_lhi) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
 						vary_regparam_lhi = false;
@@ -11416,37 +11436,64 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="regparam_llo")
-		{
-			double reg_llo, reg_llo_upper, reg_llo_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> reg_llo_lower)) Complain("invalid regparam_llo lower limit");
-				if (!(ws[2] >> reg_llo)) Complain("invalid regparam_llo value");
-				if (!(ws[3] >> reg_llo_upper)) Complain("invalid regparam_llo upper limit");
-				if ((reg_llo < reg_llo_lower) or (reg_llo > reg_llo_upper)) Complain("initial regparam_llo should lie within specified prior limits");
-				regparam_llo = reg_llo;
-				regparam_llo_lower_limit = reg_llo_lower;
-				regparam_llo_upper_limit = reg_llo_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> reg_llo)) Complain("invalid regparam_llo value");
-				regparam_llo = reg_llo;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_llo = " << regparam_llo << endl;
-			} else Complain("must specify either zero or one argument (regparam_llo value)");
-		}
-		else if (words[0]=="vary_regparam_llo")
+		else if (words[0]=="lum_weighted_srcpixel_clustering")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary regparam_llo: " << display_switch(vary_regparam_llo) << endl;
+				if (mpi_id==0) cout << "Use luminosity-weighted source pixel clustering: " << display_switch(use_lum_weighted_srcpixel_clustering) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_llo' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_llo can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_llo can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_llo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_regparam_llo,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_srcpixel_clustering requires 'optimize_regparam' to be set to 'on'");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("luminosity-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
+				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
+					//if (vary_regparam_llo) {
+						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_llo' to 'off'" << endl;
+						//vary_regparam_llo = false;
+					//}
+					if (vary_alpha_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
+						vary_alpha_clus = false;
+					}
+					if (vary_beta_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
+						vary_beta_clus = false;
+					}
+				}
+				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+
+		//else if (words[0]=="regparam_llo")
+		//{
+			//double reg_llo, reg_llo_upper, reg_llo_lower;
+			//if (nwords == 4) {
+				//if (!(ws[1] >> reg_llo_lower)) Complain("invalid regparam_llo lower limit");
+				//if (!(ws[2] >> reg_llo)) Complain("invalid regparam_llo value");
+				//if (!(ws[3] >> reg_llo_upper)) Complain("invalid regparam_llo upper limit");
+				//if ((reg_llo < reg_llo_lower) or (reg_llo > reg_llo_upper)) Complain("initial regparam_llo should lie within specified prior limits");
+				//regparam_llo = reg_llo;
+				//regparam_llo_lower_limit = reg_llo_lower;
+				//regparam_llo_upper_limit = reg_llo_upper;
+			//} else if (nwords == 2) {
+				//if (!(ws[1] >> reg_llo)) Complain("invalid regparam_llo value");
+				//regparam_llo = reg_llo;
+			//} else if (nwords==1) {
+				//if (mpi_id==0) cout << "regparam_llo = " << regparam_llo << endl;
+			//} else Complain("must specify either zero or one argument (regparam_llo value)");
+		//}
+		//else if (words[0]=="vary_regparam_llo")
+		//{
+			//if (nwords==1) {
+				//if (mpi_id==0) cout << "Vary regparam_llo: " << display_switch(vary_regparam_llo) << endl;
+			//} else if (nwords==2) {
+				//if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_llo' command; must specify 'on' or 'off'");
+				//if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_llo can be varied (see 'fit regularization')");
+				//if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_llo can be varied");
+				//if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_llo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				//set_switch(vary_regparam_llo,setword);
+				//update_parameter_list();
+			//} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		//}
 		else if (words[0]=="regparam_lhi")
 		{
 			double reg_lhi, reg_lhi_upper, reg_lhi_lower;
@@ -11507,6 +11554,68 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lum_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="alpha_clus")
+		{
+			double alpha_cl;
+			double alpha_cl_upper, alpha_cl_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> alpha_cl_lower)) Complain("invalid alpha_clus lower limit");
+				if (!(ws[2] >> alpha_cl)) Complain("invalid alpha_clus value");
+				if (!(ws[3] >> alpha_cl_upper)) Complain("invalid alpha_clus upper limit");
+				if ((alpha_cl < alpha_cl_lower) or (alpha_cl > alpha_cl_upper)) Complain("initial alpha_clus should lie within specified prior limits");
+				alpha_clus = alpha_cl;
+				alpha_clus_lower_limit = alpha_cl_lower;
+				alpha_clus_upper_limit = alpha_cl_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> alpha_cl)) Complain("invalid alpha_clus value");
+				alpha_clus = alpha_cl;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "alpha_clus = " << alpha_clus << endl;
+			} else Complain("must specify either zero or one argument (alpha_clus value)");
+		}
+		else if (words[0]=="vary_alpha_clus")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary alpha_clus: " << display_switch(vary_alpha_clus) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_alpha_clus' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before alpha_clus can be varied");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("alpha_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(vary_alpha_clus,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="beta_clus")
+		{
+			double beta_cl;
+			double beta_cl_upper, beta_cl_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> beta_cl_lower)) Complain("invalid beta_clus lower limit");
+				if (!(ws[2] >> beta_cl)) Complain("invalid beta_clus value");
+				if (!(ws[3] >> beta_cl_upper)) Complain("invalid beta_clus upper limit");
+				if ((beta_cl < beta_cl_lower) or (beta_cl > beta_cl_upper)) Complain("initial beta_clus should lie within specified prior limits");
+				beta_clus = beta_cl;
+				beta_clus_lower_limit = beta_cl_lower;
+				beta_clus_upper_limit = beta_cl_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> beta_cl)) Complain("invalid beta_clus value");
+				beta_clus = beta_cl;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "beta_clus = " << beta_clus << endl;
+			} else Complain("must specify either zero or one argument (beta_clus value)");
+		}
+		else if (words[0]=="vary_beta_clus")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary beta_clus: " << display_switch(vary_beta_clus) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_beta_clus' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("beta_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(vary_beta_clus,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -11584,6 +11693,7 @@ void QLens::process_commands(bool read_file)
 			double pnoise;
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid data pixel surface brightness noise");
+				if (data_pixel_noise==0) loglike_reference_noise = pnoise; // if this is the first time setting data_pixel_noise in script, set reference noise in log-likelihood to this value
 				data_pixel_noise = pnoise;
 				SB_Profile::SB_noise = pnoise;
 				if (image_pixel_data != NULL) image_pixel_data->set_noise(pnoise);
@@ -11717,6 +11827,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(include_extended_mask_in_inversion,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="include_noise_term_in_loglike")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include pixel noise term in log-likelihood (include_noise_term_in_loglike): " << display_switch(include_noise_term_in_loglike) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_noise_term_in_loglike' command; must specify 'on' or 'off'");
+				set_switch(include_noise_term_in_loglike,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="zero_sb_emask_prior")
 		{
 			if (nwords==1) {
@@ -11735,6 +11854,23 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "surface brightness fraction threshold for nimg_sb_frac_threshold = " << n_image_prior_sb_frac << endl;
 			} else Complain("must specify either zero or one argument for nimg_sb_frac_threshold");
+		}
+		else if (words[0]=="loglike_ref_noise")
+		{
+			double refnoise;
+			if (nwords == 2) {
+				if (words[1]=="data") refnoise = data_pixel_noise;
+				else {
+					if (!(ws[1] >> refnoise)) Complain("invalid reference noise for log-likelihood");
+					if (refnoise <= 0) {
+						refnoise = 1.0/M_SQRT_2PI; // sqrt(2*pi) is equivalent to not subtracting a reference noise term from log-likelihood
+						if (mpi_id==0) cout << "Setting loglike_ref_noise = 1.0/sqrt(2*pi), which is equivalent to having no reference noise term in log-likelihood" << endl;
+					}
+				}
+				loglike_reference_noise = refnoise;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "loglike_ref_noise = " << loglike_reference_noise << endl;
+			} else Complain("must specify either zero or one argument for loglike_ref_noise");
 		}
 		else if (words[0]=="Re_threshold_low")
 		{
