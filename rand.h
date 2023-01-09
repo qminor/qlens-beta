@@ -46,7 +46,7 @@ class Random
 	unsigned long long int get_random_seed() { return seed; }
 	double RandomNumber(){return 5.42101086242752217E-20 * int64();}
 	inline unsigned int int32() {return (unsigned int)int64(); }
-	inline double NormalDeviate()
+	double NormalDeviate()
 	{
 		double fac,rsq,v1,v2;
 
@@ -65,6 +65,24 @@ class Random
 			return gset;
 		}
 	}
+	/*
+	double NormalDeviate()
+	{
+		double u, v, x, y, q;
+		do
+		{
+			u = RandomNumber();
+			v = 1.7156*(RandomNumber() - 0.5);
+			x = u - 0.449871;
+			y = fabs(v) + 0.386595;
+			q = x*x + y*(0.19600*y-0.25472*x);
+		}
+		while(q > 0.27597 && (q > 0.27846 || v*v > -4.0*log(u)*u*u));
+		
+		return v/u;
+	}
+	*/
+
 };
 
 

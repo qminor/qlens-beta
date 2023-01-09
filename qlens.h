@@ -432,6 +432,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int extended_mask_n_neighbors;
 	bool include_extended_mask_in_inversion;
 	bool zero_sb_extended_mask_prior;
+	bool include_noise_term_in_loglike;
+	double loglike_reference_noise;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -530,12 +532,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
-	double regparam_lhi, regparam_llo, regparam_lum_index; 
+	//double regparam_lhi, regparam_llo, regparam_lum_index; 
+	double regparam_lhi, regparam_lum_index; 
 	double *lumreg_pixel_weights;
-	bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
+	//bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
+	bool vary_regparam_lhi, vary_regparam_lum_index;
 	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
-	double regparam_llo_lower_limit, regparam_llo_upper_limit;
+	//double regparam_llo_lower_limit, regparam_llo_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
+
+	bool use_lum_weighted_srcpixel_clustering;
+	double alpha_clus, beta_clus;
+	bool vary_alpha_clus, vary_beta_clus;
+	double alpha_clus_lower_limit, alpha_clus_upper_limit;
+	double beta_clus_lower_limit, beta_clus_upper_limit;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
@@ -548,6 +558,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImageData *image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
+	double chisqtol_lumreg;
+	int lumreg_max_it;
 	int n_repeats;
 	bool display_chisq_status;
 	int n_visible_images;
@@ -807,11 +819,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
+	double find_regularization_term(const bool use_lum_weighting);
 
 	void invert_lens_mapping_dense(bool verbal);
-	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal);
+	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
+	void chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix);
+	void setup_regparam_optimization(const bool dense_Fmatrix);
+	void calculate_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
+	double chisq_regparam_lumreg_dense(const double logreg);
+	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
 	void create_regularization_matrix_shapelet();
@@ -841,6 +859,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
 	dvector covmatrix_stacked;
+	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
 	dvector covmatrix_packed;
 	dvector covmatrix_factored;
 	dvector Rmatrix_packed;
@@ -967,7 +986,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
-	void create_sourcegrid_from_imggrid_delaunay(const bool verbal);
+	void create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();
