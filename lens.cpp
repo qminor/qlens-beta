@@ -935,10 +935,18 @@ QLens::QLens() : UCMC()
 	kernel_correlation_length_lower_limit = 1e30;
 	kernel_correlation_length_upper_limit = 1e30;
 	vary_correlation_length = false;
+
 	matern_index = 0.5;
 	matern_index_lower_limit = 1e30;
 	matern_index_upper_limit = 1e30;
 	vary_matern_index = false;
+
+	use_matern_scale_parameter = false;
+	matern_scale = 0.003;
+	matern_scale_lower_limit = 1e30;
+	matern_scale_upper_limit = 1e30;
+	vary_matern_scale = false;
+
 	optimize_regparam = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
@@ -1323,17 +1331,23 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	kernel_correlation_length_upper_limit = lens_in->kernel_correlation_length_upper_limit;
 	kernel_correlation_length_lower_limit = lens_in->kernel_correlation_length_lower_limit;
 	vary_correlation_length = lens_in->vary_correlation_length;
+
 	matern_index = lens_in->matern_index;
 	matern_index_upper_limit = lens_in->matern_index_upper_limit;
 	matern_index_lower_limit = lens_in->matern_index_lower_limit;
 	vary_matern_index = lens_in->vary_matern_index;
+
+	use_matern_scale_parameter = lens_in->use_matern_scale_parameter;
+	matern_scale = lens_in->matern_scale;
+	matern_scale_lower_limit = lens_in->matern_scale_lower_limit;
+	matern_scale_upper_limit = lens_in->matern_scale_upper_limit;
+	vary_matern_scale = lens_in->vary_matern_scale;
 
 	optimize_regparam = lens_in->optimize_regparam;
 	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
 	optimize_regparam_maxlog = lens_in->optimize_regparam_maxlog;
 	max_regopt_iterations = lens_in->max_regopt_iterations;
-
 
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;
@@ -7150,6 +7164,9 @@ double QLens::update_model(const double* params)
 	if ((source_fit_mode == Delaunay_Source) and (vary_correlation_length) and (regularization_method != None)) {
 		kernel_correlation_length = params[index++];
 	}
+	if ((source_fit_mode == Delaunay_Source) and (vary_matern_scale) and (regularization_method != None)) {
+		matern_scale = params[index++];
+	}
 	if ((source_fit_mode == Delaunay_Source) and (vary_matern_index) and (regularization_method != None)) {
 		matern_index = params[index++];
 	}
@@ -8117,6 +8134,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	}
 
 	if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.1;
+	if ((vary_matern_scale) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3*matern_scale;
 	if ((vary_matern_index) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3;
 	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
 	if (vary_srcgrid_size_scale) stepsizes[index++] = 0.3;
@@ -8159,6 +8177,7 @@ void QLens::set_default_plimits()
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
+	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
 	if (vary_pixel_fraction) index++;
 	if (vary_srcgrid_size_scale) index++;
@@ -8200,6 +8219,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) nparams++;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) nparams++;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
+	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
 	if (vary_pixel_fraction) nparams++;
 	if (vary_srcgrid_size_scale) nparams++;
@@ -8270,6 +8290,7 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
+	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_scale;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_index;
 	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
 	if (vary_srcgrid_size_scale) fitparams[index++] = srcgrid_size_scale;
@@ -8406,6 +8427,13 @@ bool QLens::setup_limits()
 			lower_limits[index] = kernel_correlation_length_lower_limit;
 			lower_limits_initial[index] = lower_limits[index];
 			upper_limits[index] = kernel_correlation_length_upper_limit;
+			upper_limits_initial[index] = upper_limits[index];
+			index++;
+		}
+		if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
+			lower_limits[index] = matern_scale_lower_limit;
+			lower_limits_initial[index] = lower_limits[index];
+			upper_limits[index] = matern_scale_upper_limit;
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
@@ -8637,6 +8665,11 @@ void QLens::get_parameter_names()
 		fit_parameter_names.push_back("corrlength");
 		latex_parameter_names.push_back("l");
 		latex_parameter_subscripts.push_back("corr");
+	}
+	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
+		fit_parameter_names.push_back("matern_scale");
+		latex_parameter_names.push_back("M");
+		latex_parameter_subscripts.push_back("src");
 	}
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
 		fit_parameter_names.push_back("matern_index");
@@ -9287,6 +9320,7 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
 		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
 		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "correlation length = " << fitmodel->kernel_correlation_length << endl;
+		if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "Matern scale = " << fitmodel->matern_scale << endl;
 		if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "Matern index nu = " << fitmodel->matern_index << endl;
 		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
 		if (vary_srcgrid_size_scale) cout << "source grid scale = " << fitmodel->srcgrid_size_scale << endl;
@@ -10896,6 +10930,8 @@ bool QLens::adopt_model(dvector &fitparams)
 	if (source_fit_mode == Delaunay_Source) {
 		if ((vary_correlation_length) and (regularization_method != None)) 
 			kernel_correlation_length = transformed_params[index++];
+		if ((vary_matern_scale) and (regularization_method != None)) 
+			matern_scale = transformed_params[index++];
 		if ((vary_matern_index) and (regularization_method != None)) 
 			matern_index = transformed_params[index++];
 	}
@@ -11829,6 +11865,14 @@ void QLens::print_fit_model()
 			} else {
 				if ((kernel_correlation_length_lower_limit==1e30) or (kernel_correlation_length_upper_limit==1e30)) cout << "\ncorrelationl length: lower/upper limits not given (these must be set by 'corrlength' command before fit)\n";
 				else cout << "correlation length: [" << kernel_correlation_length_lower_limit << ":" << kernel_correlation_length << ":" << kernel_correlation_length_upper_limit << "]\n";
+			}
+		}
+		if (vary_matern_scale) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Matern scale: " << matern_scale << endl;
+			} else {
+				if ((matern_scale_lower_limit==1e30) or (matern_scale_upper_limit==1e30)) cout << "\nMatern scale: lower/upper limits not given (these must be set by 'matern_scale' command before fit)\n";
+				else cout << "Matern scale: [" << matern_scale_lower_limit << ":" << matern_scale << ":" << matern_scale_upper_limit << "]\n";
 			}
 		}
 		if (vary_matern_index) {
@@ -13827,7 +13871,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double loglike_reg;
 	if ((source_fit_mode != Parameterized_Source) and (regularization_method != None) and (source_npixels > 0)) {
 		if (regularization_parameter != 0) {
-			loglike_reg = find_regularization_term(use_lum_weighted_regularization);
+			loglike_reg = calculate_regularization_term(use_lum_weighted_regularization);
 			loglike_times_two += loglike_reg;
 		}
 		if (!use_covariance_matrix) loglike_times_two += Fmatrix_log_determinant;

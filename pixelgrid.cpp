@@ -2849,7 +2849,14 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 	covmatrix_packed.input(ntot);
 	covmatrix_factored.input(ntot);
 	Rmatrix_packed.input(ntot);
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index);
+	if (source_fit_mode==Delaunay_Source) {
+		if ((kernel_type==0) and (use_matern_scale_parameter)) {
+			matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
+			//cout << "approx source size=" << matern_approx_source_size << endl;
+			set_corrlength_for_given_matscale();
+		}
+		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index);
+	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -3873,6 +3880,39 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 		}
 	}
 	delete[] indx;
+}
+
+void QLens::set_corrlength_for_given_matscale()
+{
+	double (Brent::*corrlength_eq)(const double);
+	corrlength_eq = static_cast<double (Brent::*)(const double)> (&QLens::corrlength_eq_matern_factor);
+	double logcorr = BrentsMethod(corrlength_eq,-2,16,1e-5);
+	kernel_correlation_length = pow(10,logcorr);
+	//double optimal_corrlength = pow(10,logcorr);
+	//cout << "Optimal correlation length: " << optimal_corrlength << endl;
+}
+
+double QLens::corrlength_eq_matern_factor(const double log_corr_length)
+{
+	double matern_fac, xsc;
+	matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
+	xsc = sqrt(2*matern_index)*matern_approx_source_size/pow(10,log_corr_length);
+	return (matern_scale - (1-matern_fac*pow(xsc,matern_index)*delaunay_srcgrid->modified_bessel_function(xsc,matern_index)));
+}
+
+void QLens::plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename)
+{
+	double r, rstep, x, matern_fac, mfunc;
+	rstep = pow(rmax/rmin, 1.0/(rpts-1));
+	matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
+	int i;
+	ofstream mout(mfilename);
+	if (use_scientific_notation) mout << setiosflags(ios::scientific);
+	for (i=0, r=rmin; i < rpts; i++, r *= rstep) {
+		x = sqrt(2*matern_index)*r/kernel_correlation_length;
+		mfunc = matern_fac*pow(x,matern_index)*delaunay_srcgrid->modified_bessel_function(x,matern_index);
+		mout << r << " " << mfunc << endl;
+	}
 }
 
 /*
@@ -8727,6 +8767,106 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
+double ImagePixelGrid::find_approx_source_size()
+{
+	//string sp_filename = "wtf_spt.dat";
+	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
+	//sourcepts_file << setiosflags(ios::scientific);
+
+	double xcavg, ycavg, sig;
+	double totsurf;
+	double area, min_area = 1e30, max_area = -1e30;
+	double xcmin, ycmin, sb;
+	double xsavg, ysavg;
+	int i,j,k,nsp;
+	double rsq, rsqavg;
+	sig = 1e30;
+	int npts=0, npts_old, iter=0;
+	//ofstream wtf("wtf.dat");
+	do {
+		// will use 3-sigma clipping to estimate center and dispersion of source
+		npts_old = npts;
+		xcavg = 0;
+		ycavg = 0;
+		totsurf = 0;
+		npts=0;
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
+					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					// You repeat this code three times in this function! Store things in arrays and GET RID OF THE REDUNDANCIES!!!! IT'S UGLY.
+					if (!lens->split_imgpixels) {
+						xsavg = center_sourcepts[i][j][0];
+						ysavg = center_sourcepts[i][j][1];
+					} else {
+						xsavg=ysavg=0;
+						nsp = INTSQR(nsplits[i][j]);
+						for (k=0; k < nsp; k++) {
+							xsavg += subpixel_center_sourcepts[i][j][k][0];
+							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						}
+						xsavg /= nsp;
+						ysavg /= nsp;
+					}
+					//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
+					area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+						xcavg += area*abs(sb)*xsavg;
+						ycavg += area*abs(sb)*ysavg;
+						totsurf += area*abs(sb);
+						npts++;
+					}
+					//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
+				}
+			}
+		}
+		//wtf.close();
+		xcavg /= totsurf;
+		ycavg /= totsurf;
+		rsqavg=0;
+		// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
+		for (i=0; i < x_N; i++) {
+			for (j=0; j < y_N; j++) {
+				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*pixel_noise)) {
+					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					if (!lens->split_imgpixels) {
+						xsavg = center_sourcepts[i][j][0];
+						ysavg = center_sourcepts[i][j][1];
+					} else {
+						xsavg=ysavg=0;
+						nsp = INTSQR(nsplits[i][j]);
+						for (k=0; k < nsp; k++) {
+							xsavg += subpixel_center_sourcepts[i][j][k][0];
+							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						}
+						xsavg /= nsp;
+						ysavg /= nsp;
+					}
+
+					area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+						rsqavg += area*abs(sb)*rsq;
+					}
+				}
+			}
+		}
+		//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
+		rsqavg /= totsurf;
+		sig = sqrt(abs(rsqavg));
+		//cout << "Iteration " << iter << ": sig=" << sig << ", xc=" << xcavg << ", yc=" << ycavg << ", npts=" << npts << endl;
+		iter++;
+	} while ((iter < 6) and (npts != npts_old));
+	if (iter >= 6) warn("exceeded max iterations for 3-sigma clipping to determine approx source size");
+	return sig;
+}
+
+
+
 void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist)
 {
 	//string sp_filename = "wtf_spt.dat";
@@ -12853,7 +12993,7 @@ void QLens::add_regularization_term_to_dense_Fmatrix()
 	}
 }
 
-double QLens::find_regularization_term(const bool use_lum_weighting)
+double QLens::calculate_regularization_term(const bool use_lum_weighting)
 {
 	int i,j;
 	double loglike_reg,Es_times_two=0;
@@ -13430,7 +13570,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 		chisq = (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
 		*/
 
-	double loglike_reg = find_regularization_term(false);
+	double loglike_reg = calculate_regularization_term(false);
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
@@ -13527,7 +13667,8 @@ double QLens::chisq_regparam_lumreg_dense(const double logreg)
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
 	}
-	double loglike_reg = find_regularization_term(true);
+	//cout << "Ed_times_two=" << Ed_times_two << endl;
+	double loglike_reg = calculate_regularization_term(true);
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
