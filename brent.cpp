@@ -225,9 +225,14 @@ double Brent::BrentsMethod_Inclusive(double (Brent::*func)(const double), const 
 	double fc, p, q, r, s, tol1, xm;
 
 	if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
-		if (verbose) warn("root is not bracketed in Brent's Method");
-		if (fabs(fa) < fabs(fb)) return a;
-		else return b;
+		if (fabs(fa) < fabs(fb)) {
+			if (verbose) warn("root is not bracketed in Brent's Method; setting x=a");
+			return a;
+		}
+		else {
+			if (verbose) warn("root is not bracketed in Brent's Method; setting x=b");
+			return b;
+		}
 	}
 
 	fc = fb;
