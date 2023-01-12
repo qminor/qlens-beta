@@ -522,8 +522,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
 	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
+	bool use_matern_scale_parameter;
+	double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3)
+	double matern_approx_source_size;
 	bool vary_regularization_parameter;
 	bool vary_correlation_length;
+	bool vary_matern_scale;
 	bool vary_matern_index;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
@@ -819,7 +823,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
-	double find_regularization_term(const bool use_lum_weighting);
+	double calculate_regularization_term(const bool use_lum_weighting);
 
 	void invert_lens_mapping_dense(bool verbal);
 	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
@@ -835,6 +839,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_regularization_matrix_shapelet();
 	void generate_Rmatrix_shapelet_gradient();
 	void generate_Rmatrix_shapelet_curvature();
+	void set_corrlength_for_given_matscale();
+	double corrlength_eq_matern_factor(const double log_corr_length);
+
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	//bool Cholesky_dcmp_upper(double** a, double &logdet, int n);
 	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
@@ -1343,6 +1350,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double einstein_radius_root(const double r);
 	double get_einstein_radius_prior(const bool verbal);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
+	void plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename);
 	void print_lensing_info_at_point(const double x, const double y);
 	bool make_random_sources(int nsources, const char *outfile);
 	bool total_cross_section(double&);

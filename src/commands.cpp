@@ -8205,6 +8205,20 @@ void QLens::process_commands(bool read_file)
 			} else
 			  Complain("plotmass requires 4 parameters (rmin, rmax, steps, mass_outname)");
 		}
+		else if (words[0]=="plotmatern")
+		{
+			if (terminal != TEXT) Complain("only text plotting supported for plotmatern");
+			if (delaunay_srcgrid == NULL) Complain("Dalaunay grid must be present to plot matern function");
+			if (nwords == 5) {
+				double rmin, rmax;
+				int steps;
+				ws[1] >> rmin;
+				ws[2] >> rmax;
+				ws[3] >> steps;
+				plot_matern_function(rmin, rmax, steps, words[4].c_str());
+			} else
+			  Complain("plotmass requires 4 parameters (rmin, rmax, steps, mass_outname)");
+		}
 		else if (words[0]=="findimg")
 		{
 			if (!islens()) Complain("must specify lens model first");
@@ -11643,8 +11657,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Vary correlation length: " << display_switch(vary_correlation_length) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before corrlength can be varied (see 'fit regularization')");
-				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("corrlength can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				if (setword=="on") {
+					if (regularization_method==None) Complain("regularization method must be chosen before corrlength can be varied (see 'fit regularization')");
+					if (source_fit_mode != Delaunay_Source) Complain("corrlength can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+					if (use_matern_scale_parameter) Complain("corrlength can only be varied if 'use_matern_scale' is set to 'off'");
+					if (vary_matern_scale) {
+						if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
+						vary_matern_scale = false;
+					}
+				}
 				set_switch(vary_correlation_length,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -11667,15 +11688,69 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "kernel Matern index = " << matern_index << endl;
 			} else Complain("must specify either zero or one argument (kernel Matern index value)");
 		}
+		else if (words[0]=="use_matern_scale")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use Matern scale parameter instead of correlation length: " << display_switch(use_matern_scale_parameter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_matern_scale' command; must specify 'on' or 'off'");
+				if ((setword=="off") and (vary_matern_scale)) {
+					if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
+					vary_matern_scale = false;
+				}
+				if ((setword=="on") and (vary_correlation_length)) {
+					if (mpi_id==0) cout << "NOTE: Setting 'vary_correlation_length' to 'off'" << endl;
+					vary_correlation_length = false;
+				}
+				set_switch(use_matern_scale_parameter,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="vary_matern_index")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Vary Matern index: " << display_switch(vary_matern_index) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_mat_index' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before mat_index can be varied (see 'fit regularization')");
-				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("mat_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_index' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before matern_index can be varied (see 'fit regularization')");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("matern_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
 				set_switch(vary_matern_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="matern_scale")
+		{
+			double mat_scale, mat_scale_ul, mat_scale_ll;
+			if (nwords == 4) {
+				if (!(ws[1] >> mat_scale_ll)) Complain("invalid kernel Matern scale lower limit");
+				if (!(ws[2] >> mat_scale)) Complain("invalid kernel Matern scale value");
+				if (!(ws[3] >> mat_scale_ul)) Complain("invalid kernel Matern scale upper limit");
+				if ((mat_scale < mat_scale_ll) or (mat_scale > mat_scale_ul)) Complain("initial kernel Matern scale should lie within specified prior limits");
+				matern_scale = mat_scale;
+				matern_scale_lower_limit = mat_scale_ll;
+				matern_scale_upper_limit = mat_scale_ul;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> mat_scale)) Complain("invalid kernel Matern scale value");
+				matern_scale = mat_scale;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "kernel Matern scale = " << matern_scale << endl;
+			} else Complain("must specify either zero or one argument (kernel Matern scale value)");
+		}
+		else if (words[0]=="vary_matern_scale")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary Matern scale: " << display_switch(vary_matern_scale) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_scale' command; must specify 'on' or 'off'");
+				if (setword=="on") {
+					if (regularization_method==None) Complain("regularization method must be chosen before matern_scale can be varied (see 'fit regularization')");
+					if (source_fit_mode != Delaunay_Source) Complain("matern_scale can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+					if (!use_matern_scale_parameter) Complain("matern_scale can only be varied if 'use_matern_scale' is set to 'on'");
+					if (vary_correlation_length) {
+						if (mpi_id==0) cout << "NOTE: Setting 'vary_correlation_length' to 'off'" << endl;
+						vary_correlation_length = false;
+					}
+				}
+				set_switch(vary_matern_scale,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
