@@ -3886,7 +3886,7 @@ void QLens::set_corrlength_for_given_matscale()
 {
 	double (Brent::*corrlength_eq)(const double);
 	corrlength_eq = static_cast<double (Brent::*)(const double)> (&QLens::corrlength_eq_matern_factor);
-	double logcorr = BrentsMethod_Inclusive(corrlength_eq,-2,16,1e-5,true);
+	double logcorr = BrentsMethod_Inclusive(corrlength_eq,-3,20,1e-5,true);
 	kernel_correlation_length = pow(10,logcorr);
 	//double optimal_corrlength = pow(10,logcorr);
 	//cout << "Optimal correlation length: " << optimal_corrlength << endl;
