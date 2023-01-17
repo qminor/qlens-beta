@@ -684,6 +684,7 @@ void QLens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 QLens::QLens() : UCMC()
 {
 	lens_parent = NULL; // this is only set if creating from another lens
+	random_seed = 10;
 	mpi_id = 0;
 	mpi_np = 1;
 	group_np = 1;
@@ -789,7 +790,7 @@ QLens::QLens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	n_image_prior_npixels = 20; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
+	auxiliary_srcgrid_npixels = 20; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
 	outside_sb_prior_noise_frac = 1e10; // surface brightness threshold is given as multiple of data pixel noise (1e10 by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
@@ -1019,6 +1020,8 @@ QLens::QLens() : UCMC()
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
 	clustering_random_initialization = false;
+	use_random_delaunay_srcgrid = false;
+	random_grid_length_factor = 0.7;
 	n_src_clusters = -1;
 	n_cluster_iterations = 6;
 	regrid_if_unmapped_source_subpixels = false;
@@ -1096,7 +1099,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 {
 	lens_parent = lens_in;
 	verbal_mode = lens_in->verbal_mode;
-	set_random_generator(lens_in);
+	random_seed = lens_in->random_seed;
+	set_random_seed(random_seed);
 	chisq_it=0;
 	raw_chisq = -1e30;
 	calculate_bayes_factor = lens_in->calculate_bayes_factor;
@@ -1197,7 +1201,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
-	n_image_prior_npixels = lens_in->n_image_prior_npixels;
+	auxiliary_srcgrid_npixels = lens_in->auxiliary_srcgrid_npixels;
 	outside_sb_prior = lens_in->outside_sb_prior;
 	outside_sb_prior_noise_frac = lens_in->outside_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	outside_sb_prior_threshold = lens_in->outside_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
@@ -1437,6 +1441,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
 	clustering_random_initialization = lens_in->clustering_random_initialization;
+	use_random_delaunay_srcgrid = lens_in->use_random_delaunay_srcgrid;
+	random_grid_length_factor = lens_in->random_grid_length_factor;
 	n_src_clusters = lens_in->n_src_clusters;
 	n_cluster_iterations = lens_in->n_cluster_iterations;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
@@ -12430,7 +12436,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 	if (!use_nimg_prior_npixels) {
 		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	} else {
-		SourcePixelGrid::set_splitting(n_image_prior_npixels,n_image_prior_npixels,1e-6);
+		SourcePixelGrid::set_splitting(auxiliary_srcgrid_npixels,auxiliary_srcgrid_npixels,1e-6);
 	}
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
@@ -12536,8 +12542,346 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 }
 */
 
+void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number_density, const bool verbal)
+{
+	int i,j,k,n,n_other,ii,jj,neighbor_i,neighbor_j,neighbor_k,corner_i,corner_j,corner_k,lmin;
+	double sqrdist,sqrdistmin;
+	int neighbor_ii, neighbor_jj;
+	int *pixptr_i, *pixptr_j;
+	int npix_in_mask, nsp, nsubpix, nsrcpix;
+	int srcpix_n = 0;
+	double x, y, ndev, xdev, ydev;
+	double xl = image_pixel_grid->pixel_xlength;
+	double yl = image_pixel_grid->pixel_ylength;
+	double xsl,ysl,xs_interp,ys_interp,tt,uu,mag;
+	double sbweight_interp,weight,totweight;
+	if (include_extended_mask_in_inversion) {
+		npix_in_mask = image_pixel_grid->ntot_cells_emask;
+		pixptr_i = image_pixel_grid->emask_pixels_i;
+		pixptr_j = image_pixel_grid->emask_pixels_j;
+	} else {
+		npix_in_mask = image_pixel_grid->ntot_cells;
+		pixptr_i = image_pixel_grid->masked_pixels_i;
+		pixptr_j = image_pixel_grid->masked_pixels_j;
+	}
+	if ((use_lum_weighted_srcpixel_clustering) and (!use_lum_weighted_number_density)) nsrcpix = npix_in_mask/2; // this is the first go-around, before pixel weighting is used
+	else if (n_src_clusters <= 0) nsrcpix = npix_in_mask/2;
+	else nsrcpix = n_src_clusters;
+	double number_density_imgplane;
+	if (!use_lum_weighted_number_density) {
+		number_density_imgplane = ((double) nsrcpix) / (npix_in_mask*xl*yl);
+		//nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
+		//totweight = 0;
+		//for (n=0; n < npix_in_mask; n++) {
+			//i = pixptr_i[n];
+			//j = pixptr_j[n];
+			//for (k=0; k < nsubpix; k++) {
+				//totweight += 1.0;
+			//}
+		//}
+		//double number_density_check = ((double) nsrcpix) / (totweight*xl*yl/nsubpix);
+		//cout << "DENSITY CHECK: " << number_density_imgplane << " " << number_density_check << endl;
+	} else {
+		nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
+		totweight = 0;
+		for (n=0; n < npix_in_mask; n++) {
+			i = pixptr_i[n];
+			j = pixptr_j[n];
+			for (k=0; k < nsubpix; k++) {
+				//totweight += image_pixel_grid->subpixel_sbweights[i][j][k];
+				totweight += pow((image_pixel_grid->subpixel_sbweights[i][j][k] + alpha_clus),beta_clus);
+			}
+		}
+		number_density_imgplane = ((double) nsrcpix) / (totweight*xl*yl/nsubpix);
+	}
+	double number_density_srcplane, number_density_closest_pt, average_number_density;
+	//cout << "xl=" << xl << " yl=" << yl << endl;
+	//cout << "area of each pixel =  " << xl*yl << endl;
+	//cout << "numper of pixels =  " << npix_in_mask << endl;
+	//cout << "total area = " << (npix_in_mask*xl*yl) << endl;
+	//cout << "number density = " << number_density_imgplane << endl;
+	//double length_threshold = 1.0/sqrt(number_density_imgplane);
+	//double area = length_threshold*length_threshold;
+	//double num = number_density_imgplane * area;
+	//cout << "length_threshold = " << length_threshold << endl;
+	//cout << "number in area =  " << num << endl;
+	double length_fac = random_grid_length_factor;
+	//double sqrlength_threshold = length_fac*length_fac/(number_density_imgplane);
+	double sqrlength_threshold;
+	double *srcpts_x = new double[nsrcpix];
+	double *srcpts_y = new double[nsrcpix];
+	double *weights = new double[nsrcpix];
+	double *mags = new double[nsrcpix];
+	int *ivals = new int[nsrcpix];
+	int *jvals = new int[nsrcpix];
+	//double *pts_x = new double[nsrcpix];
+	//double *pts_y = new double[nsrcpix];
+	double nearest_subpixels_x[4];
+	double nearest_subpixels_y[4];
+	double nearest_subpixels_xs[4];
+	double nearest_subpixels_ys[4];
+	double nearest_subpixels_sbweights[4];
+	bool xneighbor_plus, yneighbor_plus; // keeps track if point is closer to the pixel above/right (then true), or below/left (then false ) for x/y directions respectively
+	//ofstream subpixout;
+	ofstream ptout;
+	ofstream srcptiout;
+	if (verbal) {
+		//subpixout.open("subpix");
+		ptout.open("pts.dat");
+		srcptiout.open("spts_i.dat");
+	}
+	//ofstream srcptout("spts.dat");
+	/*
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		nsp = image_pixel_grid->nsplits[i][j];
+		nsubpix = nsp*nsp;
+		for (k=0; k < nsubpix; k++) {
+			x = image_pixel_grid->subpixel_center_pts[i][j][k][0];
+			y = image_pixel_grid->subpixel_center_pts[i][j][k][1];
+			if (verbal) subpixout << x << " " << y << endl;
+		}
+	}
+	if (verbal) subpixout.close();
+	*/
+	//ofstream randout("randpts");
+	int nreject = 0;
+
+	//double srcgrid_wtime0, srcgrid_wtime;
+	//srcgrid_wtime0 = omp_get_wtime();
+
+	reinitialize_random_generator();
+	while (true) {
+		xneighbor_plus = false;
+		yneighbor_plus = false;
+		ndev = RandomNumber() * npix_in_mask;
+		n = (int) ndev;
+		xdev = (ndev - n);
+		ydev = (RandomNumber());
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		//cout << "xdev=" << xdev << ", ydev=" << ydev << endl;
+		//cout << "dx=" << ((xdev-0.5)*xl) << ", dy=" << ((ydev-0.5)*yl) << endl;
+		x = image_pixel_grid->center_pts[i][j][0] + (xdev - 0.5)*xl;
+		y = image_pixel_grid->center_pts[i][j][1] + (ydev - 0.5)*yl;
+		nsp = image_pixel_grid->nsplits[i][j];
+		nsubpix = nsp*nsp;
+		ii = (int) (xdev*nsp);
+		//cout << "xdev=" << xdev << " xdev*nsp=" << (xdev*nsp) << " ii=" << ii << endl;
+		if ((xdev*nsp - ii) > 0.5) {
+			xneighbor_plus = true;
+		}
+		jj = (int) (ydev*nsp);
+		if ((ydev*nsp - jj) > 0.5) {
+			yneighbor_plus = true;
+		}
+		k = nsp*ii+jj;
+		nearest_subpixels_x[0] = image_pixel_grid->subpixel_center_pts[i][j][k][0];
+		nearest_subpixels_y[0] = image_pixel_grid->subpixel_center_pts[i][j][k][1];
+		nearest_subpixels_xs[0] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][0];
+		nearest_subpixels_ys[0] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][1];
+		if (use_lum_weighted_number_density) nearest_subpixels_sbweights[0] = image_pixel_grid->subpixel_sbweights[i][j][k];
+
+		corner_i = i;
+		corner_j = j;
+		neighbor_i = i;
+		neighbor_j = j;
+		if (!xneighbor_plus) {
+			if (ii > 0) {
+				neighbor_ii = ii-1;
+				neighbor_k = k-nsp;
+			} else {
+				if (i==0) continue;
+				if (!image_pixel_data->in_mask[i-1][j]) continue;
+				neighbor_i = i-1;
+				corner_i = i-1;
+				neighbor_ii=nsp-1;
+				//neighbor_k = nsp*neighbor_ii+jj;
+				neighbor_k = nsp*(nsp-1)+jj;
+			}
+		} else {
+			if (ii < nsp-1) {
+				neighbor_ii = ii+1;
+				neighbor_k = k+nsp;
+			} else {
+				if (i==image_pixel_grid->x_N-1) continue;
+				if (!image_pixel_data->in_mask[i+1][j]) continue;
+				neighbor_i = i+1;
+				corner_i = i+1;
+				neighbor_ii = 0;
+				neighbor_k = jj;
+			}
+		}
+		nearest_subpixels_x[1] = image_pixel_grid->subpixel_center_pts[neighbor_i][neighbor_j][neighbor_k][0];
+		nearest_subpixels_y[1] = image_pixel_grid->subpixel_center_pts[neighbor_i][neighbor_j][neighbor_k][1];
+		nearest_subpixels_xs[1] = image_pixel_grid->subpixel_center_sourcepts[neighbor_i][neighbor_j][neighbor_k][0];
+		nearest_subpixels_ys[1] = image_pixel_grid->subpixel_center_sourcepts[neighbor_i][neighbor_j][neighbor_k][1];
+		if (use_lum_weighted_number_density) nearest_subpixels_sbweights[1] = image_pixel_grid->subpixel_sbweights[neighbor_i][neighbor_j][neighbor_k];
+
+		neighbor_i = i;
+		neighbor_j = j;
+		if (!yneighbor_plus) {
+			if (jj > 0) {
+				neighbor_jj = jj-1;
+				neighbor_k = k-1;
+			} else {
+				if (j==0) continue;
+				if (!image_pixel_data->in_mask[i][j-1]) continue;
+				neighbor_j = j-1;
+				corner_j = j-1;
+				neighbor_jj=nsp-1;
+				//neighbor_k = nsp*ii+neighbor_jj;
+				neighbor_k = nsp*(ii+1)-1;
+			}
+		} else {
+			if (jj < nsp-1) {
+				neighbor_jj = jj+1;
+				neighbor_k = k+1;
+			} else {
+				if (j==image_pixel_grid->y_N-1) continue;
+				if (!image_pixel_data->in_mask[i][j+1]) continue;
+				neighbor_j = j+1;
+				corner_j = j+1;
+				neighbor_jj = 0;
+				neighbor_k = nsp*ii;
+			}
+		}
+		if ((corner_i != i) and (corner_j != j)) {
+			if (!image_pixel_data->in_mask[corner_i][corner_j]) continue; // in case the corner is in a pixel diagonal to the one containing the point--need to make sure it's in the mask
+		}
+		corner_k = nsp*neighbor_ii + neighbor_jj;
+		nearest_subpixels_x[2] = image_pixel_grid->subpixel_center_pts[neighbor_i][neighbor_j][neighbor_k][0];
+		nearest_subpixels_y[2] = image_pixel_grid->subpixel_center_pts[neighbor_i][neighbor_j][neighbor_k][1];
+		nearest_subpixels_xs[2] = image_pixel_grid->subpixel_center_sourcepts[neighbor_i][neighbor_j][neighbor_k][0];
+		nearest_subpixels_ys[2] = image_pixel_grid->subpixel_center_sourcepts[neighbor_i][neighbor_j][neighbor_k][1];
+		if (use_lum_weighted_number_density) nearest_subpixels_sbweights[2] = image_pixel_grid->subpixel_sbweights[neighbor_i][neighbor_j][neighbor_k];
+
+		nearest_subpixels_x[3] = image_pixel_grid->subpixel_center_pts[corner_i][corner_j][corner_k][0];
+		nearest_subpixels_y[3] = image_pixel_grid->subpixel_center_pts[corner_i][corner_j][corner_k][1];
+		nearest_subpixels_xs[3] = image_pixel_grid->subpixel_center_sourcepts[corner_i][corner_j][corner_k][0];
+		nearest_subpixels_ys[3] = image_pixel_grid->subpixel_center_sourcepts[corner_i][corner_j][corner_k][1];
+		if (use_lum_weighted_number_density) nearest_subpixels_sbweights[3] = image_pixel_grid->subpixel_sbweights[corner_i][corner_j][corner_k];
+
+		xsl=xl/nsp;
+		ysl=yl/nsp;
+		tt = abs(x - nearest_subpixels_x[0]);
+		uu = abs(y - nearest_subpixels_y[0]);
+		xs_interp = (1-tt)*(1-uu)*nearest_subpixels_xs[0] + tt*(1-uu)*nearest_subpixels_xs[1] + (1-uu)*tt*nearest_subpixels_xs[2] + tt*uu*nearest_subpixels_xs[3];
+		ys_interp = (1-tt)*(1-uu)*nearest_subpixels_ys[0] + tt*(1-uu)*nearest_subpixels_ys[1] + (1-uu)*tt*nearest_subpixels_ys[2] + tt*uu*nearest_subpixels_ys[3];
+		if (use_lum_weighted_number_density) {
+			sbweight_interp = (1-tt)*(1-uu)*nearest_subpixels_sbweights[0] + tt*(1-uu)*nearest_subpixels_sbweights[1] + (1-uu)*tt*nearest_subpixels_sbweights[2] + tt*uu*nearest_subpixels_sbweights[3];
+			weight = pow((sbweight_interp+alpha_clus),beta_clus);
+			//if (RandomNumber() > weight) continue;
+			if (weight==0) {
+				nreject++;
+				continue;
+			}
+		}
+		lensvector srcpt_interp;
+		srcpt_interp[0] = xs_interp;
+		srcpt_interp[1] = ys_interp;
+		mag = source_pixel_grid->find_local_magnification_interpolate(srcpt_interp,0);
+		if (mag==0) {
+			nreject++;
+			continue;
+		}
+		//lensvector pt,srcpt;
+		//pt[0]=x; pt[1]=y;
+		//find_sourcept(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
+		//mag = source_pixel_grid->find_local_magnification_interpolate(srcpt,0);
+
+		//cout << "xs=" << xs_interp << " ys=" << ys_interp << " mag=" << mag << endl;
+		number_density_srcplane = number_density_imgplane*mag;
+		if (use_lum_weighted_number_density) number_density_srcplane *= weight;
+
+		sqrdistmin = 1e30;
+		for (int l=0; l < srcpix_n; l++) {
+			sqrdist = SQR(xs_interp - srcpts_x[l]) + SQR(ys_interp - srcpts_y[l]);
+			//sqrdist = SQR(x - pts_x[l]) + SQR(y - pts_y[l]);
+			if (sqrdist < sqrdistmin) {
+				sqrdistmin = sqrdist;
+				lmin = l;
+			}
+		}
+		if (srcpix_n != 0) {
+			number_density_closest_pt = number_density_imgplane*mags[lmin];
+			if (use_lum_weighted_number_density) number_density_closest_pt *= weights[lmin];
+			if ((number_density_srcplane==0.0) or (number_density_closest_pt==0.0)) {
+				cout << "lmin=" << lmin << endl;
+				cout << "mag=" << mag << " " << mags[lmin] << endl;
+				cout << "weight=" << weight << " " << weights[lmin] << endl;
+				die("FUCK");
+			}
+			//average_number_density = (number_density_srcplane + number_density_closest_pt)/2; // averaging # densities was my first thought, but I think getting rms length is better
+			//sqrlength_threshold = length_fac*length_fac/average_number_density;
+			sqrlength_threshold = length_fac*length_fac*(1.0/number_density_srcplane + 1.0/number_density_closest_pt); // this is equivalent to averaging the sqrlength thresholds
+		} else {
+			sqrlength_threshold = length_fac*length_fac/number_density_srcplane;
+		}
+		//if (sqrdistmin*0.0 != 0.0) die("FOOK");
+		//cout << sqrt(sqrdistmin) << " " << sqrt(sqrlength_threshold) << endl;
+		if (sqrdistmin < sqrlength_threshold) {
+			//cout << "rejected" << endl;
+			nreject++;
+			if (nreject > 5*nsrcpix) {
+				length_fac *= 0.9;
+				if ((mpi_id==0) and (verbal)) cout << "5*nsrcpix rejects: reducing length_fac = " << length_fac << " (srcpix_n=" << srcpix_n << ")" << endl;
+				nreject=0;
+			}
+			continue;
+		}
+		nreject = 0; // start reject counting over
+		//if (sqrt(sqrlength_threshold) < 3e-3) cout << "RUHROH! threshold = " << sqrt(sqrlength_threshold) << " " << xs_interp << " " << ys_interp << endl;
+		//if (sqrlength_threshold*0.0 != 0.0) die("OOPS");
+		if (verbal) srcptiout << xs_interp << " " << ys_interp << endl;
+		//if (use_lum_weighted_number_density) cout << weight << " " << sbweight_interp << endl;
+		//if ((use_lum_weighted_number_density) and (sbweight_interp > 1)) warn("FUCK %g",sbweight_interp);
+
+		//cout << "SUBPIX: " << i << " " << j << " " << ii << " " << jj << " " << k << " " << image_pixel_grid->subpixel_center_pts[i][j][k][0] << " " << image_pixel_grid->subpixel_center_pts[i][j][k][1] << endl;
+		//cout << "SUBPIX_S: " << i << " " << j << " " << ii << " " << jj << " " << k << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][0] << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][1] << endl;
+
+		//cout << "#Point: " << endl << x << " " << y << endl;
+		if (verbal) ptout << x << " " << y << endl;
+		//randout << x << " " << y << endl;
+		//cout << "#Nearest neighbors:" << endl;
+		//for (k=0; k < 4; k++) randout << nearest_subpixels_x[k] << " " << nearest_subpixels_y[k] << endl;
+		srcpts_x[srcpix_n] = xs_interp;
+		srcpts_y[srcpix_n] = ys_interp;
+		//pts_x[srcpix_n] = x;
+		//pts_y[srcpix_n] = y;
+		ivals[srcpix_n] = i;
+		jvals[srcpix_n] = j;
+		if (use_lum_weighted_number_density) weights[srcpix_n] = weight;
+		mags[srcpix_n] = mag;
+		srcpix_n++;
+		//cout << "srcpix_n=" << srcpix_n << endl;
+		if (srcpix_n >= nsrcpix) break;
+	}
+	//srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+
+	if (nsrcpix != srcpix_n) die("number of source pixels does not match target n_src_clusters");
+	if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (random) has n_pixels=" << nsrcpix << endl;
+	delaunay_srcgrid = new DelaunayGrid(this,srcpts_x,srcpts_y,nsrcpix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
+
+	//if (mpi_id==0) cout << "Wall time for creating random source pixel grid: " << srcgrid_wtime << endl;
+	delete[] srcpts_x;
+	delete[] srcpts_y;
+	delete[] ivals;
+	delete[] jvals;
+	delete[] mags;
+	delete[] weights;
+}
+
 void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal)
 {
+	if (use_random_delaunay_srcgrid) {
+		// if using luminosity weighting, let's only use the random grid on the second go-around when lum weighting is used
+		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
+			create_sourcegrid_delaunay_random(use_weighted_srcpixel_clustering,verbal);
+			return;
+		}
+	}
 	int i,j,k,l,n,npix=0;
 	bool include;
 	double avg_sb = -1e30;
@@ -13364,7 +13708,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double loglike_times_two = 0;
 
 	if (((n_image_prior) or (n_sourcepts_fit > 0)) and (source_fit_mode != Cartesian_Source)) {
-		if ((mpi_id==0) and (verbal)) cout << "Trying sourcegrid creation..." << endl;
+		if ((mpi_id==0) and (verbal)) cout << "Trying auxiliary sourcegrid creation..." << endl;
 #ifdef USE_OPENMP
 		double srcgrid_wtime0, srcgrid_wtime;
 		if (show_wtime) {
@@ -13385,11 +13729,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			if (mpi_id==0) cout << "wall time for auxiliary source grid creation: " << srcgrid_wtime << endl;
 		}
 #endif
-
 		if (source_grid_defined) {
 			image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 			source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-			source_pixel_grid->calculate_pixel_magnifications();
+			if (!adaptive_subgrid) source_pixel_grid->calculate_pixel_magnifications(); // if adaptive_subgrid is off, we still need to get pixel magnifications for nimg_prior
 		}
 		if (n_sourcepts_fit > 0) {
 			if (use_analytic_bestfit_src) set_analytic_sourcepts(verbal);

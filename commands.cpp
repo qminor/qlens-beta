@@ -222,7 +222,7 @@ void QLens::process_commands(bool read_file)
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
-						"nimg_prior_npixels -- # of pixels per side for sourcegrid used for nimg_prior\n"
+						"auxgrid_npixels -- # of pixels per side for auxiliary sourcegrid used for nimg_prior, random grid\n"
 						"include_emask_in_chisq -- include extended mask pixels in inversion and chi-square\n"
 						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
 						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
@@ -2487,16 +2487,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Number of clustering iterations for Delaunay grid = " << n_cluster_iterations << endl;
 			} else Complain("must specify either zero or one argument (number of clustering iterations)");
 		}
-		else if (words[0]=="nimg_prior_npixels")
+		else if (words[0]=="auxgrid_npixels")
 		{
 			// This is the number of pixels (along x and y) for the sourcegrid created for the nimg_prior; not used if fitting with cartesian sourcegrid
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Number of source pixels per side for nimg_prior = " << n_image_prior_npixels << endl;
+				if (mpi_id==0) cout << "Number of source pixels per side for auxiliary srcgrid = " << auxiliary_srcgrid_npixels << endl;
 			} else if (nwords == 2) {
 				int npix;
 				if (!(ws[1] >> npix)) Complain("invalid number of pixels");
-				n_image_prior_npixels = npix;
-			} else Complain("only one argument allowed for 'nimg_prior_npixels'");
+				auxiliary_srcgrid_npixels = npix;
+			} else Complain("only one argument allowed for 'auxgrid_npixels'");
 		}
 		else if (words[0]=="autogrid")
 		{
@@ -11678,11 +11678,13 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> mat_index)) Complain("invalid kernel Matern index value");
 				if (!(ws[3] >> mat_index_ul)) Complain("invalid kernel Matern index upper limit");
 				if ((mat_index < mat_index_ll) or (mat_index > mat_index_ul)) Complain("initial kernel Matern index should lie within specified prior limits");
+				if ((mat_index_ul > 5) and (use_matern_scale_parameter)) Complain("matern indices greater than 5 are not advisable when use_matern_scale is set to 'on'");
 				matern_index = mat_index;
 				matern_index_lower_limit = mat_index_ll;
 				matern_index_upper_limit = mat_index_ul;
 			} else if (nwords == 2) {
 				if (!(ws[1] >> mat_index)) Complain("invalid kernel Matern index value");
+				if ((mat_index > 5) and (use_matern_scale_parameter)) Complain("matern indices greater than 5 are not advisable when use_matern_scale is set to 'on'");
 				matern_index = mat_index;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "kernel Matern index = " << matern_index << endl;
@@ -11698,6 +11700,7 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
 					vary_matern_scale = false;
 				}
+				if ((setword=="on") and (matern_index > 5)) Complain("matern indices greater than 5 are not allowed when use_matern_scale is set to 'on'");
 				if ((setword=="on") and (vary_correlation_length)) {
 					if (mpi_id==0) cout << "NOTE: Setting 'vary_correlation_length' to 'off'" << endl;
 					vary_correlation_length = false;
@@ -11725,11 +11728,15 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> mat_scale)) Complain("invalid kernel Matern scale value");
 				if (!(ws[3] >> mat_scale_ul)) Complain("invalid kernel Matern scale upper limit");
 				if ((mat_scale < mat_scale_ll) or (mat_scale > mat_scale_ul)) Complain("initial kernel Matern scale should lie within specified prior limits");
+				if ((mat_scale_ll >= mat_scale_ul)) Complain("Matern scale lower limit must be less than upper limit");
+				if ((mat_scale_ul >= 1)) Complain("Matern scale upper limit must be less than 1");
+				if ((mat_scale_ll <= 0)) Complain("Matern scale lower limit must be greater than zero");
 				matern_scale = mat_scale;
 				matern_scale_lower_limit = mat_scale_ll;
 				matern_scale_upper_limit = mat_scale_ul;
 			} else if (nwords == 2) {
 				if (!(ws[1] >> mat_scale)) Complain("invalid kernel Matern scale value");
+				if ((mat_scale <= 0) or (mat_scale >= 1)) Complain("Matern scale must be between 0 and 1");
 				matern_scale = mat_scale;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "kernel Matern scale = " << matern_scale << endl;
@@ -11792,12 +11799,12 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="random_seed")
 		{
-			long long int random_seed;
+			long long int seed;
 			if (nwords == 2) {
-				if (!(ws[1] >> random_seed)) Complain("invalid value for random seed");
-				set_random_seed(random_seed);
+				if (!(ws[1] >> seed)) Complain("invalid value for random seed");
+				random_seed = seed;
+				set_random_seed(seed);
 			} else if (nwords==1) {
-				random_seed = get_random_seed();
 				if (mpi_id==0) cout << "Random number generator seed = " << random_seed << endl;
 			} else Complain("must specify either zero or one argument for random_seed");
 		}
@@ -11977,6 +11984,17 @@ void QLens::process_commands(bool read_file)
 				set_switch(adaptive_subgrid,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="srcgrid_maxlevels")
+		{
+			// This is the maximum number of times that the cartesian source grid cells can be split
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Number of allowed splittings of Cartesian source pixels = " << SourcePixelGrid::max_levels << endl;
+			} else if (nwords == 2) {
+				int nlev;
+				if (!(ws[1] >> nlev)) Complain("invalid number of splittings");
+				SourcePixelGrid::max_levels = nlev;
+			} else Complain("only one argument allowed for 'srcgrid_maxlevels'");
+		}
 		else if (words[0]=="auto_srcgrid_set_pixelsize")
 		{
 			if (nwords==1) {
@@ -12096,6 +12114,19 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="random_delaunay_srcgrid")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use random adaptive grid source pixels: " << display_switch(use_random_delaunay_srcgrid) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'random_delaunay_srcgrid' command; must specify 'on' or 'off'");
+				set_switch(use_random_delaunay_srcgrid,setword);
+				if (use_srcpixel_clustering) {
+					use_srcpixel_clustering = false;
+					if (mpi_id==0) cout << "Setting 'use_srcpixel_clustering' to 'off'" << endl;
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="clustering_rand_init")
 		{
 			if (nwords==1) {
@@ -12104,6 +12135,16 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'clustering_rand_init' command; must specify 'on' or 'off'");
 				set_switch(clustering_random_initialization,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="random_grid_lengthfac")
+		{
+			if (nwords == 2) {
+				double lfac;
+				if (!(ws[1] >> lfac)) Complain("invalid length factor for random grid");
+				random_grid_length_factor = lfac;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "random_grid_lengthfac = " << random_grid_length_factor << endl;
+			} else Complain("must specify either zero or one argument");
 		}
 		else if (words[0]=="split_imgpixels")
 		{
@@ -12356,6 +12397,7 @@ void QLens::process_commands(bool read_file)
 			int param;
 			if (nwords == 2) {
 				if (!(ws[1] >> param)) Complain("invalid scale");
+				if (param < 0) Complain("delaunay_mode cannot be negative");
 				delaunay_mode = param;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "delaunay_mode = " << delaunay_mode << endl;
@@ -12377,6 +12419,26 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
 					use_lum_weighted_regularization = false;
+					if (vary_regparam_lhi) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
+						vary_regparam_lhi = false;
+					}
+					if (vary_regparam_lum_index) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
+						vary_regparam_lum_index = false;
+					}
+				}
+				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
+					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_srcpixel_clustering' to 'off'" << endl;
+					use_lum_weighted_srcpixel_clustering = false;
+					if (vary_alpha_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
+						vary_alpha_clus = false;
+					}
+					if (vary_beta_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
+						vary_beta_clus = false;
+					}
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

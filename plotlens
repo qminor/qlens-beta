@@ -586,6 +586,8 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'randpts' w points pt 6, 'pts.dat' ps 0.5 pt 1 lc 5"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'pts.dat' ps 0.5 pt 1 lc 5"
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_comp" ]]
