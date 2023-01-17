@@ -71,7 +71,7 @@ class SourcePixelGrid
 	static int **twist_status_threads;
 
 	static int u_split_initial, w_split_initial;
-	static const int max_levels;
+	static int max_levels;
 
 	static int levels; // keeps track of the total number of grid cell levels
 	static int splitlevels; // specifies the number of initial splittings to perform (not counting extra splittings if critical curves present)
@@ -130,6 +130,8 @@ class SourcePixelGrid
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread);
 	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const double weight, const int& thread);
 	double find_lensed_surface_brightness_interpolate(lensvector &input_center_pt, const int& thread);
+	double find_local_magnification_interpolate(lensvector &input_center_pt, const int& thread);
+
 	void find_interpolation_cells(lensvector &input_center_pt, const int& thread);
 	SourcePixelGrid* find_nearest_neighbor_cell(lensvector &input_center_pt, const int& side);
 	SourcePixelGrid* find_nearest_neighbor_cell(lensvector &input_center_pt, const int& side, const int tiebreaker_side);

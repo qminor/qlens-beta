@@ -43,7 +43,7 @@
 using namespace std;
 
 int SourcePixelGrid::nthreads = 0;
-const int SourcePixelGrid::max_levels = 6;
+int SourcePixelGrid::max_levels = 2;
 int SourcePixelGrid::number_of_pixels;
 int *SourcePixelGrid::imin, *SourcePixelGrid::imax, *SourcePixelGrid::jmin, *SourcePixelGrid::jmax;
 TriRectangleOverlap *SourcePixelGrid::trirec = NULL;
@@ -2295,6 +2295,75 @@ SourcePixelGrid* SourcePixelGrid::find_corner_cell(const int i, const int j)
 	return cellptr;
 }
 
+double SourcePixelGrid::find_local_magnification_interpolate(lensvector &input_center_pt, const int& thread)
+{
+	lensvector *pts[3];
+	double *mag[3];
+	int indx=0;
+	nearest_interpolation_cells[thread].found_containing_cell = false;
+	for (int i=0; i < 3; i++) nearest_interpolation_cells[thread].pixel[i] = NULL;
+
+	imin[thread]=0; imax[thread]=u_N-1;
+	jmin[thread]=0; jmax[thread]=w_N-1;
+	if (bisection_search_interpolate(input_center_pt,thread)==false) return false;
+
+	bool image_pixel_maps_to_source_grid = false;
+	int i,j,side;
+	for (j=jmin[thread]; j <= jmax[thread]; j++) {
+		for (i=imin[thread]; i <= imax[thread]; i++) {
+			if ((input_center_pt[0] >= cell[i][j]->corner_pt[0][0]) and (input_center_pt[0] < cell[i][j]->corner_pt[2][0]) and (input_center_pt[1] >= cell[i][j]->corner_pt[0][1]) and (input_center_pt[1] < cell[i][j]->corner_pt[3][1])) {
+				if (cell[i][j]->cell != NULL) cell[i][j]->find_interpolation_cells(input_center_pt,thread);
+				else {
+					nearest_interpolation_cells[thread].found_containing_cell = true;
+					nearest_interpolation_cells[thread].pixel[0] = cell[i][j];
+					if (((input_center_pt[0] > cell[i][j]->center_pt[0]) and (cell[i][j]->neighbor[0] != NULL)) or (cell[i][j]->neighbor[1] == NULL)) {
+						if (cell[i][j]->neighbor[0]->cell != NULL) {
+							side=0;
+							nearest_interpolation_cells[thread].pixel[1] = cell[i][j]->neighbor[0]->find_nearest_neighbor_cell(input_center_pt,side);
+						}
+						else nearest_interpolation_cells[thread].pixel[1] = cell[i][j]->neighbor[0];
+					} else {
+						if (cell[i][j]->neighbor[1]->cell != NULL) {
+							side=1;
+							nearest_interpolation_cells[thread].pixel[1] = cell[i][j]->neighbor[1]->find_nearest_neighbor_cell(input_center_pt,side);
+						}
+						else nearest_interpolation_cells[thread].pixel[1] = cell[i][j]->neighbor[1];
+					}
+					if (((input_center_pt[1] > cell[i][j]->center_pt[1]) and (cell[i][j]->neighbor[2] != NULL)) or (cell[i][j]->neighbor[3] == NULL)) {
+						if (cell[i][j]->neighbor[2]->cell != NULL) {
+							side=2;
+							nearest_interpolation_cells[thread].pixel[2] = cell[i][j]->neighbor[2]->find_nearest_neighbor_cell(input_center_pt,side);
+						}
+						else nearest_interpolation_cells[thread].pixel[2] = cell[i][j]->neighbor[2];
+					} else {
+						if (cell[i][j]->neighbor[3]->cell != NULL) {
+							side=3;
+							nearest_interpolation_cells[thread].pixel[2] = cell[i][j]->neighbor[3]->find_nearest_neighbor_cell(input_center_pt,side);
+						}
+						else nearest_interpolation_cells[thread].pixel[2] = cell[i][j]->neighbor[3];
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	for (i=0; i < 3; i++) {
+		pts[i] = &nearest_interpolation_cells[thread].pixel[i]->center_pt;
+		mag[i] = &nearest_interpolation_cells[thread].pixel[i]->total_magnification;
+	}
+
+	if (nearest_interpolation_cells[thread].found_containing_cell==false) die("could not find containing cell");
+	double d, total_invmag = 0;
+	// we interpolate in the inverse magnification since this is less likely to blow up
+	d = ((*pts[0])[0]-(*pts[1])[0])*((*pts[1])[1]-(*pts[2])[1]) - ((*pts[1])[0]-(*pts[2])[0])*((*pts[0])[1]-(*pts[1])[1]);
+	total_invmag += (1.0/(*mag[0]))*(input_center_pt[0]*((*pts[1])[1]-(*pts[2])[1]) + input_center_pt[1]*((*pts[2])[0]-(*pts[1])[0]) + (*pts[1])[0]*(*pts[2])[1] - (*pts[1])[1]*(*pts[2])[0]);
+	total_invmag += (1.0/(*mag[1]))*(input_center_pt[0]*((*pts[2])[1]-(*pts[0])[1]) + input_center_pt[1]*((*pts[0])[0]-(*pts[2])[0]) + (*pts[0])[1]*(*pts[2])[0] - (*pts[0])[0]*(*pts[2])[1]);
+	total_invmag += (1.0/(*mag[2]))*(input_center_pt[0]*((*pts[0])[1]-(*pts[1])[1]) + input_center_pt[1]*((*pts[1])[0]-(*pts[0])[0]) + (*pts[0])[0]*(*pts[1])[1] - (*pts[0])[1]*(*pts[1])[0]);
+	total_invmag /= d;
+	return 1.0/total_invmag;
+}
+
 void SourcePixelGrid::generate_gmatrices()
 {
 	int i,j,k,l;
@@ -2850,10 +2919,13 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 	covmatrix_factored.input(ntot);
 	Rmatrix_packed.input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
+		matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
 		if ((kernel_type==0) and (use_matern_scale_parameter)) {
-			matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
+		//wtime0 = omp_get_wtime();
 			//cout << "approx source size=" << matern_approx_source_size << endl;
 			set_corrlength_for_given_matscale();
+		//wtime = omp_get_wtime() - wtime0;
+		//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 		}
 		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index);
 	}
@@ -3468,7 +3540,7 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 			if ((j+k <= img_jmax) and (n=img_index_ij[i+k][j+k]) >= 0) break;
 		}
 		if (k > maxk) {
-			warn("could not find a good starting vertex for searching Delaunay grid; starting with vertex 0");
+			warn("could not find a good starting vertex for searching Delaunay grid (trie img_i=%i,img_j=%i); starting with vertex 0",img_pixel_i,img_pixel_j);
 			n=0; // in this case, can't find a good vertex to start with, so we just start with the first one
 		}
 	}
@@ -3857,6 +3929,10 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	indx[0] = 0;
 	for (j=1; j < n_srcpts; j++) indx[j] = indx[j-1] + n_srcpts-j+1; // allows us to find first nonzero column with packed storage
 
+	//double xsc = sqrt(2*matern_index)*lens->matern_approx_source_size/corr_length;
+	//double matscale = 1-matern_fac*pow(xsc,matern_index)*modified_bessel_function(xsc,matern_index);
+	//cout << "src_size=" << lens->matern_approx_source_size << " xsc=" << xsc << " MATSCALE=" << matscale << endl;
+
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
@@ -3886,7 +3962,7 @@ void QLens::set_corrlength_for_given_matscale()
 {
 	double (Brent::*corrlength_eq)(const double);
 	corrlength_eq = static_cast<double (Brent::*)(const double)> (&QLens::corrlength_eq_matern_factor);
-	double logcorr = BrentsMethod(corrlength_eq,-2,16,1e-5);
+	double logcorr = BrentsMethod_Inclusive(corrlength_eq,-3,40,1e-6,true);
 	kernel_correlation_length = pow(10,logcorr);
 	//double optimal_corrlength = pow(10,logcorr);
 	//cout << "Optimal correlation length: " << optimal_corrlength << endl;
@@ -8168,8 +8244,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 					for (jj=0; jj < nsplits[i][j]; jj++) {
 						u0 = ((double) (1+2*ii))/(2*nsplits[i][j]);
 						w0 = ((double) (1+2*jj))/(2*nsplits[i][j]);
-						subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
-						subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+						subpixel_center_pts[i][j][subcell_index][0] = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
+						subpixel_center_pts[i][j][subcell_index][1] = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
 						subcell_index++;
 					}
 				}
@@ -8616,8 +8692,8 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 					for (jj=0; jj < nsplit; jj++) {
 						u0 = ((double) (1+2*ii))/(2*nsplit);
 						w0 = ((double) (1+2*jj))/(2*nsplit);
-						subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
-						subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+						subpixel_center_pts[i][j][subcell_index][0] = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
+						subpixel_center_pts[i][j][subcell_index][1] = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
 						subcell_index++;
 					}
 				}
@@ -9994,10 +10070,10 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 				sb=0;
 				for (ii=0; ii < nsplit; ii++) {
 					u0 = ((double) (1+2*ii))/(2*nsplit);
-					x = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+					x = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
 					for (jj=0; jj < nsplit; jj++) {
 						w0 = ((double) (1+2*jj))/(2*nsplit);
-						y = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
+						y = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
 						if (lens->use_input_psf_matrix) {
 							sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
 						} else {
@@ -15273,10 +15349,10 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 			subpixel_index = 0;
 			for (ii=0; ii < nsplit; ii++) {
 				u0 = ((double) (1+2*ii))/(2*nsplit);
-				center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
+				center_pt[0] = (1-u0)*image_pixel_grid->corner_pts[i][j][0] + u0*image_pixel_grid->corner_pts[i+1][j][0];
 				for (jj=0; jj < nsplit; jj++) {
 					w0 = ((double) (1+2*jj))/(2*nsplit);
-					center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
+					center_pt[1] = (1-w0)*image_pixel_grid->corner_pts[i][j][1] + w0*image_pixel_grid->corner_pts[i][j+1][1];
 					//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
 					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;
 					for (int k=0; k < n_sb; k++) {

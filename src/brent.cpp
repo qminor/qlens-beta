@@ -225,10 +225,17 @@ double Brent::BrentsMethod_Inclusive(double (Brent::*func)(const double), const 
 	double fc, p, q, r, s, tol1, xm;
 
 	if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
-		if (verbose) warn("root must be bracketed in Brent's Method");
-		if (fabs(fa) < fabs(fb)) return a;
-		else return b;
+		if (fabs(fa) < fabs(fb)) {
+			if (verbose) warn("root is not bracketed in Brent's Method; setting x=a");
+			return a;
+		}
+		else {
+			if (verbose) warn("root is not bracketed in Brent's Method; setting x=b");
+			return b;
+		}
 	}
+	if (fb*0.0 != 0.0) warn("upper end of bracket is returning NaN in BrentsMethod_Inclusive");
+	if (fa*0.0 != 0.0) warn("lower end of bracket is returning NaN in BrentsMethod_Inclusive");
 
 	fc = fb;
 	for (int it=0; it < itmax; it++) {
@@ -247,7 +254,10 @@ double Brent::BrentsMethod_Inclusive(double (Brent::*func)(const double), const 
 		}
 		tol1 = 2.0*eps*fabs(b) + 0.5*tol;
 		xm = 0.5*(c-b);
-		if (fabs(xm) <= tol1 || fb == 0.0) return b;
+		if (fabs(xm) <= tol1 || fb == 0.0) {
+			//warn("returned upper end of bracket (%g,%g,%g,%g,%g); f=%g,%g,%g",a,c,b,xm,tol1,fa,fb,fc);
+			return b;
+		}
 
 		if (fabs(e) >= tol1 && fabs(fa) > fabs(fb))
 		{

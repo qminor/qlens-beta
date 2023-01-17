@@ -34,6 +34,15 @@ class Random
 		w = v; int64(); int64();
 		first_normal_deviate = true;
 	}
+	void reinitialize_random_generator()
+	{
+		v = 4101842887655102017LL;
+		w = 1;
+		u = seed ^ v; int64();
+		v = u; int64(); int64();
+		w = v; int64(); int64();
+		first_normal_deviate = true;
+	}
 	void set_random_generator(Random* rand_in) { u = rand_in->u; v = rand_in->v; w = rand_in->w; }
 	inline unsigned long long int int64()
 	{
@@ -44,8 +53,8 @@ class Random
 		return (x + v) ^ w;
 	}
 	unsigned long long int get_random_seed() { return seed; }
-	double RandomNumber(){return 5.42101086242752217E-20 * int64();}
-	inline unsigned int int32() {return (unsigned int)int64(); }
+	double RandomNumber() { return 5.42101086242752217E-20 * int64(); }
+	inline unsigned int int32() { return (unsigned int)int64(); }
 	double NormalDeviate()
 	{
 		double fac,rsq,v1,v2;
