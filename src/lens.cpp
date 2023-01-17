@@ -1021,7 +1021,7 @@ QLens::QLens() : UCMC()
 	use_srcpixel_clustering = false;
 	clustering_random_initialization = false;
 	use_random_delaunay_srcgrid = false;
-	random_grid_length_factor = 0.7;
+	random_grid_length_factor = 1.3;
 	n_src_clusters = -1;
 	n_cluster_iterations = 6;
 	regrid_if_unmapped_source_subpixels = false;
@@ -12815,7 +12815,7 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 			}
 			//average_number_density = (number_density_srcplane + number_density_closest_pt)/2; // averaging # densities was my first thought, but I think getting rms length is better
 			//sqrlength_threshold = length_fac*length_fac/average_number_density;
-			sqrlength_threshold = length_fac*length_fac*(1.0/number_density_srcplane + 1.0/number_density_closest_pt); // this is equivalent to averaging the sqrlength thresholds
+			sqrlength_threshold = length_fac*length_fac*(1.0/number_density_srcplane + 1.0/number_density_closest_pt)/2; // this is equivalent to averaging the sqrlength thresholds
 		} else {
 			sqrlength_threshold = length_fac*length_fac/number_density_srcplane;
 		}
