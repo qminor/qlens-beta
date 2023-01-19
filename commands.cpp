@@ -10796,6 +10796,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "max number of iterations for luminosity regularization = " << lumreg_max_it << endl;
 			} else Complain("must specify either zero or one argument for lumreg_max_it");
 		}
+		else if (words[0]=="lumreg_max_it_final")
+		{
+			int maxit;
+			if (nwords == 2) {
+				if (!(ws[1] >> maxit)) Complain("invalid lumreg_max_it_final setting");
+				lumreg_max_it_final=maxit;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "max number of final iterations for luminosity regularization = " << lumreg_max_it_final << endl;
+			} else Complain("must specify either zero or one argument for lumreg_max_it_final");
+		}
 		else if (words[0]=="integral_tolerance")
 		{
 			double itolerance;
@@ -12439,6 +12449,23 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
 						vary_beta_clus = false;
 					}
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="optimize_regparam_lhi")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Automatically determine optimal regularization parameter: " << display_switch(optimize_regparam_lhi) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'optimize_regparam_lhi' command; must specify 'on' or 'off'");
+				if ((setword=="on") and ((source_fit_mode != Shapelet_Source) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source))) Complain("optimize_regparam_lhi only available in pixellated (cartesian, delaunay) or Shapelet source mode");
+				if ((setword=="on") and (!optimize_regparam)) Complain("'optimize_regparam' must also be set to 'on' before turning on optimize_regparam_lhi");
+				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("optimize_regparam_lhi only available if 'lum_weighted_regularization' is set to 'on'");
+				set_switch(optimize_regparam_lhi,setword);
+				if ((setword=="on") and (vary_regparam_lhi)) {
+					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off' and updating parameters" << endl;
+					vary_regparam_lhi = false;
+					update_parameter_list();
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

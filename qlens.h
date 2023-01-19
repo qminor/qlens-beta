@@ -530,6 +530,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_matern_scale;
 	bool vary_matern_index;
 	bool optimize_regparam;
+	bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
@@ -539,6 +540,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double regparam_lhi, regparam_llo, regparam_lum_index; 
 	double regparam_lhi, regparam_lum_index; 
 	double *lumreg_pixel_weights;
+	int lumreg_it;
 	//bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
 	bool vary_regparam_lhi, vary_regparam_lum_index;
 	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
@@ -563,7 +565,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
 	double chisqtol_lumreg;
-	int lumreg_max_it;
+	int lumreg_max_it, lumreg_max_it_final;
 	int n_repeats;
 	bool display_chisq_status;
 	int n_visible_images;
@@ -783,6 +785,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
+	double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
 	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
@@ -835,7 +838,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void calculate_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	double chisq_regparam_lumreg_dense(const double logreg);
+	double chisq_regparam_it_lumreg_dense(const double logreg);
+	double chisq_regparam_it_lumreg_dense_final(const bool verbal);
+	double chisq_regparam_lumreg_dense();
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
@@ -997,7 +1002,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
 	void create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal);
-	void create_sourcegrid_delaunay_random(const bool use_weighted_probability, const bool verbal);
+	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();

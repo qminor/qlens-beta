@@ -840,6 +840,7 @@ QLens::QLens() : UCMC()
 	chisq_tolerance = 1e-3;
 	chisqtol_lumreg = 1e-3;
 	lumreg_max_it = 20;
+	lumreg_max_it_final = 20;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
 	chisq_imgplane_substitute_threshold = -1; // if > 0, will evaluate the source plane chi-square and if above the threshold, use instead of image plane chi-square (if imgplane_chisq is on)
@@ -949,6 +950,7 @@ QLens::QLens() : UCMC()
 	vary_matern_scale = false;
 
 	optimize_regparam = false;
+	optimize_regparam_lhi = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
 	optimize_regparam_maxlog = 3;
@@ -1241,6 +1243,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	chisq_tolerance = lens_in->chisq_tolerance;
 	chisqtol_lumreg = lens_in->chisqtol_lumreg;
 	lumreg_max_it = lens_in->lumreg_max_it;
+	lumreg_max_it_final = lens_in->lumreg_max_it_final;
 	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
 	chisq_imgplane_substitute_threshold = lens_in->chisq_imgplane_substitute_threshold;
@@ -1348,6 +1351,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	vary_matern_scale = lens_in->vary_matern_scale;
 
 	optimize_regparam = lens_in->optimize_regparam;
+	optimize_regparam_lhi = lens_in->optimize_regparam_lhi;
 	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
 	optimize_regparam_maxlog = lens_in->optimize_regparam_maxlog;
@@ -9564,7 +9568,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	tol = 0.5;				// tol, defines the stopping criteria
 	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters
 	nClsPar = n_fit_parameters;				// no. of parameters to do mode separation on
-	updInt = 1000;				// after how many iterations feedback is required & the output files should be updated
+	updInt = 10;				// after how many iterations feedback is required & the output files should be updated
 							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
 	Ztol = -1e90;				// all the modes with logZ < Ztol are ignored
 	maxModes = 100;				// expected max no. of modes (used only for memory allocation)
@@ -11365,7 +11369,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
 	if (loglike < 1e30) {
-		if (((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam) and (fitmodel->regularization_parameter < 0)) chisq = 2e30;
+		if ((fitmodel->regularization_parameter < 0) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam)) chisq = 2e30;
 		else {
 			chisq = fitmodel->invert_image_surface_brightness_map(chisq0,false);
 		}
@@ -12542,7 +12546,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 }
 */
 
-void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number_density, const bool verbal)
+void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number_density, const bool verbal)
 {
 	int i,j,k,n,n_other,ii,jj,neighbor_i,neighbor_j,neighbor_k,corner_i,corner_j,corner_k,lmin;
 	double sqrdist,sqrdistmin;
@@ -12648,8 +12652,9 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 	//ofstream randout("randpts");
 	int nreject = 0;
 
-	//double srcgrid_wtime0, srcgrid_wtime;
-	//srcgrid_wtime0 = omp_get_wtime();
+	double srcgrid_wtime0, srcgrid_wtime;
+	//double srcgrid_totwtime=0;
+	srcgrid_wtime0 = omp_get_wtime();
 
 	reinitialize_random_generator();
 	while (true) {
@@ -12763,6 +12768,7 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 		nearest_subpixels_ys[3] = image_pixel_grid->subpixel_center_sourcepts[corner_i][corner_j][corner_k][1];
 		if (use_lum_weighted_number_density) nearest_subpixels_sbweights[3] = image_pixel_grid->subpixel_sbweights[corner_i][corner_j][corner_k];
 
+		//srcgrid_wtime0 = omp_get_wtime();
 		xsl=xl/nsp;
 		ysl=yl/nsp;
 		tt = abs(x - nearest_subpixels_x[0]);
@@ -12782,6 +12788,7 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 		srcpt_interp[0] = xs_interp;
 		srcpt_interp[1] = ys_interp;
 		mag = source_pixel_grid->find_local_magnification_interpolate(srcpt_interp,0);
+		//srcgrid_totwtime += omp_get_wtime() - srcgrid_wtime0;
 		if (mag==0) {
 			nreject++;
 			continue;
@@ -12811,7 +12818,7 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 				cout << "lmin=" << lmin << endl;
 				cout << "mag=" << mag << " " << mags[lmin] << endl;
 				cout << "weight=" << weight << " " << weights[lmin] << endl;
-				die("FUCK");
+				die("found catastrophic zero number density when generating random Delaunay grid");
 			}
 			//average_number_density = (number_density_srcplane + number_density_closest_pt)/2; // averaging # densities was my first thought, but I think getting rms length is better
 			//sqrlength_threshold = length_fac*length_fac/average_number_density;
@@ -12859,12 +12866,15 @@ void QLens::create_sourcegrid_delaunay_random(const bool use_lum_weighted_number
 		if (srcpix_n >= nsrcpix) break;
 	}
 	//srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+	//if (mpi_id==0) cout << "Wall time for setting up random source pixel grid: " << srcgrid_wtime << endl;
 
 	if (nsrcpix != srcpix_n) die("number of source pixels does not match target n_src_clusters");
 	if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (random) has n_pixels=" << nsrcpix << endl;
+	//srcgrid_wtime0 = omp_get_wtime();
 	delaunay_srcgrid = new DelaunayGrid(this,srcpts_x,srcpts_y,nsrcpix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
+	//srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
 
-	//if (mpi_id==0) cout << "Wall time for creating random source pixel grid: " << srcgrid_wtime << endl;
+	//if (mpi_id==0) cout << "Wall time for creating delaunay_srcgrid: " << srcgrid_wtime << endl;
 	delete[] srcpts_x;
 	delete[] srcpts_y;
 	delete[] ivals;
@@ -12878,7 +12888,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if (use_random_delaunay_srcgrid) {
 		// if using luminosity weighting, let's only use the random grid on the second go-around when lum weighting is used
 		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
-			create_sourcegrid_delaunay_random(use_weighted_srcpixel_clustering,verbal);
+			create_random_delaunay_sourcegrid(use_weighted_srcpixel_clustering,verbal);
 			return;
 		}
 	}
@@ -13988,6 +13998,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid);
 		}
 		if (use_lum_weighted_srcpixel_clustering) {
+#ifdef USE_OPENMP
+		double srcgrid_wtime0, srcgrid_wtime;
+		if (show_wtime) {
+			srcgrid_wtime0 = omp_get_wtime();
+		}
+#endif
 			create_sourcegrid_from_imggrid_delaunay(true,verbal);
 
 #ifdef USE_OPENMP
