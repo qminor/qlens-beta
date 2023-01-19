@@ -2919,8 +2919,8 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type)
 	covmatrix_factored.input(ntot);
 	Rmatrix_packed.input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
-		matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
 		if ((kernel_type==0) and (use_matern_scale_parameter)) {
+			matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
 		//wtime0 = omp_get_wtime();
 			//cout << "approx source size=" << matern_approx_source_size << endl;
 			set_corrlength_for_given_matscale();
@@ -8243,6 +8243,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 						w0 = ((double) (1+2*jj))/(2*nsplits[i][j]);
 						subpixel_center_pts[i][j][subcell_index][0] = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
 						subpixel_center_pts[i][j][subcell_index][1] = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
+						//subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+						//subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 						subcell_index++;
 					}
 				}
@@ -8691,6 +8693,8 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 						w0 = ((double) (1+2*jj))/(2*nsplit);
 						subpixel_center_pts[i][j][subcell_index][0] = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
 						subpixel_center_pts[i][j][subcell_index][1] = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
+						//subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
+						//subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 						subcell_index++;
 					}
 				}
@@ -10067,9 +10071,11 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 				sb=0;
 				for (ii=0; ii < nsplit; ii++) {
 					u0 = ((double) (1+2*ii))/(2*nsplit);
+					//x = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
 					x = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
 					for (jj=0; jj < nsplit; jj++) {
 						w0 = ((double) (1+2*jj))/(2*nsplit);
+						//y = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 						y = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
 						if (lens->use_input_psf_matrix) {
 							sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
@@ -13186,6 +13192,7 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 	else Fmatrix_log_determinant = regopt_logdet;
 	if (use_lum_weighted_regularization) {
+		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
 		for (i=0; i < source_n_amps; i++) source_pixel_vector_input_lumreg[i] = source_pixel_vector_minchisq[i];
 	} else {
 		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
@@ -13210,12 +13217,51 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			chisqreg = &QLens::chisq_regparam_it_lumreg_dense;
 			logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
 			regparam_lhi = pow(10,logreg_min);
+			if ((lumreg_max_it != lumreg_max_it_final) and (lumreg_it >= lumreg_max_it)) chisq_regparam_it_lumreg_dense_final(verbal); // only do "final" iterations if it didn't already converge to chisqtol_lumreg
 			if ((verbal) and (mpi_id==0)) cout << "regparam_lhi after optimizing: " << regparam_lhi << endl;
 		} else {
-			chisq_regparam_it_lumreg_dense(log(regparam_lhi)/ln10);
+			lumreg_it = 0;
+			double chisq, chisqprev;
+			if (lumreg_max_it > 0) {
+				chisq = chisq_regparam_lumreg_dense();
+				if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+				lumreg_it++;
+				do {
+					chisqprev = chisq;
+					chisq = chisq_regparam_lumreg_dense();
+					if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+
+					if (chisq > chisqprev) {
+						if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
+						chisq = chisqprev;
+						break;
+					}
+				} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+			}
+			/*
+			lumreg_it = 0;
+			double chisq, chisqprev;
+			chisq = chisq_regparam_lumreg_dense();
+			if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+			lumreg_it++;
+			do {
+				chisqprev = chisq;
+				chisq = chisq_regparam_lumreg_dense();
+				if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+
+				if (chisq > chisqprev) {
+					if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
+					chisq = chisqprev;
+					break;
+				}
+			} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+			*/
+
+			//chisq_regparam_it_lumreg_dense_final(verbal);
 		}
-		if ((lumreg_max_it != lumreg_max_it_final) and (lumreg_it >= lumreg_max_it)) chisq_regparam_it_lumreg_dense_final(verbal); // only do "final" iterations if it didn't already converge to chisqtol_lumreg
 		if ((verbal) and (lumreg_it >= lumreg_max_it_final)) warn("exceeded maximum iterations for refining luminosity-weighted regularization (maxit_final=%i)",lumreg_max_it_final);
+		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
+		else Fmatrix_log_determinant = regopt_logdet;
 		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
 		add_lum_weighted_reg_term(dense_Fmatrix,false);
 #ifdef USE_OPENMP
@@ -15404,9 +15450,11 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 			subpixel_index = 0;
 			for (ii=0; ii < nsplit; ii++) {
 				u0 = ((double) (1+2*ii))/(2*nsplit);
+				//center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
 				center_pt[0] = (1-u0)*image_pixel_grid->corner_pts[i][j][0] + u0*image_pixel_grid->corner_pts[i+1][j][0];
 				for (jj=0; jj < nsplit; jj++) {
 					w0 = ((double) (1+2*jj))/(2*nsplit);
+					//center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
 					center_pt[1] = (1-w0)*image_pixel_grid->corner_pts[i][j][1] + w0*image_pixel_grid->corner_pts[i][j+1][1];
 					//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
 					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;

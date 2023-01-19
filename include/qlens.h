@@ -583,8 +583,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
 	bool use_random_delaunay_srcgrid;
+	bool reinitialize_random_grid;
 	int random_seed;
+	int n_ranchisq;
 	double random_grid_length_factor;
+	bool interpolate_random_sourcepts;
 	bool clustering_random_initialization;
 	int n_src_clusters;
 	int n_cluster_iterations;

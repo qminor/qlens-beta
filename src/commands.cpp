@@ -11818,6 +11818,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Random number generator seed = " << random_seed << endl;
 			} else Complain("must specify either zero or one argument for random_seed");
 		}
+		else if (words[0]=="nchisq")
+		{
+			long long int nchisq;
+			if (nwords == 2) {
+				if (!(ws[1] >> nchisq)) Complain("invalid value for random nchisq");
+				n_ranchisq = nchisq;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "Number of (averaged) likelihood evals nchisq = " << n_ranchisq << endl;
+			} else Complain("must specify either zero or one argument for nchisq");
+		}
 		else if (words[0]=="sb_threshold")
 		{
 			double sbthresh;
@@ -12135,6 +12145,24 @@ void QLens::process_commands(bool read_file)
 					use_srcpixel_clustering = false;
 					if (mpi_id==0) cout << "Setting 'use_srcpixel_clustering' to 'off'" << endl;
 				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="random_grid_reinit")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Reinitialize random grid each time: " << display_switch(reinitialize_random_grid) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'random_grid_reinit' command; must specify 'on' or 'off'");
+				set_switch(reinitialize_random_grid,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="interpolate_random_srcpts")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Interpolate ray tracing for random Delaunay grid: " << display_switch(interpolate_random_sourcepts) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'interpolate_random_srcpts' command; must specify 'on' or 'off'");
+				set_switch(interpolate_random_sourcepts,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="clustering_rand_init")
