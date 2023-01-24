@@ -2348,9 +2348,14 @@ double SourcePixelGrid::find_local_magnification_interpolate(lensvector &input_c
 		}
 	}
 
+	//double lev;
+	//cout << "Interpolating pixels for point " << input_center_pt[0] << " " << input_center_pt[1] << endl;
 	for (i=0; i < 3; i++) {
 		pts[i] = &nearest_interpolation_cells[thread].pixel[i]->center_pt;
 		mag[i] = &nearest_interpolation_cells[thread].pixel[i]->total_magnification;
+		//lev = nearest_interpolation_cells[thread].pixel[i]->level;
+		//cout << (*pts[i])[0] << " " << (*pts[i])[1] << endl;
+		//cout << "LEVEL for pixel " << i << ": " << lev << endl;
 	}
 
 	if (nearest_interpolation_cells[thread].found_containing_cell==false) die("could not find containing cell");
@@ -8221,12 +8226,16 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 	int ii,jj;
 	double u0,w0,mag;
 	int subcell_index;
+	min_srcplane_area = 1e30;
+	double pixel_srcplane_area;
 	for (n=0; n < ntot_cells; n++) {
 		//n_cell = j*x_N+i;
 		j = masked_pixels_j[n];
 		i = masked_pixels_i[n];
 		source_plane_triangle1_area[i][j] = area_tri1[n];
 		source_plane_triangle2_area[i][j] = area_tri2[n];
+		pixel_srcplane_area = area_tri1[n] + area_tri2[n];
+		if (pixel_srcplane_area < min_srcplane_area) min_srcplane_area = pixel_srcplane_area;
 		//if (i==176) cout << "AREAS (" << i << "," << j << "): " << area_tri1[n] << " " << area_tri2[n] << endl;
 		twist_pts[i][j][0] = twistx[n];
 		twist_pts[i][j][1] = twisty[n];
@@ -13747,18 +13756,20 @@ double QLens::chisq_regparam_it_lumreg_dense_final(const bool verbal)
 	double chisq, chisqprev;
 	chisq = chisq_regparam_lumreg_dense();
 	if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
-	lumreg_it++;
-	do {
-		chisqprev = chisq;
-		chisq = chisq_regparam_lumreg_dense();
-		if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
+	if (lumreg_max_it_final > 0) {
+		lumreg_it++;
+		do {
+			chisqprev = chisq;
+			chisq = chisq_regparam_lumreg_dense();
+			if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
 
-		if (chisq > chisqprev) {
-			if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
-			chisq = chisqprev;
-			break;
-		}
-	} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+			if (chisq > chisqprev) {
+				if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
+				chisq = chisqprev;
+				break;
+			}
+		} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+	}
 	return chisq;
 }
 

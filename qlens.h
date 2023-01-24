@@ -993,7 +993,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	void load_pixel_grid_from_data();
-	double invert_surface_brightness_map_from_data(bool verbal);
+	double invert_surface_brightness_map_from_data(double& chisq0, bool verbal);
 	void plot_image_pixel_grid();
 	bool find_shapelet_scaling_parameters(const bool verbal);
 	bool set_shapelet_imgpixel_nsplit();

@@ -11375,14 +11375,17 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		loglike += fitmodel->get_einstein_radius_prior(false);
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
-	chisq=0;
+	chisq=0,chisq0=0;
+	double chisq00;
 	if (loglike < 1e30) {
 		if ((fitmodel->regularization_parameter < 0) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam)) chisq = 2e30;
 		else {
 			for (int i=0; i < n_ranchisq; i++) {
-				chisq += fitmodel->invert_image_surface_brightness_map(chisq0,false);
+				chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false);
+				chisq0 += chisq00;
 			}
 			chisq /= n_ranchisq;
+			chisq0 /= n_ranchisq;
 		}
 	}
 
@@ -12559,6 +12562,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
 
 void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number_density, const bool verbal)
 {
+	double minlen;
 	int i,j,k,n,n_other,ii,jj,neighbor_i,neighbor_j,neighbor_k,corner_i,corner_j,corner_k,lmin;
 	double sqrdist,sqrdistmin;
 	int neighbor_ii, neighbor_jj;
@@ -12637,6 +12641,8 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 	double nearest_subpixels_ys[4];
 	double nearest_subpixels_sbweights[4];
 	bool xneighbor_plus, yneighbor_plus; // keeps track if point is closer to the pixel above/right (then true), or below/left (then false ) for x/y directions respectively
+	ofstream logout("logpts");
+	/*
 	//ofstream subpixout;
 	ofstream ptout;
 	ofstream srcptiout;
@@ -12646,6 +12652,7 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 		srcptiout.open("spts_i.dat");
 	}
 	//ofstream srcptout("spts.dat");
+	*/
 	/*
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
@@ -12667,6 +12674,9 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 	//double srcgrid_totwtime=0;
 	srcgrid_wtime0 = omp_get_wtime();
 
+	int count=0;
+	include_central_image = false;
+	create_grid(false,reference_zfactors,default_zsrc_beta_factors);
 	if (reinitialize_random_grid) reinitialize_random_generator();
 	while (true) {
 		xneighbor_plus = false;
@@ -12808,6 +12818,44 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 			}
 		}
 		mag = source_pixel_grid->find_local_magnification_interpolate(srcpt,0);
+		/*
+		minlen = 0.05*sqrt(image_pixel_grid->min_srcplane_area);
+		double srcpixel_length = (sourcegrid_xmax-sourcegrid_xmin)/(auxiliary_srcgrid_npixels-1);
+		cout << "MINLEN COMP: " << minlen << " " << srcpixel_length << endl;
+		die();
+		double invmag = 0;
+		int npts = 13;
+		int ip, jp;
+		double xp, yp, step;
+		lensvector srcpt_p;
+		step = 5*minlen/(npts-1);
+		double norm=0;
+		double expfac;
+		for (ip=0, xp=xs-minlen; ip < npts; ip++, xp += step) {
+			for (jp=0, yp=ys-minlen; jp < npts; jp++, yp += step) {
+				srcpt_p[0]=xp;
+				srcpt_p[1]=yp;
+				expfac = exp(-SQR((xp-xs)/minlen)/2);
+				invmag += expfac/source_pixel_grid->find_local_magnification_interpolate(srcpt_p,0);
+				norm += expfac;
+			}
+		}
+		//invmag /= (npts*npts);
+		invmag /= norm;
+		mag = 1.0/invmag;
+		double magcheck = source_pixel_grid->find_local_magnification_interpolate(srcpt,0);
+		//cout << mag << " " << magcheck << endl;
+*/
+
+		//int n_images;
+		//image *img = get_images(srcpt, n_images, false);
+		//double mag_check=0;
+		//for (i=0; i < n_images; i++) {
+			//mag_check += abs(img[i].mag);
+		//}
+		//mag = mag_check;
+		//cout << mag << " " << mag_check << endl;
+
 		//srcgrid_totwtime += omp_get_wtime() - srcgrid_wtime0;
 		if (mag==0) {
 			nreject++;
@@ -12844,8 +12892,13 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 		}
 		//if (sqrdistmin*0.0 != 0.0) die("FOOK");
 		//cout << sqrt(sqrdistmin) << " " << sqrt(sqrlength_threshold) << endl;
+		//cout << setprecision(3);
+		//cout << count << " " << x << " " << y << " " << " mag=" << mag << " mindist=" << sqrt(sqrdistmin) << " frac=" << sqrt(sqrdistmin/sqrlength_threshold) << " ...";
+		logout << count << " ";
+		count++;
 		if (sqrdistmin < sqrlength_threshold) {
-			//cout << "rejected" << endl;
+			//cout << "rejected :-(" << endl;
+			logout << "reject" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
 			nreject++;
 			if (nreject > 5*nsrcpix) {
 				length_fac *= 0.9;
@@ -12854,10 +12907,12 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 			}
 			continue;
 		}
+		logout << "KEEP!!" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
+		//cout << "KEEP!" << endl;
 		nreject = 0; // start reject counting over
 		//if (sqrt(sqrlength_threshold) < 3e-3) cout << "RUHROH! threshold = " << sqrt(sqrlength_threshold) << " " << xs << " " << ys << endl;
 		//if (sqrlength_threshold*0.0 != 0.0) die("OOPS");
-		if (verbal) srcptiout << xs << " " << ys << endl;
+		//if (verbal) srcptiout << xs << " " << ys << endl;
 		//if (use_lum_weighted_number_density) cout << weight << " " << sbweight_interp << endl;
 		//if ((use_lum_weighted_number_density) and (sbweight_interp > 1)) warn("FUCK %g",sbweight_interp);
 
@@ -12865,7 +12920,7 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 		//cout << "SUBPIX_S: " << i << " " << j << " " << ii << " " << jj << " " << k << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][0] << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][1] << endl;
 
 		//cout << "#Point: " << endl << x << " " << y << endl;
-		if (verbal) ptout << x << " " << y << endl;
+		//if (verbal) ptout << x << " " << y << endl;
 		//randout << x << " " << y << endl;
 		//cout << "#Nearest neighbors:" << endl;
 		//for (k=0; k < 4; k++) randout << nearest_subpixels_x[k] << " " << nearest_subpixels_y[k] << endl;
@@ -12878,9 +12933,15 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 		if (use_lum_weighted_number_density) weights[srcpix_n] = weight;
 		mags[srcpix_n] = mag;
 		srcpix_n++;
+		//if (srcpix_n > 100) {
+	//cout << "MINLEN: " << minlen << endl;
+			//die();
+		//}
+
 		//cout << "srcpix_n=" << srcpix_n << endl;
 		if (srcpix_n >= nsrcpix) break;
 	}
+	//die();
 	//srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
 	//if (mpi_id==0) cout << "Wall time for setting up random source pixel grid: " << srcgrid_wtime << endl;
 
@@ -13645,14 +13706,22 @@ void QLens::plot_image_pixel_grid()
 	image_pixel_grid->plot_grid("map",false);
 }
 
-double QLens::invert_surface_brightness_map_from_data(bool verbal)
+double QLens::invert_surface_brightness_map_from_data(double &chisq0, bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, verbal);
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
-	double chisq,chisq0;
-	chisq = invert_image_surface_brightness_map(chisq0,verbal);
+	double chisq=0,chisq00;
+	chisq0=0;
+	for (int i=0; i < n_ranchisq; i++) {
+		chisq += invert_image_surface_brightness_map(chisq00,verbal);
+		chisq0 += chisq00;
+	}
+	chisq /= n_ranchisq;
+	chisq0 /= n_ranchisq;
+
+	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
 
 	if (chisq == 2e30) {
@@ -13748,7 +13817,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	int i,j;
 	double loglike_times_two = 0;
 
-	if (((n_image_prior) or (n_sourcepts_fit > 0)) and (source_fit_mode != Cartesian_Source)) {
+	if (((n_image_prior) or (n_sourcepts_fit > 0) or (use_random_delaunay_srcgrid)) and (source_fit_mode != Cartesian_Source)) {
 		if ((mpi_id==0) and (verbal)) cout << "Trying auxiliary sourcegrid creation..." << endl;
 #ifdef USE_OPENMP
 		double srcgrid_wtime0, srcgrid_wtime;
@@ -14182,6 +14251,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 	//if (((n_image_prior) or (n_sourcepts_fit > 0)) and (source_fit_mode != Cartesian_Source)) {
 	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
+#endif
 		//if (nlens==0) {
 			//for (i=0; i < n_sourcepts_fit; i++) {
 				//if (source_redshifts[i] != lens_redshift) die("lensed source point has been defined, but no lens objects have been created");
@@ -14194,6 +14268,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 			source_pixel_grid->find_avg_n_images();
 		//}
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) cout << "Wall time for assigning SB for nimg_prior: " << wtime << endl;
+		}
+#endif
 	}
 
 	// Note: fluxes should be solved during the linear inversion part....ugh will have to add quasar amplitudes to the linear inversions. That will be interesting.
@@ -14385,7 +14465,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			else logfile << " -2*log(ev)=" << loglike_times_two << " (no priors)" << endl;
 		}
 		if ((mpi_id==0) and (verbal)) {
-			cout << "-2*log(ev)=" << loglike_times_two << " (without priors)" << endl;
+			cout << "-2*log(ev)=" << loglike_times_two << " (a.k.a. 'chisq_pix')" << endl;
 			if ((vary_pixel_fraction) or (regularization_method != None)) {
 				if (use_covariance_matrix) cout << " logdet(Gmatrix)=" << Gmatrix_log_determinant << endl;
 				else cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
