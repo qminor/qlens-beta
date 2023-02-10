@@ -1,0 +1,13 @@
+zlens = 0.646 # the following data file is from Tu et al. 2009 (arXiv:0902.4804)
+2 # number of source points
+4 1.847 # number of images, followed by source redshift
+# x, y, error in x or y, flux, error in flux, time delay, error in time delay
+-1.06	1.03	0.03	1.0	0.0	0.0	0.0
+-1.29	-0.53	0.03	1.0	0.0	0.0	0.0
+-1.06	-0.98	0.03	1.0	0.0	0.0	0.0
+0.88	0.08	0.03	1.0	0.0	0.0	0.0
+2  2.9 # number of images, followed by source redshift
+# x, y, error in x or y, flux, error in flux, time delay, error in time delay
+-1.28	2.31	0.03	1.0	0.0	0.0	0.0
+0.39	-0.33	0.03	1.0	0.0	0.0	0.0
+	

@@ -1,0 +1,12 @@
+# Deleting current lens configuration, if any:
+lens clear
+# We create our primary lens galaxy with an isothermal ellipsoid profile (axis ratio=0.7):
+lens alpha 10 1 1 0.7 90
+autogrid
+mkgrid
+# Now we create a "source galaxy" which consists of an ellipsoidal grid of source points:
+mksrcgal -1.4 -0.7 1 0.7 0 20 200
+# Plot the grid so you can see what it looks like:
+plotgrid
+# Now we plot the images (this may take several seconds):
+plotimgs

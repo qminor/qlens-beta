@@ -1,0 +1,57 @@
+# The correct lens model for the simulated data used here is as follows:
+# alpha (b=5, s=0, q=0.7, theta=90, center=(0.9,0.3)
+# external shear (gamma=0.1, theta=40 degrees)
+# Source point: (0.5, 0.7)
+#
+# In this script we show how to infer these parameters by fitting a lens model
+# to the simulated data using chi-square minimization.
+
+lens clear              # Just in case we were doing something else before this
+imgdata clear           # Just in case we already had image data loaded before this
+
+fit label alphafit      # This labels the files that will be produced by the lens fitting
+fit method simplex      # This is the default fit method (downhill simplex method), which minimizes the chi-square function
+chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
+sci_notation off        # This is just up to your personal preference
+central_image off       # The image data does not include a central image, so this tells QLens not to search for one.
+imgdata read alphafit.dat    # Loads in the image data
+imgdata                      # Shows the image data so you can see what it looks like
+
+# Here are some tips for deciding your initial guess for the lens parameters:
+# Use the scale of the images to guess the Einstein radius.
+# Always fix alpha=1 and s=0 (singular isothermal ellipsoid model). These parameters usually cannot be
+#    constrained well unless we have time delays or multiple source points.
+# The center of the lens can often be guessed at by averaging the image positions (or using the center of the
+#    lens galaxy in the image if it is visible).
+# It may only be possible to constrain both the external shear and axis ratio q if image fluxes or time delays
+#    can be used in addition to the image positions. If you do model the external shear, guess a small
+#    but nonzero value for both gamma and the angle, as we do here.
+
+fit lens alpha 4.5 1 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
+1 0 0 1 1 1 1 1 1                                   #vary flags; here we vary everything except for alpha and s (core size)
+
+fit sourcept auto  # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).
+                      # You can use 'fit plotimg' to see if the resulting images are roughly in the correct regions.
+                      # If the fit doesn't converge, play around with qlens further and find a lens model and source point
+                      # that fits the images more closely before trying again
+fit
+
+chisqflux on    # This means we use the image fluxes in the fit (very useful if the fluxes are reliable, but they often aren't)
+chisqtol 1e-6   # Sets the convergence criterion for finding the minimum chi-square. Bigger chisqtol --> less accuracy, but runs faster
+
+# By default, the chi-square function is set to the source-plane chi-square (see B.4.6 of the Saas Fee Lectures by Kochanek (2004))
+#fit run            # for the first run, you might want to use the source plane chi-square to find the right region of
+                    #   parameter space (which is faster and sometimes less prone to getting stuck in a rut, but not always accurate)
+#fit use_bestfit    # adopt the best fit parameters so they can be used as initial parameters for the next run
+
+imgplane_chisq on   # now we will do the fit using the image plane chi-square for a more accurate fit
+nrepeat 2           # this tells it to minimize the chi-square again after converging to a best-fit point, just to ensure we are
+                    # really at a minimum (recommended)
+pause
+fit run                  
+
+fit use_bestfit
+fit findimg # you can also do 'fit plotimg' to see the best-fit model image positions compared to the data
+fit chisq
+pause
+fit save_bestfit    # if you like the resulting fit, save the best-fit model (or do this automatically if 'auto_save_bestfit' is on)

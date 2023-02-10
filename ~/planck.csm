@@ -1,0 +1,11 @@
+# Planck cosmological parameters:
+
+0.6711    # Hubble parameter h
+0.3175    # Omega_m
+0.0488    # Omega_b
+0.6825    # Omega_lambda
+2.215     # A_s*10^9
+0.9624    # spectral index
+0         # running of spectral index
+0         # tensor-to-scalar ratio
+
