@@ -12,7 +12,6 @@
 #ifndef MLPACK_PREREQS_HPP
 #define MLPACK_PREREQS_HPP
 
-#include <cassert>
 #include "base.hpp"
 
 //#include <cereal/archives/binary.hpp>
