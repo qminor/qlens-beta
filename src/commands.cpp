@@ -13,13 +13,13 @@
 #include <sstream>
 #include <cstdlib>
 
-#ifdef USE_FAISS
-#include <faiss/Clustering.h>
-#include <faiss/IndexFlat.h>
-#include <faiss/IndexHNSW.h>
-#include <faiss/utils/distances.h>
-#include <faiss/utils/random.h>
-#endif
+//#ifdef USE_FAISS
+//#include <faiss/Clustering.h>
+//#include <faiss/IndexFlat.h>
+//#include <faiss/IndexHNSW.h>
+//#include <faiss/utils/distances.h>
+//#include <faiss/utils/random.h>
+//#endif
 
 #ifdef USE_READLINE
 #include <readline/readline.h>
@@ -59,6 +59,8 @@ void QLens::process_commands(bool read_file)
 	paused_while_reading_file = false; // used to keep track of whether qlens opened a script while it was paused
 	ws = NULL;
 	buffer = NULL;
+
+	double chisq_pix_last = -1; // for investigating difference between subsquent pixel inversions (using 'sbmap invert')
 
 	for (;;)
    {
@@ -9628,12 +9630,16 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="invert")
 			{
 				bool regopt = false; // false means it uses whatever the actual setting is for optimize_regparam
+				bool verbal = true;
+				bool chisqdif = false;
 				bool old_regopt;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-regopt") regopt = true;
+						else if ((args[i]=="-s") or (args[i]=="-silent")) verbal = false;
+						else if ((args[i]=="-d") or (args[i]=="-difff")) chisqdif = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -9657,8 +9663,15 @@ void QLens::process_commands(bool read_file)
 						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
 					}
 				}
-				invert_surface_brightness_map_from_data(true);
+				double chisq, chisq0;
+				chisq = invert_surface_brightness_map_from_data(chisq0, verbal);
+				if ((mpi_id==0) and (!verbal)) cout << "chisq0=" << chisq0 << ", chisq_pix=" << chisq << endl;
 				if (regopt) optimize_regparam = old_regopt;
+				if ((mpi_id==0) and (chisqdif)) {
+					double diff = chisq - chisq_pix_last;
+					cout << "chisq_dif = " << diff << endl;
+				}
+				chisq_pix_last = chisq;
 			}
 			else if (words[1]=="plot_imgpixels")
 			{
@@ -10791,7 +10804,8 @@ void QLens::process_commands(bool read_file)
 			int maxit;
 			if (nwords == 2) {
 				if (!(ws[1] >> maxit)) Complain("invalid lumreg_max_it setting");
-				lumreg_max_it=maxit;
+				lumreg_max_it = maxit;
+				if (!optimize_regparam_lhi) lumreg_max_it_final = maxit;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "max number of iterations for luminosity regularization = " << lumreg_max_it << endl;
 			} else Complain("must specify either zero or one argument for lumreg_max_it");
@@ -12165,6 +12179,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(interpolate_random_sourcepts,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="dualtree_kmeans")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use dual-tree k-means algorithm for clustering (instead of naive k-means): " << display_switch(use_dualtree_kmeans) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'dualtree_kmeans' command; must specify 'on' or 'off'");
+				set_switch(use_dualtree_kmeans,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="clustering_rand_init")
 		{
 			if (nwords==1) {
@@ -12527,16 +12550,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "regparam_maxlog = " << optimize_regparam_maxlog << endl;
 			} else Complain("must specify either zero or one argument (regparam_maxlog)");
 		}
-		else if (words[0]=="regparam_maxit")
+		else if ((words[0]=="regparam_max_it") or (words[0]=="regparam_maxit"))
 		{
 			int maxit;
 			if (nwords == 2) {
-				if (!(ws[1] >> maxit)) Complain("invalid regparam_maxit");
+				if (!(ws[1] >> maxit)) Complain("invalid regparam_max_it");
 				if (maxit <= 0) Complain("number of iterations for optimizing regparam must be greater than zero");
 				max_regopt_iterations = maxit;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_tol = " << max_regopt_iterations << endl;
-			} else Complain("must specify either zero or one argument (regparam_maxit)");
+				if (mpi_id==0) cout << "regparam_max_it = " << max_regopt_iterations << endl;
+			} else Complain("must specify either zero or one argument (regparam_max_it)");
 		}
 		else if (words[0]=="auto_shapelet_center")
 		{
@@ -12670,6 +12693,7 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 			
+			/*
 #ifdef USE_FAISS
 			using namespace faiss;
 			int n_data = npix;
@@ -12710,6 +12734,7 @@ void QLens::process_commands(bool read_file)
 			cout << "Centroid 3: " << centroids[4] << " " << centroids[5] << endl;
 			cout << "etc." << endl;
 #endif
+			*/
 			/*
 			ofstream dataout("srcptskm.dat");
 			ofstream centout("centkm.dat");

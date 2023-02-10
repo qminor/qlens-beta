@@ -589,6 +589,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double random_grid_length_factor;
 	bool interpolate_random_sourcepts;
 	bool clustering_random_initialization;
+	bool use_dualtree_kmeans;
 	int n_src_clusters;
 	int n_cluster_iterations;
 	double delaunay_high_sn_sbfrac;
@@ -993,7 +994,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	void load_pixel_grid_from_data();
-	double invert_surface_brightness_map_from_data(bool verbal);
+	double invert_surface_brightness_map_from_data(double& chisq0, bool verbal);
 	void plot_image_pixel_grid();
 	bool find_shapelet_scaling_parameters(const bool verbal);
 	bool set_shapelet_imgpixel_nsplit();
@@ -1006,6 +1007,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
 	void create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
+	void generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
 	bool make_image_surface_brightness_data();

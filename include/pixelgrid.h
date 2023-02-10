@@ -267,6 +267,7 @@ class ImagePixelGrid : public Sort
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 	bool **fit_to_data;
 	double pixel_area, triangle_area; // half of pixel area
+	double min_srcplane_area;
 	double max_sb, pixel_noise;
 	bool **maps_to_source_pixel;
 	int max_nsplit;
