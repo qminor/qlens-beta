@@ -1463,7 +1463,7 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 		fx = log10;
 		if (flag&LOGAXIS) gx = dummy;
 		else gx = pow10;
-		if (flag&NOADJ) facs = unit;
+		if (flag&NOADJ) facx = unit;
 		else facx = pow10;
 		//gx = (flag&LOGAXIS) ? dummy : pow10;
 		//facx = (flag&NOADJ) ? unit : pow10;
