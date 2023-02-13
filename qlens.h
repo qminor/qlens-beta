@@ -589,6 +589,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double random_grid_length_factor;
 	bool interpolate_random_sourcepts;
 	bool clustering_random_initialization;
+	bool clustering_imgplane_rand_init;
 	bool use_dualtree_kmeans;
 	int n_src_clusters;
 	int n_cluster_iterations;

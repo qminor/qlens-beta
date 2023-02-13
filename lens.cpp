@@ -1031,6 +1031,7 @@ QLens::QLens() : UCMC()
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
 	clustering_random_initialization = false;
+	clustering_imgplane_rand_init = false;
 	use_random_delaunay_srcgrid = false;
 	random_grid_length_factor = 0.5;
 	interpolate_random_sourcepts = false;
@@ -1459,6 +1460,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
 	clustering_random_initialization = lens_in->clustering_random_initialization;
+	clustering_imgplane_rand_init = lens_in->clustering_imgplane_rand_init;
 	use_random_delaunay_srcgrid = lens_in->use_random_delaunay_srcgrid;
 	random_grid_length_factor = lens_in->random_grid_length_factor;
 	interpolate_random_sourcepts = lens_in->interpolate_random_sourcepts;
@@ -1473,7 +1475,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	imgpixel_lomag_threshold = lens_in->imgpixel_lomag_threshold;
 	imgpixel_himag_threshold = lens_in->imgpixel_himag_threshold;
 	imgpixel_sb_threshold = lens_in->imgpixel_sb_threshold;
-
 
 	use_cc_spline = lens_in->use_cc_spline;
 	auto_ccspline = lens_in->auto_ccspline;
@@ -12985,7 +12986,7 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 	double nearest_subpixels_ys[4];
 	double nearest_subpixels_sbweights[4];
 	bool xneighbor_plus, yneighbor_plus; // keeps track if point is closer to the pixel above/right (then true), or below/left (then false ) for x/y directions respectively
-	ofstream logout("logpts");
+	//ofstream logout("logpts");
 	/*
 	//ofstream subpixout;
 	ofstream ptout;
@@ -13241,11 +13242,11 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 		//cout << sqrt(sqrdistmin) << " " << sqrt(sqrlength_threshold) << endl;
 		//cout << setprecision(3);
 		//cout << count << " " << x << " " << y << " " << " mag=" << mag << " mindist=" << sqrt(sqrdistmin) << " frac=" << sqrt(sqrdistmin/sqrlength_threshold) << " ...";
-		logout << count << " ";
+		//logout << count << " ";
 		//count++;
 		if (sqrdistmin < sqrlength_threshold) {
 			//cout << "rejected :-(" << endl;
-			logout << "reject" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
+			//logout << "reject" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
 			nreject++;
 			if (nreject > 5*nsrcpix) {
 				length_fac *= 0.9;
@@ -13254,7 +13255,7 @@ void QLens::create_random_delaunay_sourcegrid(const bool use_lum_weighted_number
 			}
 			continue;
 		}
-		logout << "KEEP!!" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
+		//logout << "KEEP!!" << " " << mag << " " << sqrt(sqrdistmin/sqrlength_threshold) << endl;
 		//cout << "KEEP!" << endl;
 		nreject = 0; // start reject counting over
 		//if (sqrt(sqrlength_threshold) < 3e-3) cout << "RUHROH! threshold = " << sqrt(sqrlength_threshold) << " " << xs << " " << ys << endl;
@@ -13326,12 +13327,11 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*data_pixel_noise);
 	if (use_random_delaunay_srcgrid) {
 		// if using luminosity weighting, let's only use the random grid on the second go-around when lum weighting is used
-		/*
 		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
 			create_random_delaunay_sourcegrid(use_weighted_srcpixel_clustering,verbal);
 			return;
 		}
-		*/
+		/*
 		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
 			int npix = n_src_clusters;
 			if (npix <= 0) npix = npix_in_mask/2;
@@ -13353,8 +13353,13 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
 			delete[] imgpts_x;
 			delete[] imgpts_y;
+			delete[] srcpts_x;
+			delete[] srcpts_y;
+			delete[] ivals;
+			delete[] jvals;
 			return;
 		}
+		*/
 	}
 	int i,j,k,l,n,npix=0;
 	bool include;
@@ -13488,170 +13493,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
-
-		/*
-		int npts = 40;
-		int ncent = 2;
-		int nn = 2*npts;
-		int nc = 2*ncent;
-
-		double ptts[nn];
-		j=0;
-		for (i=0; i < npts; i++) {
-			ptts[j++] = 20*RandomNumber() - 10;
-			ptts[j++] = 20*RandomNumber() - 10;
-		}
-		double wgts[npts];
-		for (i=0; i < npts; i++) {
-			wgts[i] = 20*RandomNumber() + 1.0;
-		}
-		double cent0[nc];
-
-		//= {
-			//1, 1,
-			//0, 3,
-			//-2, 5,
-			//-3, -2,
-			//5, -2,
-			//-1, 7,
-			//3, -4,
-			//2, 9
-		//};
-		//double wgts[8] = {
-			//1, 2, 3, 12, 4, 1, 7, 3
-		//};
-		//double cent0[6] = { 
-			//-1, 1,
-			//1, 2,
-			//-1, 8
-		//};
-		cout << "Data:" << endl;
-		j=0;
-		for (i=0; i < npts; i++) {
-			cout << ptts[j++] << " ";
-			cout << ptts[j++] << " ";
-			cout << wgts[i] << endl;
-		}
-
-		arma::mat testdata(ptts, 2, npts);
-		arma::Col<double> wvec(wgts, npts);
-		arma::Row<size_t> assm(npts);
-		arma::mat testcent(2, ncent);
-		testcent.col(0)[0] = 1;
-		testcent.col(0)[1] = 1;
-		testcent.col(1)[0] = -1;
-		testcent.col(1)[1] = -1;
-		for (i=0; i < npts; i++) {
-			assm[i] = -1;
-		}
-
-
-		//KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, PellegMooreKMeans> clus(n_cluster_iterations);
-		KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
-		clus.Cluster(testdata, ncent, assm, testcent, wvec, use_weighted_srcpixel_clustering, false, true);
-
-		cout << endl;
-		double *centroids_x = new double[ncent];
-		double *centroids_y = new double[ncent];
-		cout << "Naive KMeans Centroids:" << endl;
-		for (i=0; i < ncent; i++) {
-			centroids_x[i] = (double) testcent(0,i);
-			centroids_y[i] = (double) testcent(1,i);
-			cout << centroids_x[i] << " " << centroids_y[i] << endl;
-		}
-		testcent.col(0)[0] = 1;
-		testcent.col(0)[1] = 1;
-		testcent.col(1)[0] = -1;
-		testcent.col(1)[1] = -1;
-		arma::Row<size_t> assm0(assm);
-
-		//cout << "Data before dualtree:" << endl;
-		//for (i=0; i < npts; i++) {
-			//cout << i << " " << testdata.col(i)[0] << " " << testdata.col(i)[1] << " " << wvec[i] << " " << assm0[i] << endl;
-		//}
-
-
-//KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
-		KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus2(n_cluster_iterations);
-		clus2.Cluster(testdata, ncent, assm, testcent, wvec, use_weighted_srcpixel_clustering, false, true);
-
-
-		cout << endl;
-		cout << "DualTree KMeans Centroids:" << endl;
-		for (i=0; i < ncent; i++) {
-			centroids_x[i] = (double) testcent(0,i);
-			centroids_y[i] = (double) testcent(1,i);
-			cout << centroids_x[i] << " " << centroids_y[i] << endl;
-		}
-		cout << "KMeans Assignments (Naive, Dual-tree):" << endl;
-		for (i=0; i < npts; i++) {
-			cout << assm0[i] << " " << assm[i] << endl;
-		}
-		double cen0[2];
-		double cen1[2];
-		j=0;
-		cen0[0] = 0;
-		cen0[1] = 0;
-		cen1[0] = 0;
-		cen1[1] = 0;
-		double tw0=0, tw1=0;
-		for (i=0; i < npts; i++) {
-			if (assm0[i]==0) {
-				cen0[0] += wgts[i]*ptts[j++];
-				cen0[1] += wgts[i]*ptts[j++];
-				tw0 += wgts[i];
-			} else {
-				cen1[0] += wgts[i]*ptts[j++];
-				cen1[1] += wgts[i]*ptts[j++];
-				tw1 += wgts[i];
-			}
-		}
-		cen0[0] /= tw0;
-		cen0[1] /= tw0;
-		cen1[0] /= tw1;
-		cen1[1] /= tw1;
-
-		double dcen0[2];
-		double dcen1[2];
-		j=0;
-		dcen0[0] = 0;
-		dcen0[1] = 0;
-		dcen1[0] = 0;
-		dcen1[1] = 0;
-		tw0=0; tw1=0;
-		for (i=0; i < npts; i++) {
-			if (assm[i]==0) {
-				dcen0[0] += wgts[i]*ptts[j++];
-				dcen0[1] += wgts[i]*ptts[j++];
-				tw0 += wgts[i];
-			} else {
-				dcen1[0] += wgts[i]*ptts[j++];
-				dcen1[1] += wgts[i]*ptts[j++];
-				tw1 += wgts[i];
-			}
-		}
-		dcen0[0] /= tw0;
-		dcen0[1] /= tw0;
-		dcen1[0] /= tw1;
-		dcen1[1] /= tw1;
-
-
-		cout << "Check centroids (naive):" << endl;
-		cout << cen0[0] << " " << cen0[1] << endl;
-		cout << cen1[0] << " " << cen1[1] << endl;
-		cout << "Check centroids (dual-tree):" << endl;
-		cout << dcen0[0] << " " << dcen0[1] << endl;
-		cout << dcen1[0] << " " << dcen1[1] << endl;
-
-
-		//cout << "Data after dualtree:" << endl;
-		//for (i=0; i < npts; i++) {
-			//cout << i << " " << testdata.col(i)[0] << " " << testdata.col(i)[1] << " " << wvec[i] << " " << assm[i] << endl;
-		//}
-
-		die();
-*/
-
 		int n_src_centroids = n_src_clusters;	
 		if (n_src_centroids < 0) n_src_centroids = npix_in_mask / 2;
 		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
@@ -13663,90 +13504,49 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		double *initial_centroids = new double[2*n_src_centroids];
 		int *ivals_centroids = new int[n_src_centroids];
 		int *jvals_centroids = new int[n_src_centroids];
-		for (i=0,j=0,k=0,l=0; i < npix; i++) {
-			input[j++] = srcpts_x[i];
-			input[j++] = srcpts_y[i];
-			if (i%data_reduce_factor==0) {
-				initial_centroids[k++] = srcpts_x[i];
-				initial_centroids[k++] = srcpts_y[i];
-				//ivals_centroids[l] = ivals[i];
-				//jvals_centroids[l] = jvals[i];
-				ivals_centroids[l] = 0;
-				jvals_centroids[l] = 0;
-				l++;
+		if (!clustering_imgplane_rand_init) {
+			for (i=0,j=0,k=0,l=0; i < npix; i++) {
+				input[j++] = srcpts_x[i];
+				input[j++] = srcpts_y[i];
+				if (i%data_reduce_factor==0) {
+					initial_centroids[k++] = srcpts_x[i];
+					initial_centroids[k++] = srcpts_y[i];
+					ivals_centroids[l] = 0;
+					jvals_centroids[l] = 0;
+					l++;
+				}
 			}
+			int ncent2=2*n_src_centroids;
+			if (k != 2*n_src_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
+		} else {
+			for (i=0,j=0; i < npix; i++) {
+				input[j++] = srcpts_x[i];
+				input[j++] = srcpts_y[i];
+			}
+			double *centroids_x = new double[n_src_centroids];
+			double *centroids_y = new double[n_src_centroids];
+			double *imgpts_x = new double[n_src_centroids];
+			double *imgpts_y = new double[n_src_centroids];
+			generate_random_regular_imgpts(imgpts_x,imgpts_y,centroids_x,centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,use_lum_weighted_srcpixel_clustering,verbal);
+			for (i=0,j=0; i < n_src_centroids; i++) {
+				initial_centroids[j++] = centroids_x[i];
+				initial_centroids[j++] = centroids_y[i];
+			}
+			delete[] imgpts_x;
+			delete[] imgpts_y;
+			delete[] centroids_x;
+			delete[] centroids_y;
 		}
 
-		double *centroids_x = new double[n_src_centroids];
-		double *centroids_y = new double[n_src_centroids];
-		double *imgpts_x = new double[n_src_centroids];
-		double *imgpts_y = new double[n_src_centroids];
-		generate_random_regular_imgpts(imgpts_x,imgpts_y,centroids_x,centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,use_lum_weighted_srcpixel_clustering,verbal);
-		for (i=0,j=0; i < n_src_centroids; i++) {
-			initial_centroids[j++] = centroids_x[i];
-			initial_centroids[j++] = centroids_y[i];
-		}
-		delete[] imgpts_x;
-		delete[] imgpts_y;
-		delete[] centroids_x;
-		delete[] centroids_y;
-
-		//ofstream testout("test.dat");
-		//for (i=0,j=0; i < npix; i++) {
-			//testout << input[j++] << " ";
-			//testout << input[j++] << endl;
-		//}
-		//testout.close();
-		int ncent2=2*n_src_centroids;
-		if (k != 2*n_src_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
 		if (!use_weighted_srcpixel_clustering) {
 			for (i=0; i < npix; i++) weights[i] = 1;
 		} else {
 			for (i=0; i < npix; i++) weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
 		}
 
-		/*
-		double min_weight = 1e30;
-		for (i=0; i < npix; i++) {
-			if (weights[i] < min_weight) min_weight = weights[i];
-		}
-		double *weights_norm = new double[npix];
-		for (i=0; i < npix; i++) weights_norm[i] = weights[i];
-		double totweight=0;
-		int totweight_int;
-		if (min_weight != 0) {
-			for (i=0; i < npix; i++) {
-				weights_norm[i] /= min_weight;
-				totweight += weights_norm[i];
-			}
-			totweight_int = (int) totweight;
-			cout << "TOTWEIGHT: " << totweight << endl;
-			int weighted_data_reduce_factor = totweight_int / n_src_centroids;
-			for (i=0,j=0,l=0; i < npix; i++) {
-				for (k=0;k < ((int) weights_norm[i]); k++) {
-					if (j%weighted_data_reduce_factor==0) {
-						initial_centroids[l++] = srcpts_x[i];
-						initial_centroids[l++] = srcpts_y[i];
-					}
-					j++;
-				}
-			}
-			cout << "final toweight: " << j << endl;
-		}
-		delete[] weights_norm;
-		*/
-
-		//for (i=0; i < npix; i++) weights[i] = pow(wfactors[i] + 0.01,0);
-		//if (verbal){for (i=0; i < npix; i++) cout << "wfactor[" << i << "] = " << wfactors[i] << ", weight = " << weights[i] << endl;
-		//cout << "MAXSB: " << max_sb << " MINSB: " << min_sb << endl;
-		//}
-		//for (i=0; i < npix; i++) weights[i] = ((double) i)/npix;
-
-
 		arma::mat dataset(input, 2, npix);
 		arma::Col<double> weightvec(weights, npix);
 		arma::mat centroids(initial_centroids, 2, n_src_centroids);
-		//arma::Row<size_t> assignments;
 		delete[] input;
 		delete[] initial_centroids;
 		delete[] weights;
@@ -13760,7 +13560,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
 			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
 		} else {
-			//KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
 			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
 			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
 		}
@@ -13770,50 +13569,9 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		for (i=0; i < n_src_centroids; i++) {
 			src_centroids_x[i] = (double) centroids(0,i);
 			src_centroids_y[i] = (double) centroids(1,i);
-			//ivals[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Hopefully this won't be a bottleneck
-			//jvals[i] = 0;
+			//ivals_centroids[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Hopefully this won't be a bottleneck
+			//jvals_centroids[i] = 0;
 		}
-
-		/*
-		double sqrdist;
-		bool duplicate = false;
-		bool *remove_dup = new bool[n_src_centroids];
-		int ndups = 0;
-		for (i=0; i < n_src_centroids; i++) {
-			remove_dup[i] = false;
-			for (j=i+1; j < n_src_centroids; j++) {
-				sqrdist = SQR(src_centroids_x[i]-src_centroids_x[j]) + SQR(src_centroids_y[i]-src_centroids_y[j]);
-				if (sqrdist==0) {
-					duplicate = true;
-					cout << "WARNING: DUPLICATE CENTROIDS" << endl;
-					cout << "i: " << i << " img: si_x=" << src_centroids_x[i] << " si_y=" << src_centroids_y[i] << endl;
-					cout << "j: " << j << " img: sj_x=" << src_centroids_x[j] << " sj_y=" << src_centroids_y[j] << endl;
-					duplicate = true;
-					remove_dup[i] = true;
-					ndups++;
-					//die();
-				}
-			}
-		}
-		if (duplicate) {
-			int new_nsrcpts = n_src_centroids - ndups;
-			double *new_src_centroids_x = new double[new_nsrcpts];
-			double *new_src_centroids_y = new double[new_nsrcpts];
-			for (i=0,j=0; i < n_src_centroids; i++) {
-				if (!remove_dup[i]) {
-					new_src_centroids_x[j] = src_centroids_x[i];
-					new_src_centroids_y[j] = src_centroids_y[i];
-					j++;
-				}
-			}
-			delete[] src_centroids_x;
-			delete[] src_centroids_y;
-			src_centroids_x = new_src_centroids_x;
-			src_centroids_y = new_src_centroids_y;
-			n_src_centroids = new_nsrcpts;
-		}
-		delete[] remove_dup;
-		*/
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
 		delaunay_srcgrid = new DelaunayGrid(this,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
