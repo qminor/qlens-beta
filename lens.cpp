@@ -12519,57 +12519,6 @@ bool QLens::create_sourcegrid_delaunay(const bool use_mask, const bool verbal)
 	return true;
 }
 
-/*
-void QLens::create_sourcegrid_from_imggrid_delaunay(const bool verbal)
-{
-	int i,j,n,npix=0;
-	bool *include_in_delaunay_grid = new bool[image_pixel_grid->ntot_corners];
-	bool include;
-	for (n=0; n < image_pixel_grid->ntot_corners; n++) {
-		include = false;
-		j = image_pixel_grid->masked_pixel_corner_j[n];
-		i = image_pixel_grid->masked_pixel_corner_i[n];
-		if (delaunay_mode==0) include = true;
-		else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
-		else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
-		else if ((delaunay_mode==3) and (((i%3==0) and (j%3==0)) or ((i%3==1) and (j%3==1)) or ((i%3==2) and (j%3==2)))) include = true;
-		else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
-		if (include) npix++;
-		include_in_delaunay_grid[n] = include;
-	}
-
-	double *srcpts_x = new double[npix];
-	double *srcpts_y = new double[npix];
-	int *ivals = new int[npix];
-	int *jvals = new int[npix];
-
-	npix = 0;
-	for (n=0; n < image_pixel_grid->ntot_corners; n++) {
-		j = image_pixel_grid->masked_pixel_corner_j[n];
-		i = image_pixel_grid->masked_pixel_corner_i[n];
-		if (include_in_delaunay_grid[n]) {
-			srcpts_x[npix] = image_pixel_grid->corner_sourcepts[i][j][0];
-			srcpts_y[npix] = image_pixel_grid->corner_sourcepts[i][j][1];
-			ivals[npix] = i;
-			jvals[npix] = j;
-			npix++;
-		}
-	}
-	if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
-
-	if (delaunay_srcgrid != NULL) delete delaunay_srcgrid;
-	
-	delaunay_srcgrid = new DelaunayGrid(this,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
-	double sum = delaunay_srcgrid->sum_edge_sqrlengths(0.3);
-	cout << "SUM=" << sum << endl;
-
-	delete[] srcpts_x;
-	delete[] srcpts_y;
-	delete[] ivals;
-	delete[] jvals;
-}
-*/
-
 void QLens::generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal)
 {
 	const double beta_eff = beta_clus / 2; // There seems to be an advantage in clustering slightly less to begin with, and let K-means determine the exact amount of clustering from there; not sure why, but keeping the beta_clus/2 hack in there for now
@@ -13389,7 +13338,11 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
 			else if (delaunay_mode==5) include = true;
 			if ((delaunay_high_sn_mode) and (!include)) {
-				if (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb) include = true;
+				if (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb) {
+					if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
+					else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
+					else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
+				}
 			}
 		}
 		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) npix += nsubpix;

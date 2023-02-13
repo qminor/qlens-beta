@@ -154,7 +154,9 @@ double DualTreeKMeans<MetricType, MatType, TreeType>::Iterate(
       upperBounds, lowerBounds, metric, prunedPoints, oldFromNewCentroids,
       visited);
 
-  typename Tree::template BreadthFirstDualTreeTraverser<RuleType>
+  //typename Tree::template BreadthFirstDualTreeTraverser<RuleType>
+      //traverser(rules);
+  typename Tree::template DualTreeTraverser<RuleType>
       traverser(rules);
 
   CoalesceTree(*tree);
