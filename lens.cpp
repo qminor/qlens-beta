@@ -13274,16 +13274,17 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	}
 	double avg_sb = -1e30;
 	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*data_pixel_noise);
+	/*
 	if (use_random_delaunay_srcgrid) {
 		// if using luminosity weighting, let's only use the random grid on the second go-around when lum weighting is used
-		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
-			create_random_delaunay_sourcegrid(use_weighted_srcpixel_clustering,verbal);
-			return;
-		}
-		/*
-		if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
-			int npix = n_src_clusters;
-			if (npix <= 0) npix = npix_in_mask/2;
+		//if ((!use_lum_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_weighted_srcpixel_clustering))) {
+			//create_random_delaunay_sourcegrid(use_weighted_srcpixel_clustering,verbal);
+			//return;
+		//}
+		if (((!use_lum_weighted_srcpixel_clustering) and (!use_srcpixel_clustering)) or ((use_lum_weighted_srcpixel_clustering) and (!use_weighted_srcpixel_clustering))) {
+			//int npix = n_src_clusters;
+			//if (npix <= 0) npix = npix_in_mask/2;
+			int npix = npix_in_mask/2;
 			srcpts_x = new double[npix];
 			srcpts_y = new double[npix];
 			ivals = new int[npix];
@@ -13291,11 +13292,11 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			double *imgpts_x = new double[npix];
 			double *imgpts_y = new double[npix];
 			generate_random_regular_imgpts(imgpts_x,imgpts_y,srcpts_x,srcpts_y,npix,ivals,jvals,use_lum_weighted_srcpixel_clustering,verbal);
-			ofstream imgout("imgpts_r.dat");
-			for (int i=0; i < npix; i++) {
-				imgout << imgpts_x[i] << " " << imgpts_y[i] << " " << srcpts_x[i] << " " << srcpts_y[i] << endl;
-			}
-			imgout.close();
+			//ofstream imgout("imgpts_r.dat");
+			//for (int i=0; i < npix; i++) {
+				//imgout << imgpts_x[i] << " " << imgpts_y[i] << " " << srcpts_x[i] << " " << srcpts_y[i] << endl;
+			//}
+			//imgout.close();
 			if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << npix << endl;
 			delaunay_srcgrid = new DelaunayGrid(this,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
 			double edge_sum = delaunay_srcgrid->sum_edge_sqrlengths(avg_sb);
@@ -13308,8 +13309,8 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			delete[] jvals;
 			return;
 		}
-		*/
 	}
+	*/
 	int i,j,k,l,n,npix=0;
 	bool include;
 	double max_sb = -1e30, min_sb = 1e30;
@@ -13318,32 +13319,32 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	bool *include_in_delaunay_grid = new bool[npix_in_mask];
 	// if delaunay_high_sn_mode is on, we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels;
 	// avg_sb is also used to find where to compare grids 1/2
-	int nsubpix;
+	int nsubpix, nysubpix;
 	double sb;
+	if ((use_random_delaunay_srcgrid) and (reinitialize_random_grid)) reinitialize_random_generator();
 	for (n=0; n < npix_in_mask; n++) {
 		include = false;
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nysubpix = image_pixel_grid->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
+		nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
 		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
 			include = true;
 			sb = image_pixel_data->surface_brightness[i][j];
 			if (sb > max_sb) max_sb = sb;
 			if (sb < min_sb) min_sb = sb;
 		} else {
-			if (delaunay_mode==0) include = true;
+			if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
+				if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
+				else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
+				else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
+				else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
+			}
+			else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
 			else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
 			else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
 			else if ((delaunay_mode==3) and (((i%3==0) and (j%3==0)) or ((i%3==1) and (j%3==1)) or ((i%3==2) and (j%3==2)))) include = true;
 			else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
-			else if (delaunay_mode==5) include = true;
-			if ((delaunay_high_sn_mode) and (!include)) {
-				if (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb) {
-					if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
-					else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
-					else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
-				}
-			}
 		}
 		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) npix += nsubpix;
 		else if (include) {
@@ -13364,6 +13365,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	npix = 0;
 	int subcell_i1, subcell_i2;
+	//int subcell_i1_midquad, subcell_i2_midquad, midstart;
 	//ofstream pixout("piximg.dat");
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
@@ -13411,10 +13413,28 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					//}
 					//die();
 
-					//subcell_i1 = (i+2*j) % nsubpix;
-					//subcell_i2 = (i+2*j+2) % nsubpix;
-					subcell_i1 = nsubpix-1 - ((i+2*j) % nsubpix);
-					subcell_i2 = nsubpix-1 - ((i+2*j+2) % nsubpix);
+					//subcell_i1_midquad = 3 - ((i+2*j) % 4);
+					//subcell_i2_midquad = 3 - ((i+2*j+2) % 4);
+					//midstart = nysubpix/2 - 1;
+
+					//subcell_i1 = nsubpix-1 - ((i+nysubpix*j) % nsubpix);
+					//subcell_i2 = (i+nysubpix*j) % nsubpix;
+					if (use_random_delaunay_srcgrid) {
+						subcell_i1 = (int) (nsubpix*RandomNumber());
+						subcell_i2 = (int) (nsubpix*RandomNumber());
+					} else {
+						subcell_i1 = nsubpix-1 - ((i+2*j) % nsubpix); // this is really only optimized for 2x2 splittings
+						subcell_i2 = nsubpix-1 - ((i+2*j+2) % nsubpix); // this is really only optimized for 2x2 splittings
+					}
+
+					//if (nysubpix > 2) {
+						//subcell_i1 = (midstart+(subcell_i1_midquad/2))*nysubpix + midstart+(subcell_i1_midquad%2);
+						//subcell_i2 = (midstart+(subcell_i2_midquad/2))*nysubpix + midstart+(subcell_i2_midquad%2);
+					//} else {
+						//subcell_i1 = subcell_i1_midquad;
+						////subcell_i2 = subcell_i2_midquad;
+					//}
+					//cout << "i1=" << subcell_i1 << " i2=" << subcell_i2 << endl;
 					//subcell_i1 = nsubpix-1;
 					//subcell_i2 = nsubpix-1;
 					srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_i1][0];
@@ -13494,7 +13514,52 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		if (!use_weighted_srcpixel_clustering) {
 			for (i=0; i < npix; i++) weights[i] = 1;
 		} else {
-			for (i=0; i < npix; i++) weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
+			double min_weight = 1e30;
+			for (i=0; i < npix; i++) {
+				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
+				if (weights[i] < min_weight) min_weight = weights[i];
+			}
+			double *weights_norm = new double[npix];
+//#ifdef USE_OPENMP
+			//double tot_wtime0, tot_wtime;
+			//if (show_wtime) {
+				//tot_wtime0 = omp_get_wtime();
+			//}
+//#endif
+			for (i=0; i < npix; i++) weights_norm[i] = weights[i];
+			double totweight=0;
+			int totweight_int;
+			if (min_weight != 0) {
+				for (i=0; i < npix; i++) {
+					weights_norm[i] /= min_weight;
+					totweight += weights_norm[i];
+				}
+				totweight_int = (int) totweight;
+				//cout << "TOTWEIGHT: " << totweight << endl;
+				int weighted_data_reduce_factor = totweight_int / n_src_centroids;
+				int wnorm;
+				for (i=0,j=0,l=0; i < npix; i++) {
+					wnorm = (int) weights_norm[i];
+					if (wnorm >= 2*weighted_data_reduce_factor) cout << "RUHROH! Will count a centroid twice due to overweighting" << endl;
+					for (k=0; k < wnorm; k++) {
+						if (j%weighted_data_reduce_factor==0) {
+							initial_centroids[l++] = srcpts_x[i];
+							initial_centroids[l++] = srcpts_y[i];
+						}
+						j++;
+					}
+				}
+				//cout << "final toweight: " << j << endl;
+			}
+
+//#ifdef USE_OPENMP
+		//if (show_wtime) {
+			//tot_wtime = omp_get_wtime() - tot_wtime0;
+			//if (mpi_id==0) cout << "Total wall time for calculating weighted initial centroids: " << tot_wtime << endl;
+		//}
+//#endif
+
+			delete[] weights_norm;
 		}
 
 		arma::mat dataset(input, 2, npix);

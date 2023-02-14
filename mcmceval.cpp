@@ -945,8 +945,6 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 		else gx = pow10;
 		if (flag&NOADJ) facx = unit;
 		else facx = pow10;
-		//gx = (flag&LOGAXIS) ? dummy : pow10;
-		//facx = (flag&NOADJ) ? unit : pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -954,7 +952,6 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 		fx = dummy;
 		if (flag&LOGAXIS) gx = pow10;
 		else gx = dummy;
-		//gx = (flag&LOGAXIS) ? pow10 : dummy;
 		facx = unit;
 		FindHiLow(xhi, xlow, iin);
 	}
@@ -1465,8 +1462,6 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 		else gx = pow10;
 		if (flag&NOADJ) facx = unit;
 		else facx = pow10;
-		//gx = (flag&LOGAXIS) ? dummy : pow10;
-		//facx = (flag&NOADJ) ? unit : pow10;
 		FindHiLowDerived(xhi, xlow, derived_param, totPts, EVAL_NONEG);
 	}
 	else
@@ -1992,7 +1987,6 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 		gx = pow10;
 		if (flag&NOADJ) facx = unit;
 		else facx = pow10;
-		//facx = (flag&NOADJ) ? unit : pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -2425,7 +2419,6 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		gx = pow10;
 		if (flag&NOADJX) facx = unit;
 		else facx = pow10;
-		//facx = (flag&NOADJX) ? unit : pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -2442,7 +2435,6 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		gy = pow10;
 		if (flag&NOADJY) facy = unit;
 		else facy = pow10;
-		//facy = (flag&NOADJY) ? unit : pow10;
 		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
@@ -2998,7 +2990,6 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 		gx = pow10;
 		if (flag&NOADJX) facx = unit;
 		else facx = pow10;
-		//facx = (flag&NOADJX) ? unit : pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -3015,7 +3006,6 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 		gy = pow10;
 		if (flag&NOADJY) facy = unit;
 		else facy = pow10;
-		//facy = (flag&NOADJY) ? unit : pow10;
 		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
