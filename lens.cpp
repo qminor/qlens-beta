@@ -13402,17 +13402,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 						npix++;
 					}
 				} else {
-					//int ii=0,jj=0;
-					//for (int k=0; k < nsubpix; k++) {
-						//cout << k << " " << ii << " " << jj << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][0] << " " << image_pixel_grid->subpixel_center_sourcepts[i][j][k][1] << endl;
-						//jj++;
-						//if (jj==4) {
-							//ii++;
-							//jj=0;
-						//}
-					//}
-					//die();
-
 					//subcell_i1_midquad = 3 - ((i+2*j) % 4);
 					//subcell_i2_midquad = 3 - ((i+2*j+2) % 4);
 					//midstart = nysubpix/2 - 1;
@@ -13466,21 +13455,54 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
+		int *iweights_norm;
+		double min_weight = 1e30;
+		double *input_data = new double[2*npix];
+		double *weights = new double[npix];
+		double *initial_centroids;
+		int *ivals_centroids;
+		int *jvals_centroids;
+
+		if (!use_weighted_srcpixel_clustering) {
+			for (i=0; i < npix; i++) weights[i] = 1;
+		} else {
+			for (i=0; i < npix; i++) {
+				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
+				if (weights[i] < min_weight) min_weight = weights[i];
+			}
+		}
+		bool use_weighted_initial_centroids;
+		if ((use_weighted_srcpixel_clustering) and (min_weight != 0)) use_weighted_initial_centroids = true;
+		else use_weighted_initial_centroids = false;
+
 		int n_src_centroids = n_src_clusters;	
 		if (n_src_centroids < 0) n_src_centroids = npix_in_mask / 2;
 		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
-		int data_reduce_factor = npix / n_src_centroids;
-		n_src_centroids = npix / data_reduce_factor;
-		if (npix % data_reduce_factor != 0) n_src_centroids++;
-		double *input = new double[2*npix];
-		double *weights = new double[npix];
-		double *initial_centroids = new double[2*n_src_centroids];
-		int *ivals_centroids = new int[n_src_centroids];
-		int *jvals_centroids = new int[n_src_centroids];
-		if (!clustering_imgplane_rand_init) {
+
+		int data_reduce_factor;
+		if (!use_weighted_initial_centroids) {
+			data_reduce_factor = npix / n_src_centroids;
+			n_src_centroids = npix / data_reduce_factor;
+			if (npix % data_reduce_factor != 0) n_src_centroids++;
+		} else {
+			iweights_norm = new int[npix];
+			int totweight=0;
+			for (i=0; i < npix; i++) {
+				iweights_norm[i] = (int) (weights[i] / min_weight);
+				totweight += iweights_norm[i];
+			}
+			data_reduce_factor = totweight / n_src_centroids;
+			n_src_centroids = totweight / data_reduce_factor;
+			if (totweight % data_reduce_factor != 0) n_src_centroids++;
+		}
+		//cout << "n_centroids is " << n_src_centroids << endl;
+		initial_centroids = new double[2*n_src_centroids];
+		ivals_centroids = new int[n_src_centroids];
+		jvals_centroids = new int[n_src_centroids];
+		if (!use_weighted_initial_centroids) {
 			for (i=0,j=0,k=0,l=0; i < npix; i++) {
-				input[j++] = srcpts_x[i];
-				input[j++] = srcpts_y[i];
+				input_data[j++] = srcpts_x[i];
+				input_data[j++] = srcpts_y[i];
 				if (i%data_reduce_factor==0) {
 					initial_centroids[k++] = srcpts_x[i];
 					initial_centroids[k++] = srcpts_y[i];
@@ -13489,83 +13511,32 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					l++;
 				}
 			}
-			int ncent2=2*n_src_centroids;
-			if (k != 2*n_src_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
 		} else {
-			for (i=0,j=0; i < npix; i++) {
-				input[j++] = srcpts_x[i];
-				input[j++] = srcpts_y[i];
-			}
-			double *centroids_x = new double[n_src_centroids];
-			double *centroids_y = new double[n_src_centroids];
-			double *imgpts_x = new double[n_src_centroids];
-			double *imgpts_y = new double[n_src_centroids];
-			generate_random_regular_imgpts(imgpts_x,imgpts_y,centroids_x,centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,use_lum_weighted_srcpixel_clustering,verbal);
-			for (i=0,j=0; i < n_src_centroids; i++) {
-				initial_centroids[j++] = centroids_x[i];
-				initial_centroids[j++] = centroids_y[i];
-			}
-			delete[] imgpts_x;
-			delete[] imgpts_y;
-			delete[] centroids_x;
-			delete[] centroids_y;
-		}
-
-		if (!use_weighted_srcpixel_clustering) {
-			for (i=0; i < npix; i++) weights[i] = 1;
-		} else {
-			double min_weight = 1e30;
-			for (i=0; i < npix; i++) {
-				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
-				if (weights[i] < min_weight) min_weight = weights[i];
-			}
-			double *weights_norm = new double[npix];
-//#ifdef USE_OPENMP
-			//double tot_wtime0, tot_wtime;
-			//if (show_wtime) {
-				//tot_wtime0 = omp_get_wtime();
-			//}
-//#endif
-			for (i=0; i < npix; i++) weights_norm[i] = weights[i];
-			double totweight=0;
-			int totweight_int;
-			if (min_weight != 0) {
-				for (i=0; i < npix; i++) {
-					weights_norm[i] /= min_weight;
-					totweight += weights_norm[i];
-				}
-				totweight_int = (int) totweight;
-				//cout << "TOTWEIGHT: " << totweight << endl;
-				int weighted_data_reduce_factor = totweight_int / n_src_centroids;
-				int wnorm;
-				for (i=0,j=0,l=0; i < npix; i++) {
-					wnorm = (int) weights_norm[i];
-					if (wnorm >= 2*weighted_data_reduce_factor) cout << "RUHROH! Will count a centroid twice due to overweighting" << endl;
-					for (k=0; k < wnorm; k++) {
-						if (j%weighted_data_reduce_factor==0) {
-							initial_centroids[l++] = srcpts_x[i];
-							initial_centroids[l++] = srcpts_y[i];
-						}
-						j++;
+			int m,n,wnorm;
+			for (i=0,j=0,k=0,l=0,n=0; i < npix; i++) {
+				input_data[j++] = srcpts_x[i];
+				input_data[j++] = srcpts_y[i];
+				wnorm = iweights_norm[i];
+				if (wnorm >= 2*data_reduce_factor) cout << "RUHROH! Will count a centroid twice due to overweighting" << endl;
+				for (m=0; m < wnorm; m++) {
+					if (n%data_reduce_factor==0) {
+						initial_centroids[k++] = srcpts_x[i];
+						initial_centroids[k++] = srcpts_y[i];
+						ivals_centroids[l] = 0;
+						jvals_centroids[l] = 0;
+						l++;
 					}
+					n++;
 				}
-				//cout << "final toweight: " << j << endl;
 			}
-
-//#ifdef USE_OPENMP
-		//if (show_wtime) {
-			//tot_wtime = omp_get_wtime() - tot_wtime0;
-			//if (mpi_id==0) cout << "Total wall time for calculating weighted initial centroids: " << tot_wtime << endl;
-		//}
-//#endif
-
-			delete[] weights_norm;
+			if (l != n_src_centroids) die("FUCK");
+			delete[] iweights_norm;
 		}
 
-		arma::mat dataset(input, 2, npix);
+		arma::mat dataset(input_data, 2, npix);
 		arma::Col<double> weightvec(weights, npix);
 		arma::mat centroids(initial_centroids, 2, n_src_centroids);
-		delete[] input;
+		delete[] input_data;
 		delete[] initial_centroids;
 		delete[] weights;
 
