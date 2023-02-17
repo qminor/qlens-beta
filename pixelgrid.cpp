@@ -12750,7 +12750,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 			MPI_Bcast(Fmatrix + Fmatrix_index[start],length,MPI_DOUBLE,id,sub_comm);
 			MPI_Bcast(Fmatrix_index + Fmatrix_index[start],length,MPI_INT,id,sub_comm);
 		}
-		MPI_Comm_free(&sub_comm);
 #endif
 
 #ifdef USE_OPENMP
@@ -12771,7 +12770,6 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 	} else {
 		if ((regularization_method != None) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
 	}
-
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			wtime = omp_get_wtime() - wtime0;
@@ -12821,6 +12819,9 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 	delete[] Fmatrix_rows;
 	delete[] Fmatrix_diags;
 	delete[] Fmatrix_row_nn;
+#ifdef USE_MPI
+	MPI_Comm_free(&sub_comm);
+#endif
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)

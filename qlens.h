@@ -13,6 +13,7 @@
 #include "simplex.h"
 #include "mcmchdr.h"
 #include "cosmo.h"
+#include "stdio.h"
 #ifdef USE_MUMPS
 #include "dmumps_c.h"
 #endif
@@ -3624,5 +3625,9 @@ inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, do
 
 */
 
+//static int comm_counter;
+//int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm);
+//int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
+//int MPI_Comm_free(MPI_Comm *comm);
 
 #endif // QLENS_H

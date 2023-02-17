@@ -13494,6 +13494,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			data_reduce_factor = totweight / n_src_centroids;
 			n_src_centroids = totweight / data_reduce_factor;
 			if (totweight % data_reduce_factor != 0) n_src_centroids++;
+			//cout << "totweight = " << totweight << endl;
 		}
 		//cout << "n_centroids is " << n_src_centroids << endl;
 		initial_centroids = new double[2*n_src_centroids];

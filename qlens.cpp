@@ -14,9 +14,34 @@ using namespace std;
 char *advance(char *p);
 void usage_error(const int mpi_id);
 
+/*
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
+{
+      comm_counter++;
+      printf("%s %i\n", "MPI_Comm_split ", comm_counter);
+      return PMPI_Comm_split(comm, color, key, newcomm);
+}
+
+int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm)
+{
+      comm_counter++;
+      printf("%s %i\n", "MPI_Comm_create ", comm_counter);
+		return PMPI_Comm_create(comm,group,newcomm);
+}
+
+
+int MPI_Comm_free(MPI_Comm *comm)
+{
+      comm_counter--;
+      printf("%s %i\n", "PMPI_Comm_free ", comm_counter);
+      return PMPI_Comm_free(comm);
+}
+*/
+
 int main(int argc, char *argv[])
 {
 	int mpi_id=0, mpi_np=1;
+	//comm_counter = 0;
 
 #ifdef USE_MPI
 	MPI_Init(NULL, NULL);
@@ -302,4 +327,5 @@ void usage_error(const int mpi_id)
 #endif
 	exit(0);
 }
+
 
