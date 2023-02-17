@@ -1031,7 +1031,7 @@ QLens::QLens() : UCMC()
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
 	clustering_random_initialization = false;
-	clustering_imgplane_rand_init = false;
+	weight_initial_centroids = false;
 	use_random_delaunay_srcgrid = false;
 	random_grid_length_factor = 0.5;
 	interpolate_random_sourcepts = false;
@@ -1460,7 +1460,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
 	clustering_random_initialization = lens_in->clustering_random_initialization;
-	clustering_imgplane_rand_init = lens_in->clustering_imgplane_rand_init;
+	weight_initial_centroids = lens_in->weight_initial_centroids;
 	use_random_delaunay_srcgrid = lens_in->use_random_delaunay_srcgrid;
 	random_grid_length_factor = lens_in->random_grid_length_factor;
 	interpolate_random_sourcepts = lens_in->interpolate_random_sourcepts;
@@ -13472,7 +13472,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			}
 		}
 		bool use_weighted_initial_centroids;
-		if ((use_weighted_srcpixel_clustering) and (min_weight != 0)) use_weighted_initial_centroids = true;
+		if ((use_weighted_srcpixel_clustering) and (weight_initial_centroids) and (min_weight != 0)) use_weighted_initial_centroids = true;
 		else use_weighted_initial_centroids = false;
 
 		int n_src_centroids = n_src_clusters;	
@@ -13488,7 +13488,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			iweights_norm = new int[npix];
 			int totweight=0;
 			for (i=0; i < npix; i++) {
-				iweights_norm[i] = (int) (weights[i] / min_weight);
+				iweights_norm[i] = (int) (sqrt(weights[i] / min_weight)); // trying the square root in an attempt to reduce noise in the original centroid assignments
 				totweight += iweights_norm[i];
 			}
 			data_reduce_factor = totweight / n_src_centroids;

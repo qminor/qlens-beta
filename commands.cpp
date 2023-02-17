@@ -12170,14 +12170,14 @@ void QLens::process_commands(bool read_file)
 				set_switch(reinitialize_random_grid,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="clustering_imgplane_rand_init")
+		else if (words[0]=="weight_initial_centroids")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Reinitialize random grid each time: " << display_switch(clustering_imgplane_rand_init) << endl;
+				if (mpi_id==0) cout << "Reinitialize random grid each time: " << display_switch(weight_initial_centroids) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'clustering_imgplane_rand_init' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (clustering_random_initialization)) Complain("cannot use both 'clustering_rand_init' and 'clustering_imgplane_rand_init' at the same time");
-				set_switch(clustering_imgplane_rand_init,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'weight_initial_centroids' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("This option requires 'lum_weighted_srcpixel_clustering' to be turned on");
+				set_switch(weight_initial_centroids,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="interpolate_random_srcpts")
@@ -12204,7 +12204,6 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use random initialization of clustering algorithm to find adaptive grid source pixels: " << display_switch(clustering_random_initialization) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'clustering_rand_init' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (clustering_imgplane_rand_init)) Complain("cannot use both 'clustering_rand_init' and 'clustering_imgplane_rand_init' at the same time");
 				set_switch(clustering_random_initialization,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
