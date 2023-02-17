@@ -13488,7 +13488,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			iweights_norm = new int[npix];
 			int totweight=0;
 			for (i=0; i < npix; i++) {
-				iweights_norm[i] = (int) (sqrt(weights[i] / min_weight)); // trying the square root in an attempt to reduce noise in the original centroid assignments
+				iweights_norm[i] = (int) (pow(weights[i]/min_weight,0.3)); // trying the square root in an attempt to reduce noise in the original centroid assignments
 				totweight += iweights_norm[i];
 			}
 			data_reduce_factor = totweight / n_src_centroids;
