@@ -11223,6 +11223,25 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Number of live points for nested sampling = " << n_livepts << endl;
 			} else Complain("must specify either zero or one argument (number of Monte Carlo points)");
 		}
+		else if (words[0]=="multinest_target_eff")
+		{
+			double target_eff;
+			if (nwords == 2) {
+				if (!(ws[1] >> target_eff)) Complain("invalid target efficiency for nested sampling");
+				multinest_target_efficiency = target_eff;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "target efficiency for nested sampling = " << multinest_target_efficiency << endl;
+			} else Complain("must specify either zero or one argument (target efficiency for multinest)");
+		}
+		else if (words[0]=="multinest_constant_eff_mode")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use image plane chi-square function: " << display_switch(multinest_constant_eff_mode) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_constant_eff_mode' command; must specify 'on' or 'off'");
+				set_switch(multinest_constant_eff_mode,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="polychord_nrepeats")
 		{
 			int n_rp;

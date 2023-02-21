@@ -784,6 +784,8 @@ QLens::QLens() : UCMC()
 	simplex_minchisq_anneal = -1e30;
 	simplex_show_bestfit = false;
 	n_livepts = 1000; // for nested sampling
+	multinest_constant_eff_mode = false;
+	multinest_target_efficiency = 0.1;
 	polychord_nrepeats = 5;
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
@@ -1204,6 +1206,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	simplex_minchisq_anneal = lens_in->simplex_minchisq_anneal;
 	simplex_show_bestfit = lens_in->simplex_show_bestfit;
 	n_livepts = lens_in->n_livepts; // for nested sampling
+	multinest_constant_eff_mode = lens_in->multinest_constant_eff_mode;
+	multinest_target_efficiency = lens_in->multinest_target_efficiency;
 	polychord_nrepeats = lens_in->polychord_nrepeats;
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
@@ -9579,8 +9583,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 	IS = 0;					// do Nested Importance Sampling (bad idea)
 	mmodal = 0;					// do mode separation?
-	ceff = 0;					// run in constant efficiency mode? (usually a VERY bad idea)
-	efr = 0.8;				// set the required efficiency
+	ceff = multinest_constant_eff_mode;					// run in constant efficiency mode? (usually a VERY bad idea)
+	efr = multinest_target_efficiency;				// set the required efficiency
 	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
 	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters

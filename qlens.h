@@ -409,6 +409,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool simplex_show_bestfit;
 	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq, simplex_minchisq_anneal;
 	int n_livepts; // for nested sampling
+	bool multinest_constant_eff_mode;
+	double multinest_target_efficiency;
 	int polychord_nrepeats;
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings
