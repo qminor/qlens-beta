@@ -583,6 +583,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool adaptive_subgrid;
 	bool use_average_magnification_for_subgridding;
 	int delaunay_mode;
+	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
 	bool use_random_delaunay_srcgrid;
@@ -837,7 +838,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
-	double calculate_regularization_term(const bool use_lum_weighting);
+	double calculate_regularization_prior_term(const bool use_lum_weighting);
 
 	void invert_lens_mapping_dense(bool verbal);
 	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);

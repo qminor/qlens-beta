@@ -35,14 +35,6 @@ using namespace std;
 #include "interfaces.hpp"
 #endif
 
-//#ifdef USE_FAISS
-//#include <faiss/Clustering.h>
-//#include <faiss/IndexFlat.h>
-//#include <faiss/IndexHNSW.h>
-//#include <faiss/utils/distances.h>
-//#include <faiss/utils/random.h>
-//#endif
-
 #ifdef USE_MLPACK
 #include <mlpack/core.hpp>
 #include <mlpack/methods/kmeans.hpp>
@@ -813,7 +805,7 @@ QLens::QLens() : UCMC()
 	include_extended_mask_in_inversion = false;
 	zero_sb_extended_mask_prior = false;
 	include_noise_term_in_loglike = true;
-	loglike_reference_noise = 1.0/M_SQRT_2PI; // with this default choice, there is effectively no spurious reference term subtracted from loglike
+	loglike_reference_noise = 1.0/M_SQRT_2PI; // with this value, there is effectively no spurious reference term subtracted from loglike; however this is automatically reset to the data noise when image is first loaded in (but user can override with 'loglike_ref_noise 0' and it will be set to 1/sqrt(pi) again)
 	high_sn_frac = 0.5; // fraction of max SB; used to determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	subhalo_prior = false; // if on, this prior constrains any subhalos (with Pseudo-Jaffe profiles) to be positioned within the designated fit area (selected fit pixels only)
 	use_custom_prior = false;
@@ -1029,6 +1021,7 @@ QLens::QLens() : UCMC()
 	vary_magnification_threshold = false;
 	exclude_source_pixels_beyond_fit_window = true;
 	activate_unmapped_source_pixels = true;
+	delaunay_try_two_grids = false;
 	delaunay_high_sn_mode = false;
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
@@ -1460,6 +1453,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	base_srcpixel_imgpixel_ratio = lens_in->base_srcpixel_imgpixel_ratio; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
+	delaunay_try_two_grids = lens_in->delaunay_try_two_grids;
 	delaunay_high_sn_mode = lens_in->delaunay_high_sn_mode;
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
@@ -9583,7 +9577,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 	IS = 0;					// do Nested Importance Sampling (bad idea)
 	mmodal = 0;					// do mode separation?
-	ceff = multinest_constant_eff_mode;					// run in constant efficiency mode? (usually a VERY bad idea)
+	ceff = (multinest_constant_eff_mode) ? 1 : 0;
 	efr = multinest_target_efficiency;				// set the required efficiency
 	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
@@ -9595,11 +9589,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	maxModes = 100;				// expected max no. of modes (used only for memory allocation)
 	seed = 11+group_num;					// random no. generator seed, if < 0 then take the seed from system clock
 
-	if (mpi_id==0) fb = 1;					// need feedback on standard output?
-	else fb = 0;
-
-	if (resume_previous) resume = 1;					// resume from a previous job?
-	else resume = 0;
+	fb = (mpi_id==0) ? 1 : 0;				// need feedback on standard output?
+	resume = (resume_previous) ? 1 : 0;				// resume from a previous job?
 
 	outfile = 1;				// write output files?
 	initMPI = 0;				// initialize MPI routines?, relevant only if compiling with MPI
@@ -13325,7 +13316,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	// avg_sb is also used to find where to compare grids 1/2
 	int nsubpix, nysubpix;
 	double sb;
-	if ((use_random_delaunay_srcgrid) and (reinitialize_random_grid)) reinitialize_random_generator();
+	if (reinitialize_random_grid) reinitialize_random_generator();
 	for (n=0; n < npix_in_mask; n++) {
 		include = false;
 		i = pixptr_i[n];
@@ -13395,13 +13386,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 						srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][1];
 						ivals[npix] = i;
 						jvals[npix] = j;
-						//sb = image_pixel_grid->surface_brightness[i][j];
-						//if (sb < 0) sb = 0;
-						//if (sb > avg_sb) wfactors[npix] = 1;
-						//else wfactors[npix] = 1e-30;
-						//wfactors[npix] = (sb - min_sb) / (max_sb - min_sb);
-						//double wsig = 0.01;
-						//wfactors[npix] = exp(-sqrt(SQR(srcpts_x[npix]-0.094)+SQR(srcpts_y[npix]-0.052))/(wsig));
 						wfactors[npix] = image_pixel_grid->subpixel_sbweights[i][j][nsubpix-1-k];
 						npix++;
 					}
@@ -13443,17 +13427,6 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			}
 		}
 	}
-	//ofstream pixcorners("pixgrid.dat");
-	//for (i=0; i < n_image_pixels_x; i++) {
-		//for (j=0; j < n_image_pixels_y; j++) {
-			//pixcorners << image_pixel_grid->corner_pts[i][j][0] << " " << image_pixel_grid->corner_pts[i][j][1] << endl;
-			//pixcorners << image_pixel_grid->corner_pts[i+1][j][0] << " " << image_pixel_grid->corner_pts[i+1][j][1] << endl;
-			//pixcorners << image_pixel_grid->corner_pts[i+1][j+1][0] << " " << image_pixel_grid->corner_pts[i+1][j+1][1] << endl;
-			//pixcorners << image_pixel_grid->corner_pts[i][j+1][0] << " " << image_pixel_grid->corner_pts[i][j+1][1] << endl;
-			//pixcorners << image_pixel_grid->corner_pts[i][j][0] << " " << image_pixel_grid->corner_pts[i][j][1] << endl;
-			//pixcorners << endl;
-		//}
-	//}
 
 	if (delaunay_srcgrid != NULL) delete delaunay_srcgrid;
 
@@ -13484,10 +13457,15 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
 
 		int data_reduce_factor;
+		int icent_offset;
 		if (!use_weighted_initial_centroids) {
 			data_reduce_factor = npix / n_src_centroids;
-			n_src_centroids = npix / data_reduce_factor;
+			icent_offset = (int) (data_reduce_factor*RandomNumber());
+			n_src_centroids = (npix-icent_offset) / data_reduce_factor;
+			//cout << "CHECK: reduce = " << data_reduce_factor << " icent_offset=" << icent_offset << endl;
+			//cout << "CHECK: npix%reduce = " << (npix % data_reduce_factor) << endl;
 			if (npix % data_reduce_factor != 0) n_src_centroids++;
+			//cout << "CHECK now: npix%reduce = " << (npix % data_reduce_factor) << endl;
 		} else {
 			iweights_norm = new int[npix];
 			int totweight=0;
@@ -13504,11 +13482,12 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		initial_centroids = new double[2*n_src_centroids];
 		ivals_centroids = new int[n_src_centroids];
 		jvals_centroids = new int[n_src_centroids];
+		if (icent_offset >= data_reduce_factor) die("FOOK");
 		if (!use_weighted_initial_centroids) {
 			for (i=0,j=0,k=0,l=0; i < npix; i++) {
 				input_data[j++] = srcpts_x[i];
 				input_data[j++] = srcpts_y[i];
-				if (i%data_reduce_factor==0) {
+				if ((i >= icent_offset) and ((i-icent_offset)%data_reduce_factor==0)) {
 					initial_centroids[k++] = srcpts_x[i];
 					initial_centroids[k++] = srcpts_y[i];
 					ivals_centroids[l] = 0;
@@ -13516,6 +13495,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					l++;
 				}
 			}
+			if (l != n_src_centroids) die("FUCK: %i %i",l,n_src_centroids);
 		} else {
 			int m,n,wnorm;
 			for (i=0,j=0,k=0,l=0,n=0; i < npix; i++) {
@@ -13575,141 +13555,15 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		delete[] src_centroids_y;
 		delete[] ivals_centroids;
 		delete[] jvals_centroids;
-
-		/*
 #else
-#ifdef USE_FAISS
-		using namespace faiss;
-		int n_src_centroids = n_src_clusters;	
-		if (n_src_centroids < 0) n_src_centroids = npix_in_mask / 2;
-		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
-		int data_reduce_factor = npix / n_src_centroids;
-		n_src_centroids = npix / data_reduce_factor;
-		if (npix % data_reduce_factor != 0) n_src_centroids++;
-		float *input = new float[2*npix];
-		float *weights = new float[npix];
-		float *centroids = new float[2*n_src_centroids];
-		int *ivals_centroids = new int[n_src_centroids];
-		int *jvals_centroids = new int[n_src_centroids];
-		for (i=0,j=0,k=0,l=0; i < npix; i++) {
-			input[j++] = (float) srcpts_x[i];
-			input[j++] = (float) srcpts_y[i];
-			if (i%data_reduce_factor==0) {
-				centroids[k++] = srcpts_x[i];
-				centroids[k++] = srcpts_y[i];
-				//ivals_centroids[l] = ivals[i];
-				//jvals_centroids[l] = jvals[i];
-				ivals_centroids[l] = 0;
-				jvals_centroids[l] = 0;
-				l++;
-			}
-		}
-		//ofstream testout("test.dat");
-		//for (i=0,j=0; i < npix; i++) {
-			//testout << input[j++] << " ";
-			//testout << input[j++] << endl;
-		//}
-		//testout.close();
-		int ncent2=2*n_src_centroids;
-		if (k != 2*n_src_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
-		if (!use_weighted_srcpixel_clustering) {
-			for (i=0; i < npix; i++) weights[i] = 1;
-		} else {
-			for (i=0; i < npix; i++) weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
-		}
-		//for (i=0; i < npix; i++) weights[i] = pow(wfactors[i] + 0.01,0);
-		//if (verbal){for (i=0; i < npix; i++) cout << "wfactor[" << i << "] = " << wfactors[i] << ", weight = " << weights[i] << endl;
-		//cout << "MAXSB: " << max_sb << " MINSB: " << min_sb << endl;
-		//}
-		//for (i=0; i < npix; i++) weights[i] = ((float) i)/npix;
-
-		faiss::ClusteringParameters cp;
-		cp.min_points_per_centroid = 1;
-		cp.max_points_per_centroid = 10000000;
-		cp.niter = n_cluster_iterations;
-
-		Clustering clus(2,n_src_centroids,cp);
-		clus.verbose = verbal;
-		std::unique_ptr<Index> index;
-		index.reset(new IndexFlatL2(2));
-		if (!clustering_random_initialization) {
-			clus.centroids.resize(2*n_src_centroids);
-			memcpy(clus.centroids.data(), centroids, sizeof(*centroids) * 2 * n_src_centroids);
-		}
-		clus.train(npix, input, *index.get(), weights);
-		// on output the index contains the centroids.
-		memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * 2 * n_src_centroids);
-		//cout << "Centroid 1: " << centroids[0] << " " << centroids[1] << endl;
-		//cout << "Centroid 2: " << centroids[2] << " " << centroids[3] << endl;
-		//cout << "Centroid 3: " << centroids[4] << " " << centroids[5] << endl;
-		//cout << "etc." << endl;
-
-		double *src_centroids_x = new double[n_src_centroids];
-		double *src_centroids_y = new double[n_src_centroids];
-		for (i=0,j=0; i < n_src_centroids; i++) {
-			src_centroids_x[i] = (double) centroids[j++];
-			src_centroids_y[i] = (double) centroids[j++];
-			//ivals[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Hopefully this won't be a bottleneck
-			//jvals[i] = 0;
-		}
-
-		double sqrdist;
-		bool duplicate = false;
-		bool *remove_dup = new bool[n_src_centroids];
-		int ndups = 0;
-		for (i=0; i < n_src_centroids; i++) {
-			remove_dup[i] = false;
-			for (j=i+1; j < n_src_centroids; j++) {
-				sqrdist = SQR(src_centroids_x[i]-src_centroids_x[j]) + SQR(src_centroids_y[i]-src_centroids_y[j]);
-				if (sqrdist==0) {
-					duplicate = true;
-					cout << "WARNING: DUPLICATE CENTROIDS" << endl;
-					cout << "i: " << i << " img: si_x=" << src_centroids_x[i] << " si_y=" << src_centroids_y[i] << endl;
-					cout << "j: " << j << " img: sj_x=" << src_centroids_x[j] << " sj_y=" << src_centroids_y[j] << endl;
-					duplicate = true;
-					remove_dup[i] = true;
-					ndups++;
-					//die();
-				}
-			}
-		}
-		if (duplicate) {
-			int new_nsrcpts = n_src_centroids - ndups;
-			double *new_src_centroids_x = new double[new_nsrcpts];
-			double *new_src_centroids_y = new double[new_nsrcpts];
-			for (i=0,j=0; i < n_src_centroids; i++) {
-				if (!remove_dup[i]) {
-					new_src_centroids_x[j] = src_centroids_x[i];
-					new_src_centroids_y[j] = src_centroids_y[i];
-					j++;
-				}
-			}
-			delete[] src_centroids_x;
-			delete[] src_centroids_y;
-			src_centroids_x = new_src_centroids_x;
-			src_centroids_y = new_src_centroids_y;
-			n_src_centroids = new_nsrcpts;
-		}
-		delete[] remove_dup;
-
-		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
-		delaunay_srcgrid = new DelaunayGrid(this,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
-		double edge_sum = delaunay_srcgrid->sum_edge_sqrlengths(avg_sb);
-		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
-		delete[] src_centroids_x;
-		delete[] src_centroids_y;
-		delete[] ivals_centroids;
-		delete[] jvals_centroids;
-		*/
-#else
-		die("Must compile with -USE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
+		die("Must compile with -DUSE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
 #endif
 	} else {
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
 		DelaunayGrid *srcgrid1, *srcgrid2;
 		srcgrid1 = new DelaunayGrid(this,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
 		if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
-		if ((split_imgpixels) and (delaunay_mode != 5)) {
+		if ((delaunay_try_two_grids) and (split_imgpixels) and (delaunay_mode != 5)) {
 			srcgrid2 = new DelaunayGrid(this,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
 			if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
 
@@ -14034,7 +13888,10 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 		if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 		// The sim_pixel_noise should now become data_pixel_noise
-		if (sim_pixel_noise != 0) data_pixel_noise = sim_pixel_noise;
+		if (sim_pixel_noise != 0) {
+			data_pixel_noise = sim_pixel_noise;
+			if (include_noise_term_in_loglike) loglike_reference_noise = sim_pixel_noise;
+		}
 		else if (data_pixel_noise != 0) warn("no noise generated when creating mock data, but data_pixel_noise != 0");
 		data_pixel_size = image_pixel_data->pixel_size;
 	}
@@ -14186,12 +14043,24 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, bool verba
 	image_pixel_grid->set_pixel_noise(data_pixel_noise);
 	double chisq=0,chisq00;
 	chisq0=0;
+#ifdef USE_OPENMP
+	double inversion_wtime0, inversion_wtime;
+	if (show_wtime) {
+		inversion_wtime0 = omp_get_wtime();
+	}
+#endif
 	for (int i=0; i < n_ranchisq; i++) {
 		chisq += invert_image_surface_brightness_map(chisq00,verbal);
 		chisq0 += chisq00;
 	}
 	chisq /= n_ranchisq;
 	chisq0 /= n_ranchisq;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		inversion_wtime = omp_get_wtime() - inversion_wtime0;
+		if (mpi_id==0) cout << "Total wall time for lensing reconstruction: " << inversion_wtime << endl;
+	}
+#endif
 
 	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
@@ -14813,7 +14682,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double loglike_reg;
 	if ((source_fit_mode != Parameterized_Source) and (regularization_method != None) and (source_npixels > 0)) {
 		if (regularization_parameter != 0) {
-			loglike_reg = calculate_regularization_term(use_lum_weighted_regularization);
+			loglike_reg = calculate_regularization_prior_term(use_lum_weighted_regularization);
 			loglike_times_two += loglike_reg;
 		}
 		if (!use_covariance_matrix) loglike_times_two += Fmatrix_log_determinant;

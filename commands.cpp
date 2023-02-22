@@ -13,14 +13,6 @@
 #include <sstream>
 #include <cstdlib>
 
-//#ifdef USE_FAISS
-//#include <faiss/Clustering.h>
-//#include <faiss/IndexFlat.h>
-//#include <faiss/IndexHNSW.h>
-//#include <faiss/utils/distances.h>
-//#include <faiss/utils/random.h>
-//#endif
-
 #ifdef USE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -224,7 +216,7 @@ void QLens::process_commands(bool read_file)
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
 						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
-						"auxgrid_npixels -- # of pixels per side for auxiliary sourcegrid used for nimg_prior, random grid\n"
+						"auxgrid_npixels -- # of pixels per side for auxiliary sourcegrid used for point images or nimg_prior\n"
 						"include_emask_in_chisq -- include extended mask pixels in inversion and chi-square\n"
 						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
 						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
@@ -12139,12 +12131,23 @@ void QLens::process_commands(bool read_file)
 				set_switch(regrid_if_unmapped_source_subpixels,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="delaunay_try_two_grids")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Construct two delaunay grids for source (and pick the better one): " << display_switch(delaunay_try_two_grids) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_try_two_grids' command; must specify 'on' or 'off'");
+				if ((!delaunay_try_two_grids) and (setword=="on") and (n_sourcepts_fit > 0)) Complain("'delaunay_try_two_grids' cannot be used if point sources are present, since the extended surface brightness threshold cannot be applied directly from the image data");
+				set_switch(delaunay_try_two_grids,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="delaunay_high_sn_mode")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Switch to Delaunay mode 0 for high S/N regions: " << display_switch(delaunay_high_sn_mode) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_high_sn_mode' command; must specify 'on' or 'off'");
+				if ((!delaunay_high_sn_mode) and (setword=="on") and (n_sourcepts_fit > 0)) Complain("'delaunay_high_sn_mode' cannot be used if point sources are present, since the extended surface brightness cannot be obtained directly from the image data");
 				set_switch(delaunay_high_sn_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12192,7 +12195,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="weight_initial_centroids")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Reinitialize random grid each time: " << display_switch(weight_initial_centroids) << endl;
+				if (mpi_id==0) cout << "Weight initial centroids by luminosity: " << display_switch(weight_initial_centroids) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'weight_initial_centroids' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("This option requires 'lum_weighted_srcpixel_clustering' to be turned on");
@@ -12722,61 +12725,6 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 			
-			/*
-#ifdef USE_FAISS
-			using namespace faiss;
-			int n_data = npix;
-			int reduce_factor = 4;
-			int n_centroids = image_npixels / reduce_factor;
-			int data_reduce_factor = n_data / n_centroids;
-			n_centroids = n_data / data_reduce_factor;
-			if (n_data % data_reduce_factor != 0) n_centroids++;
-			float *input = new float[2*n_data];
-			float *weights = new float[n_data];
-			float *centroids = new float[2*n_centroids];
-			for (i=0,j=0,k=0; i < n_data; i++) {
-				input[j++] = (float) srcpts_x[i];
-				input[j++] = (float) srcpts_y[i];
-				if (i%data_reduce_factor==0) {
-					centroids[k++] = srcpts_x[i];
-					centroids[k++] = srcpts_y[i];
-				}
-			}
-			int ncent2=2*n_centroids;
-			if (k != 2*n_centroids) die("ruhroh! ncent*2=%i, k=%i",ncent2,k);
-			for (i=0; i < n_data; i++) weights[i] = 1;
-
-			faiss::ClusteringParameters cp;
-			cp.niter = iter;
-
-			Clustering clus(2,n_centroids,cp);
-			clus.verbose = true;
-			std::unique_ptr<Index> index;
-			index.reset(new IndexFlatL2(2));
-			clus.centroids.resize(2*n_centroids);
-			memcpy(clus.centroids.data(), centroids, sizeof(*centroids) * 2 * n_centroids);
-			clus.train(n_data, input, *index.get(), weights);
-			// on output the index contains the centroids.
-			memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * 2 * n_centroids);
-			cout << "Centroid 1: " << centroids[0] << " " << centroids[1] << endl;
-			cout << "Centroid 2: " << centroids[2] << " " << centroids[3] << endl;
-			cout << "Centroid 3: " << centroids[4] << " " << centroids[5] << endl;
-			cout << "etc." << endl;
-#endif
-			*/
-			/*
-			ofstream dataout("srcptskm.dat");
-			ofstream centout("centkm.dat");
-			for (i=0,j=0; i < n_data; i++) {
-				dataout << input[j++] << " ";
-				dataout << input[j++] << endl;
-			}
-			for (i=0,j=0; i < n_centroids; i++) {
-				centout << centroids[j++] << " ";
-				centout << centroids[j++] << endl;
-			}
-			*/
-
 			/*
 			int nstart;
 			double x,y;

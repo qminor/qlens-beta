@@ -12970,9 +12970,9 @@ void QLens::generate_Gmatrix()
 	covmatrix_stacked.input(source_n_amps*source_n_amps);
 	// You might need to explicitly make elements zero that are beyond source_npixels*source_npixels (i.e. if there are other amplitudes)
 #ifdef USE_MKL
-	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,Fmatrix_packed.array(),1,1,source_npixels,source_npixels,Fmatrix_stacked.array(),source_n_amps); // fill the lower half of Fmatrix_stacked
-	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed.array(),1,1,source_npixels,source_npixels,covmatrix_stacked.array(),source_n_amps);
-	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed.array(),1,1,source_npixels,source_npixels,covmatrix_stacked.array(),source_n_amps);
+	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_n_amps,Fmatrix_packed.array(),1,1,source_n_amps,source_n_amps,Fmatrix_stacked.array(),source_n_amps); // fill the lower half of Fmatrix_stacked
+	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed.array(),1,1,source_n_amps,source_npixels,covmatrix_stacked.array(),source_n_amps);
+	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed.array(),1,1,source_n_amps,source_npixels,covmatrix_stacked.array(),source_n_amps);
 
 	cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,source_n_amps,source_n_amps,1.0,covmatrix_stacked.array(),source_n_amps,Fmatrix_stacked.array(),source_n_amps,0,Gmatrix_stacked.array(),source_n_amps);
 	cblas_dsymv(CblasRowMajor,CblasUpper,source_n_amps,1.0,covmatrix_stacked.array(),source_n_amps,Dvector,1,0,Dvector_cov,1);
@@ -13060,10 +13060,12 @@ void QLens::add_regularization_term_to_dense_Fmatrix()
 				Fptr += n_extra_amps;
 			}
 		} else {
-			for (i=0; i < (source_npixels*source_npixels); i++) Gmatrix_stacked[i] /= regularization_parameter;
+			for (i=0; i < (source_n_amps*source_n_amps); i++) Gmatrix_stacked[i] /= regularization_parameter;
+			for (i=0; i < source_n_amps; i++) Dvector_cov[i] /= regularization_parameter;
 			int indx_start = 0;
 			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-				Dvector_cov[i] /= regularization_parameter;
+				//for (j=0; j < source_npixels; j++) Gmatrix_stacked[i+j] /= regularization_parameter;
+				//Dvector_cov[i] /= regularization_parameter;
 				//Gmatrix_stacked[indx_start] += regularization_parameter;
 				Gmatrix_stacked[indx_start] += 1.0;
 				indx_start += source_n_amps+1;
@@ -13082,7 +13084,7 @@ void QLens::add_regularization_term_to_dense_Fmatrix()
 	}
 }
 
-double QLens::calculate_regularization_term(const bool use_lum_weighting)
+double QLens::calculate_regularization_prior_term(const bool use_lum_weighting)
 {
 	int i,j;
 	double loglike_reg,Es_times_two=0;
@@ -13591,10 +13593,11 @@ double QLens::chisq_regparam_dense(const double logreg)
 				//Dvector_cov_copy[i] = Dvector_cov[i]/regularization_parameter;
 				Dvector_cov_copy[i] = Dvector_cov[i];
 			}
-			for (i=0; i < (source_npixels*source_npixels); i++) Gmatrix_stacked_copy[i] /= regularization_parameter;
+			for (i=0; i < (source_n_amps*source_n_amps); i++) Gmatrix_stacked_copy[i] /= regularization_parameter;
+			for (i=0; i < source_n_amps; i++) Dvector_cov_copy[i] /= regularization_parameter;
 			int indx_start = 0;
 			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-				Dvector_cov_copy[i] /= regularization_parameter;
+				//Dvector_cov_copy[i] /= regularization_parameter;
 				//Gmatrix_stacked[indx_start] += regularization_parameter;
 				Gmatrix_stacked_copy[indx_start] += 1.0;
 				indx_start += source_n_amps+1;
@@ -13711,7 +13714,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 		chisq = (Ed_times_two + regularization_parameter*Es_times_two + Fmatrix_logdet - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant);
 		*/
 
-	double loglike_reg = calculate_regularization_term(false);
+	double loglike_reg = calculate_regularization_prior_term(false);
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
@@ -13857,7 +13860,7 @@ double QLens::chisq_regparam_lumreg_dense()
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
 	}
 	//cout << "Ed_times_two=" << Ed_times_two << endl;
-	double loglike_reg = calculate_regularization_term(true);
+	double loglike_reg = calculate_regularization_prior_term(true);
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
