@@ -13459,12 +13459,15 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		int data_reduce_factor;
 		int icent_offset;
 		if (!use_weighted_initial_centroids) {
+			int ncorig = n_src_centroids;
 			data_reduce_factor = npix / n_src_centroids;
 			icent_offset = (int) (data_reduce_factor*RandomNumber());
-			n_src_centroids = (npix-icent_offset) / data_reduce_factor;
+			n_src_centroids = npix / data_reduce_factor;
+			cout << "HI " << npix << " " << ncorig << " " << data_reduce_factor << " " << (data_reduce_factor*n_src_centroids) << " " << icent_offset << " " << n_src_centroids << " " << (npix / data_reduce_factor) << " " << (npix % data_reduce_factor) << endl; 
 			//cout << "CHECK: reduce = " << data_reduce_factor << " icent_offset=" << icent_offset << endl;
 			//cout << "CHECK: npix%reduce = " << (npix % data_reduce_factor) << endl;
-			if (npix % data_reduce_factor != 0) n_src_centroids++;
+			if (npix % data_reduce_factor > icent_offset) n_src_centroids++;
+			cout << "Now: nsrcc=" << n_src_centroids << endl;
 			//cout << "CHECK now: npix%reduce = " << (npix % data_reduce_factor) << endl;
 		} else {
 			iweights_norm = new int[npix];
@@ -13487,7 +13490,8 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			for (i=0,j=0,k=0,l=0; i < npix; i++) {
 				input_data[j++] = srcpts_x[i];
 				input_data[j++] = srcpts_y[i];
-				if ((i >= icent_offset) and ((i-icent_offset)%data_reduce_factor==0)) {
+				//if ((i >= icent_offset) and ((i-icent_offset)%data_reduce_factor==0)) {
+				if (i%data_reduce_factor==icent_offset) {
 					initial_centroids[k++] = srcpts_x[i];
 					initial_centroids[k++] = srcpts_y[i];
 					ivals_centroids[l] = 0;
