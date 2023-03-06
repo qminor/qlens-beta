@@ -51,6 +51,7 @@ enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
+enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
 enum RayTracingMethod {
 	Interpolate,
 	Area_Overlap
@@ -540,15 +541,23 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
-	//double regparam_lhi, regparam_llo, regparam_lum_index; 
-	double regparam_lhi, regparam_lum_index; 
+	double regparam_lhi, regparam_lsc, regparam_lum_index; 
+	bool use_lum_weighted_corrlength;
+	double corrlength_lhi, corrlength_llo, corrlength_lum_index; 
+	//double regparam_lhi, regparam_lum_index; 
+	double *corrlength_pixel_weights;
 	double *lumreg_pixel_weights;
 	int lumreg_it;
-	//bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
-	bool vary_regparam_lhi, vary_regparam_lum_index;
+	bool vary_regparam_lhi, vary_regparam_lsc, vary_regparam_lum_index;
+	//bool vary_regparam_lhi, vary_regparam_lum_index;
 	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
-	//double regparam_llo_lower_limit, regparam_llo_upper_limit;
+	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
+
+	bool vary_corrlength_lhi, vary_corrlength_llo, vary_corrlength_lum_index;
+	double corrlength_lhi_lower_limit, corrlength_lhi_upper_limit;
+	double corrlength_llo_lower_limit, corrlength_llo_upper_limit;
+	double corrlength_lum_index_lower_limit, corrlength_lum_index_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	double alpha_clus, beta_clus;
@@ -670,7 +679,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
-	enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel } regularization_method;
+	RegularizationMethod regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
 	bool interpolate_sb_3pt;
@@ -850,6 +859,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_regparam_it_lumreg_dense(const double logreg);
 	double chisq_regparam_it_lumreg_dense_final(const bool verbal);
 	double chisq_regparam_lumreg_dense();
+	void calculate_corrlength_pixel_sbweights();
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
@@ -968,11 +978,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	void create_regularization_matrix(void);
+	void create_regularization_matrix(const bool include_corrlength_lum_weighting = false);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
-	void generate_Rmatrix_from_covariance_kernel(const int kernel_type);
+	void generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting);
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
@@ -3619,6 +3629,7 @@ inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, do
 		}
 		kappa *= zfacs[0];
 	} else {
+		
 		lensmatrix *jac = &jacs[0];
 		hessian_exclude(x[0],x[1],exclude_i,(*jac),0,zfacs,betafacs);
 		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
