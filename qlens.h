@@ -828,6 +828,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool dense_Rmatrix;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
+	bool penalize_defective_covmatrix;
 	double *Rmatrix;
 	int *Rmatrix_index;
 	double *Rmatrix_diag_temp;
@@ -850,7 +851,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double calculate_regularization_prior_term(const bool use_lum_weighting);
 
 	void invert_lens_mapping_dense(bool verbal);
-	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
+	bool optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
 	void chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix);
 	void setup_regparam_optimization(const bool dense_Fmatrix);
 	void calculate_pixel_sbweights();
@@ -978,11 +979,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	void create_regularization_matrix(const bool include_corrlength_lum_weighting = false);
+	bool create_regularization_matrix(const bool include_corrlength_lum_weighting = false);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
-	void generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting);
+	bool generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting);
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);

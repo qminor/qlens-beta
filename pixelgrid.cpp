@@ -2912,7 +2912,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	}
 }
 
-void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting)
+bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2943,37 +2943,47 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 	}
 #endif
 
-	//const int bignum = 640000;
-	//double *bigarray = new double[bignum];
-	//double *bigarray2 = new double[bignum];
-	//for (int i=0; i < bignum; i++) {
-		//bigarray[i] = RandomNumber();
-		//bigarray2[i] = RandomNumber();
-	//}
-//#ifdef USE_OPENMP
-	//if (show_wtime) {
-		//wtime0 = omp_get_wtime();
-	//}
-//#endif
-	//sort(bignum,bigarray,bigarray2);
-//#ifdef USE_OPENMP
-	//if (show_wtime) {
-		//wtime = omp_get_wtime() - wtime0;
-		//if (mpi_id==0) cout << "Wall time for sorting (TEST): " << wtime << endl;
-	//}
-//#endif
-	//delete[] bigarray;
-	//delete[] bigarray2;
-
 	for (int i=0; i < ntot; i++) covmatrix_factored[i] = covmatrix_packed[i];
 #ifdef USE_MKL
-   LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,covmatrix_factored.array()); // Cholesky decomposition
+	lapack_int status;
+   status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_npixels,covmatrix_factored.array()); // Cholesky decomposition
+	if ((status != 0) and (penalize_defective_covmatrix)) return false;
+	//if (status > 0) warn("cholesky decomposition of covmatrix was not successful; covmatrix is not positive definite");
 	Cholesky_logdet_packed(covmatrix_factored.array(),Rmatrix_log_determinant,source_npixels);
 	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
 	if (!use_covariance_matrix) {
 		// Since we're going to use R-matrix explicitly, we must find it by taking cov_inverse
 		for (int i=0; i < ntot; i++) Rmatrix_packed[i] = covmatrix_factored[i];
-		LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse; this is where most of the computational burden is
+		lapack_int status;
+		status = LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',source_npixels,Rmatrix_packed.array()); // computes inverse; this is where most of the computational burden is
+		//if (status != 0) { warn("covmatrix inversion was not successful"); return false; }
+
+		//Gmatrix_stacked.input(source_n_amps*source_n_amps); // just used here to check if inverse is correct
+		//dvector Rmatrix_stacked(source_n_amps*source_n_amps);
+		//covmatrix_stacked.input(source_n_amps*source_n_amps);
+		//Rmatrix_stacked = 0;
+		//covmatrix_stacked = 0;
+		//Gmatrix_stacked = 0;
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed.array(),1,1,source_n_amps,source_npixels,covmatrix_stacked.array(),source_n_amps);
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed.array(),1,1,source_n_amps,source_npixels,covmatrix_stacked.array(),source_n_amps);
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,Rmatrix_packed.array(),1,1,source_n_amps,source_npixels,Rmatrix_stacked.array(),source_n_amps);
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,Rmatrix_packed.array(),1,1,source_n_amps,source_npixels,Rmatrix_stacked.array(),source_n_amps);
+		//cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,source_n_amps,source_n_amps,1.0,covmatrix_stacked.array(),source_n_amps,Rmatrix_stacked.array(),source_n_amps,0,Gmatrix_stacked.array(),source_n_amps);
+		//int i,j;
+		//for (i=0,j=0; i < source_n_amps; i++) {
+			//if (abs(Gmatrix_stacked[j]-1.0) > 1e-2) {
+				//warn("Rmatrix times covmatrix does not produce identity matrix");
+				//break;
+			//}
+			//j += source_n_amps+1;
+		//}
+		//int k=0;
+		//for (i=0; i < 3; i++) {
+			//for (j=0; j < source_n_amps; j++) {
+				//cout << Gmatrix_stacked[k++] << " ";
+			//}
+			//cout << endl;
+		//}
 	}
 #else
 	// Doing this without MKL, using the following functions, is MUCH slower (and might be broken right now?)
@@ -2992,6 +3002,7 @@ void QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 		if (mpi_id==0) cout << "Wall time for calculating covariance kernel Rmatrix: " << wtime << endl;
 	}
 #endif
+	return true;
 }
 
 int SourcePixelGrid::assign_indices_and_count_levels()
@@ -12289,7 +12300,7 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 	return psfint;
 }
 
-void QLens::create_regularization_matrix(const bool include_corrlength_lum_weighting)
+bool QLens::create_regularization_matrix(const bool include_corrlength_lum_weighting)
 {
 	RegularizationMethod reg_method = regularization_method;
 	if ((use_lum_weighted_corrlength) and (!include_corrlength_lum_weighting)) reg_method = Curvature;
@@ -12301,6 +12312,7 @@ void QLens::create_regularization_matrix(const bool include_corrlength_lum_weigh
 	dense_Rmatrix = false; // assume sparse unless a dense regularization is chosen
 	bool covariance_kernel_regularization = false;
 	use_covariance_matrix = false; // if true, will use covariance matrix directly instead of Rmatrix
+	bool successful_Rmatrix = true;
 	if ((!find_covmatrix_inverse) and (n_sourcepts_fit > 0)) die("modeling point images is not currently compatible with 'find_cov_inverse off' setting"); // see notes in generate_Gmatrix function (this is where the problem is, I believe)...FIX LATER!!
 	switch (reg_method) {
 		case Norm:
@@ -12313,23 +12325,24 @@ void QLens::create_regularization_matrix(const bool include_corrlength_lum_weigh
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			generate_Rmatrix_from_covariance_kernel(0,include_corrlength_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(0,include_corrlength_lum_weighting);
 			break;
 		case Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			generate_Rmatrix_from_covariance_kernel(1,include_corrlength_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(1,include_corrlength_lum_weighting);
 			break;
 		case Squared_Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			generate_Rmatrix_from_covariance_kernel(2,include_corrlength_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(2,include_corrlength_lum_weighting);
 			break;
 		default:
 			die("Regularization method not recognized");
 	}
+	if (!successful_Rmatrix) return false;
 	if ((dense_Rmatrix) and (inversion_method!=DENSE) and (inversion_method!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
 	if ((!dense_Rmatrix) and ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX))) {
 		// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
@@ -12361,6 +12374,7 @@ void QLens::create_regularization_matrix(const bool include_corrlength_lum_weigh
 			//cout << i << " " << Rmatrix_index[indx+j] << " " << Rmatrix[indx+j] << endl;
 		//}
 	//}
+	return true;
 }
 
 void QLens::create_regularization_matrix_shapelet()
@@ -13220,7 +13234,7 @@ double QLens::calculate_regularization_prior_term(const bool use_lum_weighting)
 	return loglike_reg;
 }
 
-void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid)
+bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid)
 {
 #ifdef USE_OPENMP
 	double wtime_opt0, wtime_opt;
@@ -13261,7 +13275,7 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			Dvector_cov_copy = new double[source_n_amps];
 		}
 		calculate_corrlength_pixel_sbweights();
-		create_regularization_matrix(true); // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+		if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 		if (use_covariance_matrix) generate_Gmatrix();
 		//right now, we're not doing any iteration of inversions (as we do for lumreg below) to keep it simple for starters
 		//cout << "Test run..." << endl;
@@ -13310,13 +13324,13 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			lumreg_it = 0;
 			double chisq, chisqprev;
 			if (lumreg_max_it > 0) {
-				if (use_lum_weighted_corrlength) create_regularization_matrix(true); // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+				if (use_lum_weighted_corrlength) { if (create_regularization_matrix(true)==false) return false; } // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 				chisq = chisq_regparam_lumreg_dense();
 				if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
 				lumreg_it++;
 				do {
 					chisqprev = chisq;
-					if (use_lum_weighted_corrlength) create_regularization_matrix(true); // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+					if (use_lum_weighted_corrlength) { if (create_regularization_matrix(true)==false) return false; } // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 					chisq = chisq_regparam_lumreg_dense();
 					if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
 
@@ -13379,6 +13393,7 @@ void QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	delete[] img_minus_sbprofile;
 	delete[] source_pixel_vector_minchisq;
 	if (use_lum_weighted_regularization) delete[] source_pixel_vector_input_lumreg;
+	return true;
 }
 
 void QLens::chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix)

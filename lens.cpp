@@ -1007,6 +1007,7 @@ QLens::QLens() : UCMC()
 	Fmatrix_nn = 0;
 	dense_Rmatrix = false;
 	find_covmatrix_inverse = true;
+	penalize_defective_covmatrix = true;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	Dvector = NULL;
@@ -1433,6 +1434,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Fmatrix_nn = 0;
 	dense_Rmatrix = lens_in->dense_Rmatrix;
 	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
+	penalize_defective_covmatrix = lens_in->penalize_defective_covmatrix;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	image_surface_brightness = NULL;
@@ -14543,7 +14545,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 		initialize_pixel_matrices(verbal);
-		if (regularization_method != None) create_regularization_matrix();
+		if (regularization_method != None) {
+			if (create_regularization_matrix()==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
+		}
 		if (inversion_method==DENSE) {
 			convert_Lmatrix_to_dense();
 			PSF_convolution_Lmatrix_dense(verbal);
@@ -14574,7 +14578,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None)) {
 			bool pre_srcgrid = (use_lum_weighted_srcpixel_clustering) ? true : false;
-			optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid);
+			if (optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_lensing_matrices(); return 2e30; }
 		}
 		if (use_lum_weighted_srcpixel_clustering) {
 #ifdef USE_OPENMP
@@ -14608,7 +14612,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 
 			if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 			initialize_pixel_matrices(verbal);
-			if (regularization_method != None) create_regularization_matrix();
+			if (regularization_method != None) {
+				if (create_regularization_matrix()==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
+			}
 			if (inversion_method==DENSE) {
 				convert_Lmatrix_to_dense();
 				PSF_convolution_Lmatrix_dense(verbal);
@@ -14636,7 +14642,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 #endif
 			if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 			if ((optimize_regparam) and (regularization_method != None)) {
-				optimize_regularization_parameter(dense_Fmatrix,verbal);
+				if (optimize_regularization_parameter(dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); clear_lensing_matrices(); return 2e30; }
 			}
 		}
 

@@ -11927,6 +11927,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(find_covmatrix_inverse,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="covmatrix_penalty")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Penalize defective (not positive definite) covariance matrices: " << display_switch(penalize_defective_covmatrix) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'covmatrix_penalty' command; must specify 'on' or 'off'");
+				set_switch(penalize_defective_covmatrix,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="data_pixel_noise")
 		{
 			double pnoise;
