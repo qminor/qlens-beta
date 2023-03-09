@@ -3956,6 +3956,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 		for (j=i+1; j < n_srcpts; j++) {
 			if (lum_weighting) {
 				corrlength = 2.0/(corrlength_pixel_weights[i] + corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
+				//corrlength = 1.0/(corrlength_pixel_weights[i]*corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
 				// In principle, one could generalize the above to ((wi^n + wj^n)/2)^(-1/n). In the above, we have n=1, but you could explore other values
 			}
 			else corrlength = input_corr_length;

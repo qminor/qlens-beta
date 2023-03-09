@@ -2127,16 +2127,22 @@ struct ParamSettings
 	}
 	void transform_parameters(double *params)
 	{
+		double *new_params = new double[nparams];
 		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==LOG_TRANSFORM) params[i] = log(params[i])/M_LN10;
+			if (transforms[i]->transform==NONE) new_params[i] = params[i];
+			else if (transforms[i]->transform==LOG_TRANSFORM) new_params[i] = log(params[i])/M_LN10;
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
+				new_params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				params[i] = transforms[i]->a * params[i] + transforms[i]->b;
+				new_params[i] = transforms[i]->a * params[i] + transforms[i]->b;
 			} else if (transforms[i]->transform==RATIO) {
-				params[i] = params[i]/params[transforms[i]->ratio_paramnum];
+				new_params[i] = params[i]/params[transforms[i]->ratio_paramnum];
 			}
 		}
+		for (int i=0; i < nparams; i++) {
+			params[i] = new_params[i];
+		}
+		delete[] new_params;
 	}
 	void transform_limits(double *lower, double *upper)
 	{
@@ -2176,6 +2182,7 @@ struct ParamSettings
 	}
 	void inverse_transform_parameters(double *params, double *transformed_params)
 	{
+		bool apply_ratio_transform_afterwards = false;
 		for (int i=0; i < nparams; i++) {
 			if (transforms[i]->transform==NONE) transformed_params[i] = params[i];
 			else if (transforms[i]->transform==LOG_TRANSFORM) transformed_params[i] = pow(10.0,params[i]);
@@ -2184,7 +2191,14 @@ struct ParamSettings
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
 			} else if (transforms[i]->transform==RATIO) {
-				transformed_params[i] = params[i]*params[transforms[i]->ratio_paramnum];
+				if (transforms[i]->ratio_paramnum < i) {
+					transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
+				} else apply_ratio_transform_afterwards = true;
+			}
+		}
+		if (apply_ratio_transform_afterwards) {
+			for (int i=0; i < nparams; i++) {
+				if (transforms[i]->transform==RATIO) transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
 			}
 		}
 	}
