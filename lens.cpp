@@ -1008,6 +1008,7 @@ QLens::QLens() : UCMC()
 	dense_Rmatrix = false;
 	find_covmatrix_inverse = true;
 	penalize_defective_covmatrix = true;
+	covmatrix_epsilon = 1e-9;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	Dvector = NULL;
@@ -1435,6 +1436,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Fmatrix_nn = 0;
 	dense_Rmatrix = lens_in->dense_Rmatrix;
 	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
+	covmatrix_epsilon = lens_in->covmatrix_epsilon;
 	penalize_defective_covmatrix = lens_in->penalize_defective_covmatrix;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;

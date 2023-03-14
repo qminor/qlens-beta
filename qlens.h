@@ -829,6 +829,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool dense_Rmatrix;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
+	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
 	bool penalize_defective_covmatrix;
 	double *Rmatrix;
 	int *Rmatrix_index;

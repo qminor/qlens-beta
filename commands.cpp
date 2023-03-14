@@ -11940,6 +11940,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(penalize_defective_covmatrix,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="covmatrix_epsilon")
+		{
+			double eps;
+			if (nwords == 2) {
+				if (!(ws[1] >> eps)) Complain("invalid data pixel surface brightness noise");
+				covmatrix_epsilon = eps;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "covmatrix_epsilon = " << covmatrix_epsilon << endl;
+			} else Complain("must specify either zero or one argument (covmatrix_epsilon)");
+		}
 		else if (words[0]=="data_pixel_noise")
 		{
 			double pnoise;

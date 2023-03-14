@@ -3940,7 +3940,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	double corrlength;
 	int i,j;
 	double sqrdist,x,matern_fac;
-	const double epsilon = 1e-7;
+	double epsilon = lens->covmatrix_epsilon;
 	if (kernel_type==0) {
 		if (matern_index <= 0) die("Matern kernel index nu must be greater than zero");
 		matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
@@ -3960,6 +3960,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 		covptr = cov_matrix_packed+indx[i];
 		if (lum_weighting) wi = exp(-lens->regparam_lsc*(1-lumfac[i]));
 		else wi=1.0;
+		//if (wi*wi < epsilon) die("BLOOMF");
 		*(covptr++) = wi*wi + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		for (j=i+1; j < n_srcpts; j++) {
