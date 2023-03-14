@@ -3951,7 +3951,8 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
-		if (lum_weighting) wi = exp(-lens->regparam_lsc*(1-lumfac[i]));
+		//if (lum_weighting) wi = exp(-lens->regparam_lsc*(1-lumfac[i]));
+		if (lum_weighting) wi = exp(-lumfac[i]);
 		else wi=1.0;
 		*(covptr++) = wi*wi + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
@@ -3960,7 +3961,8 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			corrlength = input_corr_length;
 			double xsig = 0.5;
 			if (lum_weighting) {
-				wj = exp(-lens->regparam_lsc*(1-lumfac[j]));
+				//wj = exp(-lens->regparam_lsc*(1-lumfac[j]));
+				wj = exp(-lumfac[j]);
 				fac = wi*wj;
 				//corrlength = 2.0/(corrlength_pixel_weights[i] + corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
 				//double wj = pow(lumfac[j],lens->regparam_lum_index);
@@ -13315,15 +13317,11 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
 		//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
 		regularization_parameter = pow(10,logreg_min);
-		if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with corrlength sbweights: " << regularization_parameter << endl;
+		if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << regularization_parameter << endl;
 		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 		else Fmatrix_log_determinant = regopt_logdet;
 		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-		double chisq;
-		if (verbal) {
-			chisq = (this->*chisqreg)(log(regularization_parameter)/ln10); // used for testing purposes
-			if (mpi_id==0) cout << "loglike=" << chisq << endl;
-		}
+		if (verbal) if (mpi_id==0) cout << "loglike=" << regopt_chisqmin << endl;
 
 		//if (use_lum_weighted_regularization) {
 			//for (i=0; i < source_n_amps; i++) source_pixel_vector_input_lumreg[i] = source_pixel_vector_minchisq[i];
@@ -13337,20 +13335,17 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
 			//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
 			regularization_parameter = pow(10,logreg_min);
-			if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with corrlength sbweights: " << regularization_parameter << endl;
+			if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << regularization_parameter << endl;
 			if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 			else Fmatrix_log_determinant = regopt_logdet;
 			for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-			if (verbal) {
-				chisq = (this->*chisqreg)(log(regularization_parameter)/ln10); // used for testing purposes
-				if (mpi_id==0) cout << "lumreg_it=" << j << " loglike=" << chisq << endl;
-			}
+			if (verbal) if (mpi_id==0) cout << "lumreg_it=" << j << " loglike=" << regopt_chisqmin << endl;
 		}
 
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			wtime_opt = omp_get_wtime() - wtime_opt0;
-			if (mpi_id==0) cout << "Wall time for optimizing regparam with lum-weighted corrlength: " << wtime_opt << endl;
+			if (mpi_id==0) cout << "Wall time for optimizing regparam with lum-weighted regularization: " << wtime_opt << endl;
 			wtime_opt0 = omp_get_wtime();
 		}
 #endif
@@ -13520,8 +13515,9 @@ void QLens::calculate_lumreg_pixel_sbweights()
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
 			if (regparam_lum_index==0) lumfac = 1;
-			else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
-			lum_weight_factor[i] = (lumfac==0) ? 1e-30 : lumfac;
+			else lumfac = (source_pixel_vector[i] > 0) ? pow((1-source_pixel_vector[i]/max_sb)/regparam_lsc,regparam_lum_index) : 1;
+			//lum_weight_factor[i] = (lumfac==0) ? 1e-30 : lumfac;
+			lum_weight_factor[i] = lumfac;
 		}
 	}
 	if (use_lum_weighted_corrlength) {

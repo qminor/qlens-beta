@@ -842,7 +842,7 @@ QLens::QLens() : UCMC()
 	use_ansi_characters = false;
 	chisq_tolerance = 1e-3;
 	//chisqtol_lumreg = 1e-3;
-	lumreg_max_it = 0;
+	lumreg_max_it = 1;
 	//lumreg_max_it_final = 20;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
@@ -924,7 +924,7 @@ QLens::QLens() : UCMC()
 	beta_clus_upper_limit = 1e30; // These must be specified by user
 	vary_beta_clus = false;
 
-	regparam_lsc = 1.0;
+	regparam_lsc = 0.3;
 	regparam_lsc_lower_limit = 1e30; // These must be specified by user
 	regparam_lsc_upper_limit = 1e30; // These must be specified by user
 	vary_regparam_lsc = false;
