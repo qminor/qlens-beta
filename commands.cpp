@@ -10792,17 +10792,18 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "chi-square tolerance for convergence of luminosity regularization = " << chisqtol_lumreg << endl;
 			} else Complain("must specify either zero or one argument for chisqtol_lumreg");
 		}
+		*/
 		else if (words[0]=="lumreg_max_it")
 		{
 			int maxit;
 			if (nwords == 2) {
 				if (!(ws[1] >> maxit)) Complain("invalid lumreg_max_it setting");
 				lumreg_max_it = maxit;
-				if (!optimize_regparam_lhi) lumreg_max_it_final = maxit;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "max number of iterations for luminosity regularization = " << lumreg_max_it << endl;
 			} else Complain("must specify either zero or one argument for lumreg_max_it");
 		}
+		/*
 		else if (words[0]=="lumreg_max_it_final")
 		{
 			int maxit;

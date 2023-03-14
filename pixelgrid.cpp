@@ -3933,9 +3933,6 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 {
 	bool lum_weighting = (lumfac==NULL) ? false : true;
 	bool lum_weighted_corrlength = (corrlength_pixel_weights==NULL) ? false : true;
-	//if (lum_weighting) cout << "INCLUDING LUM WEIGHTING" << endl;
-	//if (lum_weighted_corrlength) cout << "INCLUDING LUM WEIGHTED CORRLENGTH" << endl;
-	//if ((lum_weighting) or (lum_weighted_corrlength)) die();
 	if ((!lum_weighted_corrlength) and (input_corr_length <= 0)) die("cannot have negative or zero correlation length (input value = %g",input_corr_length);
 	double corrlength;
 	int i,j;
@@ -3950,17 +3947,12 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	indx[0] = 0;
 	for (i=1; i < n_srcpts; i++) indx[i] = indx[i-1] + n_srcpts-i+1; // allows us to find first nonzero column with packed storage
 
-	//double xsc = sqrt(2*matern_index)*lens->matern_approx_source_size/corrlength;
-	//double matscale = 1-matern_fac*pow(xsc,matern_index)*modified_bessel_function(xsc,matern_index);
-	//cout << "src_size=" << lens->matern_approx_source_size << " xsc=" << xsc << " MATSCALE=" << matscale << endl;
-
 	double wi, wj, fac;
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
 		if (lum_weighting) wi = exp(-lens->regparam_lsc*(1-lumfac[i]));
 		else wi=1.0;
-		//if (wi*wi < epsilon) die("BLOOMF");
 		*(covptr++) = wi*wi + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		for (j=i+1; j < n_srcpts; j++) {
@@ -13327,24 +13319,33 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 		else Fmatrix_log_determinant = regopt_logdet;
 		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+		double chisq;
+		if (verbal) {
+			chisq = (this->*chisqreg)(log(regularization_parameter)/ln10); // used for testing purposes
+			if (mpi_id==0) cout << "loglike=" << chisq << endl;
+		}
+
 		//if (use_lum_weighted_regularization) {
 			//for (i=0; i < source_n_amps; i++) source_pixel_vector_input_lumreg[i] = source_pixel_vector_minchisq[i];
 		//}
 
-		calculate_lumreg_pixel_sbweights();
-		if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
-		if (use_covariance_matrix) generate_Gmatrix();
-		regopt_chisqmin = 1e30;
-		logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
-		//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
-		regularization_parameter = pow(10,logreg_min);
-		if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with corrlength sbweights: " << regularization_parameter << endl;
-		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-		else Fmatrix_log_determinant = regopt_logdet;
-		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-		//if (use_lum_weighted_regularization) {
-			//for (i=0; i < source_n_amps; i++) source_pixel_vector_input_lumreg[i] = source_pixel_vector_minchisq[i];
-		//}
+		for (int j=0; j < lumreg_max_it; j++) {
+			calculate_lumreg_pixel_sbweights();
+			if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+			if (use_covariance_matrix) generate_Gmatrix();
+			regopt_chisqmin = 1e30;
+			logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
+			//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
+			regularization_parameter = pow(10,logreg_min);
+			if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with corrlength sbweights: " << regularization_parameter << endl;
+			if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
+			else Fmatrix_log_determinant = regopt_logdet;
+			for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+			if (verbal) {
+				chisq = (this->*chisqreg)(log(regularization_parameter)/ln10); // used for testing purposes
+				if (mpi_id==0) cout << "lumreg_it=" << j << " loglike=" << chisq << endl;
+			}
+		}
 
 #ifdef USE_OPENMP
 		if (show_wtime) {

@@ -842,7 +842,7 @@ QLens::QLens() : UCMC()
 	use_ansi_characters = false;
 	chisq_tolerance = 1e-3;
 	//chisqtol_lumreg = 1e-3;
-	//lumreg_max_it = 20;
+	lumreg_max_it = 0;
 	//lumreg_max_it_final = 20;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
@@ -1272,7 +1272,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	use_ansi_characters = lens_in->use_ansi_characters;
 	chisq_tolerance = lens_in->chisq_tolerance;
 	//chisqtol_lumreg = lens_in->chisqtol_lumreg;
-	//lumreg_max_it = lens_in->lumreg_max_it;
+	lumreg_max_it = lens_in->lumreg_max_it;
 	//lumreg_max_it_final = lens_in->lumreg_max_it_final;
 	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;

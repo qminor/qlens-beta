@@ -548,7 +548,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *corrlength_pixel_weights;
 	double *lum_weight_factor;
 	//double *lumreg_pixel_weights;
-	int lumreg_it;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;
 	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
@@ -579,6 +578,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_tolerance;
 	//double chisqtol_lumreg;
 	//int lumreg_max_it, lumreg_max_it_final;
+	int lumreg_max_it;
 	int n_repeats;
 	bool display_chisq_status;
 	int n_visible_images;
