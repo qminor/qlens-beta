@@ -534,23 +534,24 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_matern_scale;
 	bool vary_matern_index;
 	bool optimize_regparam;
-	bool optimize_regparam_lhi;
+	//bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
 
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
-	double regparam_lhi, regparam_lsc, regparam_lum_index; 
+	double regparam_lsc, regparam_lum_index; 
 	bool use_lum_weighted_corrlength;
 	double corrlength_lhi, corrlength_llo, corrlength_lum_index; 
 	//double regparam_lhi, regparam_lum_index; 
 	double *corrlength_pixel_weights;
-	double *lumreg_pixel_weights;
+	double *lum_weight_factor;
+	//double *lumreg_pixel_weights;
 	int lumreg_it;
-	bool vary_regparam_lhi, vary_regparam_lsc, vary_regparam_lum_index;
+	bool vary_regparam_lsc, vary_regparam_lum_index;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;
-	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
+	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
 	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
 
@@ -576,8 +577,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImageData *image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
-	double chisqtol_lumreg;
-	int lumreg_max_it, lumreg_max_it_final;
+	//double chisqtol_lumreg;
+	//int lumreg_max_it, lumreg_max_it_final;
 	int n_repeats;
 	bool display_chisq_status;
 	int n_visible_images;
@@ -803,7 +804,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
-	double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
+	//double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
 	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
@@ -848,7 +849,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
-	double calculate_regularization_prior_term(const bool use_lum_weighting);
+	double calculate_regularization_prior_term();
 
 	void invert_lens_mapping_dense(bool verbal);
 	bool optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
@@ -857,10 +858,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void calculate_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	double chisq_regparam_it_lumreg_dense(const double logreg);
-	double chisq_regparam_it_lumreg_dense_final(const bool verbal);
-	double chisq_regparam_lumreg_dense();
-	void calculate_corrlength_pixel_sbweights();
+	//double chisq_regparam_it_lumreg_dense(const double logreg);
+	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
+	//double chisq_regparam_lumreg_dense();
+	void calculate_lumreg_pixel_sbweights();
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);

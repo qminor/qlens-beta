@@ -2185,8 +2185,8 @@ void QLens::process_commands(bool read_file)
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
 					cout << "regparam_lsc = " << regparam_lsc << endl;
 					cout << "vary_regparam_lsc: " << display_switch(vary_regparam_lsc) << endl;
-					cout << "regparam_lhi = " << regparam_lhi << endl;
-					cout << "vary_regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
+					//cout << "regparam_lhi = " << regparam_lhi << endl;
+					//cout << "vary_regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
 					cout << "outside_sb_noise_threshold = " << outside_sb_prior_noise_frac << endl;
 					if (extended_mask_n_neighbors==-1) cout << "emask_n_neighbors = all" << endl;
@@ -10781,6 +10781,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "chi-square required accuracy = " << chisq_tolerance << endl;
 			} else Complain("must specify either zero or one argument (required chi-square accuracy)");
 		}
+		/*
 		else if (words[0]=="chisqtol_lumreg")
 		{
 			double tol;
@@ -10812,6 +10813,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "max number of final iterations for luminosity regularization = " << lumreg_max_it_final << endl;
 			} else Complain("must specify either zero or one argument for lumreg_max_it_final");
 		}
+		*/
 		else if (words[0]=="integral_tolerance")
 		{
 			double itolerance;
@@ -11472,10 +11474,10 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
 						vary_regparam_lsc = false;
 					}
-					if (vary_regparam_lhi) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
-						vary_regparam_lhi = false;
-					}
+					//if (vary_regparam_lhi) {
+						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
+						//vary_regparam_lhi = false;
+					//}
 					if (vary_regparam_lum_index) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
 						vary_regparam_lum_index = false;
@@ -11569,6 +11571,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		/*
 		else if (words[0]=="regparam_lhi")
 		{
 			double reg_lhi, reg_lhi_upper, reg_lhi_lower;
@@ -11600,6 +11603,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		*/
 		else if (words[0]=="regparam_lum_index")
 		{
 			double reg_index;
@@ -12643,10 +12647,10 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
 					use_lum_weighted_regularization = false;
-					if (vary_regparam_lhi) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
-						vary_regparam_lhi = false;
-					}
+					//if (vary_regparam_lhi) {
+						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
+						//vary_regparam_lhi = false;
+					//}
 					if (vary_regparam_lum_index) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
 						vary_regparam_lum_index = false;
@@ -12666,6 +12670,7 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		/*
 		else if (words[0]=="optimize_regparam_lhi")
 		{
 			if (nwords==1) {
@@ -12683,6 +12688,7 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		*/
 		else if (words[0]=="regparam_tol")
 		{
 			double param;

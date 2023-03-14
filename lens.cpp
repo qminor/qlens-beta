@@ -841,9 +841,9 @@ QLens::QLens() : UCMC()
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
 	chisq_tolerance = 1e-3;
-	chisqtol_lumreg = 1e-3;
-	lumreg_max_it = 20;
-	lumreg_max_it_final = 20;
+	//chisqtol_lumreg = 1e-3;
+	//lumreg_max_it = 20;
+	//lumreg_max_it_final = 20;
 	chisq_magnification_threshold = 0;
 	chisq_imgsep_threshold = 0;
 	chisq_imgplane_substitute_threshold = -1; // if > 0, will evaluate the source plane chi-square and if above the threshold, use instead of image plane chi-square (if imgplane_chisq is on)
@@ -924,14 +924,14 @@ QLens::QLens() : UCMC()
 	beta_clus_upper_limit = 1e30; // These must be specified by user
 	vary_beta_clus = false;
 
-	regparam_lsc = 0.1;
+	regparam_lsc = 1.0;
 	regparam_lsc_lower_limit = 1e30; // These must be specified by user
 	regparam_lsc_upper_limit = 1e30; // These must be specified by user
 	vary_regparam_lsc = false;
-	regparam_lhi = 1000;
-	regparam_lhi_lower_limit = 1e30; // These must be specified by user
-	regparam_lhi_upper_limit = 1e30; // These must be specified by user
-	vary_regparam_lhi = false;
+	//regparam_lhi = 1000;
+	//regparam_lhi_lower_limit = 1e30; // These must be specified by user
+	//regparam_lhi_upper_limit = 1e30; // These must be specified by user
+	//vary_regparam_lhi = false;
 	regparam_lum_index = 1;
 	regparam_lum_index_lower_limit = 1e30; // These must be specified by user
 	regparam_lum_index_upper_limit = 1e30; // These must be specified by user
@@ -967,7 +967,7 @@ QLens::QLens() : UCMC()
 	vary_matern_scale = false;
 
 	optimize_regparam = false;
-	optimize_regparam_lhi = false;
+	//optimize_regparam_lhi = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
 	optimize_regparam_maxlog = 3;
@@ -1016,7 +1016,8 @@ QLens::QLens() : UCMC()
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
 	corrlength_pixel_weights = NULL;
-	lumreg_pixel_weights = NULL;
+	lum_weight_factor = NULL;
+	//lumreg_pixel_weights = NULL;
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
@@ -1048,7 +1049,7 @@ QLens::QLens() : UCMC()
 	interpolate_random_sourcepts = false;
 	use_dualtree_kmeans = true;
 	n_src_clusters = -1;
-	n_cluster_iterations = 6;
+	n_cluster_iterations = 20;
 	regrid_if_unmapped_source_subpixels = false;
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
@@ -1269,9 +1270,9 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	source_fit_mode = lens_in->source_fit_mode;
 	use_ansi_characters = lens_in->use_ansi_characters;
 	chisq_tolerance = lens_in->chisq_tolerance;
-	chisqtol_lumreg = lens_in->chisqtol_lumreg;
-	lumreg_max_it = lens_in->lumreg_max_it;
-	lumreg_max_it_final = lens_in->lumreg_max_it_final;
+	//chisqtol_lumreg = lens_in->chisqtol_lumreg;
+	//lumreg_max_it = lens_in->lumreg_max_it;
+	//lumreg_max_it_final = lens_in->lumreg_max_it_final;
 	chisq_magnification_threshold = lens_in->chisq_magnification_threshold;
 	chisq_imgsep_threshold = lens_in->chisq_imgsep_threshold;
 	chisq_imgplane_substitute_threshold = lens_in->chisq_imgplane_substitute_threshold;
@@ -1354,10 +1355,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	regparam_lsc_lower_limit = lens_in->regparam_lsc_lower_limit; // These must be specified by user
 	regparam_lsc_upper_limit = lens_in->regparam_lsc_upper_limit; // These must be specified by user
 	vary_regparam_lsc = lens_in->vary_regparam_lsc;
-	regparam_lhi = lens_in->regparam_lhi;
-	regparam_lhi_lower_limit = lens_in->regparam_lhi_lower_limit; // These must be specified by user
-	regparam_lhi_upper_limit = lens_in->regparam_lhi_upper_limit; // These must be specified by user
-	vary_regparam_lhi = lens_in->vary_regparam_lhi;
+	//regparam_lhi = lens_in->regparam_lhi;
+	//regparam_lhi_lower_limit = lens_in->regparam_lhi_lower_limit; // These must be specified by user
+	//regparam_lhi_upper_limit = lens_in->regparam_lhi_upper_limit; // These must be specified by user
+	//vary_regparam_lhi = lens_in->vary_regparam_lhi;
 	regparam_lum_index = lens_in->regparam_lum_index;
 	regparam_lum_index_lower_limit = lens_in->regparam_lum_index_lower_limit; // These must be specified by user
 	regparam_lum_index_upper_limit = lens_in->regparam_lum_index_upper_limit; // These must be specified by user
@@ -1393,7 +1394,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	vary_matern_scale = lens_in->vary_matern_scale;
 
 	optimize_regparam = lens_in->optimize_regparam;
-	optimize_regparam_lhi = lens_in->optimize_regparam_lhi;
+	//optimize_regparam_lhi = lens_in->optimize_regparam_lhi;
 	optimize_regparam_tol = lens_in->optimize_regparam_tol; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = lens_in->optimize_regparam_minlog;
 	optimize_regparam_maxlog = lens_in->optimize_regparam_maxlog;
@@ -1442,7 +1443,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
 	corrlength_pixel_weights = NULL;
-	lumreg_pixel_weights = NULL;
+	lum_weight_factor = NULL;
+	//lumreg_pixel_weights = NULL;
 	source_pixel_n_images = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
@@ -7210,7 +7212,7 @@ double QLens::update_model(const double* params)
 	}
 	if ((use_lum_weighted_regularization) and (regularization_method != None)) {
 		if (vary_regparam_lsc) regparam_lsc = params[index++];
-		if (vary_regparam_lhi) regparam_lhi = params[index++];
+		//if (vary_regparam_lhi) regparam_lhi = params[index++];
 		if (vary_regparam_lum_index) regparam_lum_index = params[index++];
 	}
 	if ((use_lum_weighted_corrlength) and (regularization_method != None)) {
@@ -8188,7 +8190,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	}
 	if ((use_lum_weighted_regularization) and (regularization_method != None)) {
 		if (vary_regparam_lsc) stepsizes[index++] = 0.33*regparam_lsc;
-		if (vary_regparam_lhi) stepsizes[index++] = 0.33*regparam_lhi;
+		//if (vary_regparam_lhi) stepsizes[index++] = 0.33*regparam_lhi;
 		if (vary_regparam_lum_index) stepsizes[index++] = 0.33;
 	}
 	if ((use_lum_weighted_corrlength) and (regularization_method != None)) {
@@ -8241,7 +8243,7 @@ void QLens::set_default_plimits()
 	if (vary_srcflux) index++;
 	if ((vary_regularization_parameter) and (regularization_method != None)) index++;
 	if ((use_lum_weighted_regularization) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
@@ -8286,7 +8288,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (vary_srcflux) nparams++;
 	if ((vary_regularization_parameter) and (regularization_method != None)) nparams++;
 	if ((use_lum_weighted_regularization) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
-	if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) nparams++;
+	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) nparams++;
 	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
 	if ((use_lum_weighted_corrlength) and (vary_corrlength_llo) and (regularization_method != None)) nparams++;
 	if ((use_lum_weighted_corrlength) and (vary_corrlength_lhi) and (regularization_method != None)) nparams++;
@@ -8361,7 +8363,7 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (vary_srcflux) fitparams[index++] = source_flux;
 	if ((vary_regularization_parameter) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
 	if ((use_lum_weighted_regularization) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
-	if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) fitparams[index++] = regparam_lhi;
+	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) fitparams[index++] = regparam_lhi;
 	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
 	if ((use_lum_weighted_corrlength) and (vary_corrlength_llo) and (regularization_method != None)) fitparams[index++] = corrlength_llo;
 	if ((use_lum_weighted_corrlength) and (vary_corrlength_lhi) and (regularization_method != None)) fitparams[index++] = corrlength_lhi;
@@ -8469,14 +8471,14 @@ bool QLens::setup_limits()
 			upper_limits_initial[index] = upper_limits[index];
 			index++;
 		}
-		if ((vary_regparam_lhi) and (regularization_method != None)) {
-			if ((regparam_lhi_lower_limit==1e30) or (regparam_lhi_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lhi before doing fit"); return false; }
-			lower_limits[index] = regparam_lhi_lower_limit;
-			lower_limits_initial[index] = lower_limits[index];
-			upper_limits[index] = regparam_lhi_upper_limit;
-			upper_limits_initial[index] = upper_limits[index];
-			index++;
-		}
+		//if ((vary_regparam_lhi) and (regularization_method != None)) {
+			//if ((regparam_lhi_lower_limit==1e30) or (regparam_lhi_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lhi before doing fit"); return false; }
+			//lower_limits[index] = regparam_lhi_lower_limit;
+			//lower_limits_initial[index] = lower_limits[index];
+			//upper_limits[index] = regparam_lhi_upper_limit;
+			//upper_limits_initial[index] = upper_limits[index];
+			//index++;
+		//}
 		if ((vary_regparam_lum_index) and (regularization_method != None)) {
 			if ((regparam_lum_index_lower_limit==1e30) or (regparam_lum_index_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lum_index before doing fit"); return false; }
 			lower_limits[index] = regparam_lum_index_lower_limit;
@@ -8743,13 +8745,13 @@ void QLens::get_parameter_names()
 	if ((vary_regparam_lsc) and (regularization_method != None)) {
 		fit_parameter_names.push_back("regparam_lsc");
 		latex_parameter_names.push_back("\\lambda");
-		latex_parameter_subscripts.push_back("low");
+		latex_parameter_subscripts.push_back("sc");
 	}
-	if ((vary_regparam_lhi) and (regularization_method != None)) {
-		fit_parameter_names.push_back("regparam_lhi");
-		latex_parameter_names.push_back("\\lambda");
-		latex_parameter_subscripts.push_back("high");
-	}
+	//if ((vary_regparam_lhi) and (regularization_method != None)) {
+		//fit_parameter_names.push_back("regparam_lhi");
+		//latex_parameter_names.push_back("\\lambda");
+		//latex_parameter_subscripts.push_back("high");
+	//}
 	if ((vary_regparam_lum_index) and (regularization_method != None)) {
 		fit_parameter_names.push_back("regparam_lum_index");
 		latex_parameter_names.push_back("\\gamma");
@@ -9435,7 +9437,7 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 		if (regularization_method != None) {
 			if (vary_regularization_parameter) cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
 			if (vary_regparam_lsc) cout << "regparam_lsc=" << fitmodel->regparam_lsc << endl;
-			if (vary_regparam_lhi) cout << "regparam_lhi=" << fitmodel->regparam_lhi << endl;
+			//if (vary_regparam_lhi) cout << "regparam_lhi=" << fitmodel->regparam_lhi << endl;
 			if (vary_regparam_lum_index) cout << "regparam_lum_index=" << fitmodel->regparam_lum_index << endl;
 			if (vary_corrlength_llo) cout << "corrlength_llo=" << fitmodel->corrlength_llo << endl;
 			if (vary_corrlength_lhi) cout << "corrlength_lhi=" << fitmodel->corrlength_lhi << endl;
@@ -11037,7 +11039,7 @@ bool QLens::adopt_model(dvector &fitparams)
 	if (vary_srcflux) source_flux = transformed_params[index++];
 	if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = transformed_params[index++];
 	if ((vary_regparam_lsc) and (regularization_method != None)) regparam_lsc = transformed_params[index++];
-	if ((vary_regparam_lhi) and (regularization_method != None)) regparam_lhi = transformed_params[index++];
+	//if ((vary_regparam_lhi) and (regularization_method != None)) regparam_lhi = transformed_params[index++];
 	if ((vary_regparam_lum_index) and (regularization_method != None)) regparam_lum_index = transformed_params[index++];
 	if ((vary_corrlength_llo) and (regularization_method != None)) corrlength_llo = transformed_params[index++];
 	if ((vary_corrlength_lhi) and (regularization_method != None)) corrlength_lhi = transformed_params[index++];
@@ -11957,14 +11959,14 @@ void QLens::print_fit_model()
 				else cout << "regparam_lsc: [" << regparam_lsc_lower_limit << ":" << regparam_lsc << ":" << regparam_lsc_upper_limit << "]\n";
 			}
 		}
-		if (vary_regparam_lhi) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "regparam_lhi: " << regparam_lhi << endl;
-			} else {
-				if ((regparam_lhi_lower_limit==1e30) or (regparam_lhi_upper_limit==1e30)) cout << "\nregparam_lhi: lower/upper limits not given (these must be set by 'regparam_lhi' command before fit)\n";
-				else cout << "regparam_lhi: [" << regparam_lhi_lower_limit << ":" << regparam_lhi << ":" << regparam_lhi_upper_limit << "]\n";
-			}
-		}
+		//if (vary_regparam_lhi) {
+			//if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				//cout << "regparam_lhi: " << regparam_lhi << endl;
+			//} else {
+				//if ((regparam_lhi_lower_limit==1e30) or (regparam_lhi_upper_limit==1e30)) cout << "\nregparam_lhi: lower/upper limits not given (these must be set by 'regparam_lhi' command before fit)\n";
+				//else cout << "regparam_lhi: [" << regparam_lhi_lower_limit << ":" << regparam_lhi << ":" << regparam_lhi_upper_limit << "]\n";
+			//}
+		//}
 		if (vary_regparam_lum_index) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 				cout << "regparam_lum_index: " << regparam_lum_index << endl;
@@ -14498,8 +14500,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		if ((optimize_regparam) and (regularization_method != None)) {
 			optimize_regularization_parameter(dense_Fmatrix,verbal);
 		}
-		if ((!optimize_regparam) or (use_lum_weighted_regularization)) {
-			// if using luminosity-weighted regularization, we need to do final inversion after optimizing regparam
+		if ((!optimize_regparam)) {
 			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
 			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
 			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
@@ -14646,8 +14647,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 			}
 		}
 
-		if ((!optimize_regparam) or (use_lum_weighted_regularization)) {
-			// if using luminosity-weighted regularization, we need to do final inversion after optimizing regparam
+		if ((!optimize_regparam)) {
 			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(verbal);
 			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(verbal);
 			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
@@ -14716,7 +14716,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 #endif
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(true,verbal);
-		if ((!optimize_regparam) or (use_lum_weighted_regularization)) invert_lens_mapping_dense(verbal); // if using luminosity-weighted regularization, we need to do final inversion after optimizing regparam
+		if (!optimize_regparam) invert_lens_mapping_dense(verbal); // if using luminosity-weighted regularization, we need to do final inversion after optimizing regparam
 		calculate_image_pixel_surface_brightness_dense();
 		//store_image_pixel_surface_brightness();
 
@@ -14826,16 +14826,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 	double loglike_reg;
 	if ((source_fit_mode != Parameterized_Source) and (regularization_method != None) and (source_npixels > 0)) {
 		if (regularization_parameter != 0) {
-			loglike_reg = calculate_regularization_prior_term(use_lum_weighted_regularization);
+			loglike_reg = calculate_regularization_prior_term();
 			loglike_times_two += loglike_reg;
 		}
 		if (!use_covariance_matrix) loglike_times_two += Fmatrix_log_determinant;
 		else loglike_times_two += Gmatrix_log_determinant;
 		if (group_id==0) {
 			if (logfile.is_open()) {
-				if (use_lum_weighted_regularization) logfile << "reg_lsc=" << regparam_lsc << " reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-				if (use_lum_weighted_regularization) logfile << "reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-				else logfile << "reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
+				//if (use_lum_weighted_regularization) logfile << "reg_lsc=" << regparam_lsc << " reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
+				//if (use_lum_weighted_regularization) logfile << "reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
+				logfile << "reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
 			}
 			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << loglike_times_two;
 		}
@@ -16368,7 +16368,8 @@ QLens::~QLens()
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (corrlength_pixel_weights != NULL) delete[] corrlength_pixel_weights;
-	if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
+	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
+	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
