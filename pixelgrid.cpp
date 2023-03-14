@@ -13515,7 +13515,7 @@ void QLens::calculate_lumreg_pixel_sbweights()
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
 			if (regparam_lum_index==0) lumfac = 1;
-			else lumfac = (source_pixel_vector[i] > 0) ? pow((1-source_pixel_vector[i]/max_sb)/regparam_lsc,regparam_lum_index) : 1;
+			else lumfac = (source_pixel_vector[i] > 0) ? regparam_lsc*pow((1-source_pixel_vector[i]/max_sb),regparam_lum_index) : 1;
 			//lum_weight_factor[i] = (lumfac==0) ? 1e-30 : lumfac;
 			lum_weight_factor[i] = lumfac;
 		}
