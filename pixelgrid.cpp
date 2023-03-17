@@ -3951,8 +3951,9 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
-		//if (lum_weighting) wi = exp(-lens->regparam_lsc*(1-lumfac[i]));
 		if (lum_weighting) wi = exp(-lumfac[i]);
+		//if (lum_weighting) wi = 1-exp(-lumfac[i]);
+		//if (lum_weighting) wi = lumfac[i];
 		else wi=1.0;
 		*(covptr++) = wi*wi + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
@@ -3961,8 +3962,9 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			corrlength = input_corr_length;
 			double xsig = 0.5;
 			if (lum_weighting) {
-				//wj = exp(-lens->regparam_lsc*(1-lumfac[j]));
 				wj = exp(-lumfac[j]);
+				//wj = 1-exp(-lumfac[j]);
+				//wj = lumfac[j];
 				fac = wi*wj;
 				//corrlength = 2.0/(corrlength_pixel_weights[i] + corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
 				//double wj = pow(lumfac[j],lens->regparam_lum_index);
@@ -3984,6 +3986,9 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 					die();
 				}
 				*(covptr++) = fac*matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
+				//double blurgh = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
+				//cout << "blurgh=" << blurgh << endl;
+				//*(covptr++) = fac; 
 			} else if (kernel_type==1) {
 				*(covptr++) = fac*exp(-sqrt(sqrdist)/corrlength); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
 			} else {
@@ -13514,10 +13519,12 @@ void QLens::calculate_lumreg_pixel_sbweights()
 	}
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
-			if (regparam_lum_index==0) lumfac = 1;
+			//if (regparam_lum_index==0) lumfac = 1;
 			//else lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			//lum_weight_factor[i] = (lumfac==0) ? 1e-30 : lumfac;
+			if (regparam_lum_index==0) lumfac = 1;
+			//else lumfac = (source_pixel_vector[i] > 0) ? pow(1-source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
+			//else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
 			lum_weight_factor[i] = regparam_lsc*lumfac;
 		}
 	}
