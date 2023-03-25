@@ -4830,7 +4830,6 @@ double ImagePixelData::find_avg_sb(const double sb_threshold)
 	}
 	avg_sb /= npix;
 
-
 	return avg_sb;
 }
 
@@ -9392,7 +9391,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 							maps_to_something = false;
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++)
 							{
-								if ((delaunay) and (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],i,j,thread)==true)) {
+								if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],i,j,thread)==true))) {
 									maps_to_something = true;
 									subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
 								} else if ((!delaunay) and (source_pixel_grid->assign_source_mapping_flags_interpolate(subpixel_center_sourcepts[i][j][subcell_index],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
@@ -9419,7 +9418,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
-							if ((delaunay) and (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],i,j,thread)==true)) {
+							if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],i,j,thread)==true))) {
 								maps_to_source_pixel[i][j] = true;
 								#pragma omp atomic
 								n_active_pixels++;
@@ -10564,8 +10563,12 @@ bool QLens::assign_pixel_mappings(bool verbal)
 #endif
 	int tot_npixels_count;
 	if (source_fit_mode==Delaunay_Source) {
-		image_pixel_grid->assign_image_mapping_flags(true);
-		source_npixels = delaunay_srcgrid->assign_active_indices_and_count_source_pixels(activate_unmapped_source_pixels);
+			image_pixel_grid->assign_image_mapping_flags(true);
+			if (delaunay_srcgrid != NULL) { 
+				source_npixels = delaunay_srcgrid->assign_active_indices_and_count_source_pixels(activate_unmapped_source_pixels);
+			} else {
+				source_npixels = 0;
+			}
 	} else {
 		tot_npixels_count = source_pixel_grid->assign_indices_and_count_levels();
 		if ((mpi_id==0) and (adaptive_subgrid) and (verbal==true)) cout << "Number of source cells: " << tot_npixels_count << endl;
@@ -10610,7 +10613,7 @@ bool QLens::assign_pixel_mappings(bool verbal)
 	if (image_pixel_index != image_npixels) die("Number of active pixels (%i) doesn't seem to match image_npixels (%i)",image_pixel_index,image_npixels);
 
 	if ((verbal) and (mpi_id==0)) {
-		if (source_fit_mode==Delaunay_Source) cout << "source # of pixels: " << delaunay_srcgrid->n_srcpts << ", # of active pixels: " << source_npixels << endl;
+		if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) cout << "source # of pixels: " << delaunay_srcgrid->n_srcpts << ", # of active pixels: " << source_npixels << endl;
 		else cout << "source # of pixels: " << source_pixel_grid->number_of_pixels << ", counted up as " << tot_npixels_count << ", # of active pixels: " << source_npixels << endl;
 	}
 
@@ -10877,8 +10880,10 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 					center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 					center_pt = image_pixel_grid->subpixel_center_pts[i][j];
 					if (delaunay) {
-						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-							delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+						if (delaunay_srcgrid != NULL) {
+							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+								delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							}
 						}
 					} else {
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -10894,7 +10899,9 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 					i = active_image_pixel_i[img_index];
 					j = active_image_pixel_j[img_index];
 					if (delaunay) {
-						delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+						if (delaunay_srcgrid != NULL) {
+							delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+						}
 					} else {
 						source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
 					}
@@ -11033,12 +11040,11 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
 	}
 #endif
-
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
 	else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
-	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (sparse)...\n";
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
 	ny_half = psf_npixels_y/2;
@@ -11046,12 +11052,6 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 	int *Lmatrix_psf_row_nn = new int[image_npixels];
 	vector<double> *Lmatrix_psf_rows = new vector<double>[image_npixels];
 	vector<int> *Lmatrix_psf_index_rows = new vector<int>[image_npixels];
-
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
 
 	// If the PSF is sufficiently wide, it may save time to MPI the PSF convolution by setting psf_convolution_mpi to 'true'. This option is off by default.
 	int mpi_chunk, mpi_start, mpi_end;
@@ -11065,42 +11065,49 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 	}
 
 	int i,j,k,l,m;
-	int psf_k, psf_l;
-	int img_index1, img_index2, src_index, col_index;
-	int index;
-	bool new_entry;
 	int Lmatrix_psf_nn=0;
-	int Lmatrix_psf_nn_part=0;
-	#pragma omp parallel for private(m,k,l,i,j,img_index1,img_index2,src_index,col_index,psf_k,psf_l,index,new_entry) schedule(static) reduction(+:Lmatrix_psf_nn_part)
-	for (img_index1=mpi_start; img_index1 < mpi_end; img_index1++)
-	{ // this loops over columns of the PSF blurring matrix
-		int col_i=0;
-		Lmatrix_psf_row_nn[img_index1] = 0;
-		k = active_image_pixel_i[img_index1];
-		l = active_image_pixel_j[img_index1];
-		for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
-			i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
-			if ((i >= 0) and (i < image_pixel_grid->x_N)) {
-				for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
-					j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
-					if ((j >= 0) and (j < image_pixel_grid->y_N)) {
-						if (image_pixel_grid->maps_to_source_pixel[i][j]) {
-							img_index2 = image_pixel_grid->pixel_index[i][j];
+	if (source_npixels > 0) {
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
+#endif
+		int psf_k, psf_l;
+		int img_index1, img_index2, src_index, col_index;
+		int index;
+		bool new_entry;
+		int Lmatrix_psf_nn_part=0;
+		#pragma omp parallel for private(m,k,l,i,j,img_index1,img_index2,src_index,col_index,psf_k,psf_l,index,new_entry) schedule(static) reduction(+:Lmatrix_psf_nn_part)
+		for (img_index1=mpi_start; img_index1 < mpi_end; img_index1++)
+		{ // this loops over columns of the PSF blurring matrix
+			int col_i=0;
+			Lmatrix_psf_row_nn[img_index1] = 0;
+			k = active_image_pixel_i[img_index1];
+			l = active_image_pixel_j[img_index1];
+			for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
+				i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
+				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
+					for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
+						j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
+						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+							if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+								img_index2 = image_pixel_grid->pixel_index[i][j];
 
-							for (index=image_pixel_location_Lmatrix[img_index2]; index < image_pixel_location_Lmatrix[img_index2+1]; index++) {
-								if (Lmatrix[index] != 0) {
-									src_index = Lmatrix_index[index];
-									new_entry = true;
-									for (m=0; m < Lmatrix_psf_row_nn[img_index1]; m++) {
-										if (Lmatrix_psf_index_rows[img_index1][m]==src_index) { col_index=m; new_entry=false; }
-									}
-									if (new_entry) {
-										Lmatrix_psf_rows[img_index1].push_back(psf_matrix[psf_k][psf_l]*Lmatrix[index]);
-										Lmatrix_psf_index_rows[img_index1].push_back(src_index);
-										Lmatrix_psf_row_nn[img_index1]++;
-										col_i++;
-									} else {
-										Lmatrix_psf_rows[img_index1][col_index] += psf_matrix[psf_k][psf_l]*Lmatrix[index];
+								for (index=image_pixel_location_Lmatrix[img_index2]; index < image_pixel_location_Lmatrix[img_index2+1]; index++) {
+									if (Lmatrix[index] != 0) {
+										src_index = Lmatrix_index[index];
+										new_entry = true;
+										for (m=0; m < Lmatrix_psf_row_nn[img_index1]; m++) {
+											if (Lmatrix_psf_index_rows[img_index1][m]==src_index) { col_index=m; new_entry=false; }
+										}
+										if (new_entry) {
+											Lmatrix_psf_rows[img_index1].push_back(psf_matrix[psf_k][psf_l]*Lmatrix[index]);
+											Lmatrix_psf_index_rows[img_index1].push_back(src_index);
+											Lmatrix_psf_row_nn[img_index1]++;
+											col_i++;
+										} else {
+											Lmatrix_psf_rows[img_index1][col_index] += psf_matrix[psf_k][psf_l]*Lmatrix[index];
+										}
 									}
 								}
 							}
@@ -11108,32 +11115,35 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 					}
 				}
 			}
+			Lmatrix_psf_nn_part += col_i;
 		}
-		Lmatrix_psf_nn_part += col_i;
-	}
 
 #ifdef USE_MPI
-	if (psf_convolution_mpi)
-		MPI_Allreduce(&Lmatrix_psf_nn_part, &Lmatrix_psf_nn, 1, MPI_INT, MPI_SUM, sub_comm);
-	else
-		Lmatrix_psf_nn = Lmatrix_psf_nn_part;
+		if (psf_convolution_mpi)
+			MPI_Allreduce(&Lmatrix_psf_nn_part, &Lmatrix_psf_nn, 1, MPI_INT, MPI_SUM, sub_comm);
+		else
+			Lmatrix_psf_nn = Lmatrix_psf_nn_part;
 #else
-	Lmatrix_psf_nn = Lmatrix_psf_nn_part;
+		Lmatrix_psf_nn = Lmatrix_psf_nn_part;
 #endif
-
-	int *image_pixel_location_Lmatrix_psf = new int[image_npixels+1];
 
 #ifdef USE_MPI
-	if (psf_convolution_mpi) {
-		int id, chunk, start, end, length;
-		for (id=0; id < group_np; id++) {
-			chunk = image_npixels / group_np;
-			start = id*chunk;
-			if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
-			MPI_Bcast(Lmatrix_psf_row_nn + start,chunk,MPI_INT,id,sub_comm);
+		if (psf_convolution_mpi) {
+			int id, chunk, start, end, length;
+			for (id=0; id < group_np; id++) {
+				chunk = image_npixels / group_np;
+				start = id*chunk;
+				if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
+				MPI_Bcast(Lmatrix_psf_row_nn + start,chunk,MPI_INT,id,sub_comm);
+			}
+		}
+#endif
+	} else {
+		for (int img_index=0; img_index < image_npixels; img_index++) {
+			Lmatrix_psf_row_nn[img_index] = 0;
 		}
 	}
-#endif
+
 
 	if (include_imgfluxes_in_inversion) {
 		double *Lmatptr;
@@ -11165,11 +11175,11 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 		}
 	}
 
+	int *image_pixel_location_Lmatrix_psf = new int[image_npixels+1];
 	image_pixel_location_Lmatrix_psf[0] = 0;
 	for (m=0; m < image_npixels; m++) {
 		image_pixel_location_Lmatrix_psf[m+1] = image_pixel_location_Lmatrix_psf[m] + Lmatrix_psf_row_nn[m];
 	}
-
 
 	double *Lmatrix_psf = new double[Lmatrix_psf_nn];
 	int *Lmatrix_index_psf = new int[Lmatrix_psf_nn];
@@ -11536,7 +11546,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 #endif
 
 	if (source_npixels > 0) {
-		if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+		if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (dense)...\n";
 
 		double nx_half, ny_half;
 		nx_half = psf_npixels_x/2;
@@ -12442,11 +12452,13 @@ void QLens::create_regularization_matrix_shapelet()
 #endif
 #endif
 #endif
+#ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
 		if (mpi_id==0) cout << "Wall time for calculating Rmatrix: " << wtime << endl;
 		wtime0 = omp_get_wtime();
 	}
+#endif
 
 }
 
@@ -13427,7 +13439,7 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	}
 	*/
 
-	update_source_amplitudes();
+	update_source_amplitudes(verbal);
 	if ((use_lum_weighted_srcpixel_clustering) and (pre_srcgrid)) {
 		calculate_pixel_sbweights(); // only need to calculate sb weights for the initial grid, to be used to construct the final pixellation
 	}
@@ -13458,7 +13470,7 @@ void QLens::chisq_regparam_single_eval(const double regparam, const bool dense_F
 	if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
 	else Fmatrix_log_determinant = regopt_logdet;
 	for (int i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-	update_source_amplitudes();
+	update_source_amplitudes(false);
 	if (use_lum_weighted_srcpixel_clustering) {
 		calculate_pixel_sbweights();
 	}
@@ -13807,7 +13819,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 #else
 		// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
 		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
-		repack_matrix_lower(Fmatrix_dense);
+		repack_matrix_lower(Fmatrix_packed_copy);
 
 		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
 		if (!status) die("Cholesky decomposition failed");
@@ -14602,7 +14614,7 @@ void QLens::invert_lens_mapping_dense(bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	update_source_amplitudes();
+	update_source_amplitudes(verbal);
 }
 
 void QLens::invert_lens_mapping_CG_method(bool verbal)
@@ -14695,7 +14707,7 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 	if ((mpi_id==0) and (verbal)) cout << iterations << " iterations, error=" << error << endl << endl;
 
 	delete[] temp;
-	update_source_amplitudes();
+	update_source_amplitudes(verbal);
 #ifdef USE_MPI
 	MPI_Comm_free(&sub_comm);
 #endif
@@ -14853,7 +14865,7 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal, bool use_copy)
 
    status = umfpack_di_solve(UMFPACK_A, Fmatrix_unsymmetric_cols, Fmatrix_unsymmetric_indices, Fmatrix_unsymmetric, temp, Dvector, Numeric, Control, Info);
 
-	if (regularization_method != None) calculate_determinant = true; // specifies to calculate determinant
+	if ((regularization_method != None) and (source_npixels > 0)) calculate_determinant = true; // specifies to calculate determinant
 
 	if ((n_image_prior) or (outside_sb_prior)) {
 		max_pixel_sb=-1e30;
@@ -14905,7 +14917,7 @@ void QLens::invert_lens_mapping_UMFPACK(bool verbal, bool use_copy)
 	delete[] Fmatrix_unsymmetric_cols;
 	delete[] Fmatrix_unsymmetric_indices;
 	delete[] Fmatrix_unsymmetric;
-	update_source_amplitudes();
+	update_source_amplitudes(verbal);
 #endif
 }
 
@@ -15123,7 +15135,7 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 	delete[] irn;
 	delete[] jcn;
 	delete[] Fmatrix_elements;
-	update_source_amplitudes();
+	update_source_amplitudes(verbal);
 #endif
 #ifdef USE_MPI
 	MPI_Comm_free(&sub_comm);
@@ -15132,10 +15144,10 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 
 }
 
-void QLens::update_source_amplitudes()
+void QLens::update_source_amplitudes(const bool verbal)
 {
 	int i,j,index=0;
-	if (source_fit_mode==Delaunay_Source) delaunay_srcgrid->update_surface_brightness(index);
+	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) delaunay_srcgrid->update_surface_brightness(index);
 	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->update_surface_brightness(index);
 	else if (source_fit_mode==Shapelet_Source) {
 		double* srcpix = source_pixel_vector;
@@ -15150,6 +15162,7 @@ void QLens::update_source_amplitudes()
 		for (j=0; j < point_imgs.size(); j++) {
 			for (i=0; i < point_imgs[j].size(); i++) {
 				point_imgs[j][i].flux = source_pixel_vector[index++];
+				if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << " (img " << i << "): flux=" << point_imgs[j][i].flux << endl;
 			}
 		}
 	}

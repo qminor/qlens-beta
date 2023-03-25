@@ -600,8 +600,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool reinitialize_random_grid;
 	int random_seed;
 	int n_ranchisq;
-	double random_grid_length_factor;
-	bool interpolate_random_sourcepts;
 	bool clustering_random_initialization;
 	bool weight_initial_centroids;
 	bool use_dualtree_kmeans;
@@ -994,7 +992,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
-	void update_source_amplitudes();
+	void update_source_amplitudes(const bool verbal);
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
@@ -1237,6 +1235,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	bool register_lens_vary_parameters(const int lensnumber);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
+	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y);
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
 	void reassign_lensparam_pointers_and_names();
@@ -1311,6 +1310,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
+	bool get_sourcept_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 	bool output_parameter_values();

@@ -6419,8 +6419,11 @@ void QLens::process_commands(bool read_file)
 						if (add_to_image) {
 							lensvector srcpt; srcpt[0] = xs; srcpt[1] = ys;
 							double zsrc = (lensed) ? source_redshift : lens_redshift;
+							int srcpt_i = n_sourcepts_fit;
 							if (!add_fit_sourcept(srcpt,zsrc)) Complain("could not add source point");
-							update_parameter_list();
+							if (!use_analytic_bestfit_src) {
+								set_sourcept_vary_parameters(srcpt_i,true,true);
+							}
 						} else {
 							if (n_sourcepts_fit > 1) Complain("with more than one source point, coordinates must be entered on separate lines after 'fit sourcept'");
 							sourcepts_fit[0][0] = xs;
@@ -6501,9 +6504,7 @@ void QLens::process_commands(bool read_file)
 						bool vary_xs, vary_ys;
 						if (!(ws[2] >> vary_xs)) Complain("Invalid vary flag for source point");
 						if (!(ws[3] >> vary_ys)) Complain("Invalid vary flag for source point");
-						vary_sourcepts_x[0] = vary_xs;
-						vary_sourcepts_y[0] = vary_ys;
-						update_parameter_list();
+						set_sourcept_vary_parameters(0,vary_xs,vary_ys);
 						changed_settings = true;
 					} else if (nwords==2) { 
 						bool vary_xs, vary_ys;
@@ -6513,8 +6514,7 @@ void QLens::process_commands(bool read_file)
 							if (nwords != 2) Complain("Must specify two vary flags for source point");
 							if (!(ws[0] >> vary_xs)) Complain("Invalid vary flag for source point");
 							if (!(ws[1] >> vary_ys)) Complain("Invalid vary flag for source point");
-							vary_sourcepts_x[i] = vary_xs;
-							vary_sourcepts_y[i] = vary_ys;
+							set_sourcept_vary_parameters(i,vary_xs,vary_ys);
 						}
 						update_parameter_list();
 						changed_settings = true;
@@ -7122,6 +7122,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 					}
+					if ((make_imgdata) and ((!calculate_parameter_errors) or (no_errors))) Complain("parameter uncertainties required to generate image data from best-fit points");
 					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
 					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
 					if ((make_imgdata) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) Complain("cannot make imgdata unless Powell or Simplex is being used");
@@ -7141,8 +7142,9 @@ void QLens::process_commands(bool read_file)
 					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
 					if ((adopt_bestfit) and (adopt_model(bestfitparams)==false)) Complain("could not adopt best-fit model");
 					if (make_imgdata) {
-						int param_num;
-						if ((param_num = param_settings->lookup_param_number("xsrc0")) == -1) Complain("could not find param 'xsrc0' used to adopt image position uncertainties from fit");
+						int param_num, npar=0;
+						get_n_fit_parameters(npar);
+						param_num = lensmodel_fit_parameters + srcmodel_fit_parameters;
 						add_image_data_from_sourcepts(true,param_num,2);
 						if (nlens > 0) set_analytic_sourcepts(); // just to have a starting guess for the source point
 					}
@@ -9280,7 +9282,7 @@ void QLens::process_commands(bool read_file)
 				bool exclude_ptimgs = false; // by default, we include point images if n_sourcepts_fit > 0
 				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
-				bool omit_source = false;
+				bool omit_source_plot = false;
 				int reduce_factor = 1;
 				bool offload_to_data = false;
 				bool omit_cc = false;
@@ -9308,7 +9310,7 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
-						else if (args[i]=="-resns") { plot_residual = true; omit_source = true; } // shortcut argument to plot residuals but not source
+						else if (args[i]=="-resns") { plot_residual = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
 						else if (args[i]=="-thresh") show_noise_thresh = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
 						else if (args[i]=="-nofg") omit_foreground = true;
@@ -9316,7 +9318,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-fgmask") show_foreground_mask = true;
 						else if (args[i]=="-emask") show_extended_mask = true;
 						else if (args[i]=="-fits") plot_fits = true;
-						else if ((args[i]=="-nosrc") or (args[i]=="-nosrcplot")) omit_source = true;
+						else if ((args[i]=="-nosrc") or (args[i]=="-nosrcplot")) omit_source_plot = true;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-reduce2") reduce_factor = 2;
@@ -9355,7 +9357,7 @@ void QLens::process_commands(bool read_file)
 					n_image_pixels_y *= reduce_factor;
 				}
 				if (!islens()) {
-					if (n_sb==0) {
+					if ((n_sb==0) and (n_sourcepts_fit==0)) {
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -9370,10 +9372,10 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) Complain("No source surface brightness map has been loaded");
-				if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) Complain("No Cartesian source surface brightness map has been created");
-				if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source))) omit_source = true;
+				//if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) Complain("No source surface brightness map has been created");
+				if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source))) omit_source_plot = true;
 				bool old_plot_srcplane = plot_srcplane;
-				if (omit_source) plot_srcplane = false;
+				if (omit_source_plot) plot_srcplane = false;
 				string range1, range2;
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -9487,7 +9489,7 @@ void QLens::process_commands(bool read_file)
 				if (add_specific_noise) {
 					sim_pixel_noise = old_pnoise;
 				}
-				if (omit_source) plot_srcplane = old_plot_srcplane;
+				if (omit_source_plot) plot_srcplane = old_plot_srcplane;
 				if (omit_cc) show_cc = old_cc_setting;
 				if (set_title) plot_title = "";
 			}
@@ -11537,9 +11539,11 @@ void QLens::process_commands(bool read_file)
 						vary_beta_clus = false;
 					}
 				}
+				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
 		}
 		else if (words[0]=="regparam_lsc")
 		{
@@ -12313,8 +12317,10 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use clustering algorithm to find adaptive grid source pixels: " << display_switch(use_srcpixel_clustering) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_srcpixel_clustering' command; must specify 'on' or 'off'");
+				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
 		}
 		else if (words[0]=="random_delaunay_srcgrid")
 		{
@@ -12348,15 +12354,6 @@ void QLens::process_commands(bool read_file)
 				set_switch(weight_initial_centroids,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="interpolate_random_srcpts")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Interpolate ray tracing for random Delaunay grid: " << display_switch(interpolate_random_sourcepts) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'interpolate_random_srcpts' command; must specify 'on' or 'off'");
-				set_switch(interpolate_random_sourcepts,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
 		else if (words[0]=="dualtree_kmeans")
 		{
 			if (nwords==1) {
@@ -12375,31 +12372,24 @@ void QLens::process_commands(bool read_file)
 				set_switch(clustering_random_initialization,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="random_grid_lengthfac")
-		{
-			if (nwords == 2) {
-				double lfac;
-				if (!(ws[1] >> lfac)) Complain("invalid length factor for random grid");
-				random_grid_length_factor = lfac;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "random_grid_lengthfac = " << random_grid_length_factor << endl;
-			} else Complain("must specify either zero or one argument");
-		}
 		else if (words[0]=="split_imgpixels")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Split image pixels when ray tracing: " << display_switch(split_imgpixels) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_imgpixels' command; must specify 'on' or 'off'");
+				bool old_setting = split_imgpixels;
 				set_switch(split_imgpixels,setword);
 				//if (image_pixel_grid) {
 					//delete image_pixel_grid;
 					//image_pixel_grid = NULL;
 				//}
-				if (image_pixel_grid != NULL) {
-					image_pixel_grid->delete_ray_tracing_arrays();
-					image_pixel_grid->setup_ray_tracing_arrays();
-					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				if (split_imgpixels != old_setting) {
+					if (image_pixel_grid != NULL) {
+						image_pixel_grid->delete_ray_tracing_arrays();
+						image_pixel_grid->setup_ray_tracing_arrays();
+						if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+					}
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12425,6 +12415,7 @@ void QLens::process_commands(bool read_file)
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
 			if (nwords == 2) {
+				bool changed_npix = false;
 				if (words[1]=="-shapelet") {
 					if (source_fit_mode != Shapelet_Source) Complain("must be in shapelet mode to set pixel splitting from shapelets");
 					if (!set_shapelet_imgpixel_nsplit()) Complain("could not set pixel splitting from shapelets");
@@ -12432,10 +12423,13 @@ void QLens::process_commands(bool read_file)
 				} else {
 					int nt;
 					if (!(ws[1] >> nt)) Complain("invalid number of image pixel splittings");
-					default_imgpixel_nsplit = nt;
+					if (nt != default_imgpixel_nsplit) {
+						default_imgpixel_nsplit = nt;
+						changed_npix = true;
+					}
 				}
 				// Assuming here the imgpixel_nsplit has been changed...
-				if (image_pixel_grid != NULL) {
+				if ((changed_npix) and (image_pixel_grid != NULL)) {
 					image_pixel_grid->delete_ray_tracing_arrays();
 					image_pixel_grid->setup_ray_tracing_arrays();
 					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
