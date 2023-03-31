@@ -14189,7 +14189,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		image_pixel_grid->set_fit_window((*image_pixel_data));
 	}
 
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or ((source_fit_mode==Shapelet_Source) and (source_npixels > 0)))
+	if (((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (source_npixels > 0))
 	{
 		if ((group_id==0) and (logfile.is_open())) {
 			if (sb_outside_window) logfile << " -2*log(ev)=" << loglike_times_two << " (no priors; SB produced outside window)" << endl;
@@ -14197,7 +14197,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal)
 		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "-2*log(ev)=" << loglike_times_two << " (a.k.a. 'chisq_pix')" << endl;
-			if ((vary_pixel_fraction) or (regularization_method != None)) {
+			if ((source_npixels > 0) and ((vary_pixel_fraction) or (regularization_method != None))) {
 				if (use_covariance_matrix) cout << " logdet(Gmatrix)=" << Gmatrix_log_determinant << endl;
 				else cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
 			}

@@ -325,10 +325,14 @@ void QLens::process_commands(bool read_file)
 				else if (words[1]=="grid")
 					cout << "grid <xmax> <ymax>\n"
 						"grid <xmin> <xmax> <ymin> <ymax>\n"
-						"grid center <xc> <yc>\n\n"
-						"Sets the grid size for image searching as (xmin,xmax) x (ymin,ymax) or centers the grid on\n"
-						"<xc>, <yc> if 'grid center' is specified. If no arguments are given, simply outputs the\n"
-						"present grid size.\n";
+						"grid center <xc> <yc>\n"
+						"grid -pxsize=#\n"
+						"grid -use_data_pxsize\n\n"
+						"Sets the grid size for plotting (or image searching) as (xmin,xmax) x (ymin,ymax), or centers\n"
+						"the grid on <xc>, <yc> if 'grid center' is specified. If no arguments are given, simply outputs\n"
+						"the present grid size. If argument '-pxsize=#' is used, qlens adopts a grid based on the given\n"
+						"pixel size, centered on (0,0). The same procedure is done if '-use_data_pxsize' is used, but\n"
+						"the pixel size is taken from the 'data_pixel_size' variable.\n\n";
 				else if (words[1]=="srcgrid")
 					cout << "srcgrid <xmin> <xmax> <ymin> <ymax>\n\n"
 						"Sets the size and location for a pixellated source grid as (xmin,xmax) x (ymin,ymax). Note that\n"
@@ -1316,7 +1320,7 @@ void QLens::process_commands(bool read_file)
 								"  [-fg] plots only the 'unlensed' sources (may combine with '-residual' to subtract foreground)\n"
 								"  [-nomask] plot image (or residuals) using all pixels, including those outside the chosen mask\n"
 								"  [-emask/fgmask] plot image (or residuals) using extended/foreground mask\n"
-								"  [-pnoise=#] add simulated pixel noise (for just this plot only; ignores 'sim_pixel_noise' value)\n"
+								"  [-pnoise=#] add pixel noise (used for this plot only; to use data noise, enter '-pnoise=data')\n"
 								"  [-noptsrc] do not include the point source(s) when plotting the lensed images\n"
 								"  [-nosrcplot] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
@@ -2389,6 +2393,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="grid")
 		{
+			int pos;
 			if (nwords==1) {
 				if (mpi_id==0) {
 					double xlh, ylh;
@@ -2398,8 +2403,17 @@ void QLens::process_commands(bool read_file)
 					cout << "grid = (" << grid_xcenter-xlh << "," << grid_xcenter+xlh << ") x (" << grid_ycenter-ylh << "," << grid_ycenter+ylh << ")" << endl;
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 				}
-			} else if ((nwords==2) and (words[1]=="-imgpixel")) {
+			} else if ((nwords==2) and ((words[1]=="-use_data_pxsize") or (words[1]=="-imgpixel"))) {
 				if (data_pixel_size <= 0) Complain("must have data_pixel_size > 0 to create grid based on image pixels");
+				set_grid_from_pixels();
+			} else if ((nwords==2) and (pos = words[1].find("-pxsize=")) != string::npos) {
+				double psize;
+				string sizestring = words[1].substr(pos+8);
+				stringstream sizestr;
+				sizestr << sizestring;
+				if (!(sizestr >> psize)) Complain("incorrect format for pixel noise");
+				if (psize < 0) Complain("pixel size value cannot be negative");
+				data_pixel_size = psize;
 				set_grid_from_pixels();
 			} else if (nwords == 3) {
 				double xlh, ylh;
@@ -8796,7 +8810,7 @@ void QLens::process_commands(bool read_file)
 				if (cubic_spline) {
 					if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
 				}
-				cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
+				if (mpi_id==0) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
 			}
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
 			{
@@ -9328,10 +9342,13 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-subcomp") subcomp = true;
 						else if ((pos = args[i].find("-pnoise=")) != string::npos) {
 							string noisestring = args[i].substr(pos+8);
-							stringstream noisestr;
-							noisestr << noisestring;
-							if (!(noisestr >> pnoise)) Complain("incorrect format for pixel noise");
-							if (pnoise < 0) Complain("pixel noise value cannot be negative");
+							if (noisestring=="data") pnoise = data_pixel_noise;
+							else {
+								stringstream noisestr;
+								noisestr << noisestring;
+								if (!(noisestr >> pnoise)) Complain("incorrect format for pixel noise");
+								if (pnoise < 0) Complain("pixel noise value cannot be negative");
+							}
 							add_specific_noise = true;
 						}
 						else if ((pos = args[i].find("-contour=")) != string::npos) {
@@ -11992,6 +12009,10 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Random number generator seed = " << random_seed << endl;
 			} else Complain("must specify either zero or one argument for random_seed");
+		}
+		else if (words[0]=="random_reinit")
+		{
+			reinitialize_random_generator();
 		}
 		else if (words[0]=="nchisq")
 		{

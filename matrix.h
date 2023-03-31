@@ -17,11 +17,11 @@ class Matrix
 	int nrows, ncolumns;
 
 public:
-	Matrix() : nrows(0), ncolumns(0) { a = NULL; }
-	Matrix(const int &n) { input(n,n); }
-	Matrix(const int &m, const int &n) { input(m,n); }
-	Matrix(const int &m, const int &n, const char filename[]) { input(m,n,filename); }
-	Matrix(T **inmatrix, const int &m, const int &n) { a = NULL; input(inmatrix, m, n); }
+	Matrix() : nrows(0), ncolumns(0), a(0) {}
+	Matrix(const int &n) : a(0) { input(n,n); }
+	Matrix(const int &m, const int &n) : a(0) { input(m,n); }
+	Matrix(const int &m, const int &n, const char filename[]) : a(0) { input(m,n,filename); }
+	Matrix(T **inmatrix, const int &m, const int &n) : a(0) { input(inmatrix, m, n); }
 	Matrix(const Matrix&); // copy-constructor
 	Matrix& operator = (const Matrix&);
 	Matrix& operator = (const T&);

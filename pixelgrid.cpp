@@ -7602,7 +7602,7 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 
 /***************************************** Functions in class ImagePixelGrid ****************************************/
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), x_N(x_N_in), y_N(y_N_in), source_pixel_grid(NULL), delaunay_srcgrid(NULL)
 {
 	source_fit_mode = mode;
 	ray_tracing_method = method;
@@ -7649,7 +7649,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	}
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in) : lens(lens_in), xmin(xmin_in), xmax(xmax_in), ymin(ymin_in), ymax(ymax_in), source_pixel_grid(NULL), delaunay_srcgrid(NULL)
 {
 	// I think this constructor is only used for the "reduce" option, which I never use anymore. Get rid of this option (and constructor) altogether?
 	source_fit_mode = mode;
@@ -7698,7 +7698,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	if (lens->islens()) calculate_sourcepts_and_areas(true);
 }
 
-ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask, const bool verbal)
+ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask, const bool ignore_mask, const bool verbal) : source_pixel_grid(NULL), delaunay_srcgrid(NULL)
 {
 	// with this constructor, we create the arrays but don't actually make any lensing calculations, since these will be done during each likelihood evaluation
 	lens = lens_in;
@@ -8598,8 +8598,11 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 				}
 				delete[] pixels;
 			}
-			if (pixel_xlength==pixel_ylength)
+			if (pixel_xlength==pixel_ylength) {
 				fits_write_key(outfptr, TDOUBLE, "PXSIZE", &pixel_xlength, "length of square pixels (in arcsec)", &status);
+			} else {
+				if (lens->mpi_id==0) cout << "NOTE: pixel length not equal in x- versus y-directions; not saving pixel size in FITS file header" << endl;
+			}
 			if (lens->sim_pixel_noise != 0)
 				fits_write_key(outfptr, TDOUBLE, "PXNOISE", &lens->sim_pixel_noise, "pixel surface brightness noise", &status);
 			if ((lens->psf_width_x != 0) and (lens->psf_width_y==lens->psf_width_x) and (!lens->use_input_psf_matrix))
@@ -10051,8 +10054,8 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 	//int ny = 2*ny_half+1;
 	//cout << "normfac=" << normfac << endl;
 
-	int i,j,ii,jj,img_i;
-	int i_center, j_center, imin, imax, jmin, jmax;
+	int n,i,j,ii,jj,img_i;
+	int i_center, j_center, imin, imax, jmin, jmax, inn, jnn, nmax;
 	//cout << "nsplit=" << nsplit << " nsubpix=" << nsubpix << endl;
 	double sb, fluxfac, x, y, x0, y0, u0, w0;
 #ifdef USE_OPENMP
@@ -10099,6 +10102,9 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 		if (imax >= x_N) imax = x_N-1;
 		if (jmin < 0) jmin = 0;
 		if (jmax >= y_N) jmax = y_N-1;
+		inn = imax-imin+1;
+		jnn = jmax-jmin+1;
+		nmax = inn*jnn;
 		//cout << "imin=" << imin << " imax=" << imax << " jmin=" << jmin << " jmax=" << jmax << endl;
 		//cout << "xmin=" << corner_pts[imin][jmin][0] << " xmax=" << corner_pts[imax][jmin][0] << endl;
 		//cout << "ymin=" << corner_pts[imin][jmin][1] << " ymax=" << corner_pts[imin][jmax][1] << endl;
@@ -10113,30 +10119,29 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 		//}
 
 		//double tot=0;
-		for (i=imin; i <= imax; i++) {
-			for (j=jmin; j <= jmax; j++) {
-				sb=0;
-				for (ii=0; ii < nsplit; ii++) {
-					u0 = ((double) (1+2*ii))/(2*nsplit);
-					//x = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
-					x = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
-					for (jj=0; jj < nsplit; jj++) {
-						w0 = ((double) (1+2*jj))/(2*nsplit);
-						//y = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
-						y = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
-						if (lens->use_input_psf_matrix) {
-							sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
-						} else {
-							sb += fluxfac*normfac*exp(-(SQR((x-x0)/sigx) + SQR((y-y0)/sigy))/2);
-						}
+		#pragma omp parallel for private(n,i,j,ii,jj,sb,u0,w0,x,y) schedule(static)
+		for (n=0; n < nmax; n++) {
+			j = jmin + (n / inn);
+			i = imin + (n % inn);
+			sb=0;
+			for (ii=0; ii < nsplit; ii++) {
+				u0 = ((double) (1+2*ii))/(2*nsplit);
+				x = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
+				for (jj=0; jj < nsplit; jj++) {
+					w0 = ((double) (1+2*jj))/(2*nsplit);
+					y = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
+					if (lens->use_input_psf_matrix) {
+						sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
+					} else {
+						sb += fluxfac*normfac*exp(-(SQR((x-x0)/sigx) + SQR((y-y0)/sigy))/2);
 					}
 				}
-				sb /= nsubpix;
-				//cout << "sb=" << sb << endl;
-				if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
-					ptimage_surface_brightness[pixel_index[i][j]] += sb;
-					//tot += sb;
-				}
+			}
+			sb /= nsubpix;
+			//cout << "sb=" << sb << endl;
+			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
+				ptimage_surface_brightness[pixel_index[i][j]] += sb;
+				//tot += sb;
 			}
 		}
 		//sigx = lens->psf_width_x;
@@ -12735,7 +12740,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 #endif
 
 	if (!dense_Fmatrix) {
-		if (regularization_method != None) {
+		if ((regularization_method != None) and (source_npixels > 0)) {
 			for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
 				if (src_index1 < source_npixels) { // additional source amplitudes are not regularized
 					if (!optimize_regparam) Fmatrix_diags[src_index1] += regularization_parameter*Rmatrix[src_index1];
@@ -12841,7 +12846,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 			cout << "Fmatrix sparseness = " << sparseness << endl;
 		}
 	} else {
-		if ((regularization_method != None) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
+		if ((regularization_method != None) and (source_npixels > 0) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
 	}
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -13007,7 +13012,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 #endif
 	if (use_covariance_matrix) generate_Gmatrix();
 
-	if ((regularization_method != None) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
+	if ((regularization_method != None) and (source_npixels > 0) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
 	//double Ftot = 0;
 	//for (i=0; i < ntot_packed; i++) Ftot += Fmatrix_packed[i];
 	//double ltot = 0;
@@ -14641,7 +14646,7 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 	cg_method.set_MPI_comm(&sub_comm);
 #endif
 	for (int i=0; i < source_n_amps; i++) temp[i] = 0;
-	if (regularization_method != None)
+	if ((regularization_method != None) and (source_npixels > 0))
 		cg_method.set_determinant_mode(true);
 	else cg_method.set_determinant_mode(false);
 #ifdef USE_OPENMP
@@ -14683,7 +14688,7 @@ void QLens::invert_lens_mapping_CG_method(bool verbal)
 		}
 	}
 
-	if (regularization_method != None) {
+	if ((regularization_method != None) and (source_npixels > 0)) {
 		cg_method.get_log_determinant(Fmatrix_log_determinant);
 		if ((mpi_id==0) and (verbal)) cout << "log determinant = " << Fmatrix_log_determinant << endl;
 		CG_sparse cg_det(Rmatrix,Rmatrix_index,3e-4,100000,inversion_nthreads,group_np,group_id);
@@ -15005,7 +15010,7 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 		mumps_solver->icntl[2] = MUMPS_SILENT;
 		mumps_solver->icntl[3] = MUMPS_SILENT;
 	}
-	if (regularization_method != None) mumps_solver->icntl[32]=1; // specifies to calculate determinant
+	if ((regularization_method != None) and (source_npixels > 0)) mumps_solver->icntl[32]=1; // specifies to calculate determinant
 	else mumps_solver->icntl[32] = 0;
 	if (parallel_mumps) {
 		mumps_solver->icntl[27]=2; // parallel analysis phase
@@ -15059,7 +15064,7 @@ void QLens::invert_lens_mapping_MUMPS(bool verbal, bool use_copy)
 		}
 	}
 
-	if (regularization_method != None)
+	if ((regularization_method != None) and (source_npixels > 0))
 	{
 		Fmatrix_log_determinant = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
 		//cout << "Fmatrix log determinant = " << Fmatrix_log_determinant << endl;
