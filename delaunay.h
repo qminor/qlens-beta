@@ -15,7 +15,7 @@ const unsigned char BI = 0x10;
 struct Triangle // the final triangulation will be stored in an array of triangle structs
 {
 	lensvector vertex[3];
-	lensvector circumcenter;
+	//lensvector circumcenter;
 	double *sb[3]; // pointer to surface brightness values assigned to each vertex
 	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
 	int vertex_index[3];

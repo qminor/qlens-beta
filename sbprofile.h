@@ -155,6 +155,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
+	bool has_fourier_modes() { return (n_fourier_modes > 0) ? true : false; }
 	bool fourier_mode_exists(const int mval) {
 		bool mode_exists = false;
 		for (int i=0; i < n_fourier_modes; i++) {

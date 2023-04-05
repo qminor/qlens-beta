@@ -53,6 +53,7 @@ lensvector **SourcePixelGrid::interpolation_pts[3];
 
 int DelaunayGrid::nthreads = 0;
 lensvector **DelaunayGrid::interpolation_pts[3] = { NULL, NULL, NULL};
+bool DelaunayGrid::zero_outside_border = false;
 //ImagePixelGrid* DelaunayGrid::image_pixel_grid = NULL;
 
 // The following should probably just be private, local variables in the relevant functions, that have to keep getting set from the lens pointers.
@@ -2933,8 +2934,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 		//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 		}
 		double *lumfac = ((include_lum_weighting) and (use_lum_weighted_regularization)) ? lum_weight_factor : NULL;
-		double *pixweights = ((include_lum_weighting) and (use_lum_weighted_corrlength)) ? corrlength_pixel_weights : NULL;
-		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,lumfac,pixweights);
+		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,lumfac);
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
@@ -3578,6 +3578,23 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+		if (zero_outside_border) {
+			double sqrlenmax = 1e30;
+			for (k=0; k < 3; k++) {
+				if (k != kmin) {
+					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
+					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
+				}
+			}
+
+			if (sqrdistmin > sqrlenmax) {
+				mapped_delaunay_srcpixels_ij.push_back(-1);
+				mapped_delaunay_srcpixels_ij.push_back(-1);
+				mapped_delaunay_srcpixels_ij.push_back(-1);
+				return true;
+			}
+		}
+
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
@@ -3604,22 +3621,35 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 void DelaunayGrid::calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread)
 {
 	int vertex_index;
+	bool novertex = false;
 	for (int i=0; i < 3; i++) {
 		vertex_index = image_pixel_grid->mapped_delaunay_srcpixels[image_pixel_i][image_pixel_j][3*ii+i];
+		if (vertex_index == -1) {
+			novertex = true;
+			break;
+		}
 		lens->Lmatrix_index_rows[img_index].push_back(vertex_index);
 		interpolation_pts[i][thread] = &srcpts[vertex_index];
 	}
-
-	double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
-	if (d==0) {
-		// in this case the points are all the same
-		lens->Lmatrix_rows[img_index].push_back(weight);
+	if (novertex) {
+		lens->Lmatrix_index_rows[img_index].push_back(0);
+		lens->Lmatrix_index_rows[img_index].push_back(0);
+		lens->Lmatrix_index_rows[img_index].push_back(0);
+		lens->Lmatrix_rows[img_index].push_back(0);
 		lens->Lmatrix_rows[img_index].push_back(0);
 		lens->Lmatrix_rows[img_index].push_back(0);
 	} else {
-		lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
-		lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
-		lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
+		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
+		if (d==0) {
+			// in this case the points are all the same
+			lens->Lmatrix_rows[img_index].push_back(weight);
+			lens->Lmatrix_rows[img_index].push_back(0);
+			lens->Lmatrix_rows[img_index].push_back(0);
+		} else {
+			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
+			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
+			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
+		}
 	}
 
 	index += 3;
@@ -3673,8 +3703,17 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	if ((inside_triangle) and (sqrdistmin < 1e-6)) inside_triangle = false;
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		//cout << img_pixel_i << " " << img_pixel_j << " one SB point!" << triptr->vertex_index[kmin] << endl;
-		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "one SB point!" << " " << triptr->vertex_index[kmin] << " " << n << " " << input_pt[0] << " " << input_pt[1] << endl;
+		if (zero_outside_border) {
+			double sqrlenmax = 1e30;
+			for (k=0; k < 3; k++) {
+				if (k != kmin) {
+					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
+					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
+				}
+			}
+
+			if (sqrdistmin > sqrlenmax) return 0;
+		}
 		return *triptr->sb[kmin];
 	}
 	sb[0] = triptr->sb[0];
@@ -3709,6 +3748,17 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 		for (int k=0; k < 3; k++) {
 			sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
+		}
+		if (zero_outside_border) {
+			double sqrlenmax = 1e30;
+			for (int k=0; k < 3; k++) {
+				if (k != kmin) {
+					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
+					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
+				}
+			}
+
+			if (sqrdistmin > sqrlenmax) return 0;
 		}
 		return *triptr->sb[kmin];
 	}
@@ -3929,11 +3979,9 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *lumfac, double* corrlength_pixel_weights)
+void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *lumfac)
 {
 	bool lum_weighting = (lumfac==NULL) ? false : true;
-	bool lum_weighted_corrlength = (corrlength_pixel_weights==NULL) ? false : true;
-	if ((!lum_weighted_corrlength) and (input_corr_length <= 0)) die("cannot have negative or zero correlation length (input value = %g",input_corr_length);
 	double corrlength;
 	int i,j;
 	double sqrdist,x,matern_fac;
@@ -3966,16 +4014,10 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 				//wj = 1-exp(-lumfac[j]);
 				//wj = lumfac[j];
 				fac = wi*wj;
-				//corrlength = 2.0/(corrlength_pixel_weights[i] + corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
 				//double wj = pow(lumfac[j],lens->regparam_lum_index);
 				//cout << wi << " " << wj << endl;
 			} else {
 				fac = 1.0;
-			}
-			if (lum_weighted_corrlength) {
-				corrlength = 2.0/(corrlength_pixel_weights[i] + corrlength_pixel_weights[j]);
-				//corrlength = 1.0/(corrlength_pixel_weights[i]*corrlength_pixel_weights[j]); // the pixel weights are actually the "wavenumber" 1/corrlength, which we average here
-				// In principle, one could generalize the above to ((wi^n + wj^n)/2)^(-1/n). In the above, we have n=1, but you could explore other values
 			}
 			if (kernel_type==0) {
 				x = sqrt(2*matern_index*sqrdist)/corrlength;
@@ -8486,6 +8528,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			surface_brightness[i][j] = pixel_data.surface_brightness[i][j];
+			if (surface_brightness[i][j] > max_sb) max_sb=surface_brightness[i][j];
 		}
 	}
 }
@@ -9323,7 +9366,8 @@ int ImagePixelGrid::count_nonzero_source_pixel_mappings_delaunay()
 		i = lens->active_image_pixel_i[img_index];
 		j = lens->active_image_pixel_j[img_index];
 		for (k=0; k < mapped_delaunay_srcpixels[i][j].size(); k++) {
-			if (mapped_delaunay_srcpixels[i][j][k] != -1) tot++;
+			tot++;
+			//if (mapped_delaunay_srcpixels[i][j][k] != -1) tot++;
 		}
 		//tot += mapped_delaunay_srcpixels[i][j].size();
 	}
@@ -10462,19 +10506,6 @@ bool ImagePixelGrid::LineSearch(lensvector& xold, double fold, lensvector& g, le
 
 double QLens::find_surface_brightness(lensvector &pt)
 {
-	//double xl=0.01, yl=0.01;
-	//lensvector pt1,pt2,pt3,pt4;
-	//pt1[0] = pt[0] - xl/2;
-	//pt1[1] = pt[1] - yl/2;
-
-	//pt2[0] = pt[0] + xl/2;
-	//pt2[1] = pt[1] - yl/2;
-
-	//pt3[0] = pt[0] - xl/2;
-	//pt3[1] = pt[1] + yl/2;
-
-	//pt4[0] = pt[0] + xl/2;
-	//pt4[1] = pt[1] + yl/2;
 	double sb = 0;
 	lensvector srcpt;
 	
@@ -10580,8 +10611,11 @@ bool QLens::assign_pixel_mappings(bool verbal)
 		image_pixel_grid->assign_image_mapping_flags(false);
 
 		source_pixel_grid->regrid = false;
-		source_npixels = source_pixel_grid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
-		if (source_n_amps==0) { warn("number of source pixels cannot be zero"); return false; }
+		if (nlens==0) source_npixels = 0;
+		else {
+			source_npixels = source_pixel_grid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
+			if (source_npixels==0) { warn("number of source pixels cannot be zero"); return false; }
+		}
 		while (source_pixel_grid->regrid) {
 			if ((mpi_id==0) and (verbal==true)) cout << "Redrawing the source grid after reverse-splitting unmapped source pixels...\n";
 			source_pixel_grid->regrid = false;
@@ -10685,9 +10719,6 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	image_surface_brightness = new double[image_npixels];
 	source_pixel_vector = new double[source_n_amps];
 	point_image_surface_brightness = new double[image_npixels];
-	if (use_lum_weighted_corrlength) {
-		corrlength_pixel_weights = new double[source_npixels];
-	}
 	if (use_lum_weighted_regularization) {
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
@@ -10751,9 +10782,6 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
-	if (use_lum_weighted_corrlength) {
-		corrlength_pixel_weights = new double[source_npixels];
-	}
 	if ((mpi_id==0) and (verbal)) cout << "Creating shapelet Lmatrix...\n";
 	Lmatrix_dense.input(image_npixels,source_n_amps);
 	Lmatrix_dense = 0;
@@ -10773,7 +10801,6 @@ void QLens::clear_pixel_matrices()
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
-	if (corrlength_pixel_weights != NULL) delete[] corrlength_pixel_weights;
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
@@ -10786,7 +10813,6 @@ void QLens::clear_pixel_matrices()
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
 	lum_weight_factor = NULL;
-	corrlength_pixel_weights = NULL;
 	//lumreg_pixel_weights = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
@@ -12133,8 +12159,8 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		//double totweight; // I wanted to use this to keep track of whether the full PSF area is not used (e.g. near borders or near masked pixels), and adjust
 		// But I think trying to adjust is dangerous, because there may not be much surface brightness right outside the mask, in which case you will
 		// overcompensate...it would be better to just make the mask a bit larger. For foreground light, this is a trickier business; maybe make the mask a few
-		// pixel layers larger than necessary and then discard the outer pixels? Something to think about
-		// the weighting if necessary
+		// pixel layers larger than necessary and then discard the outer pixels? Something to think about (note, if you decide to revive totweight, you must
+		// include in private(...) list below
 		#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l) schedule(static)
 		//#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l,totweight) schedule(static)
 		for (img_index1=0; img_index1 < npix; img_index1++)
@@ -12350,7 +12376,7 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 bool QLens::create_regularization_matrix(const bool include_lum_weighting)
 {
 	RegularizationMethod reg_method = regularization_method;
-	if (((use_lum_weighted_regularization) or (use_lum_weighted_corrlength)) and (!include_lum_weighting)) reg_method = Curvature;
+	if ((use_lum_weighted_regularization) and (!include_lum_weighting)) reg_method = Curvature;
 	if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
 	if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 
@@ -13319,7 +13345,7 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		wtime_opt0 = omp_get_wtime();
 	}
 #endif
-	if (((use_lum_weighted_regularization) or (use_lum_weighted_corrlength)) and (!pre_srcgrid)) {
+	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
 		calculate_lumreg_pixel_sbweights();
 		if (!use_covariance_matrix) {
 			// This means we started with a non-covmatrix based regularization (e.g. curvature) to get the initial luminosity.
@@ -13543,12 +13569,6 @@ void QLens::calculate_lumreg_pixel_sbweights()
 			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
 			//else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
 			lum_weight_factor[i] = regparam_lsc*lumfac;
-		}
-	}
-	if (use_lum_weighted_corrlength) {
-		for (i=0; i < source_npixels; i++) {
-			lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,corrlength_lum_index) : 0; // note, here it uses corrlength_lum_index, not regparam_lum_index
-			corrlength_pixel_weights[i] = lumfac/corrlength_lhi + (1-lumfac)/corrlength_llo;
 		}
 	}
 }

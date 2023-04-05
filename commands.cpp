@@ -6380,6 +6380,7 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords==3) {
 						if (!(ws[2] >> setword)) Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
+						if (((setword=="matern_kernel") or (setword=="exp_kernel") or (setword=="sqexp_kernel")) and (source_fit_mode != Delaunay_Source)) Complain("kernel-based regularization is only available for Delaunay source grids ('fit source_mode delaunay')");
 						if ((setword=="none") or (setword=="off")) {
 							regularization_method = None;
 							if (optimize_regparam) {
@@ -6414,7 +6415,7 @@ void QLens::process_commands(bool read_file)
 					}
 
 					if (((!add_to_image) or (make_imgdata)) and (n_sourcepts_fit==0)) Complain("No image data has been loaded");
-					if (make_imgdata) add_image_data_from_sourcepts(false);
+					if (make_imgdata) add_image_data_from_unlensed_sourcepts(false);
 					if (nwords==2) {
 						print_sourcept_list();
 					}
@@ -7159,7 +7160,7 @@ void QLens::process_commands(bool read_file)
 						int param_num, npar=0;
 						get_n_fit_parameters(npar);
 						param_num = lensmodel_fit_parameters + srcmodel_fit_parameters;
-						add_image_data_from_sourcepts(true,param_num,2);
+						add_image_data_from_unlensed_sourcepts(true,param_num,2);
 						if (nlens > 0) set_analytic_sourcepts(); // just to have a starting guess for the source point
 					}
 				}
@@ -9640,6 +9641,7 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="invert")
 			{
+				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				bool regopt = false; // false means it uses whatever the actual setting is for optimize_regparam
 				bool verbal = true;
 				bool chisqdif = false;
@@ -11507,33 +11509,6 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="lum_weighted_corrlength")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use luminosity-weighted corrlength: " << display_switch(use_lum_weighted_corrlength) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_corrlength' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lum_weighted_corrlength can be set (see 'fit regularization')");
-				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_corrlength requires 'optimize_regparam' to be set to 'on'");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lum_weihgted_corrlength can only be used if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				if ((setword=="off") and (use_lum_weighted_corrlength)) {
-					if (vary_corrlength_llo) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_corrlength_llo' to 'off'" << endl;
-						vary_corrlength_llo = false;
-					}
-					if (vary_corrlength_lhi) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_corrlength_lhi' to 'off'" << endl;
-						vary_corrlength_lhi = false;
-					}
-					if (vary_corrlength_lum_index) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_corrlength_lum_index' to 'off'" << endl;
-						vary_corrlength_lum_index = false;
-					}
-				}
-				set_switch(use_lum_weighted_corrlength,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
 		else if (words[0]=="lum_weighted_srcpixel_clustering")
 		{
 			if (nwords==1) {
@@ -11655,100 +11630,6 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lum_index,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="corrlength_llo")
-		{
-			double kc_llo, kc_llo_upper, kc_llo_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> kc_llo_lower)) Complain("invalid corrlength_llo lower limit");
-				if (!(ws[2] >> kc_llo)) Complain("invalid corrlength_llo value");
-				if (!(ws[3] >> kc_llo_upper)) Complain("invalid corrlength_llo upper limit");
-				if ((kc_llo < kc_llo_lower) or (kc_llo > kc_llo_upper)) Complain("initial corrlength_llo should lie within specified prior limits");
-				corrlength_llo = kc_llo;
-				corrlength_llo_lower_limit = kc_llo_lower;
-				corrlength_llo_upper_limit = kc_llo_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> kc_llo)) Complain("invalid corrlength_llo value");
-				corrlength_llo = kc_llo;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "corrlength_llo = " << corrlength_llo << endl;
-			} else Complain("must specify either zero or one argument (corrlength_llo value)");
-		}
-		else if (words[0]=="vary_corrlength_llo")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary corrlength_llo: " << display_switch(vary_corrlength_llo) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength_llo' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before corrlength_llo can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_corrlength)) Complain("lum_weighted_corrlength must be set to 'on' before corrlength_llo can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("corrlength_llo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_corrlength_llo,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="corrlength_lhi")
-		{
-			double kc_lhi, kc_lhi_upper, kc_lhi_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> kc_lhi_lower)) Complain("invalid corrlength_lhi lower limit");
-				if (!(ws[2] >> kc_lhi)) Complain("invalid corrlength_lhi value");
-				if (!(ws[3] >> kc_lhi_upper)) Complain("invalid corrlength_lhi upper limit");
-				if ((kc_lhi < kc_lhi_lower) or (kc_lhi > kc_lhi_upper)) Complain("initial corrlength_lhi should lie within specified prior limits");
-				corrlength_lhi = kc_lhi;
-				corrlength_lhi_lower_limit = kc_lhi_lower;
-				corrlength_lhi_upper_limit = kc_lhi_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> kc_lhi)) Complain("invalid corrlength_lhi value");
-				corrlength_lhi = kc_lhi;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "corrlength_lhi = " << corrlength_lhi << endl;
-			} else Complain("must specify either zero or one argument (corrlength_lhi value)");
-		}
-		else if (words[0]=="vary_corrlength_lhi")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary corrlength_lhi: " << display_switch(vary_corrlength_lhi) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength_lhi' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before corrlength_lhi can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_corrlength)) Complain("lum_weighted_corrlength must be set to 'on' before corrlength_lhi can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("corrlength_lhi can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_corrlength_lhi,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="corrlength_lum_index")
-		{
-			double kc_index;
-			double kc_index_upper, kc_index_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> kc_index_lower)) Complain("invalid corrlength_lum_index lower limit");
-				if (!(ws[2] >> kc_index)) Complain("invalid corrlength_lum_index value");
-				if (!(ws[3] >> kc_index_upper)) Complain("invalid corrlength_lum_index upper limit");
-				if ((kc_index < kc_index_lower) or (kc_index > kc_index_upper)) Complain("initial corrlength_lum_index should lie within specified prior limits");
-				corrlength_lum_index = kc_index;
-				corrlength_lum_index_lower_limit = kc_index_lower;
-				corrlength_lum_index_upper_limit = kc_index_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> kc_index)) Complain("invalid corrlength_lum_index value");
-				corrlength_lum_index = kc_index;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "corrlength_lum_index = " << corrlength_lum_index << endl;
-			} else Complain("must specify either zero or one argument (corrlength_lum_index value)");
-		}
-		else if (words[0]=="vary_corrlength_lum_index")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary corrlength_lum_index: " << display_switch(vary_corrlength_lum_index) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength_lum_index' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before corrlength_lum_index can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_corrlength)) Complain("lum_weighted_corrlength must be set to 'on' before corrlength_lum_index can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("corrlength_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_corrlength_lum_index,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12141,6 +12022,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_sb_emask_prior' command; must specify 'on' or 'off'");
 				set_switch(zero_sb_extended_mask_prior,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="zero_outside_border")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Enforce zero surface brightness outside border of Delaunay grid: " << display_switch(DelaunayGrid::zero_outside_border) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_outside_border' command; must specify 'on' or 'off'");
+				set_switch(DelaunayGrid::zero_outside_border,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="nimg_sb_frac_threshold")
@@ -12833,10 +12723,10 @@ void QLens::process_commands(bool read_file)
 			double ximin, ximax;
 			int nn, srcnum;
 			string filename_suffix = "grad";
-			if (!(ws[2] >> srcnum)) Complain("wtf?");
-			if (!(ws[3] >> ximin)) Complain("wtf?");
-			if (!(ws[4] >> ximax)) Complain("wtf?");
-			if (!(ws[5] >> nn)) Complain("wtf?");
+			if (!(ws[1] >> srcnum)) Complain("wtf?");
+			if (!(ws[2] >> ximin)) Complain("wtf?");
+			if (!(ws[3] >> ximax)) Complain("wtf?");
+			if (!(ws[4] >> nn)) Complain("wtf?");
 			if (nwords==6) filename_suffix = words[5];
 			if (srcnum >= n_sb) Complain("source number does not exist");
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
@@ -13348,7 +13238,6 @@ void QLens::process_commands(bool read_file)
 				qmin -= 0.1;
 				double qq, qstep = 0.05;
 				int nn_q = (int) ((qmax-qmin)/qstep) + 2; // this will ensure the qstep won't be larger than 0.05
-				//die("qmax=%g qmin=%g nq=%i",qmax,qmin,nn_q);
 				qstep = (qmax-qmin)/(nn_q-1);
 
 				for (i=0; i < n_xivals; i++) {

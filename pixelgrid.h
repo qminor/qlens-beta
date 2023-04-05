@@ -185,6 +185,7 @@ class DelaunayGrid
 	//static double** srcgrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
+	static bool zero_outside_border;
 	int n_srcpts;
 	int n_triangles;
 	int img_ni, img_nj;
@@ -233,7 +234,7 @@ class DelaunayGrid
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false);
 	void generate_gmatrices();
 	void generate_hmatrices();
-	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, double *corrlength_pixel_weights = NULL);
+	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL);
 	double modified_bessel_function(const double x, const double nu);
 	void beschb(const double x, double& gam1, double& gam2, double& gampl, double& gammi);
 	double chebev(const double a, const double b, double* c, const int m, const double x);

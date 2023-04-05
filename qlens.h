@@ -542,10 +542,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
 	double regparam_lsc, regparam_lum_index; 
-	bool use_lum_weighted_corrlength;
-	double corrlength_lhi, corrlength_llo, corrlength_lum_index; 
 	//double regparam_lhi, regparam_lum_index; 
-	double *corrlength_pixel_weights;
 	double *lum_weight_factor;
 	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
@@ -553,11 +550,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
 	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
-
-	bool vary_corrlength_lhi, vary_corrlength_llo, vary_corrlength_lum_index;
-	double corrlength_lhi_lower_limit, corrlength_lhi_upper_limit;
-	double corrlength_llo_lower_limit, corrlength_llo_upper_limit;
-	double corrlength_lum_index_lower_limit, corrlength_lum_index_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	double alpha_clus, beta_clus;
@@ -624,8 +616,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool fits_format;
 	double data_pixel_size;
 	bool add_simulated_image_data(const lensvector &sourcept);
-	bool add_image_data_from_sourcepts();
-	bool add_image_data_from_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
+	bool add_image_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
 	bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
