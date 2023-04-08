@@ -9399,7 +9399,6 @@ void QLens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 				if ((nwords != 3) and (plot_srcplane) and (range1 == "")) { // if nwords==3, then source plane isn't being plotted
-				//if ((range1 == "") and ((!show_cc) or (!islens()))) {
 					double xmin,xmax,ymin,ymax;
 					if (source_fit_mode==Cartesian_Source) {
 						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
@@ -9578,7 +9577,6 @@ void QLens::process_commands(bool read_file)
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if (range1 == "") {
-				//if ((range1 == "") and ((!show_cc) or (!islens()))) {
 					double xmin,xmax,ymin,ymax;
 					if (source_fit_mode==Cartesian_Source) {
 						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
@@ -9685,6 +9683,31 @@ void QLens::process_commands(bool read_file)
 					cout << "chisq_dif = " << diff << endl;
 				}
 				chisq_pix_last = chisq;
+			}
+			else if (words[1]=="save_sbweights")
+			{
+				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
+				if (use_saved_sbweights) Complain("cannot save sbweights if 'use_saved_sbweights' is also set to 'on'");
+				if (!islens()) {
+					if ((n_sb==0) and (n_sourcepts_fit==0)) {
+						Complain("must specify lens/source model first");
+					} else {
+						bool all_unlensed = true;
+						for (int i=0; i < n_sb; i++) {
+							if (sb_list[i]->is_lensed) all_unlensed = false;
+						}
+						if (!all_unlensed) Complain("background source objects have been defined, but no lens models have been defined");
+						all_unlensed = true;
+						for (int i=0; i < n_sourcepts_fit; i++) {
+							if (source_redshifts[i] != lens_redshift) all_unlensed = false;
+						}
+						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
+					}
+				}
+				double chisq, chisq0;
+				save_sbweights_during_inversion = true;
+				chisq = invert_surface_brightness_map_from_data(chisq0, false);
+				save_sbweights_during_inversion = false;
 			}
 			else if (words[1]=="plot_imgpixels")
 			{
@@ -12232,6 +12255,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
+		}
+		else if (words[0]=="use_saved_sbweights")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use saved sbweights for luminosity-weighted clustering of adaptive grid source pixels: " << display_switch(use_saved_sbweights) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_saved_sbweights' command; must specify 'on' or 'off'");
+				set_switch(use_saved_sbweights,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="random_delaunay_srcgrid")
 		{

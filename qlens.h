@@ -557,6 +557,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double alpha_clus_lower_limit, alpha_clus_upper_limit;
 	double beta_clus_lower_limit, beta_clus_upper_limit;
 
+	bool save_sbweights_during_inversion;
+	bool use_saved_sbweights;
+	double *saved_sbweights;
+	int n_sbweights;
+
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
 	void set_fit_label(const string label_in) {
@@ -843,9 +848,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void invert_lens_mapping_dense(bool verbal);
 	bool optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
-	void chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix);
 	void setup_regparam_optimization(const bool dense_Fmatrix);
-	void calculate_pixel_sbweights();
+	void calculate_pixel_sbweights(const bool save_sbweights = false, const bool verbal = false);
+	void load_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
 	//double chisq_regparam_it_lumreg_dense(const double logreg);

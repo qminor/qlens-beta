@@ -885,6 +885,10 @@ QLens::QLens() : UCMC()
 	sourcegrid_limit_xmax = 1e30;
 	sourcegrid_limit_ymin = -1e30;
 	sourcegrid_limit_ymax = 1e30;
+	save_sbweights_during_inversion = false;
+	use_saved_sbweights = false;
+	saved_sbweights = NULL;
+	n_sbweights = 0;
 	auto_sourcegrid = true;
 	auto_shapelet_scaling = true;
 	auto_shapelet_center = true;
@@ -1309,6 +1313,13 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	sourcegrid_limit_xmax = lens_in->sourcegrid_limit_xmax;
 	sourcegrid_limit_ymin = lens_in->sourcegrid_limit_ymin;
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
+	save_sbweights_during_inversion = false;
+	use_saved_sbweights = lens_in->use_saved_sbweights;
+	n_sbweights = lens_in->n_sbweights;
+	if (n_sbweights > 0) {
+		saved_sbweights = new double[n_sbweights];
+		for (int i=0; i < n_sbweights; i++) saved_sbweights[i] = lens_in->saved_sbweights[i];
+	}
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
 	auto_shapelet_center = lens_in->auto_shapelet_center;
@@ -13605,6 +13616,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		assign_foreground_mappings();
 
+		if (use_saved_sbweights) load_pixel_sbweights();
 		if (nlens > 0) {
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
@@ -13612,7 +13624,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 				srcgrid_wtime0 = omp_get_wtime();
 			}
 #endif
-			create_sourcegrid_from_imggrid_delaunay(false,verbal);
+			create_sourcegrid_from_imggrid_delaunay(use_saved_sbweights,verbal);
 #ifdef USE_OPENMP
 			if (show_wtime) {
 				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
@@ -13670,10 +13682,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None) and (delaunay_srcgrid != NULL)) {
-			bool pre_srcgrid = (use_lum_weighted_srcpixel_clustering) ? true : false;
+			bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
 			if (optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_lensing_matrices(); return 2e30; }
 		}
-		if (use_lum_weighted_srcpixel_clustering) {
+		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_pixel_sbweights(true,verbal);
+		if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
 			if (show_wtime) {
