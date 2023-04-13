@@ -541,6 +541,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
+	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
 	//double regparam_lhi, regparam_lum_index; 
 	double *lum_weight_factor;
@@ -849,14 +850,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void invert_lens_mapping_dense(bool verbal);
 	bool optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const bool dense_Fmatrix);
-	void calculate_pixel_sbweights(const bool save_sbweights = false, const bool verbal = false);
+	void calculate_subpixel_sbweights(const bool save_sbweights = false, const bool verbal = false);
+	void find_srcpixel_weights();
 	void load_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
 	//double chisq_regparam_it_lumreg_dense(const double logreg);
 	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
 	//double chisq_regparam_lumreg_dense();
-	void calculate_lumreg_pixel_sbweights();
+	void calculate_lumreg_srcpixel_weights(const bool use_sbweights);
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
@@ -975,7 +977,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	bool create_regularization_matrix(const bool include_corrlength_lum_weighting = false);
+	bool create_regularization_matrix(const bool include_lum_weighting = false, const bool use_sbweights = false);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();

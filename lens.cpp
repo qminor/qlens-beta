@@ -918,6 +918,7 @@ QLens::QLens() : UCMC()
 
 	use_lum_weighted_regularization = false;
 	use_lum_weighted_srcpixel_clustering = false;
+	get_lumreg_from_sbweights = false;
 	alpha_clus = 0.5;
 	alpha_clus_lower_limit = 1e30; // These must be specified by user
 	alpha_clus_upper_limit = 1e30; // These must be specified by user
@@ -1337,6 +1338,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
+	get_lumreg_from_sbweights = lens_in->get_lumreg_from_sbweights;
 	alpha_clus = lens_in->alpha_clus;
 	alpha_clus_lower_limit = lens_in->alpha_clus_lower_limit;
 	alpha_clus_upper_limit = lens_in->alpha_clus_upper_limit;
@@ -13624,7 +13626,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 				srcgrid_wtime0 = omp_get_wtime();
 			}
 #endif
-			create_sourcegrid_from_imggrid_delaunay(use_saved_sbweights,verbal);
+			bool use_weighted_clustering = ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights)) ? true : false;
+			create_sourcegrid_from_imggrid_delaunay(use_weighted_clustering,verbal);
 #ifdef USE_OPENMP
 			if (show_wtime) {
 				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
@@ -13644,8 +13647,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 		initialize_pixel_matrices(verbal);
+		bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
 		if ((regularization_method != None) and (delaunay_srcgrid != NULL)) {
-			if (create_regularization_matrix()==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
+			if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
 		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Number of active image pixels: " << image_npixels << endl;
@@ -13685,7 +13689,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 			bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
 			if (optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_lensing_matrices(); return 2e30; }
 		}
-		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_pixel_sbweights(true,verbal);
+		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_subpixel_sbweights(true,verbal);
 		if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
@@ -13719,7 +13723,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 			if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 			initialize_pixel_matrices(verbal);
 			if (regularization_method != None) {
-				if (create_regularization_matrix()==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
+				if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
 			}
 			if (inversion_method==DENSE) {
 				convert_Lmatrix_to_dense();

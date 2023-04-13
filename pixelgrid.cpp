@@ -3389,12 +3389,14 @@ bool DelaunayGrid::test_if_inside(int &tri_number, const lensvector& pt, bool& i
 	tri_number = new_tri_number;
 	return false; // if returning 'false', we don't bother to set the 'inside_triangle' flag because it will be ignored anyway
 }
+
 bool DelaunayGrid::test_if_inside(const int tri_number, const lensvector& pt)
 {
 	// To speed things up, these things can be made static and have an array for each (so each thread uses a different set of static elements)
 	lensvector dt1, dt2, dt3;
 	double cross_prod;
 
+	//cout << "TRINUM=" << tri_number << endl;
 	Triangle *triptr = &triangle[tri_number];
 	int same_sign=0;
 	dt1[0] = pt[0] - triptr->vertex[0][0];
@@ -12373,12 +12375,13 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 	return psfint;
 }
 
-bool QLens::create_regularization_matrix(const bool include_lum_weighting)
+bool QLens::create_regularization_matrix(const bool include_lum_weighting, const bool use_sbweights)
 {
 	RegularizationMethod reg_method = regularization_method;
 	if ((use_lum_weighted_regularization) and (!include_lum_weighting)) reg_method = Curvature;
 	if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
 	if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
+	if (include_lum_weighting) calculate_lumreg_srcpixel_weights(use_sbweights);
 
 	int i,j;
 
@@ -13346,37 +13349,33 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 	}
 #endif
 	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
-		calculate_lumreg_pixel_sbweights();
-		if (!use_covariance_matrix) {
-			// This means we started with a non-covmatrix based regularization (e.g. curvature) to get the initial luminosity.
-			// We'll switch to covariance matrix shortly, so initialize the copies here
-			Gmatrix_stacked_copy.input(source_n_amps*source_n_amps);
-			covmatrix_stacked_copy.input(source_n_amps*source_n_amps);
-			Dvector_cov_copy = new double[source_n_amps];
-		}
-		if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
-		if (use_covariance_matrix) generate_Gmatrix();
-		regopt_chisqmin = 1e30;
+		if (!get_lumreg_from_sbweights) {
+			if (!use_covariance_matrix) {
+				// This means we started with a non-covmatrix based regularization (e.g. curvature) to get the initial luminosity.
+				// We'll switch to covariance matrix shortly, so initialize the copies here
+				Gmatrix_stacked_copy.input(source_n_amps*source_n_amps);
+				covmatrix_stacked_copy.input(source_n_amps*source_n_amps);
+				Dvector_cov_copy = new double[source_n_amps];
+			}
+			if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+			if (use_covariance_matrix) generate_Gmatrix();
+			regopt_chisqmin = 1e30;
 #ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime_opt0 = omp_get_wtime();
-		}
+			if (show_wtime) {
+				wtime_opt0 = omp_get_wtime();
+			}
 #endif
-		logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
-		//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
-		regularization_parameter = pow(10,logreg_min);
-		if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << regularization_parameter << endl;
-		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-		else Fmatrix_log_determinant = regopt_logdet;
-		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-		if (verbal) if (mpi_id==0) cout << "loglike=" << regopt_chisqmin << endl;
-
-		//if (use_lum_weighted_regularization) {
-			//for (i=0; i < source_n_amps; i++) source_pixel_vector_input_lumreg[i] = source_pixel_vector_minchisq[i];
-		//}
+			logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
+			//(this->*chisqreg)(log(regparam_lhi)/ln10); // used for testing purposes
+			regularization_parameter = pow(10,logreg_min);
+			if ((verbal) and (mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << regularization_parameter << endl;
+			if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
+			else Fmatrix_log_determinant = regopt_logdet;
+			for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
+			if (verbal) if (mpi_id==0) cout << "loglike=" << regopt_chisqmin << endl;
+		}
 
 		for (int j=0; j < lumreg_max_it; j++) {
-			calculate_lumreg_pixel_sbweights();
 			if (create_regularization_matrix(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 			if (use_covariance_matrix) generate_Gmatrix();
 			regopt_chisqmin = 1e30;
@@ -13392,83 +13391,14 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 
 #ifdef USE_OPENMP
 		if (show_wtime) {
-			wtime_opt = omp_get_wtime() - wtime_opt0;
-			if (mpi_id==0) cout << "Wall time for optimizing regparam with lum-weighted regularization: " << wtime_opt << endl;
-			wtime_opt0 = omp_get_wtime();
-		}
-#endif
-	}
-
-	/*
-	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
-#ifdef USE_OPENMP
-	double wtime_opt0, wtime_opt;
-	if (show_wtime) {
-		wtime_opt0 = omp_get_wtime();
-	}
-#endif
-		if (!dense_Fmatrix) die("lum_weighted_regularization not set up for sparse Fmatrix yet");
-		if ((use_lum_weighted_regularization) and (optimize_regparam_lhi)) {
-			chisqreg = &QLens::chisq_regparam_it_lumreg_dense;
-			logreg_min = brents_min_method(chisqreg,optimize_regparam_minlog,optimize_regparam_maxlog,optimize_regparam_tol,verbal);
-			regparam_lhi = pow(10,logreg_min);
-			if ((lumreg_max_it != lumreg_max_it_final) and (lumreg_it >= lumreg_max_it)) chisq_regparam_it_lumreg_dense_final(verbal); // only do "final" iterations if it didn't already converge to chisqtol_lumreg
-			if ((verbal) and (mpi_id==0)) cout << "regparam_lhi after optimizing: " << regparam_lhi << endl;
-		} else {
-			lumreg_it = 0;
-			double chisq, chisqprev;
-			if (lumreg_max_it > 0) {
-				if (use_lum_weighted_corrlength) { if (create_regularization_matrix(true)==false) return false; } // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
-				chisq = chisq_regparam_lumreg_dense();
-				if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
-				lumreg_it++;
-				do {
-					chisqprev = chisq;
-					if (use_lum_weighted_corrlength) { if (create_regularization_matrix(true)==false) return false; } // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
-					chisq = chisq_regparam_lumreg_dense();
-					if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
-
-					if (chisq > chisqprev) {
-						if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
-						chisq = chisqprev;
-						break;
-					}
-				} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
+			if ((lumreg_max_it > 0) or (!get_lumreg_from_sbweights)) {
+				wtime_opt = omp_get_wtime() - wtime_opt0;
+				if (mpi_id==0) cout << "Wall time for optimizing regparam with lum-weighted regularization: " << wtime_opt << endl;
+				wtime_opt0 = omp_get_wtime();
 			}
-			//lumreg_it = 0;
-			//double chisq, chisqprev;
-			//chisq = chisq_regparam_lumreg_dense();
-			//if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
-			//lumreg_it++;
-			//do {
-				//chisqprev = chisq;
-				//chisq = chisq_regparam_lumreg_dense();
-				//if ((verbal) and (mpi_id==0)) cout << "lumreg_it=" << lumreg_it << " loglike=" << chisq << endl;
-
-				//if (chisq > chisqprev) {
-					//if (verbal) warn("chi-square became worse during iterations of luminosity-weighted regularization");
-					//chisq = chisqprev;
-					//break;
-				//}
-			//} while ((++lumreg_it < lumreg_max_it_final) and (abs(chisq-chisqprev) > chisqtol_lumreg*chisq));
-
-			//chisq_regparam_it_lumreg_dense_final(verbal);
 		}
-		if ((verbal) and (lumreg_it >= lumreg_max_it_final)) warn("exceeded maximum iterations for refining luminosity-weighted regularization (maxit_final=%i)",lumreg_max_it_final);
-		if (use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-		else Fmatrix_log_determinant = regopt_logdet;
-		for (i=0; i < source_n_amps; i++) source_pixel_vector[i] = source_pixel_vector_minchisq[i];
-		add_lum_weighted_reg_term(dense_Fmatrix,false);
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wtime_opt = omp_get_wtime() - wtime_opt0;
-		if (mpi_id==0) cout << "Wall time for luminosity-weighted regularization: " << wtime_opt << endl;
-		wtime_opt0 = omp_get_wtime();
-	}
 #endif
-
 	}
-	*/
 
 	update_source_amplitudes(verbal);
 	if ((use_lum_weighted_srcpixel_clustering) and (pre_srcgrid)) {
@@ -13477,7 +13407,7 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 			wtime_opt0 = omp_get_wtime();
 		}
 #endif
-		calculate_pixel_sbweights(save_sbweights_during_inversion,verbal); // only need to calculate sb weights for the initial grid, to be used to construct the final pixellation
+		if (!use_saved_sbweights) calculate_subpixel_sbweights(save_sbweights_during_inversion,verbal); // only need to calculate sb weights for the initial grid, to be used to construct the final pixellation
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			wtime_opt = omp_get_wtime() - wtime_opt0;
@@ -13535,27 +13465,7 @@ void QLens::setup_regparam_optimization(const bool dense_Fmatrix)
 	temp_src.input(source_n_amps);
 }
 
-void QLens::calculate_lumreg_pixel_sbweights()
-{
-	double lumfac, max_sb=-1e30;
-	int i;
-	for (i=0; i < source_npixels; i++) {
-		if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
-	}
-	if (use_lum_weighted_regularization) {
-		for (i=0; i < source_npixels; i++) {
-			//if (regparam_lum_index==0) lumfac = 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			if (regparam_lum_index==0) lumfac = 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? pow(1-source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
-			lum_weight_factor[i] = regparam_lsc*lumfac;
-		}
-	}
-}
-
-void QLens::calculate_pixel_sbweights(const bool save_sbweights, const bool verbal)
+void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool verbal)
 {
 	int npix_in_mask;
 	int *pixptr_i, *pixptr_j;
@@ -13610,6 +13520,77 @@ void QLens::calculate_pixel_sbweights(const bool save_sbweights, const bool verb
 		}
 	}
 	if ((save_sbweights) and (mpi_id==0)) cout << "Pixel sb-weights saved" << endl;
+}
+
+void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
+{
+	double lumfac, max_sb=-1e30;
+	int i;
+	if (use_sbweights) find_srcpixel_weights();
+	for (i=0; i < source_npixels; i++) {
+		if (source_pixel_vector[i] > max_sb) max_sb = source_pixel_vector[i];
+	}
+	if (use_lum_weighted_regularization) {
+		for (i=0; i < source_npixels; i++) {
+			//if (regparam_lum_index==0) lumfac = 1;
+			//else lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+			if (regparam_lum_index==0) lumfac = 1;
+			//else lumfac = (source_pixel_vector[i] > 0) ? pow(1-source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
+			//else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
+			lum_weight_factor[i] = regparam_lsc*lumfac;
+		}
+	}
+}
+
+void QLens::find_srcpixel_weights()
+{
+	int npix_in_mask;
+	int *pixptr_i, *pixptr_j;
+	if (include_extended_mask_in_inversion) {
+		npix_in_mask = image_pixel_grid->ntot_cells_emask;
+		pixptr_i = image_pixel_grid->emask_pixels_i;
+		pixptr_j = image_pixel_grid->emask_pixels_j;
+	} else {
+		npix_in_mask = image_pixel_grid->ntot_cells;
+		pixptr_i = image_pixel_grid->masked_pixels_i;
+		pixptr_j = image_pixel_grid->masked_pixels_j;
+	}
+	int i,j,k,n,indx,trinum,nsubpix;
+
+	int nsrcpix = delaunay_srcgrid->n_srcpts; // note, this might not be the same as source_npixels if there are inactive source pixels
+	double *srcpixel_weights = new double[nsrcpix];
+	int *srcpixel_nimgpts = new int[nsrcpix];
+	for (i=0; i < nsrcpix; i++) {
+		srcpixel_weights[i] = 0;
+		srcpixel_nimgpts[i] = 0;
+	}
+
+	bool inside_triangle;
+	lensvector *pt;
+	#pragma omp parallel for private(n,i,j,k,nsubpix,indx,trinum,inside_triangle,pt) schedule(static) 
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		for (k=0; k < nsubpix; k++) {
+			pt = &image_pixel_grid->subpixel_center_sourcepts[i][j][k];
+			// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
+			inside_triangle = false;
+			trinum = delaunay_srcgrid->search_grid(0,*pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
+			indx = delaunay_srcgrid->find_closest_vertex(trinum,*pt);
+			#pragma omp critical
+			{
+				srcpixel_weights[indx] += image_pixel_grid->subpixel_sbweights[i][j][k];
+				srcpixel_nimgpts[indx]++;
+			}
+		}
+	}
+
+	indx=0;
+	for (i=0; i < nsrcpix; i++) {
+		if (delaunay_srcgrid->active_pixel[i]) source_pixel_vector[indx++] = srcpixel_weights[i] / srcpixel_nimgpts[i];
+	}
 }
 
 void QLens::load_pixel_sbweights()

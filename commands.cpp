@@ -11538,7 +11538,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use luminosity-weighted source pixel clustering: " << display_switch(use_lum_weighted_srcpixel_clustering) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_srcpixel_clustering requires 'optimize_regparam' to be set to 'on'");
+				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("lum_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("luminosity-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
 				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
 					if (vary_regparam_lsc) {
@@ -11559,6 +11559,15 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
+		}
+		else if (words[0]=="lumreg_from_sbweights")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Get luminosity-weighted regularization from saved subpixel sbweights: " << display_switch(get_lumreg_from_sbweights) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lumreg_from_sbweights' command; must specify 'on' or 'off'");
+				set_switch(get_lumreg_from_sbweights,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="regparam_lsc")
 		{
@@ -12592,8 +12601,8 @@ void QLens::process_commands(bool read_file)
 					vary_regularization_parameter = false;
 					update_parameter_list();
 				}
-				if ((setword=="off") and (use_lum_weighted_regularization)) {
-					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
+				if ((setword=="off") and (use_lum_weighted_regularization) and ((!use_saved_sbweights) or (!get_lumreg_from_sbweights))) {
+					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights')" << endl;
 					use_lum_weighted_regularization = false;
 					//if (vary_regparam_lhi) {
 						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
@@ -12604,7 +12613,7 @@ void QLens::process_commands(bool read_file)
 						vary_regparam_lum_index = false;
 					}
 				}
-				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
+				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_srcpixel_clustering' to 'off'" << endl;
 					use_lum_weighted_srcpixel_clustering = false;
 					if (vary_alpha_clus) {
