@@ -885,6 +885,7 @@ QLens::QLens() : UCMC()
 	sourcegrid_limit_xmax = 1e30;
 	sourcegrid_limit_ymin = -1e30;
 	sourcegrid_limit_ymax = 1e30;
+	redo_lensing_calculations_before_inversion = true;
 	save_sbweights_during_inversion = false;
 	use_saved_sbweights = false;
 	saved_sbweights = NULL;
@@ -1314,6 +1315,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	sourcegrid_limit_xmax = lens_in->sourcegrid_limit_xmax;
 	sourcegrid_limit_ymin = lens_in->sourcegrid_limit_ymin;
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
+	redo_lensing_calculations_before_inversion = lens_in->redo_lensing_calculations_before_inversion;
 	save_sbweights_during_inversion = false;
 	use_saved_sbweights = lens_in->use_saved_sbweights;
 	n_sbweights = lens_in->n_sbweights;
@@ -7178,6 +7180,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	}
 
 	fitmodel->update_parameter_list();
+	if ((source_fit_mode != Point_Source) and (!redo_lensing_calculations_before_inversion)) fitmodel->image_pixel_grid->redo_lensing_calculations(); 
 	return true;
 }
 
@@ -13391,7 +13394,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 		}
 #endif
 
-	image_pixel_grid->redo_lensing_calculations(verbal);
+	if (redo_lensing_calculations_before_inversion) {
+		image_pixel_grid->redo_lensing_calculations(verbal);
+	}
 	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
 	//else if (at_least_one_zoom_lensed_src) image_pixel_grid->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
 
@@ -13974,13 +13979,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
 			if (inversion_method==DENSE) {
 				convert_Lmatrix_to_dense();
-				PSF_convolution_Lmatrix_dense_emask(verbal);
+				//PSF_convolution_Lmatrix_dense_emask(verbal);
 			}
-			else PSF_convolution_Lmatrix(verbal);
+			//else PSF_convolution_Lmatrix(verbal);
 			if (source_fit_mode==Cartesian_Source) source_pixel_grid->fill_surface_brightness_vector();
 			else delaunay_srcgrid->fill_surface_brightness_vector();
 			if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense(false);
 			else calculate_image_pixel_surface_brightness(false);
+			PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
 		} else if (source_fit_mode==Shapelet_Source) {
 #ifdef USE_OPENMP
 			double sbwtime, sbwtime0;

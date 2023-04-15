@@ -7119,6 +7119,7 @@ void QLens::process_commands(bool read_file)
 					bool skip_run = false;
 					bool no_errors = false;
 					bool adopt_bestfit = false;
+					bool varying_lensparams = true;
 					bool make_imgdata = false; // if turned on, will convert unlensed source points being fit into a system of lensed images, with position uncertainties taken from the fit
 					if (words[1]=="process_chain") {
 						if (nwords > 2) Complain("no arguments allowed for 'fit process_chain'");
@@ -7147,6 +7148,9 @@ void QLens::process_commands(bool read_file)
 						old_error_setting = calculate_parameter_errors;
 						calculate_parameter_errors = false;
 					}
+					int np;
+					get_n_fit_parameters(np);
+					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
@@ -7154,6 +7158,7 @@ void QLens::process_commands(bool read_file)
 					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
+					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
 					if ((adopt_bestfit) and (adopt_model(bestfitparams)==false)) Complain("could not adopt best-fit model");
 					if (make_imgdata) {
@@ -7171,7 +7176,11 @@ void QLens::process_commands(bool read_file)
 						if (words[2]=="diag") showdiag = true;
 						else Complain("invalid argument to 'fit chisq'");
 					}
+					int np;
+					get_n_fit_parameters(np);
+					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
 					chisq_single_evaluation(showdiag,true);
+					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
 				else if (words[1]=="output_img_chivals") {

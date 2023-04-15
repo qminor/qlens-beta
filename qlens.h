@@ -590,6 +590,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool calculate_parameter_errors;
 	bool adaptive_subgrid;
 	bool use_average_magnification_for_subgridding;
+	bool redo_lensing_calculations_before_inversion;
 	int delaunay_mode;
 	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
