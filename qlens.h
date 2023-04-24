@@ -1005,11 +1005,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root);
-	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
+	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	void load_pixel_grid_from_data();
-	double invert_surface_brightness_map_from_data(double& chisq0, bool verbal);
+	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal);
 	void plot_image_pixel_grid();
 	bool find_shapelet_scaling_parameters(const bool verbal);
 	bool set_shapelet_imgpixel_nsplit();

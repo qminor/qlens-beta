@@ -11469,7 +11469,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		if ((fitmodel->regularization_parameter < 0) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam)) chisq = 2e30;
 		else {
 			for (int i=0; i < n_ranchisq; i++) {
-				chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false);
+				chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false,i);
 				chisq0 += chisq00;
 			}
 			chisq /= n_ranchisq;
@@ -13274,7 +13274,7 @@ void QLens::plot_image_pixel_grid()
 	image_pixel_grid->plot_grid("map",false);
 }
 
-double QLens::invert_surface_brightness_map_from_data(double &chisq0, bool verbal)
+double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
@@ -13289,7 +13289,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, bool verba
 	}
 #endif
 	for (int i=0; i < n_ranchisq; i++) {
-		chisq += invert_image_surface_brightness_map(chisq00,verbal);
+		chisq += invert_image_surface_brightness_map(chisq00,verbal,i);
 		chisq0 += chisq00;
 	}
 	chisq /= n_ranchisq;
@@ -13311,7 +13311,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, bool verba
 	return chisq;
 }
 
-double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) // This function should probably be renamed to something like 'pixel_level_log_evidence' or something like that
+double QLens::invert_image_surface_brightness_map(double &chisq0, const bool verbal, const int ranchisq_i) // This function should probably be renamed to something like 'pixel_level_log_evidence' or something like that
 {
 	// This function is too long, and should be broken into a bunch of inline functions.
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
@@ -13394,7 +13394,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, bool verbal) /
 		}
 #endif
 
-	if (redo_lensing_calculations_before_inversion) {
+	if ((redo_lensing_calculations_before_inversion) and (ranchisq_i==0)) {
 		image_pixel_grid->redo_lensing_calculations(verbal);
 	}
 	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid->redo_lensing_calculations(verbal);
