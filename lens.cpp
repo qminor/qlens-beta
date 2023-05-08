@@ -7210,11 +7210,11 @@ double QLens::update_model(const double* params)
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(params,index,status);
 	}
-	if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (i=0; i < n_sb; i++) {
-			sb_list[i]->update_fit_parameters(params,index,status);
-		}
+	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->update_fit_parameters(params,index,status);
 	}
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -8163,9 +8163,9 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 {
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
-	}
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			if ((nlens > 0) and (image_data != NULL)) {
@@ -8241,9 +8241,9 @@ void QLens::set_default_plimits()
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	}
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	}
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -8281,11 +8281,11 @@ void QLens::get_n_fit_parameters(int &nparams)
 	srcmodel_fit_parameters = 0;
 	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (int i=0; i < n_sb; i++)
-			srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
-		nparams += srcmodel_fit_parameters;
-	}
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (int i=0; i < n_sb; i++)
+		srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
+	nparams += srcmodel_fit_parameters;
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
@@ -8353,11 +8353,11 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
 	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
-		int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
-		if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
-	}
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
@@ -8411,13 +8411,13 @@ bool QLens::setup_limits()
 		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for lens %i",i); return false; }
 	}
 	if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (int i=0; i < n_sb; i++) {
-			if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
-		}
-		int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
-		if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (int i=0; i < n_sb; i++) {
+		if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
 	}
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
@@ -8613,15 +8613,15 @@ void QLens::get_parameter_names()
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
-	if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		int srcparams_start = fit_parameter_names.size();
-		for (i=0; i < n_sb; i++) {
-			sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
-		}
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	int srcparams_start = fit_parameter_names.size();
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
+	}
 		//for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
 			//fit_parameter_names[i] += "_src";
 		//}
-	}
+	//}
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
 	n_names = fit_parameter_names.size();
@@ -11000,12 +11000,12 @@ bool QLens::adopt_model(dvector &fitparams)
 		lens_list[i]->update_fit_parameters(transformed_params,index,status);
 		lens_list[i]->reset_angle_modulo_2pi();
 	}
-	if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		for (i=0; i < n_sb; i++) {
-			sb_list[i]->update_fit_parameters(transformed_params,index,status);
-			sb_list[i]->reset_angle_modulo_2pi();
-		}
+	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->update_fit_parameters(transformed_params,index,status);
+		sb_list[i]->reset_angle_modulo_2pi();
 	}
+	//}
 	if (n_sourcepts_fit > 0) {
 		if (use_analytic_bestfit_src) {
 			output_analytic_srcpos(sourcepts_fit.data());
@@ -11831,13 +11831,13 @@ void QLens::output_lens_commands(string filename, const bool print_limits)
 			}
 		}
 	}
-	if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		if (print_limits) scriptfile << "#limits included" << endl;
-		else scriptfile << "#nolimits included" << endl;
-		for (int i=0; i < n_sb; i++) {
-			sb_list[i]->print_source_command(scriptfile,print_limits);
-		}
+	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	if (print_limits) scriptfile << "#limits included" << endl;
+	else scriptfile << "#nolimits included" << endl;
+	for (int i=0; i < n_sb; i++) {
+		sb_list[i]->print_source_command(scriptfile,print_limits);
 	}
+	//}
 
 	if (vary_hubble_parameter) {
 		scriptfile << "hubble = " << hubble << endl;
@@ -11890,12 +11890,12 @@ void QLens::print_sourcept_list()
 void QLens::print_fit_model()
 {
 	print_lens_list(true);
-	if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-		if (n_sb > 0) {
-			cout << "Source profile list:" << endl;
-			print_source_list(true);
-		}
+	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	if (n_sb > 0) {
+		cout << "Source profile list:" << endl;
+		print_source_list(true);
 	}
+	//}
 	if (n_sourcepts_fit > 0) print_sourcept_list();
 	if (vary_srcpt_xshift) {
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
