@@ -9579,26 +9579,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread);
 										else if (source_fit_mode==Cartesian_Source) sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(center_srcpt[subcell_index],thread);
 									}
-									if ((at_least_one_foreground_src) and (!lensed_sources_only)) {
-										for (int k=0; k < lens->n_sb; k++) {
-											if (!lens->sb_list[k]->is_lensed) {
-												if (!lens->sb_list[k]->zoom_subgridding) sb += lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
-												else {
-													subpixel_xlength = pixel_xlength/sqrt(nsubpix);
-													subpixel_ylength = pixel_ylength/sqrt(nsubpix);
-													corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-													corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-													corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-													corner2[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
-													corner3[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
-													corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-													corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
-													corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-													sb += lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4);
-												}
-											}
-										}
-									}
 								}
 								surface_brightness[i][j] += sb / nsubpix;
 							}
@@ -13478,7 +13458,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 		pixptr_i = image_pixel_grid->masked_pixels_i;
 		pixptr_j = image_pixel_grid->masked_pixels_j;
 	}
-	int i,j,k,n,l,nsubpix;
+	int i,j,k,n,l,m,nsubpix;
 	double sb, max_sb = 1e-30;
 
 	if (save_sbweights) {
@@ -13490,24 +13470,56 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 			n_sbweights += nsubpix;
 		}
+		cout << "Saving " << n_sbweights << " sbweights" << endl;
 		saved_sbweights = new double[n_sbweights];
 		l=0;
 	}
 
-	#pragma omp parallel for private(n,i,j,k,nsubpix,sb) schedule(static) 
-	for (n=0; n < npix_in_mask; n++) {
-		i = pixptr_i[n];
-		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
-		for (k=0; k < nsubpix; k++) {
-			// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
-			sb = delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k]);
-			if (sb < 0) sb = 0;
-			if (sb > max_sb) {
-				#pragma omp critical
-				max_sb = sb;
+	bool at_least_one_lensed_src = false;
+	for (int k=0; k < n_sb; k++) {
+		if (sb_list[k]->is_lensed) {
+			at_least_one_lensed_src = true;
+			break;
+		}
+	}
+
+	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) die("delaunay_srcgrid has not been created");
+	if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid != NULL)) die("source_pixel_grid has not been created");
+
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		#pragma omp for private(n,i,j,k,m,nsubpix,sb) schedule(static) 
+		for (n=0; n < npix_in_mask; n++) {
+			i = pixptr_i[n];
+			j = pixptr_j[n];
+			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+			for (k=0; k < nsubpix; k++) {
+				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
+				sb = 0;
+				if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k]);
+				else if (source_fit_mode==Cartesian_Source) sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
+				if (at_least_one_lensed_src) {
+					for (m=0; m < n_sb; m++) {
+						if (sb_list[m]->is_lensed) {
+							sb += sb_list[m]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k][0],image_pixel_grid->subpixel_center_sourcepts[i][j][k][1]);
+						}
+					}
+				}
+				if (sb < 0) sb = 0;
+
+				if (sb > max_sb) {
+					#pragma omp critical
+					max_sb = sb;
+				}
+				image_pixel_grid->subpixel_sbweights[i][j][k] = sb;
 			}
-			image_pixel_grid->subpixel_sbweights[i][j][k] = sb;
 		}
 	}
 	for (int n=0; n < npix_in_mask; n++) {
@@ -13615,7 +13627,7 @@ void QLens::load_pixel_sbweights()
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		nweights += nsubpix;
 	}
-	if (nweights != n_sbweights) die("number of subpixels doesn't match number of saved sb-weights");
+	if (nweights != n_sbweights) die("number of subpixels (%i) doesn't match number of saved sb-weights (%i)",nweights,n_sbweights);
 
 	l=0;
 	for (n=0; n < npix_in_mask; n++) {

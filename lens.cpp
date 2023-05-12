@@ -13021,7 +13021,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		}
 	}
 
-	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
+	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 	if ((at_least_one_lensed_src) or (n_sb > 0)) {
 		if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
 		store_image_pixel_surface_brightness();
@@ -13694,7 +13694,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
 			if (optimize_regularization_parameter(dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_lensing_matrices(); return 2e30; }
 		}
-		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_subpixel_sbweights(true,verbal);
 		if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
@@ -13767,6 +13766,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(verbal);
 			else invert_lens_mapping_CG_method(verbal);
 		}
+		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_subpixel_sbweights(true,verbal);
 
 		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
 		else calculate_image_pixel_surface_brightness();
@@ -13783,6 +13783,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		image_pixel_grid->find_surface_brightness(foreground_only);
 		vectorize_image_pixel_surface_brightness();
 		PSF_convolution_pixel_vector(image_surface_brightness,false,verbal);
+		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 		if (n_sourcepts_fit > 0) {
 			point_image_surface_brightness = new double[image_npixels];
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
@@ -13838,6 +13839,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None)) optimize_regularization_parameter(true,verbal);
 		if (!optimize_regparam) invert_lens_mapping_dense(verbal); // if using luminosity-weighted regularization, we need to do final inversion after optimizing regparam
+		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 		calculate_image_pixel_surface_brightness_dense();
 		//store_image_pixel_surface_brightness();
 
