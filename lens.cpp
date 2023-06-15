@@ -962,7 +962,7 @@ QLens::QLens() : UCMC()
 	//optimize_regparam_lhi = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
 	optimize_regparam_minlog = -1;
-	optimize_regparam_maxlog = 3;
+	optimize_regparam_maxlog = 4;
 	max_regopt_iterations = 20;
 
 	psf_width_x = 0;
@@ -2996,6 +2996,20 @@ void QLens::toggle_major_axis_along_y(bool major_axis_along_y)
 				for (int i=0; i < nlens; i++) lens_list[i]->shift_angle_minus_90();
 			} else {
 				for (int i=0; i < nlens; i++) lens_list[i]->shift_angle_90();
+			}
+		}
+	}
+}
+
+void QLens::toggle_major_axis_along_y_src(bool major_axis_along_y)
+{
+	if (SB_Profile::orient_major_axis_north != major_axis_along_y) {
+		SB_Profile::orient_major_axis_north = major_axis_along_y;
+		if (n_sb > 0) {
+			if (major_axis_along_y) {
+				for (int i=0; i < n_sb; i++) sb_list[i]->shift_angle_minus_90();
+			} else {
+				for (int i=0; i < n_sb; i++) sb_list[i]->shift_angle_90();
 			}
 		}
 	}
@@ -11415,7 +11429,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
-	if (einstein_radius_prior) loglike += fitmodel->get_einstein_radius_prior(false);
+	if ((einstein_radius_prior) and (nlens > 0)) loglike += fitmodel->get_einstein_radius_prior(false);
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (fitmodel->chisq_it % chisq_display_frequency == 0) {
 			if (chisq_total != (2*loglike)) cout << ", chisq_tot=" << chisq_total;
@@ -12947,13 +12961,20 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 	bool use_data = true;
 	if (image_pixel_data==NULL) use_data = false;
-	double blar1 = grid_xlength / n_image_pixels_x;
-	double blar2 = grid_ylength / n_image_pixels_y;
-	if ((image_pixel_data != NULL) and ((n_image_pixels_x != image_pixel_data->npixels_x) or (n_image_pixels_y != image_pixel_data->npixels_y))) {
+	double orig_npix_x, orig_npix_y;
+	orig_npix_x = n_image_pixels_x;
+	orig_npix_y = n_image_pixels_y;
+	if (reduce_factor > 1) {
+		n_image_pixels_x *= reduce_factor;
+		n_image_pixels_y *= reduce_factor;
+	}
+	if (reduce_factor > 1) use_data = false;
+	else if ((image_pixel_data != NULL) and (reduce_factor == 1) and ((orig_npix_x != image_pixel_data->npixels_x) or (orig_npix_y != image_pixel_data->npixels_y))) {
 		use_data = false;
 		warn("img_npixels does not match number of pixels in data image; showing all pixels (using '-nomask' option)");
+		if (plot_residual==true) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
 	}
-	if ((plot_residual==true) and (!use_data)) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
+	if ((plot_residual==true) and (!image_pixel_data)) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
 	double xmin,xmax,ymin,ymax;
 	if (use_data) {
 		xmin = image_pixel_data->xmin;
@@ -12970,14 +12991,25 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	bool raytrace = true;
 	if (use_data) raytrace = false;
 	image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace);
-	if (use_data) image_pixel_grid->set_fit_window((*image_pixel_data)); 
-	if (show_all_pixels) {
-		image_pixel_grid->include_all_pixels();
-	} else if ((show_extended_mask) and (use_data)) {
-		if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
-		else image_pixel_grid->activate_extended_mask(); 
-	} else if ((show_foreground_mask) and (use_data)) {
-		image_pixel_grid->activate_foreground_mask(); 
+	if (use_data) {
+		if (show_all_pixels) { // currently, reducing down to lower resolution isn't compatible with masks
+			image_pixel_grid->include_all_pixels();
+		} else if (show_extended_mask) {
+			if (extended_mask_n_neighbors == -1) image_pixel_grid->include_all_pixels();
+			else image_pixel_grid->activate_extended_mask(); 
+		} else if (show_foreground_mask) {
+			image_pixel_grid->activate_foreground_mask(); 
+		} else {
+			if (!image_pixel_grid->set_fit_window((*image_pixel_data))) {
+				delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
+				image_pixel_grid = NULL;
+				if (reduce_factor > 1) {
+					n_image_pixels_x = orig_npix_x;
+					n_image_pixels_y = orig_npix_y;
+				}
+				return false;
+			}
+		}
 	}
 	image_pixel_grid->ray_trace_pixels();
 
@@ -12990,11 +13022,24 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 
 	//bool old_split_imgpixels = split_imgpixels;
 	bool at_least_one_lensed_src = false;
+	bool at_least_one_foreground_src = false;
+	for (int k=0; k < n_sb; k++) {
+		if (sb_list[k]->is_lensed) at_least_one_lensed_src = true;
+		if (!sb_list[k]->is_lensed) at_least_one_foreground_src = true;
+	}
 	if (source_fit_mode==Cartesian_Source) {
 		at_least_one_lensed_src = true;
 		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
-		if (assign_pixel_mappings(verbose)==false) return false;
+		if (assign_pixel_mappings(verbose)==false) {
+			delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
+			image_pixel_grid = NULL;
+			if (reduce_factor > 1) {
+				n_image_pixels_x = orig_npix_x;
+				n_image_pixels_y = orig_npix_y;
+			}
+			return false;
+		}
 	} else if (source_fit_mode==Delaunay_Source) {
 		if (delaunay_srcgrid != NULL) {
 			at_least_one_lensed_src = true;
@@ -13002,16 +13047,12 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 			delaunay_srcgrid->set_image_pixel_grid(image_pixel_grid);
 		}
 		//if (split_imgpixels) split_imgpixels = false;
-	} else {
-		for (int k=0; k < n_sb; k++) {
-			if (sb_list[k]->is_lensed) at_least_one_lensed_src = true;
-		}
 	}
 
 	if ((at_least_one_lensed_src) or (n_sb > 0)) {
 		if ((!plot_foreground_only) and (at_least_one_lensed_src)) {
 			image_pixel_grid->find_surface_brightness(false,true);
-			if (!omit_foreground) {
+			if ((!omit_foreground) and (at_least_one_foreground_src)) {
 				assign_foreground_mappings(use_data);
 				calculate_foreground_pixel_surface_brightness(false);
 				store_foreground_pixel_surface_brightness();
@@ -13023,7 +13064,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 
 	vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 	if ((at_least_one_lensed_src) or (n_sb > 0)) {
-		if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
+		//if (reduce_factor==1) PSF_convolution_pixel_vector(image_surface_brightness,false,verbose); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
+		PSF_convolution_pixel_vector(image_surface_brightness,false,verbose);
 		store_image_pixel_surface_brightness();
 	}
 
@@ -13051,15 +13093,16 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		}
 		delete image_pixel_grid;
 		image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,sb_old,n_image_pixels_x,n_image_pixels_y,reduce_factor,xmin,xmax,ymin,ymax);
-		n_image_pixels_x /= reduce_factor;
-		n_image_pixels_y /= reduce_factor;
+		n_image_pixels_x = orig_npix_x;
+		n_image_pixels_y = orig_npix_y;
 		vectorize_image_pixel_surface_brightness();
-		PSF_convolution_pixel_vector(image_surface_brightness,false,verbose);
+		//PSF_convolution_pixel_vector(image_surface_brightness,false,verbose);
 		store_image_pixel_surface_brightness();
 		clear_pixel_matrices();
 
 		for (int i=0; i < n_image_pixels_x; i++) delete[] sb_old[i];
 		delete[] sb_old;
+		if (image_pixel_data != NULL) use_data = true;
 	}
 
 	if ((sim_pixel_noise != 0) or (data_pixel_noise != 0)) {
@@ -13083,8 +13126,15 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
-	if (((show_all_pixels) or (show_extended_mask) or (show_foreground_mask)) and (use_data)) {
-		image_pixel_grid->set_fit_window((*image_pixel_data));
+	if (use_data) {
+		if (show_all_pixels) image_pixel_grid->include_all_pixels();
+		else if ((show_extended_mask) or (show_foreground_mask)) {
+			if (!image_pixel_grid->set_fit_window((*image_pixel_data))) {
+				delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
+				image_pixel_grid = NULL;
+				return false;
+			}
+		}
 	}
 	if ((mpi_id==0) and (plot_residual) and (!output_fits)) {
 		if (data_pixel_noise != 0) chisq_from_residuals /= data_pixel_noise*data_pixel_noise;
@@ -13137,6 +13187,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 
 	delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
 	image_pixel_grid = NULL;
+
 	//split_imgpixels = old_split_imgpixels;
 	return true;
 }
@@ -13432,7 +13483,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 		if (n_sourcepts_fit > 0) {
 			if (use_analytic_bestfit_src) set_analytic_sourcepts(verbal);
-			//cout << "WTF0" << endl;
 			bool is_lensed;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				is_lensed = true;
@@ -13440,7 +13490,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				if ((is_lensed) and (nlens==0)) die("lensed source point has been defined, but no lens objects have been created");
 				image_pixel_grid->find_image_points(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],source_grid_defined,is_lensed,verbal);
 			}
-			//cout << "WTF1" << endl;
 		}
 	}
 

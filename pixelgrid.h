@@ -139,7 +139,7 @@ class SourcePixelGrid
 	SourcePixelGrid* find_corner_cell(const int i, const int j);
 
 	void assign_surface_brightness_from_analytic_source();
-	void assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid);
+	void assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid, const bool add_sb = false);
 	void update_surface_brightness(int& index);
 	void fill_surface_brightness_vector();
 	void fill_surface_brightness_vector_recursive(int& column_j);
@@ -330,7 +330,7 @@ class ImagePixelGrid : public Sort
 	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_image_points(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	void set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
+	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
 	void include_all_pixels();
 	void activate_extended_mask();
 	void activate_foreground_mask();
@@ -391,6 +391,7 @@ struct ImagePixelData : public Sort
 	double pixel_size, pixel_noise;
 	double global_max_sb;
 	double emask_rmax;
+	ostream* isophote_fit_out;
 	ImagePixelData()
 	{
 		surface_brightness = NULL;
@@ -403,6 +404,7 @@ struct ImagePixelData : public Sort
 		pixel_xcvals = NULL;
 		pixel_ycvals = NULL;
 		lens = NULL;
+		isophote_fit_out = &std::cout;
 	}
 	~ImagePixelData();
 	void load_data(string root);
@@ -415,6 +417,7 @@ struct ImagePixelData : public Sort
 		pixel_size = pixel_size_in;
 		return load_data_fits(true,fits_filename);
 	}
+	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);

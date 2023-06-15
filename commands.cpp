@@ -8781,7 +8781,9 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="loadpsf")
 			{
 				string filename;
-				if (nwords==3) {
+				if (nwords==2) {
+					Complain("filename for PSF in FITS format is required (e.g. 'sbmap loadpsf file.fits')");
+				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
 				if (!load_psf_fits(filename,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
@@ -8796,6 +8798,11 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 					delete[] psf_matrix;
 					psf_matrix = NULL;
+				}
+				if (foreground_psf_matrix != NULL) {
+					for (int i=0; i < foreground_psf_npixels_x; i++) delete[] foreground_psf_matrix[i];
+					delete[] foreground_psf_matrix;
+					foreground_psf_matrix = NULL;
 				}
 			}
 			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
@@ -8826,9 +8833,8 @@ void QLens::process_commands(bool read_file)
 			{
 				vector<string> args;
 				bool plot_source = false;
-				bool delaunay = false;
+				bool make_delaunay_from_sbprofile = false;
 				bool use_mask = true;
-				if (source_fit_mode==Delaunay_Source) delaunay = true;
 				bool zoom_in = false;
 				bool interpolate = false;
 				bool old_auto_srcgrid_npixels = auto_srcgrid_npixels;
@@ -8836,7 +8842,7 @@ void QLens::process_commands(bool read_file)
 				double old_srcgrid_scale;
 				//bool changed_srcgrid = false;
 				//bool old_auto_srcgrid = false;
-				double zoomfactor = 2;
+				double zoomfactor = 1;
 				double delaunay_grid_scale = 1;
 				int set_npix = -1; // if negative, doesn't set npix; other wise, it's npix by npix grid
 				bool set_title = false;
@@ -8876,12 +8882,13 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
 						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
-						else if (args[i]=="-delaunay") { delaunay = true; }
+						else if (args[i]=="-delaunay") { make_delaunay_from_sbprofile = true; }
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
+				if ((source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile) and (!plot_source)) Complain("to make Delaunay source grid from source profiles, use '-delaunay' argument; to plot Delaunay source grid (from inversion) along with source profiles, use 'mkplotsrc'");
 				if (zoom_in) {
-					if (delaunay) {
+					if (make_delaunay_from_sbprofile) {
 						delaunay_grid_scale /= zoomfactor;
 					} else {
 						old_srcgrid_scale = srcgrid_size_scale;
@@ -8894,16 +8901,19 @@ void QLens::process_commands(bool read_file)
 						srcgrid_npixels_y = set_npix;
 						auto_srcgrid_npixels = false;
 					}
-					if (delaunay) {
+					if (make_delaunay_from_sbprofile) {
 						create_sourcegrid_delaunay(use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					}
 					else {
 						create_sourcegrid_cartesian(verbal_mode);
 						source_pixel_grid->assign_surface_brightness_from_analytic_source();
+						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) {
+							source_pixel_grid->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrid,true);
+						}
 					}
 					if (plot_source) {
-						if ((!delaunay) and (scale_to_srcgrid)) {
+						if ((!make_delaunay_from_sbprofile) and (scale_to_srcgrid)) {
 							double xmin,xmax,ymin,ymax;
 							source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
 							if (mpi_id==0) cout << "Source grid dimensions: " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
@@ -8922,23 +8932,23 @@ void QLens::process_commands(bool read_file)
 
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) {
-							if (!delaunay) source_pixel_grid->plot_surface_brightness("src_pixel");
+							if (!make_delaunay_from_sbprofile) source_pixel_grid->plot_surface_brightness("src_pixel");
 							else {
 								delaunay_srcgrid->plot_surface_brightness("src_pixel",sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,delaunay_grid_scale,set_npix,interpolate);
 							}
 						}
 						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
-							if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range);
+							if (make_delaunay_from_sbprofile) run_plotter_range("srcpixel_delaunay",range);
 							else run_plotter_range("srcpixel","",range);
 						} else {
-							if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay_nocc","",range);
+							if (make_delaunay_from_sbprofile) run_plotter_range("srcpixel_delaunay_nocc","",range);
 							else run_plotter_range("srcpixel_nocc","",range);
 						}
 						if (set_title) plot_title = "";
 					}
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
-				if ((zoom_in) and (!delaunay)) srcgrid_size_scale = old_srcgrid_scale;
+				if ((zoom_in) and (!make_delaunay_from_sbprofile)) srcgrid_size_scale = old_srcgrid_scale;
 				auto_srcgrid_npixels = old_auto_srcgrid_npixels;
 			}
 			else if (words[1]=="plotsrcgrid")
@@ -9348,6 +9358,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-reduce2") reduce_factor = 2;
 						else if (args[i]=="-reduce4") reduce_factor = 4;
 						else if (args[i]=="-reduce8") reduce_factor = 8;
+						else if (args[i]=="-reduce10") reduce_factor = 10;
 						else if (args[i]=="-mkdata") offload_to_data = true;
 						else if (args[i]=="-subcomp") subcomp = true;
 						else if ((pos = args[i].find("-pnoise=")) != string::npos) {
@@ -9379,10 +9390,6 @@ void QLens::process_commands(bool read_file)
 				ncontstr2 >> ncontstring2;
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
-				if (reduce_factor > 1) {
-					n_image_pixels_x *= reduce_factor;
-					n_image_pixels_y *= reduce_factor;
-				}
 				if (!islens()) {
 					if ((n_sb==0) and (n_sourcepts_fit==0)) {
 						Complain("must specify lens/source model first");
@@ -9524,7 +9531,7 @@ void QLens::process_commands(bool read_file)
 				int set_npix = 600; // this is only relevant for a Delaunay source, for which the plotting resolution needs to be given (since it's plotted to Cartesian pixels)
 				bool delaunay = false;
 				bool zoom_in = false;
-				double zoomfactor = 2;
+				double zoomfactor = 1;
 				bool interpolate = false;
 				double old_srcgrid_scale;
 				double delaunay_grid_scale = 1;
@@ -9561,10 +9568,6 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
 						//else if (args[i]=="-nomask") use_mask = false;
 						//else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
-						//else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
-						//else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
-						//else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
-						//else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
 						//else if (args[i]=="-delaunay") { delaunay = true; }
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
@@ -9859,6 +9862,17 @@ void QLens::process_commands(bool read_file)
 				bool orient_north;
 				set_switch(orient_north,setword);
 				toggle_major_axis_along_y(orient_north);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="major_axis_along_y_src")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Orient major axis along y-direction for source profiles: " << display_switch(SB_Profile::orient_major_axis_north) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'major_axis_along_y_src' command; must specify 'on' or 'off'");
+				bool orient_north;
+				set_switch(orient_north,setword);
+				toggle_major_axis_along_y_src(orient_north);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="shear_components")
@@ -11521,7 +11535,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_regularization' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!optimize_regparam)) Complain("lum_weighted_regularization requires 'optimize_regparam' to be set to 'on'");
+				if ((setword=="on") and (!optimize_regparam) and (!get_lumreg_from_sbweights)) Complain("lum_weighted_regularization requires 'optimize_regparam' or 'lumreg_from_sbweights' to be set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
 					if (vary_regparam_lsc) {
@@ -12611,7 +12625,7 @@ void QLens::process_commands(bool read_file)
 					update_parameter_list();
 				}
 				if ((setword=="off") and (use_lum_weighted_regularization) and ((!use_saved_sbweights) or (!get_lumreg_from_sbweights))) {
-					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights')" << endl;
+					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights' and 'use_saved_sbweights))" << endl;
 					use_lum_weighted_regularization = false;
 					//if (vary_regparam_lhi) {
 						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
@@ -13187,6 +13201,8 @@ void QLens::process_commands(bool read_file)
 			bool verbal = true;
 			if (mpi_id > 0) verbal = false;
 
+			ofstream fitout((output_label + "_isofit.dat").c_str());
+			image_pixel_data->set_isofit_output_stream(&fitout);
 			IsophoteData isodata;
 			if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
 

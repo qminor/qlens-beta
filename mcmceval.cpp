@@ -3729,11 +3729,15 @@ void FisherEval::input(const char *file_root, const bool silent)
 		cerr << "Error: cannot read data file '" << string(file_root) + ".bf'" << endl;
 		return;
 	}
+	a--; // first number is log-likelihood, not param
+
 	numOfParam = a;
 	if (!silent) cout << "Number of parameters: " << a << endl;
 
 	int i,j;
 	bestfitpt = new double[numOfParam];
+	double garbage;
+	iss >> garbage; // ignore log-likelihood entry
 	for (i=0; i < numOfParam; i++) iss >> bestfitpt[i];
 	pcov = new double*[numOfParam];
 	for (i=0; i < numOfParam; i++) pcov[i] = new double[numOfParam];

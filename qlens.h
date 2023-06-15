@@ -1273,6 +1273,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void reset_grid();
 	void remove_lens(int lensnumber);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
+	void toggle_major_axis_along_y_src(bool major_axis_along_y);
 	void create_output_directory();
 	void open_output_file(ofstream &outfile, string filename_in);
 	void open_output_file(ofstream &outfile, char* filechar_in);

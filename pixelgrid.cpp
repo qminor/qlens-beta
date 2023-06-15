@@ -514,14 +514,17 @@ void SourcePixelGrid::assign_surface_brightness_from_analytic_source()
 	}
 }
 
-void SourcePixelGrid::assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid)
+void SourcePixelGrid::assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid, const bool add_sb)
 {
 	int i,j;
+	double sb;
 	for (j=0; j < w_N; j++) {
 		for (i=0; i < u_N; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness_from_delaunay_grid(delaunay_grid);
+			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness_from_delaunay_grid(delaunay_grid,add_sb);
 			else {
-				cell[i][j]->surface_brightness = delaunay_grid->find_lensed_surface_brightness(cell[i][j]->center_pt,-1,-1,0); // it would be nice to use Greg's method for searching so it doesn't start from an arbitrary triangle...but it's pretty fast as-is
+				sb = delaunay_grid->find_lensed_surface_brightness(cell[i][j]->center_pt,-1,-1,0); // it would be nice to use Greg's method for searching so it doesn't start from an arbitrary triangle...but it's pretty fast as-is
+				if (add_sb) cell[i][j]->surface_brightness += sb;
+				else cell[i][j]->surface_brightness = sb;
 			}
 		}
 	}
@@ -3581,6 +3584,11 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 		if (zero_outside_border) {
+			mapped_delaunay_srcpixels_ij.push_back(-1);
+			mapped_delaunay_srcpixels_ij.push_back(-1);
+			mapped_delaunay_srcpixels_ij.push_back(-1);
+			return true;
+			/*
 			double sqrlenmax = 1e30;
 			for (k=0; k < 3; k++) {
 				if (k != kmin) {
@@ -3595,6 +3603,7 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 				mapped_delaunay_srcpixels_ij.push_back(-1);
 				return true;
 			}
+			*/
 		}
 
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
@@ -3706,6 +3715,8 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 		if (zero_outside_border) {
+			return 0;
+			/*
 			double sqrlenmax = 1e30;
 			for (k=0; k < 3; k++) {
 				if (k != kmin) {
@@ -3715,6 +3726,7 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 			}
 
 			if (sqrdistmin > sqrlenmax) return 0;
+			*/
 		}
 		return *triptr->sb[kmin];
 	}
@@ -3752,6 +3764,8 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 		}
 		if (zero_outside_border) {
+			return 0;
+			/*
 			double sqrlenmax = 1e30;
 			for (int k=0; k < 3; k++) {
 				if (k != kmin) {
@@ -3761,6 +3775,7 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 			}
 
 			if (sqrdistmin > sqrlenmax) return 0;
+			*/
 		}
 		return *triptr->sb[kmin];
 	}
@@ -5039,6 +5054,12 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 		delete[] psf_matrix;
 		psf_matrix = NULL;
 	}
+	if (foreground_psf_matrix != NULL) {
+		for (i=0; i < foreground_psf_npixels_x; i++) delete[] foreground_psf_matrix[i];
+		delete[] foreground_psf_matrix;
+		foreground_psf_matrix = NULL;
+	}
+
 	double **input_psf_matrix;
 
 	fitsfile *fptr;   // FITS file pointer, defined in fitsio.h
@@ -5124,24 +5145,24 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 		}
 	}
 
-	imid = nx/2;
-	jmid = ny/2;
-	imin = imid;
-	imax = imid;
-	jmin = jmid;
-	jmax = jmid;
-	for (i=0; i < nx; i++) {
-		for (j=0; j < ny; j++) {
-			if (input_psf_matrix[i][j] > foreground_psf_threshold*peak_sb) {
-				if (i < imin) imin=i;
-				if (i > imax) imax=i;
-				if (j < jmin) jmin=j;
-				if (j > jmax) jmax=j;
-			}
-		}
-	}
-	nx_half = (imax-imin+1)/2;
-	ny_half = (jmax-jmin+1)/2;
+	//imid = nx/2;
+	//jmid = ny/2;
+	//imin = imid;
+	//imax = imid;
+	//jmin = jmid;
+	//jmax = jmid;
+	//for (i=0; i < nx; i++) {
+		//for (j=0; j < ny; j++) {
+			//if (input_psf_matrix[i][j] > foreground_psf_threshold*peak_sb) {
+				//if (i < imin) imin=i;
+				//if (i > imax) imax=i;
+				//if (j < jmin) jmin=j;
+				//if (j > jmax) jmax=j;
+			//}
+		//}
+	//}
+	//nx_half = (imax-imin+1)/2;
+	//ny_half = (jmax-jmin+1)/2;
 	setup_foreground_PSF_matrix();
 	//for (i=0; i < psf_npixels_x; i++) {
 		//for (j=0; j < psf_npixels_y; j++) {
@@ -5169,8 +5190,8 @@ void QLens::setup_foreground_PSF_matrix()
 	// right now, we're just making foreground PSF same as regular PSF. Maybe later we'll allow for a custom PSF for the foreground galaxy?
 	foreground_psf_npixels_x = psf_npixels_x;
 	foreground_psf_npixels_y = psf_npixels_y;
-	int nx_half = foreground_psf_npixels_x/2;
-	int ny_half = foreground_psf_npixels_y/2;
+	//int nx_half = foreground_psf_npixels_x/2;
+	//int ny_half = foreground_psf_npixels_y/2;
 	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
 	int i,j;
 	for (i=0; i < foreground_psf_npixels_x; i++) foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
@@ -5179,17 +5200,17 @@ void QLens::setup_foreground_PSF_matrix()
 			foreground_psf_matrix[i][j] = psf_matrix[i][j];
 		}
 	}
-	double normalization = 0;
-	for (i=0; i < foreground_psf_npixels_x; i++) {
-		for (j=0; j < foreground_psf_npixels_y; j++) {
-			normalization += foreground_psf_matrix[i][j];
-		}
-	}
-	for (i=0; i < psf_npixels_x; i++) {
-		for (j=0; j < psf_npixels_y; j++) {
-			foreground_psf_matrix[i][j] /= normalization;
-		}
-	}
+	//double normalization = 0;
+	//for (i=0; i < foreground_psf_npixels_x; i++) {
+		//for (j=0; j < foreground_psf_npixels_y; j++) {
+			//normalization += foreground_psf_matrix[i][j];
+		//}
+	//}
+	//for (i=0; i < psf_npixels_x; i++) {
+		//for (j=0; j < psf_npixels_y; j++) {
+			//foreground_psf_matrix[i][j] /= normalization;
+		//}
+	//}
 }
 
 ImagePixelData::~ImagePixelData()
@@ -6292,14 +6313,14 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		if (grad_xistep < pixel_size) {
 			grad_xistep = pixel_size;
 		}
-		if (verbose) cout << "xi_it=" << xi_it << " xi=" << xi << " epsilon=" << epsilon << " theta=" << radians_to_degrees(theta) << " xc=" << xc << " yc=" << yc << endl;
+		if (verbose) (*isophote_fit_out) << "xi_it=" << xi_it << " xi=" << xi << " epsilon=" << epsilon << " theta=" << radians_to_degrees(theta) << " xc=" << xc << " yc=" << yc << endl;
 		if (xi_it==i_switch) {
 			epsilon = epsilon0;
 			theta = theta0;
 			xc = xc0;
 			yc = yc0;
 			default_sampling_mode = default_sampling_mode_in;
-			//cout << "sampling mode now: " << default_sampling_mode << endl;
+			//(*isophote_fit_out) << "sampling mode now: " << default_sampling_mode << endl;
 		}
 		it = 0;
 		minchisq = 1e30;
@@ -6324,9 +6345,9 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		failed_isophote_fit = false;
 		while (true) {
 			using_prev_sbgrad = false;
-			//cout << "Sampling mode: " << sampling_mode << endl;
+			//(*isophote_fit_out) << "Sampling mode: " << sampling_mode << endl;
 			npts_sample = -1; // so it will choose automatically
-			//cout << "EPSILON=" << epsilon << " THETA=" << theta << endl;
+			//(*isophote_fit_out) << "EPSILON=" << epsilon << " THETA=" << theta << endl;
 			sb_avg = sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics);
 			if (npts < npts_sample*npts_frac) {
 				// if there aren't enough points/sectors, then it's not worth doing a parameter search (it can even backfire and result in contour crossings etc.); just move on
@@ -6338,7 +6359,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				yc = yc_prev;
 				failed_isophote_fit = true;
 				double nfrac = npts/((double) npts_sample);
-				warn("not enough points being sampled; moving on to next ellipse (npts_frac=%g,npts_frac_threshold=%g,sb_avg=%g)",nfrac,npts_frac,sb_avg);
+				(*isophote_fit_out) << "WARNING: not enough points being sampled; moving on to next ellipse (npts_frac=" << nfrac << ",npts_frac_threshold=" << npts_frac << ",sb_avg=" << sb_avg << ")" << endl;
 				break;
 			}
 			//if (do_parameter_search) {
@@ -6393,7 +6414,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 					failed_isophote_fit = true;
 					break;
 				}
-				cout << "Smallest residuals for epsilon=" << epsilon << ", theta=" << theta << " during parameter search (rms_resid=" << residmin << ")" << endl;
+				(*isophote_fit_out) << "Smallest residuals for epsilon=" << epsilon << ", theta=" << theta << " during parameter search (rms_resid=" << residmin << ")" << endl;
 				//sb_avg = sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts,npts_sample,emode,sampling_mode,sbvals,NULL,sbprofile,true,sb_residual,sb_weights,smatrix,lowest_harmonic,2+n_harmonics_it,use_polar_higher_harmonics);
 				do_parameter_search = false;
 				tried_parameter_search = true;
@@ -6416,15 +6437,15 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			if (verbose) {
 				if (sb_avg*0.0 != 0.0) {
 					for (i=0; i < npts; i++) {
-						cout << sbvals[i] << " " << sb_residual[i] << endl;
+						(*isophote_fit_out) << sbvals[i] << " " << sb_residual[i] << endl;
 					}
 				}
 			}
 
 			if ((verbose) and (it==0)) {
-				if (sampling_mode==0) cout << "Sampling mode: interpolation" << endl;
-				else if (sampling_mode==1) cout << "Sampling mode: sector integration" << endl;
-				else if (sampling_mode==3) cout << "Sampling mode: SB profile" << endl;
+				if (sampling_mode==0) (*isophote_fit_out) << "Sampling mode: interpolation" << endl;
+				else if (sampling_mode==1) (*isophote_fit_out) << "Sampling mode: sector integration" << endl;
+				else if (sampling_mode==3) (*isophote_fit_out) << "Sampling mode: SB profile" << endl;
 			}
 			if (npts==0) {
 				warn("isophote fit failed; no sampling points were accepted on ellipse");
@@ -6515,7 +6536,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 					abort_isofit = true;
 					break;
 				} else {
-					if (verbose) cout << "it=" << it << " sbavg=" << sb_avg << " rms=" << rms_resid << " sbgrad=" << sb_grad << " maxamp=" << max_amp << " eps=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << " (npts=" << npts << ")" << endl;
+					if (verbose) (*isophote_fit_out) << "it=" << it << " sbavg=" << sb_avg << " rms=" << rms_resid << " sbgrad=" << sb_grad << " maxamp=" << max_amp << " eps=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << " (npts=" << npts << ")" << endl;
 					if (ngrad < npts_sample*npts_frac) {
 						warn("RUHROH! not enough points when getting gradient (ngrad=%i,npts_sample=%i,nprev=%i,nnext=%i,npts=%i)",ngrad,npts_sample,prev_npts,next_npts,npts);
 						epsilon = epsilon_prev;
@@ -6687,8 +6708,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		if (abort_isofit) break;
 		if (npts==0) continue; // don't even record previous isophote parameters because we can't even get an estimate for sb_avg or its uncertainty
 		if ((failed_isophote_fit) or (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) or (npts_minres < npts_frac*npts_sample_minres)) {
-			//cout << "The ellipse parameters are epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
-			//cout << "USING VERY LARGE ERRORS IN STRUCTURAL PARAMS" << endl;
+			//(*isophote_fit_out) << "The ellipse parameters are epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
+			//(*isophote_fit_out) << "USING VERY LARGE ERRORS IN STRUCTURAL PARAMS" << endl;
 			repeat_params[xi_i] = true;
 			isophote_data.sb_avg_vals[xi_i] = sb_avg;
 			isophote_data.sb_errs[xi_i] = rms_resid_min/sqrt(npts); // standard error of the mean
@@ -6747,8 +6768,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				}
 			}
 			if (verbose) {
-				if (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) cout << "rms_sbgrad_rel > threshold (" << rms_sbgrad_rel_minres << " vs " << rms_sbgrad_rel_threshold << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
-				if (npts_minres < npts_frac*npts_sample_minres) cout << "npts/npts_sample < npts_frac (" << (((double) npts_minres)/npts_sample) << " vs " << npts_frac << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
+				if (rms_sbgrad_rel_minres > rms_sbgrad_rel_threshold) (*isophote_fit_out) << "rms_sbgrad_rel > threshold (" << rms_sbgrad_rel_minres << " vs " << rms_sbgrad_rel_threshold << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
+				if (npts_minres < npts_frac*npts_sample_minres) (*isophote_fit_out) << "npts/npts_sample < npts_frac (" << (((double) npts_minres)/npts_sample) << " vs " << npts_frac << ") --> repeating ellipse parameters, epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
 				int npts_plot;
 				sample_ellipse(verbose,xi,xistep,epsilon,theta,xc,yc,npts_plot,npts_sample,emode,sampling_mode,NULL,NULL,sbprofile,false,NULL,NULL,NULL,lowest_harmonic,2,false,true,&ellout); // make plot
 			}
@@ -6774,8 +6795,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			}
 
 			if (verbose) {
-				cout << "DONE! The final ellipse parameters are epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
-				cout << "Performed " << it << " iterations; minimum rms_resid=" << rms_resid_min << " achieved during iteration " << it_minres << endl;
+				(*isophote_fit_out) << "DONE! The final ellipse parameters are epsilon=" << epsilon << ", theta=" << radians_to_degrees(theta) << ", xc=" << xc << ", yc=" << yc << endl;
+				(*isophote_fit_out) << "Performed " << it << " iterations; minimum rms_resid=" << rms_resid_min << " achieved during iteration " << it_minres << endl;
 			}
 
 			sb_grad = abs(sb_grad);
@@ -6806,8 +6827,8 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 				}
 			}
 			//if (verbose) {
-				//cout << "Untransformed: A3=" << amp[0] << " B3=" << amp[1] << " A4=" << amp[2] << " B4=" << amp[3] << endl;
-				//cout << "Untransformed: A3_err=" << amperrs[0] << " B3_err=" << amperrs[1] << " A4_err=" << amperrs[2] << " B4_err=" << amperrs[3] << endl;
+				//(*isophote_fit_out) << "Untransformed: A3=" << amp[0] << " B3=" << amp[1] << " A4=" << amp[2] << " B4=" << amp[3] << endl;
+				//(*isophote_fit_out) << "Untransformed: A3_err=" << amperrs[0] << " B3_err=" << amperrs[1] << " A4_err=" << amperrs[2] << " B4_err=" << amperrs[3] << endl;
 			//}
 
 			for (i=n_ellipse_amps; i < nmax_amp_it; i++) {
@@ -6826,23 +6847,23 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			theta_err = amperrs[theta_ampnum]*sqrt(2*(1-epsilon)/(xi*sb_grad*(1-SQR(1-epsilon))));
 			if (theta_err > degrees_to_radians(200)) warn("absurd theta error; amperr=%g,sbgrad=%g,epsilon=%g",amperrs[3],sb_grad,epsilon);
 
-			//cout << "AMPERRS: " << amperrs[0] << " " << amperrs[1] << " " << amperrs[2] << " " << amperrs[3] << endl;
+			//(*isophote_fit_out) << "AMPERRS: " << amperrs[0] << " " << amperrs[1] << " " << amperrs[2] << " " << amperrs[3] << endl;
 			if (verbose) {
-				cout << "epsilon_err=" << epsilon_err << ", theta_err=" << radians_to_degrees(theta_err) << ", xc_err=" << xc_err << ", yc_err=" << yc_err << endl;
-				cout << "A3=" << amp[n_ellipse_amps] << " B3=" << amp[n_ellipse_amps+1] << " A4=" << amp[n_ellipse_amps+2] << " B4=" << amp[n_ellipse_amps+3] << endl;
-				cout << "A3_err=" << amperrs[n_ellipse_amps] << " B3_err=" << amperrs[n_ellipse_amps+1] << " A4_err=" << amperrs[n_ellipse_amps+2] << " B4_err=" << amperrs[n_ellipse_amps+3] << endl;
+				(*isophote_fit_out) << "epsilon_err=" << epsilon_err << ", theta_err=" << radians_to_degrees(theta_err) << ", xc_err=" << xc_err << ", yc_err=" << yc_err << endl;
+				(*isophote_fit_out) << "A3=" << amp[n_ellipse_amps] << " B3=" << amp[n_ellipse_amps+1] << " A4=" << amp[n_ellipse_amps+2] << " B4=" << amp[n_ellipse_amps+3] << endl;
+				(*isophote_fit_out) << "A3_err=" << amperrs[n_ellipse_amps] << " B3_err=" << amperrs[n_ellipse_amps+1] << " A4_err=" << amperrs[n_ellipse_amps+2] << " B4_err=" << amperrs[n_ellipse_amps+3] << endl;
 				if (n_harmonics_it > 2) {
-					cout << "A5=" << amp[n_ellipse_amps+4] << " B5=" << amp[n_ellipse_amps+5] << endl;
-					cout << "A5_err=" << amperrs[n_ellipse_amps+4] << " B5_err=" << amperrs[n_ellipse_amps+5] << endl;
+					(*isophote_fit_out) << "A5=" << amp[n_ellipse_amps+4] << " B5=" << amp[n_ellipse_amps+5] << endl;
+					(*isophote_fit_out) << "A5_err=" << amperrs[n_ellipse_amps+4] << " B5_err=" << amperrs[n_ellipse_amps+5] << endl;
 				}
 				if (n_harmonics_it > 3) {
-					cout << "A6=" << amp[n_ellipse_amps+6] << " B6=" << amp[n_ellipse_amps+7] << endl;
-					cout << "A6_err=" << amperrs[n_ellipse_amps+6] << " B6_err=" << amperrs[n_ellipse_amps+7] << endl;
+					(*isophote_fit_out) << "A6=" << amp[n_ellipse_amps+6] << " B6=" << amp[n_ellipse_amps+7] << endl;
+					(*isophote_fit_out) << "A6_err=" << amperrs[n_ellipse_amps+6] << " B6_err=" << amperrs[n_ellipse_amps+7] << endl;
 				}
 
 			}
 
-			if ((verbose) and (sbprofile==NULL)) cout << "Best-fit rms_resid=" << rms_resid_min << ", sb_avg=" << sb_avg << ", sbgrad=" << sbgrad_minres << ", maxamp=" << maxamp_minres << ", rms_sbgrad_rel=" << rms_sbgrad_rel << endl;
+			if ((verbose) and (sbprofile==NULL)) (*isophote_fit_out) << "Best-fit rms_resid=" << rms_resid_min << ", sb_avg=" << sb_avg << ", sbgrad=" << sbgrad_minres << ", maxamp=" << maxamp_minres << ", rms_sbgrad_rel=" << rms_sbgrad_rel << endl;
 
 			if (verbose) {
 				int npts_plot;
@@ -6929,7 +6950,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 					if (sbprofile->fourier_mode_mvals[i]==n_ellipse_amps) true_A4 = sbprofile->fourier_mode_cosamp[i];
 				}
 			}
-			cout << "TRUE MODEL: epsilon_true=" << true_epsilon << ", theta_true=" << radians_to_degrees(true_theta) << ", xc_true=" << true_xc << ", yc_true=" << true_yc << ", A4_true=" << true_A4 << endl;
+			(*isophote_fit_out) << "TRUE MODEL: epsilon_true=" << true_epsilon << ", theta_true=" << radians_to_degrees(true_theta) << ", xc_true=" << true_xc << ", yc_true=" << true_yc << ", A4_true=" << true_A4 << endl;
 			if (abs(xc-true_xc) > 3*xc_err) warn("RUHROH! xc off by more than 3*xc_err");
 			if (abs(yc-true_yc) > 3*yc_err) warn("RUHROH! yc off by more than 3*yc_err");
 			if (abs(epsilon - true_epsilon) > 3*epsilon_err) warn("RUHROH! epsilon off by more than 3*epsilon_err");
@@ -6946,7 +6967,7 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 			//if (!Cholesky_dcmp(Smatrix,nmax_amp)) die("Cholesky decomposition failed");
 			//Cholesky_solve(Smatrix,Dvec,amp,nmax_amp);
 			//double true_max_amp = -1e30;
-			////if (verbose) cout << "AMPS: " << amp[0] << " " << amp[1] << " " << amp[2] << " " << amp[3] << endl;
+			////if (verbose) (*isophote_fit_out) << "AMPS: " << amp[0] << " " << amp[1] << " " << amp[2] << " " << amp[3] << endl;
 			//for (j=0; j < 4; j++) if (abs(amp[j]) > true_max_amp) { true_max_amp = abs(amp[j]); }
 
 			prev_sb_avg = sample_ellipse(verbose,xi-grad_xistep,xistep,true_epsilon,true_theta,true_xc,true_yc,prev_npts,npts_sample,emode,sampling_mode,sbvals_prev,sbgrad_weights_prev,sbprofile);
@@ -6981,20 +7002,20 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 
 			for (i=n_ellipse_amps; i < nmax_amp; i++) amp[i] /= (sb_grad*xi); // this will relate it to the contour shape amplitudes (when perturbing the elliptical radius)
 
-			cout << "Best-fit rms_resid=" << rms_resid_min << ", sb_avg=" << sb_avg << ", sbgrad=" << sbgrad_minres << ", maxamp=" << maxamp_minres << ", rms_sbgrad_rel=" << rms_sbgrad_rel << ", npts=" << npts << endl;
-			cout << "True rms_resid=" << rms_resid_true << ", sb_avg=" << true_sb_avg << ", sbgrad=" << sb_grad << ", maxamp=" << true_max_amp << ", rms_sbgrad_rel=" << true_rms_sbgrad_rel << ", npts=" << true_npts << endl;
-			cout << "True solution: A3=" << amp[n_ellipse_amps] << " B3=" << amp[n_ellipse_amps+1] << " A4=" << amp[n_ellipse_amps+2] << " B4=" << amp[n_ellipse_amps+3] << endl;
+			(*isophote_fit_out) << "Best-fit rms_resid=" << rms_resid_min << ", sb_avg=" << sb_avg << ", sbgrad=" << sbgrad_minres << ", maxamp=" << maxamp_minres << ", rms_sbgrad_rel=" << rms_sbgrad_rel << ", npts=" << npts << endl;
+			(*isophote_fit_out) << "True rms_resid=" << rms_resid_true << ", sb_avg=" << true_sb_avg << ", sbgrad=" << sb_grad << ", maxamp=" << true_max_amp << ", rms_sbgrad_rel=" << true_rms_sbgrad_rel << ", npts=" << true_npts << endl;
+			(*isophote_fit_out) << "True solution: A3=" << amp[n_ellipse_amps] << " B3=" << amp[n_ellipse_amps+1] << " A4=" << amp[n_ellipse_amps+2] << " B4=" << amp[n_ellipse_amps+3] << endl;
 			double sbderiv = (sbprofile->sb_rsq(SQR(xi + grad_xistep)) - sbprofile->sb_rsq(SQR(xi-grad_xistep)))/(2*grad_xistep);
 
-			cout << "sb from model at xi (no PSF or harmonics): " << sbprofile->sb_rsq(xi*xi) << ", sbgrad=" << sbderiv << endl;
+			(*isophote_fit_out) << "sb from model at xi (no PSF or harmonics): " << sbprofile->sb_rsq(xi*xi) << ", sbgrad=" << sbderiv << endl;
 			if ((rms_resid_true < rms_resid_min) and (rms_resid_min > 1e-8)) // we don't worry about this if rms_resid_min is super small
 			{
-				if (rms_sbgrad_rel < 0.5) warn("RUHROH! true solution had smaller rms_resid than best-fit, AND rms_sbgrad_rel < 0.5");
-				else warn("true solution had smaller rms_resid than the best fit!");
+				if (rms_sbgrad_rel < 0.5) (*isophote_fit_out) << "WARNING: RUHROH! true solution had smaller rms_resid than best-fit, AND rms_sbgrad_rel < 0.5" << endl;
+				else (*isophote_fit_out) << "true solution had smaller rms_resid than the best fit!" << endl;
 			}
-			if (rms_resid_true > rms_resid_min) cout << "NOTE: YOUR BEST-FIT SOLUTION HAS SMALLER RESIDUALS THAN TRUE SOLUTION" << endl;
+			if (rms_resid_true > rms_resid_min) (*isophote_fit_out) << "NOTE: YOUR BEST-FIT SOLUTION HAS SMALLER RESIDUALS THAN TRUE SOLUTION" << endl;
 		}
-		if (verbose) cout << endl;
+		if (verbose) (*isophote_fit_out) << endl;
 	}
 	if (sbprofile != NULL) {
 		int nn_plot = imax(100,6*n_xivals);
@@ -7128,7 +7149,6 @@ double ImagePixelData::sample_ellipse(const bool show_warnings, const double xi,
 		}
 	}
 	eta_step = M_2PI / npts_sample;
-
 
 	/*
 	if ((plot_ellipse) and (sector_integration)) {
@@ -7430,8 +7450,8 @@ double ImagePixelData::sample_ellipse(const bool show_warnings, const double xi,
 		if ((show_warnings) and (avg_err > (0.5*sb_avg))) warn("Average SB error is greater than 20\% of average isophote SB!! Try increasing annulus width (or fewer sectors) to reduce noise");
 	}
 	if (show_warnings) {
-		if (out_of_bounds) warn("part of ellipse was out of bounds of the image");
-		if (sector_warning) warn("less than 5 pixels in at least one sector");
+		if (out_of_bounds) (*isophote_fit_out) << "WARNING: part of ellipse was out of bounds of the image" << endl;
+		if (sector_warning) (*isophote_fit_out) << "WARNING: less than 5 pixels in at least one sector" << endl;
 	}
 
 	if (fill_matrices) {
@@ -8682,11 +8702,11 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 #endif
 }
 
-void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace)
+bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace)
 {
 	if ((x_N != pixel_data.npixels_x) or (y_N != pixel_data.npixels_y)) {
 		warn("Number of data pixels does not match specified number of image pixels; cannot activate fit window");
-		return;
+		return false;
 	}
 	int i,j;
 	if (fit_to_data==NULL) {
@@ -8715,8 +8735,8 @@ void ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 		setup_ray_tracing_arrays();
 		if ((raytrace) or (lens->split_high_mag_imgpixels)) calculate_sourcepts_and_areas(true);
 	}
+	return true;
 }
-
 
 void ImagePixelGrid::include_all_pixels()
 {
@@ -8728,28 +8748,43 @@ void ImagePixelGrid::include_all_pixels()
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			fit_to_data[i][j] = true;
+			mapped_cartesian_srcpixels[i][j].clear();
+			mapped_delaunay_srcpixels[i][j].clear();
 		}
 	}
+	if (lens) setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::activate_extended_mask()
 {
 	int i,j;
+	if (fit_to_data==NULL) {
+		fit_to_data = new bool*[x_N];
+		for (i=0; i < x_N; i++) fit_to_data[i] = new bool[y_N];
+	}
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->extended_mask[i][j];
 		}
 	}
+	if (lens) setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::activate_foreground_mask()
 {
 	int i,j;
+	if (fit_to_data==NULL) {
+		fit_to_data = new bool*[x_N];
+		for (i=0; i < x_N; i++) fit_to_data[i] = new bool[y_N];
+	}
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->foreground_mask[i][j];
+			mapped_cartesian_srcpixels[i][j].clear();
+			mapped_delaunay_srcpixels[i][j].clear();
 		}
 	}
+	if (lens) setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::deactivate_extended_mask()
@@ -8759,12 +8794,16 @@ void ImagePixelGrid::deactivate_extended_mask()
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->in_mask[i][j];
+			mapped_cartesian_srcpixels[i][j].clear();
+			mapped_delaunay_srcpixels[i][j].clear();
+
 			//if (fit_to_data[i][j]) n++;
 			//if (lens->image_pixel_data->extended_mask[i][j]) m++;
 		}
 	}
 	//cout << "NFIT: " << n << endl;
 	//cout << "NEXT: " << m << endl;
+	if (lens) setup_ray_tracing_arrays();
 }
 
 void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels)
@@ -13483,9 +13522,8 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 		}
 	}
 
-	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) die("delaunay_srcgrid has not been created");
-	if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid != NULL)) die("source_pixel_grid has not been created");
-
+	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) die("delaunay_srcgrid has not been created");
+	if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) die("source_pixel_grid has not been created");
 
 	#pragma omp parallel
 	{
@@ -13505,7 +13543,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 				sb = 0;
 				if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k]);
 				else if (source_fit_mode==Cartesian_Source) sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
-				if (at_least_one_lensed_src) {
+				else if (at_least_one_lensed_src) {
 					for (m=0; m < n_sb; m++) {
 						if (sb_list[m]->is_lensed) {
 							sb += sb_list[m]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k][0],image_pixel_grid->subpixel_center_sourcepts[i][j][k][1]);
