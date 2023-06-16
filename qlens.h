@@ -796,6 +796,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int *active_image_pixel_i_fgmask;
 	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
+	double *imgpixel_covinv_vector;
 	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
@@ -822,6 +823,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *Fmatrix;
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
+	bool use_noise_map;
 	bool dense_Rmatrix;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false

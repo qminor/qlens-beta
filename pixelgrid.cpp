@@ -2681,7 +2681,7 @@ void QLens::generate_Rmatrix_from_hmatrices()
 				l = lvals[k][src_index1][n];
 				src_index2 = hmatrix_index[k][l];
 				new_entry = true;
-				element = hmatrix[k][j]*hmatrix[k][l]; // generalize this to full covariance matrix later
+				element = hmatrix[k][j]*hmatrix[k][l];
 				if (src_index1==src_index2) Rmatrix_diag_temp[src_index1] += element;
 				else {
 					m=0;
@@ -2846,7 +2846,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 				l = lvals[k][src_index1][n];
 				src_index2 = gmatrix_index[k][l];
 				new_entry = true;
-				element = gmatrix[k][j]*gmatrix[k][l]; // generalize this to full covariance matrix later
+				element = gmatrix[k][j]*gmatrix[k][l];
 				if (src_index1==src_index2) Rmatrix_diag_temp[src_index1] += element;
 				else {
 					m=0;
@@ -4390,6 +4390,16 @@ void ImagePixelData::load_data(string root)
 		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
 	}
+	if (noise_map != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] noise_map[i];
+		delete[] noise_map;
+		noise_map = NULL;
+	}
+	if (covinv_map != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] covinv_map[i];
+		delete[] covinv_map;
+		covinv_map = NULL;
+	}
 	if (high_sn_pixel != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
 		delete[] high_sn_pixel;
@@ -4471,6 +4481,16 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid, cons
 	if (surface_brightness != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
+	}
+	if (noise_map != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] noise_map[i];
+		delete[] noise_map;
+		noise_map = NULL;
+	}
+	if (covinv_map != NULL) {
+		for (i=0; i < npixels_x; i++) delete[] covinv_map[i];
+		delete[] covinv_map;
+		covinv_map = NULL;
 	}
 	if (high_sn_pixel != NULL) {
 		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
@@ -4566,6 +4586,16 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 		if (surface_brightness != NULL) {
 			for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 			delete[] surface_brightness;
+		}
+		if (noise_map != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] noise_map[i];
+			delete[] noise_map;
+			noise_map = NULL;
+		}
+		if (covinv_map != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] covinv_map[i];
+			delete[] covinv_map;
+			covinv_map = NULL;
 		}
 		if (high_sn_pixel != NULL) {
 			for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
@@ -4825,6 +4855,79 @@ void ImagePixelData::save_data_fits(string fits_filename, const bool subimage, c
 	} 
 
 	if (status) fits_report_error(stderr, status); // print any error message
+#endif
+}
+
+bool ImagePixelData::load_noise_map_fits(string fits_filename)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
+#else
+	bool image_load_status = false;
+	int i,j,kk;
+	fitsfile *fptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix, naxis;
+	long naxes[2] = {1,1};
+	double *pixels;
+
+	if (noise_map == NULL) {
+		noise_map = new double*[npixels_x];
+		for (i=0; i < npixels_x; i++) noise_map[i] = new double[npixels_y];
+	}
+	if (covinv_map == NULL) {
+		covinv_map = new double*[npixels_x];
+		for (i=0; i < npixels_x; i++) covinv_map[i] = new double[npixels_y];
+	}
+
+	double noise_bg = 1e30;
+	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
+	{
+		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				if ((npixels_x == naxes[0]) or (npixels_y == naxes[1])) {
+					pixels = new double[npixels_x];
+					noise_map = new double*[npixels_x];
+					for (i=0; i < npixels_x; i++) {
+						noise_map[i] = new double[npixels_y];
+					}
+
+					for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+					{
+						if (fits_read_pix(fptr, TDOUBLE, fpixel, naxes[0], NULL, pixels, NULL, &status) )  // read row of pixels
+							break; // jump out of loop on error
+
+						for (i=0; i < naxes[0]; i++) {
+							noise_map[i][j] = pixels[i];
+							if (pixels[i] < noise_bg) noise_bg = pixels[i];
+						}
+					}
+					delete[] pixels;
+					image_load_status = true;
+				} else {
+					warn("noise map does not have same dimensions as data image");
+					image_load_status = false;
+				}
+				for (i=0; i < npixels_x; i++) {
+					for (j=0; j < npixels_y; j++) {
+						covinv_map[i][j] = 1.0/SQR(noise_map[i][j]);
+					}
+				}
+
+			}
+		}
+		fits_close_file(fptr, &status);
+	}
+	if (lens != NULL) lens->data_pixel_noise = noise_bg; // store the background noise separately
+
+	if (status) fits_report_error(stderr, status); // print any error message
+	return image_load_status;
 #endif
 }
 
@@ -5220,6 +5323,14 @@ ImagePixelData::~ImagePixelData()
 	if (surface_brightness != NULL) {
 		for (int i=0; i < npixels_x; i++) delete[] surface_brightness[i];
 		delete[] surface_brightness;
+	}
+	if (noise_map != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] noise_map[i];
+		delete[] noise_map;
+	}
+	if (covinv_map != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] covinv_map[i];
+		delete[] covinv_map;
 	}
 	if (high_sn_pixel != NULL) {
 		for (int i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
@@ -8588,7 +8699,11 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 				} else {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					residual = lens->image_pixel_data->surface_brightness[i][j] - sb;
-					tot_residuals += residual*residual;
+					if ((lens->image_pixel_data != NULL) and (lens->use_noise_map)) {
+						tot_residuals += residual*residual*lens->image_pixel_data->covinv_map[i][j];
+					} else {
+						tot_residuals += residual*residual;
+					}
 					//wtfout << i << " " << j << " " << (residual*residual) << endl;
 					if (show_noise_thresh) {
 						if (abs(residual) >= lens->data_pixel_noise) pixel_image_file << residual;
@@ -10738,11 +10853,21 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	if (image_surface_brightness != NULL) die("image surface brightness vector already initialized");
 	if (active_image_pixel_i == NULL) die("Need to assign pixel mappings before initializing pixel matrices");
 	image_surface_brightness = new double[image_npixels];
+	imgpixel_covinv_vector = new double[image_npixels];
 	source_pixel_vector = new double[source_n_amps];
 	point_image_surface_brightness = new double[image_npixels];
 	if (use_lum_weighted_regularization) {
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
+	}
+
+	if (use_noise_map) {
+		int ii,i,j;
+		for (ii=0; ii < image_npixels; ii++) {
+			i = active_image_pixel_i[ii];
+			j = active_image_pixel_j[ii];
+			imgpixel_covinv_vector[ii] = image_pixel_data->covinv_map[i][j];
+		}
 	}
 
 	bool delaunay = false;
@@ -10818,6 +10943,7 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 void QLens::clear_pixel_matrices()
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	if (point_image_surface_brightness != NULL) delete[] point_image_surface_brightness;
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
@@ -10830,6 +10956,7 @@ void QLens::clear_pixel_matrices()
 	if (Lmatrix != NULL) delete[] Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	image_surface_brightness = NULL;
+	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
@@ -12581,9 +12708,11 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
-	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
-	else covariance = SQR(data_pixel_noise);
+	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (!use_noise_map) {
+		if (data_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		else cov_inverse = 1.0/SQR(data_pixel_noise);
+	}
 
 	int i,j,k,l,m,t;
 
@@ -12608,17 +12737,27 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 
 	int pix_i, pix_j, img_index_fgmask;
 	double sbcov;
+	//double *Lmatrix_eff;
+	//Lmatrix_eff = new double[Lmatrix_n_elements];
 	for (i=0; i < image_npixels; i++) {
+		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
 		pix_i = active_image_pixel_i[i];
 		pix_j = active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		sbcov = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
 		if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) sbcov -= point_image_surface_brightness[i];
-		sbcov /= covariance;
+		sbcov *= cov_inverse;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
-			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - sbprofile_surface_brightness[i])/covariance;
-			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
+			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - sbprofile_surface_brightness[i])/cov_inverse;
+			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/cov_inverse;
 			Dvector[Lmatrix_index[j]] += Lmatrix[j]*sbcov;
+			//Lmatrix_eff[j] = Lmatrix[j]*sqrt(cov_inverse);
+		}
+	}
+	for (i=0; i < image_npixels; i++) {
+		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
+		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+			Lmatrix[j] *= sqrt(cov_inverse);
 		}
 	}
 
@@ -12652,7 +12791,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 			for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
 				duplicate_column = false;
 				if (Fmatrix_csr_index[j]==i) {
-					Fmatrix_diags[i] += Fmatrix_csr[j]/covariance;
+					Fmatrix_diags[i] += Fmatrix_csr[j];
 					//cout << "Adding " << Fmatrix_csr[j] << " to diag " << i << endl;
 				}
 				else if (Fmatrix_csr[j] != 0) {
@@ -12661,10 +12800,10 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 						dup_k = k;
 					}
 					if (duplicate_column) {
-						Fmatrix_rows[i][k] += Fmatrix_csr[j]/covariance;
+						Fmatrix_rows[i][k] += Fmatrix_csr[j];
 						die("duplicate!"); // this is not a big deal, but if duplicates never happen, then you might want to redo this part so it allocates memory in one go for each row instead of a bunch of push_back's
 					} else {
-						Fmatrix_rows[i].push_back(Fmatrix_csr[j]/covariance);
+						Fmatrix_rows[i].push_back(Fmatrix_csr[j]);
 						Fmatrix_index_rows[i].push_back(Fmatrix_csr_index[j]);
 						Fmatrix_row_nn[i]++;
 						Fmatrix_nn_part++;
@@ -12697,7 +12836,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 		int nf=0;
 		for (i=0; i < ntot; i++) {
 			if (Fmatrix_stacked[i] != 0) {
-				Fmatrix_stacked[i] /= covariance;
+				//Fmatrix_stacked[i] *= cov_inverse; // not necessary since the noise (inverse) covariance was put into Lmatrix_eff
 				nf++;
 			}
 		}
@@ -12760,7 +12899,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 					l = jlvals[t][src_index1][k].l;
 					src_index2 = Lmatrix_index[l];
 					new_entry = true;
-					element = Lmatrix[j]*Lmatrix[l]/covariance; // generalize this to full covariance matrix later
+					element = Lmatrix[j]*Lmatrix[l];
 					if (src_index1==src_index2) Fmatrix_diags[src_index1] += element;
 					else {
 						m=0;
@@ -12903,6 +13042,12 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 			wtime0 = omp_get_wtime();
 		}
 #endif
+	for (i=0; i < image_npixels; i++) {
+		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
+		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
+			Lmatrix[j] /= sqrt(cov_inverse);
+		}
+	}
 
 	//cout << "FMATRIX (SPARSE):" << endl;
 	//for (i=0; i < source_n_amps; i++) {
@@ -12935,6 +13080,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 	mkl_sparse_destroy(Lsparse);
 	if (!dense_Fmatrix) mkl_sparse_destroy(Fsparse);
 	delete[] image_pixel_end_Lmatrix;
+	//delete[] Lmatrix_eff;
 #else
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
@@ -12950,6 +13096,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const
 #endif
 }
 
+/*
 void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 {
 #ifdef USE_OPENMP
@@ -12958,9 +13105,11 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 	}
 #endif
 
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
-	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
-	else covariance = SQR(data_pixel_noise);
+	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (!use_noise_map) {
+		if (data_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		else cov_inverse = 1.0/SQR(data_pixel_noise);
+	}
 
 	int i,j,l,n;
 
@@ -13003,20 +13152,21 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 		for (i=0; i < source_n_amps; i++) {
 			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
+				//if (use_noise_map) cov_inverse = imgpixel_covinv_vector[j];
 				pix_i = active_image_pixel_i[j];
 				pix_j = active_image_pixel_j[j];
 				img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
-				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/covariance;
-				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/covariance;
+				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])*cov_inverse;
+				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])*cov_inverse;
 				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[pix_i][pix_j])) ; 
 				else {
 					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
 					if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
-					Dvector[i] += Lmatrix_dense[j][i]*sb_adj/covariance;
+					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*cov_inverse;
 					if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
 				}
 #ifdef USE_MKL
-				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]/sqrt(covariance); // hack to get the covariance in there
+				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(cov_inverse); // hack to get the cov_inverse in there
 #else
 				Ltrans[i][j] = Lmatrix_dense[j][i];
 #endif
@@ -13038,6 +13188,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 		// The following is not as fast as the Blas function dsyrk (below), but it still gets the job done
 		double *fpmatptr;
 		double *lmatptr1, *lmatptr2;
+		double *covinvptr;
 		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
 		for (n=0; n < ntot_packed; n++) {
 			i = i_n[n];
@@ -13046,10 +13197,17 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 			lmatptr1 = Ltrans[i];
 			lmatptr2 = Ltrans[j];
 			(*fpmatptr) = 0;
-			for (l=0; l < image_npixels; l++) {
-				(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
+			if (use_noise_map) {
+				covinvptr = imgpixel_covinv_vector;
+				for (l=0; l < image_npixels; l++) {
+					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++))*(*(imgpixel_covinv_vector++));
+				}
+			} else {
+				for (l=0; l < image_npixels; l++) {
+					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
+				}
+				(*fpmatptr) *= cov_inverse;
 			}
-			(*fpmatptr) /= covariance;
 		}
 #endif
 	}
@@ -13087,6 +13245,164 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 	delete[] j_n;
 #endif
 }
+*/
+
+void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
+{
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+
+	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (!use_noise_map) {
+		if (data_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		else cov_inverse = 1.0/SQR(data_pixel_noise);
+	}
+
+	int i,j,l,n;
+
+	bool new_entry;
+	Dvector = new double[source_n_amps];
+	for (i=0; i < source_n_amps; i++) Dvector[i] = 0;
+	int ntot_packed = source_n_amps*(source_n_amps+1)/2;
+	Fmatrix_packed.input(ntot_packed);
+#ifdef USE_MKL
+   double *Ltrans_stacked = new double[source_n_amps*image_npixels];
+	Fmatrix_stacked.input(source_n_amps*source_n_amps);
+#else
+	double *i_n = new double[ntot_packed];
+	double *j_n = new double[ntot_packed];
+	double **Ltrans = new double*[source_n_amps];
+	n=0;
+	for (i=0; i < source_n_amps; i++) {
+		Ltrans[i] = new double[image_npixels];
+		for (j=i; j < source_n_amps; j++) {
+			i_n[n] = i;
+			j_n[n] = j;
+			n++;
+		}
+	}
+#endif
+
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		int row;
+		int pix_i, pix_j;
+		int img_index_fgmask;
+		double sb_adj;
+		double covinv = cov_inverse;
+		//#pragma omp for private(i,j,pix_i,pix_j,img_index_fgmask,row,sb_adj) schedule(static)
+		#pragma omp master
+		{
+			// Parallelizing this part is causing problems, and I don't know why!!!
+		for (i=0; i < source_n_amps; i++) {
+			row = i*image_npixels;
+			for (j=0; j < image_npixels; j++) {
+				if (use_noise_map) covinv = imgpixel_covinv_vector[j];
+				pix_i = active_image_pixel_i[j];
+				pix_j = active_image_pixel_j[j];
+				img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
+				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/cov_inverse;
+				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/cov_inverse;
+				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[pix_i][pix_j])) ; 
+				else {
+					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
+					if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
+					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
+					if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
+				}
+#ifdef USE_MKL
+				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(covinv); // hack to get the cov_inverse in there
+#else
+				Ltrans[i][j] = Lmatrix_dense[j][i];
+#endif
+			}
+		}
+		}
+
+#ifdef USE_OPENMP
+		#pragma omp master
+		{
+			if (show_wtime) {
+				wtime = omp_get_wtime() - wtime0;
+				if (mpi_id==0) cout << "Wall time for initializing Fmatrix and Dvector: " << wtime << endl;
+				wtime0 = omp_get_wtime();
+			}
+		}
+#endif
+
+#ifndef USE_MKL
+		// The following is not as fast as the Blas function dsyrk (below), but it still gets the job done
+
+		double *fpmatptr;
+		double *lmatptr1, *lmatptr2;
+		double *covinvptr;
+		#pragma omp for private(n,i,j,l,lmatptr1,lmatptr2,fpmatptr) schedule(static)
+		for (n=0; n < ntot_packed; n++) {
+			i = i_n[n];
+			j = j_n[n];
+			fpmatptr = Fmatrix_packed.array()+n;
+			lmatptr1 = Ltrans[i];
+			lmatptr2 = Ltrans[j];
+			(*fpmatptr) = 0;
+			if (use_noise_map) {
+				covinvptr = imgpixel_covinv_vector;
+				for (l=0; l < image_npixels; l++) {
+					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++))*(*(imgpixel_covinv_vector++));
+				}
+			} else {
+				for (l=0; l < image_npixels; l++) {
+					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++));
+				}
+				(*fpmatptr) *= cov_inverse;
+			}
+		}
+#endif
+	}
+
+#ifdef USE_MKL
+   cblas_dsyrk(CblasRowMajor,CblasUpper,CblasNoTrans,source_n_amps,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked.array(),source_n_amps); // Note: this only fills the upper triangular half of the stacked matrix
+	LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_stacked.array(),source_n_amps,Fmatrix_packed.array());
+#endif
+	if (use_covariance_matrix) generate_Gmatrix();
+
+	if ((regularization_method != None) and (source_npixels > 0) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
+	//double Ftot = 0;
+	//for (i=0; i < ntot_packed; i++) Ftot += Fmatrix_packed[i];
+	//double ltot = 0;
+	//for (i=0; i < source_n_amps; i++) {
+		//for (j=0; j < image_npixels; j++) {
+			//ltot += Lmatrix_dense[i][j];
+		//}
+	//}
+	//cout << "Ltot, Ftot: " << ltot << " " << Ftot << endl;
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for calculating Fmatrix dense elements: " << wtime << endl;
+		wtime0 = omp_get_wtime();
+	}
+#endif
+#ifdef USE_MKL
+	delete[] Ltrans_stacked;
+#else
+	for (i=0; i < source_n_amps; i++) delete[] Ltrans[i];
+	delete[] Ltrans;
+	delete[] i_n;
+	delete[] j_n;
+#endif
+}
+
+
 
 void QLens::generate_Gmatrix()
 {
@@ -13680,9 +13996,11 @@ void QLens::load_pixel_sbweights()
 
 double QLens::chisq_regparam(const double logreg)
 {
-	double covariance, chisq; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
-	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
-	else covariance = SQR(data_pixel_noise);
+	double cov_inverse, chisq; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (!use_noise_map) {
+		if (data_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		else cov_inverse = 1.0/SQR(data_pixel_noise);
+	}
 
 	regularization_parameter = pow(10,logreg);
 	int i,j,k;
@@ -13710,15 +14028,16 @@ double QLens::chisq_regparam(const double logreg)
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
 
-	#pragma omp parallel for private(temp_img,i,j) schedule(static) reduction(+:Ed_times_two)
+	#pragma omp parallel for private(temp_img,i,j,cov_inverse) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
+		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
 		temp_img = 0;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			temp_img += Lmatrix[j]*source_pixel_vector[Lmatrix_index[j]];
 		}
 
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
-		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
+		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])*cov_inverse;
 	}
 	for (i=0; i < source_npixels; i++) {
 		Es_times_two += Rmatrix[i]*SQR(source_pixel_vector[i]);
@@ -13741,9 +14060,9 @@ double QLens::chisq_regparam(const double logreg)
 
 double QLens::chisq_regparam_dense(const double logreg)
 {
-	double chisq, logdet, covariance; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
-	if (data_pixel_noise==0) covariance = 1; // if there is no noise it doesn't matter what the covariance is, since we won't be regularizing
-	else covariance = SQR(data_pixel_noise);
+	double chisq, logdet, cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (data_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+	else cov_inverse = 1.0/SQR(data_pixel_noise);
 
 	regularization_parameter = pow(10,logreg);
 	int i,j;
@@ -13826,7 +14145,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 		LU_logdet_stacked(Gmatrix_stacked_copy.array(),Gmatrix_logdet,source_n_amps);
 		delete[] ipiv;
 #else
-		die("Currently MKL is required to do covariance kernel regularization");
+		die("Currently MKL is required to do cov_inverse kernel regularization");
 #endif
 	}
 
@@ -13838,6 +14157,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
 		temp_img = 0;
+		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
 		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
 			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
 			Lmatptr = (Lmatrix_dense.pointer())[i];
@@ -13851,7 +14171,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 			}
 		}
 		// NOTE: this chisq does not include foreground mask pixels that lie outside the primary mask, since those pixels don't contribute to determining the regularization
-		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])/covariance;
+		Ed_times_two += SQR(temp_img - img_minus_sbprofile[i])*cov_inverse;
 	}
 
 /*
@@ -15775,11 +16095,20 @@ void QLens::vectorize_image_pixel_surface_brightness(bool use_mask)
 	}
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
 	image_surface_brightness = new double[image_npixels];
+	imgpixel_covinv_vector = new double[image_npixels];
 
 	for (k=0; k < image_npixels; k++) {
 		i = active_image_pixel_i[k];
 		j = active_image_pixel_j[k];
 		image_surface_brightness[k] = image_pixel_grid->surface_brightness[i][j];
+	}
+	if (use_noise_map) {
+		int ii,i,j;
+		for (ii=0; ii < image_npixels; ii++) {
+			i = active_image_pixel_i[ii];
+			j = active_image_pixel_j[ii];
+			imgpixel_covinv_vector[ii] = image_pixel_data->covinv_map[i][j];
+		}
 	}
 }
 

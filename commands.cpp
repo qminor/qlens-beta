@@ -8778,6 +8778,18 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask)==false) Complain("mask could not be saved");
 			}
+			else if (words[1]=="load_noisemap")
+			{
+				if (image_pixel_data==NULL) Complain("image pixel data has not been loaded");
+				string filename;
+				if (nwords==2) {
+					Complain("filename for noise map in FITS format is required (e.g. 'sbmap load_noisemap file.fits')");
+				} else if (nwords==3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for noise map");
+				} else Complain("too many arguments to 'sbmap load_noisemap'");
+				if (!image_pixel_data->load_noise_map_fits(filename)) Complain("could not load noise map fits file '" << filename << "'");
+				use_noise_map = true;
+			}
 			else if (words[1]=="loadpsf")
 			{
 				string filename;

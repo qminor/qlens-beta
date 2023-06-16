@@ -381,6 +381,8 @@ struct ImagePixelData : public Sort
 	int npixels_x, npixels_y;
 	int n_required_pixels;
 	double **surface_brightness;
+	double **noise_map;
+	double **covinv_map; // this is simply 1/SQR(noise_map)
 	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	bool **in_mask;
 	bool **extended_mask;
@@ -395,6 +397,8 @@ struct ImagePixelData : public Sort
 	ImagePixelData()
 	{
 		surface_brightness = NULL;
+		noise_map = NULL;
+		covinv_map = NULL;
 		high_sn_pixel = NULL;
 		in_mask = NULL;
 		extended_mask = NULL;
@@ -417,6 +421,7 @@ struct ImagePixelData : public Sort
 		pixel_size = pixel_size_in;
 		return load_data_fits(true,fits_filename);
 	}
+	bool load_noise_map_fits(string fits_filename);
 	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename);

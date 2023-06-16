@@ -997,6 +997,7 @@ QLens::QLens() : UCMC()
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
+	use_noise_map = false;
 	dense_Rmatrix = false;
 	find_covmatrix_inverse = true;
 	use_covariance_matrix = false;
@@ -1006,6 +1007,7 @@ QLens::QLens() : UCMC()
 	Rmatrix_index = NULL;
 	Dvector = NULL;
 	image_surface_brightness = NULL;
+	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
@@ -1419,6 +1421,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
 	Fmatrix_nn = 0;
+	use_noise_map = lens_in->use_noise_map;
 	dense_Rmatrix = lens_in->dense_Rmatrix;
 	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
 	use_covariance_matrix = lens_in->use_covariance_matrix;
@@ -1427,6 +1430,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
 	image_surface_brightness = NULL;
+	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
@@ -13137,7 +13141,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		}
 	}
 	if ((mpi_id==0) and (plot_residual) and (!output_fits)) {
-		if (data_pixel_noise != 0) chisq_from_residuals /= data_pixel_noise*data_pixel_noise;
+		if ((data_pixel_noise != 0) and (!use_noise_map)) chisq_from_residuals /= data_pixel_noise*data_pixel_noise; // if using noise map, 1/sig^2 factors are included in 'plot_surface_brightness' function above
 		cout << "chi-square from residuals = " << chisq_from_residuals << endl;
 	}
 
@@ -13940,9 +13944,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	//if (mpi_id==0) image_pixel_grid->plot_surface_brightness("img_pixel",false,false);
 		//run_plotter("imgpixel");
 
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
-	if (data_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
-	else covariance = SQR(data_pixel_noise);
+	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel
+	if (!use_noise_map) {
+		if (data_pixel_noise==0) cov_inverse = 1; // doesn't matter what cov_inverse is, since we won't be regularizing
+		else cov_inverse = 1.0/SQR(data_pixel_noise);
+	}
 	int img_index;
 	int count=0, foreground_count=0;
 	int n_data_pixels=0;
@@ -13951,26 +13957,27 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
 			if ((image_pixel_grid->fit_to_data[i][j]) or ((at_least_one_foreground_src) and (image_pixel_data->foreground_mask[i][j]))) {
 				n_data_pixels++;
+				if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 				if ((image_pixel_grid->fit_to_data[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
 					if (at_least_one_foreground_src) {
-						loglike_times_two += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
-						//loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+						loglike_times_two += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+						//loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
 						foreground_count++;
 					}
 					else {
-						loglike_times_two += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+						loglike_times_two += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 						//wtfout << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
 					}
-					//else loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
+					//else loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
 					count++;
 				} else {
 					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
 					if (at_least_one_foreground_src) {
-						loglike_times_two += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/covariance;
+						loglike_times_two += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
 						foreground_count++;
 					}
-					else if (image_pixel_grid->fit_to_data[i][j]) loglike_times_two += SQR(image_pixel_data->surface_brightness[i][j])/covariance; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
+					else if (image_pixel_grid->fit_to_data[i][j]) loglike_times_two += SQR(image_pixel_data->surface_brightness[i][j])*cov_inverse; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
 				}
 			}
 		}
@@ -14005,7 +14012,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 	}
 	//if ((mpi_id==0) and (verbal)) cout << "chisqreg=" << loglike_reg << ", n_data_pixels=" << n_data_pixels << endl;
-	if (include_noise_term_in_loglike) loglike_times_two += n_data_pixels*log(covariance/(loglike_reference_noise*loglike_reference_noise)); // if the covariance is equal to SQR(loglike_reference_noise), then this term becomes zero and it just looks like chi-square (which looks prettier)
+	if (include_noise_term_in_loglike) loglike_times_two -= n_data_pixels*log(loglike_reference_noise*loglike_reference_noise*cov_inverse); // if the noise covariance is equal to SQR(loglike_reference_noise), then this term becomes zero and it just looks like chi-square (which looks prettier)
+
 	// to normalize the evidence properly
 
 	if (n_image_prior) {
@@ -15531,6 +15539,7 @@ QLens::~QLens()
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
 	if ((image_pixel_data != NULL) and (borrowed_image_data==false)) delete image_pixel_data;
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
