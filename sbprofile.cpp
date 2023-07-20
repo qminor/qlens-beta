@@ -2559,7 +2559,9 @@ double Sersic::sb_rsq(const double rsq)
 
 double Sersic::window_rmax()
 {
-	return Reff*pow(3.0/b,n);
+	double fac = pow(3.0/b,n);
+	if (fac < 1) fac = 1;
+	return Reff*fac;
 }
 
 double Sersic::length_scale()
@@ -2638,15 +2640,6 @@ void Cored_Sersic::set_auto_ranges()
 
 double Cored_Sersic::sb_rsq(const double rsq)
 {
-	// The rcore_corrected is a hack because the previous way I did this effectively had rc equal to the major axis of the core, not the average radius.
-	// It's bullshit, but required for backwards compatibility; otherwise my previous fits to J0946 won't work. REMOVE THIS HACK LATER!!!!!!
-	// SERIOUSLY, REMOVE THIS HACK LATER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! IT'S BULLSHIT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	//double rcore_corrected;
-	//if (ellipticity_mode==0) rcore_corrected = rc;
-	//else rcore_corrected = rc*sqrt(q);
-	//return s0*exp(-b*pow((rsq+rcore_corrected*rcore_corrected)/(Reff*Reff),0.5/n));
-
 	return s0*exp(-b*pow((rsq+rc*rc)/(Reff*Reff),0.5/n));
 }
 
@@ -2857,6 +2850,85 @@ double DoubleSersic::window_rmax()
 double DoubleSersic::length_scale()
 {
 	return sqrt(Reff1*Reff1 + Reff2*Reff2);
+}
+
+SPLE::SPLE(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, QLens* cosmo_in)
+{
+	model_name = "sple";
+	sbtype = sple;
+	qlens = cosmo_in;
+	setup_base_source_properties(7,3,true); // number of parameters = 7, is_elliptical_source = true
+	bs = bb;
+	alpha = aa;
+	s = ss;
+	if (s < 0) s = -s; // don't allow negative core radii
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+SPLE::SPLE(const SPLE* sb_in)
+{
+	bs = sb_in->bs;
+	alpha = sb_in->alpha;
+	s = sb_in->s;
+
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void SPLE::assign_paramnames()
+{
+	paramnames[0] = "bs";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "s";
+	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
+	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
+	set_geometric_paramnames(sbprofile_nparams);
+}
+
+void SPLE::assign_param_pointers()
+{
+	param[0] = &bs;
+	param[1] = &alpha;
+	param[2] = &s;
+	set_geometric_param_pointers(sbprofile_nparams);
+}
+
+void SPLE::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
+}
+
+void SPLE::set_auto_stepsizes()
+{
+	int index = 0;
+	stepsizes[index++] = 0.1*bs;
+	stepsizes[index++] = 0.1;
+	stepsizes[index++] = 0.02*bs; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void SPLE::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(sbprofile_nparams);
+}
+
+double SPLE::sb_rsq(const double rsq)
+{
+	return ((bs==0.0) ? 0.0 : ((2-alpha) * pow(bs*bs/(s*s+rsq), alpha/2) / 2));
+}
+
+double SPLE::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 3*bs;
+}
+
+double SPLE::length_scale()
+{
+	return bs;
 }
 
 Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)

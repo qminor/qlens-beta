@@ -18,6 +18,8 @@ using namespace std;
 class Sersic;
 class DoubleSersic;
 class Cored_Sersic;
+class TopHatLens;
+class SPLE;
 class SB_Profile;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
@@ -40,6 +42,7 @@ enum LensProfileName
 	SHEAR,
 	SHEET,
 	DEFLECTION,
+	TOPHAT_LENS,
 	TABULATED,
 	QTABULATED,
 	TESTMODEL
@@ -55,6 +58,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	friend class SB_Profile;
 	friend class Sersic;
 	friend class Cored_Sersic;
+	friend class SPLE;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:
@@ -427,10 +431,9 @@ struct LensIntegral : public Romberg
 		xsqval = xval*xval;
 		ysqval = yval*yval;
 		epsilon = 1 - q*q;
-		if (q != 1.0) fsqinv = 1.0/SQR(profile->f_major_axis);
-		else fsqinv = 1.0; // even if the lens model itself is not spherical, we can still get the spherical calculations if needed by setting f=1 here
-		phi0 = 0;
 		emode = profile->ellipticity_mode;
+		fsqinv = (emode==0) ? 1 : (emode==1) ? q : (emode==2) ? q : q*q/((1+q*q)/2); 
+		phi0 = 0;
 		gausspoints = profile->points;
 		gaussweights = profile->weights;
 		if (profile->integral_method==Gauss_Patterson_Quadrature) {
@@ -464,8 +467,10 @@ struct LensIntegral : public Romberg
 	double j_integral(const int nval, bool &converged);
 	double k_integral(const int nval, bool &converged);
 
+	double i_integrand_egrad(const double w);
 	double j_integrand_egrad(const double w);
 	double k_integrand_egrad(const double w);
+	double i_integral_egrad(bool &converged);
 	double j_integral_egrad(const int nval_in, bool &converged);
 	double k_integral_egrad(const int nval_in, bool &converged);
 	double jprime_integral_egrad(const int nval_in, bool &converged);
@@ -479,7 +484,7 @@ struct LensIntegral : public Romberg
 
 };
 
-class Alpha : public LensProfile
+class AlphaLens : public LensProfile
 {
 	private:
 	double alpha, bprime, sprime;
@@ -511,16 +516,17 @@ class Alpha : public LensProfile
 	void set_model_specific_integration_pointers();
 
 	public:
-	Alpha()
+	AlphaLens()
 	{
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	Alpha(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
+	AlphaLens(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* qlens_in);
-	Alpha(const Alpha* lens_in);
+	AlphaLens(const AlphaLens* lens_in);
 	void initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	Alpha(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in) : Alpha() { initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in); }
+	AlphaLens(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in) : AlphaLens() { initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in); }
+	AlphaLens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -1213,6 +1219,41 @@ class Deflection : public LensProfile
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
 };
+
+class TopHatLens : public LensProfile
+{
+	private:
+	double kap0, xi0;
+
+	double kappa_rsq(const double);
+	double kappa_rsq_deriv(const double);
+
+	double kapavg_spherical_rsq(const double rsq);
+	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void set_model_specific_integration_pointers();
+
+	public:
+	TopHatLens()
+	{
+		set_null_ptrs_and_values();
+		setup_lens_properties();
+	}
+	TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens*);
+	void initialize_parameters(const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	TopHatLens(const TopHatLens* lens_in);
+
+	void deflection_analytic(const double, const double, lensvector&);
+	void hessian_analytic(const double, const double, lensmatrix&);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	//bool calculate_total_scaled_mass(double& total_mass);
+};
+
+
 
 class Tabulated_Model : public LensProfile
 {

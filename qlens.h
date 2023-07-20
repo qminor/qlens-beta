@@ -437,7 +437,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_extended_mask_in_inversion;
 	bool zero_sb_extended_mask_prior;
 	bool include_noise_term_in_loglike;
-	double loglike_reference_noise;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -702,7 +701,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static const double default_rmin_frac;
 	int cc_thetasteps;
 	double cc_rmin, cc_rmax;
-	double source_plane_rscale;
+	//double source_plane_rscale;
 	Spline *ccspline;
 	Spline *caustic;
 	bool cc_splined;
@@ -844,7 +843,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void assign_Lmatrix_shapelets(bool verbal);
 	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
 	void PSF_convolution_Lmatrix_dense(const bool verbal);
-	void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
+	//void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
@@ -919,6 +918,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	bool use_input_psf_matrix;
 	bool use_input_psf_ptsrc_matrix;
+	bool ignore_foreground_in_chisq;
 	double **psf_matrix, **foreground_psf_matrix;
 	Spline2D psf_spline;
 	bool load_psf_fits(string fits_filename, const bool verbal);
@@ -941,20 +941,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static fftw_plan *fftplans_Lmatrix;
 	static fftw_plan *fftplans_Lmatrix_inverse;
 #endif
-	static bool setup_fft_convolution_emask;
-	static double *psf_zvec_emask; // for convolutions using FFT
-	static int fft_imin_emask, fft_jmin_emask, fft_ni_emask, fft_nj_emask;
-#ifdef USE_FFTW
-	static complex<double> *psf_transform_emask;
-	static complex<double> **Lmatrix_transform_emask;
-	static double **Lmatrix_imgs_rvec_emask;
-	//static double *img_rvec_emask;
-	//static complex<double> *img_transform_emask;
-	//static fftw_plan fftplan_emask;
-	//static fftw_plan fftplan_inverse_emask;
-	static fftw_plan *fftplans_Lmatrix_emask;
-	static fftw_plan *fftplans_Lmatrix_inverse_emask;
-#endif
+	//static bool setup_fft_convolution_emask;
+	//static double *psf_zvec_emask; // for convolutions using FFT
+	//static int fft_imin_emask, fft_jmin_emask, fft_ni_emask, fft_nj_emask;
+//#ifdef USE_FFTW
+	//static complex<double> *psf_transform_emask;
+	//static complex<double> **Lmatrix_transform_emask;
+	//static double **Lmatrix_imgs_rvec_emask;
+	////static double *img_rvec_emask;
+	////static complex<double> *img_transform_emask;
+	////static fftw_plan fftplan_emask;
+	////static fftw_plan fftplan_inverse_emask;
+	//static fftw_plan *fftplans_Lmatrix_emask;
+	//static fftw_plan *fftplans_Lmatrix_inverse_emask;
+//#endif
 
 	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
 
@@ -1013,7 +1013,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal);
 	void plot_image_pixel_grid();
-	bool find_shapelet_scaling_parameters(const bool verbal);
+	bool find_shapelet_scaling_parameters(const int i_shapelet, const bool verbal);
 	bool set_shapelet_imgpixel_nsplit();
 
 	void update_source_amplitudes_from_shapelets();
@@ -1026,7 +1026,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
 	void generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
-	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
+	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	bool make_image_surface_brightness_data();
 	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
 
@@ -1397,11 +1397,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double chisq_flux();
 	double chisq_time_delays();
+	double chisq_time_delays_from_model_imgs();
 	double chisq_weak_lensing();
 	bool output_weak_lensing_chivals(string filename);
 	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
-	void output_analytic_srcpos(lensvector *beta_i);
+	void find_analytic_srcpos(lensvector *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
 
 	static bool respline_at_end;
@@ -1522,6 +1523,7 @@ struct ImageData
 	double *sigma_pos, *sigma_f, *sigma_t;
 	bool *use_in_chisq;
 	double max_distsqr; // maximum squared distance between any pair of images
+	double max_tdsqr; // max squared difference between any pair of time delays
 	ImageData() { n_images = 0; }
 	void input(const int &nn);
 	void input(const ImageData& imgs_in);

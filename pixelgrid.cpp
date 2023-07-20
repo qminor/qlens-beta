@@ -99,17 +99,17 @@ complex<double> **QLens::Lmatrix_transform;
 double *QLens::img_rvec;
 double **QLens::Lmatrix_imgs_rvec;
 #endif
-bool QLens::setup_fft_convolution_emask;
-double *QLens::psf_zvec_emask;
-int QLens::fft_imin_emask, QLens::fft_jmin_emask, QLens::fft_ni_emask, QLens::fft_nj_emask;
-#ifdef USE_FFTW
-fftw_plan QLens::fftplan_emask, QLens::fftplan_inverse_emask;
-fftw_plan *QLens::fftplans_Lmatrix_emask, *QLens::fftplans_Lmatrix_inverse_emask;
-complex<double> *QLens::psf_transform_emask, *QLens::img_transform_emask;
-complex<double> **QLens::Lmatrix_transform_emask;
-double *QLens::img_rvec_emask;
-double **QLens::Lmatrix_imgs_rvec_emask;
-#endif
+//bool QLens::setup_fft_convolution_emask;
+//double *QLens::psf_zvec_emask;
+//int QLens::fft_imin_emask, QLens::fft_jmin_emask, QLens::fft_ni_emask, QLens::fft_nj_emask;
+//#ifdef USE_FFTW
+//fftw_plan QLens::fftplan_emask, QLens::fftplan_inverse_emask;
+//fftw_plan *QLens::fftplans_Lmatrix_emask, *QLens::fftplans_Lmatrix_inverse_emask;
+//complex<double> *QLens::psf_transform_emask, *QLens::img_transform_emask;
+//complex<double> **QLens::Lmatrix_transform_emask;
+//double *QLens::img_rvec_emask;
+//double **QLens::Lmatrix_imgs_rvec_emask;
+//#endif
 
 ifstream SourcePixelGrid::sb_infile;
 
@@ -723,6 +723,48 @@ void SourcePixelGrid::plot_surface_brightness(string root)
 	ofstream pixel_info; lens->open_output_file(pixel_info,info_filename);
 	pixel_info << u_split_initial << " " << w_split_initial << " " << levels << endl;
 	pixel_info << srcgrid_xmin << " " << srcgrid_xmax << " " << srcgrid_ymin << " " << srcgrid_ymax << endl;
+}
+
+void SourcePixelGrid::output_fits_file(string fits_filename)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+	int i,j,kk;
+	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix = -64, naxis = 2;
+	long naxes[2] = {u_N,w_N};
+	double *pixels;
+	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
+
+	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+	{
+		if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				pixels = new double[u_N];
+
+				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				{
+					for (i=0; i < u_N; i++) {
+						pixels[i] = cell[i][j]->surface_brightness;
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+				}
+				delete[] pixels;
+			}
+		}
+		fits_close_file(outfptr, &status);
+	} 
+
+	if (status) fits_report_error(stderr, status); // print any error message
+#endif
 }
 
 void SourcePixelGrid::plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y)
@@ -4300,12 +4342,8 @@ double DelaunayGrid::chebev(const double a, const double b, double* c, const int
 	return y*d-dd+0.5*c[0];
 }
 
-void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate_sb)
+void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac, const int npix, const bool interpolate_sb, const bool plot_fits)
 {
-	string img_filename = root + ".dat";
-	string x_filename = root + ".x";
-	string y_filename = root + ".y";
-
 	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
 	int i, j, npts_x, npts_y;
 	xlength = xmax-xmin;
@@ -4315,16 +4353,30 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const
 	pixel_xlength = xlength/npts_x;
 	pixel_ylength = ylength/npts_y;
 
-	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
-	for (i=0, x=xmin; i <= npts_x; i++, x += pixel_xlength) pixel_xvals << x << endl;
-
-	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
-	for (i=0, y=ymin; i <= npts_y; i++, y += pixel_ylength) pixel_yvals << y << endl;
-
+	string img_filename;
+	string x_filename;
+	string y_filename;
 	ofstream pixel_surface_brightness_file;
-	lens->open_output_file(pixel_surface_brightness_file,img_filename.c_str());
+	if (!plot_fits) {
+		string img_filename = root + ".dat";
+		string x_filename = root + ".x";
+		string y_filename = root + ".y";
+
+		ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
+		for (i=0, x=xmin; i <= npts_x; i++, x += pixel_xlength) pixel_xvals << x << endl;
+
+		ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
+		for (i=0, y=ymin; i <= npts_y; i++, y += pixel_ylength) pixel_yvals << y << endl;
+
+		lens->open_output_file(pixel_surface_brightness_file,img_filename.c_str());
+	}
 	int srcpt_i, trinum;
 	double sb;
+	double **sbvals;
+	if (plot_fits) {
+		sbvals = new double*[npts_x];
+		for (i=0; i < npts_x; i++) sbvals[i] = new double[npts_y];
+	}
 	lensvector pt;
 	for (j=0, y=ymin+pixel_xlength/2; j < npts_y; j++, y += pixel_ylength) {
 		pt[1] = y;
@@ -4341,16 +4393,63 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const
 				srcpt_i = find_closest_vertex(trinum,pt);
 				sb = surface_brightness[srcpt_i];
 			}
+			if (plot_fits) sbvals[i][j] = sb;
 			//cout << x << " " << y << " " << srcpts[srcpt_i][0] << " " << srcpts[srcpt_i][1] << endl;
-			pixel_surface_brightness_file << sb << " ";
+			if (!plot_fits) pixel_surface_brightness_file << sb << " ";
 		}
-		pixel_surface_brightness_file << endl;
+		if (!plot_fits) pixel_surface_brightness_file << endl;
 	}
-	string srcpt_filename = root + "_srcpts.dat";
-	ofstream srcout; lens->open_output_file(srcout,srcpt_filename);
-	for (i=0; i < n_srcpts; i++) {
-		srcout << srcpts[i][0] << " " << srcpts[i][1] << endl;
+	if (!plot_fits) {
+		string srcpt_filename = root + "_srcpts.dat";
+		ofstream srcout; lens->open_output_file(srcout,srcpt_filename);
+		for (i=0; i < n_srcpts; i++) {
+			srcout << srcpts[i][0] << " " << srcpts[i][1] << endl;
+		}
 	}
+
+	if (plot_fits) {
+#ifndef USE_FITS
+		cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+		int i,j,kk;
+		fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+		int status = 0;   // CFITSIO status value MUST be initialized to zero!
+		int bitpix = -64, naxis = 2;
+		long naxes[2] = {npts_x,npts_y};
+		double *pixels;
+		string fits_filename_overwrite = "!" + root; // ensures that it overwrites an existing file of the same name
+
+		if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+		{
+			if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+			{
+				if (naxis == 0) {
+					die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+				} else {
+					kk=0;
+					long fpixel[naxis];
+					for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+					pixels = new double[npts_x];
+
+					for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+					{
+						for (i=0; i < npts_x; i++) {
+							pixels[i] = sbvals[i][j];
+						}
+						fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					}
+					delete[] pixels;
+				}
+			}
+			fits_close_file(outfptr, &status);
+		} 
+
+		if (status) fits_report_error(stderr, status); // print any error message
+		for (i=0; i < npts_x; i++) delete[] sbvals[i];
+		delete[] sbvals;
+	}
+#endif
+
 }
 
 DelaunayGrid::~DelaunayGrid()
@@ -4561,7 +4660,7 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid, cons
 	assign_high_sn_pixels();
 }
 
-bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
+bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -4578,8 +4677,8 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
-		 //if ( fits_movabs_hdu(fptr, 2, &hdutype, &status) ) /* move to 2nd HDU */
-			//die("fuck");
+		 if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
+			 return false;
 
 		if (xvals != NULL) delete[] xvals;
 		if (yvals != NULL) delete[] yvals;
@@ -4613,8 +4712,8 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 		int pos, pos1;
 		for (ii = 1; ii <= nkeys; ii++) { // Read and print each keywords 
 			if (fits_read_record(fptr, ii, card, &status))break;
-			// When you get time: put pixel size and pixel noise as lines in the FITS file comment! Then have it load them here so you don't need to specify them as separate lines.
 			string cardstring(card);
+			if (show_header) cout << cardstring << endl;
 			if (reading_qlens_comment) {
 				if ((pos = cardstring.find("COMMENT")) != string::npos) {
 					if (((pos1 = cardstring.find("mk: ")) != string::npos) or ((pos1 = cardstring.find("MK: ")) != string::npos)) {
@@ -4652,7 +4751,6 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename)
 				pxnoise_str >> pixel_noise;
 				if (lens != NULL) {
 					lens->data_pixel_noise = pixel_noise;
-					lens->loglike_reference_noise = pixel_noise;
 					SB_Profile::SB_noise = pixel_noise;
 				}
 			} else if (cardstring.find("PSFSIG ") != string::npos) {
@@ -4858,7 +4956,7 @@ void ImagePixelData::save_data_fits(string fits_filename, const bool subimage, c
 #endif
 }
 
-bool ImagePixelData::load_noise_map_fits(string fits_filename)
+bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_indx, const bool show_header)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -4881,8 +4979,22 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename)
 	}
 
 	double noise_bg = 1e30;
+	char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
+	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
+		if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
+			return false;
+		int nkeys;
+		fits_get_hdrspace(fptr, &nkeys, NULL, &status); // get # of keywords
+		if (show_header) {
+			for (int ii = 1; ii <= nkeys; ii++) { // Read and print each keywords 
+				if (fits_read_record(fptr, ii, card, &status))break;
+				string cardstring(card);
+				cout << cardstring << endl;
+			}
+		}
+
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
@@ -5236,9 +5348,11 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 			psf_matrix[ii][jj] = input_psf_matrix[i][j];
 		}
 	}
+	double psfmax = -1e30;
 	double normalization = 0;
 	for (i=0; i < psf_npixels_x; i++) {
 		for (j=0; j < psf_npixels_y; j++) {
+			if (psf_matrix[i][j] > psfmax) psfmax = psf_matrix[i][j];
 			normalization += psf_matrix[i][j];
 		}
 	}
@@ -10134,6 +10248,8 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 #else
 		thread = 0;
 #endif
+		double td_factor;
+		if (lens->include_time_delays) td_factor = lens->time_delay_factor_arcsec(lens->lens_redshift,lens->reference_source_redshift);
 		image imgpt;
 		double mag;
 		#pragma omp for private(i) schedule(static)
@@ -10149,6 +10265,7 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 				if (lens->include_time_delays) {
 					double potential = lens->potential(imgpt.pos,imggrid_zfactors,imggrid_betafactors);
 					imgpt.td = 0.5*(SQR(imgpt.pos[0]-lens->source[0])+SQR(imgpt.pos[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+					imgpt.td *= td_factor;
 				} else {
 					imgpt.td = 0;
 				}
@@ -10193,7 +10310,9 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 	if ((lens->mpi_id==0) and (verbal)) {
 		cout << "# images found: " << imgs.size() << endl;
 		for (i=0; i < imgs.size(); i++) {
-			cout << imgs[i].pos[0] << " " << imgs[i].pos[1] << " " << imgs[i].mag << endl;
+			cout << imgs[i].pos[0] << " " << imgs[i].pos[1] << " " << imgs[i].mag;
+			if (lens->include_time_delays) cout << " " << imgs[i].td;
+			cout << endl;
 		}
 	}
 #ifdef USE_OPENMP
@@ -10271,7 +10390,7 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 		j_center = (y0 - ymin)/pixel_ylength;
 		//cout << "icenter=" << i_center << " jcenter=" << j_center << endl;
 		if ((i_center < 0) or (i_center >= x_N) or (j_center < 0) or (j_center >= y_N)) {
-			warn("image point lies outside image pixel grid");
+			warn("image point (%g,%g) lies outside image pixel grid",x0,y0);
 			continue;
 		}
 		imin = i_center - nx_half;
@@ -10311,7 +10430,7 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 					w0 = ((double) (1+2*jj))/(2*nsplit);
 					y = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
 					if (lens->use_input_psf_matrix) {
-						sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0)/(pixel_xlength*pixel_ylength);
+						sb += fluxfac*lens->interpolate_PSF_matrix(x-x0,y-y0);
 					} else {
 						sb += fluxfac*normfac*exp(-(SQR((x-x0)/sigx) + SQR((y-y0)/sigy))/2);
 					}
@@ -10924,9 +11043,18 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 
 	if (source_n_amps <= 0) die("no shapelet amplitudes found");
 	source_pixel_vector = new double[source_n_amps];
+	imgpixel_covinv_vector = new double[image_npixels];
 	if (use_lum_weighted_regularization) {
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
+	}
+	if (use_noise_map) {
+		int ii,i,j;
+		for (ii=0; ii < image_npixels; ii++) {
+			i = active_image_pixel_i[ii];
+			j = active_image_pixel_j[ii];
+			imgpixel_covinv_vector[ii] = image_pixel_data->covinv_map[i][j];
+		}
 	}
 	if ((mpi_id==0) and (verbal)) cout << "Creating shapelet Lmatrix...\n";
 	Lmatrix_dense.input(image_npixels,source_n_amps);
@@ -11545,6 +11673,7 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 	return true;
 }
 
+/*
 bool QLens::setup_convolution_FFT_emask(const bool verbal)
 {
 #ifdef USE_OPENMP
@@ -11668,6 +11797,7 @@ bool QLens::setup_convolution_FFT_emask(const bool verbal)
 	setup_fft_convolution_emask = true;
 	return true;
 }
+*/
 
 void QLens::cleanup_FFT_convolution_arrays()
 {
@@ -11693,6 +11823,7 @@ void QLens::cleanup_FFT_convolution_arrays()
 		fft_imin=fft_jmin=fft_ni=fft_nj=0;
 		setup_fft_convolution = false;
 	}
+	/*
 	if (setup_fft_convolution_emask) {
 #ifdef USE_FFTW
 		delete[] psf_transform_emask;
@@ -11713,6 +11844,7 @@ void QLens::cleanup_FFT_convolution_arrays()
 		fft_imin_emask=fft_jmin_emask=fft_ni_emask=fft_nj_emask=0;
 		setup_fft_convolution_emask = false;
 	}
+	*/
 }
 
 void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
@@ -11854,8 +11986,8 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			double **Lmatrix_psf = new double*[image_npixels];
 			int i,j;
 			for (i=0; i < image_npixels; i++) {
-				Lmatrix_psf[i] = new double[source_npixels];
-				for (j=0; j < source_npixels; j++) Lmatrix_psf[i][j] = 0;
+				Lmatrix_psf[i] = new double[source_n_amps];
+				for (j=0; j < source_n_amps; j++) Lmatrix_psf[i][j] = 0;
 			}
 
 #ifdef USE_OPENMP
@@ -11938,6 +12070,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 	}
 }
 
+/*
 void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
 {
 #ifdef USE_MPI
@@ -12075,8 +12208,8 @@ void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
 		double **Lmatrix_psf = new double*[image_npixels];
 		int i,j;
 		for (i=0; i < image_npixels; i++) {
-			Lmatrix_psf[i] = new double[source_npixels];
-			for (j=0; j < source_npixels; j++) Lmatrix_psf[i][j] = 0;
+			Lmatrix_psf[i] = new double[source_n_amps];
+			for (j=0; j < source_n_amps; j++) Lmatrix_psf[i][j] = 0;
 		}
 
 #ifdef USE_OPENMP
@@ -12131,6 +12264,7 @@ void QLens::PSF_convolution_Lmatrix_dense_emask(const bool verbal)
 #endif
 	}
 }
+*/
 
 void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground, const bool verbal)
 {
@@ -12517,7 +12651,7 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 		UU = 1-uu;
 		psfint = TT*UU*psf_matrix[ii][jj] + tt*UU*psf_matrix[ii+1][jj] + TT*uu*psf_matrix[ii][jj+1] + tt*uu*psf_matrix[ii+1][jj+1];
 	}
-	//cout << "PSFINT: " << psfint << endl;
+	if (psfint < 0) psfint = 0;
 	return psfint;
 }
 
@@ -15829,7 +15963,7 @@ void QLens::calculate_image_pixel_surface_brightness(const bool calculate_foregr
 				break;
 			}
 		}
-		if (at_least_one_foreground_src) {
+		if ((at_least_one_foreground_src) and (!ignore_foreground_in_chisq)) {
 			if (active_image_pixel_i_fgmask==NULL) die("Need to assign foreground pixel mappings before calculating foreground surface brightness");
 
 			calculate_foreground_pixel_surface_brightness();
@@ -15869,7 +16003,7 @@ void QLens::calculate_image_pixel_surface_brightness_dense(const bool calculate_
 				at_least_one_foreground_src = true;
 			}
 		}
-		if (at_least_one_foreground_src) {
+		if ((at_least_one_foreground_src) and (!ignore_foreground_in_chisq)) {
 			calculate_foreground_pixel_surface_brightness();
 			store_foreground_pixel_surface_brightness(); // this stores it in image_pixel_grid->sbprofile_surface_brightness[i][j]
 			//add_foreground_to_image_pixel_vector();

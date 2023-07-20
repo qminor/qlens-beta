@@ -148,6 +148,7 @@ class SourcePixelGrid
 
 	void fill_n_image_vector_recursive(int& column_j);
 	void plot_surface_brightness(string root);
+	void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
 	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y);
 	void store_surface_brightness_grid_data(string root);
@@ -231,7 +232,7 @@ class DelaunayGrid
 	void calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
-	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false);
+	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void generate_gmatrices();
 	void generate_hmatrices();
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL);
@@ -413,18 +414,18 @@ struct ImagePixelData : public Sort
 	~ImagePixelData();
 	void load_data(string root);
 	void load_from_image_grid(ImagePixelGrid* image_pixel_grid, const double noise_in);
-	bool load_data_fits(const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, string fits_filename) {
+	bool load_data_fits(const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, string fits_filename, const int hdu_indx = 1, const bool show_header = false) {
 		xmin=xmin_in; xmax=xmax_in; ymin=ymin_in; ymax=ymax_in;
-		return load_data_fits(false,fits_filename);
+		return load_data_fits(false,fits_filename,hdu_indx,show_header);
 	}
-	bool load_data_fits(const double pixel_size_in, string fits_filename) {
+	bool load_data_fits(const double pixel_size_in, string fits_filename, const int hdu_indx = 1, const bool show_header = false) {
 		pixel_size = pixel_size_in;
-		return load_data_fits(true,fits_filename);
+		return load_data_fits(true,fits_filename, hdu_indx, show_header);
 	}
-	bool load_noise_map_fits(string fits_filename);
+	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
 	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_noise(const double noise) { pixel_noise = noise; }
-	bool load_data_fits(bool use_pixel_size, string fits_filename);
+	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
 	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false);

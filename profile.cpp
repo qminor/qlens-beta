@@ -1052,14 +1052,14 @@ void LensProfile::set_geometric_param_pointers(int qi)
 	param[qi++] = &zlens;
 }
 
-void LensProfile::set_geometric_parameters(const double &q1_in, const double &q2_in, const double &xc_in, const double &yc_in)
+void LensProfile::set_geometric_parameters(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in)
 {
 	if (use_ellipticity_components) {
-		epsilon1 = q1_in;
-		epsilon2 = q2_in;
+		epsilon1 = par1_in;
+		epsilon2 = par2_in;
 	} else {
-		set_ellipticity_parameter(q1_in);
-		theta = degrees_to_radians(q2_in);
+		set_ellipticity_parameter(par1_in);
+		theta = degrees_to_radians(par2_in);
 	}
 	if (!lensed_center_coords) {
 		x_center = xc_in;
@@ -1344,16 +1344,19 @@ double LensProfile::rho3d_w_integrand(const double w)
 	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
 }
 
-void LensProfile::set_ellipticity_parameter(const double &q_in)
+void LensProfile::set_ellipticity_parameter(const double &param_in)
 {
 	if (ellipticity_mode==0) {
-		q = q_in; // axis ratio q = b/a
+		q = param_in; // axis ratio q = b/a
 	} else if (ellipticity_mode==1) {
-		q = q_in; // axis ratio q = b/a
-	} else if (use_ellipticity_components) {
-		q = q_in; // axis ratio q = b/a
-	} else if ((ellipticity_mode==2) or (ellipticity_mode==3)) {
-		epsilon = q_in; // axis ratio q = b/a
+		q = param_in; // axis ratio q = b/a
+	} else if (ellipticity_mode==2) {
+		epsilon = param_in; // axis ratio q = b/a
+		q = (1-epsilon)/(1+epsilon);
+			cout << "q=" << q << endl;
+	} else if (ellipticity_mode==3) {
+		epsilon = param_in; // axis ratio q = b/a
+		q = sqrt((1-epsilon)/(1+epsilon));
 	}
 	if (q > 1) q = 1.0; // don't allow q>1
 	if (q<=0) q = 0.001; // just to avoid catastrophe
@@ -1571,8 +1574,9 @@ void LensProfile::calculate_ellipticity_components()
 {
 	if ((ellipticity_mode != -1) and (use_ellipticity_components)) {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		epsilon1 = (1-q)*cos(2*theta_eff);
-		epsilon2 = (1-q)*sin(2*theta_eff);
+		if ((ellipticity_mode==0) or (ellipticity_mode==1)) epsilon = 1-q;
+		epsilon1 = epsilon*cos(2*theta_eff);
+		epsilon2 = epsilon*sin(2*theta_eff);
 	}
 }
 
@@ -1594,7 +1598,10 @@ void LensProfile::update_ellipticity_meta_parameters()
 			epsilon = 1 - q;
 			// if ellipticity components are being used, we are automatically using the following major axis scaling
 			f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
-		} else if ((ellipticity_mode==2) or (ellipticity_mode==3)) {
+		} else if (ellipticity_mode==2) {
+			q = (1-epsilon)/(1+epsilon);
+			f_major_axis = 1.0/sqrt(q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+		} else if (ellipticity_mode==3) {
 			q = sqrt((1-epsilon)/(1+epsilon));
 			f_major_axis = sqrt((1+q*q)/2)/q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
 		}
@@ -2308,7 +2315,6 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& 
 		//double hess00 = lens_integral.k_integral(0,converged);
 		//double hess01 = lens_integral.k_integral(1,converged);
 		//double hess11 = lens_integral.k_integral(2,converged);
-		//cout << "CHECK: hess00=" << (hess00*x*x) << " hess01=" << (hess01*x*y) << " hess11=" << (hess11*y*y) << endl;
 		/*
 		double kap2 = 2*kappa_rsq((x*x + y*y/(q*q))/(f_major_axis*f_major_axis));
 		double laplacian = hess[0][0] + hess[1][1];
@@ -2477,12 +2483,60 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 
 double LensProfile::potential_numerical(const double x, const double y)
 {
-	if (this->kapavgptr_rsq_spherical==NULL) return 0.0; // cannot calculate potential without a spherical deflection defined
+	if ((!ellipticity_gradient) and (this->kapavgptr_rsq_spherical==NULL)) return 0.0; // for the integral without egrad, cannot calculate potential without a spherical deflection defined
 	bool converged;
 	double ans;
 	LensIntegral lens_integral(this,x,y,q);
-	ans = 0.5*lens_integral.i_integral(converged);
-	warn_if_not_converged(converged,x,y);
+	if (!ellipticity_gradient) {
+		ans = 0.5*lens_integral.i_integral(converged);
+		warn_if_not_converged(converged,x,y);
+
+		//double h = 1e-5;
+		//LensIntegral lens_integral2(this,x-h,y,q);
+		//double ansmh = 0.5*lens_integral2.i_integral(converged);
+		//LensIntegral lens_integral3(this,x+h,y,q);
+		//double ansph = 0.5*lens_integral3.i_integral(converged);
+		//double defx = (ansph - ansmh) / (2*h);
+
+		//LensIntegral lens_integral4(this,x,y-h,q);
+		//ansmh = 0.5*lens_integral4.i_integral(converged);
+		//LensIntegral lens_integral5(this,x,y+h,q);
+		//ansph = 0.5*lens_integral5.i_integral(converged);
+		//double defy = (ansph - ansmh) / (2*h);
+		//cout << "DEFX=" << defx << " DEFY=" << defy << endl;
+	} else {
+		ans = 0.5*lens_integral.i_integral_egrad(converged);
+		warn_if_not_converged(converged,x,y);
+
+		//double xi = elliptical_radius_root(x,y);
+		//double epf, thetaf;
+		//ellipticity_function(xi,epf,thetaf);
+		//q = sqrt(1 - epf);
+		//cout << "SETTING q=" << q << endl;
+
+		//LensIntegral lens_integral0(this,x,y,q);
+		//double checkans = 0.5*lens_integral0.i_integral(converged);
+		//warn_if_not_converged(converged,x,y);
+		//cout << "POT: " << ans << " " << checkans << endl;
+
+		//double h = 1e-5;
+		//LensIntegral lens_integral2(this,x-h,y,q);
+		//double ansmh = 0.5*lens_integral2.i_integral_egrad(converged);
+		//LensIntegral lens_integral3(this,x+h,y,q);
+		//double ansph = 0.5*lens_integral3.i_integral_egrad(converged);
+		//double defx = (ansph - ansmh) / (2*h);
+
+		//LensIntegral lens_integral4(this,x,y-h,q);
+		//ansmh = 0.5*lens_integral4.i_integral_egrad(converged);
+		//LensIntegral lens_integral5(this,x,y+h,q);
+		//ansph = 0.5*lens_integral5.i_integral_egrad(converged);
+		//double defy = (ansph - ansmh) / (2*h);
+		//cout << "DEFX=" << defx << " DEFY=" << defy << endl;
+
+		//double ans2 = 0.5*lens_integral.i_integral(converged);
+		//warn_if_not_converged(converged,x,y);
+		//cout << "POT COMP: " << ans << " " << ans2 << endl;
+	}
 	return ans;
 }
 
@@ -2513,18 +2567,10 @@ double LensIntegral::i_integral(bool &converged)
 		//iptr = &LensIntegral::i_integrand_v2;
 		//double xisqf = (xsqval+ysqval/(1-epsilon))*fsqinv;
 		//double iint = PattersonIntegrate(iptr,0,sqrt(xisqf),converged);
-
-		//nval_plus_half = 0.5;
-		//mnval_plus_half = 0.5;
-		//double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_v2;
 		//double qfactor = 1 - epsilon;
-		//double j0 = (PattersonIntegrate(jptr,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
-
-		//nval_plus_half = 1.5;
-		//mnval_plus_half = -0.5;
-		//double j1 = (PattersonIntegrate(jptr,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
-		//double ans2 = sqrt(1-epsilon)*(xsqval*j0 + ysqval*j1 + iint);
-		//cout << "POT: " << ans << " " << ans2 << endl;
+		//double ans2 = sqrt(1-epsilon)*(iint + (2/epsilon)*profile->kappa_rsq(xisqf)*(xsqval*(1-pow(qfactor,0.5)) - ysqval*(1-pow(qfactor,-0.5))));
+		//double constterm = sqrt(1-epsilon)*((2/epsilon)*profile->kappa_rsq(xisqf)*(xsqval*(1-pow(qfactor,0.5)) - ysqval*(1-pow(qfactor,-0.5))));
+		//cout << "POT: " << ans << " " << ans2 << " border=" << constterm << " (q=" << sqrt(qfactor) << ")" << endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
 	{
@@ -2560,7 +2606,7 @@ double LensIntegral::j_integral(const int nval_in, bool &converged)
 		//double (LensIntegral::*jptr2)(double) = &LensIntegral::j_integrand_v2;
 		//double qfactor = 1 - epsilon;
 		//double xisqf = (xsqval+ysqval/qfactor)*fsqinv;
-		//ans = sqrt(1-epsilon)*(PattersonIntegrate(jptr2,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
+		//double ans2 = sqrt(1-epsilon)*(PattersonIntegrate(jptr2,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
 		//cout << "CHECK: " << ans << " " << ans2 << endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
@@ -2615,7 +2661,6 @@ double LensIntegral::k_integral(const int nval_in, bool &converged)
 	return ans;
 }
 
-
 // i,j,k integrals are in form similar to Keeton (2001), but generalized to allow for different
 // definitions of the elliptical radius. I have also made the substitution
 // u=w*w (easier for Gaussian quadrature; makes kappa singularity more manageable)
@@ -2643,16 +2688,19 @@ double LensIntegral::k_integrand_prime(const double w)
 }
 
 /*
-double LensIntegral::i_integrand_v2(const double w)
+// This version of i_integrand might still be useful in cases where we have no formula for the spherical deflection, since it only requires kappa_rsq_deriv. Keep in mind for later!
+double LensIntegral::i_integrand_v2(const double xi)
 {
-	xisq = w*w;
+	xisq = xi*xi;
 	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
-	if ((epsilon*xsqval) < 1e-9) u = xisq/qfac/fsqinv;
+	if (xisq > fsqinv*(xsqval+ysqval/(1-epsilon))) u = 1.0;
+	else if ((epsilon*xsqval) < 1e-5) u = xisq/qfac/fsqinv;
 	else u = (qfac - sqrt(qfac*qfac - 4*epsilon*xsqval*xisq/fsqinv)) / (2*epsilon*xsqval);
-	// Something's wrong here...FIGURE IT OUT LATER
-	double logfac = log((1-sqrt(1-epsilon))/(1+sqrt(1-epsilon))) - log((1-sqrt(1-epsilon*u))/(1+sqrt(1-epsilon*u)));
+
+	double inside_fac = (2/epsilon)*(xsqval*(1-pow(1-epsilon*u,0.5)) - ysqval*(1-pow(1-epsilon*u,-0.5))); // this is the contribution from work done moving through the inside of the plates
+	double outside_fac = xisq*log((1-sqrt(1-epsilon))/(1-sqrt(1-epsilon*u))*(1+sqrt(1-epsilon*u))/(1+sqrt(1-epsilon)))/fsqinv; // contribution from work done moving outside the plates
 	
-	return (2*w*(profile->kappa_rsq_deriv(xisq))*xisq*logfac);
+	return (2*xi*(-profile->kappa_rsq_deriv(xisq))*(inside_fac+outside_fac));
 }
 */
 
@@ -2684,6 +2732,57 @@ double LensIntegral::k_integrand_v2(const double w)
 
 /******************** Integrals required when ellipticity gradient is present *********************/
 
+double LensIntegral::i_integral_egrad(bool &converged)
+{
+	converged = true; // will change if convergence not achieved
+	double ans;
+
+	double xi = profile->elliptical_radius_root(xval,yval);
+	double xif = (xi < profile->xi_final_egrad) ? profile->xi_final_egrad : xi;
+
+	double costh, sinth;
+	double epf, thetaf;
+	profile->ellipticity_function(xif,epf,thetaf);
+	costh=cos(thetaf);
+	sinth=sin(thetaf);
+	double xprime, yprime;
+	xprime = xval*costh + yval*sinth;
+	yprime = -xval*sinth + yval*costh;
+	xsqval = xprime*xprime;
+	ysqval = yprime*yprime;
+
+	double qfactor = sqrt(1 - epf);
+	if (epf > 1e-4)
+		ans = (2*qfactor/epf)*profile->kappa_rsq(xif*xif)*(xsqval*(1-qfactor) - ysqval*(1-1.0/qfactor)); // This is the boundary term
+	else
+		ans = qfactor*profile->kappa_rsq(xif*xif)*(xsqval + ysqval); // This is the boundary term
+
+	if (profile->integral_method == Romberg_Integration)
+	{
+		double (Romberg::*iptr)(const double);
+		iptr = static_cast<double (Romberg::*)(const double)> (&LensIntegral::i_integrand_egrad);
+		ans += romberg_open(iptr, 0, xif, profile->integral_tolerance, 5);
+	}
+	else if (profile->integral_method == Gaussian_Quadrature)
+	{
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_egrad;
+		ans += GaussIntegrate(iptr,0,xif);
+	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_egrad;
+		ans += PattersonIntegrate(iptr,0,xif,converged);
+	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_egrad;
+		ans += FejerIntegrate(iptr,0,xif,converged);
+
+	}
+	else die("unknown integral method");
+	return ans;
+}
+
 double LensIntegral::j_integral_egrad(const int nval_in, bool &converged)
 {
 	converged = true; // will change if convergence not achieved
@@ -2692,24 +2791,8 @@ double LensIntegral::j_integral_egrad(const int nval_in, bool &converged)
 	nval = nval_in;
 	double xi = profile->elliptical_radius_root(xval,yval);
 	double xif = (xi < profile->xi_final_egrad) ? profile->xi_final_egrad : xi;
-	//double xif=xi;
 
 	double costh, sinth;
-	//costh=cos(profile->theta);
-	//sinth=sin(profile->theta); // later, use trig identity to get sinth (don't forget to put in sign based on quadrant) to save a little time
-	//double xprime, yprime;
-	//xprime = xval*costh + yval*sinth;
-	//yprime = -xval*sinth + yval*costh;
-
-
-	//double xif = xi;
-	//double qfactor = 1 - epsilon;
-	//double xisqf = (SQR(xprime)+SQR(yprime)/qfactor)*fsqinv;
-	//double xicheck = sqrt(xisqf);
-	//cout << "WTF? " << xi << " " << xicheck << endl;
-	//double xif = sqrt(xisqf);
-	//if (abs(xif-xi) > 1e-5)
-	//cout << "BLA " << xif << " " << xi << endl;
 	double epf, thetaf;
 	profile->ellipticity_function(xif,epf,thetaf);
 	costh=cos(thetaf);
@@ -2816,7 +2899,7 @@ double LensIntegral::jprime_integral_egrad(const int nval_in, bool &converged)
 		fac0 = xprime*sinth;
 		fac1 = -yprime*costh;
 	}
-	if (epf > 1e-9)
+	if (epf > 1e-3)
 		ans = 2*profile->kappa_rsq(xif*xif)*(sqrt(1-epf)/epf)*(fac0*(1-sqrt(1-epf)) + fac1*(1-1.0/sqrt(1-epf))); // This is the boundary term
 	else
 		ans = profile->kappa_rsq(xif*xif)*sqrt(1-epf)*(fac0 - fac1); // This is the boundary term
@@ -2845,6 +2928,39 @@ double LensIntegral::jprime_integral_egrad(const int nval_in, bool &converged)
 	}
 	else die("unknown integral method");
 	return ans;
+}
+
+double LensIntegral::i_integrand_egrad(const double xi)
+{
+	xisq = xi*xi;
+	double theta, costh, sinth, xprime, yprime, qufactor, qval;
+	profile->ellipticity_function(xi,epsilon,theta);
+	qval = sqrt(1-epsilon);
+	fsqinv = (emode==0) ? 1 : qval;
+
+	costh=cos(theta);
+	sinth=sin(theta); // later, use trig identity to get sinth (don't forget to put in sign based on quadrant) to save a little time
+	xprime = xval*costh + yval*sinth;
+	yprime = -xval*sinth + yval*costh;
+
+	xsqval = xprime*xprime;
+	ysqval = yprime*yprime;
+	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
+	if (xisq > fsqinv*(xsqval+ysqval/(1-epsilon))) u = 1.0;
+	else if ((epsilon*xsqval) < 1e-4) u = xisq/qfac/fsqinv;
+	else u = (qfac - sqrt(qfac*qfac - 4*epsilon*xsqval*xisq/fsqinv)) / (2*epsilon*xsqval);
+	qufactor = sqrt(1-epsilon*u);
+
+	double inside_fac, outside_fac;
+	if (epsilon > 1e-4) {
+		inside_fac = (2/epsilon)*(xsqval*(1-qufactor) - ysqval*(1-1.0/qufactor)); // this is the contribution from work done moving through the inside of the plates
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-qval)/(1-qufactor)*(1+qufactor)/(1+qval))/fsqinv; // contribution from work done moving outside the plates
+	} else {
+		inside_fac = u*(xsqval + ysqval);
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-epsilon*u/4)/(1-epsilon/4)/u);
+	}
+	
+	return (2*xi*(-profile->kappa_rsq_deriv(xisq))*qval*(inside_fac+outside_fac));
 }
 
 double LensIntegral::j_integrand_egrad(const double xi)
@@ -3502,7 +3618,7 @@ void LensProfile::print_parameters()
 	}
 	//if (!lensed_center_coords) cout << "xc=" << x_center << ", yc=" << y_center;
 	//else cout << "xc_l=" << x_center_lensed << ", yc_l=" << y_center_lensed << " (xc=" << x_center << ",yc=" << y_center << ")";
-	if (center_anchored) cout << " (center_anchored to lens " << center_anchor_lens->lens_number << ")";
+	if (center_anchored) cout << " (center anchored to lens " << center_anchor_lens->lens_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		cout << " (";
 		if (ellipticity_gradient) cout << "egrad=on, ";
@@ -3555,7 +3671,7 @@ string LensProfile::get_parameters_string()
 		else paramstring += *(param[i]);
 		if (i != n_params-2) paramstring += ", ";
 	}
-	if (center_anchored) paramstring += " (center_anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
+	if (center_anchored) paramstring += " (center anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
 		paramstring += " (ellipticity mode = " + mkstring_doub(ellipticity_mode) + ")"; // emode=3 is indicated by "pseudo-" name, not here

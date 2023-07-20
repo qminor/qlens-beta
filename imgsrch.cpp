@@ -1935,7 +1935,7 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 
 	if (!analytic_source_flux) srcflux[0] = source_flux;
 	if (use_analytic_bestfit_src) {
-		output_analytic_srcpos(srcpts);
+		find_analytic_srcpos(srcpts);
 	} else {
 		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
 	}

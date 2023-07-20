@@ -18,7 +18,7 @@ struct ImagePixelData;
 class LensProfile;
 class QLens;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile : public EllipticityGradient, UCMC, Simplex
 {
@@ -27,6 +27,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class SersicLens;
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
+	friend class AlphaLens;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -70,7 +71,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void reset_anchor_lists();
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in = 0);
 	void copy_base_source_data(const SB_Profile* sb_in);
-	//bool spawn_lens_model(Alpha* lens_model);
+	//bool spawn_lens_model(AlphaLens* lens_model);
 
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
@@ -165,6 +166,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	}
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
+		assign_paramnames();
 	}
 	void set_zoom_subgridding(const bool zoom) {
 		zoom_subgridding = zoom;
@@ -309,7 +311,6 @@ class Sersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -334,7 +335,6 @@ class CoreSersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -360,7 +360,6 @@ class Cored_Sersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -388,7 +387,31 @@ class DoubleSersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
+	double window_rmax();
+	double length_scale();
+};
+
+class SPLE : public SB_Profile
+{
+	friend class AlphaLens;
+
+	private:
+	double bs, s, alpha;
+
+	double sb_rsq(const double);
+
+	public:
+	SPLE() : SB_Profile() {}
+	SPLE(const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	SPLE(const SPLE* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
 	double window_rmax();
 	double length_scale();
 };
@@ -460,7 +483,6 @@ class SB_Multipole : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -483,7 +505,6 @@ class TopHat : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
