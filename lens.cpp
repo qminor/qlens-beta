@@ -1981,7 +1981,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			//alphaptr = new AlphaLens();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			alphaptr = new AlphaLens(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc); // an alternative constructor to use; in this case you don't need to call initialize_parameters
+			alphaptr = new AlphaLens(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode); // an alternative constructor to use; in this case you don't need to call initialize_parameters
 			new_lens = alphaptr;
 			break;
 		case SHEAR:
@@ -11677,7 +11677,7 @@ void QLens::set_integral_convergence_warnings(const bool warn)
 
 
 
-void QLens::reassign_lensparam_pointers_and_names()
+void QLens::reassign_lensparam_pointers_and_names(const bool reset_plimits)
 {
 	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
 	if (nlens > 0) {
@@ -11685,10 +11685,11 @@ void QLens::reassign_lensparam_pointers_and_names()
 			lens_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
 			lens_list[i]->assign_param_pointers();
 			lens_list[i]->assign_paramnames();
+			lens_list[i]->update_meta_parameters();
 		}
-		set_default_plimits();
+		if (reset_plimits) set_default_plimits();
 		update_parameter_list();
-		if (mpi_id==0) cout << "NOTE: plimits have been reset, since lens parameterization has been changed" << endl;
+		if ((reset_plimits) and (mpi_id==0)) cout << "NOTE: plimits have been reset, since lens parameterization has been changed" << endl;
 	}
 }
 

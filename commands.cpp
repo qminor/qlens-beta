@@ -3014,14 +3014,20 @@ void QLens::process_commands(bool read_file)
 				if ((words[1]=="sple") or (words[1]=="alpha"))
 				{
 					if (nwords > 9) Complain("more than 7 parameters not allowed for model sple");
+					if ((pmode < 0) or (pmode > 1)) Complain("parameter mode must be either 0 or 1");
 					if (nwords >= 6) {
-						double b, alpha, s;
+						double b, slope, slope2d, s;
 						double q, theta = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> b)) Complain("invalid b parameter for model sple");
-						if (!(ws[3] >> alpha)) Complain("invalid alpha parameter for model sple");
+						if (!(ws[3] >> slope)) {
+							if (pmode==0) Complain("invalid alpha parameter for model sple");
+							else if (pmode==1) Complain("invalid gamma parameter for model sple");
+						}
+						if (pmode==0) slope2d = slope;
+						else slope2d = slope-1;
 						if (!(ws[4] >> s)) Complain("invalid s (core) parameter for model sple");
 						if (!(ws[5] >> q)) Complain("invalid q parameter for model sple");
-						if (alpha <= 0) Complain("alpha cannot be less than or equal to zero (or else the mass diverges near r=0)");
+						if (slope2d <= 0) Complain("2D (projected) density log-slope cannot be less than or equal to zero (or else the mass diverges near r=0)");
 						if (nwords >= 7) {
 							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sple");
 							if (nwords == 8) {
@@ -3042,7 +3048,7 @@ void QLens::process_commands(bool read_file)
 						}
 						param_vals.input(8);
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
-						param_vals[0]=b; param_vals[1]=alpha; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
+						param_vals[0]=b; param_vals[1]=slope; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
 						else param_vals[7]=lens_list[lens_number]->zlens;
 						if (vary_parameters) {
@@ -3057,9 +3063,9 @@ void QLens::process_commands(bool read_file)
 									if (nwords==tot_nparams_to_vary+2) {
 										if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-									} else complain_str = "Must specify vary flags for five parameters (b,alpha,s,q,theta) in model sple";
+									} else complain_str = "Must specify vary flags for five parameters (b,slope,s,q,theta) in model sple";
 								}
-								else complain_str = "Must specify vary flags for seven parameters (b,alpha,s,q,theta,xc,yc) in model sple";
+								else complain_str = "Must specify vary flags for seven parameters (b,slope,s,q,theta,xc,yc) in model sple";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
 									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -3081,7 +3087,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, alpha, s, 0, q, theta, xc, yc);
+							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, slope, s, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -10130,6 +10136,26 @@ void QLens::process_commands(bool read_file)
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="shear_angle_towards_perturber")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Shear angle points towards (hypothetical) perturber: " << display_switch(Shear::angle_points_towards_perturber) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'shear_angle_towards_perturber' command; must specify 'on' or 'off'");
+				bool towards_perturber;
+				set_switch(towards_perturber,setword);
+				if (Shear::angle_points_towards_perturber != towards_perturber) {
+					Shear::angle_points_towards_perturber = towards_perturber;
+					if (Shear::use_shear_component_params==false) {
+						// awkward, but otherwise it doesn't change the actual theta_shear parameter
+						Shear::use_shear_component_params = true;
+						reassign_lensparam_pointers_and_names(false);
+						Shear::use_shear_component_params = false;
+						reassign_lensparam_pointers_and_names(false);
+					}
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="ellipticity_components")
 		{
 			if (nwords==1) {
@@ -13171,7 +13197,7 @@ void QLens::process_commands(bool read_file)
 						param_val = lensptr->get_parameter(j);
 						if (j==1) {
 							// shear angle
-							param_val += 90;
+							if (Shear::angle_points_towards_perturber) param_val += 90;
 							while (param_val > 90) param_val -= 180;
 							while (param_val < -90) param_val += 180;
 						}

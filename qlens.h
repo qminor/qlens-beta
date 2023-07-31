@@ -1240,7 +1240,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y);
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
-	void reassign_lensparam_pointers_and_names();
+	void reassign_lensparam_pointers_and_names(const bool reset_plimits = true);
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }

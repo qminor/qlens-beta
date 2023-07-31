@@ -486,10 +486,11 @@ struct LensIntegral : public Romberg
 class AlphaLens : public LensProfile
 {
 	private:
-	double alpha, bprime, sprime;
-	// Note that the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
+	double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
+	// Note that in emode=1, the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
 	double b, s;
 	double qsq, ssq; // used in lensing calculations
+	double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
 	static const double euler_mascheroni;
 	static const double def_tolerance;
 
@@ -511,20 +512,22 @@ class AlphaLens : public LensProfile
 	std::complex<double> deflection_angular_factor(const double &phi);
 	double rho3d_r_integrand_analytic(const double r);
 
-	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
-	AlphaLens()
+	AlphaLens(const int parameter_mode_in = 0)
 	{
 		set_null_ptrs_and_values();
-		setup_lens_properties();
+		setup_lens_properties(parameter_mode_in);
 	}
-	AlphaLens(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* qlens_in);
+	AlphaLens(const double zlens_in, const double zsrc_in, const double &b_in, const double &slope_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
 	AlphaLens(const AlphaLens* lens_in);
-	void initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	AlphaLens(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in) : AlphaLens() { initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in); }
+	void initialize_parameters(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	AlphaLens(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in=0) : AlphaLens(parameter_mode_in) {
+		initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
+	}
 	AlphaLens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
@@ -560,7 +563,7 @@ class PseudoJaffe : public LensProfile
 	double potential_spherical_rsq(const double rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
-	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
@@ -807,6 +810,7 @@ class Shear : public LensProfile
 	}
 	Shear(const Shear* lens_in);
 	static bool use_shear_component_params; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
+	static bool angle_points_towards_perturber; // direction of hypothetical perturber differs from shear angle by 90 degrees
 
 	void assign_paramnames();
 	void assign_param_pointers();

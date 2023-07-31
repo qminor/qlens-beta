@@ -12,6 +12,7 @@
 using namespace std;
 
 bool Shear::use_shear_component_params = false;
+bool Shear::angle_points_towards_perturber = false; // this option points towards a hypothetical distant perturber that would generate the given shear (differs by 90 degrees)
 const double CoreCusp::nstep = 0.2;
 const double CoreCusp::digamma_three_halves = 0.036489973978435;
 const double AlphaLens::euler_mascheroni = 0.57721566490153286060;
@@ -19,31 +20,35 @@ const double AlphaLens::def_tolerance = 1e-16;
 
 /*************************** Softened power law model (alpha) *****************************/
 
-AlphaLens::AlphaLens(const double zlens_in, const double zsrc_in, const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
+AlphaLens::AlphaLens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
 {
-	setup_lens_properties();
+	setup_lens_properties(parameter_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
-	initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in);
+	initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 }
 
-void AlphaLens::setup_lens_properties(const int parameter_mode, const int subclass)
+void AlphaLens::setup_lens_properties(const int parameter_mode_in, const int subclass)
 {
 	lenstype = ALPHA;
 	model_name = "sple";
 	special_parameter_command = "";
-	setup_base_lens_properties(8,3,true); // number of parameters = 7, is_elliptical_lens = true
+	setup_base_lens_properties(8,3,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
 
-void AlphaLens::initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
+void AlphaLens::initialize_parameters(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
 		const double &xc_in, const double &yc_in)
 {
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	b = bb;
 	s = ss;
-	alpha = aa;
+	if (parameter_mode==0) {
+		alpha = slope;
+	} else {
+		gamma = slope;
+	}
 	if (s < 0) s = -s; // don't allow negative core radii
 
 	update_meta_parameters_and_pointers();
@@ -54,6 +59,7 @@ AlphaLens::AlphaLens(const AlphaLens* lens_in)
 	copy_base_lensdata(lens_in);
 	b = lens_in->b;
 	alpha = lens_in->alpha;
+	if (parameter_mode==1) gamma = lens_in->gamma;
 	s = lens_in->s;
 
 	update_meta_parameters_and_pointers();
@@ -99,7 +105,11 @@ AlphaLens::AlphaLens(SPLE* sb_in, const int parameter_mode_in, const bool vary_m
 void AlphaLens::assign_paramnames()
 {
 	paramnames[0] = "b";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "";
-	paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
+	if (parameter_mode==0) {
+		paramnames[1] = "alpha"; latex_paramnames[1] = "\\alpha"; latex_param_subscripts[1] = "";
+	} else {
+		paramnames[1] = "gamma"; latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "";
+	}
 	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
 	set_geometric_paramnames(lensprofile_nparams);
 }
@@ -107,7 +117,11 @@ void AlphaLens::assign_paramnames()
 void AlphaLens::assign_param_pointers()
 {
 	param[0] = &b;
-	param[1] = &alpha;
+	if (parameter_mode==0) {
+		param[1] = &alpha;
+	} else {
+		param[1] = &gamma;
+	}
 	param[2] = &s;
 	set_geometric_param_pointers(lensprofile_nparams);
 }
@@ -120,6 +134,7 @@ void AlphaLens::update_meta_parameters()
 	bprime = b*f_major_axis;
 	sprime = s*f_major_axis;
 	qsq = q*q; ssq = sprime*sprime;
+	if (parameter_mode==1) alpha = gamma-1;
 }
 
 void AlphaLens::set_auto_stepsizes()
@@ -134,7 +149,11 @@ void AlphaLens::set_auto_stepsizes()
 void AlphaLens::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
-	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2;
+	if (parameter_mode==0) {
+		set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 2; // for 2D log-slope alpha
+	} else {
+		set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 1; penalty_upper_limits[1] = 3; // for 3D log-slope gamma
+	}
 	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
 	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
@@ -2155,7 +2174,11 @@ void Shear::assign_paramnames()
 		paramnames[1] = "shear2";      latex_paramnames[1] = "\\gamma"; latex_param_subscripts[1] = "2";
 	} else {
 		paramnames[0] = "shear";       latex_paramnames[0] = "\\gamma"; latex_param_subscripts[0] = "ext";
-		paramnames[1] = "theta_shear"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "\\gamma";
+		if (angle_points_towards_perturber) {
+			paramnames[1] = "theta_pert"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "pert";
+		} else {
+			paramnames[1] = "theta_shear"; latex_paramnames[1] = "\\theta"; latex_param_subscripts[1] = "\\gamma";
+		}
 	}
 	paramnames[2] = "xc"; latex_paramnames[2] = "x"; latex_param_subscripts[2] = "c";
 	paramnames[3] = "yc"; latex_paramnames[3] = "y"; latex_param_subscripts[3] = "c";
@@ -2194,8 +2217,9 @@ void Shear::update_meta_parameters()
 		set_angle_from_components(shear1,shear2);
 	} else {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
-		shear1 = -shear*cos(2*theta_eff);
-		shear2 = -shear*sin(2*theta_eff);
+		if (angle_points_towards_perturber) theta_eff -= M_HALFPI; // the phase shift is because the angle is the direction of the perturber, NOT the shear angle
+		shear1 = shear*cos(2*theta_eff);
+		shear2 = shear*sin(2*theta_eff);
 	}
 }
 
@@ -2285,7 +2309,8 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 			angle = -angle;
 		}
 	}
-	angle = 0.5*(angle+M_PI); // the phase shift is because the angle is the direction of the perturber, NOT the shear angle
+	angle /= 2;
+	if (angle_points_towards_perturber) angle += M_HALFPI; // the phase shift is because the angle is the direction of the perturber, NOT the shear angle
 	if (orient_major_axis_north) angle -= M_HALFPI;
 	while (angle > M_HALFPI) angle -= M_PI;
 	while (angle <= -M_HALFPI) angle += M_PI;
