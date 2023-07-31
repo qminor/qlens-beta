@@ -8,7 +8,6 @@
 #include <cmath>
 #include "vector.h"
 #include "errors.h"
-using namespace std;
 
 template <class T>
 class Matrix
@@ -182,7 +181,7 @@ void Matrix<T>::input(const int &m, const int &n, const char filename[])
 		delete[] a;
 	}
 
-	ifstream infile(filename);
+	std::ifstream infile(filename);
 
 	nrows = m; ncolumns = n;
 	a = new T*[nrows];
@@ -198,7 +197,7 @@ void Matrix<T>::input(const int &m, const int &n, const char filename[])
 template <class T>
 void Matrix<T>::open(const char filename[])
 {
-	ifstream infile(filename);
+	std::ifstream infile(filename);
 
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++) {
@@ -221,13 +220,13 @@ double Matrix<T>::bicubic_interpolate(const double &t, const double &u) // can u
 template <class T>
 void Matrix<T>::output(const char filename[])
 {
-	ofstream outfile(filename);
+	std::ofstream outfile(filename);
 
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++) {
 			outfile << a[i][j] << " ";
 		}
-		outfile << endl;
+		outfile << std::endl;
 	}
 	return;
 }
@@ -552,7 +551,7 @@ void Matrix<T>::lu_decomposition(int* indx)
 			vv[imax] = vv[j];
 		}
 		indx[j] = imax;
-		if (a[j][j] == 0) { cout << "Singular matrix!\n"; a[j][j] = TINY; }
+		if (a[j][j] == 0) { std::cout << "Singular matrix!\n"; a[j][j] = TINY; }
 		if (j != nrows-1) {
 			dum = 1.0/(a[j][j]);
 			for (i=j+1; i < nrows; i++) a[i][j] *= dum;
@@ -1000,8 +999,8 @@ void Matrix<T>::print(void)
 {
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++)
-			cout << a[i][j] << "\t";
-		cout << endl;
+			std::cout << a[i][j] << "\t";
+		std::cout << std::endl;
 	}
 }
 

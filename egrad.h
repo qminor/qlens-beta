@@ -8,7 +8,6 @@
 #include <string>
 #include <sstream>
 #include <vector>
-using namespace std;
 
 class EllipticityGradient : public Brent
 {
@@ -63,7 +62,7 @@ class EllipticityGradient : public Brent
 	int get_egrad_nparams();
 	int get_fgrad_nparams();
 	void update_egrad_meta_parameters();
-	void set_geometric_paramnames_egrad(vector<string>& paramnames, vector<string>& latex_paramnames, vector<string>& latex_param_subscripts, int &qi, string latex_suffix = "");
+	void set_geometric_paramnames_egrad(std::vector<std::string>& paramnames, std::vector<std::string>& latex_paramnames, std::vector<std::string>& latex_param_subscripts, int &qi, std::string latex_suffix = "");
 	void set_geometric_param_ranges_egrad(boolvector& set_auto_penalty_limits, dvector& penalty_lower_limits, dvector& penalty_upper_limits, int &param_i);
 	void set_geometric_stepsizes_egrad(dvector& stepsizes, int &index);
 	void set_fourier_paramnums(int *paramnum, int paramnum0);
@@ -76,9 +75,9 @@ class EllipticityGradient : public Brent
 	double egrad_tanh_function(const double xi, double *paramvals, const int param_index);
 	double egrad_bspline_function(const double xi, double *paramvals, const int param_index);
 	double elliptical_radius_root(const double x, const double y);
-	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const string suffix = "");
-	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const string suffix = "");
-	void output_egrad_values_and_knots(ofstream& outfile);
+	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const std::string suffix = "");
+	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const std::string suffix = "");
+	void output_egrad_values_and_knots(std::ofstream& outfile);
 	int get_egrad_mode() { return egrad_mode; }
 
 	private:
@@ -207,39 +206,39 @@ struct IsophoteData {
 			}
 		}
 	}
-	void plot_isophote_parameters(const string suffix) {
-		string sbname = "sbvals_" + suffix + ".dat";
-		string qname = "qvals_" + suffix + ".dat";
-		string thetaname = "thetavals_" + suffix + ".dat";
-		string xcname = "xcvals_" + suffix + ".dat";
-		string ycname = "ycvals_" + suffix + ".dat";
+	void plot_isophote_parameters(const std::string suffix) {
+		std::string sbname = "sbvals_" + suffix + ".dat";
+		std::string qname = "qvals_" + suffix + ".dat";
+		std::string thetaname = "thetavals_" + suffix + ".dat";
+		std::string xcname = "xcvals_" + suffix + ".dat";
+		std::string ycname = "ycvals_" + suffix + ".dat";
 
-		string A3name = "A3vals_" + suffix + ".dat";
-		string B3name = "B3vals_" + suffix + ".dat";
-		string A4name = "A4vals_" + suffix + ".dat";
-		string B4name = "B4vals_" + suffix + ".dat";
+		std::string A3name = "A3vals_" + suffix + ".dat";
+		std::string B3name = "B3vals_" + suffix + ".dat";
+		std::string A4name = "A4vals_" + suffix + ".dat";
+		std::string B4name = "B4vals_" + suffix + ".dat";
 
-		string A5name = "A5vals_" + suffix + ".dat";
-		string B5name = "B5vals_" + suffix + ".dat";
-		string A6name = "A6vals_" + suffix + ".dat";
-		string B6name = "B6vals_" + suffix + ".dat";
+		std::string A5name = "A5vals_" + suffix + ".dat";
+		std::string B5name = "B5vals_" + suffix + ".dat";
+		std::string A6name = "A6vals_" + suffix + ".dat";
+		std::string B6name = "B6vals_" + suffix + ".dat";
 
-		ofstream sbout(sbname.c_str());
-		ofstream qout(qname.c_str());
-		ofstream thetaout(thetaname.c_str());
-		ofstream xcout(xcname.c_str());
-		ofstream ycout(ycname.c_str());
+		std::ofstream sbout(sbname.c_str());
+		std::ofstream qout(qname.c_str());
+		std::ofstream thetaout(thetaname.c_str());
+		std::ofstream xcout(xcname.c_str());
+		std::ofstream ycout(ycname.c_str());
 
-		ofstream A3out(A3name.c_str());
-		ofstream B3out(B3name.c_str());
-		ofstream A4out(A4name.c_str());
-		ofstream B4out(B4name.c_str());
+		std::ofstream A3out(A3name.c_str());
+		std::ofstream B3out(B3name.c_str());
+		std::ofstream A4out(A4name.c_str());
+		std::ofstream B4out(B4name.c_str());
 
 
-		ofstream A5out;
-		ofstream B5out;
-		ofstream A6out;
-		ofstream B6out;
+		std::ofstream A5out;
+		std::ofstream B5out;
+		std::ofstream A6out;
+		std::ofstream B6out;
 		if (use_A56) {
 			A5out.open(A5name.c_str());
 			B5out.open(B5name.c_str());
@@ -250,21 +249,21 @@ struct IsophoteData {
 
 
 		for (int i=0; i < n_xivals; i++) {
-			sbout << xivals[i] << " " << sb_avg_vals[i] << " " << 2*sb_errs[i] << endl;
-			qout << xivals[i] << " " << qvals[i] << " " << 2*q_errs[i] << endl;
-			thetaout << xivals[i] << " " << radians_to_degrees(thetavals[i]) << " " << radians_to_degrees(2*theta_errs[i]) << endl;
-			xcout << xivals[i] << " " << xcvals[i] << " " << 2*xc_errs[i] << endl;
-			ycout << xivals[i] << " " << ycvals[i] << " " << 2*yc_errs[i] << endl;
-			A3out << xivals[i] << " " << A3vals[i] << " " << 2*A3_errs[i] << endl;
-			B3out << xivals[i] << " " << B3vals[i] << " " << 2*B3_errs[i] << endl;
-			A4out << xivals[i] << " " << A4vals[i] << " " << 2*A4_errs[i] << endl;
-			B4out << xivals[i] << " " << B4vals[i] << " " << 2*B4_errs[i] << endl;
+			sbout << xivals[i] << " " << sb_avg_vals[i] << " " << 2*sb_errs[i] << std::endl;
+			qout << xivals[i] << " " << qvals[i] << " " << 2*q_errs[i] << std::endl;
+			thetaout << xivals[i] << " " << radians_to_degrees(thetavals[i]) << " " << radians_to_degrees(2*theta_errs[i]) << std::endl;
+			xcout << xivals[i] << " " << xcvals[i] << " " << 2*xc_errs[i] << std::endl;
+			ycout << xivals[i] << " " << ycvals[i] << " " << 2*yc_errs[i] << std::endl;
+			A3out << xivals[i] << " " << A3vals[i] << " " << 2*A3_errs[i] << std::endl;
+			B3out << xivals[i] << " " << B3vals[i] << " " << 2*B3_errs[i] << std::endl;
+			A4out << xivals[i] << " " << A4vals[i] << " " << 2*A4_errs[i] << std::endl;
+			B4out << xivals[i] << " " << B4vals[i] << " " << 2*B4_errs[i] << std::endl;
 
 			if (use_A56) {
-				A5out << xivals[i] << " " << A5vals[i] << " " << 2*A5_errs[i] << endl;
-				B5out << xivals[i] << " " << B5vals[i] << " " << 2*B5_errs[i] << endl;
-				A6out << xivals[i] << " " << A6vals[i] << " " << 2*A6_errs[i] << endl;
-				B6out << xivals[i] << " " << B6vals[i] << " " << 2*B6_errs[i] << endl;
+				A5out << xivals[i] << " " << A5vals[i] << " " << 2*A5_errs[i] << std::endl;
+				B5out << xivals[i] << " " << B5vals[i] << " " << 2*B5_errs[i] << std::endl;
+				A6out << xivals[i] << " " << A6vals[i] << " " << 2*A6_errs[i] << std::endl;
+				B6out << xivals[i] << " " << B6vals[i] << " " << 2*B6_errs[i] << std::endl;
 			}
 		}
 	}

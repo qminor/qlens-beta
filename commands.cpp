@@ -13,8 +13,9 @@
 #include <sstream>
 #include <cstdlib>
 
-#ifdef USE_JSONCPP
+#ifdef USE_COOLEST
 #include "json.h"
+#include <CCfits/CCfits>
 #endif
 
 #ifdef USE_READLINE
@@ -8991,6 +8992,14 @@ void QLens::process_commands(bool read_file)
 				if (!image_pixel_data->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
 				use_noise_map = true;
 			}
+			else if (words[1]=="unload_noisemap")
+			{
+				string filename;
+				if (nwords != 2) Complain("no arguments are required for 'sbmap unload_noisemap'");
+				if (!use_noise_map) Complain("no noise map has been loaded from FITS file");
+				if (image_pixel_data) image_pixel_data->unload_noise_map();
+				use_noise_map = false;
+			}
 			else if (words[1]=="loadpsf")
 			{
 				string filename;
@@ -9000,6 +9009,16 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
 				if (!load_psf_fits(filename,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
+			}
+			else if (words[1]=="savepsf")
+			{
+				string filename;
+				if (nwords==2) {
+					Complain("filename for PSF in FITS format is required (e.g. 'sbmap savepsf file.fits')");
+				} else if (nwords==3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
+				} else Complain("too many arguments to 'sbmap savepsf'");
+				if (!save_psf_fits(filename)) Complain("could not save PSF fits file '" << filename << "'");
 			}
 			else if (words[1]=="unloadpsf")
 			{
@@ -9017,6 +9036,7 @@ void QLens::process_commands(bool read_file)
 					delete[] foreground_psf_matrix;
 					foreground_psf_matrix = NULL;
 				}
+				psf_filename = "";
 			}
 			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
 			{
@@ -13010,14 +13030,230 @@ void QLens::process_commands(bool read_file)
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
 		} else if (words[0]=="test") {
-#ifdef USE_JSONCPP
-			ifstream coolestin("coolest_fixed_input.json");
-			Json::Reader reader;
+			if (LensProfile::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
+			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
+#ifdef USE_COOLEST
+			std::ifstream fin;
 			Json::Value coolest;
-			coolestin >> coolest;
-			reader.parse(coolestin,coolest);
-			cout << "standard: " << coolest["standard"].asString() << endl;
-			cout << "H0: " << coolest["H0"].asDouble() << endl;
+			fin.open("coolest_fixed_input.json",std::ifstream::in);
+			fin >> coolest;
+			fin.close();
+
+			coolest["instrument"]["pixel_size"] = data_pixel_size;
+			//cout << "pixel size: " << coolest["instrument"]["pixel_size"].asDouble() << endl;
+			//cout << "standard: " << coolest["standard"].asString() << endl;
+			//cout << "H0: " << coolest["cosmology"]["H0"].asDouble() << endl;
+
+			Json::Value pixels_psf;
+			pixels_psf["field_of_view_x"] = Json::Value(Json::arrayValue);
+			pixels_psf["field_of_view_x"].append(0);
+			pixels_psf["field_of_view_x"].append( data_pixel_size*psf_npixels_x );
+			pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
+			pixels_psf["field_of_view_y"].append(0);
+			pixels_psf["field_of_view_y"].append( data_pixel_size*psf_npixels_y );
+			pixels_psf["num_pix_x"] = psf_npixels_x;
+			pixels_psf["num_pix_y"] = psf_npixels_y;
+			pixels_psf["fits_file"] = Json::Value();
+			pixels_psf["fits_file"]["path"] = psf_filename;
+			coolest["instrument"]["psf"]["pixels"] = pixels_psf;
+
+			Json::Value pixels_obs;
+			double grid_xmin = grid_xcenter - grid_xlength/2;
+			double grid_xmax = grid_xcenter + grid_xlength/2;
+			double grid_ymin = grid_ycenter - grid_ylength/2;
+			double grid_ymax = grid_ycenter + grid_ylength/2;
+
+			pixels_obs["field_of_view_x"] = Json::Value(Json::arrayValue);
+			pixels_obs["field_of_view_x"].append(grid_xmin);
+			pixels_obs["field_of_view_x"].append(grid_xmax);
+			pixels_obs["field_of_view_y"] = Json::Value(Json::arrayValue);
+			pixels_obs["field_of_view_y"].append(grid_ymin);
+			pixels_obs["field_of_view_y"].append(grid_ymax);
+			pixels_obs["num_pix_x"] = n_image_pixels_x;
+			pixels_obs["num_pix_y"] = n_image_pixels_y;
+			pixels_obs["fits_file"] = Json::Value();
+			pixels_obs["fits_file"]["path"] = image_pixel_data->data_fits_filename;
+			coolest["observation"]["pixels"] = pixels_obs;
+
+			Json::Value noise;
+			if (use_noise_map) {
+				Json::Value pixels_noise;
+				pixels_noise["field_of_view_x"] = Json::Value(Json::arrayValue);
+				pixels_noise["field_of_view_x"].append(grid_xmin);
+				pixels_noise["field_of_view_x"].append(grid_xmax);
+				pixels_noise["field_of_view_y"] = Json::Value(Json::arrayValue);
+				pixels_noise["field_of_view_y"].append(grid_ymin);
+				pixels_noise["field_of_view_y"].append(grid_ymax);
+				pixels_noise["num_pix_x"] = n_image_pixels_x;
+				pixels_noise["num_pix_y"] = n_image_pixels_y;
+				pixels_noise["fits_file"] = Json::Value();
+				pixels_noise["fits_file"]["path"] = image_pixel_data->noise_map_fits_filename;
+				noise["type"] = "NoiseMap";
+				noise["noise_map"] = pixels_noise;
+			} else {
+				noise["type"] = "UniformGaussianNoise";
+				noise["std_dev"] = data_pixel_noise;
+			}
+			coolest["observation"]["noise"] = noise;
+
+			Json::Value mass_model;
+			map<string,string> names_lookup;
+
+			//lens["type"] = "Galaxy";
+			//lens["name"] = ;
+			//lens["redshift"] = lens_redshift;
+			//lens["mass_model"] = Json::Value(Json::arrayValue);
+			//lens["light_model"] = Json::Value(Json::arrayValue);
+
+			Json::Value posterior_stats;
+			posterior_stats["mean"] = Json::Value::null;
+			posterior_stats["median"] = Json::Value::null;
+			posterior_stats["percentile_16th"] = Json::Value::null;
+			posterior_stats["percentile_84th"] = Json::Value::null;
+
+			Json::Value prior;
+			prior["type"] = Json::Value::null;
+
+			Json::Value lensing_entities = Json::Value(Json::arrayValue);
+			LensProfile* lensptr;
+			int i,j;
+			double param_val;
+			string typestring;
+			for (i=0; i < nlens; i++) {
+				lensptr = lens_list[i];
+				typestring = "Galaxy";
+				string name = lensptr->model_name;
+				if (name=="sple") name = "SPEMD";
+				else if (name=="shear") {
+					name = "ExternalShear";
+					typestring = "MassField";
+				}
+				Json::Value lens;
+				lens["type"] = typestring;
+				lens["redshift"] = lensptr->zlens;
+				lens["mass_model"] = Json::Value(Json::arrayValue);
+				lens["light_model"] = Json::Value(Json::arrayValue);
+
+				if (lensptr->model_name=="sple")
+				{
+					names_lookup = {{"xc","center_x"},{"yc","center_y"},{"alpha","gamma"},{"theta","phi"},{"q","q"},{"b","theta_E"},{"s","s"}};
+					Json::Value param;
+					param["posterior_stats"] = posterior_stats;
+					param["prior"] = prior;
+					for (j=0; j < lensptr->n_params-1; j++) {
+						Json::Value point_estimate;
+						param_val = lensptr->get_parameter(j);
+						if (lensptr->paramnames[j]=="alpha") param_val += 1; // from 2D power index to 3D power index	
+						point_estimate["value"] = param_val;
+						if ((lensptr->paramnames[j]=="s") and (param_val==0)) {
+							name = "PEMD";
+							// skip 's' if it is zero, since we will call it a PEMD instead of SPEMD
+						} else {
+							param["point_estimate"] = point_estimate;
+							mass_model["parameters"][names_lookup[lensptr->paramnames[j]]] = param;
+						}
+					}
+					mass_model["type"] = name;
+					lens["mass_model"].append(mass_model);
+
+					//cout << "Lens number " << i << " is a SPLE!" << endl;
+				}
+				else if (lens_list[i]->model_name=="shear")
+				{
+					names_lookup = {{"xc","center_x"},{"yc","center_y"},{"shear","gamma_ext"},{"theta_shear","phi_ext"}};
+					Json::Value param;
+					param["posterior_stats"] = posterior_stats;
+					param["prior"] = prior;
+					mass_model["type"] = typestring;
+					mass_model["parameters"] = Json::Value();
+					for (j=0; j < 2; j++) {
+						Json::Value point_estimate;
+						param_val = lensptr->get_parameter(j);
+						if (j==1) {
+							// shear angle
+							param_val += 90;
+							while (param_val > 90) param_val -= 180;
+							while (param_val < -90) param_val += 180;
+						}
+						point_estimate["value"] = param_val;
+						param["point_estimate"] = point_estimate;
+						mass_model["parameters"][names_lookup[lensptr->paramnames[j]]] = param;
+					}
+					mass_model["type"] = name;
+					lens["mass_model"].append(mass_model);
+  
+					//cout << "Lens number " << i << " is an external shear!" << endl;
+				}
+				else
+				{
+					die("mass model type for lens %i not supported in COOLEST yet",i);
+				}
+				lens["name"] = name;
+				lensing_entities.append(lens);
+			}
+			coolest["lensing_entities"] = lensing_entities;
+
+			if (source_fit_mode==Delaunay_Source) {
+				if (delaunay_srcgrid) {
+					vector<double> xvals;
+					vector<double> yvals;
+					vector<double> sbvals;
+					delaunay_srcgrid->get_grid_points(xvals,yvals,sbvals);
+					int n_srcpts = sbvals.size();
+
+					string filename = "qlens_source.fits";
+					std::unique_ptr<CCfits::FITS> pFits(nullptr);
+					pFits.reset( new CCfits::FITS("!"+filename,CCfits::Write) );
+
+					std::string newName("NEW-EXTENSION");
+					std::vector<std::string> ColFormats = {"E","E","E"};
+					std::vector<std::string> ColNames = {"x","y","z"};
+					std::vector<std::string> ColUnits = {"dum","dum","dum"};
+					CCfits::Table* newTable = pFits->addTable(newName,n_srcpts,ColNames,ColFormats,ColUnits);
+					newTable->column("x").write(xvals,1);  
+					newTable->column("y").write(yvals,1);
+					newTable->column("z").write(sbvals,1);
+
+					// Then create the remaining json fields
+					Json::Value source;
+					source["type"] = "Galaxy";
+					source["name"] = "qlens Delaunay source";
+					source["redshift"] = source_redshift;
+					source["mass_model"] = Json::Value(Json::arrayValue);
+					source["light_model"] = Json::Value(Json::arrayValue);
+
+					Json::Value light_model;
+					Json::Value pixels_irr;
+					pixels_irr["field_of_view_x"] = Json::Value(Json::arrayValue);
+					pixels_irr["field_of_view_x"].append(0);
+					pixels_irr["field_of_view_x"].append(0);
+					pixels_irr["field_of_view_y"] = Json::Value(Json::arrayValue);
+					pixels_irr["field_of_view_y"].append(0);
+					pixels_irr["field_of_view_y"].append(0);
+					pixels_irr["num_pix"] = n_srcpts;
+					pixels_irr["fits_file"] = Json::Value();
+					pixels_irr["fits_file"]["path"] = filename;  
+					light_model["parameters"] = Json::Value();
+					light_model["parameters"]["pixels"] = pixels_irr;
+					light_model["type"] = "IrregularGrid";
+					source["light_model"].append( light_model );
+
+					lensing_entities.append( source );
+
+					coolest["lensing_entities"] = lensing_entities;
+
+				} else {
+					Complain("Delaunay source grid has not been constructed, so it cannot be output in FITS table");
+				}
+			} else if (Delaunay_Source==Shapelet_Source) {
+				// Implement this when you get time
+			} else if (Delaunay_Source==Parameterized_Source) {
+				// Implement this when you get time
+			}
+
+			std::ofstream jsonfile("coolest_qlens.json");
+			jsonfile << coolest;
+			jsonfile.close();
 #endif
 
 			/*

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <iomanip>
 
+using namespace std;
+
 const double Simplex::t0_default = 1.0;
 const double Simplex::tfinal_default = 1e-10;
 const double Simplex::tinc_default = 0.9;

@@ -13,7 +13,6 @@
 #include <iostream>
 #include <vector>
 #include <complex>
-using namespace std;
 
 class Sersic;
 class DoubleSersic;
@@ -85,16 +84,15 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
-	int n_param2;
 	int lensprofile_nparams; // just the parameters that define the kappa profile (rather than the angular structure or center coord's)
 	bool angle_param_exists;
 	int ellipticity_paramnum; // used to keep track of ellipticity parameter (this feature is used only by qtab models)
 	boolvector vary_params;
 	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
-	string model_name;
-	string special_parameter_command;
-	vector<string> paramnames;
-	vector<string> latex_paramnames, latex_param_subscripts;
+	std::string model_name;
+	std::string special_parameter_command;
+	std::vector<std::string> paramnames;
+	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
 	dvector penalty_upper_limits, penalty_lower_limits;
 	dvector stepsizes;
@@ -210,7 +208,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
 	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
-	string subclass_label;
+	std::string subclass_label;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
 	LensProfile() {
@@ -287,7 +285,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
-	bool set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
+	bool set_limits_specific_parameter(const std::string name_in, const double& lower, const double& upper);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
 	void shift_angle_90();
 	void shift_angle_minus_90();
@@ -301,11 +299,12 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
+	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
+	virtual double get_parameter(const int i);
 	virtual void get_parameters(double* params);
-	bool get_specific_parameter(const string name_in, double& value);
+	bool get_specific_parameter(const std::string name_in, double& value);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
-	bool update_specific_parameter(const string name_in, const double& value);
+	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool update_specific_parameter(const int paramnum, const double& value);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -324,14 +323,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 	void print_parameters();
-	string mkstring_doub(const double db);
-	string mkstring_int(const int i);
-	string get_parameters_string();
+	std::string mkstring_doub(const double db);
+	std::string mkstring_int(const int i);
+	std::string get_parameters_string();
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
-	virtual void print_lens_command(ofstream& scriptout, const bool use_limits);
-	void output_lens_command_nofit(string& command);
-	virtual void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
+	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
+	virtual void print_lens_command(std::ofstream& scriptout, const bool use_limits);
+	void output_lens_command_nofit(std::string& command);
+	virtual void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
 	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -355,7 +354,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	virtual double kappa_avg_r(const double r);
 	//void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
-	void plot_kappa_profile(double rmin, double rmax, int steps, ofstream& kout, ofstream& kdout);
+	void plot_kappa_profile(double rmin, double rmax, int steps, std::ofstream& kout, std::ofstream& kdout);
 	void plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals);
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
 	bool has_kapavg_profile();
@@ -373,7 +372,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	public:
 	bool isspherical() { return (q==1.0); }
-	string get_model_name() { return model_name; }
+	std::string get_model_name() { return model_name; }
 	LensProfileName get_lenstype() { return lenstype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	void get_center_coords(lensvector &center) { center[0]=x_center; center[1]=y_center; }
@@ -509,7 +508,7 @@ class AlphaLens : public LensProfile
 	void hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess);
 	double potential_elliptical_nocore(const double x, const double y);
 	double potential_spherical_rsq_nocore(const double rsq);
-	complex<double> deflection_angular_factor(const double &phi);
+	std::complex<double> deflection_angular_factor(const double &phi);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -948,7 +947,7 @@ class CoreCusp : public LensProfile
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
-	void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
+	void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
 
 	public:
 	bool calculate_tidal_radius;
@@ -1264,7 +1263,7 @@ class Tabulated_Model : public LensProfile
 	double grid_logrlength;
 	double *grid_logrvals, *grid_phivals;
 	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
-	string original_lens_command; // used for saving commands to reproduce this model
+	std::string original_lens_command; // used for saving commands to reproduce this model
 	double original_kscale, original_rscale;
 	bool loaded_from_file;
 
@@ -1278,18 +1277,18 @@ class Tabulated_Model : public LensProfile
 		setup_lens_properties();
 	}
 	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, QLens*);
-	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, QLens*);
+	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, std::ifstream& tabfile, const std::string& tab_filename, QLens*);
 
 	Tabulated_Model(const Tabulated_Model* lens_in);
 	~Tabulated_Model();
-	void output_tables(const string tabfile_root);
+	void output_tables(const std::string tabfile_root);
 
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void print_lens_command(ofstream& scriptout, const bool use_limits);
+	void print_lens_command(std::ofstream& scriptout, const bool use_limits);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
@@ -1324,11 +1323,11 @@ class QTabulated_Model : public LensProfile
 		setup_lens_properties();
 	}
 	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin, const int q_N, QLens*);
-	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, QLens*);
+	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, std::ifstream& tabfile, QLens*);
 
 	QTabulated_Model(const QTabulated_Model* lens_in);
 	~QTabulated_Model();
-	void output_tables(const string tabfile_root);
+	void output_tables(const std::string tabfile_root);
 
 	void assign_paramnames();
 	void assign_param_pointers();

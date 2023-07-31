@@ -815,8 +815,8 @@ QLens::QLens() : UCMC()
 	use_custom_prior = false;
 	nlens = 0;
 	n_sb = 0;
-	sbmin = -1e30;
-	sbmax = 1e30;
+	//sbmin = -1e30;
+	//sbmax = 1e30;
 	n_derived_params = 0;
 	radial_grid = true;
 	grid_xlength = 20; // default gridsize
@@ -13164,16 +13164,19 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		if ((data_pixel_noise != 0) and (!use_noise_map)) chisq_from_residuals /= data_pixel_noise*data_pixel_noise; // if using noise map, 1/sig^2 factors are included in 'plot_surface_brightness' function above
 		cout << "chi-square from residuals = " << chisq_from_residuals << endl;
 	}
-
-	sbmax=-1e30;
-	sbmin=1e30;
-	// store max sb just in case we want to set the color bar scale using it
-	for (i=0; i < n_image_pixels_x; i++) {
-		for (j=0; j < n_image_pixels_y; j++) {
-			if (image_pixel_grid->surface_brightness[i][j] > sbmax) sbmax = image_pixel_grid->surface_brightness[i][j];
-			if (image_pixel_grid->surface_brightness[i][j] < sbmin) sbmin = image_pixel_grid->surface_brightness[i][j];
-		}
+	if ((mpi_id==0) and (verbose) and (plot_residual) and (use_noise_map)) {
+		cout << "*NOTE*: Plotting normalized residuals using noise map" << endl;
 	}
+
+	//sbmax=-1e30;
+	//sbmin=1e30;
+	//// store max sb just in case we want to set the color bar scale using it
+	//for (i=0; i < n_image_pixels_x; i++) {
+		//for (j=0; j < n_image_pixels_y; j++) {
+			//if (image_pixel_grid->surface_brightness[i][j] > sbmax) sbmax = image_pixel_grid->surface_brightness[i][j];
+			//if (image_pixel_grid->surface_brightness[i][j] < sbmin) sbmin = image_pixel_grid->surface_brightness[i][j];
+		//}
+	//}
 	if (offload_to_data) {
 		if ((plot_residual) and (use_data)) {
 			for (i=0; i < n_image_pixels_x; i++) {
@@ -13971,7 +13974,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	//if (mpi_id==0) image_pixel_grid->plot_surface_brightness("img_pixel",false,false);
 		//run_plotter("imgpixel");
 
-	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel
+	double cov_inverse;
 	if (!use_noise_map) {
 		if (data_pixel_noise==0) cov_inverse = 1; // doesn't matter what cov_inverse is, since we won't be regularizing
 		else cov_inverse = 1.0/SQR(data_pixel_noise);

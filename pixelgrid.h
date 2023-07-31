@@ -9,7 +9,6 @@
 #include "delaunay.h"
 #include <vector>
 #include <iostream>
-using namespace std;
 
 class ImagePixelGrid;
 class SourcePixelGrid;
@@ -233,6 +232,7 @@ class DelaunayGrid
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
+	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices();
 	void generate_hmatrices();
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL);
@@ -394,6 +394,8 @@ struct ImagePixelData : public Sort
 	double pixel_size, pixel_noise;
 	double global_max_sb;
 	double emask_rmax;
+	string data_fits_filename;
+	string noise_map_fits_filename;
 	ostream* isophote_fit_out;
 	ImagePixelData()
 	{
@@ -423,6 +425,7 @@ struct ImagePixelData : public Sort
 		return load_data_fits(true,fits_filename, hdu_indx, show_header);
 	}
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
+	void unload_noise_map();
 	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_noise(const double noise) { pixel_noise = noise; }
 	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);

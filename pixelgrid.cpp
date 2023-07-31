@@ -3611,6 +3611,7 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 	}
 	//cout << "searching for point (" << input_pt[0] << "," << input_pt[1] << "), starting with pixel " << n << " (" << srcpts[n][0] << " " << srcpts[n][1] << ")" << endl;
 	bool inside_triangle;
+	bool on_vertex = false;
 	int trinum;
 	trinum = search_grid(n,input_pt,inside_triangle);
 	//cout << "...found in triangle " << trinum << endl;
@@ -3621,11 +3622,14 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
-	if ((inside_triangle) and (sqrdistmin < 1e-6)) inside_triangle = false;
+	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+		inside_triangle = false;
+		on_vertex = true;
+	}
 
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		if (zero_outside_border) {
+		if ((zero_outside_border) and (!on_vertex)) {
 			mapped_delaunay_srcpixels_ij.push_back(-1);
 			mapped_delaunay_srcpixels_ij.push_back(-1);
 			mapped_delaunay_srcpixels_ij.push_back(-1);
@@ -3647,7 +3651,6 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 			}
 			*/
 		}
-
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
 		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
@@ -3745,6 +3748,7 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	}
 
 	bool inside_triangle;
+	bool on_vertex = false;
 	int trinum = search_grid(n,input_pt,inside_triangle);
 	Triangle *triptr = &triangle[trinum];
 	double sqrdist, sqrdistmin=1e30;
@@ -3753,10 +3757,13 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
-	if ((inside_triangle) and (sqrdistmin < 1e-6)) inside_triangle = false;
+	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+		inside_triangle = false;
+		on_vertex = true;
+	}
 	if (!inside_triangle) {
 		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		if (zero_outside_border) {
+		if ((zero_outside_border) and (!on_vertex)) {
 			return 0;
 			/*
 			double sqrlenmax = 1e30;
@@ -3795,6 +3802,7 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 	lensvector *pts[3];
 	double *sb[3];
 	bool inside_triangle;
+	bool on_vertex = false;
 	int trinum = search_grid(0,input_pt,inside_triangle);
 	Triangle *triptr = &triangle[trinum];
 	if (!inside_triangle) {
@@ -3805,7 +3813,12 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 			sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 		}
-		if (zero_outside_border) {
+		if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+			inside_triangle = false;
+			on_vertex = true;
+		}
+
+		if ((zero_outside_border) and (!on_vertex)) {
 			return 0;
 			/*
 			double sqrlenmax = 1e30;
@@ -4133,76 +4146,6 @@ void QLens::plot_matern_function(double rmin, double rmax, int rpts, const char 
 	}
 }
 
-/*
-void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index)
-{
-	int i,j;
-	double sqrdist;
-	const double epsilon = 1e-7;
-	double *covptr;
-	double matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
-	covptr = cov_matrix_packed;
-	for (i=0; i < n_srcpts; i++) {
-		if ((kernel_type==0) or (kernel_type==1)) *(covptr++) = 1.0;
-		else *(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
-		for (j=i+1; j < n_srcpts; j++) {
-			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
-			if (kernel_type==0) {
-				if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
-				double x = sqrt(2*matern_index*sqrdist)/corr_length;
-				//double checkexp = pow(2,1-matern_index)*pow(x,matern_index)*modified_bessel_function(x,matern_index)/Gamma(matern_index); // Matern kernel
-				//double expf = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
-				//cout << "CHECKEXP: " << checkexp << " " << expf << endl;
-				*(covptr) = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
-				//if ((i==0) and (j==1)) cout << "MATERN: " << x << " " << *(covptr) << endl;
-				covptr++;
-			} else if (kernel_type==1) {
-				*(covptr++) = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
-			} else {
-				*(covptr++) = exp(-sqrdist/(2*corr_length*corr_length)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
-			}
-		}
-	}
-
-	if (kernel_type==0) {
-		if (matern_index < 0) die("Matern kernel index nu must be greater than zero");
-		matern_fac = pow(2,1-matern_index)/Gamma(matern_index);
-	}
-	int *indx = new int[n_srcpts];
-	indx[0] = 0;
-	for (j=1; j < n_srcpts; j++) indx[j] = indx[j-1] + n_srcpts-j+1; // allows us to find first nonzero column with packed storage
-
-	double covcheck;
-	//#pragma omp parallel for private(i,j,sqrdist,covptr) schedule(dynamic)
-	for (i=0; i < n_srcpts; i++) {
-		covptr = cov_matrix_packed+indx[i];
-		covptr++;
-		for (j=i+1; j < n_srcpts; j++) {
-			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
-			if (kernel_type==0) {
-				double x = sqrt(2*matern_index*sqrdist)/corr_length;
-				covcheck = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
-				if (covcheck != *(covptr)) {
-					cout << "MISMATCH: " << covcheck << " " << *covptr << endl;
-					//die();
-				}
-					covptr++;
-			} else if (kernel_type==1) {
-				covcheck = exp(-sqrt(sqrdist)/corr_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
-				if (covcheck != *(covptr)) warn("FUCK %g %g",covcheck,*covptr);
-					covptr++;
-			} else {
-				covcheck = exp(-sqrdist/(2*corr_length*corr_length)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
-				if (covcheck != *(covptr)) warn("FUCK %g %g",covcheck,*covptr);
-					covptr++;
-			}
-		}
-	}
-	delete[] indx;
-
-}
-*/
-
 double DelaunayGrid::modified_bessel_function(const double x, const double nu)
 {
 	const int MAXIT=10000;
@@ -4450,6 +4393,15 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const
 	}
 #endif
 
+}
+
+void DelaunayGrid::get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals)
+{
+	for (int i=0; i < n_srcpts; i++) {
+		xvals.push_back(srcpts[i][0]);
+		yvals.push_back(srcpts[i][1]);
+		sb_vals.push_back(surface_brightness[i]);
+	}
 }
 
 DelaunayGrid::~DelaunayGrid()
@@ -4887,7 +4839,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 	}
 
 	if (status) fits_report_error(stderr, status); // print any error message
-	if (image_load_status) assign_high_sn_pixels();
+	if (image_load_status) {
+		data_fits_filename = fits_filename;
+		assign_high_sn_pixels();
+	}
 	return image_load_status;
 #endif
 }
@@ -5039,9 +4994,26 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 	if (lens != NULL) lens->data_pixel_noise = noise_bg; // store the background noise separately
 
 	if (status) fits_report_error(stderr, status); // print any error message
+	if (image_load_status) noise_map_fits_filename = fits_filename;
 	return image_load_status;
 #endif
 }
+
+void ImagePixelData::unload_noise_map()
+{
+	int i;
+	if (noise_map == NULL) {
+		noise_map = new double*[npixels_x];
+		for (i=0; i < npixels_x; i++) noise_map[i] = new double[npixels_y];
+	}
+	if (covinv_map == NULL) {
+		covinv_map = new double*[npixels_x];
+		for (i=0; i < npixels_x; i++) covinv_map[i] = new double[npixels_y];
+	}
+	noise_map_fits_filename = "";
+}
+
+
 
 void ImagePixelData::get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
 {
@@ -5398,7 +5370,56 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	delete[] input_psf_matrix;
 
 	if (status) fits_report_error(stderr, status); // print any error message
+	if (image_load_status) psf_filename = fits_filename;
 	return image_load_status;
+#endif
+}
+
+bool QLens::save_psf_fits(string fits_filename)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
+#else
+	int i,j,kk;
+	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix = -64, naxis = 2;
+	if (psf_matrix == NULL) {
+		warn("no PSF matrix has been loaded or generated; cannot save PSF to FITS file");
+		return false;
+	}
+	long naxes[2] = {psf_npixels_x,psf_npixels_y};
+	double *pixels;
+	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
+
+	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+	{
+		if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				pixels = new double[psf_npixels_x];
+
+				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				{
+					for (i=0; i < psf_npixels_x; i++) {
+						pixels[i] = psf_matrix[i][j];
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+				}
+				delete[] pixels;
+			}
+		}
+		fits_close_file(outfptr, &status);
+	} 
+
+	if (status) fits_report_error(stderr, status); // print any error message
+	psf_filename = fits_filename;
+	return true;
 #endif
 }
 
@@ -5411,8 +5432,8 @@ void QLens::setup_foreground_PSF_matrix()
 	//int ny_half = foreground_psf_npixels_y/2;
 	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
 	int i,j;
-	for (i=0; i < foreground_psf_npixels_x; i++) foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
 	for (i=0; i < foreground_psf_npixels_x; i++) {
+		foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
 		for (j=0; j < foreground_psf_npixels_y; j++) {
 			foreground_psf_matrix[i][j] = psf_matrix[i][j];
 		}
@@ -8814,10 +8835,9 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					residual = lens->image_pixel_data->surface_brightness[i][j] - sb;
 					if ((lens->image_pixel_data != NULL) and (lens->use_noise_map)) {
-						tot_residuals += residual*residual*lens->image_pixel_data->covinv_map[i][j];
-					} else {
-						tot_residuals += residual*residual;
+						residual /= lens->image_pixel_data->noise_map[i][j];
 					}
+					tot_residuals += residual*residual;
 					//wtfout << i << " " << j << " " << (residual*residual) << endl;
 					if (show_noise_thresh) {
 						if (abs(residual) >= lens->data_pixel_noise) pixel_image_file << residual;

@@ -2,7 +2,7 @@
 #define GREGSMATHHDR_H
 #include <cmath>
 #include <iostream>
-using namespace std;
+
 const double SQ2PI = 2.5066282746310005;
 const double SQRT2PI = 2.5066282746310005;
 const double PI = 3.14159265358979323846;

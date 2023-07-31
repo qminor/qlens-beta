@@ -12,7 +12,6 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
-using namespace std;
 
 struct ImagePixelData;
 class LensProfile;
@@ -53,9 +52,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
 	boolvector vary_params;
-	string model_name;
-	vector<string> paramnames;
-	vector<string> latex_paramnames, latex_param_subscripts;
+	std::string model_name;
+	std::vector<std::string> paramnames;
+	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
 	dvector penalty_upper_limits, penalty_lower_limits;
 	dvector stepsizes;
@@ -193,10 +192,10 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
+	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
 	virtual void get_parameters(double* params);
-	bool get_specific_parameter(const string name_in, double& value);
-	bool update_specific_parameter(const string name_in, const double& value);
+	bool get_specific_parameter(const std::string name_in, double& value);
+	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool update_specific_parameter(const int paramnum, const double& value);
 
 	virtual void update_parameters(const double* params);
@@ -208,19 +207,19 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void copy_parameter_anchors(const SB_Profile* sb_in);
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 
-	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = "."); // for fitting to isophote data
+	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = "."); // for fitting to isophote data
 	double sbprofile_loglike(double *params);
-	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = ".");
+	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = ".");
 	double profile_fit_loglike(double *params);
 	double profile_fit_loglike_bspline(double *params);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
-	void plot_sb_profile(double rmin, double rmax, int steps, ofstream &sbout);
+	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
 	void print_parameters();
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
-	virtual void print_source_command(ofstream& scriptout, const bool use_limits);
-	virtual bool get_special_command_arg(string &arg);
+	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
+	virtual void print_source_command(std::ofstream& scriptout, const bool use_limits);
+	virtual bool get_special_command_arg(std::string &arg);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -457,7 +456,7 @@ class Shapelet : public SB_Profile
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);
 	void update_indxptr(const int newval);
-	bool get_special_command_arg(string &arg);
+	bool get_special_command_arg(std::string &arg);
 
 	double window_rmax();
 	double length_scale();

@@ -6,8 +6,6 @@
 #include "GregsMathHdr.h"
 #include <vector>
 
-using namespace std;
-
 template<class T>
 inline const T SQ(const T a) {return a*a;}
 
@@ -45,7 +43,7 @@ class Cholesky
 					{
 						if(sum <= 0.0)
 						{
-                     cout << "Cholesky failed " << sum << endl;
+                     std::cout << "Cholesky failed " << sum << std::endl;
 							getchar();
 						}
 						el[i][i] = sqrt(sum);
@@ -142,7 +140,7 @@ class Cholesky
 			return true;
 		}
 		
-		bool EnterMat(const vector<vector<double> > &a)
+		bool EnterMat(const std::vector<std::vector<double> > &a)
 		{
 			double sum = 0;
 			int i, j, k;
@@ -497,7 +495,7 @@ class AdvanceDevs : public BasicDevs, public Cholesky
 			int i;
 			double dist = 0.0;
 
-			vector<double> vec(num);
+			std::vector<double> vec(num);
 			double norm = 0.0;
 			for (i = 0; i < num; i++)
 			{
@@ -747,7 +745,7 @@ public:
         
         void Mult2(double *ptrOut, double *ptr, double *ptr0, const double Z)
         {
-                vector<double> z(proj);
+                std::vector<double> z(proj);
                 for (int i = 0; i < proj; i++)
                 {
                         z[i] = 0.0;
@@ -783,7 +781,7 @@ public:
         {
                 RandRot(0, proj);
                 
-                vector<double> z(proj);
+                std::vector<double> z(proj);
                 for (int i = 0; i < proj; i++)
                 {
                         z[i] = 0.0;
@@ -806,7 +804,7 @@ public:
         void RandRot(const int start = 0)
         {
                 double temp;
-                vector<double> vec(num);
+                std::vector<double> vec(num);
                 int i, j, k;
                         
                 for (i = start; i < num; i++)
@@ -835,7 +833,7 @@ public:
         void RandRot(const int start, const int end)
         {
                 double temp;
-                vector<double> vec(num);
+                std::vector<double> vec(num);
                 int i, j, k;
                         
                 for (i = start; i < end; i++)

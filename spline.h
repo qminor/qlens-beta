@@ -35,8 +35,8 @@ class Spline
 		void input(const dvector& x, const dvector& y, const double yp1, const double ypn);
 		void input(const char filename[]);
 		void output(const char filename[]);
-		void output(const string filename) { output(filename.c_str()); }
-		void input(const string filename) { input(filename.c_str()); }
+		void output(const std::string filename) { output(filename.c_str()); }
+		void input(const std::string filename) { input(filename.c_str()); }
 		void input(const Spline& spline_in);
 		void natural_spline(void);
 		void unnatural_spline(double yp1, double ypn);
@@ -51,7 +51,7 @@ class Spline
 		void print(double, double, long);
 		void logprint(double, double, long);
 		void printall(long);
-		void printall(long steps, string filename);
+		void printall(long steps, std::string filename);
 		void logprintall(long);
 
 		void dprint(double, double, long);
@@ -90,8 +90,8 @@ class Spline2D
 		void input(Spline2D &spline_in);
 		void input_3column(const char xyfilename[], const char zfilename[]);
 		void output(const char xyfilename[], const char zfilename[]);
-		void input(const string xyfilename, const string zfilename) { input(xyfilename.c_str(),zfilename.c_str()); }
-		void output(const string xyfilename, const string zfilename) { output(xyfilename.c_str(),zfilename.c_str()); }
+		void input(const std::string xyfilename, const std::string zfilename) { input(xyfilename.c_str(),zfilename.c_str()); }
+		void output(const std::string xyfilename, const std::string zfilename) { output(xyfilename.c_str(),zfilename.c_str()); }
 		void spline(void);
 		void spline_invert_y(void);
 		void spline1D(double[], double[], int, double, double, double[]);

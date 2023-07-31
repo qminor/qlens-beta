@@ -589,6 +589,13 @@ void LensProfile::get_parameters(double* params)
 	}
 }
 
+double LensProfile::get_parameter(const int i)
+{
+	if (i >= n_params) die("requested parameter with index greater than number of params");
+	if (angle_param[i]) return radians_to_degrees(*(param[i]));
+	else return *(param[i]);
+}
+
 bool LensProfile::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;

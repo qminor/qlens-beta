@@ -15,7 +15,6 @@
 #include "romberg.h"
 #include "brent.h"
 #include "mathexpr.h"
-using namespace std;
 
 struct CosmologyParams
 {
@@ -24,7 +23,7 @@ struct CosmologyParams
 	double A_s;
 	double spectral_index, running;
 	double tensor_scalar_ratio;
-	stringstream datastream;
+	std::stringstream datastream;
 
 	CosmologyParams() { }
 	CosmologyParams(CosmologyParams &cosmo_in)
@@ -37,11 +36,11 @@ struct CosmologyParams
 	{
 		hubble=hub; omega_m=omega_matter; omega_b=omega_baryon; omega_lambda=omega_l; A_s = del_R; spectral_index=ns; running=alpha; tensor_scalar_ratio=r;
 	}
-	CosmologyParams(string filename) { load_params(filename); }
-	bool load_params(string filename);
-	bool read_data_line(ifstream& data_infile, vector<string>& datawords, int &n_datawords);
-	bool datastring_convert(const string& instring, double& outvar);
-	void remove_comments(string& instring);
+	CosmologyParams(std::string filename) { load_params(filename); }
+	bool load_params(std::string filename);
+	bool read_data_line(std::ifstream& data_infile, std::vector<std::string>& datawords, int &n_datawords);
+	bool datastring_convert(const std::string& instring, double& outvar);
+	void remove_comments(std::string& instring);
 };
 
 class Cosmology : public Spline, public Romberg, public Brent
@@ -127,9 +126,9 @@ class Cosmology : public Spline, public Romberg, public Brent
 	void rms_tophat_spline();
 	double rms_sigma_tophat(const double mass, const double z);
 	double rms_sigma8();
-	void plot_power_k(int nsteps, const double log10k_min, const double log10k_max, const string filename);
-	void plot_primordial_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
-	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const string filename);
+	void plot_power_k(int nsteps, const double log10k_min, const double log10k_max, const std::string filename);
+	void plot_primordial_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const std::string filename);
+	void plot_angular_power_spectrum(int nsteps, const double log10k_min, const double log10k_max, const std::string filename);
 
 	void plot_mc_relation_dutton_moline(const double z, const double xsub);
 	double median_concentration_bullock(const double mass, const double z);
