@@ -3805,19 +3805,18 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 	bool on_vertex = false;
 	int trinum = search_grid(0,input_pt,inside_triangle);
 	Triangle *triptr = &triangle[trinum];
+	// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+	double sqrdist, sqrdistmin=1e30;
+	int kmin;
+	for (int k=0; k < 3; k++) {
+		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
+		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
+	}
+	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+		inside_triangle = false;
+		on_vertex = true;
+	}
 	if (!inside_triangle) {
-		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		double sqrdist, sqrdistmin=1e30;
-		int kmin;
-		for (int k=0; k < 3; k++) {
-			sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
-			if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
-		}
-		if ((inside_triangle) and (sqrdistmin < 1e-6)) {
-			inside_triangle = false;
-			on_vertex = true;
-		}
-
 		if ((zero_outside_border) and (!on_vertex)) {
 			return 0;
 			/*
@@ -8173,7 +8172,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				if ((i < x_N) and (j < y_N) and (lens->image_pixel_data->extended_mask[i][j])) ntot_cells_emask++;
+				if ((i < x_N) and (j < y_N) and ((fit_to_data[i][j]) or (lens->image_pixel_data->extended_mask[i][j]))) ntot_cells_emask++;
 			}
 		}
 
@@ -8217,7 +8216,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (lens->image_pixel_data->extended_mask[i][j])) {
+			if ((!fit_to_data) or (lens->image_pixel_data == NULL) or (fit_to_data[i][j]) or (lens->image_pixel_data->extended_mask[i][j])) {
 				emask_pixels_i[n_cell] = i;
 				emask_pixels_j[n_cell] = j;
 				n_cell++;

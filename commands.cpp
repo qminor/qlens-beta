@@ -96,7 +96,7 @@ void QLens::process_commands(bool read_file)
 						"fit -- commands for lens model fitting (type 'help fit' for list of subcommands)\n"
 						"imgdata -- commands for loading point image data ('help imgdata' for list of subcommands)\n"
 						"wldata -- commands for loading weak lensing data ('help wldata' for list of subcommands)\n"
-						"sbmap -- commands for surface brightness maps ('help sbmap' for list of subcommands)\n"
+						"sbmap -- commands for surface brightness pixel maps ('help sbmap' for list of subcommands)\n"
 						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
 						"cosmology -- display cosmological information, including physical properties of lenses\n"
 						"lensinfo -- display kappa, deflection, magnification, shear, and potential at a specific point\n"

@@ -13151,8 +13151,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
 	if (use_data) {
-		if (show_all_pixels) image_pixel_grid->include_all_pixels();
-		else if ((show_extended_mask) or (show_foreground_mask)) {
+		//if (show_all_pixels) image_pixel_grid->include_all_pixels();
+		if ((show_all_pixels) or (show_extended_mask) or (show_foreground_mask)) {
 			if (!image_pixel_grid->set_fit_window((*image_pixel_data))) {
 				delete image_pixel_grid; // so when you invert, it will load a new image grid based on the data
 				image_pixel_grid = NULL;
