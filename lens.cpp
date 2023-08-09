@@ -23,8 +23,9 @@
 #include <sys/stat.h>
 using namespace std;
 
-#ifdef USE_JSONCPP
+#ifdef USE_COOLEST
 #include "json.h"
+#include <CCfits/CCfits>
 #endif
 
 #ifdef USE_MKL
@@ -965,8 +966,8 @@ QLens::QLens() : UCMC()
 	optimize_regparam = false;
 	//optimize_regparam_lhi = false;
 	optimize_regparam_tol = 0.01; // this is the tolerance on log(regparam)
-	optimize_regparam_minlog = -1;
-	optimize_regparam_maxlog = 4;
+	optimize_regparam_minlog = -2;
+	optimize_regparam_maxlog = 5;
 	max_regopt_iterations = 20;
 
 	psf_width_x = 0;
@@ -9487,6 +9488,99 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 	}
 }
 
+int FISHER_KEEP_RUNNING = 1;
+
+void fisher_sighandler(int sig)
+{
+	FISHER_KEEP_RUNNING = 0;
+}
+
+void fisher_quitproc(int sig)
+{
+	exit(0);
+}
+
+bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsizes)
+{
+	// this function calculates the marginalized error using the Gaussian approximation
+	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
+	static const double increment2 = 1e-4;
+	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!imgplane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
+
+	dmatrix fisher(n_fit_parameters,n_fit_parameters);
+	fisher_inverse.erase();
+	fisher_inverse.input(n_fit_parameters,n_fit_parameters);
+	dvector xhi(params);
+	dvector xlo(params);
+	double x0, curvature;
+	int i,j;
+	double step, derivlo, derivhi;
+	for (i=0; i < n_fit_parameters; i++) {
+		x0 = params[i];
+		xhi[i] += increment2*stepsizes[i];
+		if ((param_settings->use_penalty_limits[i]==true) and (xhi[i] > param_settings->penalty_limits_hi[i])) xhi[i] = x0;
+		xlo[i] -= increment2*stepsizes[i];
+		if ((param_settings->use_penalty_limits[i]==true) and (xlo[i] < param_settings->penalty_limits_lo[i])) xlo[i] = x0;
+		step = xhi[i] - xlo[i];
+		for (j=0; j < n_fit_parameters; j++) {
+			derivlo = loglike_deriv(xlo,j,stepsizes[j]);
+			derivhi = loglike_deriv(xhi,j,stepsizes[j]);
+			fisher[i][j] = (derivhi - derivlo) / step;
+			if (fisher[i][j]*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
+			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher[i][j])) << endl;
+			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
+			signal(SIGABRT, &fisher_sighandler);
+			signal(SIGTERM, &fisher_sighandler);
+			signal(SIGINT, &fisher_sighandler);
+			signal(SIGUSR1, &fisher_sighandler);
+			signal(SIGQUIT, &fisher_quitproc);
+			if (!FISHER_KEEP_RUNNING) {
+				fisher_inverse.erase();
+				return false;
+			}
+		}
+		xhi[i]=xlo[i]=x0;
+	}
+
+	double offdiag_avg;
+	// average the off-diagonal elements to enforce symmetry
+	for (i=1; i < n_fit_parameters; i++) {
+		for (j=0; j < i; j++) {
+			offdiag_avg = 0.5*(fisher[i][j]+ fisher[j][i]);
+			//if (abs((fisher[i][j]-fisher[j][i])/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
+			fisher[i][j] = fisher[j][i] = offdiag_avg;
+		}
+	}
+	bool nonsingular = fisher.check_nan();
+	if (nonsingular) fisher.inverse(fisher_inverse,nonsingular);
+	if (!nonsingular) {
+		if (mpi_id==0) warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
+		fisher_inverse.erase();
+		return false;
+	}
+	return true;
+}
+
+double QLens::loglike_deriv(const dvector &params, const int index, const double step)
+{
+	static const double increment = 1e-5;
+	dvector xhi(params);
+	dvector xlo(params);
+	double dif, x0 = xhi[index];
+	xhi[index] += increment*step;
+	if ((param_settings->use_penalty_limits[index]==true) and (xhi[index] > param_settings->penalty_limits_hi[index])) xhi[index] = x0;
+	xlo[index] -= increment*step;
+	if ((param_settings->use_penalty_limits[index]==true) and (xlo[index] < param_settings->penalty_limits_lo[index])) xlo[index] = x0;
+	dif = xhi[index] - xlo[index];
+	double (QLens::*loglikeptr)(double*);
+	if (source_fit_mode==Point_Source) {
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
+	} else {
+		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
+	}
+	return (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
+}
+
 void QLens::nested_sampling()
 {
 	fitmethod = NESTED_SAMPLING;
@@ -10182,6 +10276,283 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 #endif
 }
 
+void QLens::chi_square_twalk()
+{
+	if (setup_fit_parameters(true)==false) return;
+	fit_set_optimizations();
+	if ((mpi_id==0) and (fit_output_dir != ".")) {
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		create_output_directory();
+	}
+	if (!initialize_fitmodel(true)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return;
+	}
+
+	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
+	SetNDerivedParams(n_derived_params);
+
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
+	} else {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
+	}
+
+	if (mpi_id==0) {
+		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
+		int i;
+		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+		ofstream pnumfile(pnumfile_str.c_str());
+		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile.close();
+		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+		ofstream pnamefile(pnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		pnamefile.close();
+		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+		ofstream lpnamefile(lpnamefile_str.c_str());
+		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		lpnamefile.close();
+		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
+		ofstream prangefile(prange_str.c_str());
+		for (i=0; i < n_fit_parameters; i++)
+		{
+			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+		}
+		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
+		prangefile.close();
+		if (param_markers != "") {
+			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
+			ofstream markerfile(marker_str.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
+	}
+
+#ifdef USE_OPENMP
+	double wt0, wt;
+	if (show_wtime) {
+		wt0 = omp_get_wtime();
+	}
+#endif
+	string filename = fit_output_dir + "/" + fit_output_filename;
+
+	display_chisq_status = false; // just in case it was turned on
+
+	use_ansi_characters = true;
+	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info,data_info);
+	use_ansi_characters = false;
+	bestfitparams.input(fitparams);
+	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
+
+	//if (display_chisq_status) {
+		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
+		//cout << endl;
+		//display_chisq_status = false;
+	//}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wt = omp_get_wtime() - wt0;
+		if (mpi_id==0) cout << "Time for T-Walk: " << wt << endl;
+	}
+#endif
+	if (mpi_id==0) {
+		output_bestfit_model();
+	}
+
+	fit_restore_defaults();
+	delete fitmodel;
+	fitmodel = NULL;
+}
+
+bool QLens::adopt_model(dvector &fitparams)
+{
+	if ((nlens==0) and (n_sourcepts_fit==0) and ((n_sb==0) or (source_fit_mode != Parameterized_Source))) { if (mpi_id==0) warn(warnings,"No lens/source model has been specified"); return false; }
+	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
+	if (fitparams.size() != n_fit_parameters) {
+		if (mpi_id==0) {
+			if (fitparams.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
+			else warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
+		}
+		return false;
+	}
+	int i, index=0;
+	double transformed_params[n_fit_parameters];
+	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
+	// Maybe instead of the following code, just run update_model(transformed_params)? Look into this and implement if it works!!
+	bool status;
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->update_fit_parameters(transformed_params,index,status);
+		lens_list[i]->reset_angle_modulo_2pi();
+	}
+	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->update_fit_parameters(transformed_params,index,status);
+		sb_list[i]->reset_angle_modulo_2pi();
+	}
+	//}
+	if (n_sourcepts_fit > 0) {
+		if (use_analytic_bestfit_src) {
+			find_analytic_srcpos(sourcepts_fit.data());
+		} else {
+			for (i=0; i < n_sourcepts_fit; i++) {
+				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = transformed_params[index++];
+				if (vary_sourcepts_y[i]) sourcepts_fit[i][1] = transformed_params[index++];
+			}
+		}
+	}
+	if (vary_srcpt_xshift) srcpt_xshift = transformed_params[index++];
+	if (vary_srcpt_yshift) srcpt_yshift = transformed_params[index++];
+	if (vary_srcflux) source_flux = transformed_params[index++];
+	if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = transformed_params[index++];
+	if ((vary_regparam_lsc) and (regularization_method != None)) regparam_lsc = transformed_params[index++];
+	//if ((vary_regparam_lhi) and (regularization_method != None)) regparam_lhi = transformed_params[index++];
+	if ((vary_regparam_lum_index) and (regularization_method != None)) regparam_lum_index = transformed_params[index++];
+	if (vary_alpha_clus) alpha_clus = transformed_params[index++];
+	if (vary_beta_clus) beta_clus = transformed_params[index++];
+	if (source_fit_mode == Cartesian_Source) {
+		if (vary_pixel_fraction) pixel_fraction = transformed_params[index++];
+		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
+		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
+	}
+	update_anchored_parameters_and_redshift_data();
+	reset_grid(); // this will force it to redraw the critical curves if needed
+	if (source_fit_mode == Delaunay_Source) {
+		if ((vary_correlation_length) and (regularization_method != None)) 
+			kernel_correlation_length = transformed_params[index++];
+		if ((vary_matern_scale) and (regularization_method != None)) 
+			matern_scale = transformed_params[index++];
+		if ((vary_matern_index) and (regularization_method != None)) 
+			matern_index = transformed_params[index++];
+	}
+
+	if (vary_hubble_parameter) {
+		hubble = transformed_params[index++];
+		set_cosmology(omega_matter,0.04,hubble,2.215);
+	}
+	if (vary_omega_matter_parameter) {
+		omega_matter = transformed_params[index++];
+		set_cosmology(omega_matter,0.04,hubble,2.215);
+	}
+	if (vary_syserr_pos_parameter) {
+		syserr_pos = transformed_params[index++];
+	}
+	if (vary_wl_shear_factor_parameter) {
+		wl_shear_factor = transformed_params[index++];
+	}
+	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
+	//if (source_fit_mode==Shapelet_Source) {
+		//// we run the following function so it updates amplitudes (and also sigma, xc, yc if using auto_shapelet_scaling)
+		//if (invert_surface_brightness_map_from_data(false)==false) warn("no data loaded; cannot update shapelet amplitudes");
+	//}
+	return true;
+}
+
+void QLens::output_bestfit_model()
+{
+	if ((nlens == 0) and (n_sb==0)) { warn(warnings,"No fit model has been specified"); return; }
+	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
+	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
+	if (fit_output_dir != ".") create_output_directory();
+
+	int i;
+	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
+	ofstream pnamefile(pnamefile_str.c_str());
+	for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+	pnamefile.close();
+	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
+	ofstream lpnamefile(lpnamefile_str.c_str());
+	for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+	lpnamefile.close();
+
+	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
+	int n,j;
+	ofstream bf_out(bestfit_filename.c_str());
+	bf_out << chisq_bestfit << " ";
+	for (i=0; i < n_fit_parameters; i++) bf_out << bestfitparams[i] << " ";
+	bf_out << endl;
+	bf_out.close();
+
+	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
+	ofstream outfile(outfile_str.c_str());
+	if ((calculate_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
+	{
+		if (bestfit_fisher_inverse.rows() != n_fit_parameters) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fit_parameters);
+		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
+		ofstream fisher_inv_out(fisher_inv_filename.c_str());
+		for (i=0; i < n_fit_parameters; i++) {
+			for (j=0; j < n_fit_parameters; j++) {
+				fisher_inv_out << bestfit_fisher_inverse[i][j] << " ";
+			}
+			fisher_inv_out << endl;
+		}
+
+		outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
+		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
+		outfile << endl;
+		outfile << "Marginalized 1-sigma errors from Fisher matrix:\n";
+		for (int i=0; i < n_fit_parameters; i++) {
+			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_fisher_inverse[i][i])) << endl;
+		}
+		outfile << endl;
+	} else {
+		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << " (warning: errors omitted here because Fisher matrix was not calculated):\n";
+		} else {
+			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
+		}
+		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
+		outfile << endl;
+		for (int i=0; i < n_fit_parameters; i++) {
+			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
+		}
+		outfile << endl;
+	}
+	string prange_str = fit_output_dir + "/" + fit_output_filename + ".pranges";
+	ofstream prangefile(prange_str.c_str());
+	for (int i=0; i < n_fit_parameters; i++)
+	{
+		if (param_settings->use_penalty_limits[i])
+			prangefile << param_settings->penalty_limits_lo[i] << " " << param_settings->penalty_limits_hi[i] << endl;
+		else
+			prangefile << "-1e30 1e30" << endl;
+	}
+	prangefile.close();
+	if (lines.size() > 0) {
+		string script_str = fit_output_dir + "/" + fit_output_filename + ".commands";
+		ofstream scriptfile(script_str.c_str());
+		for (int i=0; i < lines.size()-1; i++) {
+			scriptfile << lines[i] << endl;
+		}
+		scriptfile.close();
+	}
+
+	QLens* model;
+	if (fitmodel != NULL) model = fitmodel;
+	else model = this;
+	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object (if available);
+	// that way we're not forced to adopt it in the user-end lens object if the user doesn't want to
+	if (model == fitmodel) {
+		model->bestfitparams.input(bestfitparams);
+		model->adopt_model(bestfitparams);
+	}
+	bool include_limits;
+	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
+	else include_limits = true;
+	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
+	model->output_lens_commands(scriptfile_str,include_limits);
+	if (include_limits) {
+		// save version without limits in case user wants to load best-fit model while in Simplex or Powell mode
+		string scriptfile_str2 = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
+		model->output_lens_commands(scriptfile_str2,false);
+	}
+}
+
 bool QLens::add_dparams_to_chain()
 {
 	// Should have an option to specify the extension to the filename for the new chain (which defaults to '.new' if nothing is specified). ADD THIS IN!!!!!!!!!!!!!
@@ -10830,7 +11201,6 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const 
 	return true;
 }
 
-
 bool QLens::output_scaled_percentiles_from_chain(const double pct_scaling)
 {
 	string scriptfile = fit_output_dir + "/scaled_limits.in";
@@ -10917,374 +11287,233 @@ bool QLens::output_scaled_percentiles_from_chain(const double pct_scaling)
 	return true;
 }
 
-void QLens::chi_square_twalk()
+void QLens::output_coolest_files(const string filename)
 {
-	if (setup_fit_parameters(true)==false) return;
-	fit_set_optimizations();
-	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
-		create_output_directory();
-	}
-	if (!initialize_fitmodel(true)) {
-		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
-		return;
-	}
+#ifdef USE_COOLEST
+	std::ifstream fin;
+	Json::Value coolest;
+	fin.open("coolest_fixed_input.json",std::ifstream::in);
+	fin >> coolest;
+	fin.close();
 
-	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
-	SetNDerivedParams(n_derived_params);
+	coolest["instrument"]["pixel_size"] = data_pixel_size;
+	//cout << "pixel size: " << coolest["instrument"]["pixel_size"].asDouble() << endl;
+	//cout << "standard: " << coolest["standard"].asString() << endl;
+	//cout << "H0: " << coolest["cosmology"]["H0"].asDouble() << endl;
 
-	if (source_fit_mode==Point_Source) {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
+	Json::Value pixels_psf;
+	pixels_psf["field_of_view_x"] = Json::Value(Json::arrayValue);
+	pixels_psf["field_of_view_x"].append(0);
+	pixels_psf["field_of_view_x"].append( data_pixel_size*psf_npixels_x );
+	pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
+	pixels_psf["field_of_view_y"].append(0);
+	pixels_psf["field_of_view_y"].append( data_pixel_size*psf_npixels_y );
+	pixels_psf["num_pix_x"] = psf_npixels_x;
+	pixels_psf["num_pix_y"] = psf_npixels_y;
+	pixels_psf["fits_file"] = Json::Value();
+	pixels_psf["fits_file"]["path"] = psf_filename;
+	coolest["instrument"]["psf"]["pixels"] = pixels_psf;
+
+	Json::Value pixels_obs;
+	double grid_xmin = grid_xcenter - grid_xlength/2;
+	double grid_xmax = grid_xcenter + grid_xlength/2;
+	double grid_ymin = grid_ycenter - grid_ylength/2;
+	double grid_ymax = grid_ycenter + grid_ylength/2;
+
+	pixels_obs["field_of_view_x"] = Json::Value(Json::arrayValue);
+	pixels_obs["field_of_view_x"].append(grid_xmin);
+	pixels_obs["field_of_view_x"].append(grid_xmax);
+	pixels_obs["field_of_view_y"] = Json::Value(Json::arrayValue);
+	pixels_obs["field_of_view_y"].append(grid_ymin);
+	pixels_obs["field_of_view_y"].append(grid_ymax);
+	pixels_obs["num_pix_x"] = n_image_pixels_x;
+	pixels_obs["num_pix_y"] = n_image_pixels_y;
+	pixels_obs["fits_file"] = Json::Value();
+	pixels_obs["fits_file"]["path"] = image_pixel_data->data_fits_filename;
+	coolest["observation"]["pixels"] = pixels_obs;
+
+	Json::Value noise;
+	if (use_noise_map) {
+		Json::Value pixels_noise;
+		pixels_noise["field_of_view_x"] = Json::Value(Json::arrayValue);
+		pixels_noise["field_of_view_x"].append(grid_xmin);
+		pixels_noise["field_of_view_x"].append(grid_xmax);
+		pixels_noise["field_of_view_y"] = Json::Value(Json::arrayValue);
+		pixels_noise["field_of_view_y"].append(grid_ymin);
+		pixels_noise["field_of_view_y"].append(grid_ymax);
+		pixels_noise["num_pix_x"] = n_image_pixels_x;
+		pixels_noise["num_pix_y"] = n_image_pixels_y;
+		pixels_noise["fits_file"] = Json::Value();
+		pixels_noise["fits_file"]["path"] = image_pixel_data->noise_map_fits_filename;
+		noise["type"] = "NoiseMap";
+		noise["noise_map"] = pixels_noise;
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
+		noise["type"] = "UniformGaussianNoise";
+		noise["std_dev"] = data_pixel_noise;
 	}
+	coolest["observation"]["noise"] = noise;
 
-	if (mpi_id==0) {
-		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
-		int i;
-		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
-		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
-		pnumfile.close();
-		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
-		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
-		pnamefile.close();
-		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
-		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
-		lpnamefile.close();
-		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
-		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
-		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
-		}
-		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
-		prangefile.close();
-		if (param_markers != "") {
-			string marker_str = fit_output_dir + "/" + fit_output_filename + ".markers";
-			ofstream markerfile(marker_str.c_str());
-			markerfile << param_markers << endl;
-			markerfile.close();
-		}
-	}
 
-#ifdef USE_OPENMP
-	double wt0, wt;
-	if (show_wtime) {
-		wt0 = omp_get_wtime();
-	}
-#endif
-	string filename = fit_output_dir + "/" + fit_output_filename;
+	//lens["type"] = "Galaxy";
+	//lens["name"] = ;
+	//lens["redshift"] = lens_redshift;
+	//lens["mass_model"] = Json::Value(Json::arrayValue);
+	//lens["light_model"] = Json::Value(Json::arrayValue);
 
-	display_chisq_status = false; // just in case it was turned on
+	Json::Value posterior_stats;
+	posterior_stats["mean"] = Json::Value::null;
+	posterior_stats["median"] = Json::Value::null;
+	posterior_stats["percentile_16th"] = Json::Value::null;
+	posterior_stats["percentile_84th"] = Json::Value::null;
 
-	use_ansi_characters = true;
-	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info,data_info);
-	use_ansi_characters = false;
-	bestfitparams.input(fitparams);
-	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
+	Json::Value prior;
+	prior["type"] = Json::Value::null;
 
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
-#ifdef USE_OPENMP
-	if (show_wtime) {
-		wt = omp_get_wtime() - wt0;
-		if (mpi_id==0) cout << "Time for T-Walk: " << wt << endl;
-	}
-#endif
-	if (mpi_id==0) {
-		output_bestfit_model();
-	}
-
-	fit_restore_defaults();
-	delete fitmodel;
-	fitmodel = NULL;
-}
-
-bool QLens::adopt_model(dvector &fitparams)
-{
-	if ((nlens==0) and (n_sourcepts_fit==0) and ((n_sb==0) or (source_fit_mode != Parameterized_Source))) { if (mpi_id==0) warn(warnings,"No lens/source model has been specified"); return false; }
-	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
-	if (fitparams.size() != n_fit_parameters) {
-		if (mpi_id==0) {
-			if (fitparams.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
-			else warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
-		}
-		return false;
-	}
-	int i, index=0;
-	double transformed_params[n_fit_parameters];
-	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
-	// Maybe instead of the following code, just run update_model(transformed_params)? Look into this and implement if it works!!
-	bool status;
-	for (i=0; i < nlens; i++) {
-		lens_list[i]->update_fit_parameters(transformed_params,index,status);
-		lens_list[i]->reset_angle_modulo_2pi();
-	}
-	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	for (i=0; i < n_sb; i++) {
-		sb_list[i]->update_fit_parameters(transformed_params,index,status);
-		sb_list[i]->reset_angle_modulo_2pi();
-	}
-	//}
-	if (n_sourcepts_fit > 0) {
-		if (use_analytic_bestfit_src) {
-			find_analytic_srcpos(sourcepts_fit.data());
-		} else {
-			for (i=0; i < n_sourcepts_fit; i++) {
-				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = transformed_params[index++];
-				if (vary_sourcepts_y[i]) sourcepts_fit[i][1] = transformed_params[index++];
-			}
-		}
-	}
-	if (vary_srcpt_xshift) srcpt_xshift = transformed_params[index++];
-	if (vary_srcpt_yshift) srcpt_yshift = transformed_params[index++];
-	if (vary_srcflux) source_flux = transformed_params[index++];
-	if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = transformed_params[index++];
-	if ((vary_regparam_lsc) and (regularization_method != None)) regparam_lsc = transformed_params[index++];
-	//if ((vary_regparam_lhi) and (regularization_method != None)) regparam_lhi = transformed_params[index++];
-	if ((vary_regparam_lum_index) and (regularization_method != None)) regparam_lum_index = transformed_params[index++];
-	if (vary_alpha_clus) alpha_clus = transformed_params[index++];
-	if (vary_beta_clus) beta_clus = transformed_params[index++];
-	if (source_fit_mode == Cartesian_Source) {
-		if (vary_pixel_fraction) pixel_fraction = transformed_params[index++];
-		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
-		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
-	}
-	update_anchored_parameters_and_redshift_data();
-	reset_grid(); // this will force it to redraw the critical curves if needed
-	if (source_fit_mode == Delaunay_Source) {
-		if ((vary_correlation_length) and (regularization_method != None)) 
-			kernel_correlation_length = transformed_params[index++];
-		if ((vary_matern_scale) and (regularization_method != None)) 
-			matern_scale = transformed_params[index++];
-		if ((vary_matern_index) and (regularization_method != None)) 
-			matern_index = transformed_params[index++];
-	}
-
-	if (vary_hubble_parameter) {
-		hubble = transformed_params[index++];
-		set_cosmology(omega_matter,0.04,hubble,2.215);
-	}
-	if (vary_omega_matter_parameter) {
-		omega_matter = transformed_params[index++];
-		set_cosmology(omega_matter,0.04,hubble,2.215);
-	}
-	if (vary_syserr_pos_parameter) {
-		syserr_pos = transformed_params[index++];
-	}
-	if (vary_wl_shear_factor_parameter) {
-		wl_shear_factor = transformed_params[index++];
-	}
-	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
-	//if (source_fit_mode==Shapelet_Source) {
-		//// we run the following function so it updates amplitudes (and also sigma, xc, yc if using auto_shapelet_scaling)
-		//if (invert_surface_brightness_map_from_data(false)==false) warn("no data loaded; cannot update shapelet amplitudes");
-	//}
-	return true;
-}
-
-int FISHER_KEEP_RUNNING = 1;
-
-void fisher_sighandler(int sig)
-{
-	FISHER_KEEP_RUNNING = 0;
-}
-
-void fisher_quitproc(int sig)
-{
-	exit(0);
-}
-
-bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsizes)
-{
-	// this function calculates the marginalized error using the Gaussian approximation
-	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
-	static const double increment2 = 1e-4;
-	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!imgplane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
-
-	dmatrix fisher(n_fit_parameters,n_fit_parameters);
-	fisher_inverse.erase();
-	fisher_inverse.input(n_fit_parameters,n_fit_parameters);
-	dvector xhi(params);
-	dvector xlo(params);
-	double x0, curvature;
+	Json::Value lensing_entities = Json::Value(Json::arrayValue);
+	LensProfile* lensptr;
 	int i,j;
-	double step, derivlo, derivhi;
-	for (i=0; i < n_fit_parameters; i++) {
-		x0 = params[i];
-		xhi[i] += increment2*stepsizes[i];
-		if ((param_settings->use_penalty_limits[i]==true) and (xhi[i] > param_settings->penalty_limits_hi[i])) xhi[i] = x0;
-		xlo[i] -= increment2*stepsizes[i];
-		if ((param_settings->use_penalty_limits[i]==true) and (xlo[i] < param_settings->penalty_limits_lo[i])) xlo[i] = x0;
-		step = xhi[i] - xlo[i];
-		for (j=0; j < n_fit_parameters; j++) {
-			derivlo = loglike_deriv(xlo,j,stepsizes[j]);
-			derivhi = loglike_deriv(xhi,j,stepsizes[j]);
-			fisher[i][j] = (derivhi - derivlo) / step;
-			if (fisher[i][j]*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
-			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher[i][j])) << endl;
-			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
-			signal(SIGABRT, &fisher_sighandler);
-			signal(SIGTERM, &fisher_sighandler);
-			signal(SIGINT, &fisher_sighandler);
-			signal(SIGUSR1, &fisher_sighandler);
-			signal(SIGQUIT, &fisher_quitproc);
-			if (!FISHER_KEEP_RUNNING) {
-				fisher_inverse.erase();
-				return false;
+	double param_val;
+	string typestring;
+	map<string,string> names_lookup;
+	for (i=nlens-1; i >= 0; i--) { // adding lenses in reverse because the other lens modelers put the shear model before PEMD, so just to make it look the same
+		Json::Value mass_model;
+		lensptr = lens_list[i];
+		typestring = "Galaxy";
+		string name = lensptr->model_name;
+		if (name=="sple") name = "SPEMD";
+		else if (name=="shear") {
+			name = "ExternalShear";
+			typestring = "MassField";
+		}
+		Json::Value lens;
+		lens["type"] = typestring;
+		lens["redshift"] = lensptr->zlens;
+		lens["mass_model"] = Json::Value(Json::arrayValue);
+		lens["light_model"] = Json::Value(Json::arrayValue);
+
+		if (lensptr->model_name=="sple")
+		{
+			names_lookup = {{"xc","center_x"},{"yc","center_y"},{"alpha","gamma"},{"gamma","gamma"},{"theta","phi"},{"q","q"},{"b","theta_E"},{"s","s"}};
+			Json::Value param;
+			param["posterior_stats"] = posterior_stats;
+			param["prior"] = prior;
+			for (j=0; j < lensptr->n_params-1; j++) {
+				Json::Value point_estimate;
+				param_val = lensptr->get_parameter(j);
+				if (lensptr->paramnames[j]=="alpha") param_val += 1; // from 2D power index to 3D power index	
+				point_estimate["value"] = param_val;
+				if ((lensptr->paramnames[j]=="s") and (param_val==0)) {
+					name = "PEMD";
+					// skip 's' if it is zero, since we will call it a PEMD instead of SPEMD
+				} else {
+					param["point_estimate"] = point_estimate;
+					mass_model["parameters"][names_lookup[lensptr->paramnames[j]]] = param;
+				}
 			}
+			mass_model["type"] = name;
+			lens["mass_model"].append(mass_model);
+
+			//cout << "Lens number " << i << " is a SPLE!" << endl;
 		}
-		xhi[i]=xlo[i]=x0;
-	}
-
-	double offdiag_avg;
-	// average the off-diagonal elements to enforce symmetry
-	for (i=1; i < n_fit_parameters; i++) {
-		for (j=0; j < i; j++) {
-			offdiag_avg = 0.5*(fisher[i][j]+ fisher[j][i]);
-			//if (abs((fisher[i][j]-fisher[j][i])/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
-			fisher[i][j] = fisher[j][i] = offdiag_avg;
-		}
-	}
-	bool nonsingular = fisher.check_nan();
-	if (nonsingular) fisher.inverse(fisher_inverse,nonsingular);
-	if (!nonsingular) {
-		if (mpi_id==0) warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
-		fisher_inverse.erase();
-		return false;
-	}
-	return true;
-}
-
-double QLens::loglike_deriv(const dvector &params, const int index, const double step)
-{
-	static const double increment = 1e-5;
-	dvector xhi(params);
-	dvector xlo(params);
-	double dif, x0 = xhi[index];
-	xhi[index] += increment*step;
-	if ((param_settings->use_penalty_limits[index]==true) and (xhi[index] > param_settings->penalty_limits_hi[index])) xhi[index] = x0;
-	xlo[index] -= increment*step;
-	if ((param_settings->use_penalty_limits[index]==true) and (xlo[index] < param_settings->penalty_limits_lo[index])) xlo[index] = x0;
-	dif = xhi[index] - xlo[index];
-	double (QLens::*loglikeptr)(double*);
-	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_point_source);
-	} else {
-		loglikeptr = static_cast<double (QLens::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
-	}
-	return (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
-}
-
-void QLens::output_bestfit_model()
-{
-	if ((nlens == 0) and (n_sb==0)) { warn(warnings,"No fit model has been specified"); return; }
-	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
-	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
-	if (fit_output_dir != ".") create_output_directory();
-
-	int i;
-	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
-	ofstream pnamefile(pnamefile_str.c_str());
-	for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
-	pnamefile.close();
-	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
-	ofstream lpnamefile(lpnamefile_str.c_str());
-	for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
-	lpnamefile.close();
-
-	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
-	int n,j;
-	ofstream bf_out(bestfit_filename.c_str());
-	bf_out << chisq_bestfit << " ";
-	for (i=0; i < n_fit_parameters; i++) bf_out << bestfitparams[i] << " ";
-	bf_out << endl;
-	bf_out.close();
-
-	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
-	ofstream outfile(outfile_str.c_str());
-	if ((calculate_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
-	{
-		if (bestfit_fisher_inverse.rows() != n_fit_parameters) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fit_parameters);
-		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
-		ofstream fisher_inv_out(fisher_inv_filename.c_str());
-		for (i=0; i < n_fit_parameters; i++) {
-			for (j=0; j < n_fit_parameters; j++) {
-				fisher_inv_out << bestfit_fisher_inverse[i][j] << " ";
+		else if (lens_list[i]->model_name=="shear")
+		{
+			names_lookup = {{"xc","center_x"},{"yc","center_y"},{"shear","gamma_ext"},{"theta_shear","phi_ext"},{"theta_pert","phi_ext"}};
+			Json::Value param;
+			param["posterior_stats"] = posterior_stats;
+			param["prior"] = prior;
+			mass_model["type"] = typestring;
+			mass_model["parameters"] = Json::Value();
+			for (j=0; j < 2; j++) {
+				Json::Value point_estimate;
+				param_val = lensptr->get_parameter(j);
+				if (j==1) {
+					// shear angle
+					if (lensptr->paramnames[j]=="theta_pert") param_val += 90; // from 2D power index to 3D power index	
+					while (param_val > 90) param_val -= 180;
+					while (param_val < -90) param_val += 180;
+				}
+				point_estimate["value"] = param_val;
+				param["point_estimate"] = point_estimate;
+				mass_model["parameters"][names_lookup[lensptr->paramnames[j]]] = param;
 			}
-			fisher_inv_out << endl;
-		}
+			mass_model["type"] = name;
+			lens["mass_model"].append(mass_model);
 
-		outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
-		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
-		outfile << endl;
-		outfile << "Marginalized 1-sigma errors from Fisher matrix:\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_fisher_inverse[i][i])) << endl;
+			//cout << "Lens number " << i << " is an external shear!" << endl;
 		}
-		outfile << endl;
-	} else {
-		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << " (warning: errors omitted here because Fisher matrix was not calculated):\n";
-		} else {
-			outfile << "Best-fit model: 2*loglike = " << chisq_bestfit << endl;
-		}
-		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
-		outfile << endl;
-		for (int i=0; i < n_fit_parameters; i++) {
-			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
-		}
-		outfile << endl;
-	}
-	string prange_str = fit_output_dir + "/" + fit_output_filename + ".pranges";
-	ofstream prangefile(prange_str.c_str());
-	for (int i=0; i < n_fit_parameters; i++)
-	{
-		if (param_settings->use_penalty_limits[i])
-			prangefile << param_settings->penalty_limits_lo[i] << " " << param_settings->penalty_limits_hi[i] << endl;
 		else
-			prangefile << "-1e30 1e30" << endl;
-	}
-	prangefile.close();
-	if (lines.size() > 0) {
-		string script_str = fit_output_dir + "/" + fit_output_filename + ".commands";
-		ofstream scriptfile(script_str.c_str());
-		for (int i=0; i < lines.size()-1; i++) {
-			scriptfile << lines[i] << endl;
+		{
+			die("mass model type for lens %i not supported in COOLEST yet",i);
 		}
-		scriptfile.close();
+		lens["name"] = name;
+		lensing_entities.append(lens);
+	}
+	coolest["lensing_entities"] = lensing_entities;
+
+	if (source_fit_mode==Delaunay_Source) {
+		if (delaunay_srcgrid) {
+			vector<double> xvals;
+			vector<double> yvals;
+			vector<double> sbvals;
+			delaunay_srcgrid->get_grid_points(xvals,yvals,sbvals);
+			int n_srcpts = sbvals.size();
+
+			string src_filename = filename + "_src.fits";
+			std::unique_ptr<CCfits::FITS> pFits(nullptr);
+			pFits.reset( new CCfits::FITS("!"+src_filename,CCfits::Write) );
+
+			std::string newName("NEW-EXTENSION");
+			std::vector<std::string> ColFormats = {"E","E","E"};
+			std::vector<std::string> ColNames = {"x","y","z"};
+			std::vector<std::string> ColUnits = {"dum","dum","dum"};
+			CCfits::Table* newTable = pFits->addTable(newName,n_srcpts,ColNames,ColFormats,ColUnits);
+			newTable->column("x").write(xvals,1);  
+			newTable->column("y").write(yvals,1);
+			newTable->column("z").write(sbvals,1);
+
+			// Then create the remaining json fields
+			Json::Value source;
+			source["type"] = "Galaxy";
+			source["name"] = "qlens Delaunay source";
+			source["redshift"] = source_redshift;
+			source["mass_model"] = Json::Value(Json::arrayValue);
+			source["light_model"] = Json::Value(Json::arrayValue);
+
+			Json::Value light_model;
+			Json::Value pixels_irr;
+			pixels_irr["field_of_view_x"] = Json::Value(Json::arrayValue);
+			pixels_irr["field_of_view_x"].append(0);
+			pixels_irr["field_of_view_x"].append(0);
+			pixels_irr["field_of_view_y"] = Json::Value(Json::arrayValue);
+			pixels_irr["field_of_view_y"].append(0);
+			pixels_irr["field_of_view_y"].append(0);
+			pixels_irr["num_pix"] = n_srcpts;
+			pixels_irr["fits_file"] = Json::Value();
+			pixels_irr["fits_file"]["path"] = src_filename;  
+			light_model["parameters"] = Json::Value();
+			light_model["parameters"]["pixels"] = pixels_irr;
+			light_model["type"] = "IrregularGrid";
+			source["light_model"].append( light_model );
+
+			lensing_entities.append( source );
+
+			coolest["lensing_entities"] = lensing_entities;
+
+		} else {
+			warn("Delaunay source grid has not been constructed, so it cannot be output in FITS table");
+		}
+	} else if (Delaunay_Source==Shapelet_Source) {
+		// Implement this when you get time
+	} else if (Delaunay_Source==Parameterized_Source) {
+		// Implement this when you get time
 	}
 
-	QLens* model;
-	if (fitmodel != NULL) model = fitmodel;
-	else model = this;
-	// In order to save the commands for the best-fit model, we adopt the best-fit model in the fitmodel object (if available);
-	// that way we're not forced to adopt it in the user-end lens object if the user doesn't want to
-	if (model == fitmodel) {
-		model->bestfitparams.input(bestfitparams);
-		model->adopt_model(bestfitparams);
-	}
-	bool include_limits;
-	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
-	else include_limits = true;
-	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
-	model->output_lens_commands(scriptfile_str,include_limits);
-	if (include_limits) {
-		// save version without limits in case user wants to load best-fit model while in Simplex or Powell mode
-		string scriptfile_str2 = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
-		model->output_lens_commands(scriptfile_str2,false);
-	}
+	std::ofstream jsonfile(filename + ".json");
+	jsonfile << coolest;
+	jsonfile.close();
+#else
+	warn("QLens must be compiled with jsoncpp and ccfits (and -DUSE_COOLEST flag) to output coolest files");
+#endif
 }
 
 double QLens::get_einstein_radius_prior(const bool verbal)
@@ -12520,6 +12749,12 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 	//if ((autogrid_from_analytic_source) and (n_sb==0)) { warn("no source objects have been specified"); return false; }
 	if ((auto_sourcegrid) and (!autogrid_from_analytic_source) and (!image_grid_already_exists)) { warn("no image data have been generated from which to automatically set source grid dimensions"); return false; }
 
+	bool at_least_one_lensed_src = false;
+	for (int k=0; k < n_sb; k++) {
+		if (sb_list[k]->is_lensed) { at_least_one_lensed_src = true; break; }
+	}
+	if ((!image_grid_already_exists) and (use_image_pixelgrid) and (!at_least_one_lensed_src)) die("there are no analytic sources or current pixel grid available to generate source plot");
+
 	if (use_image_pixelgrid) {
 		if (!image_grid_already_exists) {
 			double xmin,xmax,ymin,ymax;
@@ -12532,13 +12767,13 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 		}
 
 		int n_imgpixels;
-		if (auto_sourcegrid) {
-			bool at_least_one_lensed_src = false;
-			for (int k=0; k < n_sb; k++) {
-				if (sb_list[k]->is_lensed) { at_least_one_lensed_src = true; break; }
+		if ((auto_sourcegrid) and (source_fit_mode != Delaunay_Source)) {
+			if ((autogrid_from_analytic_source) and (at_least_one_lensed_src)) {
+				find_optimal_sourcegrid_for_analytic_source();
 			}
-			if ((autogrid_from_analytic_source) and (at_least_one_lensed_src)) find_optimal_sourcegrid_for_analytic_source();
-			else image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+			else {
+				image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+			}
 		}
 		if ((auto_srcgrid_npixels) and (!use_nimg_prior_npixels)) {
 			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
@@ -12977,7 +13212,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root,
 	return true;
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool normalize_residuals, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool verbose)
 {
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid==NULL)) { warn("No source surface brightness map has been generated"); return false; }
@@ -13147,7 +13382,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	double chisq_from_residuals;
 	if (output_fits==false) {
 		if (mpi_id==0) 
-			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,show_noise_thresh);
+			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
@@ -13164,9 +13399,6 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 	if ((mpi_id==0) and (plot_residual) and (!output_fits)) {
 		if ((data_pixel_noise != 0) and (!use_noise_map)) chisq_from_residuals /= data_pixel_noise*data_pixel_noise; // if using noise map, 1/sig^2 factors are included in 'plot_surface_brightness' function above
 		cout << "chi-square from residuals = " << chisq_from_residuals << endl;
-	}
-	if ((mpi_id==0) and (verbose) and (plot_residual) and (use_noise_map)) {
-		cout << "*NOTE*: Plotting normalized residuals using noise map" << endl;
 	}
 
 	//sbmax=-1e30;

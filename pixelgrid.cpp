@@ -6422,7 +6422,6 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 		}
 	}
 	isophote_data.input(n_xivals,xivals);
-	isophote_data.setnan(); // in case any of the isophotes can't be fit, the NAN will indicate it
 	if (n_higher_harmonics > 2) isophote_data.use_A56 = true;
 
 	/*************************************** lambda functions ******************************************/
@@ -6548,7 +6547,10 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	int it_minres;
 	int xi_it, xi_i, xi_i_prev;
 	int npts_minres, npts_sample_minres;
-	if (pixel_noise==0) pixel_noise = 0.001; // just a hack for cases where there is no noise
+	if (pixel_noise==0) {
+		pixel_noise = 0.001; // just a hack for cases where there is no noise
+		warn("No pixel noise has been defined; choosing sig_noise=0.001");
+	}
 	for (xi_it=0; xi_it < n_xivals; xi_it++) {
 		xi_i = xi_ivals[xi_it];
 		if (xi_it==0) xi_i_prev = xi_i;
@@ -8800,7 +8802,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool show_noise_thresh, bool plot_log)
+double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool normalize_residuals, bool show_noise_thresh, bool plot_log)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -8833,8 +8835,14 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 				} else {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					residual = lens->image_pixel_data->surface_brightness[i][j] - sb;
-					if ((lens->image_pixel_data != NULL) and (lens->use_noise_map)) {
-						residual /= lens->image_pixel_data->noise_map[i][j];
+					if (normalize_residuals) {
+						if (lens->use_noise_map) {
+							if (lens->image_pixel_data != NULL) {
+								residual /= lens->image_pixel_data->noise_map[i][j];
+							} else warn("image pixel data not loaded; could not use noise map to plot residuals");
+						} else {
+							if (lens->data_pixel_noise > 0) residual /= lens->data_pixel_noise;
+						}
 					}
 					tot_residuals += residual*residual;
 					//wtfout << i << " " << j << " " << (residual*residual) << endl;
@@ -10275,6 +10283,7 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 		for (i=0; i < n_candidates; i++) {
 			//cout << "Trying candidate " << i << ": " << image_candidates[i].pos[0] << " " << image_candidates[i].pos[1] << endl;
 			if (run_newton(image_candidates[i].pos,mag,thread)==true) {
+			//{
 				imgpt.pos = image_candidates[i].pos;
 				//imgpt.mag = lens->magnification(image_candidates[i].pos,0,imggrid_zfactors,imggrid_betafactors);
 				imgpt.mag = mag;
