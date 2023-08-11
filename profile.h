@@ -25,8 +25,8 @@ enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patters
 enum LensProfileName
 {
 	KSPLINE,
-	ALPHA,
-	PJAFFE,
+	sple_LENS,
+	dpie_LENS,
 	nfw,
 	TRUNCATED_nfw,
 	CORED_nfw,
@@ -483,7 +483,7 @@ struct LensIntegral : public Romberg
 
 };
 
-class AlphaLens : public LensProfile
+class SPLE_Lens : public LensProfile
 {
 	private:
 	double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
@@ -516,19 +516,19 @@ class AlphaLens : public LensProfile
 	void set_model_specific_integration_pointers();
 
 	public:
-	AlphaLens(const int parameter_mode_in = 0)
+	SPLE_Lens(const int parameter_mode_in = 0)
 	{
 		set_null_ptrs_and_values();
 		setup_lens_properties(parameter_mode_in);
 	}
-	AlphaLens(const double zlens_in, const double zsrc_in, const double &b_in, const double &slope_in, const double &s_in, const double &q_in, const double &theta_degrees,
+	SPLE_Lens(const double zlens_in, const double zsrc_in, const double &b_in, const double &slope_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
-	AlphaLens(const AlphaLens* lens_in);
+	SPLE_Lens(const SPLE_Lens* lens_in);
 	void initialize_parameters(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	AlphaLens(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in=0) : AlphaLens(parameter_mode_in) {
+	SPLE_Lens(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in=0) : SPLE_Lens(parameter_mode_in) {
 		initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 	}
-	AlphaLens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+	SPLE_Lens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -543,7 +543,7 @@ class AlphaLens : public LensProfile
 	bool output_cosmology_info(const int lens_number);
 };
 
-class PseudoJaffe : public LensProfile
+class dPIE_Lens : public LensProfile
 {
 	private:
 	double b, s, a; // a is the truncation radius
@@ -570,14 +570,14 @@ class PseudoJaffe : public LensProfile
 	bool calculate_tidal_radius;
 	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
-	PseudoJaffe()
+	dPIE_Lens()
 	{
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
+	dPIE_Lens(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	PseudoJaffe(const PseudoJaffe* lens_in);
+	dPIE_Lens(const dPIE_Lens* lens_in);
 
 	void assign_paramnames();
 	void assign_param_pointers();

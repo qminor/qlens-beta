@@ -1021,7 +1021,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int get_shapelet_nn();
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
+	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
 	void create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);

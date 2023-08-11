@@ -1966,7 +1966,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 
 		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
 
-	AlphaLens* alphaptr;
+	SPLE_Lens* alphaptr;
 	Shear* shearptr;
 	//Truncated_NFW* tnfwptr;
 	switch (name) {
@@ -1976,13 +1976,13 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			new_lens = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
 		case DEFLECTION:
 			new_lens = new Deflection(zl, zs, scale1, scale2, this); break;
-		case ALPHA:
-			//new_lens = new AlphaLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break; // the old way
+		case sple_LENS:
+			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break; // the old way
 			
-			//alphaptr = new AlphaLens();
+			//alphaptr = new SPLE_Lens();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			alphaptr = new AlphaLens(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode); // an alternative constructor to use; in this case you don't need to call initialize_parameters
+			alphaptr = new SPLE_Lens(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode); // an alternative constructor to use; in this case you don't need to call initialize_parameters
 			new_lens = alphaptr;
 			break;
 		case SHEAR:
@@ -2003,8 +2003,8 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
 		case CORED_nfw:
 			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case PJAFFE:
-			new_lens = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case dpie_LENS:
+			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case EXPDISK:
 			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case HERNQUIST:
@@ -2056,7 +2056,7 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 		case DOUBLE_SERSIC:
 			new_lens = new DoubleSersicLens((DoubleSersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case sple:
-			new_lens = new AlphaLens((SPLE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+			new_lens = new SPLE_Lens((SPLE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case SB_MULTIPOLE:
 			warn("cannot spawn lens from SB multipole"); spawn_lens = false; break;
 		case SHAPELET:
@@ -2093,8 +2093,8 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			lens_list[nlens-1] = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
 		case DEFLECTION:
 			lens_list[nlens-1] = new Deflection(zl, zs, scale1, scale2, this); break;
-		case ALPHA:
-			lens_list[nlens-1] = new AlphaLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+		case sple_LENS:
+			lens_list[nlens-1] = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case SHEAR:
 			lens_list[nlens-1] = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
@@ -2104,8 +2104,8 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			lens_list[nlens-1] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
 		case CORED_nfw:
 			lens_list[nlens-1] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case PJAFFE:
-			lens_list[nlens-1] = new PseudoJaffe(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+		case dpie_LENS:
+			lens_list[nlens-1] = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
 		case EXPDISK:
 			lens_list[nlens-1] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
 		case HERNQUIST:
@@ -3064,8 +3064,8 @@ bool QLens::test_for_singularity()
 	bool singular = false;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
-			if ((lens_list[i]->get_lenstype() == PJAFFE) and (lens_list[i]->core_present()==false)) singular = true;
-			else if ((lens_list[i]->get_lenstype() == ALPHA) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
+			if ((lens_list[i]->get_lenstype() == dpie_LENS) and (lens_list[i]->core_present()==false)) singular = true;
+			else if ((lens_list[i]->get_lenstype() == sple_LENS) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
 			else if (lens_list[i]->get_lenstype() == PTMASS) singular = true;
 				// a radial critical curve will occur if a core is present, OR if alpha > 1 (since kappa goes like r^n where n=alpha-2)
 		}
@@ -3086,8 +3086,8 @@ void QLens::record_singular_points(double *zfacs)
 		for (int i=0; i < nlens; i++) {
 			singular = false;
 			if (zfacs[lens_redshift_idx[i]] != 0.0) {
-				if ((lens_list[i]->get_lenstype() == PJAFFE) and (lens_list[i]->core_present()==false)) singular = true;
-				else if ((lens_list[i]->get_lenstype() == ALPHA) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
+				if ((lens_list[i]->get_lenstype() == dpie_LENS) and (lens_list[i]->core_present()==false)) singular = true;
+				else if ((lens_list[i]->get_lenstype() == sple_LENS) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
 				else if (lens_list[i]->get_lenstype() == PTMASS) singular = true;
 					// a radial critical curve will occur if a core is present, OR if alpha > 1 (since kappa goes like r^n where n=alpha-2)
 				if (singular) {
@@ -3285,8 +3285,8 @@ void QLens::print_source_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 	/*
 	if (n_sb > 0) {
-		AlphaLens* lens_spawn;
-		//lens_spawn = new AlphaLens(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
+		SPLE_Lens* lens_spawn;
+		//lens_spawn = new SPLE_Lens(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
 		sb_list[0]->spawn_lens_model(lens_spawn);
 		//lens_spawn->initialize_parameters(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
 		cout << "LENS NAME: " << lens_spawn->get_model_name() << endl;
@@ -4012,7 +4012,7 @@ void QLens::calculate_critical_curve_perturbation_radius(int lens_number, bool v
 {
 	// the analytic formulas require a Pseudo-Jaffe or isothermal profile, and they only work for subhalos in the plane of the lens
 	// if one of these conditions isn't satisfied, just use the numerical root-finding version instead
-	if (((lens_list[lens_number]->get_lenstype()!=PJAFFE) and (lens_list[lens_number]->get_lenstype()!=ALPHA)) or (lens_list[lens_number]->zlens != lens_list[0]->zlens))
+	if (((lens_list[lens_number]->get_lenstype()!=dpie_LENS) and (lens_list[lens_number]->get_lenstype()!=sple_LENS)) or (lens_list[lens_number]->zlens != lens_list[0]->zlens))
 	{
 		double avg_sigma_enclosed;
 		calculate_critical_curve_perturbation_radius_numerical(lens_number,verbose,rmax,avg_sigma_enclosed,mass_enclosed);
@@ -4036,7 +4036,7 @@ void QLens::calculate_critical_curve_perturbation_radius(int lens_number, bool v
 	}
 
 	bool is_pjaffe;
-	if (lens_list[lens_number]->get_lenstype()==PJAFFE) {
+	if (lens_list[lens_number]->get_lenstype()==dpie_LENS) {
 		is_pjaffe = true;
 		double params[10];
 		lens_list[lens_number]->get_parameters(params);
@@ -4324,7 +4324,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 
 	double avg_kappa = reference_zfactors[lens_redshift_idx[perturber_lens_number]]*lens_list[perturber_lens_number]->kappa_avg_r(rmax_perturber_z);
 
-	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+	if (lens_list[primary_lens_number]->lenstype==sple_LENS) {
 		double host_params[10];
 		lens_list[primary_lens_number]->get_parameters(host_params);
 		alpha = host_params[1];
@@ -7106,10 +7106,10 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		switch (lens_list[i]->get_lenstype()) {
 			case KSPLINE:
 				fitmodel->lens_list[i] = new LensProfile(lens_list[i]); break;
-			case ALPHA:
-				fitmodel->lens_list[i] = new AlphaLens((AlphaLens*) lens_list[i]); break;
-			case PJAFFE:
-				fitmodel->lens_list[i] = new PseudoJaffe((PseudoJaffe*) lens_list[i]); break;
+			case sple_LENS:
+				fitmodel->lens_list[i] = new SPLE_Lens((SPLE_Lens*) lens_list[i]); break;
+			case dpie_LENS:
+				fitmodel->lens_list[i] = new dPIE_Lens((dPIE_Lens*) lens_list[i]); break;
 			case nfw:
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
@@ -7309,7 +7309,6 @@ double QLens::update_model(const double* params)
 	if ((source_fit_mode == Delaunay_Source) and (vary_matern_index) and (regularization_method != None)) {
 		matern_index = params[index++];
 	}
-	update_anchored_parameters_and_redshift_data();
 
 	if (vary_hubble_parameter) {
 		hubble = params[index++];
@@ -7333,8 +7332,9 @@ double QLens::update_model(const double* params)
 		log_penalty_prior += contour_overlap_log_penalty_prior;
 		//warn("contours overlap in ellipticity gradient model");
 	}
+	update_anchored_parameters_and_redshift_data();
 
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters (%i)",n_fit_parameters);
+	if (index != n_fit_parameters) die("Index (%i) didn't go through all the fit parameters (ntot=%i), indicating a lens model mismatch",index,n_fit_parameters);
 	return log_penalty_prior;
 }
 
@@ -10030,13 +10030,6 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
-		//if (mpi_id==0) {
-			//string cluster_dir = fit_output_dir + "/clusters";
-			//struct stat sb;
-			//stat(cluster_dir.c_str(),&sb);
-			//if (S_ISDIR(sb.st_mode)==false)
-				//mkdir(cluster_dir.c_str(),S_IRWXU | S_IRWXG);
-		//}
 	}
 
 	if (!initialize_fitmodel(true)) {
@@ -10126,12 +10119,6 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	}
 
 	use_ansi_characters = false;
-
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -10348,11 +10335,6 @@ void QLens::chi_square_twalk()
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wt = omp_get_wtime() - wt0;
@@ -10379,75 +10361,22 @@ bool QLens::adopt_model(dvector &fitparams)
 		}
 		return false;
 	}
-	int i, index=0;
 	double transformed_params[n_fit_parameters];
 	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
-	// Maybe instead of the following code, just run update_model(transformed_params)? Look into this and implement if it works!!
-	bool status;
-	for (i=0; i < nlens; i++) {
-		lens_list[i]->update_fit_parameters(transformed_params,index,status);
+	double log_penalty_prior;
+	log_penalty_prior = update_model(transformed_params); // the model is adopted here
+
+	// Since optimizations sometimes result in angles being out of (-2*pi,2*pi) range, reset them if necessary
+	for (int i=0; i < nlens; i++) {
 		lens_list[i]->reset_angle_modulo_2pi();
 	}
-	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	for (i=0; i < n_sb; i++) {
-		sb_list[i]->update_fit_parameters(transformed_params,index,status);
+	for (int i=0; i < n_sb; i++) {
 		sb_list[i]->reset_angle_modulo_2pi();
 	}
-	//}
-	if (n_sourcepts_fit > 0) {
-		if (use_analytic_bestfit_src) {
-			find_analytic_srcpos(sourcepts_fit.data());
-		} else {
-			for (i=0; i < n_sourcepts_fit; i++) {
-				if (vary_sourcepts_x[i]) sourcepts_fit[i][0] = transformed_params[index++];
-				if (vary_sourcepts_y[i]) sourcepts_fit[i][1] = transformed_params[index++];
-			}
-		}
-	}
-	if (vary_srcpt_xshift) srcpt_xshift = transformed_params[index++];
-	if (vary_srcpt_yshift) srcpt_yshift = transformed_params[index++];
-	if (vary_srcflux) source_flux = transformed_params[index++];
-	if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = transformed_params[index++];
-	if ((vary_regparam_lsc) and (regularization_method != None)) regparam_lsc = transformed_params[index++];
-	//if ((vary_regparam_lhi) and (regularization_method != None)) regparam_lhi = transformed_params[index++];
-	if ((vary_regparam_lum_index) and (regularization_method != None)) regparam_lum_index = transformed_params[index++];
-	if (vary_alpha_clus) alpha_clus = transformed_params[index++];
-	if (vary_beta_clus) beta_clus = transformed_params[index++];
-	if (source_fit_mode == Cartesian_Source) {
-		if (vary_pixel_fraction) pixel_fraction = transformed_params[index++];
-		if (vary_srcgrid_size_scale) srcgrid_size_scale = transformed_params[index++];
-		if (vary_magnification_threshold) pixel_magnification_threshold = transformed_params[index++];
-	}
-	update_anchored_parameters_and_redshift_data();
+	if ((n_sourcepts_fit > 0) and (use_analytic_bestfit_src)) find_analytic_srcpos(sourcepts_fit.data());
 	reset_grid(); // this will force it to redraw the critical curves if needed
-	if (source_fit_mode == Delaunay_Source) {
-		if ((vary_correlation_length) and (regularization_method != None)) 
-			kernel_correlation_length = transformed_params[index++];
-		if ((vary_matern_scale) and (regularization_method != None)) 
-			matern_scale = transformed_params[index++];
-		if ((vary_matern_index) and (regularization_method != None)) 
-			matern_index = transformed_params[index++];
-	}
+	if (log_penalty_prior > 0) warn(warnings,"adopted parameters are generating a penalty prior; this may be due to parameters being out of plimit ranges");
 
-	if (vary_hubble_parameter) {
-		hubble = transformed_params[index++];
-		set_cosmology(omega_matter,0.04,hubble,2.215);
-	}
-	if (vary_omega_matter_parameter) {
-		omega_matter = transformed_params[index++];
-		set_cosmology(omega_matter,0.04,hubble,2.215);
-	}
-	if (vary_syserr_pos_parameter) {
-		syserr_pos = transformed_params[index++];
-	}
-	if (vary_wl_shear_factor_parameter) {
-		wl_shear_factor = transformed_params[index++];
-	}
-	if ((index != n_fit_parameters) and (mpi_id==0)) die("Index didn't go through all the fit parameters (%i); this likely means your current lens model does not match the lens model that was used for fitting.",n_fit_parameters);
-	//if (source_fit_mode==Shapelet_Source) {
-		//// we run the following function so it updates amplitudes (and also sigma, xc, yc if using auto_shapelet_scaling)
-		//if (invert_surface_brightness_map_from_data(false)==false) warn("no data loaded; cannot update shapelet amplitudes");
-	//}
 	return true;
 }
 
@@ -12741,7 +12670,7 @@ void QLens::find_optimal_sourcegrid_for_analytic_source()
 	}
 }
 
-bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source, const bool image_grid_already_exists, const bool use_nimg_prior_npixels)
+bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source, const bool image_grid_already_exists, const bool use_auxiliary_srcgrid)
 {
 	bool use_image_pixelgrid = false;
 	if ((adaptive_subgrid) and (nlens==0)) { cerr << "Error: cannot ray trace source for adaptive grid; no lens model has been specified\n"; return false; }
@@ -12775,7 +12704,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 				image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
 			}
 		}
-		if ((auto_srcgrid_npixels) and (!use_nimg_prior_npixels)) {
+		if ((auto_srcgrid_npixels) and (!use_auxiliary_srcgrid)) {
 			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
 				image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
 			else
@@ -12814,7 +12743,7 @@ bool QLens::create_sourcegrid_cartesian(const bool verbal, const bool autogrid_f
 		}
 	}
 
-	if (!use_nimg_prior_npixels) {
+	if (!use_auxiliary_srcgrid) {
 		SourcePixelGrid::set_splitting(srcgrid_npixels_x,srcgrid_npixels_y,1e-6);
 	} else {
 		SourcePixelGrid::set_splitting(auxiliary_srcgrid_npixels,auxiliary_srcgrid_npixels,1e-6);
@@ -14494,7 +14423,7 @@ void QLens::plot_mc_curve(const int lensnumber, const double logm_min, const dou
 	LensProfile::use_ellipticity_components = true;
 	Shear::use_shear_component_params = true;
 
-	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	create_and_add_lens(sple_LENS,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
 	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
 	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
@@ -14561,7 +14490,7 @@ void QLens::find_equiv_mvir(const double newc)
 	LensProfile::use_ellipticity_components = true;
 	Shear::use_shear_component_params = true;
 
-	create_and_add_lens(ALPHA,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
+	create_and_add_lens(sple_LENS,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
 	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
 	lens_list[1]->anchor_center_to_lens(lens_list,0);
 	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
@@ -14631,7 +14560,7 @@ void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double 
 	}
 
 	double alpha, alpha0, b0, b;
-	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+	if (lens_list[primary_lens_number]->lenstype==sple_LENS) {
 		double host_params[10];
 		lens_list[primary_lens_number]->get_parameters(host_params);
 		alpha0 = host_params[1];
@@ -15102,7 +15031,7 @@ void QLens::find_perturber_surface_density(const int lensnumber, const double zm
 	}
 
 	double alpha;
-	if (lens_list[primary_lens_number]->lenstype==ALPHA) {
+	if (lens_list[primary_lens_number]->lenstype==sple_LENS) {
 		double host_params[10];
 		lens_list[primary_lens_number]->get_parameters(host_params);
 		alpha = host_params[1];
@@ -15356,7 +15285,7 @@ void QLens::generate_solution_chain_sdp81()
 
 			xs_true = -rs*cos(theta_sub);
 			ys_true = -rs*sin(theta_sub);
-			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+			create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
@@ -15372,7 +15301,7 @@ void QLens::generate_solution_chain_sdp81()
 
 			auto_srcgrid_npixels = true;
 			auto_sourcegrid = true;
-			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+			create_and_add_lens(sple_LENS,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
@@ -15384,7 +15313,7 @@ void QLens::generate_solution_chain_sdp81()
 			shear_vary_flags[1] = true;
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
-				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+				create_and_add_lens(dpie_LENS,bs_fit,0,0,1,0,xs_fit,ys_fit);
 				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -15427,7 +15356,7 @@ void QLens::generate_solution_chain_sdp81()
 			double avg_kappa, menc_true;
 			if (include_subhalo) {
 				clear_lenses();
-				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+				create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
@@ -15468,7 +15397,7 @@ void QLens::generate_solution_chain_sdp81()
 
 			xs_true = -rs*cos(theta_sub);
 			ys_true = -rs*sin(theta_sub);
-			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+			create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
@@ -15484,7 +15413,7 @@ void QLens::generate_solution_chain_sdp81()
 
 			auto_srcgrid_npixels = true;
 			auto_sourcegrid = true;
-			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+			create_and_add_lens(sple_LENS,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 			lens_list[1]->anchor_center_to_lens(lens_list,0);
 			boolvector vary_flags(7);
@@ -15496,7 +15425,7 @@ void QLens::generate_solution_chain_sdp81()
 			shear_vary_flags[1] = true;
 			lens_list[1]->vary_parameters(shear_vary_flags);
 			if (include_subhalo) {
-				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+				create_and_add_lens(dpie_LENS,bs_fit,0,0,1,0,xs_fit,ys_fit);
 				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 				boolvector pjaffe_vary_flags(7);
 				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -15543,7 +15472,7 @@ void QLens::generate_solution_chain_sdp81()
 			double avg_kappa, menc_true;
 			if (include_subhalo) {
 				clear_lenses();
-				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+				create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
@@ -15608,7 +15537,7 @@ void QLens::generate_solution_chain_sdp81()
 //			xs_true = -r_initial*cos(theta_sub);
 //			ys_true = -r_initial*sin(theta_sub);
 //			a_true = SQR(21.6347)*ks_true/1.606; // from formula for tidal radius of Munoz profile, see Minor et al. (2016)
-//			create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//			create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 //			add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 //			create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 //			//calculate_critical_curve_perturbation_radius_numerical(2,true,rmax,menc);
@@ -15623,7 +15552,7 @@ void QLens::generate_solution_chain_sdp81()
 //
 //			auto_srcgrid_npixels = true;
 //			auto_sourcegrid = true;
-//			create_and_add_lens(ALPHA,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
+//			create_and_add_lens(sple_LENS,b_fit,alpha_fit,0,q_fit,theta_fit,xc_fit,yc_fit);
 //			add_shear_lens(shear_x_fit,shear_y_fit,xc_fit,yc_fit);
 //			lens_list[1]->anchor_center_to_lens(lens_list,0);
 //			boolvector vary_flags(7);
@@ -15635,7 +15564,7 @@ void QLens::generate_solution_chain_sdp81()
 //			shear_vary_flags[1] = true;
 //			lens_list[1]->vary_parameters(shear_vary_flags);
 //			if (include_subhalo) {
-//				create_and_add_lens(PJAFFE,bs_fit,0,0,1,0,xs_fit,ys_fit);
+//				create_and_add_lens(dpie_LENS,bs_fit,0,0,1,0,xs_fit,ys_fit);
 //				lens_list[2]->assign_special_anchored_parameters(lens_list[0],1,true); // calculates tidal radius
 //				boolvector pjaffe_vary_flags(7);
 //				for (int i=0; i < 7; i++) pjaffe_vary_flags[i] = false;
@@ -15684,7 +15613,7 @@ void QLens::generate_solution_chain_sdp81()
 //			double avg_kappa, menc_true;
 //			if (include_subhalo) {
 //				clear_lenses();
-//				create_and_add_lens(ALPHA,b_true,1,0,q_true,theta_true,xc_true,yc_true);
+//				create_and_add_lens(sple_LENS,b_true,1,0,q_true,theta_true,xc_true,yc_true);
 //				add_shear_lens(shear_x_true, shear_y_true, xc_true, yc_true);
 //				create_and_add_lens(CORECUSP,ks_true,a_true,0,1,0,xs_true,ys_true,gamma_true,4);
 //				avg_kappa = reference_zfactor*lens_list[2]->kappa_avg_r(rmax);
@@ -15907,7 +15836,7 @@ void QLens::test_lens_functions()
 	clear_lenses();
 	load_image_data("alphafit.dat");
 
-	AlphaLens *A = new AlphaLens();
+	SPLE_Lens *A = new SPLE_Lens();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
 	boolvector flags(7);
 	flags[0] = true;

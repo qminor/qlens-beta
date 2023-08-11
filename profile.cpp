@@ -708,6 +708,8 @@ void LensProfile::update_anchored_parameters()
 	}
 	if (at_least_one_param_anchored) {
 		update_meta_parameters();
+		set_integration_pointers();
+		set_model_specific_integration_pointers();
 	}
 }
 

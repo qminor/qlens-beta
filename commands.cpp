@@ -221,7 +221,7 @@ void QLens::process_commands(bool read_file)
 						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
 						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
 						"emask_nsplit -- specify number of pixel splittings for the extended mask (if 'split_imgpixels' is on)\n"
-						"subhalo_prior -- restrict subhalo position to lie within pixel mask (pjaffe/corecusp only)\n"
+						"subhalo_prior -- restrict subhalo position to lie within pixel mask (dpie/corecusp only)\n"
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
 						"remove_unmapped_subpixels -- when inverting, exclude *sub*pixels that don't map to any imgpixels\n"
@@ -381,8 +381,8 @@ void QLens::process_commands(bool read_file)
 							"parameters of one lens to another lens; type 'help lens anchoring' for info on how to do this.\n\n"
 							"Available lens models:   (type 'help lens <lensmodel>' for usage information)\n\n"
 							"\033[4mElliptical mass models:\033[0m\n"  // ASCII codes are for underlining
-							"sple -- softened power-law profile\n"
-							"pjaffe -- Pseudo-Jaffe profile (smoothly truncated isothermal profile with core)\n"
+							"sple -- softened power-law ellipsoid profile\n"
+							"dpie -- dual pseudo-isothermal ellipsoid (smoothly truncated isothermal profile with core)\n"
 							"nfw -- NFW model\n"
 							"tnfw -- Truncated NFW model\n"
 							"cnfw -- NFW model with core\n"
@@ -544,10 +544,10 @@ void QLens::process_commands(bool read_file)
 							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
-					else if (words[2]=="pjaffe")
-						cout << "lens pjaffe <b> <a> <s> <q/e> [theta] [x-center] [y-center]                 (pmode=0)\n"
-								  "lens pjaffe <sigma0> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]    (pmode=1)\n"
-								  "lens pjaffe <mtot> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]      (pmode=2)\n\n"
+					else if (words[2]=="dpie")
+						cout << "lens dpie <b> <a> <s> <q/e> [theta] [x-center] [y-center]                 (pmode=0)\n"
+								  "lens dpie <sigma0> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]    (pmode=1)\n"
+								  "lens dpie <mtot> <a_kpc> <s_kpc> <q/e> [theta] [x-center] [y-center]      (pmode=2)\n\n"
 							"where <b> is the default mass parameter (it is the Einstein radius in the limit of large a, s=0); <a> is\n"
 							"the tidal radius, <s> is the core radius, <q/e> is the axis ratio or ellipticity (depending on the ellip-\n"
 							"ticity mode), and [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
@@ -1465,6 +1465,8 @@ void QLens::process_commands(bool read_file)
 							"Available source models:    (type 'help source '<sourcemodel>' for usage information)\n\n"
 							"gaussian -- Gaussian with dispersion <sig> and q*<sig> along major/minor axes respectively\n"
 							"sersic -- Sersic profile S = S0 * exp(-b*(R/R_eff)^(1/n))\n"
+							"csersic -- Cored Sersic profile S = S0 * exp(-b*(sqrt(R^+rc^2))/R_eff)^(1/n))\n"
+							"dsersic -- Double Sersic profile\n"
 							"sbmpole -- multipole term\n"
 							"tophat -- ellipsoidal 'top hat' profile\n"
 							"spline -- splined surface brightness profile (generated from an input file)\n\n";
@@ -1815,7 +1817,7 @@ void QLens::process_commands(bool read_file)
 						"Mode 3: in potential(R), we let R^2 --> (1-e)*x^2 + (1+e)*y^2. Ellipticity parameter: e (epsilon)\n\n"
 						"If a lens is created using mode 3, the prefix 'pseudo-' is added to the lens model name. The\n"
 						"pseudo-elliptical model can do lens calculations significantly faster in most of the elliptical\n"
-						"mass models, since analytic formulas are used for the deflection. Exceptions are the pjaffe\n"
+						"mass models, since analytic formulas are used for the deflection. Exceptions are the dpie\n"
 						"model and the sple model in the case where s=0 or alpha=1, since in these cases the formulas\n"
 						"are analytic regardless. Keep in mind however that the pseudo-elliptical models can lead to\n"
 						"unphysical density contours when the ellipticity is high enough (you can check this using the\n"
@@ -2688,8 +2690,8 @@ void QLens::process_commands(bool read_file)
 					// so it follows the format of the usual "lens" command, but with update_parameters==true
 					stringstream* new_ws = new stringstream[nwords-1];
 					words[1] = (profile_name==KSPLINE) ? "kspline" :
-									(profile_name==ALPHA) ? "sple" :
-									(profile_name==PJAFFE) ? "pjaffe" :
+									(profile_name==sple_LENS) ? "sple" :
+									(profile_name==dpie_LENS) ? "dpie" :
 									(profile_name==MULTIPOLE) ? "mpole" :
 									(profile_name==nfw) ? "nfw" :
 									(profile_name==TRUNCATED_nfw) ? "tnfw" :
@@ -3105,7 +3107,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(ALPHA, emode, zl_in, reference_source_redshift, b, slope, s, 0, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(sple_LENS, emode, zl_in, reference_source_redshift, b, slope, s, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 									remove_lens(nlens-1);
@@ -3129,18 +3131,18 @@ void QLens::process_commands(bool read_file)
 					}
 					else Complain("sple requires at least 4 parameters (b, alpha, s, q)");
 				}
-				else if (words[1]=="pjaffe")
+				else if ((words[1]=="dpie") or (words[1]=="pjaffe")) // 'pjaffe' is deprecated
 				{
 					bool set_tidal_host = false;
 					int hostnum;
 					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
-					if (nwords > 9) Complain("more than 7 parameters not allowed for model pjaffe");
+					if (nwords > 9) Complain("more than 7 parameters not allowed for model dpie");
 					if (nwords >= 6) {
 						double p1, p2, p3;
 						double q, theta = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> p1)) {
-							if (pmode==0) Complain("invalid b parameter for model pjaffe");
-							else Complain("invalid sigma_v parameter for model pjaffe");
+							if (pmode==0) Complain("invalid b parameter for model dpie");
+							else Complain("invalid sigma_v parameter for model dpie");
 						}
 						if (words[3].find("host=")==0) {
 							string hoststr = words[3].substr(5);
@@ -3150,11 +3152,11 @@ void QLens::process_commands(bool read_file)
 							if (hostnum >= nlens) Complain("lens number does not exist");
 							set_tidal_host = true;
 							p2 = 0;
-						} else if (!(ws[3] >> p2)) Complain("invalid a parameter for model pjaffe");
-						if (!(ws[4] >> p3)) Complain("invalid s (core) parameter for model pjaffe");
-						if (!(ws[5] >> q)) Complain("invalid q parameter for model pjaffe");
+						} else if (!(ws[3] >> p2)) Complain("invalid a parameter for model dpie");
+						if (!(ws[4] >> p3)) Complain("invalid s (core) parameter for model dpie");
+						if (!(ws[5] >> q)) Complain("invalid q parameter for model dpie");
 						if (nwords >= 7) {
-							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model pjaffe");
+							if (!(ws[6] >> theta)) Complain("invalid theta parameter for model dpie");
 							if (nwords == 8) {
 								if (words[7].find("anchor_center=")==0) {
 									string anchorstr = words[7].substr(14);
@@ -3167,8 +3169,8 @@ void QLens::process_commands(bool read_file)
 							}
 							else if (nwords == 9) {
 								if ((update_parameters) and (lens_list[lens_number]->center_anchored==true)) Complain("cannot update center point if lens is anchored to another lens");
-								if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model pjaffe");
-								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model pjaffe");
+								if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model dpie");
+								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model dpie");
 							}
 						}
 						param_vals.input(8);
@@ -3188,9 +3190,9 @@ void QLens::process_commands(bool read_file)
 									if (nwords==tot_nparams_to_vary+2) {
 										if ((words[5] != "0") or (words[6] != "0")) complain_str = "center coordinates cannot be varied as free parameters if anchored to another lens";
 										else { nparams_to_vary += 2; tot_nparams_to_vary += 2; }
-									} else complain_str = "Must specify vary flags for five parameters (b,a,s,q,theta) in model pjaffe";
+									} else complain_str = "Must specify vary flags for five parameters (b,a,s,q,theta) in model dpie";
 								}
-								else complain_str = "Must specify vary flags for seven parameters (b,a,s,q,theta,xc,yc) in model pjaffe";
+								else complain_str = "Must specify vary flags for seven parameters (b,a,s,q,theta,xc,yc) in model dpie";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
 									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
@@ -3214,7 +3216,7 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
-							create_and_add_lens(PJAFFE, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
+							create_and_add_lens(dpie_LENS, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							if (egrad) {
 								if (lens_list[nlens-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -3240,7 +3242,7 @@ void QLens::process_commands(bool read_file)
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
 					}
-					else Complain("pjaffe requires at least 4 parameters (b, a, s, q)");
+					else Complain("dpie requires at least 4 parameters (b, a, s, q)");
 				}
 				else if ((words[1]=="mpole") or (words[1]=="kmpole"))
 				{
@@ -5724,10 +5726,10 @@ void QLens::process_commands(bool read_file)
 					sb_list[src_number]->set_zoom_subgridding(false);
 				}
 			}
-			else if (words[1]=="spawn")
+			else if ((words[1]=="spawn_lens") or (words[1]=="spawn"))
 			{
 				if (n_sb==0) Complain("no source objects have been created");
-				if (nwords < 3) Complain("need at least one argument to 'source spawn' (source number, optional mass parameter value)");
+				if (nwords < 3) Complain("need at least one argument to 'source spawn_lens' (source number, optional mass parameter value)");
 				int src_number;
 				if (!(ws[2] >> src_number)) Complain("invalid source number");
 				if (src_number >= n_sb) Complain("source number does not exist");
@@ -12516,7 +12518,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="subhalo_prior")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Constrain subhalos (with pjaffe/corecusp profile) to lie within pixel mask: " << display_switch(subhalo_prior) << endl;
+				if (mpi_id==0) cout << "Constrain subhalos (with dpie/corecusp profile) to lie within pixel mask: " << display_switch(subhalo_prior) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'subhalo_prior' command; must specify 'on' or 'off'");
 				set_switch(subhalo_prior,setword);
@@ -13384,106 +13386,107 @@ void QLens::process_commands(bool read_file)
 			//triangles->print_triangle_neighbors(18);
 			//delete delaunay_triangles;
 			//delete[] triangle;
-	} else if (words[0]=="load_isofit") {
-		bool fit_sbprofile = false;
-		bool no_optimize = false; // if true, do not switch to downhill simplex mode when varying SB profile params during PSF iterations
-		bool nested_sampling_all_profiles = false;
-		bool optimize_knots = false;
-		bool optimize_knots_before_nest = true;
-		bool skip_nested_sampling = false;
-		bool include_xcyc = false;
-		bool include_a34 = false;
-		bool include_a56 = false;
-		bool input_profile_errors = true; // if on, read profile errors from input file; if off, generate errors from a specified error fraction
-		double errfrac = 0;
-		if (nwords < 2) Complain("need 1 arg (filename)");
-		string input_filename = words[1];
-		if (nwords > 2) {
-			for (int i=2; i < nwords; i++) {
-				if ((words[i]=="-xcyc")) include_xcyc = true;
-				else if ((words[i]=="-a34")) include_a34 = true;
-				else if ((words[i]=="-a56")) include_a56 = true;
-				else if ((words[i]=="-noopt")) no_optimize = true;
-				else if ((words[i]=="-nest_all")) nested_sampling_all_profiles = true;
-				else if ((words[i]=="-skipnest")) skip_nested_sampling = true;
-				else if ((words[i]=="-nest_all_optknots")) {
-					nested_sampling_all_profiles = true;
-					optimize_knots_before_nest = true;
-				}
-				else if ((words[i]=="-fitsb")) fit_sbprofile = true;
-				else if ((words[i]=="-optknots")) optimize_knots = true;
-				else if (words[i].find("errfrac=")==0) {
-					string estr = words[i].substr(8);
-					stringstream estream;
-					estream << estr;
-					if (!(estream >> errfrac)) Complain("invalid maximum elliptical radius");
-					if ((errfrac <= 0) or (errfrac > 1)) Complain("invalid error fraction; must be a number greater than 0 and less than 1");
-					input_profile_errors = false;
+		} else if (words[0]=="load_isofit") {
+			bool fit_sbprofile = false;
+			bool no_optimize = false; // if true, do not switch to downhill simplex mode when varying SB profile params during PSF iterations
+			bool nested_sampling_all_profiles = false;
+			bool optimize_knots = false;
+			bool optimize_knots_before_nest = true;
+			bool skip_nested_sampling = false;
+			bool include_xcyc = false;
+			bool include_a34 = false;
+			bool include_a56 = false;
+			bool input_profile_errors = true; // if on, read profile errors from input file; if off, generate errors from a specified error fraction
+			double errfrac = 0;
+			if (nwords < 2) Complain("need 1 arg (filename)");
+			string input_filename = words[1];
+			if (nwords > 2) {
+				for (int i=2; i < nwords; i++) {
+					if ((words[i]=="-xcyc")) include_xcyc = true;
+					else if ((words[i]=="-a34")) include_a34 = true;
+					else if ((words[i]=="-a56")) include_a56 = true;
+					else if ((words[i]=="-noopt")) no_optimize = true;
+					else if ((words[i]=="-nest_all")) nested_sampling_all_profiles = true;
+					else if ((words[i]=="-skipnest")) skip_nested_sampling = true;
+					else if ((words[i]=="-nest_all_optknots")) {
+						nested_sampling_all_profiles = true;
+						optimize_knots_before_nest = true;
+					}
+					else if ((words[i]=="-fitsb")) fit_sbprofile = true;
+					else if ((words[i]=="-optknots")) optimize_knots = true;
+					else if (words[i].find("errfrac=")==0) {
+						string estr = words[i].substr(8);
+						stringstream estream;
+						estream << estr;
+						if (!(estream >> errfrac)) Complain("invalid maximum elliptical radius");
+						if ((errfrac <= 0) or (errfrac > 1)) Complain("invalid error fraction; must be a number greater than 0 and less than 1");
+						input_profile_errors = false;
+					}
 				}
 			}
-		}
-		SB_Profile *sbptr;
-		if (fit_sbprofile) sbptr = sb_list[0];
-		else sbptr = NULL;
+			SB_Profile *sbptr;
+			if (fit_sbprofile) sbptr = sb_list[0];
+			else sbptr = NULL;
 
-		ifstream isodata_input;
-		isodata_input.open(input_filename.c_str());
-		if (!isodata_input.is_open()) Complain("could not open isophote data file");
-		int n_xivals = 0;
-		static const int n_characters = 5000;
-		char dataline[n_characters];
-		string dum;
-		while (!isodata_input.eof()) {
-			isodata_input.getline(dataline,n_characters);
-			if (dataline[0]=='#') continue;
-			istringstream checkempty(dataline);
-			if (!(checkempty >> dum)) continue;
-			n_xivals++;
-		}
-		isodata_input.close();
-		if (n_xivals==0) Complain("could not read any lines from isophote data file");
-		isodata_input.open(input_filename.c_str());
-		if (!isodata_input.is_open()) Complain("could not open isophote data file");
-			
-		IsophoteData isodata(n_xivals);
-		if (input_profile_errors) {
-			if (!isodata.load_profiles(isodata_input,include_xcyc,include_a34,include_a56)) Complain("could not load isophote fitting profiles");;
-		} else {
-			if (!isodata.load_profiles_noerrs(isodata_input,errfrac,include_xcyc,include_a34,include_a56)) Complain("could not load isophote fitting profiles");
-		}
-		int n_sbfit_livepts = 600;
-		int sbprofile_fit_iter = 0; // keeps track of how many sbprofile fits have been done, so it does nested sampling on iter=0 and simplex afterwards
-		if (skip_nested_sampling) sbprofile_fit_iter++;
-		if (nested_sampling_all_profiles) sbprofile_fit_iter = -1;
-		if ((fit_sbprofile) and (sbptr != NULL)) {
-			if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id,fit_output_dir)) Complain("sbprofile fit failed");
-			if ((sbptr != NULL) and (sbptr->ellipticity_gradient)) {
-				if (mpi_id==0) cout << "Fitting q profile from isophote fit..." << endl;
-				if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-				if (mpi_id==0) cout << "Fitting theta profile from isophote fit..." << endl;
-				if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-				if (sbptr->fourier_gradient) {
-					if (include_a34) {
-						if (mpi_id==0) cout << "Fitting Fourier m=3 profiles from isophote fit:" << endl;
-						if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (mpi_id==0) cout << "Fitting Fourier m=4 profiles from isophote fit:" << endl;
-						if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-					}
-					if (include_a56) {
-						if (mpi_id==0) cout << "Fitting Fourier m=5 profiles from isophote fit:" << endl;
-						if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (mpi_id==0) cout << "Fitting Fourier m=6 profiles from isophote fit:" << endl;
-						if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
-						if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+			ifstream isodata_input;
+			isodata_input.open(input_filename.c_str());
+			if (!isodata_input.is_open()) Complain("could not open isophote data file");
+			int n_xivals = 0;
+			static const int n_characters = 5000;
+			char dataline[n_characters];
+			string dum;
+			while (!isodata_input.eof()) {
+				isodata_input.getline(dataline,n_characters);
+				if (dataline[0]=='#') continue;
+				istringstream checkempty(dataline);
+				if (!(checkempty >> dum)) continue;
+				n_xivals++;
+			}
+			isodata_input.close();
+			if (n_xivals==0) Complain("could not read any lines from isophote data file");
+			isodata_input.open(input_filename.c_str());
+			if (!isodata_input.is_open()) Complain("could not open isophote data file");
+				
+			IsophoteData isodata(n_xivals);
+			if (input_profile_errors) {
+				if (!isodata.load_profiles(isodata_input,include_xcyc,include_a34,include_a56)) Complain("could not load isophote fitting profiles");;
+			} else {
+				if (!isodata.load_profiles_noerrs(isodata_input,errfrac,include_xcyc,include_a34,include_a56)) Complain("could not load isophote fitting profiles");
+			}
+			int n_sbfit_livepts = 600;
+			int sbprofile_fit_iter = 0; // keeps track of how many sbprofile fits have been done, so it does nested sampling on iter=0 and simplex afterwards
+			if (skip_nested_sampling) sbprofile_fit_iter++;
+			if (nested_sampling_all_profiles) sbprofile_fit_iter = -1;
+			if ((fit_sbprofile) and (sbptr != NULL)) {
+				if (!sbptr->fit_sbprofile_data(isodata,sbprofile_fit_iter,n_sbfit_livepts,mpi_np,mpi_id,fit_output_dir)) Complain("sbprofile fit failed");
+				if ((sbptr != NULL) and (sbptr->ellipticity_gradient)) {
+					if (mpi_id==0) cout << "Fitting q profile from isophote fit..." << endl;
+					if (!sbptr->fit_egrad_profile_data(isodata,0,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+					if (mpi_id==0) cout << "Fitting theta profile from isophote fit..." << endl;
+					if (!sbptr->fit_egrad_profile_data(isodata,1,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+					if (sbptr->fourier_gradient) {
+						if (include_a34) {
+							if (mpi_id==0) cout << "Fitting Fourier m=3 profiles from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,4,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,5,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (mpi_id==0) cout << "Fitting Fourier m=4 profiles from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,6,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,7,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+						}
+						if (include_a56) {
+							if (mpi_id==0) cout << "Fitting Fourier m=5 profiles from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,8,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,9,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (mpi_id==0) cout << "Fitting Fourier m=6 profiles from isophote fit:" << endl;
+							if (!sbptr->fit_egrad_profile_data(isodata,10,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+							if (!sbptr->fit_egrad_profile_data(isodata,11,sbprofile_fit_iter,n_sbfit_livepts,optimize_knots,mpi_np,mpi_id,fit_output_dir)) Complain("egrad profile fit failed");
+						}
 					}
 				}
 			}
-		}
-		isodata.plot_isophote_parameters("isofit");
-	} else if (words[0]=="isofit") {
+			isodata.plot_isophote_parameters("isofit");
+			update_anchored_parameters_and_redshift_data(); // For any lens that is anchored to the foreground source
+		} else if (words[0]=="isofit") {
 			if (image_pixel_data == NULL) Complain("image pixel data not loaded");
 			if (nwords < 8) Complain("need 6 args");
 			double xi0, xistep, qi, theta_i, xc_i, yc_i;
@@ -14150,6 +14153,7 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 			}
+			update_anchored_parameters_and_redshift_data(); // For any lens that is anchored to the foreground source
 
 			//find_bestfit_smooth_model(2);
 			//fit_los_despali();

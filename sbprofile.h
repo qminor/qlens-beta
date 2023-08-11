@@ -26,7 +26,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class SersicLens;
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
-	friend class AlphaLens;
+	friend class SPLE_Lens;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -70,7 +70,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void reset_anchor_lists();
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in = 0);
 	void copy_base_source_data(const SB_Profile* sb_in);
-	//bool spawn_lens_model(AlphaLens* lens_model);
+	//bool spawn_lens_model(SPLE_Lens* lens_model);
 
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
@@ -392,7 +392,7 @@ class DoubleSersic : public SB_Profile
 
 class SPLE : public SB_Profile
 {
-	friend class AlphaLens;
+	friend class SPLE_Lens;
 
 	private:
 	double bs, s, alpha;
