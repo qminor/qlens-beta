@@ -5793,10 +5793,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(GAUSSIAN, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -5957,10 +5957,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(SERSIC, emode, s0, reff, 0, n, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6033,10 +6033,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(CORE_SERSIC, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6107,10 +6107,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,8,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(CORED_SERSIC, emode, s0, reff, rc, n, q, theta, xc, yc);
 
 						if (egrad) {
@@ -6184,10 +6184,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,10,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(DOUBLE_SERSIC, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6257,10 +6257,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(sple, emode, bs, s, 0, alpha, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6390,10 +6390,10 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 
-					if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
+						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						add_source_object(TOPHAT, emode, sb, rad, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
