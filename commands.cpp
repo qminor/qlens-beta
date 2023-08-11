@@ -7378,14 +7378,23 @@ void QLens::process_commands(bool read_file)
 				else if (words[1]=="chisq")
 				{
 					bool showdiag = false;
-					if (nwords == 3) {
-						if (words[2]=="diag") showdiag = true;
-						else Complain("invalid argument to 'fit chisq'");
+					bool show_lensinfo = false;
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						int pos;
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-diag") showdiag = true;
+							else if (args[i]=="-info") show_lensinfo = true;
+							else Complain("argument '" << args[i] << "' not recognized");
+						}
 					}
+
+					if (nwords > 2) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
 					int np;
 					get_n_fit_parameters(np);
 					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
-					chisq_single_evaluation(showdiag,true);
+					chisq_single_evaluation(showdiag,true,show_lensinfo);
 					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
@@ -9989,7 +9998,7 @@ void QLens::process_commands(bool read_file)
 				}
 				double chisq, chisq0;
 				chisq = invert_surface_brightness_map_from_data(chisq0, verbal);
-				if ((mpi_id==0) and (!verbal)) cout << "chisq0=" << chisq0 << ", chisq_pix=" << chisq << endl;
+				if ((mpi_id==0) and (!verbal)) cout << "chisq0=" << chisq0 << ", chisq_pix=" << chisq << endl; // we output here if verbal==false because we still want to see the chisq values at the end
 				if (regopt) optimize_regparam = old_regopt;
 				if ((mpi_id==0) and (chisqdif)) {
 					double diff = chisq - chisq_pix_last;
@@ -13108,6 +13117,8 @@ void QLens::process_commands(bool read_file)
 			if (srcnum >= n_sb) Complain("source number does not exist");
 			sb_list[srcnum]->plot_ellipticity_function(ximin,ximax,nn,filename_suffix);
 			if (sb_list[srcnum]->fourier_gradient) sb_list[srcnum]->plot_fourier_functions(ximin,ximax,nn,filename_suffix);
+		} else if (words[0]=="output_egrad_params") {
+			if (!(output_egrad_values_and_knots())) Complain("could not output egrad values"); // crude but hopefully works well enough
 		} else if (words[0]=="output_coolest") {
 			if (nwords != 2) Complain("one argument required: filename to output to <filename>.json");
 			if (LensProfile::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
@@ -14518,19 +14529,29 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 		if (enter_params_and_varyflags) {
 			if (mpi_id==0) cout << "Ellipticity gradient vary flags:" << endl;
 			if (read_command(false)==false) return false;
-			if (nwords != n_efunc_params) return false;
-
-			bool invalid_params = false;
-			//cout << "NEW VARYFLAGS: " << endl;
-			for (int i=0; i < n_efunc_params; i++) {
-				if (!(ws[i] >> varyflags[insertion_point+i])) invalid_params = true;
-				//if (varyflags[insertion_point+i]) nparams_to_vary++;
-				if ((egrad_param_anchored[i]) and (varyflags[insertion_point+i])) {
-					warn("cannot vary egrad parameter if it has been anchored to another egrad parameter");
-					return false;
+			if ((nwords==1) and (words[0]=="none")) {
+				for (int i=0; i < n_efunc_params; i++) {
+					varyflags[insertion_point+i] = false;
 				}
+			} else if ((nwords==1) and (words[0]=="all")) {
+				for (int i=0; i < n_efunc_params; i++) {
+					varyflags[insertion_point+i] = true;
+				}
+			} else {
+				if (nwords != n_efunc_params) return false;
+
+				bool invalid_params = false;
+				//cout << "NEW VARYFLAGS: " << endl;
+				for (int i=0; i < n_efunc_params; i++) {
+					if (!(ws[i] >> varyflags[insertion_point+i])) invalid_params = true;
+					//if (varyflags[insertion_point+i]) nparams_to_vary++;
+					if ((egrad_param_anchored[i]) and (varyflags[insertion_point+i])) {
+						warn("cannot vary egrad parameter if it has been anchored to another egrad parameter");
+						return false;
+					}
+				}
+				if (invalid_params==true) return false;
 			}
-			if (invalid_params==true) return false;
 		} else {
 			for (int i=0; i < n_efunc_params; i++) {
 				varyflags[insertion_point+i] = true;

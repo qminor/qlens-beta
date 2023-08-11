@@ -98,6 +98,7 @@ SPLE_Lens::SPLE_Lens(SPLE* sb_in, const int parameter_mode_in, const bool vary_m
 		parameter_anchor_paramnum[i] = i;
 		parameter_anchor_ratio[i] = 1.0;
 		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
 }
@@ -128,7 +129,7 @@ void SPLE_Lens::assign_param_pointers()
 
 void SPLE_Lens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
 	bprime = b*f_major_axis;
@@ -537,7 +538,7 @@ void dPIE_Lens::assign_param_pointers()
 
 void dPIE_Lens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (qlens != NULL) {
 		if (parameter_mode==1) set_abs_params_from_sigma0();
@@ -901,7 +902,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 
 void NFW::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (qlens != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
@@ -975,6 +976,7 @@ void NFW::set_ks_rs_from_m200_c200()
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
+	//cout << "NFW: dcrit=" << qlens->critical_density(zlens) << " lenfac=" << kpc_to_arcsec << " rs_kpc=" << rs_kpc << " rs=" << rs << " ks=" << ks << " c200=" << c200 << " m200=" << m200 << endl;
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -1265,7 +1267,7 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 
 void Truncated_NFW::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (qlens != NULL) {
 		if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
@@ -1451,7 +1453,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 
 	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//zlens = 5;
-	//update_zlens_meta_parameters();
+	//update_cosmology_meta_parameters();
 	//c200 = r200/rs_kpc;
 	//set_ks_rs_from_m200_c200();
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
@@ -1606,7 +1608,7 @@ void Cored_NFW::get_parameters_pmode(const int pmode, double* params)
 
 void Cored_NFW::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (qlens != NULL) {
 		if (parameter_mode==3) {
@@ -1963,7 +1965,7 @@ void Hernquist::assign_param_pointers()
 
 void Hernquist::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*rs;
 }
@@ -2079,7 +2081,7 @@ void ExpDisk::assign_param_pointers()
 
 void ExpDisk::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	rmin_einstein_radius = 1e-6*R_d;
 }
@@ -2211,7 +2213,7 @@ void Shear::assign_param_pointers()
 
 void Shear::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	if (use_shear_component_params) {
 		shear = sqrt(SQR(shear1) + SQR(shear2));
 		set_angle_from_components(shear1,shear2);
@@ -2422,7 +2424,7 @@ void Multipole::assign_param_pointers()
 
 void Multipole::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
 	if (sine_term) theta_eff += M_HALFPI/m;
 }
@@ -2784,7 +2786,7 @@ void PointMass::set_auto_ranges()
 
 void PointMass::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	if (parameter_mode==1) b = sqrt(mtot/(M_PI*sigma_cr));
 }
 
@@ -2954,7 +2956,7 @@ void CoreCusp::assign_param_pointers()
 
 void CoreCusp::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	if (a < s) die("scale radius a cannot be less than core radius s for corecusp model");
 	if (gamma >= n) die("inner slope cannot be equal to or greater than than outer slope for corecusp model");
@@ -3292,6 +3294,7 @@ SersicLens::SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool va
 		parameter_anchor_paramnum[i] = i;
 		parameter_anchor_ratio[i] = 1.0;
 		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
 }
@@ -3323,7 +3326,7 @@ void SersicLens::assign_param_pointers()
 
 void SersicLens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
 	if (parameter_mode==0) {
@@ -3496,6 +3499,7 @@ DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode
 		parameter_anchor_paramnum[i] = i;
 		parameter_anchor_ratio[i] = 1.0;
 		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
 }
@@ -3533,7 +3537,7 @@ void DoubleSersicLens::assign_param_pointers()
 
 void DoubleSersicLens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
 	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
@@ -3702,6 +3706,7 @@ Cored_SersicLens::Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode
 		parameter_anchor_paramnum[i] = i;
 		parameter_anchor_ratio[i] = 1.0;
 		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
 }
@@ -3735,7 +3740,7 @@ void Cored_SersicLens::assign_param_pointers()
 
 void Cored_SersicLens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n);
 	if (parameter_mode==0) {
@@ -4308,7 +4313,7 @@ void Tabulated_Model::assign_param_pointers()
 
 void Tabulated_Model::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
 	costheta = cos(theta);
 	sintheta = sin(theta);
@@ -5023,7 +5028,7 @@ void QTabulated_Model::assign_param_pointers()
 
 void QTabulated_Model::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	// We don't use orient_major_axis_north because this is meaningless for the tabulated model
 	costheta = cos(theta);
 	sintheta = sin(theta);
@@ -5466,7 +5471,7 @@ void TopHatLens::assign_param_pointers()
 
 void TopHatLens::update_meta_parameters()
 {
-	update_zlens_meta_parameters();
+	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
 }
 

@@ -7002,6 +7002,7 @@ void WeakLensingData::clear()
 
 bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
+	//cout << "making fitmodel..." << endl;
 	if (source_fit_mode == Point_Source) {
 		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit.empty()) or (image_data==NULL))) {
 			warn("image data points have not been defined");
@@ -7236,11 +7237,13 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 	fitmodel->update_parameter_list();
 	if ((source_fit_mode != Point_Source) and (!redo_lensing_calculations_before_inversion)) fitmodel->image_pixel_grid->redo_lensing_calculations(); 
+	//cout << "DONE making fitmodel" << endl;
 	return true;
 }
 
 void QLens::update_anchored_parameters_and_redshift_data()
 {
+	//cout << "updating anchors and redshifts..." << endl;
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source)) {
 			sb_list[i]->update_anchor_center();
@@ -7250,10 +7253,11 @@ void QLens::update_anchored_parameters_and_redshift_data()
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->center_anchored) lens_list[i]->update_anchor_center();
 		if (lens_list[i]->anchor_special_parameter) lens_list[i]->update_special_anchored_params();
-		lens_list[i]->update_anchored_parameters();
+		if (lens_list[i]->at_least_one_param_anchored) lens_list[i]->update_anchored_parameters();
 	}
 	update_lens_redshift_data();
 	reset_grid();
+	//cout << "just updated anchors and redshifts" << endl;
 }
 
 double QLens::update_model(const double* params)
@@ -7331,6 +7335,12 @@ double QLens::update_model(const double* params)
 	if ((ellipticity_gradient) and (contours_overlap)) {
 		log_penalty_prior += contour_overlap_log_penalty_prior;
 		//warn("contours overlap in ellipticity gradient model");
+	}
+	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
+	if ((vary_hubble_parameter) or (vary_omega_matter_parameter)) {
+		for (i=0; i < nlens; i++) {
+			if ((!lens_list[i]->at_least_one_param_anchored) and (!lens_list[i]->anchor_special_parameter)) lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below
+		}
 	}
 	update_anchored_parameters_and_redshift_data();
 
@@ -9015,7 +9025,7 @@ void QLens::fit_restore_defaults()
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
+double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status, bool show_lensinfo)
 {
 	if (setup_fit_parameters(false)==false) return -1e30;
 	fit_set_optimizations();
@@ -9069,6 +9079,23 @@ double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status)
 #endif
 	display_chisq_status = false;
 	if (show_diagnostics) chisq_diagnostic = false;
+
+	if (show_lensinfo) {
+		//fitmodel->print_lens_list(false);
+		//fitmodel->print_source_list(false);
+		//double chisq, chisq0;
+		//chisq = fitmodel->invert_surface_brightness_map_from_data(chisq0,true);
+		//if (mpi_id==0) cout << "chisq0=" << chisq0 << ", chisq_pix=" << chisq << endl;
+
+		cout << "lensing info:" << endl;
+		print_lensing_info_at_point(0.05,0.07);
+		cout << "fitmodel lensing info:" << endl;
+		fitmodel->print_lensing_info_at_point(0.05,0.07);
+		cout << "cosmo info:" << endl;
+		print_lens_cosmology_info(0,nlens-1);
+		cout << "fitmodel cosmo info:" << endl;
+		fitmodel->print_lens_cosmology_info(0,nlens-1);
+	}
 
 	double rawchisqval = raw_chisq;
 	fit_restore_defaults();
@@ -10987,6 +11014,15 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
+bool QLens::output_egrad_values_and_knots()
+{
+	if (n_sb==0) return false;
+	string scriptfile = fit_output_dir + "/egrad_values_knots.in";
+	ofstream scriptout(scriptfile.c_str());
+	sb_list[0]->output_egrad_values_and_knots(scriptout);
+	return true;
+}
+
 bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling, const double fmode_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
 {
 	if (n_sb==0) return false;
@@ -11620,6 +11656,14 @@ double QLens::fitmodel_loglike_point_source(double* params)
 
 double QLens::fitmodel_loglike_extended_source(double* params)
 {
+
+#ifdef USE_OPENMP
+	double update_wtime0, update_wtime;
+	if (show_wtime) {
+		update_wtime0 = omp_get_wtime();
+	}
+#endif
+
 	double transformed_params[n_fit_parameters];
 	double loglike=0, chisq=0, chisq0, chisq_td;
 	double log_penalty_prior;
@@ -11635,7 +11679,9 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 			//else cout << "parameter " << i << ": no plimits " << endl;
 		}
+		//cout << "updaing model" << endl;
 		log_penalty_prior = fitmodel->update_model(transformed_params);
+		//cout << "done updating model" << endl;
 		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
 		else if (log_penalty_prior > 0) loglike += log_penalty_prior;
 
@@ -11646,6 +11692,14 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 			}
 		}
 	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		update_wtime = omp_get_wtime() - update_wtime0;
+		if (mpi_id==0) cout << "wall time for updating parameters: " << update_wtime << endl;
+	}
+#endif
+
+
 	if (einstein_radius_prior) {
 		loglike += fitmodel->get_einstein_radius_prior(false);
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time

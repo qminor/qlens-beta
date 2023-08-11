@@ -405,6 +405,7 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool 
 	parameter_anchor_paramnum = new int[n_params];
 	parameter_anchor_ratio = new double[n_params];
 	parameter_anchor_exponent = new double[n_params];
+	at_least_one_param_anchored = false;
 	param = new double*[n_params];
 	for (int i=0; i < n_params; i++) {
 		//vary_params[i] = false;
@@ -696,17 +697,16 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 
 void LensProfile::update_anchored_parameters()
 {
-	bool at_least_one_param_anchored = false;
-	for (int i=0; i < n_params; i++) {
-		if (anchor_parameter_to_lens[i]) {
-			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
-			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
-		} else if (anchor_parameter_to_source[i]) {
-			(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
-			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
-		}
-	}
 	if (at_least_one_param_anchored) {
+		for (int i=0; i < n_params; i++) {
+			if (anchor_parameter_to_lens[i]) {
+				(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+			} else if (anchor_parameter_to_source[i]) {
+				(*param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
+			}
+		}
 		update_meta_parameters();
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
@@ -866,6 +866,7 @@ void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 		parameter_anchor_ratio[i] = lens_in->parameter_anchor_ratio[i];
 		parameter_anchor_exponent[i] = lens_in->parameter_anchor_exponent[i];
 	}
+	at_least_one_param_anchored = lens_in->at_least_one_param_anchored;
 	if (anchor_special_parameter) copy_special_parameter_anchor(lens_in);
 }
 
@@ -900,6 +901,7 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 		parameter_anchor_ratio[paramnum] = ratio;
 		parameter_anchor_exponent[paramnum] = exponent;
 	}
+	at_least_one_param_anchored = true;
 	update_anchored_parameters();
 }
 
@@ -1116,7 +1118,7 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		double kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+		//double kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1570,12 +1572,12 @@ void LensProfile::set_angle_radians(const double &theta_in)
 	}
 }
 
-void LensProfile::update_zlens_meta_parameters()
+void LensProfile::update_cosmology_meta_parameters()
 {
-	if (zlens != zlens_current) {
+	if ((qlens != NULL) and ((zlens != zlens_current) or (qlens->vary_hubble_parameter) or (qlens->vary_omega_matter_parameter))) {
 		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
 		kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
-		zlens_current = zlens;
+		if (zlens != zlens_current) zlens_current = zlens;
 	}
 }
 
@@ -2001,6 +2003,7 @@ void LensProfile::reset_anchor_lists()
 		parameter_anchor_ratio[i] = 1.0;
 		parameter_anchor_exponent[i] = 1.0;
 	}
+	at_least_one_param_anchored = false;
 }
 
 bool LensProfile::enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
@@ -3717,11 +3720,7 @@ void LensProfile::print_vary_parameters()
 			cout << endl;
 		}
 	}
-	bool parameter_anchored = false;
-	for (int i=0; i < n_params; i++) {
-		if ((anchor_parameter_to_lens[i]) or (anchor_parameter_to_source[i])) parameter_anchored = true;
-	}
-	if (parameter_anchored) {
+	if (at_least_one_param_anchored) {
 		cout << "   anchored parameters: ";
 		int j=0;
 		for (int i=0; i < n_params; i++) {

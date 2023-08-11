@@ -1665,16 +1665,16 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 	// downhill simplex: fitmode = 1 or higher
 	for (int i=0; i < sbprofile_nparams; i++) {
 		if (!vary_params[i]) {
-			warn("all sbprofile parameters must be allowed to vary (param %i set fixed)",i);
+			if (mpi_id==0) warn("all sbprofile parameters must be allowed to vary (param %i set fixed)",i);
 			return false;
 		}
 		if ((fit_mode<=0) and (lower_limits.size() != n_vary_params)) {
-			warn("lower/upper prior limits have not been set for sbprofile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
+			if (mpi_id==0) warn("lower/upper prior limits have not been set for sbprofile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
 			return false;
 		}
 	}
 	if (sbprofile_nparams == 0) {
-		warn("Not an ellipical sbprofile object; cannot do sbprofile fit");
+		if (mpi_id==0) warn("Not an ellipical sbprofile object; cannot do sbprofile fit");
 		return false;
 	}
 	n_isophote_datapts = isophote_data.n_xivals;
@@ -1770,18 +1770,18 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 	// downhill simplex: fitmode = 1 or higher
 	int fit_mode = fit_mode_in;
 	if (ellipticity_gradient == false) {
-		warn("ellipticity gradient must be on for egrad profile fitting");
+		if (mpi_id==0) warn("ellipticity gradient must be on for egrad profile fitting");
 		return false;
 	}
 #ifndef USE_FITPACK
 	if (egrad_mode==0) {
-		warn("cannot do B-spline fit without compiling with FITPACK");
+		if (mpi_id==0) warn("cannot do B-spline fit without compiling with FITPACK");
 		return false;
 	}
 #endif
 	if (fit_mode==0) {
 		if (egrad_mode==0) {
-			warn("nested sampling is not currently set up with egrad_mode=0; switching to downhill simplex");
+			if (mpi_id==0) warn("nested sampling is not currently set up with egrad_mode=0; switching to downhill simplex");
 			fit_mode = 1;
 		}
 	}
@@ -1894,11 +1894,11 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 	} else {
 		for (i=profile_fit_istart; i < profile_fit_istart + profile_fit_nparams; i++) {
 			if (!vary_params[i]) {
-				warn("all egrad profile parameters must be allowed to vary (param %i set fixed, profile_fit_nparams=%i, istart=%i)",i,profile_fit_nparams,profile_fit_istart);
+				if (mpi_id==0) warn("all egrad profile parameters must be allowed to vary (param %i set fixed, profile_fit_nparams=%i, istart=%i)",i,profile_fit_nparams,profile_fit_istart);
 				return false;
 			}
 			if ((fit_mode==0) and (lower_limits.size() != n_vary_params)) {
-				warn("lower/upper prior limits have not been set for egrad profile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
+				if (mpi_id==0) warn("lower/upper prior limits have not been set for egrad profile parameters (limit size=%i, nvary=%i)",lower_limits.size(),n_vary_params);
 				return false;
 			}
 		}

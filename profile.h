@@ -135,10 +135,10 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
 	void update_ellipticity_meta_parameters();
-	void update_zlens_meta_parameters();
+	void update_cosmology_meta_parameters();
 	virtual void update_meta_parameters()
 	{
-		update_zlens_meta_parameters();
+		update_cosmology_meta_parameters();
 		update_ellipticity_meta_parameters();
 	}
 	void calculate_ellipticity_components();
@@ -189,9 +189,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
 	double* parameter_anchor_exponent;
-
 	bool* anchor_parameter_to_source;
 	SB_Profile** parameter_anchor_source;
+	bool at_least_one_param_anchored;
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
@@ -246,6 +246,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		anchor_parameter_to_source = NULL;
 		parameter_anchor_source = NULL;
 		parameter_anchor_paramnum = NULL;
+		at_least_one_param_anchored = false;
 		param = NULL;
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
