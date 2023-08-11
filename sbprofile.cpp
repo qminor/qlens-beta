@@ -148,7 +148,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 				geometric_param[i][j] = sb_in->geometric_param[i][j];
 			}
 		}
-		 angle_param_egrad = new bool[n_egrad_params[1]]; // keeps track of which parameters are angles, so they can be converted to degrees when displayed
+		angle_param_egrad = new bool[n_egrad_params[1]]; // keeps track of which parameters are angles, so they can be converted to degrees when displayed
 		for (j=0; j < n_egrad_params[1]; j++) {
 			angle_param_egrad[j] = sb_in->angle_param_egrad[j];
 		}
@@ -777,6 +777,9 @@ bool SB_Profile::get_specific_parameter(const string name_in, double& value)
 void SB_Profile::update_parameters(const double* params)
 {
 	for (int i=0; i < n_params; i++) {
+		//cout << "Param " << i << ": " << params[i];
+		//if (angle_param[i]) cout << " angle param" << endl;
+		//else cout << " NOT angle param" << endl;
 		if (angle_param[i]) *(param[i]) = degrees_to_radians(params[i]);
 		else *(param[i]) = params[i];
 	}
@@ -787,40 +790,45 @@ void SB_Profile::update_parameters(const double* params)
 
 bool SB_Profile::update_specific_parameter(const string name_in, const double& value)
 {
-	double* newparams = new double[n_params];
-	get_parameters(newparams);
 	bool found_match = false;
+	int paramnum = -1;
 	for (int i=0; i < n_params; i++) {
 		if (paramnames[i]==name_in) {
 			found_match = true;
-			newparams[i] = value;
+			paramnum = i;
 			break;
 		}
 	}
-	if (found_match) update_parameters(newparams);
+	if (found_match) {
+		if (angle_param[paramnum]) *(param[paramnum]) = degrees_to_radians(value);
+		else *(param[paramnum]) = value;
+		update_meta_parameters();
+		if (qlens != NULL) qlens->update_anchored_parameters_and_redshift_data();
+		if (lensed_center_coords) set_center_if_lensed_coords();
+	}
 	else {
 		if ((sbtype==SHAPELET) and (name_in=="n")) {
 			update_indxptr(value);
 			found_match = true;
 		}
 	}
-	delete[] newparams;
 	return found_match;
 }
 
 bool SB_Profile::update_specific_parameter(const int paramnum, const double& value)
 {
 	if (paramnum >= n_params) return false;
-	double* newparams = new double[n_params];
-	get_parameters(newparams);
-	for (int i=0; i < n_params; i++) {
-		if (i==paramnum) {
-			newparams[i] = value;
-			break;
-		}
-	}
-	update_parameters(newparams);
-	delete[] newparams;
+	//double* newparams = new double[n_params];
+	//get_parameters(newparams);
+	//newparams[paramnum] = value;
+	if (angle_param[paramnum]) *(param[paramnum]) = degrees_to_radians(value);
+	else *(param[paramnum]) = value;
+
+	//update_parameters(newparams);
+	//delete[] newparams;
+	update_meta_parameters();
+	if (qlens != NULL) qlens->update_anchored_parameters_and_redshift_data();
+	if (lensed_center_coords) set_center_if_lensed_coords();
 	return true;
 }
 
