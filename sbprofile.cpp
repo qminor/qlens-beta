@@ -33,7 +33,7 @@ SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 }
 
-void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in)
+void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in) // default pmode_in=0
 {
 	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	parameter_mode = pmode_in;
@@ -2861,11 +2861,11 @@ double DoubleSersic::length_scale()
 }
 
 SPLE::SPLE(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, QLens* cosmo_in)
+		const double &xc_in, const double &yc_in, QLens* qlens_in)
 {
 	model_name = "sple";
 	sbtype = sple;
-	qlens = cosmo_in;
+	qlens = qlens_in;
 	setup_base_source_properties(7,3,true); // number of parameters = 7, is_elliptical_source = true
 	bs = bb;
 	alpha = aa;
@@ -2938,6 +2938,168 @@ double SPLE::length_scale()
 {
 	return bs;
 }
+
+dPIE::dPIE(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, QLens* qlens_in)
+{
+	model_name = "dpie";
+	sbtype = dpie;
+	qlens = qlens_in;
+	setup_base_source_properties(7,3,true); // number of parameters = 7, is_elliptical_source = true
+	bs = bb;
+	a = aa;
+	s = ss;
+	if (s < 0) s = -s; // don't allow negative core radii
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+dPIE::dPIE(const dPIE* sb_in)
+{
+	bs = sb_in->bs;
+	a = sb_in->a;
+	s = sb_in->s;
+
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void dPIE::assign_paramnames()
+{
+	paramnames[0] = "bs";     latex_paramnames[0] = "b";       latex_param_subscripts[0] = "s";
+	paramnames[1] = "a"; latex_paramnames[1] = "a"; latex_param_subscripts[1] = "";
+	paramnames[2] = "s";     latex_paramnames[2] = "s";       latex_param_subscripts[2] = "";
+	set_geometric_paramnames(sbprofile_nparams);
+}
+
+void dPIE::assign_param_pointers()
+{
+	param[0] = &bs;
+	param[1] = &a;
+	param[2] = &s;
+	set_geometric_param_pointers(sbprofile_nparams);
+}
+
+void dPIE::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
+}
+
+void dPIE::set_auto_stepsizes()
+{
+	int index = 0;
+	stepsizes[index++] = 0.1*bs;
+	stepsizes[index++] = 0.1*a;
+	stepsizes[index++] = 0.02*bs; // this one is a bit arbitrary, but hopefully reasonable enough
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void dPIE::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
+	set_geometric_param_auto_ranges(sbprofile_nparams);
+}
+
+double dPIE::sb_rsq(const double rsq)
+{
+	return (0.5 * bs * (pow(s*s+rsq, -0.5) - pow(a*a+rsq,-0.5)));
+}
+
+double dPIE::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 3*dmax(bs,a);
+}
+
+double dPIE::length_scale()
+{
+	return bs;
+}
+
+NFW_Source::NFW_Source(const double &s0_in, const double &rs_in, const double &q_in, const double &theta_degrees,
+		const double &xc_in, const double &yc_in, QLens* qlens_in)
+{
+	model_name = "nfw";
+	sbtype = nfw_SOURCE;
+	qlens = qlens_in;
+	setup_base_source_properties(6,2,true); // number of parameters = 6, is_elliptical_source = true
+	s0 = s0_in;
+	rs = rs_in;
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+NFW_Source::NFW_Source(const NFW_Source* sb_in)
+{
+	s0 = sb_in->s0;
+	rs = sb_in->rs;
+
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void NFW_Source::assign_paramnames()
+{
+	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	paramnames[1] = "rs"; latex_paramnames[1] = "r"; latex_param_subscripts[1] = "s";
+	set_geometric_paramnames(sbprofile_nparams);
+}
+
+void NFW_Source::assign_param_pointers()
+{
+	param[0] = &s0;
+	param[1] = &rs;
+	set_geometric_param_pointers(sbprofile_nparams);
+}
+
+void NFW_Source::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
+}
+
+void NFW_Source::set_auto_stepsizes()
+{
+	int index = 0;
+	stepsizes[index++] = 0.2*s0;
+	stepsizes[index++] = 0.2*rs;
+	set_geometric_param_auto_stepsizes(index);
+}
+
+void NFW_Source::set_auto_ranges()
+{
+	set_auto_penalty_limits[0] = true; penalty_lower_limits[0] = 0; penalty_upper_limits[0] = 1e30;
+	set_auto_penalty_limits[1] = true; penalty_lower_limits[1] = 0; penalty_upper_limits[1] = 1e30;
+	set_geometric_param_auto_ranges(sbprofile_nparams);
+}
+
+double NFW_Source::sb_rsq(const double rsq)
+{
+	double xsq = rsq/(rs*rs);
+	if (xsq < 1e-6) return -s0*(2+log(xsq/4));
+	else if (abs(xsq-1) < 1e-5) return 2*s0*(0.3333333333333333 - (xsq-1)/5.0); // formula on next line becomes unstable for x close to 1, this fixes it
+	else return 2*s0*(1 - nfw_function_xsq(xsq))/(xsq - 1);
+}
+
+inline double NFW_Source::nfw_function_xsq(const double &xsq)
+{
+	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
+}
+
+double NFW_Source::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 3*rs;
+}
+
+double NFW_Source::length_scale()
+{
+	return rs;
+}
+
+
+
 
 Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {

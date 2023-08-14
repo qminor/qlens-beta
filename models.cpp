@@ -72,35 +72,7 @@ SPLE_Lens::SPLE_Lens(SPLE* sb_in, const int parameter_mode_in, const bool vary_m
 	b = sb_in->bs;
 	alpha = sb_in->alpha;
 	s = sb_in->s;
-
-	if (vary_mass_parameter) {
-		vary_params[0] = true;
-		n_vary_params = 1;
-		include_limits = include_limits_in;
-		if (include_limits) {
-			lower_limits.input(n_vary_params);
-			upper_limits.input(n_vary_params);
-			lower_limits[0] = mass_param_lower;
-			upper_limits[0] = mass_param_upper;
-			lower_limits_initial.input(lower_limits);
-			upper_limits_initial.input(upper_limits);
-		}
-	}
-
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
-
-	for (int i=1; i < n_params-1; i++) {
-		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
-		anchor_parameter_to_source[i] = true;
-		parameter_anchor_source[i] = (SB_Profile*) sb_in;
-		parameter_anchor_paramnum[i] = i;
-		parameter_anchor_ratio[i] = 1.0;
-		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
-		at_least_one_param_anchored = true;
-	}
-	update_anchored_parameters();
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
 }
 
 void SPLE_Lens::assign_paramnames()
@@ -475,7 +447,7 @@ void dPIE_Lens::initialize_parameters(const double &p1_in, const double &p2_in, 
 void dPIE_Lens::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = dpie_LENS;
-	model_name = "pjaffe";
+	model_name = "dpie";
 	special_parameter_command = "";
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
@@ -498,6 +470,16 @@ dPIE_Lens::dPIE_Lens(const dPIE_Lens* lens_in)
 	}
 
 	update_meta_parameters_and_pointers();
+}
+
+dPIE_Lens::dPIE_Lens(dPIE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	b = sb_in->bs;
+	a = sb_in->a;
+	s = sb_in->s;
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
 }
 
 void dPIE_Lens::assign_paramnames()
@@ -839,6 +821,15 @@ NFW::NFW(const NFW* lens_in)
 	update_meta_parameters_and_pointers();
 }
 
+NFW::NFW(NFW_Source* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	setup_lens_properties(parameter_mode_in);
+	copy_source_data_to_lens(sb_in);
+	ks = sb_in->s0;
+	rs = sb_in->rs;
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
+}
+
 void NFW::assign_paramnames()
 {
 	if (parameter_mode==2) {
@@ -907,6 +898,14 @@ void NFW::update_meta_parameters()
 	if (qlens != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200();
+		else {
+			double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
+			double ds, r200;
+			if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
+			ds = ks * sigma_cr_kpc / rs_kpc;
+			qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+			c200 = r200/rs_kpc;
+		}
 	}
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
 }
@@ -3268,7 +3267,9 @@ SersicLens::SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool va
 	b = sb_in->b;
 	kappa0 = 3; // arbitrary
 	mstar = 1e12; // arbitrary
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
 
+/*
 	if (vary_mass_parameter) {
 		vary_params[0] = true;
 		n_vary_params = 1;
@@ -3297,6 +3298,7 @@ SersicLens::SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool va
 		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
+	*/
 }
 
 void SersicLens::assign_paramnames()
@@ -3473,7 +3475,9 @@ DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode
 	b2 = sb_in->b2;
 	kappa0 = 3; // arbitrary
 	mstar = 1e12; // arbitrary
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
 
+	/*
 	if (vary_mass_parameter) {
 		vary_params[0] = true;
 		n_vary_params = 1;
@@ -3502,6 +3506,7 @@ DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode
 		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
+	*/	
 }
 
 void DoubleSersicLens::assign_paramnames()
@@ -3680,7 +3685,9 @@ Cored_SersicLens::Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode
 	rc = sb_in->rc;
 	kappa0 = 3; // arbitrary
 	mstar = 1e12; // arbitrary
+	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
 
+	/*
 	if (vary_mass_parameter) {
 		vary_params[0] = true;
 		n_vary_params = 1;
@@ -3709,6 +3716,7 @@ Cored_SersicLens::Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode
 		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
+	*/
 }
 
 void Cored_SersicLens::assign_paramnames()

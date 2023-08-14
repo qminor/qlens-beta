@@ -540,12 +540,12 @@ double EllipticityGradient::fit_bspline_curve(double *knots, double *coefs)
 	return minchisq/2;
 }
 
-void EllipticityGradient::plot_ellipticity_function(const double ximin, const double ximax, const int nn, const string suffix)
+void EllipticityGradient::plot_ellipticity_function(const double ximin, const double ximax, const int nn, const string dir, const string suffix)
 {
 	double xi, xistep = pow(ximax/ximin,1.0/(nn-1));
 	int i;
-	string qname = "qfunc_" + suffix + ".dat";
-	string thetaname = "thetafunc_" + suffix + ".dat";
+	string qname = dir + "/qfunc_" + suffix + ".dat";
+	string thetaname = dir + "/thetafunc_" + suffix + ".dat";
 	ofstream qout(qname.c_str());
 	ofstream thetaout(thetaname.c_str());
 	double ep, angle, q;
@@ -557,7 +557,7 @@ void EllipticityGradient::plot_ellipticity_function(const double ximin, const do
 	}
 }
 
-void EllipticityGradient::plot_fourier_functions(const double ximin, const double ximax, const int nn, const string suffix)
+void EllipticityGradient::plot_fourier_functions(const double ximin, const double ximax, const int nn, const string dir, const string suffix)
 {
 	double xi, xistep = pow(ximax/ximin,1.0/(nn-1));
 	int i,j;
@@ -570,8 +570,8 @@ void EllipticityGradient::plot_fourier_functions(const double ximin, const doubl
 		mstr >> mstring;
 		cosampname = "A" + mstring;
 		sinampname = "B" + mstring;
-		cos_filename = cosampname + "func_" + suffix + ".dat";
-		sin_filename = sinampname + "func_" + suffix + ".dat";
+		cos_filename = dir + "/" + cosampname + "func_" + suffix + ".dat";
+		sin_filename = dir + "/" + sinampname + "func_" + suffix + ".dat";
 		ofstream cosout(cos_filename.c_str());
 		ofstream sinout(sin_filename.c_str());
 		for (i=0, xi=ximin; i < nn; i++, xi *= xistep) {
@@ -1356,23 +1356,23 @@ void IsophoteData::setnan()
 	}
 }
 
-void IsophoteData::plot_isophote_parameters(const string suffix)
+void IsophoteData::plot_isophote_parameters(const string dir, const string suffix)
 {
-	string sbname = "sbvals_" + suffix + ".dat";
-	string qname = "qvals_" + suffix + ".dat";
-	string thetaname = "thetavals_" + suffix + ".dat";
-	string xcname = "xcvals_" + suffix + ".dat";
-	string ycname = "ycvals_" + suffix + ".dat";
+	string sbname = dir + "/sbvals_" + suffix + ".dat";
+	string qname = dir + "/qvals_" + suffix + ".dat";
+	string thetaname = dir + "/thetavals_" + suffix + ".dat";
+	string xcname = dir + "/xcvals_" + suffix + ".dat";
+	string ycname = dir + "/ycvals_" + suffix + ".dat";
 
-	string A3name = "A3vals_" + suffix + ".dat";
-	string B3name = "B3vals_" + suffix + ".dat";
-	string A4name = "A4vals_" + suffix + ".dat";
-	string B4name = "B4vals_" + suffix + ".dat";
+	string A3name = dir + "/A3vals_" + suffix + ".dat";
+	string B3name = dir + "/B3vals_" + suffix + ".dat";
+	string A4name = dir + "/A4vals_" + suffix + ".dat";
+	string B4name = dir + "/B4vals_" + suffix + ".dat";
 
-	string A5name = "A5vals_" + suffix + ".dat";
-	string B5name = "B5vals_" + suffix + ".dat";
-	string A6name = "A6vals_" + suffix + ".dat";
-	string B6name = "B6vals_" + suffix + ".dat";
+	string A5name = dir + "/A5vals_" + suffix + ".dat";
+	string B5name = dir + "/B5vals_" + suffix + ".dat";
+	string A6name = dir + "/A6vals_" + suffix + ".dat";
+	string B6name = dir + "/B6vals_" + suffix + ".dat";
 
 	ofstream sbout(sbname.c_str());
 	ofstream qout(qname.c_str());

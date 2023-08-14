@@ -2057,6 +2057,10 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 			new_lens = new DoubleSersicLens((DoubleSersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case sple:
 			new_lens = new SPLE_Lens((SPLE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+		case dpie:
+			new_lens = new dPIE_Lens((dPIE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+		case nfw_SOURCE:
+			new_lens = new NFW((NFW_Source*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case SB_MULTIPOLE:
 			warn("cannot spawn lens from SB multipole"); spawn_lens = false; break;
 		case SHAPELET:
@@ -3127,6 +3131,10 @@ void QLens::add_source_object(SB_ProfileName name, const int emode, const double
 			newlist[n_sb] = new DoubleSersic(sb_norm, index_param, scale, special_param1, scale2, special_param2, q, theta, xc, yc, this); break;
 		case sple:
 			newlist[n_sb] = new SPLE(sb_norm, index_param, scale, q, theta, xc, yc, this); break;
+		case dpie:
+			newlist[n_sb] = new dPIE(sb_norm, scale, scale2, q, theta, xc, yc, this); break;
+		case nfw_SOURCE:
+			newlist[n_sb] = new NFW_Source(sb_norm, scale, q, theta, xc, yc, this); break;
 		case TOPHAT:
 			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc, this); break;
 		default:
@@ -7168,6 +7176,10 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 					fitmodel->sb_list[i] = new DoubleSersic((DoubleSersic*) sb_list[i]); break;
 				case sple:
 					fitmodel->sb_list[i] = new SPLE((SPLE*) sb_list[i]); break;
+				case dpie:
+					fitmodel->sb_list[i] = new dPIE((dPIE*) sb_list[i]); break;
+				case nfw_SOURCE:
+					fitmodel->sb_list[i] = new NFW_Source((NFW_Source*) sb_list[i]); break;
 				case SB_MULTIPOLE:
 					fitmodel->sb_list[i] = new SB_Multipole((SB_Multipole*) sb_list[i]); break;
 				case SHAPELET:
@@ -11014,21 +11026,24 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
-bool QLens::output_egrad_values_and_knots()
+bool QLens::output_egrad_values_and_knots(const int srcnum, const string suffix)
 {
-	if (n_sb==0) return false;
-	string scriptfile = fit_output_dir + "/egrad_values_knots.in";
+	if (n_sb <= srcnum) return false;
+	string scriptfile = fit_output_dir + "/egrad_values_knots";
+	if (suffix != "") scriptfile += "_" + suffix;
+	scriptfile += ".in";
 	ofstream scriptout(scriptfile.c_str());
-	sb_list[0]->output_egrad_values_and_knots(scriptout);
+	sb_list[srcnum]->output_egrad_values_and_knots(scriptout);
+	if (mpi_id==0) cout << "egrad values and knots output to '" << scriptfile << "'" << endl;
 	return true;
 }
 
-bool QLens::output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling, const double fmode_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
+bool QLens::output_scaled_percentiles_from_egrad_fits(const int srcnum, const double xcavg, const double ycavg, const double qtheta_pct_scaling, const double fmode_pct_scaling, const bool include_m3_fmode, const bool include_m4_fmode)
 {
-	if (n_sb==0) return false;
+	if (n_sb <= srcnum) return false;
 	string scriptfile = fit_output_dir + "/isofit_knots_limits.in";
 	ofstream scriptout(scriptfile.c_str());
-	sb_list[0]->output_egrad_values_and_knots(scriptout);
+	sb_list[srcnum]->output_egrad_values_and_knots(scriptout);
 	
 	int i,j,k,nparams;
 	int n_profile_params = 3;

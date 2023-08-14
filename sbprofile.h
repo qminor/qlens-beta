@@ -17,7 +17,7 @@ struct ImagePixelData;
 class LensProfile;
 class QLens;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, SHAPELET, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile : public EllipticityGradient, UCMC, Simplex
 {
@@ -27,6 +27,8 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
 	friend class SPLE_Lens;
+	friend class dPIE_Lens;
+	friend class NFW;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -404,6 +406,57 @@ class SPLE : public SB_Profile
 	SPLE(const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, QLens* qlens_in);
 	SPLE(const SPLE* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double window_rmax();
+	double length_scale();
+};
+
+class dPIE : public SB_Profile
+{
+	friend class dPIE_Lens;
+
+	private:
+	double bs, s, a;
+
+	double sb_rsq(const double);
+
+	public:
+	dPIE() : SB_Profile() {}
+	dPIE(const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	dPIE(const dPIE* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double window_rmax();
+	double length_scale();
+};
+
+class NFW_Source : public SB_Profile
+{
+	friend class NFW;
+
+	private:
+	double s0, rs;
+
+	double sb_rsq(const double);
+	double nfw_function_xsq(const double &xsq);
+
+	public:
+	NFW_Source() : SB_Profile() {}
+	NFW_Source(const double &s0_in, const double &rs_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	NFW_Source(const NFW_Source* sb_in);
 
 	void update_meta_parameters();
 	void assign_paramnames();

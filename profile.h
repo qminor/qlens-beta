@@ -19,6 +19,8 @@ class DoubleSersic;
 class Cored_Sersic;
 class TopHatLens;
 class SPLE;
+class dPIE;
+class NFW_Source;
 class SB_Profile;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
@@ -58,6 +60,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	friend class Sersic;
 	friend class Cored_Sersic;
 	friend class SPLE;
+	friend class dPIE;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:
@@ -116,6 +119,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	void set_nparams_and_anchordata(const int &n_params_in, const bool resize = false);
 	void reset_anchor_lists();
+	void set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
 	void set_angle(const double &theta_degrees);
@@ -579,6 +584,7 @@ class dPIE_Lens : public LensProfile
 	dPIE_Lens(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	dPIE_Lens(const dPIE_Lens* lens_in);
+	dPIE_Lens(dPIE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -627,6 +633,7 @@ class NFW : public LensProfile
 	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	NFW(const NFW* lens_in);
+	NFW(NFW_Source* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();

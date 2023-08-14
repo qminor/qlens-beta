@@ -75,8 +75,8 @@ class EllipticityGradient : public Brent
 	double egrad_tanh_function(const double xi, double *paramvals, const int param_index);
 	double egrad_bspline_function(const double xi, double *paramvals, const int param_index);
 	double elliptical_radius_root(const double x, const double y);
-	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const std::string suffix = "");
-	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const std::string suffix = "");
+	void plot_ellipticity_function(const double ximin, const double ximax, const int nn, const std::string dir, const std::string suffix = "");
+	void plot_fourier_functions(const double ximin, const double ximax, const int nn, const std::string dir, const std::string suffix = "");
 	void output_egrad_values_and_knots(std::ofstream& outfile);
 	int get_egrad_mode() { return egrad_mode; }
 
@@ -128,7 +128,7 @@ struct IsophoteData {
 	bool load_profiles_noerrs(std::ifstream& profin, const double errfrac, const bool include_xcyc, const bool include_a34, const bool include_a56);
 	bool load_profiles(std::ifstream& profin, const bool include_xcyc, const bool include_a34, const bool include_a56);
 	void setnan();
-	void plot_isophote_parameters(const std::string suffix);
+	void plot_isophote_parameters(const std::string dir, const std::string suffix);
 	~IsophoteData();
 };
 

@@ -7266,7 +7266,9 @@ bool ImagePixelData::fit_isophote(const double xi0, const double xistep, const i
 	}
 	if (sbprofile != NULL) {
 		int nn_plot = imax(100,6*n_xivals);
-		sbprofile->plot_ellipticity_function(xi_min,xi_max,nn_plot);
+		string dir = ".";
+		if (lens != NULL) dir = lens->fit_output_dir;
+		sbprofile->plot_ellipticity_function(xi_min,xi_max,nn_plot,dir);
 	}
 
 	/*

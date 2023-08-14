@@ -1302,8 +1302,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
 	bool output_scaled_percentiles_from_chain(const double pct_scaling);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
-	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
-	bool output_egrad_values_and_knots();
+	bool output_scaled_percentiles_from_egrad_fits(const int srcnum, const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
+	bool output_egrad_values_and_knots(const int srcnum,const string suffix);
 
 	void output_coolest_files(const string filename);
 

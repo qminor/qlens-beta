@@ -451,6 +451,38 @@ void LensProfile::delete_special_parameter_anchor()
 	if (anchor_special_parameter) anchor_special_parameter = false;
 }
 
+void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+{
+	if (vary_mass_parameter) {
+		vary_params[0] = true;
+		n_vary_params = 1;
+		include_limits = include_limits_in;
+		if (include_limits) {
+			lower_limits.input(n_vary_params);
+			upper_limits.input(n_vary_params);
+			lower_limits[0] = mass_param_lower;
+			upper_limits[0] = mass_param_upper;
+			lower_limits_initial.input(lower_limits);
+			upper_limits_initial.input(upper_limits);
+		}
+	}
+
+	set_integration_pointers();
+	set_model_specific_integration_pointers();
+	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
+
+	for (int i=1; i < n_params-1; i++) {
+		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
+		anchor_parameter_to_source[i] = true;
+		parameter_anchor_source[i] = (SB_Profile*) sb_in;
+		parameter_anchor_paramnum[i] = i;
+		parameter_anchor_ratio[i] = 1.0;
+		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
+		at_least_one_param_anchored = true;
+	}
+	update_anchored_parameters();
+}
+
 bool LensProfile::set_vary_flags(boolvector &vary_flags)
 {
 	bool omitted_center = false;
@@ -930,14 +962,17 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 		parameter_anchor_ratio[paramnum] = ratio;
 		parameter_anchor_exponent[paramnum] = exponent;
 	}
+	at_least_one_param_anchored = true;
 	update_anchored_parameters();
 }
 
 void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 {
 	// if any parameters are anchored to the lens in question, unanchor them (use this when you are deleting a lens, in case others are anchored to it)
+	bool removed_anchor = false;
 	for (int i=0; i < n_params; i++) {
 		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_lens[i] == param_anchor_lens)) {
+			removed_anchor = true;
 			parameter_anchor_lens[i] = NULL;
 			anchor_parameter_to_lens[i] = false;
 			parameter_anchor_paramnum[i] = -1;
@@ -945,13 +980,25 @@ void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 			parameter_anchor_exponent[i] = 1.0;
 		}
 	}
+	if (removed_anchor) {
+		at_least_one_param_anchored = false;
+		// check to see if any anchors are left
+		for (int i=0; i < n_params; i++) {
+			if ((anchor_parameter_to_lens[i]) or (anchor_parameter_to_source[i])) {
+				at_least_one_param_anchored = true;
+				break;
+			}
+		}
+	}
 }
 
 void LensProfile::unanchor_parameter(SB_Profile* param_anchor_source)
 {
 	// if any parameters are anchored to the source in question, unanchor them (use this when you are deleting a source, in case others are anchored to it)
+	bool removed_anchor = false;
 	for (int i=0; i < n_params; i++) {
 		if ((anchor_parameter_to_source[i]) and (parameter_anchor_source[i] == param_anchor_source)) {
+			removed_anchor = true;
 			parameter_anchor_source[i] = NULL;
 			anchor_parameter_to_source[i] = false;
 			parameter_anchor_paramnum[i] = -1;
@@ -959,6 +1006,17 @@ void LensProfile::unanchor_parameter(SB_Profile* param_anchor_source)
 			parameter_anchor_exponent[i] = 1.0;
 		}
 	}
+	if (removed_anchor) {
+		at_least_one_param_anchored = false;
+		// check to see if any anchors are left
+		for (int i=0; i < n_params; i++) {
+			if ((anchor_parameter_to_lens[i]) or (anchor_parameter_to_source[i])) {
+				at_least_one_param_anchored = true;
+				break;
+			}
+		}
+	}
+
 }
 
 void LensProfile::assign_paramnames()
