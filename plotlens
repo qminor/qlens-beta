@@ -238,7 +238,7 @@ then
 	fi
 elif [[ $COMMAND == "image_grid" ]]
 then
-	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
@@ -539,11 +539,11 @@ then
 elif [[ $COMMAND == "grid" ]]
 then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
-	KEYPLOT="set title ' '\nplot [][1e12:2e12] 'xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
+	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
 
-	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/xgrid.dat' w lines lc 1 t 'grid'"
 	if [[ $TERM != "" ]]; then
-		#KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+		#KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/xgrid.dat' w lines lc 1 t 'grid'"
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
 		else

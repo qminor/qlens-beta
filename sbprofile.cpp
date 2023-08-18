@@ -2001,8 +2001,8 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 					if ((profile_fit_logxivals[i+1]-profile_fit_logxivals[i]) < min_data_interval) min_data_interval = (profile_fit_logxivals[i+1]-profile_fit_logxivals[i]);
 				}
 				// the minimum knot interval allowed is given in terms of a specified fraction of the spacing between data points
-				profile_fit_min_knot_interval = 2*min_data_interval;
-				//cout << "min interval: " << profile_fit_min_knot_interval << endl;
+				profile_fit_min_knot_interval = min_data_interval;
+				if (mpi_id==0) cout << "min knot interval: " << profile_fit_min_knot_interval << endl;
 			} else {
 				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike);
 				for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
@@ -2546,9 +2546,9 @@ void Sersic::assign_param_pointers()
 void Sersic::set_auto_stepsizes()
 {
 	int index = 0;
+	stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
 	stepsizes[index++] = 0.1; // arbitrary
-	stepsizes[index++] = 0.1; // arbitrary
-	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = 0.3; // arbitrary
 	set_geometric_param_auto_stepsizes(index);
 }
 
@@ -2630,7 +2630,7 @@ void Cored_Sersic::assign_param_pointers()
 void Cored_Sersic::set_auto_stepsizes()
 {
 	int index = 0;
-	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.1; // arbitrary
@@ -2722,7 +2722,7 @@ void CoreSersic::assign_param_pointers()
 void CoreSersic::set_auto_stepsizes()
 {
 	int index = 0;
-	stepsizes[index++] = 0.1; // arbitrary
+	stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.1; // arbitrary

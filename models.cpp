@@ -5501,11 +5501,10 @@ void TopHatLens::set_auto_ranges()
 void TopHatLens::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&TopHatLens::kapavg_spherical_rsq);
-	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&dPIE_Lens::potential_spherical_rsq);
 	if (!ellipticity_gradient) {
 		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&TopHatLens::deflection_analytic);
 		hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&TopHatLens::hessian_analytic);
-		//potptr = static_cast<double (LensProfile::*)(const double,const double)> (&dPIE_Lens::potential_elliptical);
+		potptr = static_cast<double (LensProfile::*)(const double,const double)> (&TopHatLens::potential_analytic);
 	}
 }
 
@@ -5581,6 +5580,35 @@ void TopHatLens::hessian_analytic(const double x, const double y, lensmatrix& he
 	hess[1][1] = def1;
 	hess[1][0] = 0;
 	hess[0][1] = 0;
+}
+
+double TopHatLens::potential_analytic(const double x, const double y)
+{
+	double eps, xsqval, ysqval, xisq, qfac, u, qufactor, dxisq, hessfac, def_fac, def0, def1;
+	double fsqinv = 1.0/SQR(f_major_axis);
+	eps = 1 - q*q;
+	xsqval = x*x;
+	ysqval = y*y;
+	xisq = xi0*xi0;
+	qfac = xsqval + ysqval + eps*xisq/fsqinv;
+	if (xisq > fsqinv*(xsqval+ysqval/(1-eps))) u = 1.0;
+	else if ((eps*xsqval) < 1e-9) u = xisq/qfac/fsqinv;
+	else u = (qfac - sqrt(qfac*qfac - 4*eps*xsqval*xisq/fsqinv)) / (2*eps*xsqval);
+
+	qufactor = sqrt(1-eps*u);
+	//dxisq = xsqval + ysqval/(qufactor*qufactor);
+	//hessfac = -2*(2*xi0*kap0*q*u/sqrt(qufactor))/dxisq;
+
+	double inside_fac, outside_fac;
+	if (eps > 1e-4) {
+		inside_fac = (2/eps)*(xsqval*(1-qufactor) - ysqval*(1-1.0/qufactor)); // this is the contribution from work done moving through the inside of the plates
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-q)/(1-qufactor)*(1+qufactor)/(1+q))/fsqinv; // contribution from work done moving outside the plates
+	} else {
+		inside_fac = u*(xsqval + ysqval);
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-eps*u/4)/(1-eps/4)/u);
+	}
+	
+	return (kap0*q*(inside_fac+outside_fac)/2);
 }
 
 /***************************** Test Model (for testing purposes only) *****************************/

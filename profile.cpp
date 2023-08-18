@@ -3107,7 +3107,6 @@ double LensIntegral::k_integrand_egrad(const double xi)
 	double dxisq = xsqval + ysqval/(qufactor*qufactor);
 	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*fac0*fac1*u/sqrt(qufactor))/dxisq;
 	//return 2*xi*profile->kappa_rsq_deriv(xisq)*u*qval*pow(1-epsilon*u,-(nval+0.5))/dxisq;
-
 }
 
 double LensIntegral::jprime_integrand_egrad(const double xi)
@@ -3147,7 +3146,25 @@ double LensIntegral::jprime_integrand_egrad(const double xi)
 	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
 
-/************************************* Integration algorithms *************************************/
+bool LensProfile::output_plates(const int n_plates)
+{
+	if (!ellipticity_gradient) return false;
+	double xi, xistep, eps, theta, qval, kap;
+	int i;
+	xistep = pow(xi_final_egrad/xi_initial_egrad,1.0/(n_plates-1));
+
+	ofstream plate_out("plates.dat");
+	for (i=0, xi=xi_initial_egrad; i < n_plates; i++, xi *= xistep) {
+		ellipticity_function(xi,eps,theta);
+		qval = sqrt(1-eps);
+		kap = kappa_rsq(xi*xi);
+		plate_out << "lens tophat " << kap << " " << xi << " " << qval << " " << radians_to_degrees(theta) << " 0 0" << endl;
+	}
+	return true;
+}
+
+
+/************************************* Fourier perturbation algorithms *************************************/
 
 double LensProfile::kappa_from_fourier_modes(const double x, const double y)
 {

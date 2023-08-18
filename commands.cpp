@@ -117,11 +117,6 @@ void QLens::process_commands(bool read_file)
 						"defspline -- create a bicubic spline of the deflection field over the range of the grid\n"
 						"einstein -- find Einstein radius of a given lens model\n"
 						"\n";
-						//"FEATURES THAT REQUIRE CCSPLINE MODE:\n"
-						//"cc_reset -- delete the current critical curve spline and create a new one\n"              // These are obsolete features, probably should remove
-						//"auto_defspline -- spline deflection over an optimized grid determined by critical curves\n" // Although the 'mkrandsrc' and 'printcs' should be generalized
-						//"mkrandsrc -- create file containing randomly plotted sources to be read with 'findimgs'\n" // so they don't require ccspline mode (then get rid of ccspline)
-						//"printcs -- print total (unbiased) cross section\n\n";
 				} else if (words[1]=="settings") {
 					cout << "Type 'help <category_name>' to display a list of settings in each category, and 'help <setting>'\n"
 						"for a detailed description of each individual setting. Type 'settings' to display all current\n"
@@ -179,8 +174,6 @@ void QLens::process_commands(bool read_file)
 						"galsub_radius -- scale factor for the optimal radius of perturber subgridding\n"
 						"galsub_min_cellsize -- minimum perturber subgrid cell length (units of Einstein radius)\n"
 						"galsub_cc_splitlevels -- number of critical curve splittings around perturbing galaxies\n"
-						"ccspline -- set critical curve spline mode on/off\n"
-						"auto_ccspline -- spline critical curves only if elliptical symmetry is present (on/off)\n"
 						"\n";
 				} else if (words[1]=="sbmap_settings") {
 					cout <<
@@ -1715,10 +1708,6 @@ void QLens::process_commands(bool read_file)
 					cout << "mksrcgal <xcenter> <ycenter> <a> <q> <angle> <n_ellipses> <pts_per_ellipse> [outfile]\n\n"
 						"Creates an elliptical grid of sources (representing a galaxy) with major axis a, axis ratio q.\n"
 						"The grid is a series of concentric ellipses, plotted to [outfile] (default='sourcexy.in').\n";
-				else if (words[1]=="mkrandsrc")
-					cout << "mkrandsrc <N> [source_outfile]   (supported only in ccspline mode)\n\n"
-						"Plots N sources randomly within the curve circumscribing the outermost caustic(s).\n"
-						"Sources are plotted to [source_outfile] (default='sourcexy.in')\n";
 				else if (words[1]=="plotkappa")
 					cout << "plotkappa <rmin> <rmax> <steps> <kappa_file> [dkappa_file] [lens=#]\n\n"
 						"Plots the radial kappa profile and its (optional) derivative to <kappa_file> and [dkappa_file]\n"
@@ -1737,9 +1726,6 @@ void QLens::process_commands(bool read_file)
 						"Plots the radial mass profile to <mass_file>. The columns in the output file are radius in\n"
 						"arcseconds, mass in m_solar, and radius in kpc respectively.\n"
 						"NOTE: Only text mode plotting is supported for this feature.\n";
-				else if (words[1]=="printcs")
-					cout << "printcs [filename]\n\n"
-						"Prints the total (unbiased) cross section. If [filename] is specified, saves to file.\n";
 				else if (words[1]=="clear")
 					cout << "clear <#>\n\n"
 						"Remove lens galaxy # from the list (the list of galaxies can be printed using the\n"
@@ -1822,19 +1808,6 @@ void QLens::process_commands(bool read_file)
 						"are analytic regardless. Keep in mind however that the pseudo-elliptical models can lead to\n"
 						"unphysical density contours when the ellipticity is high enough (you can check this using the\n"
 						"command 'plotlogkappa').\n";
-				else if (words[1]=="ccspline")
-					cout << "ccspline <on/off>\n\n"
-						"Set critical curve spline mode on/off (if no arguments given, prints current setting.\n"
-						"Critical curve spline mode is appropriate for lenses with circular or elliptical\n"
-						"symmetry (or close to it), where exactly two critical curves exist with roughly the\n"
-						"same symmetry; it is not appropriate when substructure is included and should be\n"
-						"turned off in this case.\n";
-				else if (words[1]=="auto_ccspline")
-					cout << "auto_ccspline <on/off>\n\n"
-						"Set automatic critical curve spline mode on/off (default=on). When on, the critical\n"
-						"curves are splined (i.e. ccspline is turned on) only if elliptical symmetry is present,\n"
-						"i.e. all lenses are centered at the origin. If elliptical symmetry is not present, the\n"
-						"critical curves are not splined.\n";
 				else if (words[1]=="autocenter")
 					cout << "autocenter [on/off]\n\n"
 						"Automatically center the grid on the center of the 'primary' lens (if on), which is set by\n"
@@ -2151,8 +2124,6 @@ void QLens::process_commands(bool read_file)
 					cout << "galsub_radius = " << galsubgrid_radius_fraction << endl;
 					cout << "galsub_min_cellsize = " << galsubgrid_min_cellsize_fraction << " (units of Einstein radius)" << endl;
 					cout << "galsub_cc_splitlevels = " << galsubgrid_cc_splittings << endl;
-					cout << "ccspline: " << display_switch(use_cc_spline) << endl;
-					cout << "auto_ccspline: " << display_switch(auto_ccspline) << endl;
 					cout << endl;
 				}
 				if (show_sbmap_settings) {
@@ -2960,6 +2931,7 @@ void QLens::process_commands(bool read_file)
 				} else Complain("'lens change_pmode' should have two arguments (lens#, pmode)");
 				update_specific_parameters = true;  // this will ensure it skips trying to create a lens model
 			}
+
 			if (!update_specific_parameters) {
 				for (int i=3; i < nwords; i++) {
 					int pos;
@@ -3009,9 +2981,19 @@ void QLens::process_commands(bool read_file)
 					}
 				} else Complain("'lens clear' command requires either one or zero arguments");
 			}
-			else if (words[1]=="anchor")
+			else if ((nwords > 1) and (words[1]=="output_plates")) {
+				if (nwords==4) {
+					int lensnum, np;
+					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change pmode");
+					if (lensnum >= nlens) Complain("specified lens number does not exist");
+					if (!(ws[3] >> np)) Complain("Invalid parameter mode");
+					bool status = lens_list[lensnum]->output_plates(np);
+					if (!status) Complain("specified lens does not have ellipticity gradient enabled; could not output plates");
+				} else Complain("'lens output_plates' should have two arguments (lens#, # of plates)");
+			}
+			else if (words[1]=="anchor_center")
 			{
-				if (nwords != 4) Complain("must specify two arguments for 'lens anchor': lens1 --> lens2");
+				if (nwords != 4) Complain("must specify two arguments for 'lens anchor_center': lens1 --> lens2");
 				int lens_num1, lens_num2;
 				if (!(ws[2] >> lens_num1)) Complain("invalid lens number for lens to be anchored");
 				if (!(ws[3] >> lens_num2)) Complain("invalid lens number for lens to anchor to");
@@ -3105,7 +3087,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(sple_LENS, emode, zl_in, reference_source_redshift, b, slope, s, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
@@ -3214,7 +3195,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(dpie_LENS, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -3348,7 +3328,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_multipole_lens(zl_in, reference_source_redshift, m, a_m, n, theta, xc, yc, kappa_multipole, sine_term);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -3465,7 +3444,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
@@ -3625,7 +3603,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(TRUNCATED_nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, tmode, 0, pmode);
 							if (egrad) {
@@ -3746,7 +3723,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_nfw, emode, zl_in, reference_source_redshift, p1, 0, p2, p3, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
@@ -3842,7 +3818,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(EXPDISK, emode, zl_in, reference_source_redshift, k0, 0, R_d, 0.0, q, theta, xc, yc);
 							if (egrad) {
@@ -3934,7 +3909,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(TOPHAT_LENS, emode, zl_in, reference_source_redshift, k0, 0, rad, 0.0, q, theta, xc, yc);
 							if (egrad) {
@@ -4033,7 +4007,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(filename.c_str(), emode, zl_in, reference_source_redshift, q, theta, qx, f, xc, yc);
 							if (egrad) {
@@ -4125,7 +4098,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,6,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(HERNQUIST, emode, zl_in, reference_source_redshift, ks, 0, rs, 0.0, q, theta, xc, yc);
 							if (egrad) {
@@ -4251,7 +4223,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,9,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORECUSP, emode, zl_in, reference_source_redshift, p1, 0, a, s, q, theta, xc, yc, gamma, n, pmode);
 							if (egrad) {
@@ -4346,7 +4317,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_ptmass_lens(zl_in, reference_source_redshift, p1, xc, yc, pmode);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -4433,7 +4403,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n, re, 0, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
@@ -4538,7 +4507,6 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,7,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(DOUBLE_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n1, re1, re2, q, theta, xc, yc, delta_k, n2, pmode); // weird ordering of parameters in this function. Dislike...
 							if (egrad) {
@@ -4642,7 +4610,6 @@ void QLens::process_commands(bool read_file)
 
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(CORED_SERSIC_LENS, emode, zl_in, reference_source_redshift, p1, n, re, rc, q, theta, xc, yc, 0, 0, pmode);
 							if (egrad) {
@@ -4729,7 +4696,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -4777,7 +4743,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, 0, defx, defy, 0, 0, 0, 0);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -4846,7 +4811,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
@@ -4947,7 +4911,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							if (tabulate_existing_lens) {
 								add_tabulated_lens(zl_in, reference_source_redshift, lnum, kscale, rscale, theta, xc, yc);
@@ -5052,7 +5015,6 @@ void QLens::process_commands(bool read_file)
 						}
 						if (update_parameters) {
 							lens_list[lens_number]->update_parameters(param_vals.array());
-							if (auto_ccspline) automatically_determine_ccspline_mode();
 						} else {
 							if (qtabulate_existing_lens) {
 								add_qtabulated_lens(zl_in, reference_source_redshift, lnum, kscale, rscale, q, theta, xc, yc);
@@ -6762,7 +6724,7 @@ void QLens::process_commands(bool read_file)
 
 					if (((!add_to_image) or (make_imgdata)) and (n_sourcepts_fit==0)) Complain("No image data has been loaded");
 					if (make_imgdata) add_image_data_from_unlensed_sourcepts(false);
-					if (nwords==2) {
+					else if (nwords==2) {
 						print_sourcept_list();
 					}
 					else if ((nwords==3) and (words[2]=="auto")) {
@@ -8339,20 +8301,6 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Created " << splinesteps << "x" << splinesteps << " bicubic spline" << endl;
 			} else Complain("must specify number of steps N and (xmax,ymax) (defaults to current gridsize)");
 		}
-		else if (words[0]=="auto_defspline")  // obsolete--should probably remove
-		{
-			if (!use_cc_spline) Complain("auto_defspline is only supported in ccspline mode");
-			if (nwords >= 2) {
-				if (!islens()) Complain("no lens models have been specified");
-				int splinesteps;
-				if (!(ws[1] >> splinesteps)) Complain("invalid number of spline steps");
-				if ((splinesteps/2)==(splinesteps/2.0))
-					splinesteps++;   // Enforce odd number of steps (to avoid the origin)
-				if (autospline_deflection(splinesteps)==true) {
-					if (mpi_id==0) cout << "Created " << splinesteps << "x" << splinesteps << " bicubic spline" << endl;
-				}
-			} else Complain("must specify number of points N (will create a NxN bicubic spline)");
-		}
 		else if (words[0]=="plotcrit")
 		{
 			if (!islens()) Complain("must specify lens model first");
@@ -8405,30 +8353,6 @@ void QLens::process_commands(bool read_file)
 				if (create_grid(verbal_mode,reference_zfactors,default_zsrc_beta_factors)==false)
 					Complain("could not generate recursive grid");
 			}
-		}
-		else if (words[0]=="printcs")
-		{
-			bool output_to_file;
-			string cs_filename;
-			double area;
-			ofstream cs_out;
-			if (!islens()) Complain("must specify lens model first");
-			if (nwords == 2) {
-				if (!(ws[1] >> cs_filename)) Complain("invalid filename");
-				output_to_file = true;
-				cs_out.open(cs_filename.c_str(), ofstream::out);
-			} else output_to_file = false;
-			if (total_cross_section(area)==false) Complain("Could not determine total cross section");
-			if (output_to_file) {
-				cs_out << "#\n" "source plane: area and number of sources\n" << area << " unknown\n";
-			} else {
-				if (mpi_id==0) cout << "total cross section: " << area << endl;
-			}
-		}
-		else if (words[0]=="cc_reset")
-		{
-			if (use_cc_spline) delete_ccspline();
-			else Complain("cc_reset can only be used when ccspline is on");
 		}
 		else if (words[0]=="plotkappa")
 		{
@@ -8898,19 +8822,6 @@ void QLens::process_commands(bool read_file)
 				else outfile = "sourcexy.in";
 				raytrace_image_rectangle(xmin,xmax,xsteps,ymin,ymax,ysteps,outfile);
 			} else Complain("raytracetab requires at least 6 parameters: xmin, xmax, xpoints, ymin, ymax, ypoints");
-		}
-		else if (words[0]=="mkrandsrc")
-		{
-			if (!islens()) Complain("must specify lens model first");
-			if (nwords >= 2) {
-				int nsources;
-				if (!(ws[1] >> nsources)) Complain("invalid number of sources");
-				string outfile;
-				if (nwords==3) outfile = words[2];
-				else if (nwords > 3) { Complain("too many parameters in mkrandsrc"); }
-				else outfile = "sourcexy.in";
-				make_random_sources(nsources, outfile.c_str());
-			} else Complain("mkrandsrc requires at least 1 parameter (number of sources)");
 		}
 		else if (words[0]=="findimgs")
 		{
@@ -9885,6 +9796,15 @@ void QLens::process_commands(bool read_file)
 					ymaxstr >> ymaxstring;
 					range1 = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
 				}
+				if ((range2.empty()) and (image_pixel_data != NULL)) {
+					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
+					string xminstr, xmaxstr, yminstr, ymaxstr;
+					xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
+					yminstream << image_pixel_data->yvals[0]; yminstream >> yminstr;
+					xmaxstream << image_pixel_data->xvals[image_pixel_data->npixels_x]; xmaxstream >> xmaxstr;
+					ymaxstream << image_pixel_data->yvals[image_pixel_data->npixels_y]; ymaxstream >> ymaxstr;
+					range2 = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
+				}
 
 				bool foundcc = true;
 				bool plotted_src = false;
@@ -10723,29 +10643,6 @@ void QLens::process_commands(bool read_file)
 			}
 			else Complain("only one argument allowed for linewidth");
 		}
-		else if (words[0]=="ccspline")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Critical curve spline: " << display_switch(use_cc_spline) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'ccspline' command; must specify 'on' or 'off'");
-				if (setword=="on") set_ccspline_mode(true);
-				else if (setword=="off") {
-					set_ccspline_mode(false);
-					delete_ccspline();
-				}
-				else Complain("invalid argument to 'ccspline' command; must specify 'on' or 'off'");
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="auto_ccspline")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Automatic critical curve spline: " << display_switch(auto_ccspline) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_ccspline' command; must specify 'on' or 'off'");
-				set_switch(auto_ccspline,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
 		else if (words[0]=="autocenter")
 		{
 			if (nwords==1) {
@@ -11274,6 +11171,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'cc_split_neighbors' command; must specify 'on' or 'off'");
 				set_switch(cc_neighbor_splittings,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="skip_newton")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Skip Newton's method during image searching: " << display_switch(cc_neighbor_splittings) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'skip_newton' command; must specify 'on' or 'off'");
+				set_switch(skip_newtons_method,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="splitlevels")
@@ -13672,7 +13578,7 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 			if (plot_isofit_profiles) {
-				cout << "PLOTTING TO " << fit_output_dir << "/stuff_" << plot_label << endl;
+				cout << "Plotting isofit profiles to " << fit_output_dir << "/..._" << plot_label << endl;
 				isodata.plot_isophote_parameters(fit_output_dir,plot_label);
 			}
 			update_anchored_parameters_and_redshift_data(); // For any lens that is anchored to the foreground source
@@ -14488,6 +14394,9 @@ bool QLens::read_command(bool show_prompt)
 			}
 		} else {
 			getline((*infile),line);
+#ifdef USE_READLINE
+			add_history(line.c_str());
+#endif
 			lines.push_back(line);
 			if ((verbal_mode) and (mpi_id==0)) cout << line << endl;
 		}

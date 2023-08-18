@@ -256,13 +256,16 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
 		zlens = zlens_current = 0;
+		zsrc_ref = 0;
 		zfac = 1.0;
+		sigma_cr = 0;
 		fourier_integrals_splined = false;
 		fourier_integral_left_cos_spline = NULL;
 		fourier_integral_left_sin_spline = NULL;
 		fourier_integral_right_cos_spline = NULL;
 		fourier_integral_right_sin_spline = NULL;
 		use_concentration_prior = false;
+		qlens = NULL;
 	}
 	void setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in);
 
@@ -404,6 +407,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		assign_paramnames();
 		assign_param_pointers();
 	}
+	bool output_plates(const int n_plates);
 };
 
 struct LensIntegral : public Romberg
@@ -1255,6 +1259,7 @@ class TopHatLens : public LensProfile
 
 	void deflection_analytic(const double, const double, lensvector&);
 	void hessian_analytic(const double, const double, lensmatrix&);
+	double potential_analytic(const double x, const double y);
 
 	void assign_paramnames();
 	void assign_param_pointers();

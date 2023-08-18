@@ -201,6 +201,8 @@ class Grid : public Brent
 	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
 	Grid* parent_cell;
 
+	public:
+	// Instead of all these static variables, have a class Grid versus GridCell, where Grid is the parent that contains all these as non-static variables
 	static double* grid_zfactors; // kappa ratio used for modeling source points at different redshifts
 	static double** grid_betafactors; // kappa ratio used for modeling source points at different redshifts
 	static const int u_split, w_split;
@@ -226,7 +228,9 @@ class Grid : public Brent
 
 	// all functions in class Grid are contained in imgsrch.cpp
 	bool image_test(const int& thread);
-	bool run_newton(const lensvector& xroot_initial, const int& thread);
+	void add_image_to_list(const lensvector& imgpos);
+
+	bool run_newton(lensvector& xroot, const int& thread);
 	inside_cell test_if_inside_sourceplane_cell(lensvector* point, const int& thread);
 	bool test_if_sourcept_inside_triangle(lensvector* point1, lensvector* point2, lensvector* point3, const int& thread);
 	bool test_if_inside_cell(const lensvector& point, const int& thread);
@@ -493,6 +497,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sourcegrid_limit_xmin, sourcegrid_limit_xmax, sourcegrid_limit_ymin, sourcegrid_limit_ymax;
 	bool enforce_min_cell_area;
 	bool cc_neighbor_splittings;
+	bool skip_newtons_method;
 	double min_cell_area; // area of the smallest allowed cell area
 	int usplit_initial, wsplit_initial;
 	int splitlevels, cc_splitlevels;
@@ -699,12 +704,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static const int max_cc_search_iterations;
 	static double rmin_frac;
 	static const double default_rmin_frac;
-	int cc_thetasteps;
-	double cc_rmin, cc_rmax;
+	double cc_rmin, cc_rmax, cc_thetasteps;
 	//double source_plane_rscale;
-	Spline *ccspline;
-	Spline *caustic;
-	bool cc_splined;
 	bool effectively_spherical;
 	double newton_magnification_threshold;
 	bool reject_himag_images;
@@ -774,9 +775,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double inverse_magnification_r(const double);
 	double source_plane_r(const double r);
 	bool find_optimal_gridsize();
-
-	bool use_cc_spline; // critical curves can be splined when (approximate) elliptical symmetry is present
-	bool auto_ccspline;
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
 	int shapelet_scale_mode;
@@ -1128,8 +1126,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude_i,0,zfacs,betafacs); }
 	*/
 
-	bool test_for_elliptical_symmetry();
-	bool test_for_singularity();
 	void record_singular_points(double *zfacs);
 
 	// the following functions and objects are contained in commands.cpp
@@ -1282,7 +1278,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void open_output_file(std::ofstream &outfile, char* filechar_in);
 
 	private:
-	bool temp_auto_ccspline, temp_auto_store_cc_points, temp_include_time_delays;
+	bool temp_auto_store_cc_points, temp_include_time_delays;
 	void fit_set_optimizations();
 	void fit_restore_defaults();
 	double zfac_re; // used by einstein_radius_root(...)
@@ -1354,7 +1350,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	bool spline_critical_curves(bool verbal);
 	bool spline_critical_curves() { return spline_critical_curves(true); }
-	void automatically_determine_ccspline_mode();
 	bool plot_splined_critical_curves(string filename = "");
 	bool plot_sorted_critical_curves(string filename = "");
 	bool (QLens::*plot_critical_curves)(string filename);
@@ -1390,9 +1385,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
 	void plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename);
 	void print_lensing_info_at_point(const double x, const double y);
-	bool make_random_sources(int nsources, const char *outfile);
-	bool total_cross_section(double&);
-	double total_cross_section_integrand(const double);
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
@@ -1426,7 +1418,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void autogrid(double rmin, double rmax);
 	void autogrid();
 	bool get_deflection_spline_info(double &xmax, double &ymax, int &nsteps);
-	void delete_ccspline();
 	void set_Gauss_NN(const int& nn);
 	void set_integral_tolerance(const double& acc);
 	void set_integral_convergence_warnings(const bool warn);
@@ -1442,10 +1433,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void get_warnings(bool &setting) { setting = warnings; }
 	void set_newton_warnings(bool setting) { newton_warnings = setting; }
 	void get_newton_warnings(bool &setting) { setting = newton_warnings; }
-	void set_ccspline_mode(bool setting) { use_cc_spline = setting; plot_critical_curves = (setting==true) ? &QLens::plot_splined_critical_curves : &QLens::plot_sorted_critical_curves; }
-	void get_ccspline_mode(bool &setting) { setting = use_cc_spline; }
-	void set_auto_ccspline_mode(bool setting) { auto_ccspline = setting; }
-	void get_auto_ccspline_mode(bool &setting) { setting = auto_ccspline; }
 	void set_galsubgrid_mode(bool setting) { subgrid_around_perturbers = setting; }
 	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_perturbers; }
 	void set_auto_store_cc_points(bool setting) { auto_store_cc_points = setting; }
@@ -1491,11 +1478,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 		}
 	}
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
-
-	double crit0_interpolate(double theta) { return ccspline[0].splint(theta); }
-	double crit1_interpolate(double theta) { return ccspline[1].splint(theta); }
-	double caust0_interpolate(double theta);
-	double caust1_interpolate(double theta);
 
 	//double make_perturber_population(const double number_density, const double rmax, const double a, const double b);
 	//void plot_perturber_deflection_vs_area();

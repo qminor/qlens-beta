@@ -1057,18 +1057,12 @@ QLens::QLens() : UCMC()
 	imgpixel_himag_threshold = 0;
 	imgpixel_sb_threshold = 0.5;
 
-	use_cc_spline = false;
-	auto_ccspline = false;
 	plot_critical_curves = &QLens::plot_sorted_critical_curves;
 	cc_rmin = default_autogrid_rmin;
 	cc_rmax = default_autogrid_rmax;
+	cc_thetasteps = 200;
 	//source_plane_rscale = 1; // this will be found by the autogrid (or by ray-tracing pixels to the source grid)
 	autogrid_frac = default_autogrid_frac;
-
-	// the following variables are only relevant if use_cc_spline is on (so critical curves are splined)
-	cc_thetasteps = 200;
-	cc_splined = false;
-	effectively_spherical = false;
 
 	// parameters for the recursive grid
 	enforce_min_cell_area = true; // this is option is obsolete, and should be removed (we should always enforce a min cell area!!!!)
@@ -1078,6 +1072,7 @@ QLens::QLens() : UCMC()
 	splitlevels = 0; // number of times grid squares are recursively split (by default)...setting to zero is best, recursion slows down grid creation & searching
 	cc_splitlevels = 2; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = false;
+	skip_newtons_method = false;
 	use_perturber_flags = false;
 	subgrid_around_perturbers = true;
 	subgrid_only_near_data_images = false; // if on, only subgrids around perturber galaxies (during fit) if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
@@ -1502,18 +1497,12 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	imgpixel_himag_threshold = lens_in->imgpixel_himag_threshold;
 	imgpixel_sb_threshold = lens_in->imgpixel_sb_threshold;
 
-	use_cc_spline = lens_in->use_cc_spline;
-	auto_ccspline = lens_in->auto_ccspline;
 	plot_critical_curves = &QLens::plot_sorted_critical_curves;
 	cc_rmin = lens_in->cc_rmin;
 	cc_rmax = lens_in->cc_rmax;
+	cc_thetasteps = lens_in->cc_thetasteps;
 	//source_plane_rscale = lens_in->source_plane_rscale;
 	autogrid_frac = lens_in->autogrid_frac;
-
-	// the following variables are only relevant if use_cc_spline is on (so critical curves are splined)
-	cc_thetasteps = lens_in->cc_thetasteps;
-	cc_splined = false;
-	effectively_spherical = false;
 
 	// parameters for the recursive grid
 	enforce_min_cell_area = lens_in->enforce_min_cell_area;
@@ -1523,6 +1512,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	splitlevels = lens_in->splitlevels; // number of times grid squares are recursively split (by default)...minimum of one splitting is required
 	cc_splitlevels = lens_in->cc_splitlevels; // number of times grid squares are recursively split when containing a critical curve
 	cc_neighbor_splittings = lens_in->cc_neighbor_splittings;
+	skip_newtons_method = lens_in->skip_newtons_method;
 	use_perturber_flags = lens_in->use_perturber_flags;
 	subgrid_around_perturbers = lens_in->subgrid_around_perturbers;
 	subgrid_only_near_data_images = lens_in->subgrid_only_near_data_images; // if on, only subgrids around perturber galaxies if a data image is within the determined subgridding radius
@@ -2130,7 +2120,6 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 */
@@ -2149,7 +2138,6 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
 void QLens::add_shear_lens(const double zl, const double zs, const double shear_p1, const double shear_p2, const double xc, const double yc)
@@ -2176,7 +2164,6 @@ void QLens::add_multipole_lens(const double zl, const double zs, int m, const do
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
 void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
@@ -2206,7 +2193,6 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
 void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc)
@@ -2237,7 +2223,6 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 }
 
 bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot)
@@ -2280,7 +2265,6 @@ bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 	return true;
 }
 
@@ -2330,7 +2314,6 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 	return true;
 }
 
@@ -2348,7 +2331,6 @@ void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 	lens_list[nlens-1]->register_vary_flags();
 
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
 }
 
@@ -2875,7 +2857,6 @@ void QLens::remove_lens(int lensnumber)
 	else lens_redshift_idx = NULL;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
-	if (auto_ccspline) automatically_determine_ccspline_mode();
 
 	param_settings->remove_params(pi,pf);
 	update_parameter_list();
@@ -3030,51 +3011,6 @@ void QLens::toggle_major_axis_along_y_src(bool major_axis_along_y)
 			}
 		}
 	}
-}
-
-void QLens::automatically_determine_ccspline_mode()
-{
-	// this feature should be made obsolete. It's really not necessary to spline the critical curves anymore
-	bool kappa_present = false;
-	for (int i=0; i < nlens; i++) {
-		if ((autocenter==true) and (i==primary_lens_number)) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
-		if ((lens_list[i]->get_lenstype() != SHEAR) and (lens_list[i]->get_lenstype() != MULTIPOLE)) kappa_present = true;
-	}
-	if (kappa_present==false) set_ccspline_mode(false);
-	else if ((test_for_elliptical_symmetry()==true) and (test_for_singularity()==false)) set_ccspline_mode(true);
-	else set_ccspline_mode(false);
-}
-
-bool QLens::test_for_elliptical_symmetry()
-{
-	bool elliptical_symmetry_present = true;
-	if (nlens > 0) {
-		double xc, yc;
-		for (int i=0; i < nlens; i++) {
-			lens_list[i]->get_center_coords(xc,yc);
-			if ((abs(xc-grid_xcenter) > Grid::image_pos_accuracy) or (abs(yc-grid_ycenter) > Grid::image_pos_accuracy))
-				elliptical_symmetry_present = false;
-		}
-	}
-	return elliptical_symmetry_present;
-}
-
-bool QLens::test_for_singularity()
-{
-	// if kappa goes like r^n near the origin where n <= -1, then a radial critical curve will not form
-	// (this is because the deflection, which goes like r^(n+1), must increase as you go outward in order
-	// to have a radial critical curve; this will only happen for n>-1). Here we test for this for the
-	// relevant models where this can occur
-	bool singular = false;
-	if (nlens > 0) {
-		for (int i=0; i < nlens; i++) {
-			if ((lens_list[i]->get_lenstype() == dpie_LENS) and (lens_list[i]->core_present()==false)) singular = true;
-			else if ((lens_list[i]->get_lenstype() == sple_LENS) and (lens_list[i]->get_inner_logslope() <= -1) and (lens_list[i]->core_present()==false)) singular = true;
-			else if (lens_list[i]->get_lenstype() == PTMASS) singular = true;
-				// a radial critical curve will occur if a core is present, OR if alpha > 1 (since kappa goes like r^n where n=alpha-2)
-		}
-	}
-	return singular;
 }
 
 void QLens::record_singular_points(double *zfacs)
@@ -3462,7 +3398,7 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 			delete grid;
 			grid = NULL;
 		}
-		if ((auto_store_cc_points) and (use_cc_spline==false)) {
+		if (auto_store_cc_points) {
 			critical_curve_pts.clear();
 			caustic_pts.clear();
 			length_of_cc_cell.clear();
@@ -3495,7 +3431,7 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 		delete[] centers;
 		delete[] einstein_radii;
 	}
-	if ((auto_store_cc_points==true) and (use_cc_spline==false)) grid->store_critical_curve_pts();
+	if (auto_store_cc_points==true) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
 #ifdef USE_OPENMP
@@ -4910,133 +4846,6 @@ Vector<dvector> QLens::find_critical_curves(bool &check)
 	return rcrit;
 }
 
-bool QLens::spline_critical_curves(bool verbal)
-{
-	respline_at_end = false;	// this is for deflection spline; will become true if def. needs to be resplined
-	if (cc_splined==true) {
-		delete[] ccspline;
-		delete[] caustic;
-	}
-	if ((verbal) and (mpi_id==0)) cout << "Splining critical curves..." << endl;
-	bool check;
-	Vector<dvector> rcrit = find_critical_curves(check);
-	if (check==false) {
-		cc_splined = false;	// critical curves could not be found
-		return false;
-	}
-	Vector<dvector> rcaust(2);
-	double theta, thetastep;
-	thetastep = 2*M_PI/cc_thetasteps;
-	rcaust[0].input(cc_thetasteps+1);
-	rcaust[1].input(cc_thetasteps+1);
-	dvector theta_table(cc_thetasteps+1);
-	dvector caust0_theta_table(cc_thetasteps+1);
-	dvector caust1_theta_table(cc_thetasteps+1);
-	double xp, yp;
-	lensvector x, caust0, caust1;
-	bool seems_spherical = false;
-	for (int i=0; i < cc_thetasteps; i++) {
-		theta_table[i] = i*thetastep;
-		xp = cos(theta_table[i]); yp = sin(theta_table[i]);
-		x[0] = grid_xcenter + rcrit[0][i]*xp;
-		x[1] = grid_ycenter + rcrit[0][i]*yp;
-		find_sourcept(x,caust0,0,reference_zfactors,default_zsrc_beta_factors);
-		rcaust[0][i] = norm(caust0[0]-grid_xcenter,caust0[1]-grid_ycenter);
-		caust0_theta_table[i] = angle(caust0[0]-grid_xcenter,caust0[1]-grid_ycenter);
-		if (!(isspherical())) {
-			x[0] = grid_xcenter + rcrit[1][i]*xp;
-			x[1] = grid_ycenter + rcrit[1][i]*yp;
-			find_sourcept(x,caust1,0,reference_zfactors,default_zsrc_beta_factors);
-			rcaust[1][i] = norm(caust1[0]-grid_xcenter,caust1[1]-grid_ycenter);
-			caust1_theta_table[i] = angle(caust1[0]-grid_xcenter,caust1[1]-grid_ycenter);
-			if ((i==0) and (rcaust[1][i] < 1e-3))
-				seems_spherical = true;
-			else if ((seems_spherical == true) and (rcaust[1][i] > 1e-3))
-				seems_spherical = false;
-		} else {
-			rcaust[1][i] = 0;
-			caust1_theta_table[i] = theta_table[i];
-		}
-		if ((rcaust[0][i] < 0) or (rcaust[1][i] < 0)) {
-			cc_splined = false;
-			warn(warnings, "Cannot spline critical curves; caustics not well-defined");
-			return false;
-		}
-	}
-	if (seems_spherical==true) {
-		effectively_spherical = true;
-		for (int i=0; i < cc_thetasteps; i++)
-			rcaust[1][i] = 0;
-	}
-
-	// put the (theta,r) points in order for splining
-	theta_table[cc_thetasteps] = 2*M_PI;
-	sort(cc_thetasteps, caust0_theta_table, rcaust[0]);
-	sort(cc_thetasteps, caust1_theta_table, rcaust[1]);
-	caust0_theta_table[cc_thetasteps] = 2*M_PI + caust0_theta_table[0];
-	caust1_theta_table[cc_thetasteps] = 2*M_PI + caust1_theta_table[0];
-	rcaust[0][cc_thetasteps] = rcaust[0][0];
-	rcaust[1][cc_thetasteps] = rcaust[1][0];
-	
-	ccspline = new Spline[2];
-	caustic = new Spline[2];
-	int c0steps, c1steps;
-	ccspline[0].input(theta_table, rcrit[0]);
-	ccspline[1].input(theta_table, rcrit[1]);
-	caustic[0].input(caust0_theta_table, rcaust[0]);
-	caustic[1].input(caust1_theta_table, rcaust[1]);
-		
-	cc_splined = true;
-
-	return check;
-}
-
-bool QLens::plot_splined_critical_curves(string critfile)
-{
-	if (!use_cc_spline) { warn("Cannot plot critical curves from spline, spline option is disabled"); return false; }
-	if (!cc_splined) {
-		if (spline_critical_curves()==false) return false;
-	}
-	ofstream crit;
-	open_output_file(crit,critfile);
-	if (use_scientific_notation) crit << setiosflags(ios::scientific);
-	int nn = 500;
-	double thetastep, rcrit0, rcrit1, rcaust0, rcaust1, xp, yp;
-	thetastep = 2*M_PI/nn;
-	double theta;
-	int i;
-	for (theta=0, i=0; i <= nn; i++, theta += thetastep) {
-		rcrit0 = crit0_interpolate(theta);
-		rcaust0 = caust0_interpolate(theta);
-		xp = cos(theta); yp = sin(theta);
-		crit << grid_xcenter+rcrit0*xp << "\t" << grid_ycenter+rcrit0*yp << "\t" << grid_xcenter+rcaust0*xp << "\t" << grid_ycenter+rcaust0*yp << endl;
-	}
-	crit << endl;
-	for (theta=0, i=0; i <= nn; i++, theta += thetastep) {
-		rcrit1 = crit1_interpolate(theta);
-		rcaust1 = caust1_interpolate(theta);
-		xp = cos(theta); yp = sin(theta);
-		crit << grid_xcenter+rcrit1*xp << "\t" << grid_ycenter+rcrit1*yp << "\t" << grid_xcenter+rcaust1*xp << "\t" << grid_ycenter+rcaust1*yp << endl;
-	}
-	return true;
-}
-
-double QLens::caust0_interpolate(double theta)
-{
-	// sometimes caustic starts at some small angle, so make sure theta is in range
-	if ((theta < caustic[0].xmin()) and (theta+2*M_PI < caustic[0].xmax()))
-		theta += 2*M_PI;
-	return caustic[0].splint(theta);
-}
-double QLens::caust1_interpolate(double theta)
-{
-	// sometimes caustic starts at some small angle, so make sure theta is in range
-	if (effectively_spherical) return 0.0;
-	if ((theta < caustic[1].xmin()) and (theta+2*M_PI < caustic[1].xmax()))
-		theta += 2*M_PI;
-	return caustic[1].splint(theta);
-}
-
 bool QLens::find_optimal_gridsize()
 {
 	if (autocenter==true) {
@@ -5547,35 +5356,6 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 	}
 }
 
-
-bool QLens::make_random_sources(int nsources, const char *outfilename)
-{
-	if (!use_cc_spline) { warn(warnings,"Random sources is only supported in critical curve spline mode (ccspline)"); return false; }
-	ofstream outfile(outfilename);
-	if (!cc_splined)
-		if (spline_critical_curves()==false) return false;	// in case critical curves could not be found
-	int sources_inside = 0;
-	double theta, r, theta_step, rmax;
-	int theta_n, theta_count = 400;
-	theta_step = 2*M_PI/(theta_count-1);
-	rmax = dmax(caust0_interpolate(0), caust1_interpolate(0));
-	for (theta_n=0, theta=0; theta_n < theta_count; theta_n++, theta += theta_step) {
-		r = dmax(caust0_interpolate(theta), caust1_interpolate(theta));
-		if (r > rmax) rmax = r;
-	}
-
-	while (sources_inside < nsources)
-	{
-		theta = RandomNumber() * 2*M_PI;
-		r = sqrt(RandomNumber()) * rmax;
-		if (r < dmax(caust0_interpolate(theta), caust1_interpolate(theta))) {
-			sources_inside++;
-			outfile << grid_xcenter+r*cos(theta) << "\t" << grid_ycenter+r*sin(theta) << endl;
-		}
-	}
-	return true;
-}
-
 void QLens::make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename)
 {
 	ofstream sourcetab(source_filename.c_str());
@@ -5628,23 +5408,6 @@ void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const
 			sourcetab << xs << " " << ys << endl;
 		}
 	}
-}
-
-bool QLens::total_cross_section(double &area)
-{
-	if (!use_cc_spline) { warn(warnings,"Determining total cross section is only supported when ccspline mode is on"); return false; }
-	if (!cc_splined)
-		if (spline_critical_curves()==false) return false;	// in case critical curves could not be found
-	double (Romberg::*csptr)(const double);
-	csptr = static_cast<double (Romberg::*)(const double)> (&QLens::total_cross_section_integrand);
-	area = romberg(csptr, 0, 2*M_PI,1e-6,5);
-
-	return true;
-}
-
-double QLens::total_cross_section_integrand(const double theta)
-{
-	return (0.5 * SQR(dmax(caust0_interpolate(theta), caust1_interpolate(theta))));
 }
 
 /*
@@ -6279,7 +6042,6 @@ void QLens::remove_image_data(int image_set)
 bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
-	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
 	if (dataset_number >= n_sourcepts_fit) { warn("specified dataset number does not exist"); return false; }
 
 	int i,n_srcpts = image_data[dataset_number].n_images;
@@ -7035,7 +6797,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if (fitmodel != NULL) delete fitmodel;
 	fitmodel = new QLens(this);
 	fitmodel->use_ansi_characters = running_fit_in;
-	fitmodel->auto_ccspline = false;
 	//fitmodel->set_gridcenter(grid_xcenter,grid_ycenter);
 
 	int i,j,k;
@@ -7362,6 +7123,10 @@ double QLens::update_model(const double* params)
 
 void QLens::find_analytic_srcpos(lensvector *beta_i)
 {
+	if (nlens==0) {
+		warn("no lens models have been defined; cannot find analytic best-fit source point");
+		return;
+	}
 	// Note: beta_i needs to have the same size as the number of image sets being fit, or else a segmentation fault will occur
 	int i,j;
 	lensvector beta_ji;
@@ -7399,7 +7164,10 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 			}
 		}
 		if (use_magnification_in_chisq) {
-			if (amatrix.invert(ainv)==false) return;
+			if (amatrix.invert(ainv)==false) {
+				warn(warnings,"magnification matrix is singular; cannot use magnification to solve for analytic best-fit source points");
+				return;
+			}
 			beta_i[i] = ainv*bvec;
 		} else {
 			beta_i[i][0] /= src_norm;
@@ -8255,7 +8023,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	}
 	if (vary_srcpt_xshift) stepsizes[index++] = 0.01;
 	if (vary_srcpt_yshift) stepsizes[index++] = 0.01;
-	if (vary_srcflux) stepsizes[index++] = 0.1;
+	if (vary_srcflux) stepsizes[index++] = (source_flux > 0) ? 0.1*source_flux : source_flux;
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
@@ -9015,13 +8783,11 @@ bool QLens::get_sourcept_parameter_numbers(const int sp_i, int& pi, int& pf)
 
 void QLens::fit_set_optimizations()
 {
-	temp_auto_ccspline = auto_ccspline;
 	temp_auto_store_cc_points = auto_store_cc_points;
 	temp_include_time_delays = include_time_delays;
 
 	// turn the following features off because they add pointless overhead (they will be restored to their
 	// former settings after the search is done)
-	auto_ccspline = false;
 	auto_store_cc_points = false;
 	if (source_fit_mode==Point_Source) include_time_delays = false; // calculating time delays from images found not necessary during point source fit, since the chisq_time_delays finds time delays separately
 
@@ -9030,7 +8796,6 @@ void QLens::fit_set_optimizations()
 
 void QLens::fit_restore_defaults()
 {
-	auto_ccspline = temp_auto_ccspline;
 	auto_store_cc_points = temp_auto_store_cc_points;
 	include_time_delays = temp_include_time_delays;
 	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
@@ -9047,6 +8812,7 @@ double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status, b
 		if ((mpi_id==0) and (show_status)) warn(warnings,"Warning: could not evaluate chi-square function");
 		return -1e30;
 	}
+
 	//fitmodel->param_settings->print_penalty_limits();
 
 	double (QLens::*loglikeptr)(double*);
@@ -9067,10 +8833,10 @@ double QLens::chisq_single_evaluation(bool show_diagnostics, bool show_status, b
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
 
-	
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+
 	//fitmodel->lens_list[0]->update_specific_parameter("mstar",3.5e11);
 	//fitparams[0] = 11.67;
 	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
@@ -11548,15 +11314,25 @@ double QLens::fitmodel_loglike_point_source(double* params)
 		int n_matched_imgs;
 		if (imgplane_chisq) {
 			used_imgplane_chisq = true;
+			double* remember_grid_zfac = Grid::grid_zfactors;
+			double** remember_grid_betafac = Grid::grid_betafactors;
 			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 			else chisq = fitmodel->chisq_pos_image_plane();
+			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. DO THIS BEFORE RELEASING PUBLICLY!!!!
+			Grid::grid_zfactors = remember_grid_zfac;
+			Grid::grid_betafactors = remember_grid_betafac;
 		}
 		else {
 			used_imgplane_chisq = false;
 			chisq = fitmodel->chisq_pos_source_plane();
 			if (chisq < chisq_imgplane_substitute_threshold) {
+				double* remember_grid_zfac = Grid::grid_zfactors;
+				double** remember_grid_betafac = Grid::grid_betafactors;
 				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane();
+				// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. DO THIS BEFORE RELEASING PUBLICLY!!!!
+				Grid::grid_zfactors = remember_grid_zfac;
+				Grid::grid_betafactors = remember_grid_betafac;
 				used_imgplane_chisq = true;
 			}
 		}
@@ -13334,7 +13110,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, const int reduce_fa
 		for (i=0; i < n_sourcepts_fit; i++) {
 			is_lensed = true;
 			if (source_redshifts[i]==lens_redshift) is_lensed = false;
-			if (!include_imgfluxes_in_inversion) image_pixel_grid->find_image_points(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
+			if (!include_imgfluxes_in_inversion) image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
 			image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
 		}
 	}
@@ -13736,7 +13512,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				is_lensed = true;
 				if (source_redshifts[i]==lens_redshift) is_lensed = false;
 				if ((is_lensed) and (nlens==0)) die("lensed source point has been defined, but no lens objects have been created");
-				image_pixel_grid->find_image_points(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],source_grid_defined,is_lensed,verbal);
+				image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],source_grid_defined,is_lensed,verbal);
 			}
 		}
 	}
@@ -13831,7 +13607,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			for (i=0; i < n_sourcepts_fit; i++) {
 				is_lensed = true;
 				if (source_redshifts[i]==lens_redshift) is_lensed = false;
-				image_pixel_grid->find_image_points(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],use_overlap,is_lensed,verbal);
+				image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],use_overlap,is_lensed,verbal);
 			}
 		}
 
@@ -15748,20 +15524,6 @@ void QLens::reset_grid()
 	sorted_critical_curves = false;
 	sorted_critical_curve.clear();
 	singular_pts.clear();
-	if (cc_splined==true) {
-		delete[] ccspline;
-		delete[] caustic;
-		cc_splined = false;
-	}
-}
-
-void QLens::delete_ccspline()
-{
-	if (cc_splined==true) {
-		delete[] ccspline;
-		delete[] caustic;
-		cc_splined = false;
-	}
 }
 
 QLens::~QLens()

@@ -10057,7 +10057,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 #endif
 }
 
-void ImagePixelGrid::find_image_points(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
+void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
 {
 	imgs.resize(0);
 	if (!is_lensed) {
@@ -10179,13 +10179,6 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 		if ((product1 > 0) and (product2 > 0) and (product3 > 0)) inside_tri = Lower;
 		else if ((product1 < 0) and (product2 < 0) and (product3 < 0)) inside_tri = Lower;
 		else {
-			//if (product1 > 0) {
-				//if ((abs(product2)==0) and (product3 > 0)) inside_tri = Lower;
-				//if ((product2 > 0) and (abs(product3)==0)) inside_tri = Lower;
-			//} else if (product1 < 0) {
-				//if ((abs(product2)==0) and (product3 < 0)) inside_tri = Lower;
-				//if ((product2 < 0) and (abs(product3)==0)) inside_tri = Lower;
-			//}
 			if (inside_tri==None) {
 				d1[0] = src_x - (*vertex5_srcplane)[0];
 				d1[1] = src_y - (*vertex5_srcplane)[1];
@@ -10205,7 +10198,7 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 		if (inside_tri != None) {
 			//cout << "i=" << img_i << " j=" << img_j << " twiststat=" << *twist_type << endl;
 			imgpt_i = n_candidates++;
-			if (n_candidates > max_nimgs) die("exceeded max number of images in ImagePixelGrid::find_image_points");
+			if (n_candidates > max_nimgs) die("exceeded max number of images in ImagePixelGrid::find_point_images");
 			//pixels_with_imgpts[imgpt_i].img_i = img_i;
 			//pixels_with_imgpts[imgpt_i].img_j = img_j;
 			//pixels_with_imgpts[imgpt_i].upper_tri = (inside_tri==Upper) ? true : false;
@@ -10284,7 +10277,7 @@ void ImagePixelGrid::find_image_points(const double src_x, const double src_y, v
 		#pragma omp for private(i) schedule(static)
 		for (i=0; i < n_candidates; i++) {
 			//cout << "Trying candidate " << i << ": " << image_candidates[i].pos[0] << " " << image_candidates[i].pos[1] << endl;
-			if (run_newton(image_candidates[i].pos,mag,thread)==true) {
+			if ((lens->skip_newtons_method) or (run_newton(image_candidates[i].pos,mag,thread)==true)) {
 			//{
 				imgpt.pos = image_candidates[i].pos;
 				//imgpt.mag = lens->magnification(image_candidates[i].pos,0,imggrid_zfactors,imggrid_betafactors);
