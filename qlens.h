@@ -620,6 +620,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 	bool split_imgpixels;
 	bool split_high_mag_imgpixels;
+	bool psf_supersampling;
 	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
 	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
 
@@ -695,7 +696,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double srcgrid_size_scale, srcgrid_size_scale_lower_limit, srcgrid_size_scale_upper_limit;
 	bool vary_pixel_fraction, vary_srcpt_xshift, vary_srcpt_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
 	string psf_filename;
-	double psf_width_x, psf_width_y, data_pixel_noise, sim_pixel_noise;
+	double psf_width_x, psf_width_y, background_pixel_noise;
+	bool simulate_pixel_noise;
 	double sb_threshold; // for creating centroid images from pixel maps
 	double noise_threshold; // for automatic source grid sizing
 
@@ -839,9 +841,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void convert_Lmatrix_to_dense();
 	void assign_Lmatrix_shapelets(bool verbal);
-	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
 	void PSF_convolution_Lmatrix_dense(const bool verbal);
-	//void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
 	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
@@ -940,22 +940,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static fftw_plan *fftplans_Lmatrix;
 	static fftw_plan *fftplans_Lmatrix_inverse;
 #endif
-	//static bool setup_fft_convolution_emask;
-	//static double *psf_zvec_emask; // for convolutions using FFT
-	//static int fft_imin_emask, fft_jmin_emask, fft_ni_emask, fft_nj_emask;
-//#ifdef USE_FFTW
-	//static complex<double> *psf_transform_emask;
-	//static complex<double> **Lmatrix_transform_emask;
-	//static double **Lmatrix_imgs_rvec_emask;
-	////static double *img_rvec_emask;
-	////static complex<double> *img_transform_emask;
-	////static fftw_plan fftplan_emask;
-	////static fftw_plan fftplan_inverse_emask;
-	//static fftw_plan *fftplans_Lmatrix_emask;
-	//static fftw_plan *fftplans_Lmatrix_inverse_emask;
-//#endif
-
-	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	double Gmatrix_log_determinant;
@@ -967,10 +951,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double find_surface_brightness(lensvector &pt);
 	void assign_Lmatrix(const bool delaunay, const bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
-	//void PSF_convolution_image_pixel_vector(bool verbal = false);
 	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
 	bool setup_convolution_FFT(const bool verbal);
-	bool setup_convolution_FFT_emask(const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
@@ -1151,8 +1133,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double& xiref, bool& linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots);
 	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const std::vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
 	void run_plotter(string plotcommand, string extra_command = "");
-	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");
-	void run_plotter_range(string plotcommand, string range, string extra_command = "");
+	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "", string extra_command2 = "");
+	void run_plotter_range(string plotcommand, string range, string extra_command = "", string extra_command2 = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
@@ -1301,11 +1283,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool output_scaled_percentiles_from_egrad_fits(const int srcnum, const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 	bool output_egrad_values_and_knots(const int srcnum,const string suffix);
 
-	void output_coolest_files(const string filename);
+	bool output_coolest_files(const string filename);
 
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	double chisq_single_evaluation(bool showdiag, bool show_status, bool show_lensinfo = false);
+	double chisq_single_evaluation(bool init_fitmodel, bool showdiag, bool show_status, bool show_lensinfo = false);
 	bool setup_fit_parameters(bool include_limits);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
@@ -1717,7 +1699,7 @@ struct DerivedParam
 					chisq_out = lens_in->raw_chisq;
 					lens_in->clear_raw_chisq();
 				} else {
-					chisq_out = lens_in->chisq_single_evaluation(false,false);
+					chisq_out = lens_in->chisq_single_evaluation(true,false,false);
 				}
 			}
 			return chisq_out;

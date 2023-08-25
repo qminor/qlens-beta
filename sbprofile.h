@@ -103,7 +103,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	static bool fourier_use_eccentric_anomaly; // use eccentric anomaly as angle for fourier modes? (preferable, but lensing multiploes must use polar angle)
 	static double zoom_split_factor; 
 	static double zoom_scale; 
-	static double SB_noise;
 	int ellipticity_mode;
 
 	public:
@@ -244,7 +243,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void update_scale_parameter(const double scale);
 
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
+	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4, const double sb_noise);
 
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }

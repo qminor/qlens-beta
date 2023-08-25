@@ -261,16 +261,19 @@ class ImagePixelGrid : public Sort
 	lensvector **center_sourcepts;
 	lensvector ***subpixel_center_pts;
 	lensvector ***subpixel_center_sourcepts;
+	double ***subpixel_surface_brightness;
 	double ***subpixel_sbweights;
+	int ***subpixel_index;
 
 	double **surface_brightness;
 	double **foreground_surface_brightness;
+	double **noise_map;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 	bool **fit_to_data;
 	double pixel_area, triangle_area; // half of pixel area
 	double min_srcplane_area;
-	double max_sb, pixel_noise;
+	double max_sb;
 	bool **maps_to_source_pixel;
 	int max_nsplit;
 	int **nsplits;
@@ -344,6 +347,7 @@ class ImagePixelGrid : public Sort
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
 	void ray_trace_pixels();
 	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
+	void setup_noise_map(QLens* lens_in);
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations(const bool verbal = false);
@@ -365,9 +369,19 @@ class ImagePixelGrid : public Sort
 	void plot_sourcepts(string outfile_root);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
-	void add_pixel_noise(const double& pixel_noise_sig);
-	void set_pixel_noise(const double& pn) { pixel_noise = pn; }
-	double calculate_signal_to_noise(const double& pixel_noise_sig, double &total_signal);
+	void add_pixel_noise();
+	void set_uniform_pixel_noise(const double pn)
+	{
+		if (noise_map != NULL) {
+			int i,j;
+			for (i=0; i < x_N; i++) {
+				for (j=0; j < y_N; j++) {
+					noise_map[i][j] = pn;
+				}
+			}
+		}
+	}
+	double calculate_signal_to_noise(double &total_signal);
 	void assign_image_mapping_flags(const bool delaunay);
 	int count_nonzero_source_pixel_mappings_cartesian();
 	int count_nonzero_source_pixel_mappings_delaunay();
@@ -391,7 +405,7 @@ struct ImagePixelData : public Sort
 	double *xvals, *yvals, *pixel_xcvals, *pixel_ycvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
-	double pixel_size, pixel_noise;
+	double pixel_size;
 	double global_max_sb;
 	double emask_rmax;
 	string data_fits_filename;
@@ -427,7 +441,19 @@ struct ImagePixelData : public Sort
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
 	void unload_noise_map();
 	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
-	void set_noise(const double noise) { pixel_noise = noise; }
+	void set_uniform_pixel_noise(const double noise)
+	{
+		if (noise_map != NULL) {
+			int i,j;
+			double covinv = 1.0/(noise*noise);
+			for (i=0; i < npixels_x; i++) {
+				for (j=0; j < npixels_y; j++) {
+					noise_map[i][j] = noise;
+					covinv_map[i][j] = covinv;
+				}
+			}
+		}
+	}
 	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
@@ -454,13 +480,11 @@ struct ImagePixelData : public Sort
 	void find_extended_mask_rmax();
 	void set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
 
-
 	long int get_size_of_extended_mask();
 	long int get_size_of_foreground_mask();
 	bool test_if_in_fit_region(const double& x, const double& y);
 	void set_lens(QLens* lensptr) {
 		lens = lensptr;
-		pixel_noise = lens->data_pixel_noise;
 		pixel_size = lens->data_pixel_size;
 	}
 
@@ -482,7 +506,7 @@ struct ImagePixelData : public Sort
 	void set_pixel_size(const double size) { pixel_size = size; }
 
 	bool fit_isophote(const double xi0, const double xistep, const int emode, const double qi, const double theta_i, const double xc_i, const double yc_i, const int max_it, IsophoteData& isophote_data, const bool use_polar_higher_harmonics = false, const bool verbose = true, SB_Profile* sbprofile = NULL, const int default_sampling_mode = 2, const int n_higher_harmonics = 2, const bool fix_center = false, const int max_xi_it = 10000, const double ximax_in = -1, const double rms_sbgrad_rel_threshold = 1.0, const double npts_frac = 0.5, const double rms_sbgrad_rel_transition = 0.3, const double npts_frac_zeroweight = 0.5);
-	double sample_ellipse(const bool show_warnings, const double xi, const double xistep, const double epsilon, const double theta, const double xc, const double yc, int& npts, int& npts_sample, const int emode, int& sampling_mode, double* sbvals = NULL, double* sbgrad_wgts = NULL, SB_Profile* sbprofile = NULL, const bool fill_matrices = false, double* sb_residual = NULL, double* sb_weights = NULL, double** smatrix = NULL, const int ni = 1, const int nf = 2, const bool use_polar_higher_harmonics = false, const bool plot_ellipse = false, ofstream* ellout = NULL);
+	double sample_ellipse(const bool show_warnings, const double xi, const double xistep, const double epsilon, const double theta, const double xc, const double yc, int& npts, int& npts_sample, const int emode, int& sampling_mode, const double pixel_noise, double* sbvals = NULL, double* sbgrad_wgts = NULL, SB_Profile* sbprofile = NULL, const bool fill_matrices = false, double* sb_residual = NULL, double* sb_weights = NULL, double** smatrix = NULL, const int ni = 1, const int nf = 2, const bool use_polar_higher_harmonics = false, const bool plot_ellipse = false, ofstream* ellout = NULL);
 	bool Cholesky_dcmp(double** a, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);

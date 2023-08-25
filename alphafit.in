@@ -52,7 +52,6 @@ fit run
 
 fit use_bestfit
 fit findimg # you can also do 'fit plotimg' to see the best-fit model image positions compared to the data
-pause
 fit chisq
 pause
 fit save_bestfit    # if you like the resulting fit, save the best-fit model (or do this automatically if 'auto_save_bestfit' is on)

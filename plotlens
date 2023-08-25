@@ -64,6 +64,20 @@ for VAR in "$@"; do
 		SET_CBRANGE=1
 	fi
 
+	if [[ $VAR == "cb6" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-6
+		CBMAX=6
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == "cb4" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-4
+		CBMAX=4
+		SET_CBRANGE=1
+	fi
+
 	if [[ $VAR == *'ncont='* ]]; then
 		NCONT=${VAR#ncont=}
 		INCLUDE_CONTOURS=1

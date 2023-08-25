@@ -43,9 +43,9 @@ class GaussPatterson
 {
      protected:
          double **pat_weights;
-         double *pat_points;
-			double *pat_funcs;
-			double *pat_funcs2;
+         double pat_points[512];
+			double pat_funcs[512];
+			//double pat_funcs_mult[512][6];
 			int *pat_orders;
          int pat_N;
 			double pat_tolerance, pat_tolerance_outer;

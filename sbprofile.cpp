@@ -17,7 +17,6 @@ bool SB_Profile::fourier_use_eccentric_anomaly = true;
 bool SB_Profile::fourier_sb_perturbation = false; // if true, add fourier modes to the surface brightness, rather than the elliptical radius
 double SB_Profile::zoom_split_factor = 2;
 double SB_Profile::zoom_scale = 4;
-double SB_Profile::SB_noise = 0.1; // used to help determine subpixel splittings to resolve SB profiles (zoom mode)
 
 SB_Profile::SB_Profile(const char *splinefile, const double &q_in, const double &theta_degrees,
 			const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, QLens* qlens_in)
@@ -1458,7 +1457,7 @@ double SB_Profile::surface_brightness(double x, double y)
 	return sb;
 }
 
-double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4)
+double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4, const double sb_noise)
 {
 	bool subgrid = false;
 	bool contains_sbcenter = false;
@@ -1525,7 +1524,7 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 			if (rmaxsq <= h) sbderiv2 = 2*rmax*(sb_rsq(rmaxsq + h) - sb_rsq(rmaxsq))/(h);
 			else sbderiv2 = 2*rmax*(sb_rsq(rmaxsq + h) - sb_rsq(rmaxsq-h))/(2*h);
 			double sbcurv_approx = sbderiv2-sbderiv1;
-			double optimal_scale = 4*epsilon*SB_noise/sbcurv_approx;
+			double optimal_scale = 4*epsilon*sb_noise/sbcurv_approx;
 			// Ideally, if the pixel size is greater than optimal scale, you'd increase the splittings, calculate sbcurv_approx again, and iterate until
 			// pixel size is small enough. But this seems to work well enough as it is.
 			double npix_approx = (rmax-rmin)/optimal_scale;
@@ -1993,6 +1992,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			double (Simplex::*loglikeptr)(double*);
 			if (egrad_mode==0) {
 				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike_bspline);
+				//cout << "Fitting " << profile_fit_nparams << " independent knot intervals" << endl;
 				for (i=0; i < profile_fit_nparams; i++) {
 					stepsizes[i] = fitparams[i]/4.0; // arbitrary
 				}
@@ -2097,17 +2097,21 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 	// here, the nonlinear parameters are the knots that are being optimized
 	int i;
 	double tot_interval = 0;
+	cout <<  "Current knot intervals: " << endl;
 	for (i=0; i < n_bspline_knots_tot-2*bspline_order-1; i++) {
+		cout << params[i] << " ";
 		if (abs(params[i]) < profile_fit_min_knot_interval) { warn("knot interval too small; skipping B-spline fit"); return 1e30; }
 		tot_interval += abs(params[i]);
 		profile_fit_egrad_params[bspline_order+i+1] = profile_fit_egrad_params[bspline_order+i] + abs(params[i]);
 	}
+	cout << "total interval: " << tot_interval << " ";
 	for (i=0; i < bspline_order; i++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+i] = profile_fit_egrad_params[n_bspline_knots_tot-bspline_order-1];
 
 	//update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
-	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) { warn("total interval too large (%g); skipping B-spline fit",pow(10,tot_interval)); return 1e30; } // penalty chisq
+	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) { cout << endl; warn("total interval too large (log: %g) (linear: %g); skipping B-spline fit",tot_interval,pow(10,tot_interval)); return 1e30; } // penalty chisq
 
 	double loglike = fit_bspline_curve(profile_fit_egrad_params,profile_fit_bspline_coefs);
+	cout << "loglike=" << loglike << endl;
 	return loglike;
 }
 

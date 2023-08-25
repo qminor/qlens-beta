@@ -2112,11 +2112,10 @@ bool Grid::run_newton(lensvector& xroot, const int& thread)
 	if (((xroot[0]==center_imgplane[0]) and (center_imgplane[0] != 0)) and ((xroot[1]==center_imgplane[1]) and (center_imgplane[1] != 0)))
 		warn(lens->newton_warnings, "Newton's method returned center of grid cell");
 	double mag = lens->magnification(xroot,thread,grid_zfactors,grid_betafactors);
-	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy)) {
+	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy) and (abs(mag) < 1e-3)) {
 		if (lens->newton_warnings==true) {
-			warn(lens->newton_warnings,"Newton's method found probable false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
+			warn(lens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
 		}
-		return false;
 	}
 	if (abs(mag) > lens->newton_magnification_threshold) {
 		if (lens->reject_himag_images) {
