@@ -445,7 +445,8 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 
 		if (nwords >= 2) {
 			int param_num;
-			if (!(ws[0] >> param_num)) die("Invalid parameter number");
+			if (words[0]=="last") param_num = numOfParam-1;
+			else if (!(ws[0] >> param_num)) die("Invalid parameter number");
 			if (param_num >= numOfParam) die("Parameter number does not exist");
 			if (transform_name) param_transforms[param_num].transform_param_name(new_name);
 			if (transform_latex_name) param_transforms[param_num].transform_latex_param_name(new_latex_name);

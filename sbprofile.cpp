@@ -2097,21 +2097,21 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 	// here, the nonlinear parameters are the knots that are being optimized
 	int i;
 	double tot_interval = 0;
-	cout <<  "Current knot intervals: " << endl;
+	//cout <<  "Current knot intervals: " << endl;
 	for (i=0; i < n_bspline_knots_tot-2*bspline_order-1; i++) {
-		cout << params[i] << " ";
+		//cout << params[i] << " ";
 		if (abs(params[i]) < profile_fit_min_knot_interval) { warn("knot interval too small; skipping B-spline fit"); return 1e30; }
 		tot_interval += abs(params[i]);
 		profile_fit_egrad_params[bspline_order+i+1] = profile_fit_egrad_params[bspline_order+i] + abs(params[i]);
 	}
-	cout << "total interval: " << tot_interval << " ";
+	//cout << "total interval: " << tot_interval << " ";
 	for (i=0; i < bspline_order; i++) profile_fit_egrad_params[n_bspline_knots_tot-bspline_order+i] = profile_fit_egrad_params[n_bspline_knots_tot-bspline_order-1];
 
 	//update_meta_parameters(); // this isn't really necessary now, but will become necessary if parameter transformations are made, e.g. ellipticity components
-	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) { cout << endl; warn("total interval too large (log: %g) (linear: %g); skipping B-spline fit",tot_interval,pow(10,tot_interval)); return 1e30; } // penalty chisq
+	if (tot_interval > 1.1*(log(xi_final_egrad/xi_initial_egrad)/ln10)) { warn("total interval too large (log: %g) (linear: %g); skipping B-spline fit",tot_interval,pow(10,tot_interval)); return 1e30; } // penalty chisq
 
 	double loglike = fit_bspline_curve(profile_fit_egrad_params,profile_fit_bspline_coefs);
-	cout << "loglike=" << loglike << endl;
+	//cout << "loglike=" << loglike << endl;
 	return loglike;
 }
 
