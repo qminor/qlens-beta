@@ -2618,52 +2618,9 @@ double LensProfile::potential_numerical(const double x, const double y)
 	if (!ellipticity_gradient) {
 		ans = 0.5*lens_integral.i_integral(converged);
 		warn_if_not_converged(converged,x,y);
-
-		//double h = 1e-5;
-		//LensIntegral lens_integral2(this,x-h,y,q);
-		//double ansmh = 0.5*lens_integral2.i_integral(converged);
-		//LensIntegral lens_integral3(this,x+h,y,q);
-		//double ansph = 0.5*lens_integral3.i_integral(converged);
-		//double defx = (ansph - ansmh) / (2*h);
-
-		//LensIntegral lens_integral4(this,x,y-h,q);
-		//ansmh = 0.5*lens_integral4.i_integral(converged);
-		//LensIntegral lens_integral5(this,x,y+h,q);
-		//ansph = 0.5*lens_integral5.i_integral(converged);
-		//double defy = (ansph - ansmh) / (2*h);
-		//cout << "DEFX=" << defx << " DEFY=" << defy << endl;
 	} else {
 		ans = 0.5*lens_integral.i_integral_egrad(converged);
 		warn_if_not_converged(converged,x,y);
-
-		//double xi = elliptical_radius_root(x,y);
-		//double epf, thetaf;
-		//ellipticity_function(xi,epf,thetaf);
-		//q = sqrt(1 - epf);
-		//cout << "SETTING q=" << q << endl;
-
-		//LensIntegral lens_integral0(this,x,y,q);
-		//double checkans = 0.5*lens_integral0.i_integral(converged);
-		//warn_if_not_converged(converged,x,y);
-		//cout << "POT: " << ans << " " << checkans << endl;
-
-		//double h = 1e-5;
-		//LensIntegral lens_integral2(this,x-h,y,q);
-		//double ansmh = 0.5*lens_integral2.i_integral_egrad(converged);
-		//LensIntegral lens_integral3(this,x+h,y,q);
-		//double ansph = 0.5*lens_integral3.i_integral_egrad(converged);
-		//double defx = (ansph - ansmh) / (2*h);
-
-		//LensIntegral lens_integral4(this,x,y-h,q);
-		//ansmh = 0.5*lens_integral4.i_integral_egrad(converged);
-		//LensIntegral lens_integral5(this,x,y+h,q);
-		//ansph = 0.5*lens_integral5.i_integral_egrad(converged);
-		//double defy = (ansph - ansmh) / (2*h);
-		//cout << "DEFX=" << defx << " DEFY=" << defy << endl;
-
-		//double ans2 = 0.5*lens_integral.i_integral(converged);
-		//warn_if_not_converged(converged,x,y);
-		//cout << "POT COMP: " << ans << " " << ans2 << endl;
 	}
 	return ans;
 }
@@ -2691,14 +2648,6 @@ double LensIntegral::i_integral(bool &converged)
 	{
 		double (LensIntegral::*iptr)(double) = &LensIntegral::i_integrand_prime;
 		ans = sqrt(1-epsilon)*PattersonIntegrate(iptr,0,1,converged);
-
-		//iptr = &LensIntegral::i_integrand_v2;
-		//double xisqf = (xsqval+ysqval/(1-epsilon))*fsqinv;
-		//double iint = PattersonIntegrate(iptr,0,sqrt(xisqf),converged);
-		//double qfactor = 1 - epsilon;
-		//double ans2 = sqrt(1-epsilon)*(iint + (2/epsilon)*profile->kappa_rsq(xisqf)*(xsqval*(1-pow(qfactor,0.5)) - ysqval*(1-pow(qfactor,-0.5))));
-		//double constterm = sqrt(1-epsilon)*((2/epsilon)*profile->kappa_rsq(xisqf)*(xsqval*(1-pow(qfactor,0.5)) - ysqval*(1-pow(qfactor,-0.5))));
-		//cout << "POT: " << ans << " " << ans2 << " border=" << constterm << " (q=" << sqrt(qfactor) << ")" << endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
 	{
@@ -2730,23 +2679,11 @@ double LensIntegral::j_integral(const int nval_in, bool &converged)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
 		ans = sqrt(1-epsilon)*PattersonIntegrate(jptr,0,1,converged);
-
-		//double (LensIntegral::*jptr2)(double) = &LensIntegral::j_integrand_v2;
-		//double qfactor = 1 - epsilon;
-		//double xisqf = (xsqval+ysqval/qfactor)*fsqinv;
-		//double ans2 = sqrt(1-epsilon)*(PattersonIntegrate(jptr2,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
-		//cout << "CHECK: " << ans << " " << ans2 << endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
 	{
 		double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_prime;
 		ans = sqrt(1-epsilon)*FejerIntegrate(jptr,0,1,converged);
-
-		//double (LensIntegral::*jptr2)(double) = &LensIntegral::j_integrand_v2;
-		//double qfactor = 1 - epsilon;
-		//double xisqf = (xsqval+ysqval/qfactor)*fsqinv;
-		//ans = sqrt(1-epsilon)*(FejerIntegrate(jptr2,0,sqrt(xisqf),converged) + profile->kappa_rsq(xisqf)*(1-pow(qfactor,mnval_plus_half))) / (epsilon*mnval_plus_half);
-		//cout << "CHECK: " << ans << " " << ans2 << endl;
 
 	}
 	else die("unknown integral method");
@@ -2756,7 +2693,6 @@ double LensIntegral::j_integral(const int nval_in, bool &converged)
 double LensIntegral::k_integral(const int nval_in, bool &converged)
 {
 	nval_plus_half = nval_in + 0.5;
-	//mnval_plus_half = -nval_in + 0.5;
 	converged = true; // will change if convergence not achieved
 	double ans;
 	if (profile->integral_method == Romberg_Integration)
@@ -2774,15 +2710,11 @@ double LensIntegral::k_integral(const int nval_in, bool &converged)
 	{
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
 		ans = sqrt(1-epsilon)*PattersonIntegrate(kptr,0,1,converged);
-		//double (LensIntegral::*kptr2)(double) = &LensIntegral::k_integrand_v2;
-		//cout << ans << " " << ans2 << endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
 	{
 		double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_prime;
 		ans = sqrt(1-epsilon)*FejerIntegrate(kptr,0,1,converged);
-		//double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_v2;
-		//ans = sqrt(1-epsilon)*FejerIntegrate(kptr,0,sqrt((xsqval+ysqval/(1-epsilon))*fsqinv),converged);
 	}
 
 	else die("unknown integral method");
@@ -2911,6 +2843,40 @@ double LensIntegral::i_integral_egrad(bool &converged)
 	return ans;
 }
 
+double LensIntegral::i_integrand_egrad(const double xi)
+{
+	xisq = xi*xi;
+	double theta, costh, sinth, xprime, yprime, qufactor, qval;
+	profile->ellipticity_function(xi,epsilon,theta);
+	qval = sqrt(1-epsilon);
+	fsqinv = (emode==0) ? 1 : qval;
+
+	costh=cos(theta);
+	sinth=sin(theta); // later, use trig identity to get sinth (don't forget to put in sign based on quadrant) to save a little time
+	xprime = xval*costh + yval*sinth;
+	yprime = -xval*sinth + yval*costh;
+
+	xsqval = xprime*xprime;
+	ysqval = yprime*yprime;
+	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
+	if (xisq > fsqinv*(xsqval+ysqval/(1-epsilon))) u = 1.0;
+	else if ((epsilon*xsqval) < 1e-4) u = xisq/qfac/fsqinv;
+	else u = (qfac - sqrt(qfac*qfac - 4*epsilon*xsqval*xisq/fsqinv)) / (2*epsilon*xsqval);
+	qufactor = sqrt(1-epsilon*u);
+
+	double inside_fac, outside_fac;
+	if (epsilon > 1e-4) {
+		inside_fac = (2/epsilon)*(xsqval*(1-qufactor) - ysqval*(1-1.0/qufactor)); // this is the contribution from work done moving through the inside of the plates
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-qval)/(1-qufactor)*(1+qufactor)/(1+qval))/fsqinv; // contribution from work done moving outside the plates
+	} else {
+		inside_fac = u*(xsqval + ysqval);
+		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-epsilon*u/4)/(1-epsilon/4)/u);
+	}
+	
+	return (2*xi*(-profile->kappa_rsq_deriv(xisq))*qval*(inside_fac+outside_fac));
+}
+
+/*
 double LensIntegral::j_integral_egrad(const int nval_in, bool &converged)
 {
 	converged = true; // will change if convergence not achieved
@@ -3057,40 +3023,9 @@ double LensIntegral::jprime_integral_egrad(const int nval_in, bool &converged)
 	else die("unknown integral method");
 	return ans;
 }
+*/
 
-double LensIntegral::i_integrand_egrad(const double xi)
-{
-	xisq = xi*xi;
-	double theta, costh, sinth, xprime, yprime, qufactor, qval;
-	profile->ellipticity_function(xi,epsilon,theta);
-	qval = sqrt(1-epsilon);
-	fsqinv = (emode==0) ? 1 : qval;
-
-	costh=cos(theta);
-	sinth=sin(theta); // later, use trig identity to get sinth (don't forget to put in sign based on quadrant) to save a little time
-	xprime = xval*costh + yval*sinth;
-	yprime = -xval*sinth + yval*costh;
-
-	xsqval = xprime*xprime;
-	ysqval = yprime*yprime;
-	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
-	if (xisq > fsqinv*(xsqval+ysqval/(1-epsilon))) u = 1.0;
-	else if ((epsilon*xsqval) < 1e-4) u = xisq/qfac/fsqinv;
-	else u = (qfac - sqrt(qfac*qfac - 4*epsilon*xsqval*xisq/fsqinv)) / (2*epsilon*xsqval);
-	qufactor = sqrt(1-epsilon*u);
-
-	double inside_fac, outside_fac;
-	if (epsilon > 1e-4) {
-		inside_fac = (2/epsilon)*(xsqval*(1-qufactor) - ysqval*(1-1.0/qufactor)); // this is the contribution from work done moving through the inside of the plates
-		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-qval)/(1-qufactor)*(1+qufactor)/(1+qval))/fsqinv; // contribution from work done moving outside the plates
-	} else {
-		inside_fac = u*(xsqval + ysqval);
-		outside_fac = (u==1.0) ? 0.0 : xisq*log((1-epsilon*u/4)/(1-epsilon/4)/u);
-	}
-	
-	return (2*xi*(-profile->kappa_rsq_deriv(xisq))*qval*(inside_fac+outside_fac));
-}
-
+/*
 double LensIntegral::j_integrand_egrad(const double xi)
 {
 	xisq = xi*xi;
@@ -3203,10 +3138,7 @@ double LensIntegral::jprime_integrand_egrad(const double xi)
 
 	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
-
-
-
-
+*/
 
 void LensIntegral::j_integral_egrad_mult(double *jint, bool &converged)
 {
@@ -3219,22 +3151,19 @@ void LensIntegral::j_integral_egrad_mult(double *jint, bool &converged)
 
 	double epf, thetaf;
 	profile->ellipticity_function(xif,epf,thetaf);
+	void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::j_integrand_egrad_mult;
 	if (profile->integral_method == Gaussian_Quadrature)
 	{
-		void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::j_integrand_egrad_mult;
 		GaussIntegrate(jptr,0,xif,jint,3);
 	}
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
-		void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::j_integrand_egrad_mult;
 		PattersonIntegrate(jptr,0,xif,jint,3,converged);
 	}
-	//else if (profile->integral_method == Fejer_Quadrature)
-	//{
-		//double (LensIntegral::*jptr)(double) = &LensIntegral::j_integrand_egrad;
-		//ans += 2*FejerIntegrate(jptr,0,xif,converged);
-
-	//}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		FejerIntegrate(jptr,0,xif,jint,3,converged);
+	}
 	else die("cannot use chosen integral method with egrad_mult");
 	for (int i=0; i < 3; i++) jint[i] *= 2;
 
@@ -3263,21 +3192,19 @@ void LensIntegral::k_integral_egrad_mult(double *kint, bool &converged)
 	double ans;
 
 	double xi = profile->elliptical_radius_root(xval,yval);
+	void (LensIntegral::*kptr)(const double, double*) = &LensIntegral::k_integrand_egrad_mult;
 	if (profile->integral_method == Gaussian_Quadrature)
 	{
-		void (LensIntegral::*kptr)(const double, double*) = &LensIntegral::k_integrand_egrad_mult;
 		GaussIntegrate(kptr,0,xi,kint,3);
 	}
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
-		void (LensIntegral::*kptr)(const double, double*) = &LensIntegral::k_integrand_egrad_mult;
 		PattersonIntegrate(kptr,0,xi,kint,3,converged);
 	}
-	//else if (profile->integral_method == Fejer_Quadrature)
-	//{
-		//double (LensIntegral::*kptr)(double) = &LensIntegral::k_integrand_egrad;
-		//ans = FejerIntegrate(kptr,0,xi,converged);
-	//}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		FejerIntegrate(kptr,0,xi,kint,3,converged);
+	}
 	else die("cannot use chosen integral method with egrad_mult");
 }
 
@@ -3293,21 +3220,19 @@ void LensIntegral::jprime_integral_egrad_mult(double *jint, bool &converged)
 
 	double epf, thetaf;
 	profile->ellipticity_function(xif,epf,thetaf);
+	void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::jprime_integrand_egrad_mult;
 	if (profile->integral_method == Gaussian_Quadrature)
 	{
-		void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::jprime_integrand_egrad_mult;
 		GaussIntegrate(jptr,0,xif,jint,2);
 	}
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
-		void (LensIntegral::*jptr)(const double, double*) = &LensIntegral::jprime_integrand_egrad_mult;
 		PattersonIntegrate(jptr,0,xif,jint,2,converged);
 	}
-	//else if (profile->integral_method == Fejer_Quadrature)
-	//{
-		//double (LensIntegral::*jptr)(double) = &LensIntegral::jprime_integrand_egrad;
-		//ans += 2*FejerIntegrate(jptr,0,xif,converged);
-	//}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		FejerIntegrate(jptr,0,xif,jint,2,converged);
+	}
 	else die("cannot use chosen integral method with egrad_mult");
 	jint[0] *= 2;
 	jint[1] *= 2;
@@ -3332,8 +3257,6 @@ void LensIntegral::jprime_integral_egrad_mult(double *jint, bool &converged)
 		for (int i=0; i < 2; i++) jint[i] += jfac*sqrt(1-epf)*(fac0[i] - fac1[i]); // This is the boundary term
 	}
 }
-
-
 
 void LensIntegral::j_integrand_egrad_mult(const double xi, double* jint)
 {
@@ -3802,8 +3725,6 @@ void LensIntegral::calculate_fourier_integrals(const int mval_in, const int four
 		cout << "CHECK(r=" << rval << "): " << ileftcheck << " " << ileft << " " << (abs((ileft-ileftcheck)/ileftcheck)) << " " << irightcheck << " " << iright << " " << (abs((iright-irightcheck)/irightcheck)) << endl;
 	}
 	*/
-
-
 }
 
 double LensIntegral::fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in)
@@ -3926,11 +3847,9 @@ double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double
 	double abavg = (a+b)/2, abdif = (b-a)/2;
 	converged = true; // until proven otherwise
 	double *weightptr;
-	//if (!include_endpoints) {
-		level = 1;
-		cc_funcs[0] = 0;
-		cc_funcs[profile->cc_N-1] = (this->*func)(abavg);
-	//}
+	level = 1;
+	cc_funcs[0] = 0;
+	cc_funcs[profile->cc_N-1] = (this->*func)(abavg);
 
 	int lval, j;
 	do {
@@ -3940,35 +3859,19 @@ double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double
 		istart = (profile->cc_N-1) / lval;
 		istep = istart*2;
 		result = 0;
-		//cout << "level=" << level << " lval=" << lval << " nlevs=" << profile->cc_nlevels << endl;
-		//if (level==0) {
-			//cc_funcs[0] = (this->*func)(abavg + abdif*cc_points[0]) + (this->*func)(abavg - abdif*cc_points[0]);
-			//cc_funcs[cc_N-1] = (this->*func)(abavg);
-			//result += cc_weights[0][1]*cc_funcs[cc_N-1];
-		//}
 		for (j=1, i=istart; j < lval; j += 2, i += istep) {
 			cc_funcs[i] = (this->*func)(abavg + abdif*cc_points[i]) + (this->*func)(abavg - abdif*cc_points[i]);
 			result += weightptr[j]*cc_funcs[i];
-			//cout << "WEIGHT: " << weightptr[j] << endl;
 		}
-		//if (include_endpoints) {
-			//for (j=0, i=0; j <= lval; j += 2, i += istep) {
-				//result += cc_weights[level][j]*cc_funcs[i];
-			//}
-		//} else {
-			for (j=2, i=istep; j <= lval; j += 2, i += istep) {
-				result += weightptr[j]*cc_funcs[i];
-			//cout << "WEIGHT: " << weightptr[j] << endl;
-			}
-		//}
+		for (j=2, i=istep; j <= lval; j += 2, i += istep) {
+			result += weightptr[j]*cc_funcs[i];
+		}
 		if ((level > 1) and (abs(result-result_old) < profile->cc_tolerance*abs(result))) break;
 	} while (++level < profile->cc_nlevels);
 
 	if (level==profile->cc_nlevels) {
 		if ((result*0.0 != 0.0) or (result > 1e100)) warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
 		converged = false;
-		//cout << "result=" << result << endl;
-		//int npoints = 2*profile->cc_lvals[profile->cc_nlevels-1] + 1;
 		// If Gauss-Legendre is set up with at least cc_N points, then switch to this to get a (hopefully) more accurate value
 		if (profile->numberOfPoints >= profile->cc_N) {
 			gausspoints = profile->points;
@@ -3980,14 +3883,6 @@ double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double
 		}
 		converged = false;
 	}
-
-
-	//cout << "INTEGRAL=" << (abdif*result) << endl;
-	//else {
-	//int npoints = 2*cc_lvals[level] - 1;
-	//cout << "Final level: " << (level) << " npoints=" << npoints << endl;
-	//}
-
 	return abdif*result;
 }
 
@@ -4095,87 +3990,94 @@ void LensIntegral::PattersonIntegrate(void (LensIntegral::*func)(const double, d
 		converged = false;
 	}
 
-	//cout << "INTEGRAL=" << (abdif*result) << endl;
-	for (k=0; k < n_funcs; k++) results[k] = abdif*results[k];
+	for (k=0; k < n_funcs; k++) results[k] *= abdif;
 	delete[] func_converged;
 	delete[] results_old;
 }
 
-/*
-double LensIntegral::FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged)
+void LensIntegral::FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged)
 {
 	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more
 	// points in case integrand doesn't converge easily
-	double result = 0, result_old;
-	int i, level = 0, istep, istart;
+	int i, j, k, level = 0, istep, istart;
 	double abavg = (a+b)/2, abdif = (b-a)/2;
-	converged = true; // until proven otherwise
+	converged = false;
 	double *weightptr;
-	//if (!include_endpoints) {
-		level = 1;
-		cc_funcs[0] = 0;
-		cc_funcs[profile->cc_N-1] = (this->*func)(abavg);
-	//}
 
-	int lval, j;
+	bool at_least_one_converged;
+	double *results_old = new double[n_funcs];
+	double *funcs = new double[n_funcs];
+	bool *func_converged = new bool[n_funcs];
+	for (k=0; k < n_funcs; k++) {
+		results[k] = 0;
+		func_converged[k] = false;
+	}
+
+	level = 1;
+	for (k=0; k < n_funcs; k++) cc_funcs_mult[k][0] = 0;
+	(this->*func)(abavg,cc_funcs_mult[profile->cc_N-1]);
+
+	int lval;
 	do {
+		//cout << "Level " << level << " (versus lmax=" << profile->cc_nlevels << ")" << endl;
 		weightptr = cc_weights[level];
-		result_old = result;
+		for (k=0; k < n_funcs; k++) {
+			results_old[k] = results[k];
+			//cout << "integral " << k << ": " << results[k] << endl;
+			results[k] = 0;
+		}
 		lval = profile->cc_lvals[level];
 		istart = (profile->cc_N-1) / lval;
 		istep = istart*2;
-		result = 0;
-		//cout << "level=" << level << " lval=" << lval << " nlevs=" << profile->cc_nlevels << endl;
-		//if (level==0) {
-			//cc_funcs[0] = (this->*func)(abavg + abdif*cc_points[0]) + (this->*func)(abavg - abdif*cc_points[0]);
-			//cc_funcs[cc_N-1] = (this->*func)(abavg);
-			//result += cc_weights[0][1]*cc_funcs[cc_N-1];
-		//}
 		for (j=1, i=istart; j < lval; j += 2, i += istep) {
-			cc_funcs[i] = (this->*func)(abavg + abdif*cc_points[i]) + (this->*func)(abavg - abdif*cc_points[i]);
-			result += weightptr[j]*cc_funcs[i];
-			//cout << "WEIGHT: " << weightptr[j] << endl;
-		}
-		//if (include_endpoints) {
-			//for (j=0, i=0; j <= lval; j += 2, i += istep) {
-				//result += cc_weights[level][j]*cc_funcs[i];
-			//}
-		//} else {
-			for (j=2, i=istep; j <= lval; j += 2, i += istep) {
-				result += weightptr[j]*cc_funcs[i];
-			//cout << "WEIGHT: " << weightptr[j] << endl;
+			(this->*func)(abavg + abdif*cc_points[i],funcs);
+			for (k=0; k < n_funcs; k++) cc_funcs_mult[i][k] = funcs[k];
+			(this->*func)(abavg - abdif*cc_points[i],funcs);
+			for (k=0; k < n_funcs; k++) {
+				cc_funcs_mult[i][k] += funcs[k];
+				results[k] += weightptr[j]*cc_funcs_mult[i][k];
 			}
-		//}
-		if ((level > 1) and (abs(result-result_old) < profile->cc_tolerance*abs(result))) break;
+		}
+		for (j=2, i=istep; j <= lval; j += 2, i += istep) {
+			for (k=0; k < n_funcs; k++) results[k] += weightptr[j]*cc_funcs_mult[i][k];
+		}
+		at_least_one_converged = false;
+		if (level > 1) {
+			for (k=0; k < n_funcs; k++) {
+				if (!func_converged[k]) {
+					if (abs(results[k]-results_old[k]) < profile->cc_tolerance*abs(results[k])) {
+						func_converged[k] = true;
+						at_least_one_converged = true;
+					}
+				}
+			}
+			if (at_least_one_converged) { // we won't bother to check if they're all converged, if we haven't had at least one integral converge
+				converged = true;
+				for (k=0; k < n_funcs; k++) {
+					if (!func_converged[k]) converged = false;
+				}
+			}
+			if (converged) {
+				break;
+			}
+		}
 	} while (++level < profile->cc_nlevels);
 
 	if (level==profile->cc_nlevels) {
-		if ((result*0.0 != 0.0) or (result > 1e100)) warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		for (k=0; k < n_funcs; k++) {
+			if ((results[k]*0.0 != 0.0) or (results[k] > 1e100)) warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		}
 		converged = false;
 		//cout << "result=" << result << endl;
 		//int npoints = 2*profile->cc_lvals[profile->cc_nlevels-1] + 1;
 		// If Gauss-Legendre is set up with at least cc_N points, then switch to this to get a (hopefully) more accurate value
-		if (profile->numberOfPoints >= profile->cc_N) {
-			gausspoints = profile->points;
-			gaussweights = profile->weights;
-
-			result = 0;
-			for (int i = 0; i < profile->numberOfPoints; i++)
-				result += gaussweights[i]*(this->*func)(abavg + abdif*gausspoints[i]);
-		}
-		converged = false;
 	}
 
-
-	//cout << "INTEGRAL=" << (abdif*result) << endl;
-	//else {
-	//int npoints = 2*cc_lvals[level] - 1;
-	//cout << "Final level: " << (level) << " npoints=" << npoints << endl;
-	//}
-
-	return abdif*result;
+	for (k=0; k < n_funcs; k++) results[k] *= abdif;
+	delete[] funcs;
+	delete[] func_converged;
+	delete[] results_old;
 }
-*/
 
 /*********************************** Functions for printing lens/parameter information *************************************/
 

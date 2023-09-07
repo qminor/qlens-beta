@@ -2281,7 +2281,6 @@ void SB_Profile::print_vary_parameters()
 	for (int i=0; i < n_params; i++) {
 		if (anchor_parameter_to_source[i]) {
 			parameter_anchored = true;
-			cout << "Parameter " << i << " is anchored" << endl;
 		}
 	}
 	if (parameter_anchored) {

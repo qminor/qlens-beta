@@ -120,14 +120,14 @@ class SourcePixelGrid
 
 	bool assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread);
 	void subcell_assign_source_mapping_flags_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread, bool& image_pixel_maps_to_source_grid);
-	void calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& Lmatrix_index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+	void calculate_Lmatrix_overlap(const int &img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	double find_lensed_surface_brightness_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	void find_lensed_surface_brightness_subcell_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness);
 
 	bool bisection_search_interpolate(lensvector &input_center_pt, const int& thread);
 	bool assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread, const int& image_pixel_i, const int& image_pixel_j);
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread);
-	void calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const double weight, const int& thread);
+	void calculate_Lmatrix_interpolate(const int img_index, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const double weight, const int& thread);
 	double find_lensed_surface_brightness_interpolate(lensvector &input_center_pt, const int& thread);
 	double find_local_magnification_interpolate(lensvector &input_center_pt, const int& thread);
 
@@ -228,7 +228,7 @@ class DelaunayGrid
 	double interpolate_surface_brightness(lensvector &input_pt);
 	bool assign_source_mapping_flags(lensvector &input_pt, vector<int>& mapped_delaunay_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
 	void record_srcpixel_mappings();
-	void calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
+	void calculate_Lmatrix(const int img_index, vector<int>& mapped_delaunay_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
@@ -263,7 +263,7 @@ class ImagePixelGrid : public Sort
 	lensvector ***subpixel_center_sourcepts;
 	double ***subpixel_surface_brightness;
 	double ***subpixel_sbweights;
-	int ***subpixel_index;
+	int **subpixel_index;
 
 	double **surface_brightness;
 	double **foreground_surface_brightness;

@@ -789,12 +789,21 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImagePixelGrid *image_pixel_grid;
 	ImagePixelData *image_pixel_data;
 	int image_npixels, source_npixels, source_n_amps;
+	int image_n_subpixels; // for supersampling
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
+	int *active_image_pixel_i_ss;
+	int *active_image_pixel_j_ss;
+	int *active_image_subpixel_ii;
+	int *active_image_subpixel_jj;
+	int *active_image_subpixel_ss;
+	int *image_pixel_i_from_subcell_ii;
+	int *image_pixel_j_from_subcell_jj;
 	int image_npixels_fgmask;
 	int *active_image_pixel_i_fgmask;
 	int *active_image_pixel_j_fgmask;
 	double *image_surface_brightness;
+	double *image_surface_brightness_supersampled;
 	double *imgpixel_covinv_vector;
 	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
@@ -917,14 +926,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_input_psf_matrix;
 	bool use_input_psf_ptsrc_matrix;
 	bool ignore_foreground_in_chisq;
-	double **psf_matrix, **foreground_psf_matrix;
+	double **psf_matrix;
 	Spline2D psf_spline;
+	double **supersampled_psf_matrix;
+	void generate_supersampled_PSF_matrix();
 	bool load_psf_fits(string fits_filename, const bool verbal);
-	bool save_psf_fits(string fits_filename);
-	void setup_foreground_PSF_matrix();
+	bool save_psf_fits(string fits_filename, const bool supersampled = false);
 	int psf_npixels_x, psf_npixels_y;
-	int foreground_psf_npixels_x, foreground_psf_npixels_y;
-	double psf_threshold, psf_ptsrc_threshold, foreground_psf_threshold;
+	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
+	double psf_threshold, psf_ptsrc_threshold;
 	int psf_ptsrc_nsplit; // allows for subpixel PSF
 	static bool setup_fft_convolution;
 	static double *psf_zvec; // for convolutions using FFT
@@ -950,14 +960,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void clear_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
 	void assign_Lmatrix(const bool delaunay, const bool verbal);
+	void assign_Lmatrix_supersampled(const bool delaunay, const bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
-	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
+	void PSF_convolution_pixel_vector(const bool foreground = false, const bool verbal = false, const bool no_fft = false);
+	void average_supersampled_image_surface_brightness();
+	void average_supersampled_dense_Lmatrix();
 	bool setup_convolution_FFT(const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
-	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength);
+	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
@@ -1009,7 +1022,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -1287,7 +1300,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	double chisq_single_evaluation(bool init_fitmodel, bool showdiag, bool show_status, bool show_lensinfo = false);
+	double chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool showdiag, bool show_status, bool show_lensinfo = false);
 	bool setup_fit_parameters(bool include_limits);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
@@ -1699,7 +1712,7 @@ struct DerivedParam
 					chisq_out = lens_in->raw_chisq;
 					lens_in->clear_raw_chisq();
 				} else {
-					chisq_out = lens_in->chisq_single_evaluation(true,false,false);
+					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
 				}
 			}
 			return chisq_out;

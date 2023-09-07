@@ -425,6 +425,7 @@ struct LensIntegral : public Romberg
 	double **pat_funcs_mult;
 	double *cc_points, **cc_weights;
 	double *cc_funcs;
+	double **cc_funcs_mult;
 	int n_mult;
 
 	LensIntegral()
@@ -462,7 +463,12 @@ struct LensIntegral : public Romberg
 		} else if (profile->integral_method==Fejer_Quadrature) {
 			cc_points = profile->cc_points;
 			cc_weights = profile->cc_weights;
-			cc_funcs = new double[profile->cc_N];
+			if (n_mult > 0) {
+				cc_funcs_mult = new double*[profile->cc_N];
+				for (int i=0; i < profile->cc_N; i++) cc_funcs_mult[i] = new double[n_mult];
+			} else {
+				cc_funcs = new double[profile->cc_N];
+			}
 		}
 	}
 	~LensIntegral() {
@@ -474,7 +480,12 @@ struct LensIntegral : public Romberg
 				delete[] pat_funcs;
 			}
 		} else if (profile->integral_method==Fejer_Quadrature) {
-			delete[] cc_funcs;
+			if (n_mult > 0) {
+				for (int i=0; i < profile->cc_N; i++) delete[] cc_funcs_mult[i];
+				delete[] cc_funcs_mult;
+			} else {
+				delete[] cc_funcs;
+			}
 		}
 	}
 	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
@@ -484,6 +495,7 @@ struct LensIntegral : public Romberg
 	// Functions for doing multiple integrals simulataneously
 	void GaussIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs);
 	void PattersonIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
+	void FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
 
 	double i_integrand_prime(const double w);
 	double j_integrand_prime(const double w);
@@ -496,14 +508,14 @@ struct LensIntegral : public Romberg
 	double k_integral(const int nval, bool &converged);
 
 	double i_integrand_egrad(const double w);
-	double j_integrand_egrad(const double w);
-	double k_integrand_egrad(const double w);
-	double jprime_integrand_egrad(const double w);
+	//double j_integrand_egrad(const double w);
+	//double k_integrand_egrad(const double w);
+	//double jprime_integrand_egrad(const double w);
 
 	double i_integral_egrad(bool &converged);
-	double j_integral_egrad(const int nval_in, bool &converged);
-	double k_integral_egrad(const int nval_in, bool &converged);
-	double jprime_integral_egrad(const int nval_in, bool &converged);
+	//double j_integral_egrad(const int nval_in, bool &converged);
+	//double k_integral_egrad(const int nval_in, bool &converged);
+	//double jprime_integral_egrad(const int nval_in, bool &converged);
 
 	void j_integrand_egrad_mult(const double w, double* jint);
 	void k_integrand_egrad_mult(const double w, double* kint);

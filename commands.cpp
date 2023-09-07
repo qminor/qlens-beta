@@ -1319,9 +1319,6 @@ void QLens::process_commands(bool read_file)
 								"  [-noptsrc] do not include the point source(s) when plotting the lensed images\n"
 								"  [-nosrcplot] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
-								"  [-reduce2/4/8] generate higher resolution image first, then reduces number of pixels by aver-\n"
-								"               aging 2x2 or 4x4 or 8x8 pixel groups to generate low-res pixel surface brightness\n"
-								"               values.\n"
 								"  [-replot] plots image that was previously found and plotted by the 'sbmap plotimg' command.\n"
 								"     This allows one to tweak plot parameters (range, show_cc etc.) without having to calculate\n"
 								"     the lensed pixel images again.\n\n"
@@ -5745,7 +5742,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> sbmax)) Complain("invalid max surface brightness parameter for model gaussian");
 					if (!(ws[3] >> sig)) Complain("invalid sigma parameter for model gaussian");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model gaussian");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model gaussian");
 						if (nwords == 7) {
@@ -5848,7 +5844,6 @@ void QLens::process_commands(bool read_file)
 						if (!(ws[pi++] >> scale)) Complain("invalid sigfac parameter for model shapelet");
 					}
 					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model shapelet");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= (pi+1)) {
 						if (!(ws[pi++] >> theta)) Complain("invalid theta parameter for model shapelet");
 						if (nwords == (pi+1)) {
@@ -5910,7 +5905,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> reff)) Complain("invalid R_eff parameter for model sersic");
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model sersic");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sersic");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sersic");
 						if (nwords == 8) {
@@ -5987,7 +5981,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[6] >> gamma)) Complain("invalid gamma parameter for model Csersic");
 					if (!(ws[7] >> alpha)) Complain("invalid alpha parameter for model Csersic");
 					if (!(ws[8] >> q)) Complain("invalid q parameter for model Csersic");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 10) {
 						if (!(ws[9] >> theta)) Complain("invalid theta parameter for model Csersic");
 						if (nwords == 11) {
@@ -6062,7 +6055,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[4] >> n)) Complain("invalid n parameter for model csersic");
 					if (!(ws[5] >> rc)) Complain("invalid rc parameter for model csersic");
 					if (!(ws[6] >> q)) Complain("invalid q parameter for model csersic");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 8) {
 						if (!(ws[7] >> theta)) Complain("invalid theta parameter for model csersic");
 						if (nwords == 9) {
@@ -6140,7 +6132,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[6] >> reff2)) Complain("invalid R_eff2 parameter for model dsersic");
 					if (!(ws[7] >> n2)) Complain("invalid n2 parameter for model dsersic");
 					if (!(ws[8] >> q)) Complain("invalid q parameter for model dsersic");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 10) {
 						if (!(ws[9] >> theta)) Complain("invalid theta parameter for model dsersic");
 						if (nwords == 11) {
@@ -6214,7 +6205,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> alpha)) Complain("invalid alpha parameter for model sple");
 					if (!(ws[4] >> s)) Complain("invalid s parameter for model sple");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model sple");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model sple");
 						if (nwords == 8) {
@@ -6288,7 +6278,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> a)) Complain("invalid a parameter for model dpie");
 					if (!(ws[4] >> s)) Complain("invalid s parameter for model dpie");
 					if (!(ws[5] >> q)) Complain("invalid q parameter for model dpie");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 7) {
 						if (!(ws[6] >> theta)) Complain("invalid theta parameter for model dpie");
 						if (nwords == 8) {
@@ -6361,7 +6350,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> s0)) Complain("invalid s0 parameter for model nfw");
 					if (!(ws[3] >> rs)) Complain("invalid rs parameter for model nfw");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model nfw");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model nfw");
 						if (nwords == 7) {
@@ -6508,7 +6496,6 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> sb)) Complain("invalid surface brightness normalization parameter for model tophat");
 					if (!(ws[3] >> rad)) Complain("invalid radius parameter for model tophat");
 					if (!(ws[4] >> q)) Complain("invalid q parameter for model tophat");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 6) {
 						if (!(ws[5] >> theta)) Complain("invalid theta parameter for model tophat");
 						if (nwords == 8) {
@@ -6564,7 +6551,6 @@ void QLens::process_commands(bool read_file)
 				if (nwords >= 4) {
 					double q, theta = 0, xc = 0, yc = 0, qx = 1, f = 1;
 					if (!(ws[3] >> q)) Complain("invalid q parameter");
-					if ((SB_Profile::use_sb_ellipticity_components==false) and (q <= 0)) Complain("axis ratio q must be greater than zero");
 					if (nwords >= 5) {
 						if (!(ws[4] >> theta)) Complain("invalid theta parameter");
 						if (nwords >= 7) {
@@ -7522,6 +7508,7 @@ void QLens::process_commands(bool read_file)
 					bool showdiag = false;
 					bool show_lensinfo = false;
 					bool temp_show_wtime = false;
+					bool show_total_wtime = false;
 					bool old_show_wtime = show_wtime;
 					bool init_fitmodel = true; // if set to false, will skip creating a separate "fitmodel" object and just use current qlens object as fitmodel
 					vector<string> args;
@@ -7529,7 +7516,8 @@ void QLens::process_commands(bool read_file)
 					{
 						int pos;
 						for (int i=0; i < args.size(); i++) {
-							if ((args[i]=="-wtime") or (args[i]=="-wt")) temp_show_wtime = true;
+							if ((args[i]=="-wtime") or (args[i]=="-w")) temp_show_wtime = true;
+							else if (args[i]=="-T") show_total_wtime = true;
 							else if (args[i]=="-diag") showdiag = true;
 							else if (args[i]=="-info") show_lensinfo = true;
 							else if ((args[i]=="-skipfm") or (args[i]=="-s")) init_fitmodel = false;
@@ -7542,7 +7530,7 @@ void QLens::process_commands(bool read_file)
 					get_n_fit_parameters(np);
 					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
 					if ((temp_show_wtime) and (!show_wtime)) show_wtime = true;
-					chisq_single_evaluation(init_fitmodel,showdiag,true,show_lensinfo);
+					chisq_single_evaluation(init_fitmodel,show_total_wtime,showdiag,true,show_lensinfo);
 					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 					if ((temp_show_wtime) and (!old_show_wtime)) show_wtime = false;
@@ -9162,12 +9150,24 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="savepsf")
 			{
 				string filename;
+				bool sup = false;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-supersampled") {
+							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to save supersampled PSF");
+							else sup = true;
+						}
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
 				if (nwords==2) {
 					Complain("filename for PSF in FITS format is required (e.g. 'sbmap savepsf file.fits')");
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap savepsf'");
-				if (!save_psf_fits(filename)) Complain("could not save PSF fits file '" << filename << "'");
+				if (!save_psf_fits(filename,sup)) Complain("could not save PSF fits file '" << filename << "'");
 			}
 			else if (words[1]=="unloadpsf")
 			{
@@ -9179,11 +9179,6 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 					delete[] psf_matrix;
 					psf_matrix = NULL;
-				}
-				if (foreground_psf_matrix != NULL) {
-					for (int i=0; i < foreground_psf_npixels_x; i++) delete[] foreground_psf_matrix[i];
-					delete[] foreground_psf_matrix;
-					foreground_psf_matrix = NULL;
 				}
 				psf_filename = "";
 			}
@@ -9203,13 +9198,22 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((mkpsf) and (nwords==3) and (words[2]=="-spline")) cubic_spline = true;
 				if (mkpsf) {
-					if (generate_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("could not generate PSF matrix from analytic model");
-					use_input_psf_matrix = true;
+					if (generate_PSF_matrix(pixel_xlength,pixel_ylength,false)==false) Complain("could not generate PSF matrix from analytic model");
 				}
 				if (cubic_spline) {
 					if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
 				}
-				if (mpi_id==0) cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
+				if (mkpsf) {
+					if (psf_supersampling) {
+						generate_supersampled_PSF_matrix();
+						//if (generate_PSF_matrix(pixel_xlength,pixel_ylength,true)==false) Complain("could not generate supersampled PSF matrix from analytic model");
+					}
+					use_input_psf_matrix = true;
+				}
+				if (mpi_id==0) {
+					cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
+					if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+				}
 			}
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
 			{
@@ -9707,7 +9711,6 @@ void QLens::process_commands(bool read_file)
 				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
 				bool omit_source_plot = true; // changed this to false because it's annoying to have the source plot come out when you really just want e.g. residuals.
-				int reduce_factor = 1;
 				bool offload_to_data = false;
 				bool omit_cc = false;
 				bool old_cc_setting = show_cc;
@@ -9753,10 +9756,6 @@ void QLens::process_commands(bool read_file)
 						else if ((args[i]=="-nosrc") or (args[i]=="-nosrcplot")) omit_source_plot = true;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
-						else if (args[i]=="-reduce2") reduce_factor = 2;
-						else if (args[i]=="-reduce4") reduce_factor = 4;
-						else if (args[i]=="-reduce8") reduce_factor = 8;
-						else if (args[i]=="-reduce10") reduce_factor = 10;
 						else if (args[i]=="-mkdata") offload_to_data = true;
 						else if (args[i]=="-pnoise") {
 							add_noise = true;
@@ -9869,7 +9868,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if ((subcomp) and (show_cc)) {
 								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							}
@@ -9901,9 +9900,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
+							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range1,contstring,cbstring);
 								else run_plotter_file("imgpixel",words[2],range1,contstring,cbstring);
@@ -9914,11 +9913,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
+								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs);
 								if ((plotted_src) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",reduce_factor,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs)==true)) {
 							if ((!replot) and (plotted_src)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
@@ -11554,7 +11553,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> threshold)) Complain("invalid PSF threshold");
 				if (threshold >= 1) Complain("psf threshold must be less than 1");
 				psf_threshold = threshold;
-				foreground_psf_threshold = threshold; // you should implement an option so foreground PSF threshold can be given separately
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "Point spread function (PSF) input threshold = " << psf_threshold << endl;
 			} else Complain("can only specify up to one argument for PSF input threshold");
@@ -12794,10 +12792,26 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="psf_supersampling")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "PSF supersampling: " << display_switch(psf_supersampling) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'PSF supersampling' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!split_imgpixels)) Complain("cannot use PSF supersampling unless 'split_imgpixels' is set to 'on'");
+				set_switch(psf_supersampling,setword);
+				if ((psf_supersampling) and (use_input_psf_matrix)) {
+					generate_supersampled_PSF_matrix();
+					if (mpi_id==0) {
+						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+					}
+				}
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="split_himag_imgpixels")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Split high-magnification image pixels when ray tracing: " << display_switch(split_high_mag_imgpixels) << endl;
+				if (mpi_id==0) cout << "Split only high-magnification image pixels when ray tracing: " << display_switch(split_high_mag_imgpixels) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_himag_imgpixels' command; must specify 'on' or 'off'");
 				set_switch(split_high_mag_imgpixels,setword);
@@ -12834,6 +12848,13 @@ void QLens::process_commands(bool read_file)
 					image_pixel_grid->delete_ray_tracing_arrays();
 					image_pixel_grid->setup_ray_tracing_arrays();
 					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
+				}
+				if ((psf_supersampling) and (use_input_psf_matrix)) {
+					if (mpi_id==0) cout << "Generating new supersampled PSF matrix..." << endl;
+					generate_supersampled_PSF_matrix();
+					if (mpi_id==0) {
+						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+					}
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
@@ -13235,6 +13256,7 @@ void QLens::process_commands(bool read_file)
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
+			//generate_supersampled_PSF_matrix();
 			/*
 			int iter = 20;
 			if (nwords==2) {

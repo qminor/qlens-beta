@@ -1799,7 +1799,7 @@ void SourcePixelGrid::subcell_assign_source_mapping_flags_overlap(lensvector **i
 	}
 }
 
-void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int &image_pixel_i, const int &image_pixel_j, int& index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
+void SourcePixelGrid::calculate_Lmatrix_overlap(const int &img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread)
 {
 	double overlap, total_overlap=0;
 	int i,j,k;
@@ -2071,17 +2071,17 @@ bool SourcePixelGrid::subcell_assign_source_mapping_flags_interpolate(lensvector
 	return image_pixel_maps_to_source_grid;
 }
 
-void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
+void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, int& index, lensvector &input_center_pt, const int& ii, const double weight, const int& thread)
 {
 	for (int i=0; i < 3; i++) {
 		//cout << "What " << i << endl;
 		//cout << "ii=" << ii << " trying index " << (3*ii+i) << endl;
 		//cout << "imgpix: " << image_pixel_i << " " << image_pixel_j << endl;
 		//cout << "size: " << image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j].size() << endl;
-		if (image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i] == NULL) return; // in this case, subpixel does not map to anything
-		lens->Lmatrix_index_rows[img_index].push_back(image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i]->active_index);
+		if (mapped_cartesian_srcpixels[3*ii+i] == NULL) return; // in this case, subpixel does not map to anything
+		lens->Lmatrix_index_rows[img_index].push_back(mapped_cartesian_srcpixels[3*ii+i]->active_index);
 		//cout << "What? " << i << endl;
-		interpolation_pts[i][thread] = &image_pixel_grid->mapped_cartesian_srcpixels[image_pixel_i][image_pixel_j][3*ii+i]->center_pt;
+		interpolation_pts[i][thread] = &mapped_cartesian_srcpixels[3*ii+i]->center_pt;
 	}
 
 	if (lens->interpolate_sb_3pt) {
@@ -3663,12 +3663,12 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 	return true;
 }
 
-void DelaunayGrid::calculate_Lmatrix(const int img_index, const int image_pixel_i, const int image_pixel_j, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread)
+void DelaunayGrid::calculate_Lmatrix(const int img_index, vector<int>& mapped_delaunay_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread)
 {
 	int vertex_index;
 	bool novertex = false;
 	for (int i=0; i < 3; i++) {
-		vertex_index = image_pixel_grid->mapped_delaunay_srcpixels[image_pixel_i][image_pixel_j][3*ii+i];
+		vertex_index = mapped_delaunay_srcpixels[3*ii+i];
 		if (vertex_index == -1) {
 			novertex = true;
 			break;
@@ -5240,11 +5240,6 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 		delete[] psf_matrix;
 		psf_matrix = NULL;
 	}
-	if (foreground_psf_matrix != NULL) {
-		for (i=0; i < foreground_psf_npixels_x; i++) delete[] foreground_psf_matrix[i];
-		delete[] foreground_psf_matrix;
-		foreground_psf_matrix = NULL;
-	}
 
 	double **input_psf_matrix;
 
@@ -5333,25 +5328,6 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 		}
 	}
 
-	//imid = nx/2;
-	//jmid = ny/2;
-	//imin = imid;
-	//imax = imid;
-	//jmin = jmid;
-	//jmax = jmid;
-	//for (i=0; i < nx; i++) {
-		//for (j=0; j < ny; j++) {
-			//if (input_psf_matrix[i][j] > foreground_psf_threshold*peak_sb) {
-				//if (i < imin) imin=i;
-				//if (i > imax) imax=i;
-				//if (j < jmin) jmin=j;
-				//if (j > jmax) jmax=j;
-			//}
-		//}
-	//}
-	//nx_half = (imax-imin+1)/2;
-	//ny_half = (jmax-jmin+1)/2;
-	setup_foreground_PSF_matrix();
 	//for (i=0; i < psf_npixels_x; i++) {
 		//for (j=0; j < psf_npixels_y; j++) {
 			//cout << psf_matrix[i][j] << " ";
@@ -5362,7 +5338,6 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 
 	if ((verbal) and (mpi_id==0)) {
 		cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << " (input PSF dimensions: " << nx << " " << ny << ")" << endl;
-		cout << "Foreground PSF matrix dimensions: " << foreground_psf_npixels_x << " " << foreground_psf_npixels_y << endl;
 		//cout << "PSF normalization =" << normalization << endl << endl;
 	}
 	for (i=0; i < nx; i++) delete[] input_psf_matrix[i];
@@ -5374,7 +5349,7 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 #endif
 }
 
-bool QLens::save_psf_fits(string fits_filename)
+bool QLens::save_psf_fits(string fits_filename, const bool supersampled)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
@@ -5383,11 +5358,26 @@ bool QLens::save_psf_fits(string fits_filename)
 	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
 	int bitpix = -64, naxis = 2;
+	int nx, ny;
+	double **psf;
 	if (psf_matrix == NULL) {
 		warn("no PSF matrix has been loaded or generated; cannot save PSF to FITS file");
 		return false;
 	}
-	long naxes[2] = {psf_npixels_x,psf_npixels_y};
+	if ((supersampled) and (supersampled_psf_matrix == NULL)) {
+		warn("no supersampled PSF matrix has been loaded or generated; cannot save PSF to FITS file");
+		return false;
+	}
+	if (supersampled) {
+		nx = supersampled_psf_npixels_x;
+		ny = supersampled_psf_npixels_y;
+		psf = supersampled_psf_matrix;
+	} else {
+		nx = psf_npixels_x;
+		ny = psf_npixels_y;
+		psf = psf_matrix;
+	}
+	long naxes[2] = {nx,ny};
 	double *pixels;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
 
@@ -5401,17 +5391,42 @@ bool QLens::save_psf_fits(string fits_filename)
 				kk=0;
 				long fpixel[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-				pixels = new double[psf_npixels_x];
+				pixels = new double[nx];
 
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
-					for (i=0; i < psf_npixels_x; i++) {
-						pixels[i] = psf_matrix[i][j];
+					for (i=0; i < nx; i++) {
+						pixels[i] = psf[i][j];
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
 				delete[] pixels;
 			}
+
+				/*
+				// for playing around with supersampling
+				pixels = new double[psf_npixels_x*4];
+
+				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; j++)
+				{
+					int k=0;
+					for (i=0; i < psf_npixels_x; i++) {
+						pixels[k++] = psf_matrix[i][j];
+						pixels[k++] = psf_matrix[i][j];
+						pixels[k++] = psf_matrix[i][j];
+						pixels[k++] = psf_matrix[i][j];
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					fpixel[1]++;
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					fpixel[1]++;
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					fpixel[1]++;
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					fpixel[1]++;
+				}
+				*/
+
 		}
 		fits_close_file(outfptr, &status);
 	} 
@@ -5420,34 +5435,6 @@ bool QLens::save_psf_fits(string fits_filename)
 	psf_filename = fits_filename;
 	return true;
 #endif
-}
-
-void QLens::setup_foreground_PSF_matrix()
-{
-	// right now, we're just making foreground PSF same as regular PSF. Maybe later we'll allow for a custom PSF for the foreground galaxy?
-	foreground_psf_npixels_x = psf_npixels_x;
-	foreground_psf_npixels_y = psf_npixels_y;
-	//int nx_half = foreground_psf_npixels_x/2;
-	//int ny_half = foreground_psf_npixels_y/2;
-	foreground_psf_matrix = new double*[foreground_psf_npixels_x];
-	int i,j;
-	for (i=0; i < foreground_psf_npixels_x; i++) {
-		foreground_psf_matrix[i] = new double[foreground_psf_npixels_y];
-		for (j=0; j < foreground_psf_npixels_y; j++) {
-			foreground_psf_matrix[i][j] = psf_matrix[i][j];
-		}
-	}
-	//double normalization = 0;
-	//for (i=0; i < foreground_psf_npixels_x; i++) {
-		//for (j=0; j < foreground_psf_npixels_y; j++) {
-			//normalization += foreground_psf_matrix[i][j];
-		//}
-	//}
-	//for (i=0; i < psf_npixels_x; i++) {
-		//for (j=0; j < psf_npixels_y; j++) {
-			//foreground_psf_matrix[i][j] /= normalization;
-		//}
-	//}
 }
 
 ImagePixelData::~ImagePixelData()
@@ -8106,7 +8093,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	noise_map = new double*[x_N];
 	source_plane_triangle1_area = new double*[x_N];
 	source_plane_triangle2_area = new double*[x_N];
-	max_nsplit = imax(18,lens->default_imgpixel_nsplit);
+	max_nsplit = imax(12,lens->default_imgpixel_nsplit);
 	//max_nsplit = lens->default_imgpixel_nsplit;
 	nsplits = new int*[x_N];
 	subpixel_maps_to_srcpixel = new bool**[x_N];
@@ -8114,7 +8101,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	subpixel_center_sourcepts = new lensvector**[x_N];
 	subpixel_surface_brightness = new double**[x_N];
 	subpixel_sbweights = new double**[x_N];
-	subpixel_index = new int**[x_N];
+	subpixel_index = new int*[x_N*max_nsplit];
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
 
@@ -8142,7 +8129,6 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_center_sourcepts[i] = new lensvector*[y_N];
 		subpixel_surface_brightness[i] = new double*[y_N];
 		subpixel_sbweights[i] = new double*[y_N];
-		subpixel_index[i] = new int*[y_N];
 		nsplits[i] = new int[y_N];
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
@@ -8158,9 +8144,13 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_surface_brightness[i][j] = new double[max_nsplit*max_nsplit];
 			subpixel_sbweights[i][j] = new double[max_nsplit*max_nsplit];
-			subpixel_index[i][j] = new int[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
+	}
+	int max_subpixel_nx = x_N*max_nsplit;
+	int max_subpixel_ny = y_N*max_nsplit;
+	for (i=0; i < max_subpixel_nx; i++) {
+		subpixel_index[i] = new int[max_subpixel_ny];
 	}
 	set_null_ray_tracing_arrays();
 }
@@ -9688,11 +9678,15 @@ int ImagePixelGrid::count_nonzero_source_pixel_mappings_cartesian()
 {
 	int tot=0;
 	int i,j,k,img_index;
+	//if (lens->psf_supersampling) nsubpix = SQR(lens->default_imgpixel_nsplit);
 	for (img_index=0; img_index < lens->image_npixels; img_index++) {
 		i = lens->active_image_pixel_i[img_index];
 		j = lens->active_image_pixel_j[img_index];
 		for (k=0; k < mapped_cartesian_srcpixels[i][j].size(); k++) {
-			if (mapped_cartesian_srcpixels[i][j][k] != NULL) tot++;
+			if (mapped_cartesian_srcpixels[i][j][k] != NULL) {
+				 tot++;
+				//else tot += nsubpix;
+			}
 		}
 		//tot += mapped_cartesian_srcpixels[i][j].size();
 	}
@@ -9703,11 +9697,13 @@ int ImagePixelGrid::count_nonzero_source_pixel_mappings_delaunay()
 {
 	int tot=0;
 	int i,j,k,img_index;
+	//if (lens->psf_supersampling) nsubpix = SQR(lens->default_imgpixel_nsplit);
 	for (img_index=0; img_index < lens->image_npixels; img_index++) {
 		i = lens->active_image_pixel_i[img_index];
 		j = lens->active_image_pixel_j[img_index];
 		for (k=0; k < mapped_delaunay_srcpixels[i][j].size(); k++) {
-			tot++;
+			 tot++;
+			//else tot += nsubpix;
 			//if (mapped_delaunay_srcpixels[i][j][k] != -1) tot++;
 		}
 		//tot += mapped_delaunay_srcpixels[i][j].size();
@@ -9995,8 +9991,8 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								} else if (!lensed_sources_only) {
 									if (!lens->sb_list[k]->zoom_subgridding) sb = lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
 									else {
-										subpixel_xlength = pixel_xlength/sqrt(nsubpix);
-										subpixel_ylength = pixel_ylength/sqrt(nsubpix);
+										subpixel_xlength = pixel_xlength/nsplits[i][j];
+										subpixel_ylength = pixel_ylength/nsplits[i][j];
 										corner1[0] = center_pt[subcell_index][0] - subpixel_xlength/2;
 										corner1[1] = center_pt[subcell_index][1] - subpixel_ylength/2;
 										corner2[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
@@ -10864,13 +10860,15 @@ ImagePixelGrid::~ImagePixelGrid()
 			delete[] subpixel_center_sourcepts[i][j];
 			delete[] subpixel_surface_brightness[i][j];
 			delete[] subpixel_sbweights[i][j];
-			delete[] subpixel_index[i][j];
 		}
 		delete[] subpixel_maps_to_srcpixel[i];
 		delete[] subpixel_center_pts[i];
 		delete[] subpixel_center_sourcepts[i];
 		delete[] subpixel_surface_brightness[i];
 		delete[] subpixel_sbweights[i];
+	}
+	int max_subpixel_nx = x_N*max_nsplit;
+	for (int i=0; i < max_subpixel_nx; i++) {
 		delete[] subpixel_index[i];
 	}
 	delete[] center_pts;
@@ -10878,6 +10876,7 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] maps_to_source_pixel;
 	delete[] pixel_index;
 	delete[] pixel_index_fgmask;
+	delete[] subpixel_index;
 	delete[] mapped_cartesian_srcpixels;
 	delete[] mapped_delaunay_srcpixels;
 	delete[] foreground_surface_brightness;
@@ -10890,7 +10889,6 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] subpixel_center_sourcepts;
 	delete[] subpixel_surface_brightness;
 	delete[] subpixel_sbweights;
-	delete[] subpixel_index;
 	delete[] nsplits;
 	delete[] twist_status;
 	delete[] twist_pts;
@@ -10905,6 +10903,7 @@ ImagePixelGrid::~ImagePixelGrid()
 
 bool QLens::assign_pixel_mappings(bool verbal)
 {
+	int i, j, ii, jj, subcell_index, nsubpix, image_pixel_index=0, image_subpixel_index=0;
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -10948,12 +10947,46 @@ bool QLens::assign_pixel_mappings(bool verbal)
 		}
 	}
 
+	if (psf_supersampling) {
+		int nsub=0;
+		for (j=0; j < image_pixel_grid->y_N; j++) {
+			for (i=0; i < image_pixel_grid->x_N; i++) {
+				if (image_pixel_grid->maps_to_source_pixel[i][j]) {
+					if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
+					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+					nsub += nsubpix;
+				}
+			}
+		}
+		image_n_subpixels = nsub;
+	}
+
 	image_npixels = image_pixel_grid->n_active_pixels;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
 	active_image_pixel_i = new int[image_npixels];
 	active_image_pixel_j = new int[image_npixels];
-	int i, j, subcell_index, nsubpix, image_pixel_index=0, image_subpixel_index=0;
+
+	if (psf_supersampling) {
+		active_image_pixel_i_ss = new int[image_n_subpixels];
+		active_image_pixel_j_ss = new int[image_n_subpixels];
+		active_image_subpixel_ss = new int[image_n_subpixels];
+		active_image_subpixel_ii = new int[image_n_subpixels];
+		active_image_subpixel_jj = new int[image_n_subpixels];
+		image_pixel_i_from_subcell_ii = new int[image_pixel_grid->x_N*default_imgpixel_nsplit];
+		image_pixel_j_from_subcell_jj = new int[image_pixel_grid->y_N*default_imgpixel_nsplit];
+		for (j=0; j < image_pixel_grid->y_N; j++) {
+			for (i=0; i < image_pixel_grid->x_N; i++) {
+				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+					ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+					jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+					image_pixel_i_from_subcell_ii[ii] = i;
+					image_pixel_j_from_subcell_jj[jj] = j;
+				}
+			}
+		}
+	}
+
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
 			if (image_pixel_grid->maps_to_source_pixel[i][j]) {
@@ -10962,11 +10995,32 @@ bool QLens::assign_pixel_mappings(bool verbal)
 				image_pixel_grid->pixel_index[i][j] = image_pixel_index++;
 				if (psf_supersampling) {
 					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+					if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
 					for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-						image_pixel_grid->subpixel_index[i][j][subcell_index] = image_subpixel_index++;
+						active_image_pixel_i_ss[image_subpixel_index] = i;
+						active_image_pixel_j_ss[image_subpixel_index] = j;
+						ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+						jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+						active_image_subpixel_ii[image_subpixel_index] = ii;
+						active_image_subpixel_jj[image_subpixel_index] = jj;
+
+						//cout << "SUBCELL: " << active_image_subpixel_ii[image_subpixel_index] << " " << active_image_subpixel_jj[image_subpixel_index] << " " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][0] << " " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][1] << endl;
+
+						active_image_subpixel_ss[image_subpixel_index] = subcell_index;
+						image_pixel_grid->subpixel_index[ii][jj] = image_subpixel_index++;
+						//cout << image_subpixel_index << " (total=" << image_n_subpixels << ")" << endl;
 					}
 				}
-			} else image_pixel_grid->pixel_index[i][j] = -1;
+			} else {
+				image_pixel_grid->pixel_index[i][j] = -1;
+				if (psf_supersampling) {
+					for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+						ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+						jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+						image_pixel_grid->subpixel_index[ii][jj] = -1;
+					}
+				}
+			}
 		}
 	}
 	if (image_pixel_index != image_npixels) die("Number of active pixels (%i) doesn't seem to match image_npixels (%i)",image_pixel_index,image_npixels);
@@ -11037,6 +11091,7 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	if (image_surface_brightness != NULL) die("image surface brightness vector already initialized");
 	if (active_image_pixel_i == NULL) die("Need to assign pixel mappings before initializing pixel matrices");
 	image_surface_brightness = new double[image_npixels];
+	if (psf_supersampling) image_surface_brightness_supersampled = new double[image_n_subpixels];
 	imgpixel_covinv_vector = new double[image_npixels];
 	source_pixel_vector = new double[source_n_amps];
 	point_image_surface_brightness = new double[image_npixels];
@@ -11068,7 +11123,8 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	}
 	if ((mpi_id==0) and (verbal)) cout << "Expected Lmatrix_n_elements=" << Lmatrix_n_elements << endl << flush;
 	Lmatrix_index = new int[Lmatrix_n_elements];
-	image_pixel_location_Lmatrix = new int[image_npixels+1];
+	if (!psf_supersampling) image_pixel_location_Lmatrix = new int[image_npixels+1];
+	else image_pixel_location_Lmatrix = new int[image_n_subpixels+1];
 	Lmatrix = new double[Lmatrix_n_elements];
 	if (include_imgfluxes_in_inversion) {
 		int nimgs = 0;
@@ -11077,7 +11133,8 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Creating Lmatrix...\n";
-	assign_Lmatrix(delaunay,verbal);
+	if (!psf_supersampling) assign_Lmatrix(delaunay,verbal);
+	else assign_Lmatrix_supersampled(delaunay,verbal);
 }
 
 void QLens::count_shapelet_npixels()
@@ -11144,6 +11201,13 @@ void QLens::clear_pixel_matrices()
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
+	if (active_image_pixel_i_ss != NULL) delete[] active_image_pixel_i_ss;
+	if (active_image_pixel_j_ss != NULL) delete[] active_image_pixel_j_ss;
+	if (active_image_subpixel_ss != NULL) delete[] active_image_subpixel_ss;
+	if (active_image_subpixel_ii != NULL) delete[] active_image_subpixel_ii;
+	if (active_image_subpixel_jj != NULL) delete[] active_image_subpixel_jj;
+	if (image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_i_from_subcell_ii;
+	if (image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_j_from_subcell_jj;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
 	if (Lmatrix != NULL) delete[] Lmatrix;
@@ -11157,6 +11221,13 @@ void QLens::clear_pixel_matrices()
 	//lumreg_pixel_weights = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
+	active_image_subpixel_ii = NULL;
+	active_image_subpixel_jj = NULL;
+	active_image_pixel_i_ss = NULL;
+	active_image_pixel_j_ss = NULL;
+	active_image_subpixel_ss = NULL;
+	image_pixel_i_from_subcell_ii = NULL;
+	image_pixel_j_from_subcell_jj = NULL;
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -11229,7 +11300,6 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 	}
 	else // interpolate
 	{
-		int max_nsplit = image_pixel_grid->max_nsplit;
 		#pragma omp parallel
 		{
 			int thread;
@@ -11239,10 +11309,10 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 			thread = 0;
 #endif
 			int nsubpix,subcell_index;
-			lensvector *center_srcpt, *center_pt;
+			lensvector *center_srcpt;
 
 			if (split_imgpixels) {
-				#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt,center_pt) schedule(dynamic)
+				#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt) schedule(dynamic)
 				for (img_index=0; img_index < image_npixels; img_index++) {
 					index = 0;
 					i = active_image_pixel_i[img_index];
@@ -11250,16 +11320,15 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 
 					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
 					center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
-					center_pt = image_pixel_grid->subpixel_center_pts[i][j];
 					if (delaunay) {
 						if (delaunay_srcgrid != NULL) {
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-								delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+								delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
 							}
 						}
 					} else {
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-							source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							source_pixel_grid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
 						}
 					}
 					Lmatrix_row_nn[img_index] = index;
@@ -11272,10 +11341,10 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 					j = active_image_pixel_j[img_index];
 					if (delaunay) {
 						if (delaunay_srcgrid != NULL) {
-							delaunay_srcgrid->calculate_Lmatrix(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+							delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
 						}
 					} else {
-						source_pixel_grid->calculate_Lmatrix_interpolate(img_index,i,j,index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+						source_pixel_grid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
 					}
 					Lmatrix_row_nn[img_index] = index;
 				}
@@ -11306,6 +11375,81 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 #endif
 	if ((mpi_id==0) and (verbal)) {
 		int Lmatrix_ntot = source_n_amps*image_npixels;
+		double sparseness = ((double) Lmatrix_n_elements)/Lmatrix_ntot;
+		cout << "image has " << image_pixel_grid->n_active_pixels << " active pixels, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
+	}
+
+	delete[] Lmatrix_row_nn;
+	delete[] Lmatrix_rows;
+	delete[] Lmatrix_index_rows;
+}
+
+void QLens::assign_Lmatrix_supersampled(const bool delaunay, const bool verbal)
+{
+	int img_index;
+	int index;
+	int i,j;
+	Lmatrix_rows = new vector<double>[image_n_subpixels];
+	Lmatrix_index_rows = new vector<int>[image_n_subpixels];
+	int *Lmatrix_row_nn = new int[image_n_subpixels];
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		int nsubpix,subcell_index;
+		lensvector *center_srcpt;
+
+		#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt) schedule(dynamic)
+		for (img_index=0; img_index < image_n_subpixels; img_index++) {
+			index = 0;
+			i = active_image_pixel_i_ss[img_index];
+			j = active_image_pixel_j_ss[img_index];
+			subcell_index = active_image_subpixel_ss[img_index];
+
+			center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
+			if (delaunay) {
+				if (delaunay_srcgrid != NULL) { // this might be the case if we're only doing point sources but happen to be in delaunay source mode
+						delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
+				}
+			} else {
+				source_pixel_grid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
+			}
+			Lmatrix_row_nn[img_index] = index;
+		}
+	}
+
+	image_pixel_location_Lmatrix[0] = 0;
+	for (img_index=0; img_index < image_n_subpixels; img_index++) {
+		image_pixel_location_Lmatrix[img_index+1] = image_pixel_location_Lmatrix[img_index] + Lmatrix_row_nn[img_index];
+	}
+	if (image_pixel_location_Lmatrix[img_index] != Lmatrix_n_elements) die("Number of supersampled Lmatrix elements don't match (%i vs %i)",image_pixel_location_Lmatrix[img_index],Lmatrix_n_elements);
+
+	index=0;
+	for (i=0; i < image_n_subpixels; i++) {
+		for (j=0; j < Lmatrix_row_nn[i]; j++) {
+			Lmatrix[index] = Lmatrix_rows[i][j];
+			Lmatrix_index[index] = Lmatrix_index_rows[i][j];
+			index++;
+		}
+	}
+
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for constructing Lmatrix: " << wtime << endl;
+	}
+#endif
+	if ((mpi_id==0) and (verbal)) {
+		int Lmatrix_ntot = source_n_amps*image_n_subpixels;
 		double sparseness = ((double) Lmatrix_n_elements)/Lmatrix_ntot;
 		cout << "image has " << image_pixel_grid->n_active_pixels << " active pixels, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
 	}
@@ -11415,7 +11559,7 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
-	else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
+	else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) return;
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (sparse)...\n";
 	double nx_half, ny_half;
 	nx_half = psf_npixels_x/2;
@@ -11605,14 +11749,27 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 
 void QLens::convert_Lmatrix_to_dense()
 {
-	int i,j;
-	Lmatrix_dense.input(image_npixels,source_n_amps);
+#ifdef USE_OPENMP
+		if (show_wtime) {
+			wtime0 = omp_get_wtime();
+		}
+#endif
+	int i,j,npix;
+	if (!psf_supersampling) npix = image_npixels;
+	else npix = image_n_subpixels;
+	Lmatrix_dense.input(npix,source_n_amps);
 	Lmatrix_dense = 0;
-	for (i=0; i < image_npixels; i++) {
+	for (i=0; i < npix; i++) {
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			Lmatrix_dense[i][Lmatrix_index[j]] += Lmatrix[j];
 		}
 	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime = omp_get_wtime() - wtime0;
+		if (mpi_id==0) cout << "Wall time for converting Lmatrix to dense form: " << wtime << endl;
+	}
+#endif
 }
 
 bool QLens::setup_convolution_FFT(const bool verbal)
@@ -11623,25 +11780,40 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 	}
 #endif
 	int npix;
-	int *pixel_map_i, *pixel_map_j;
-	npix = image_npixels;
-	pixel_map_i = active_image_pixel_i;
-	pixel_map_j = active_image_pixel_j;
+	int *pixel_map_ii, *pixel_map_jj;
+	double **psf;
+	int psf_nx, psf_ny;
+	if (!psf_supersampling) {
+		psf = psf_matrix;
+		psf_nx = psf_npixels_x;
+		psf_ny = psf_npixels_y;
+		npix = image_npixels;
+		pixel_map_ii = active_image_pixel_i;
+		pixel_map_jj = active_image_pixel_j;
+	} else {
+		psf = supersampled_psf_matrix;
+		psf_nx = supersampled_psf_npixels_x;
+		psf_ny = supersampled_psf_npixels_y;
+		npix = image_n_subpixels;
+		pixel_map_ii = active_image_subpixel_ii;
+		pixel_map_jj = active_image_subpixel_jj;
+	}
+
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return false;
-	}
-	else {
+	} else {
 		if ((psf_width_x==0) and (psf_width_y==0)) return false;
-		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
+		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) {
 			if (verbal) warn("could not generate_PSF matrix");
 			return false;
 		}
+		if (mpi_id==0) cout << "generated PSF matrix" << endl;
 	}
 	int nx_half, ny_half;
-	nx_half = psf_npixels_x/2;
-	ny_half = psf_npixels_y/2;
+	nx_half = psf_nx/2;
+	ny_half = psf_nx/2;
 
-	int i,j,k,img_index;
+	int i,j,ii,jj,k,img_index;
 	fft_ni = 1;
 	fft_nj = 1;
 	fft_imin = 50000;
@@ -11651,17 +11823,24 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 
 	for (img_index=0; img_index < npix; img_index++)
 	{
-		i = pixel_map_i[img_index];
-		j = pixel_map_j[img_index];
+		ii = pixel_map_ii[img_index];
+		jj = pixel_map_jj[img_index];
+		if (psf_supersampling) {
+			i = image_pixel_i_from_subcell_ii[ii];
+			j = image_pixel_j_from_subcell_jj[jj];
+		} else {
+			i = ii;
+			j = jj;
+		}
 		if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-			if (i > imax) imax = i;
-			if (j > jmax) jmax = j;
-			if (i < fft_imin) fft_imin = i;
-			if (j < fft_jmin) fft_jmin = j;
+			if (ii > imax) imax = ii;
+			if (jj > jmax) jmax = jj;
+			if (ii < fft_imin) fft_imin = ii;
+			if (jj < fft_jmin) fft_jmin = jj;
 		}
 	}
-	il0 = 1+imax-fft_imin + psf_npixels_x; // will pad with extra zeros to avoid edge effects (wraparound of PSF blurring)
-	jl0 = 1+jmax-fft_jmin + psf_npixels_y;
+	il0 = 1+imax-fft_imin + psf_nx; // will pad with extra zeros to avoid edge effects (wraparound of PSF blurring)
+	jl0 = 1+jmax-fft_jmin + psf_ny;
 
 #ifdef USE_FFTW
 	fft_ni = il0;
@@ -11699,18 +11878,18 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 #endif
 	int zpsf_i, zpsf_j;
 	int l;
-	for (i=-nx_half; i < psf_npixels_x - nx_half; i++) {
-		for (j=-ny_half; j < psf_npixels_y - ny_half; j++) {
+	for (i=-nx_half; i < psf_nx - nx_half; i++) {
+		for (j=-ny_half; j < psf_ny - ny_half; j++) {
 			zpsf_i=i;
 			zpsf_j=j;
 			if (zpsf_i < 0) zpsf_i += fft_ni;
 			if (zpsf_j < 0) zpsf_j += fft_nj;
 #ifdef USE_FFTW
 			l = zpsf_j*fft_ni + zpsf_i;
-			psf_rvec[l] = psf_matrix[nx_half+i][ny_half+j];
+			psf_rvec[l] = psf[nx_half+i][ny_half+j];
 #else
 			k = 2*(zpsf_j*fft_ni + zpsf_i);
-			psf_zvec[k] = psf_matrix[nx_half+i][ny_half+j];
+			psf_zvec[k] = psf[nx_half+i][ny_half+j];
 #endif
 		}
 	}
@@ -11776,9 +11955,27 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 	if (source_npixels > 0) {
 		if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (dense)...\n";
 
-		double nx_half, ny_half;
-		nx_half = psf_npixels_x/2;
-		ny_half = psf_npixels_y/2;
+		int nx_half, ny_half;
+		int psf_nx, psf_ny;
+		int npix;
+		int *pixel_map_ii, *pixel_map_jj;
+
+		if (!psf_supersampling) {
+			npix = image_npixels;
+			psf_nx = psf_npixels_x;
+			psf_ny = psf_npixels_y;
+			pixel_map_ii = active_image_pixel_i;
+			pixel_map_jj = active_image_pixel_j;
+		} else {
+			npix = image_n_subpixels;
+			psf_nx = supersampled_psf_npixels_x;
+			psf_ny = supersampled_psf_npixels_y;
+			pixel_map_ii = active_image_subpixel_ii;
+			pixel_map_jj = active_image_subpixel_jj;
+		}
+		nx_half = psf_nx/2;
+		ny_half = psf_ny/2;
+		int i,j,ii,jj,k,l,img_index;
 
 		if (fft_convolution) {
 			if (!setup_fft_convolution) {
@@ -11787,11 +11984,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 					return;	
 				}
 			}
-			int *pixel_map_i, *pixel_map_j;
-			pixel_map_i = active_image_pixel_i;
-			pixel_map_j = active_image_pixel_j;
 
-			int i,j,k,l,img_index;
 
 #ifdef USE_FFTW
 			int ncomplex = fft_nj*(fft_ni/2+1);
@@ -11818,7 +12011,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			double *img_zvec, *img_rvec;
 			complex<double> *img_cvec;
 			int src_index;
-			#pragma omp parallel for private(k,i,j,l,img_index,src_index,img_zvec,img_rvec,img_cvec,rtemp,itemp) schedule(static)
+			#pragma omp parallel for private(k,i,j,ii,jj,l,img_index,src_index,img_zvec,img_rvec,img_cvec,rtemp,itemp) schedule(static)
 			for (src_index=0; src_index < source_npixels; src_index++) {
 #ifdef USE_FFTW
 				img_rvec = Lmatrix_imgs_rvec[src_index];
@@ -11828,21 +12021,27 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 				img_zvec = Lmatrix_imgs_zvec[src_index];
 				for (j=0; j < nzvec; j++) img_zvec[j] = 0;
 #endif
-				for (img_index=0; img_index < image_npixels; img_index++)
+				for (img_index=0; img_index < npix; img_index++)
 				{
-					i = pixel_map_i[img_index];
-					j = pixel_map_j[img_index];
+					ii = pixel_map_ii[img_index];
+					jj = pixel_map_jj[img_index];
+					if (psf_supersampling) {
+						i = image_pixel_i_from_subcell_ii[ii];
+						j = image_pixel_j_from_subcell_jj[jj];
+					} else {
+						i = ii;
+						j = jj;
+					}
 					if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-						i -= fft_imin;
-						j -= fft_jmin;
+						ii -= fft_imin;
+						jj -= fft_jmin;
 #ifdef USE_FFTW
-						l = j*fft_ni + i;
+						l = jj*fft_ni + ii;
 						img_rvec[l] = Lmatrix_dense[img_index][src_index];
 #else
-						k = 2*(j*fft_ni + i);
+						k = 2*(jj*fft_ni + ii);
 						img_zvec[k] = Lmatrix_dense[img_index][src_index];
 #endif
-
 					}
 				}
 
@@ -11865,18 +12064,25 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 				fourier_transform(img_zvec,2,nnvec,-1);
 #endif
 
-				for (img_index=0; img_index < image_npixels; img_index++)
+				for (img_index=0; img_index < npix; img_index++)
 				{
-					i = pixel_map_i[img_index];
-					j = pixel_map_j[img_index];
+					ii = pixel_map_ii[img_index];
+					jj = pixel_map_jj[img_index];
+					if (psf_supersampling) {
+						i = image_pixel_i_from_subcell_ii[ii];
+						j = image_pixel_j_from_subcell_jj[jj];
+					} else {
+						i = ii;
+						j = jj;
+					}
 					if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-						i -= fft_imin;
-						j -= fft_jmin;
+						ii -= fft_imin;
+						jj -= fft_jmin;
 #ifdef USE_FFTW
-						l = j*fft_ni + i;
+						l = jj*fft_ni + ii;
 						Lmatrix_dense[img_index][src_index] = img_rvec[l];
 #else
-						k = 2*(j*fft_ni + i);
+						k = 2*(jj*fft_ni + ii);
 						Lmatrix_dense[img_index][src_index] = img_zvec[k];
 #endif
 					}
@@ -11898,11 +12104,25 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			if (use_input_psf_matrix) {
 				if (psf_matrix == NULL) return;
 			}
-			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) return;
+			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) return;
 
-			double **Lmatrix_psf = new double*[image_npixels];
-			int i,j;
-			for (i=0; i < image_npixels; i++) {
+			int **pix_index;
+			double **psf;
+			int max_nx, max_ny;
+			if (!psf_supersampling) {
+				psf = psf_matrix;
+				pix_index = image_pixel_grid->pixel_index;
+				max_nx = image_pixel_grid->x_N;
+				max_ny = image_pixel_grid->y_N;
+			} else {
+				psf = supersampled_psf_matrix;
+				pix_index = image_pixel_grid->subpixel_index;
+				max_nx = image_pixel_grid->x_N*default_imgpixel_nsplit;
+				max_ny = image_pixel_grid->y_N*default_imgpixel_nsplit;
+			}
+
+			double **Lmatrix_psf = new double*[npix];
+			for (i=0; i < npix; i++) {
 				Lmatrix_psf[i] = new double[source_n_amps];
 				for (j=0; j < source_n_amps; j++) Lmatrix_psf[i][j] = 0;
 			}
@@ -11912,8 +12132,6 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 				wtime0 = omp_get_wtime();
 			}
 #endif
-
-			int k,l;
 			int psf_k, psf_l;
 			int img_index1, img_index2, src_index, col_index;
 			int index;
@@ -11921,21 +12139,28 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			int Lmatrix_psf_nn=0;
 			int Lmatrix_psf_nn_part=0;
 			double *lmatptr, *lmatpsfptr, psfval;
-			#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,src_index,psf_k,psf_l,lmatptr,lmatpsfptr,psfval) schedule(static) reduction(+:Lmatrix_psf_nn_part)
-			for (img_index1=0; img_index1 < image_npixels; img_index1++)
+			#pragma omp parallel for private(k,l,i,j,ii,jj,img_index1,img_index2,src_index,psf_k,psf_l,lmatptr,lmatpsfptr,psfval) schedule(static) reduction(+:Lmatrix_psf_nn_part)
+			for (img_index1=0; img_index1 < npix; img_index1++)
 			{ // this loops over columns of the PSF blurring matrix
 				int col_i=0;
-				k = active_image_pixel_i[img_index1];
-				l = active_image_pixel_j[img_index1];
-				for (psf_k=0; psf_k < psf_npixels_x; psf_k++) {
-					i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
-					if ((i >= 0) and (i < image_pixel_grid->x_N)) {
-						for (psf_l=0; psf_l < psf_npixels_y; psf_l++) {
-							j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
-							psfval = psf_matrix[psf_k][psf_l];
-							if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+				k = pixel_map_ii[img_index1];
+				l = pixel_map_jj[img_index1];
+				for (psf_k=0; psf_k < psf_nx; psf_k++) {
+					ii = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
+					if ((ii >= 0) and (ii < max_nx)) {
+						for (psf_l=0; psf_l < psf_ny; psf_l++) {
+							jj = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
+							if ((jj >= 0) and (jj < max_ny)) {
+								if (psf_supersampling) {
+									i = image_pixel_i_from_subcell_ii[ii];
+									j = image_pixel_j_from_subcell_jj[jj];
+								} else {
+									i = ii;
+									j = jj;
+								}
 								if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-									img_index2 = image_pixel_grid->pixel_index[i][j];
+									psfval = psf[psf_k][psf_l];
+									img_index2 = pix_index[ii][jj];
 									lmatptr = Lmatrix_dense.subarray(img_index2);
 									lmatpsfptr = Lmatrix_psf[img_index1];
 									for (src_index=0; src_index < source_npixels; src_index++) {
@@ -11959,7 +12184,9 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			}
 #endif
 		}
+		if (psf_supersampling) average_supersampled_dense_Lmatrix();
 	}
+
 	if (include_imgfluxes_in_inversion) {
 		int i,j,k;
 		double *Lmatptr;
@@ -11987,7 +12214,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 	}
 }
 
-void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground, const bool verbal)
+void QLens::PSF_convolution_pixel_vector(const bool foreground, const bool verbal, const bool no_fft)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -11995,23 +12222,55 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 	}
 #endif
 	if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+	double *surface_brightness_vector;
+	if (foreground) surface_brightness_vector = sbprofile_surface_brightness;
+	else {
+		if (psf_supersampling) surface_brightness_vector = image_surface_brightness_supersampled;
+		else surface_brightness_vector = image_surface_brightness;
+	}
 
 	int nx_half, ny_half;
+	int psf_nx, psf_ny;
 
-	if ((!foreground) and (fft_convolution)) {
-		nx_half = psf_npixels_x/2;
-		ny_half = psf_npixels_y/2;
+	if (!psf_supersampling) {
+		psf_nx = psf_npixels_x;
+		psf_ny = psf_npixels_y;
+	} else {
+		psf_nx = supersampled_psf_npixels_x;
+		psf_ny = supersampled_psf_npixels_y;
+	}
+	nx_half = psf_nx/2;
+	ny_half = psf_ny/2;
+
+	int npix;
+	int *pixel_map_ii, *pixel_map_jj;
+	if (foreground) {
+		npix = image_npixels_fgmask;
+		pixel_map_ii = active_image_pixel_i_fgmask;
+		pixel_map_jj = active_image_pixel_j_fgmask;
+	} else {
+		if (!psf_supersampling) {
+			npix = image_npixels;
+			pixel_map_ii = active_image_pixel_i;
+			pixel_map_jj = active_image_pixel_j;
+		} else {
+			npix = image_n_subpixels;
+			pixel_map_ii = active_image_subpixel_ii;
+			pixel_map_jj = active_image_subpixel_jj;
+		}
+	}
+
+	int i,j,ii,jj,k,img_index;
+	if ((!foreground) and (fft_convolution) and (!no_fft)) {
 		if (!setup_fft_convolution) {
 			if (!setup_convolution_FFT(verbal)) {
 				warn("PSF convolution FFT failed");
 				return;	
 			}
 		}
-		int *pixel_map_i, *pixel_map_j;
-		pixel_map_i = active_image_pixel_i;
-		pixel_map_j = active_image_pixel_j;
-
-		int i,j,k,img_index;
+		//int *pixel_map_i, *pixel_map_j;
+		//pixel_map_i = active_image_pixel_i;
+		//pixel_map_j = active_image_pixel_j;
 
 #ifdef USE_FFTW
 		int ncomplex = fft_nj*(fft_ni/2+1);
@@ -12031,18 +12290,25 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 #ifndef USE_FFTW
 		for (i=0; i < nzvec; i++) img_zvec[i] = 0;
 #endif
-		for (img_index=0; img_index < image_npixels; img_index++)
+		for (img_index=0; img_index < npix; img_index++)
 		{
-			i = pixel_map_i[img_index];
-			j = pixel_map_j[img_index];
+			ii = pixel_map_ii[img_index];
+			jj = pixel_map_jj[img_index];
+			if (psf_supersampling) {
+				i = image_pixel_i_from_subcell_ii[ii];
+				j = image_pixel_j_from_subcell_jj[jj];
+			} else {
+				i = ii;
+				j = jj;
+			}
 			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-				i -= fft_imin;
-				j -= fft_jmin;
+				ii -= fft_imin;
+				jj -= fft_jmin;
 #ifdef USE_FFTW
-				l = j*fft_ni + i;
+				l = jj*fft_ni + ii;
 				img_rvec[l] = surface_brightness_vector[img_index];
 #else
-				k = 2*(j*fft_ni + i);
+				k = 2*(jj*fft_ni + ii);
 				img_zvec[k] = surface_brightness_vector[img_index];
 #endif
 			}
@@ -12084,18 +12350,25 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		fourier_transform(img_zvec,2,nnvec,-1);
 #endif
 
-		for (img_index=0; img_index < image_npixels; img_index++)
+		for (img_index=0; img_index < npix; img_index++)
 		{
-			i = pixel_map_i[img_index];
-			j = pixel_map_j[img_index];
+			ii = pixel_map_ii[img_index];
+			jj = pixel_map_jj[img_index];
+			if (psf_supersampling) {
+				i = image_pixel_i_from_subcell_ii[ii];
+				j = image_pixel_j_from_subcell_jj[jj];
+			} else {
+				i = ii;
+				j = jj;
+			}
 			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
-				i -= fft_imin;
-				j -= fft_jmin;
+				ii -= fft_imin;
+				jj -= fft_jmin;
 #ifdef USE_FFTW
-				l = j*fft_ni + i;
+				l = jj*fft_ni + ii;
 				surface_brightness_vector[img_index] = img_rvec[l];
 #else
-				k = 2*(j*fft_ni + i);
+				k = 2*(jj*fft_ni + ii);
 				surface_brightness_vector[img_index] = img_zvec[k];
 #endif
 			}
@@ -12112,71 +12385,93 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 		delete[] img_zvec;
 #endif
 	} else {
-		int npix;
-		int *pixel_map_i, *pixel_map_j;
 		int **pix_index;
 		double **psf;
-		int psf_nx, psf_ny;
-		if (foreground) {
-			npix = image_npixels_fgmask;
-			pixel_map_i = active_image_pixel_i_fgmask;
-			pixel_map_j = active_image_pixel_j_fgmask;
-			pix_index = image_pixel_grid->pixel_index_fgmask;
-			psf = foreground_psf_matrix;
-			psf_nx = foreground_psf_npixels_x;
-			psf_ny = foreground_psf_npixels_y;
-			if (use_input_psf_matrix) {
-				if (foreground_psf_matrix == NULL) return;
+		int max_nx, max_ny;
+
+		if (use_input_psf_matrix) {
+			if (!psf_supersampling) {
+				if (psf_matrix == NULL) {
+					if (verbal) warn("could not find input PSF matrix");
+					return;
+				}
 			} else {
-				if ((psf_width_x==0) and (psf_width_y==0)) return;
-				else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
-					if (verbal) warn("could not generate_PSF matrix");
+				if (supersampled_psf_matrix == NULL) {
+					if (verbal) warn("could not find input supersampled PSF matrix");
+					average_supersampled_image_surface_brightness();
 					return;
 				}
 			}
 		} else {
-			if (use_input_psf_matrix) {
-				if (psf_matrix == NULL) return;
-			} else {
-				if ((psf_width_x==0) and (psf_width_y==0)) return;
-				else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength)==false) {
-					if (verbal) warn("could not generate_PSF matrix");
-					return;
-				}
+			if ((psf_width_x==0) and (psf_width_y==0)) {
+				if (psf_supersampling) average_supersampled_image_surface_brightness();
+				return;
 			}
-			npix = image_npixels;
-			pixel_map_i = active_image_pixel_i;
-			pixel_map_j = active_image_pixel_j;
-			pix_index = image_pixel_grid->pixel_index;
+			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) {
+				if (verbal) warn("could not generate_PSF matrix");
+				return;
+			}
+			if (mpi_id==0) cout << "generated PSF matrix" << endl;
+		}
+		if (!psf_supersampling) {
 			psf = psf_matrix;
 			psf_nx = psf_npixels_x;
 			psf_ny = psf_npixels_y;
+		} else {
+			psf = supersampled_psf_matrix;
+			psf_nx = supersampled_psf_npixels_x;
+			psf_ny = supersampled_psf_npixels_y;
 		}
-		nx_half = psf_nx/2;
-		ny_half = psf_ny/2;
+
+		if (foreground) {
+			pix_index = image_pixel_grid->pixel_index_fgmask;
+			max_nx = image_pixel_grid->x_N;
+			max_ny = image_pixel_grid->y_N;
+		} else {
+			if (!psf_supersampling) {
+				pix_index = image_pixel_grid->pixel_index;
+				max_nx = image_pixel_grid->x_N;
+				max_ny = image_pixel_grid->y_N;
+			} else {
+				pix_index = image_pixel_grid->subpixel_index;
+				max_nx = image_pixel_grid->x_N*default_imgpixel_nsplit;
+				max_ny = image_pixel_grid->y_N*default_imgpixel_nsplit;
+			}
+		}
+		cout << "npix=" << npix << " psf_nx=" << psf_nx << " psf_ny=" << psf_ny << " nxhalf=" << nx_half << " nyhalf=" << ny_half << endl;
 
 		double *new_surface_brightness_vector = new double[npix];
-		int i,j,k,l;
+		int l;
 		int psf_k, psf_l;
-		int img_index1, img_index2;
-		#pragma omp parallel for private(k,l,i,j,img_index1,img_index2,psf_k,psf_l) schedule(static)
-		for (img_index1=0; img_index1 < npix; img_index1++)
+		int img_index2;
+		#pragma omp parallel for private(k,l,i,j,ii,jj,img_index,img_index2,psf_k,psf_l) schedule(static)
+		for (img_index=0; img_index < npix; img_index++)
 		{ // this loops over columns of the PSF blurring matrix
-			new_surface_brightness_vector[img_index1] = 0;
-			k = pixel_map_i[img_index1];
-			l = pixel_map_j[img_index1];
+			new_surface_brightness_vector[img_index] = 0;
+			k = pixel_map_ii[img_index];
+			l = pixel_map_jj[img_index];
 			for (psf_k=0; psf_k < psf_nx; psf_k++) {
-				i = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
-				if ((i >= 0) and (i < image_pixel_grid->x_N)) {
+				ii = k + nx_half - psf_k; // Note, 'k' is the index for the convolved image, so we have k = i - nx_half + psf_k
+				if ((ii >= 0) and (ii < max_nx)) {
+					//cout << "ii=" << ii << " versus max_nx=" << max_nx << endl;
 					for (psf_l=0; psf_l < psf_ny; psf_l++) {
-						j = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
-						if ((j >= 0) and (j < image_pixel_grid->y_N)) {
+						jj = l + ny_half - psf_l; // Note, 'l' is the index for the convolved image, so we have l = j - ny_half + psf_l
+						if ((jj >= 0) and (jj < max_ny)) {
+							//cout << "k-ii=" << (k-ii) << " l-jj=" << (l-jj) << endl;
+							if (psf_supersampling) {
+								i = image_pixel_i_from_subcell_ii[ii];
+								j = image_pixel_j_from_subcell_jj[jj];
+							} else {
+								i = ii;
+								j = jj;
+							}
+							//cout << "i=" << i << " ii=" << ii << ", j=" << j << " jj=" << jj << endl;
 							// THIS IS VERY CLUMSY! RE-IMPLEMENT IN A MORE ELEGANT WAY?
 							if (((foreground) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_data->foreground_mask[i][j]))) or  
 							((!foreground) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])))) {
-								img_index2 = pix_index[i][j];
-								new_surface_brightness_vector[img_index1] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
-								//cout << "PSF: " << psf_k << " " << psf_l << " " << psf[psf_k][psf_l] << endl;
+								img_index2 = pix_index[ii][jj];
+								new_surface_brightness_vector[img_index] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
+								//cout << "PSF: " << psf_k << " " << psf_l << " " << psf[psf_k][psf_l] << " " << surface_brightness_vector[img_index2] << " " << new_surface_brightness_vector[img_index] << endl;
 							}
 						}
 					}
@@ -12193,14 +12488,59 @@ void QLens::PSF_convolution_pixel_vector(double *surface_brightness_vector, cons
 			}
 		}
 #endif
-
-		for (i=0; i < npix; i++) {
+		for (int i=0; i < npix; i++) {
 			surface_brightness_vector[i] = new_surface_brightness_vector[i];
 			//cout << surface_brightness_vector[i] << endl;
 		}
 		delete[] new_surface_brightness_vector;
 	}
+	if (psf_supersampling) average_supersampled_image_surface_brightness();
 }
+
+void QLens::average_supersampled_image_surface_brightness()
+{
+	// now average the subpixel surface brightnesses to get the new image surface brightness
+	int nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
+	int i, j, img_index;
+	for (i=0; i < image_npixels; i++) image_surface_brightness[i] = 0;
+	for (img_index=0; img_index < image_n_subpixels; img_index++) {
+		i = active_image_pixel_i_ss[img_index];
+		j = active_image_pixel_j_ss[img_index];
+		image_surface_brightness[image_pixel_grid->pixel_index[i][j]] += image_surface_brightness_supersampled[img_index];
+	}
+	for (i=0; i < image_npixels; i++) image_surface_brightness[i] /= nsubpix;
+}
+
+void QLens::average_supersampled_dense_Lmatrix()
+{
+	double **Lmatrix_reduced = new double*[image_npixels];
+	int i,j,k;
+	for (i=0; i < image_npixels; i++) {
+		Lmatrix_reduced[i] = new double[source_n_amps];
+		for (j=0; j < source_n_amps; j++) Lmatrix_reduced[i][j] = 0;
+	}
+
+	// now average the subpixel surface brightnesses to get the new image surface brightness
+	int nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
+	int img_index;
+	double *lmatptr, *lmatsup_ptr;
+	for (i=0; i < image_npixels; i++) image_surface_brightness[i] = 0;
+	for (img_index=0; img_index < image_n_subpixels; img_index++) {
+		i = active_image_pixel_i_ss[img_index];
+		j = active_image_pixel_j_ss[img_index];
+		lmatptr = Lmatrix_reduced[image_pixel_grid->pixel_index[i][j]];
+		lmatsup_ptr = Lmatrix_dense.subarray(img_index);
+		for (k=0; k < source_npixels; k++) {
+			//Lmatrix_reduced[image_pixel_grid->pixel_index[i][j]][k] += Lmatrix_dense[img_index][k]/nsubpix;
+			(*(lmatptr++)) += (*(lmatsup_ptr++))/nsubpix;
+		}
+	}
+
+	// note, the following function sets the pointer in Lmatrix dense to Lmatrix_psf (and deletes the old pointer), so no garbage collection necessary afterwards
+	Lmatrix_dense.input(Lmatrix_reduced,image_npixels,source_n_amps);
+}
+
+
 
 #define DSWAP(a,b) dtemp=(a);(a)=(b);(b)=dtemp;
 void QLens::fourier_transform(double* data, const int ndim, int* nn, const int isign)
@@ -12268,7 +12608,7 @@ void QLens::fourier_transform(double* data, const int ndim, int* nn, const int i
 }
 #undef DSWAP
 
-bool QLens::generate_PSF_matrix(const double xstep, const double ystep)
+bool QLens::generate_PSF_matrix(const double xstep, const double ystep, const bool supersampling)
 {
 	//static const double sigma_fraction = 1.6; // the bigger you make this, the less sparse the matrix will become (more pixel-pixel correlations)
 	if (psf_threshold==0) return false; // need a threshold to determine where to truncate the PSF
@@ -12279,6 +12619,8 @@ bool QLens::generate_PSF_matrix(const double xstep, const double ystep)
 	if ((psf_width_x==0) or (psf_width_y==0)) return false;
 	double normalization = 0;
 	double nx_half_dec, ny_half_dec;
+	int supersampling_fac=1;
+	if (supersampling) supersampling_fac = default_imgpixel_nsplit;
 	//xstep = image_pixel_grid->pixel_xlength;
 	//ystep = image_pixel_grid->pixel_ylength;
 	nx_half_dec = sigma_fraction*psf_width_x/xstep;
@@ -12291,32 +12633,47 @@ bool QLens::generate_PSF_matrix(const double xstep, const double ystep)
 	ymax = ny_half*ystep;
 	//cout << "PIXEL LENGTHS: " << xstep << " " << ystep << endl;
 	//cout << "nxhalf=" << nx_half << " nyhalf=" << ny_half << " xmax=" << xmax << " ymax=" << ymax << endl;
-	nx = 2*nx_half+1;
-	ny = 2*ny_half+1;
+	nx = (2*nx_half+1)*supersampling_fac;
+	ny = (2*ny_half+1)*supersampling_fac;
 	if (psf_matrix != NULL) {
 		for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 		delete[] psf_matrix;
 	}
 	//cout << "NX=" << nx << " NY=" << ny << endl;
-	psf_matrix = new double*[nx];
-	for (i=0; i < nx; i++) psf_matrix[i] = new double[ny];
-	psf_npixels_x = nx;
-	psf_npixels_y = ny;
-	//cout << " NPIXELS: " << nx << " " << ny << endl;
+	double **psf;
+	if (supersampling) {
+		supersampled_psf_matrix = new double*[nx];
+		for (i=0; i < nx; i++) supersampled_psf_matrix[i] = new double[ny];
+		psf = supersampled_psf_matrix;
+		supersampled_psf_npixels_x = nx;
+		supersampled_psf_npixels_y = ny;
+		//cout << "supersampled psf: NX=" << nx << " NY=" << ny << endl;
+	} else {
+		psf_matrix = new double*[nx];
+		for (i=0; i < nx; i++) psf_matrix[i] = new double[ny];
+		psf = psf_matrix;
+		psf_npixels_x = nx;
+		psf_npixels_y = ny;
+	}
+	double xstep_sup, ystep_sup, xmax_sup, ymax_sup;
+	xstep_sup = xstep/supersampling_fac;
+	ystep_sup = ystep/supersampling_fac;
+	xmax_sup = ((2*nx_half+1)*xstep-xstep_sup)/2;
+	ymax_sup = ((2*ny_half+1)*ystep-ystep_sup)/2;
+	//cout << "CHECK xstep: " << xstep_sup << " " << ystep_sup << " " << xstep << " " << ystep << " (xmax=" << xmax << ", xmax_sup=" << xmax_sup << ", nx=" << nx << ", supfac=" << supersampling_fac << ")" << endl;
 	//cout << "PSF widths: " << psf_width_x << " " << psf_width_y << endl;
-	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
-		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
-			psf_matrix[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
-			normalization += psf_matrix[i][j];
-			//cout << "creating PSF: " << i << " " << j << " x=" << x << " y=" << y << " " << psf_matrix[i][j] << endl;
+	for (i=0, x=-xmax_sup; i < nx; i++, x += xstep_sup) {
+		for (j=0, y=-ymax_sup; j < ny; j++, y += ystep_sup) {
+			psf[i][j] = exp(-0.5*(SQR(x/psf_width_x) + SQR(y/psf_width_y)));
+			normalization += psf[i][j];
+			//cout << "creating PSF: " << i << " " << j << " x=" << x << " y=" << y << " " << psf[i][j] << endl;
 		}
 	}
 	for (i=0; i < nx; i++) {
 		for (j=0; j < ny; j++) {
-			psf_matrix[i][j] /= normalization;
+			psf[i][j] /= normalization;
 		}
 	}
-	setup_foreground_PSF_matrix(); // just sets foreground PSF to be same as PSF for lensed images (maybe later allow them to be different?)
 	return true;
 }
 
@@ -12350,10 +12707,21 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 		double nx_half, ny_half;
 		nx_half = psf_npixels_x/2;
 		ny_half = psf_npixels_y/2;
-		scaled_x = (x / image_pixel_grid->pixel_xlength) + nx_half;
-		scaled_y = (y / image_pixel_grid->pixel_ylength) + ny_half;
+
+		double pixel_xlength, pixel_ylength;
+		if (image_pixel_grid != NULL) {
+			pixel_xlength = image_pixel_grid->pixel_xlength;
+			pixel_ylength = image_pixel_grid->pixel_ylength;
+		} else {
+			pixel_xlength = grid_xlength / n_image_pixels_x;
+			pixel_ylength = grid_ylength / n_image_pixels_y;
+		}
+
+		scaled_x = (x / pixel_xlength) + nx_half;
+		scaled_y = (y / pixel_ylength) + ny_half;
 		ii = (int) scaled_x;
 		jj = (int) scaled_y;
+		//cout << "x=" << x << " y=" << y << " ii=" << ii << " jj=" << jj << endl;
 		if ((ii < 0) or (jj < 0) or (ii >= psf_npixels_x-1) or (jj >= psf_npixels_y-1)) return 0.0;
 		double tt,TT,uu,UU;
 		tt = scaled_x - ii;
@@ -12361,9 +12729,77 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 		uu = scaled_y - jj;
 		UU = 1-uu;
 		psfint = TT*UU*psf_matrix[ii][jj] + tt*UU*psf_matrix[ii+1][jj] + TT*uu*psf_matrix[ii][jj+1] + tt*uu*psf_matrix[ii+1][jj+1];
+		//cout << "PSF=" << psfint << endl;
+		// zeroth order interpolation
+		/*
+		int II,JJ;
+		if (tt < TT) II = ii;
+		else II = ii+1;
+		if (uu < UU) JJ = jj;
+		else JJ = jj+1;
+		psfint = psf_matrix[II][JJ];
+		*/
 	}
 	if (psfint < 0) psfint = 0;
 	return psfint;
+}
+
+void QLens::generate_supersampled_PSF_matrix()
+{
+	int i,j;
+	if (supersampled_psf_matrix != NULL) {
+		for (i=0; i < supersampled_psf_npixels_x; i++) delete[] supersampled_psf_matrix[i];
+		delete[] supersampled_psf_matrix;
+	}
+	int nx = psf_npixels_x * default_imgpixel_nsplit;
+	int ny = psf_npixels_y * default_imgpixel_nsplit;
+	supersampled_psf_matrix = new double*[nx];
+	for (i=0; i < nx; i++) supersampled_psf_matrix[i] = new double[ny];
+
+	double pixel_xlength, pixel_ylength;
+	if (image_pixel_grid != NULL) {
+		pixel_xlength = image_pixel_grid->pixel_xlength;
+		pixel_ylength = image_pixel_grid->pixel_ylength;
+	} else {
+		pixel_xlength = grid_xlength / n_image_pixels_x;
+		pixel_ylength = grid_ylength / n_image_pixels_y;
+	}
+
+	double x, xmax, xstep, y, ymax, ystep;
+	xstep = pixel_xlength / default_imgpixel_nsplit;
+	//double xstep_check = (psf_npixels_x*pixel_xlength) / nx;
+	xmax = ((psf_npixels_x * pixel_xlength)-xstep) / 2;
+	ystep = pixel_ylength / default_imgpixel_nsplit;
+	ymax = ((psf_npixels_y * pixel_ylength)-ystep) / 2;
+	//cout << "CHECK xstep, ystep: " << xstep << " " << ystep << " (xmax=" << xmax << ", ymax=" << ymax << ", nx=" << nx << ", ny=" << ny << ")" << endl;
+	double normalization = 0;
+	int ii,jj;
+	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
+		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
+			if (psf_spline.is_splined()) {
+				supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
+			} else {
+				ii = i / default_imgpixel_nsplit;
+				jj = j / default_imgpixel_nsplit;
+				supersampled_psf_matrix[i][j] = psf_matrix[ii][jj]; // equivalent to zeroth order interpolation
+				//supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
+			}
+			normalization += supersampled_psf_matrix[i][j];
+			//cout << "x=" << x << ", y=" << y << " psfint=" << supersampled_psf_matrix[i][j] << endl;
+			//cout << "i=" << i << ", j=" << j << ", ii=" << ii << ", jj=" << jj << endl;
+		}
+	}
+	x -= xstep;
+	y -= ystep;
+	//cout << "final_x=" << x << ", final_y=" << y << endl;
+	supersampled_psf_npixels_x = nx;
+	supersampled_psf_npixels_y = ny;
+	for (i=0; i < nx; i++) {
+		for (j=0; j < ny; j++) {
+			supersampled_psf_matrix[i][j] /= normalization;
+		}
+	}
+
 }
 
 bool QLens::create_regularization_matrix(const bool include_lum_weighting, const bool use_sbweights)
@@ -15788,8 +16224,8 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 		lensvector corner1, corner2, corner3, corner4;
 		lensvector corner1_src, corner2_src, corner3_src, corner4_src;
 		double subpixel_xlength, subpixel_ylength;
-		int subpixel_index;
-		#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subpixel_index) schedule(dynamic)
+		int subcell_index;
+		#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subcell_index) schedule(dynamic)
 		for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
 			sbprofile_surface_brightness[img_index] = 0;
 
@@ -15814,7 +16250,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 
 			subpixel_xlength = image_pixel_grid->pixel_xlength/nsplit;
 			subpixel_ylength = image_pixel_grid->pixel_ylength/nsplit;
-			subpixel_index = 0;
+			subcell_index = 0;
 			for (ii=0; ii < nsplit; ii++) {
 				u0 = ((double) (1+2*ii))/(2*nsplit);
 				//center_pt[0] = u0*image_pixel_grid->corner_pts[i][j][0] + (1-u0)*image_pixel_grid->corner_pts[i+1][j][0];
@@ -15823,8 +16259,8 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 					w0 = ((double) (1+2*jj))/(2*nsplit);
 					//center_pt[1] = w0*image_pixel_grid->corner_pts[i][j][1] + (1-w0)*image_pixel_grid->corner_pts[i][j+1][1];
 					center_pt[1] = (1-w0)*image_pixel_grid->corner_pts[i][j][1] + w0*image_pixel_grid->corner_pts[i][j+1][1];
-					//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subpixel_index]; 
-					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subpixel_index][1] << " " << center_pt[1] << endl;
+					//center_pt = image_pixel_grid->subpixel_center_pts[i][j][subcell_index]; 
+					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][1] << " " << center_pt[1] << endl;
 					for (int k=0; k < n_sb; k++) {
 						if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) {
 							if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
@@ -15841,11 +16277,11 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 							}
 						}
 						else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
-							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
-							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index];
+							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index];
+							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index];
 							//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
 							//sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
-							if (split_imgpixels) sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subpixel_index][1]);
+							if (split_imgpixels) sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index][1]);
 							else sb += sb_list[k]->surface_brightness(image_pixel_grid->center_sourcepts[i][j][0],image_pixel_grid->center_sourcepts[i][j][1]);
 							//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
 							//else {
@@ -15861,7 +16297,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 							//}
 						}
 					}
-					subpixel_index++;
+					subcell_index++;
 				}
 			}
 			sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
@@ -15875,7 +16311,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 #endif
 
 	}
-	PSF_convolution_pixel_vector(sbprofile_surface_brightness,true,false);
+	PSF_convolution_pixel_vector(true,false);
 }
 
 void QLens::add_foreground_to_image_pixel_vector()
@@ -15912,28 +16348,89 @@ void QLens::store_foreground_pixel_surface_brightness() // note, foreground_surf
 void QLens::vectorize_image_pixel_surface_brightness(bool use_mask)
 {
 	int i,j,k=0;
+	int subcell_index, nsubpix, image_subpixel_index=0;
 	if (active_image_pixel_i == NULL) {
 		//	delete[] active_image_pixel_i;
 		//if (active_image_pixel_j == NULL) delete[] active_image_pixel_j;
 		if (use_mask) {
-			int n=0;
+			int n=0, nsub=0;
 			for (j=0; j < image_pixel_grid->y_N; j++) {
 				for (i=0; i < image_pixel_grid->x_N; i++) {
-					if ((image_pixel_grid->fit_to_data != NULL) and (image_pixel_grid->fit_to_data[i][j])) n++;
+					if ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])) {
+						n++;
+						if (psf_supersampling) {
+							if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
+							nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+							nsub += nsubpix;
+						}
+					}
 				}
 			}
 			image_npixels = n;
+			if (psf_supersampling) {
+				if (nsub != image_npixels*default_imgpixel_nsplit*default_imgpixel_nsplit) die("number of counted subpixels (%i) does not match image_npixels*imgpixel_nsplit (%i)",nsub,(image_npixels*default_imgpixel_nsplit*default_imgpixel_nsplit));
+				image_n_subpixels = nsub;
+			}
 		} else {
 			image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
+			if (psf_supersampling) image_n_subpixels = image_npixels*default_imgpixel_nsplit;
 		}
 		active_image_pixel_i = new int[image_npixels];
 		active_image_pixel_j = new int[image_npixels];
+		int ii,jj;
+		if (psf_supersampling) {
+			active_image_pixel_i_ss = new int[image_n_subpixels];
+			active_image_pixel_j_ss = new int[image_n_subpixels];
+			active_image_subpixel_ss = new int[image_n_subpixels];
+			active_image_subpixel_ii = new int[image_n_subpixels];
+			active_image_subpixel_jj = new int[image_n_subpixels];
+			image_pixel_i_from_subcell_ii = new int[image_pixel_grid->x_N*default_imgpixel_nsplit];
+			image_pixel_j_from_subcell_jj = new int[image_pixel_grid->y_N*default_imgpixel_nsplit];
+			for (j=0; j < image_pixel_grid->y_N; j++) {
+				for (i=0; i < image_pixel_grid->x_N; i++) {
+					for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+						ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+						jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+						image_pixel_i_from_subcell_ii[ii] = i;
+						image_pixel_j_from_subcell_jj[jj] = j;
+					}
+				}
+			}
+		}
+
 		for (j=0; j < image_pixel_grid->y_N; j++) {
 			for (i=0; i < image_pixel_grid->x_N; i++) {
-				if ((!use_mask) or ((image_pixel_grid->fit_to_data != NULL) and (image_pixel_grid->fit_to_data[i][j]))) {
+				if ((!use_mask) or (image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j])) {
 					active_image_pixel_i[k] = i;
 					active_image_pixel_j[k] = j;
 					image_pixel_grid->pixel_index[i][j] = k++;
+					if (psf_supersampling) {
+						nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+						if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
+						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+							active_image_pixel_i_ss[image_subpixel_index] = i;
+							active_image_pixel_j_ss[image_subpixel_index] = j;
+							ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+							jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+							active_image_subpixel_ii[image_subpixel_index] = ii;
+							active_image_subpixel_jj[image_subpixel_index] = jj;
+
+							//cout << "SUBCELL: " << active_image_subpixel_ii[image_subpixel_index] << " " << active_image_subpixel_jj[image_subpixel_index] << " " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][0] << " " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][1] << endl;
+
+							active_image_subpixel_ss[image_subpixel_index] = subcell_index;
+							image_pixel_grid->subpixel_index[ii][jj] = image_subpixel_index++;
+							//cout << image_subpixel_index << " (total=" << image_n_subpixels << ")" << endl;
+						}
+					}
+				} else {
+					image_pixel_grid->pixel_index[i][j] = -1;
+					if (psf_supersampling) {
+						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+							ii = i*default_imgpixel_nsplit + subcell_index / default_imgpixel_nsplit;
+							jj = j*default_imgpixel_nsplit + subcell_index % default_imgpixel_nsplit;
+							image_pixel_grid->subpixel_index[ii][jj] = -1;
+						}
+					}
 				}
 			}
 		}
@@ -15955,6 +16452,28 @@ void QLens::vectorize_image_pixel_surface_brightness(bool use_mask)
 			imgpixel_covinv_vector[ii] = image_pixel_data->covinv_map[i][j];
 		}
 	}
+	
+	if (psf_supersampling) {
+		if (image_surface_brightness_supersampled != NULL) delete[] image_surface_brightness_supersampled;
+		image_surface_brightness_supersampled = new double[image_n_subpixels];
+		//image_subpixel_index = 0;
+		//for (k=0; k < image_npixels; k++) {
+			//i = active_image_pixel_i[k];
+			//j = active_image_pixel_j[k];
+			//nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+			//for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+				//image_surface_brightness_supersampled[image_subpixel_index++] = image_pixel_grid->subpixel_surface_brightness[i][j][subcell_index];
+			//}
+		//}
+		for (int img_index=0; img_index < image_n_subpixels; img_index++) {
+			i = active_image_pixel_i_ss[img_index];
+			j = active_image_pixel_j_ss[img_index];
+			subcell_index = active_image_subpixel_ss[img_index];
+			image_surface_brightness_supersampled[img_index] = image_pixel_grid->subpixel_surface_brightness[i][j][subcell_index];
+		}
+		//average_supersampled_image_surface_brightness();
+	}
+
 }
 
 void QLens::plot_image_pixel_surface_brightness(string outfile_root)
