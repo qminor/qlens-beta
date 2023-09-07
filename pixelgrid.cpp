@@ -12438,7 +12438,7 @@ void QLens::PSF_convolution_pixel_vector(const bool foreground, const bool verba
 				max_ny = image_pixel_grid->y_N*default_imgpixel_nsplit;
 			}
 		}
-		cout << "npix=" << npix << " psf_nx=" << psf_nx << " psf_ny=" << psf_ny << " nxhalf=" << nx_half << " nyhalf=" << ny_half << endl;
+		//cout << "npix=" << npix << " psf_nx=" << psf_nx << " psf_ny=" << psf_ny << " nxhalf=" << nx_half << " nyhalf=" << ny_half << endl;
 
 		double *new_surface_brightness_vector = new double[npix];
 		int l;

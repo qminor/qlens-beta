@@ -9146,6 +9146,13 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
 				if (!load_psf_fits(filename,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
+				if (psf_supersampling) {
+					generate_supersampled_PSF_matrix();
+					if (mpi_id==0) {
+						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+					}
+				}
+				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 			}
 			else if (words[1]=="savepsf")
 			{
@@ -12799,7 +12806,11 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'PSF supersampling' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (!split_imgpixels)) Complain("cannot use PSF supersampling unless 'split_imgpixels' is set to 'on'");
+				bool ss_orig = psf_supersampling;
 				set_switch(psf_supersampling,setword);
+				if (psf_supersampling != ss_orig) {
+					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+				}
 				if ((psf_supersampling) and (use_input_psf_matrix)) {
 					generate_supersampled_PSF_matrix();
 					if (mpi_id==0) {
@@ -12843,18 +12854,20 @@ void QLens::process_commands(bool read_file)
 						changed_npix = true;
 					}
 				}
-				// Assuming here the imgpixel_nsplit has been changed...
-				if ((changed_npix) and (image_pixel_grid != NULL)) {
-					image_pixel_grid->delete_ray_tracing_arrays();
-					image_pixel_grid->setup_ray_tracing_arrays();
-					if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
-				}
-				if ((psf_supersampling) and (use_input_psf_matrix)) {
-					if (mpi_id==0) cout << "Generating new supersampled PSF matrix..." << endl;
-					generate_supersampled_PSF_matrix();
-					if (mpi_id==0) {
-						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+				if (changed_npix) {
+					if (image_pixel_grid != NULL) {
+						image_pixel_grid->delete_ray_tracing_arrays();
+						image_pixel_grid->setup_ray_tracing_arrays();
+						if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 					}
+					if ((psf_supersampling) and (use_input_psf_matrix)) {
+						if (mpi_id==0) cout << "Generating new supersampled PSF matrix..." << endl;
+						generate_supersampled_PSF_matrix();
+						if (mpi_id==0) {
+							if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+						}
+					}
+					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
