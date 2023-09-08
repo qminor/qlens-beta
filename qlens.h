@@ -894,6 +894,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void repack_matrix_upper(dvector& packed_matrix);
 
 	dmatrix Lmatrix_dense;
+	dmatrix Lmatrix_supersampled;
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
 	dvector Gmatrix_stacked;
 	dvector Gmatrix_stacked_copy;

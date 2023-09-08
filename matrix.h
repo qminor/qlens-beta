@@ -26,6 +26,7 @@ public:
 	Matrix& operator = (const T&);
 	void input(const int&, const int&);
 	void input(T**, const int&, const int&);
+	void input_ptr(T**, const int&, const int&);
 	void input(T**); // this assumes the input dimensions are the same as already set
 	void input(const Matrix&);
 	void input(const int &m, const int &n, const char filename[]);
@@ -104,21 +105,29 @@ Matrix<T>::Matrix(const Matrix<T>& b)
 template <class T>
 void Matrix<T>::input(const Matrix<T>& b)
 {
-	if (a != NULL) {
-		for (int i = 0; i < nrows; i++)
-			delete[] a[i];
-		delete[] a;
-	}
+	if ((a==NULL) or (b.nrows != nrows) or (b.ncolumns != ncolumns)) {
+		if (a != NULL) {
+			for (int i = 0; i < nrows; i++)
+				delete[] a[i];
+			delete[] a;
+		}
 
-	nrows = b.nrows;
-	ncolumns = b.ncolumns;
-	a = new T*[nrows];
-	
-	for (int i = 0; i < nrows; i++)
-	{
-		a[i] = new T[ncolumns];
-		for (int j = 0; j < ncolumns; j++)
-			a[i][j] = b[i][j];
+		nrows = b.nrows;
+		ncolumns = b.ncolumns;
+		a = new T*[nrows];
+		
+		for (int i = 0; i < nrows; i++)
+		{
+			a[i] = new T[ncolumns];
+			for (int j = 0; j < ncolumns; j++)
+				a[i][j] = b[i][j];
+		}
+	} else {
+		for (int i = 0; i < nrows; i++)
+		{
+			for (int j = 0; j < ncolumns; j++)
+				a[i][j] = b[i][j];
+		}
 	}
 	return;
 }
@@ -126,16 +135,18 @@ void Matrix<T>::input(const Matrix<T>& b)
 template <class T>
 void Matrix<T>::input(const int &m, const int &n)
 {
-	if (a != NULL) {
-		for (int i = 0; i < nrows; i++)
-			delete[] a[i];
-		delete[] a;
-	}
+	if ((a==NULL) or (m != nrows) or (n != ncolumns)) {
+		if (a != NULL) {
+			for (int i = 0; i < nrows; i++)
+				delete[] a[i];
+			delete[] a;
+		}
 
-	nrows = m; ncolumns = n;
-	a = new T*[nrows];
-	for (int i = 0; i < nrows; i++) {
-		a[i] = new T[ncolumns];
+		nrows = m; ncolumns = n;
+		a = new T*[nrows];
+		for (int i = 0; i < nrows; i++) {
+			a[i] = new T[ncolumns];
+		}
 	}
 	return;
 }
@@ -148,7 +159,6 @@ void Matrix<T>::input(T **inmatrix, const int &m, const int &n)
 			delete[] a[i];
 		delete[] a;
 	}
-
 	nrows = m; ncolumns = n;
 	a = new T*[nrows];
 	for (int i = 0; i < nrows; i++) {
@@ -157,6 +167,19 @@ void Matrix<T>::input(T **inmatrix, const int &m, const int &n)
 			a[i][j] = inmatrix[i][j];
 		}
 	}
+	return;
+}
+
+template <class T>
+void Matrix<T>::input_ptr(T **inmatrix, const int &m, const int &n)
+{
+	if (a != NULL) {
+		for (int i = 0; i < nrows; i++)
+			delete[] a[i];
+		delete[] a;
+	}
+	nrows = m; ncolumns = n;
+	a = inmatrix; // NOTE: if nrows or ncolumns does not match the inmatrix, you'll get a seg fault!
 	return;
 }
 

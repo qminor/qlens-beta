@@ -11755,13 +11755,20 @@ void QLens::convert_Lmatrix_to_dense()
 		}
 #endif
 	int i,j,npix;
-	if (!psf_supersampling) npix = image_npixels;
-	else npix = image_n_subpixels;
-	Lmatrix_dense.input(npix,source_n_amps);
-	Lmatrix_dense = 0;
+	dmatrix *Lptr;
+	if (!psf_supersampling) {
+		npix = image_npixels;
+		Lptr = &Lmatrix_dense;
+	}
+	else {
+		npix = image_n_subpixels;
+		Lptr = &Lmatrix_supersampled;
+	}
+	(*Lptr).input(npix,source_n_amps);
+	(*Lptr) = 0;
 	for (i=0; i < npix; i++) {
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
-			Lmatrix_dense[i][Lmatrix_index[j]] += Lmatrix[j];
+			(*Lptr)[i][Lmatrix_index[j]] += Lmatrix[j];
 		}
 	}
 #ifdef USE_OPENMP
@@ -11960,13 +11967,16 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 		int npix;
 		int *pixel_map_ii, *pixel_map_jj;
 
+		dmatrix *Lptr;
 		if (!psf_supersampling) {
+			Lptr = &Lmatrix_dense;
 			npix = image_npixels;
 			psf_nx = psf_npixels_x;
 			psf_ny = psf_npixels_y;
 			pixel_map_ii = active_image_pixel_i;
 			pixel_map_jj = active_image_pixel_j;
 		} else {
+			Lptr = &Lmatrix_supersampled;
 			npix = image_n_subpixels;
 			psf_nx = supersampled_psf_npixels_x;
 			psf_ny = supersampled_psf_npixels_y;
@@ -12037,10 +12047,10 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 						jj -= fft_jmin;
 #ifdef USE_FFTW
 						l = jj*fft_ni + ii;
-						img_rvec[l] = Lmatrix_dense[img_index][src_index];
+						img_rvec[l] = (*Lptr)[img_index][src_index];
 #else
 						k = 2*(jj*fft_ni + ii);
-						img_zvec[k] = Lmatrix_dense[img_index][src_index];
+						img_zvec[k] = (*Lptr)[img_index][src_index];
 #endif
 					}
 				}
@@ -12080,10 +12090,10 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 						jj -= fft_jmin;
 #ifdef USE_FFTW
 						l = jj*fft_ni + ii;
-						Lmatrix_dense[img_index][src_index] = img_rvec[l];
+						(*Lptr)[img_index][src_index] = img_rvec[l];
 #else
 						k = 2*(jj*fft_ni + ii);
-						Lmatrix_dense[img_index][src_index] = img_zvec[k];
+						(*Lptr)[img_index][src_index] = img_zvec[k];
 #endif
 					}
 				}
@@ -12161,7 +12171,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 								if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->fit_to_data==NULL) or (image_pixel_grid->fit_to_data[i][j]))) {
 									psfval = psf[psf_k][psf_l];
 									img_index2 = pix_index[ii][jj];
-									lmatptr = Lmatrix_dense.subarray(img_index2);
+									lmatptr = (*Lptr).subarray(img_index2);
 									lmatpsfptr = Lmatrix_psf[img_index1];
 									for (src_index=0; src_index < source_npixels; src_index++) {
 										(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
@@ -12174,7 +12184,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 			}
 
 			// note, the following function sets the pointer in Lmatrix dense to Lmatrix_psf (and deletes the old pointer), so no garbage collection necessary afterwards
-			Lmatrix_dense.input(Lmatrix_psf);
+			(*Lptr).input(Lmatrix_psf);
 
 
 #ifdef USE_OPENMP
@@ -12513,12 +12523,14 @@ void QLens::average_supersampled_image_surface_brightness()
 
 void QLens::average_supersampled_dense_Lmatrix()
 {
-	double **Lmatrix_reduced = new double*[image_npixels];
+	Lmatrix_dense.input(image_npixels,source_n_amps);
+	Lmatrix_dense = 0;
+	//double **Lmatrix_reduced = new double*[image_npixels];
 	int i,j,k;
-	for (i=0; i < image_npixels; i++) {
-		Lmatrix_reduced[i] = new double[source_n_amps];
-		for (j=0; j < source_n_amps; j++) Lmatrix_reduced[i][j] = 0;
-	}
+	//for (i=0; i < image_npixels; i++) {
+		//Lmatrix_reduced[i] = new double[source_n_amps];
+		//for (j=0; j < source_n_amps; j++) Lmatrix_reduced[i][j] = 0;
+	//}
 
 	// now average the subpixel surface brightnesses to get the new image surface brightness
 	int nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
@@ -12528,19 +12540,14 @@ void QLens::average_supersampled_dense_Lmatrix()
 	for (img_index=0; img_index < image_n_subpixels; img_index++) {
 		i = active_image_pixel_i_ss[img_index];
 		j = active_image_pixel_j_ss[img_index];
-		lmatptr = Lmatrix_reduced[image_pixel_grid->pixel_index[i][j]];
-		lmatsup_ptr = Lmatrix_dense.subarray(img_index);
+		lmatptr = Lmatrix_dense[image_pixel_grid->pixel_index[i][j]];
+		lmatsup_ptr = Lmatrix_supersampled.subarray(img_index);
 		for (k=0; k < source_npixels; k++) {
 			//Lmatrix_reduced[image_pixel_grid->pixel_index[i][j]][k] += Lmatrix_dense[img_index][k]/nsubpix;
 			(*(lmatptr++)) += (*(lmatsup_ptr++))/nsubpix;
 		}
 	}
-
-	// note, the following function sets the pointer in Lmatrix dense to Lmatrix_psf (and deletes the old pointer), so no garbage collection necessary afterwards
-	Lmatrix_dense.input(Lmatrix_reduced,image_npixels,source_n_amps);
 }
-
-
 
 #define DSWAP(a,b) dtemp=(a);(a)=(b);(b)=dtemp;
 void QLens::fourier_transform(double* data, const int ndim, int* nn, const int isign)
