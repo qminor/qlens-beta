@@ -11105,8 +11105,8 @@ bool QLens::output_coolest_files(const string filename)
 	pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
 	pixels_psf["field_of_view_y"].append(0);
 	pixels_psf["field_of_view_y"].append( data_pixel_size*psf_npixels_y );
-	pixels_psf["num_pix_x"] = psf_npixels_x;
-	pixels_psf["num_pix_y"] = psf_npixels_y;
+	pixels_psf["num_pix_x"] = (psf_supersampling ? supersampled_psf_npixels_x : psf_npixels_x);
+	pixels_psf["num_pix_y"] = (psf_supersampling ? supersampled_psf_npixels_y : psf_npixels_y);
 	pixels_psf["fits_file"] = Json::Value();
 	pixels_psf["fits_file"]["path"] = psf_filename;
 	coolest["instrument"]["psf"]["pixels"] = pixels_psf;
@@ -11299,9 +11299,9 @@ bool QLens::output_coolest_files(const string filename)
 		} else {
 			warn("Delaunay source grid has not been constructed, so it cannot be output in FITS table");
 		}
-	} else if (Delaunay_Source==Shapelet_Source) {
+	} else if (source_fit_mode==Shapelet_Source) {
 		// Implement this when you get time
-	} else if (Delaunay_Source==Parameterized_Source) {
+	} else if (source_fit_mode==Parameterized_Source) {
 		// Implement this when you get time
 	}
 

@@ -99,6 +99,7 @@ class Spline2D
 
 		double splint(const double x, const double y);
 		double splint_invert_y(const double x, const double y);
+		void unspline();
 		void print(double, double, long, double, double, long);
 		void logprint(double, double, long, double, double, long);
 		void printall(long, long);

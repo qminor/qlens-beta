@@ -9140,16 +9140,44 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="loadpsf")
 			{
 				string filename;
+				bool sup = false;
+				bool cubic_spline = false;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-spline") cubic_spline = true;
+						else if (args[i]=="-supersampled") {
+							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to load supersampled PSF");
+							else sup = true;
+						}
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+				if ((cubic_spline) and (sup)) Complain("cannot spline supersampled PSF matrix");
 				if (nwords==2) {
 					Complain("filename for PSF in FITS format is required (e.g. 'sbmap loadpsf file.fits')");
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-				if (!load_psf_fits(filename,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
-				if (psf_supersampling) {
-					generate_supersampled_PSF_matrix();
-					if (mpi_id==0) {
-						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+				if (!load_psf_fits(filename,sup,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
+				if (!sup) {
+					if (psf_spline.is_splined()) psf_spline.unspline();
+					if (cubic_spline) {
+						// this code snippet is ugly and gets repeated in a few places. Consolodate and maybe rewrite!
+						double pixel_xlength, pixel_ylength;
+						if (image_pixel_grid != NULL) {
+							pixel_xlength = image_pixel_grid->pixel_xlength;
+							pixel_ylength = image_pixel_grid->pixel_ylength;
+						} else {
+							pixel_xlength = grid_xlength / n_image_pixels_x;
+							pixel_ylength = grid_ylength / n_image_pixels_y;
+						}
+						if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
+					}
+					if (psf_supersampling) {
+						generate_supersampled_PSF_matrix();
+						if (mpi_id==0) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
 					}
 				}
 				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
@@ -9188,11 +9216,13 @@ void QLens::process_commands(bool read_file)
 					psf_matrix = NULL;
 				}
 				psf_filename = "";
+				if (psf_spline.is_splined()) psf_spline.unspline();
 			}
 			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
 			{
 				bool mkpsf = false;
 				bool cubic_spline = false;
+				bool generated_supersampled_psf = false;
 				if (words[1]=="mkpsf") mkpsf = true;	
 				else if (words[1]=="spline_psf") cubic_spline = true;
 				double pixel_xlength, pixel_ylength;
@@ -9210,16 +9240,20 @@ void QLens::process_commands(bool read_file)
 				if (cubic_spline) {
 					if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
 				}
-				if (mkpsf) {
+				if ((mkpsf) or (cubic_spline)) {
 					if (psf_supersampling) {
 						generate_supersampled_PSF_matrix();
+						generated_supersampled_psf = true;
 						//if (generate_PSF_matrix(pixel_xlength,pixel_ylength,true)==false) Complain("could not generate supersampled PSF matrix from analytic model");
 					}
 					use_input_psf_matrix = true;
 				}
 				if (mpi_id==0) {
 					cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
-					if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+					if ((psf_supersampling) and (generated_supersampled_psf)) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+				}
+				if ((mkpsf) or (generated_supersampled_psf)) {
+					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 				}
 			}
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
@@ -12036,7 +12070,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
+			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
 		else if (words[0]=="lumreg_from_sbweights")
 		{
@@ -12717,7 +12751,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 4");
+			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
 		else if (words[0]=="use_saved_sbweights")
 		{

@@ -419,6 +419,28 @@ Spline2D::~Spline2D()
 	*/
 }
 
+void Spline2D::unspline()
+{
+	if (xarray) delete[] xarray;
+	if (yarray) delete[] yarray;
+	if ((zmatrix) and (zspline)) {
+		for (int i=0; i < mm; i++) {
+			delete[] zmatrix[i];
+			delete[] zspline[i];
+		}
+	delete[] zmatrix;
+	delete[] zspline;
+	}
+	xarray = NULL;
+	yarray = NULL;
+	zmatrix = NULL;
+	zspline = NULL;
+	mm = 0; nn = 0;
+	invert_y = false;
+}
+
+
+
 void Spline2D::input(double x[], double y[], double **z, const int m, const int n)
 {
 	nn = n; mm = m;

@@ -5227,7 +5227,7 @@ bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground,
 #endif
 }
 
-bool QLens::load_psf_fits(string fits_filename, const bool verbal)
+bool QLens::load_psf_fits(string fits_filename, const bool supersampled, const bool verbal)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -5235,10 +5235,15 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	use_input_psf_matrix = true;
 	bool image_load_status = false;
 	int i,j,kk;
-	if (psf_matrix != NULL) {
+	if ((!supersampled) and (psf_matrix != NULL)) {
 		for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 		delete[] psf_matrix;
 		psf_matrix = NULL;
+	}
+	else if ((supersampled) and (supersampled_psf_matrix != NULL)) {
+		for (i=0; i < supersampled_psf_npixels_x; i++) delete[] supersampled_psf_matrix[i];
+		delete[] supersampled_psf_matrix;
+		supersampled_psf_matrix = NULL;
 	}
 
 	double **input_psf_matrix;
@@ -5293,38 +5298,49 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	jmax = jmid;
 	for (i=0; i < nx; i++) {
 		for (j=0; j < ny; j++) {
-			if (input_psf_matrix[i][j] > psf_threshold*peak_sb) {
+			//if (input_psf_matrix[i][j] > psf_threshold*peak_sb) {
 				if (i < imin) imin=i;
 				if (i > imax) imax=i;
 				if (j < jmin) jmin=j;
 				if (j > jmax) jmax=j;
-			}
+			//}
 		}
 	}
 	int nx_half, ny_half;
 	nx_half = (imax-imin+1)/2;
 	ny_half = (jmax-jmin+1)/2;
-	psf_npixels_x = 2*nx_half+1;
-	psf_npixels_y = 2*ny_half+1;
-	psf_matrix = new double*[psf_npixels_x];
-	for (i=0; i < psf_npixels_x; i++) psf_matrix[i] = new double[psf_npixels_y];
+	double ***psf;
+	int *npix_x, *npix_y;
+	if (!supersampled) {
+		psf = &psf_matrix;
+		npix_x = &psf_npixels_x;
+		npix_y = &psf_npixels_y;
+	} else {
+		psf = &supersampled_psf_matrix;
+		npix_x = &supersampled_psf_npixels_x;
+		npix_y = &supersampled_psf_npixels_y;
+	}
+	(*npix_x) = 2*nx_half+1;
+	(*npix_y) = 2*ny_half+1;
+	(*psf) = new double*[(*npix_x)];
+	for (i=0; i < (*npix_x); i++) (*psf)[i] = new double[(*npix_y)];
 	int ii,jj;
-	for (ii=0, i=imid-nx_half; ii < psf_npixels_x; i++, ii++) {
-		for (jj=0, j=jmid-ny_half; jj < psf_npixels_y; j++, jj++) {
-			psf_matrix[ii][jj] = input_psf_matrix[i][j];
+	for (ii=0, i=imid-nx_half; ii < (*npix_x); i++, ii++) {
+		for (jj=0, j=jmid-ny_half; jj < (*npix_y); j++, jj++) {
+			(*psf)[ii][jj] = input_psf_matrix[i][j];
 		}
 	}
 	double psfmax = -1e30;
 	double normalization = 0;
-	for (i=0; i < psf_npixels_x; i++) {
-		for (j=0; j < psf_npixels_y; j++) {
-			if (psf_matrix[i][j] > psfmax) psfmax = psf_matrix[i][j];
-			normalization += psf_matrix[i][j];
+	for (i=0; i < (*npix_x); i++) {
+		for (j=0; j < (*npix_y); j++) {
+			if ((*psf)[i][j] > psfmax) psfmax = (*psf)[i][j];
+			normalization += (*psf)[i][j];
 		}
 	}
-	for (i=0; i < psf_npixels_x; i++) {
-		for (j=0; j < psf_npixels_y; j++) {
-			psf_matrix[i][j] /= normalization;
+	for (i=0; i < (*npix_x); i++) {
+		for (j=0; j < (*npix_y); j++) {
+			(*psf)[i][j] /= normalization;
 		}
 	}
 
@@ -5337,7 +5353,7 @@ bool QLens::load_psf_fits(string fits_filename, const bool verbal)
 	//cout << psf_npixels_x << " " << psf_npixels_y << " " << nx_half << " " << ny_half << endl;
 
 	if ((verbal) and (mpi_id==0)) {
-		cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << " (input PSF dimensions: " << nx << " " << ny << ")" << endl;
+		cout << "PSF matrix dimensions: " << (*npix_x) << " " << (*npix_y) << " (input PSF dimensions: " << nx << " " << ny << ")" << endl;
 		//cout << "PSF normalization =" << normalization << endl << endl;
 	}
 	for (i=0; i < nx; i++) delete[] input_psf_matrix[i];
@@ -9098,6 +9114,9 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 {
 	int i,j,ii,jj,nsplit,subcell_index;
 	double u0,w0;
+
+int II, JJ;
+	//int ii_check, jj_check;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (split_pixels) {
@@ -9111,10 +9130,17 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 				subcell_index = 0;
 				for (ii=0; ii < nsplit; ii++) {
 					for (jj=0; jj < nsplit; jj++) {
+						//ii_check = subcell_index / nsplit;
+						//jj_check = subcell_index % nsplit;
+						//cout << "IIJJ: " << ii << " " << ii_check << " " << jj << " " << jj_check << endl;
+						//if (ii != ii_check) die("FUCK ii");
+						//if (jj != jj_check) die("FUCK jj");
+
 						u0 = ((double) (1+2*ii))/(2*nsplit);
 						w0 = ((double) (1+2*jj))/(2*nsplit);
 						subpixel_center_pts[i][j][subcell_index][0] = (1-u0)*corner_pts[i][j][0] + u0*corner_pts[i+1][j][0];
 						subpixel_center_pts[i][j][subcell_index][1] = (1-w0)*corner_pts[i][j][1] + w0*corner_pts[i][j+1][1];
+
 						//subpixel_center_pts[i][j][subcell_index][0] = u0*corner_pts[i][j][0] + (1-u0)*corner_pts[i+1][j][0];
 						//subpixel_center_pts[i][j][subcell_index][1] = w0*corner_pts[i][j][1] + (1-w0)*corner_pts[i][j+1][1];
 						subcell_index++;
@@ -12525,12 +12551,7 @@ void QLens::average_supersampled_dense_Lmatrix()
 {
 	Lmatrix_dense.input(image_npixels,source_n_amps);
 	Lmatrix_dense = 0;
-	//double **Lmatrix_reduced = new double*[image_npixels];
 	int i,j,k;
-	//for (i=0; i < image_npixels; i++) {
-		//Lmatrix_reduced[i] = new double[source_n_amps];
-		//for (j=0; j < source_n_amps; j++) Lmatrix_reduced[i][j] = 0;
-	//}
 
 	// now average the subpixel surface brightnesses to get the new image surface brightness
 	int nsubpix = default_imgpixel_nsplit*default_imgpixel_nsplit;
@@ -12783,14 +12804,14 @@ void QLens::generate_supersampled_PSF_matrix()
 	int ii,jj;
 	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
 		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
-			if (psf_spline.is_splined()) {
-				supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
-			} else {
-				ii = i / default_imgpixel_nsplit;
-				jj = j / default_imgpixel_nsplit;
-				supersampled_psf_matrix[i][j] = psf_matrix[ii][jj]; // equivalent to zeroth order interpolation
+			//if (psf_spline.is_splined()) {
+			supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
+			//} else {
+				//ii = i / default_imgpixel_nsplit;
+				//jj = j / default_imgpixel_nsplit;
+				//supersampled_psf_matrix[i][j] = psf_matrix[ii][jj]; // equivalent to zeroth order interpolation
 				//supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
-			}
+			//}
 			normalization += supersampled_psf_matrix[i][j];
 			//cout << "x=" << x << ", y=" << y << " psfint=" << supersampled_psf_matrix[i][j] << endl;
 			//cout << "i=" << i << ", j=" << j << ", ii=" << ii << ", jj=" << jj << endl;
