@@ -11315,6 +11315,10 @@ bool QLens::output_coolest_files(const string filename)
 #endif
 }
 
+//bool QLens::output_coolest_chain_file(const string filename)
+//{
+//}
+
 double QLens::get_einstein_radius_prior(const bool verbal)
 {
 	double re, loglike_penalty = 0;

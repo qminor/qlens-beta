@@ -9177,7 +9177,7 @@ void QLens::process_commands(bool read_file)
 					}
 					if (psf_supersampling) {
 						generate_supersampled_PSF_matrix();
-						if (mpi_id==0) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 					}
 				}
 				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
@@ -9250,7 +9250,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (mpi_id==0) {
 					cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
-					if ((psf_supersampling) and (generated_supersampled_psf)) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
+					if (generated_supersampled_psf) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 				}
 				if ((mkpsf) or (generated_supersampled_psf)) {
 					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
@@ -12070,7 +12070,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
 		else if (words[0]=="lumreg_from_sbweights")
 		{
@@ -12751,7 +12751,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 4)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
 		else if (words[0]=="use_saved_sbweights")
 		{
@@ -12847,9 +12847,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((psf_supersampling) and (use_input_psf_matrix)) {
 					generate_supersampled_PSF_matrix();
-					if (mpi_id==0) {
-						if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
-					}
+					if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12895,11 +12893,8 @@ void QLens::process_commands(bool read_file)
 						if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 					}
 					if ((psf_supersampling) and (use_input_psf_matrix)) {
-						if (mpi_id==0) cout << "Generating new supersampled PSF matrix..." << endl;
 						generate_supersampled_PSF_matrix();
-						if (mpi_id==0) {
-							if (psf_supersampling) cout << "Supersampled PSF matrix dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << endl;
-						}
+						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 					}
 					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 				}

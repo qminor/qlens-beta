@@ -5298,12 +5298,12 @@ bool QLens::load_psf_fits(string fits_filename, const bool supersampled, const b
 	jmax = jmid;
 	for (i=0; i < nx; i++) {
 		for (j=0; j < ny; j++) {
-			//if (input_psf_matrix[i][j] > psf_threshold*peak_sb) {
+			if ((input_psf_matrix[i][j] > psf_threshold*peak_sb) or (supersampled)) {
 				if (i < imin) imin=i;
 				if (i > imax) imax=i;
 				if (j < jmin) jmin=j;
 				if (j > jmax) jmax=j;
-			//}
+			}
 		}
 	}
 	int nx_half, ny_half;
