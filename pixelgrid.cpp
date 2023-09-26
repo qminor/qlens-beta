@@ -3604,18 +3604,10 @@ double DelaunayGrid::sum_edge_sqrlengths(const double min_sb)
 	if ((lens != NULL) and (lens->image_pixel_data != NULL)) {
 		use_sb = true;
 		sb = lens->image_pixel_data->surface_brightness;
-		//min_sb = min_sb_frac*lens->image_pixel_data->find_max_sb();
 	}
 	int i,j;
 	// Note, the inside edges (the majority) will be counted twice, but that's ok
 	for (i=0; i < n_triangles; i++) {
-		//if (use_sb) {
-			//for (j=0; j < 3; j++) {
-				//iv[j] = imggrid_ivals[triangle[i].vertex_index[j]];
-				//jv[j] = imggrid_jvals[triangle[i].vertex_index[j]];
-			//}
-			//if ((sb[iv[0]][jv[0]] < min_sb) or (sb[iv[1]][jv[1]] < min_sb) or (sb[iv[2]][jv[2]] < min_sb)) continue;
-		//}
 		edge = triangle[i].vertex[1] - triangle[i].vertex[0];
 		sum += edge.sqrnorm();
 		edge = triangle[i].vertex[2] - triangle[i].vertex[1];
@@ -3797,7 +3789,7 @@ void DelaunayGrid::find_interpolation_weights_3pt(lensvector& input_pt, const in
 void DelaunayGrid::find_interpolation_weights_nn(lensvector &input_pt, const int trinum, int& npts, const int thread) // natural neighbor interpolation
 {
 	npts = 0;
-	const int nmax_tri = 20;
+	const int nmax_tri = 40;
 	Triangle* adjacent_triangles[nmax_tri];
 	int n_adjacent_triangles;
 
