@@ -1476,8 +1476,8 @@ void QLens::process_commands(bool read_file)
 							"source, and you will not be prompted to enter vary flags; if the source number is omitted ('source changevary\n"
 							"none'), vary flags are set to '0' for all sourcees.\n\n";
 					else if (words[2]=="gaussian")
-						cout << "source gaussian <sbtot> <sigma> <q> [theta] [x-center] [y-center]\n\n"
-							"where <sbtot> is the total surface brightness (not the peak), <sigma> is the dispersion of\n"
+						cout << "source gaussian <sbmax> <sigma> <q> [theta] [x-center] [y-center]\n\n"
+							"where <sbmax> is the peak surface brightness (not the peak), <sigma> is the dispersion of\n"
 							"the surface brightness along the major axis of the profile, <q> is the axis ratio (so that\n"
 							"the dispersion along the minor axis is q*sigma), and [theta] is the angle of rotation\n"
 							"(counterclockwise, in degrees) about the center (defaults=0). Note that for theta=0, the\n"
@@ -1488,9 +1488,7 @@ void QLens::process_commands(bool read_file)
 							"The sersic profile is defined by S = S0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
 							"determined from the value for n (enforces the half-light radius Re). For the elliptical model, we make\n"
 							"the replacement R --> sqrt(q*x^2 + (y^2/q)), analogous to the elliptical radius defined in the lens\n"
-							"models. (Note that if n=0.5, this is equivalent to a Gaussian with sigma=R_eff/(1.1774*sqrt(q)), and\n"
-							"sbtot = sbmax*2*pi*sigma^2*q. The latter factor of q is because the other source models in qlens,\n"
-							"including the Gaussian model, use R --> sqrt(x^2 + (y^2/q^2)) which is different from Sersic here.)\n\n"
+							"models. (Note that if n=0.5, this is equivalent to a Gaussian with sigma=R_eff/(1.1774*sqrt(q)).)\n"
 							"Note, in the above, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
@@ -5769,7 +5767,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) nparams_to_vary++;
 						nparams_to_vary += fourier_nmodes*2;
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbtot,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for six parameters (sbmax,sigma,q,theta,xc,yc) in model gaussian, plus optional c0/rfsc parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -5803,7 +5801,7 @@ void QLens::process_commands(bool read_file)
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 					}
 				}
-				else Complain("gaussian requires at least 3 parameters (sbtot, sig, q)");
+				else Complain("gaussian requires at least 3 parameters (sbmax, sig, q)");
 			}
 			else if (words[1]=="shapelet")
 			{

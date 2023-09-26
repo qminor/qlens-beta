@@ -16803,10 +16803,13 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 	int img_index;
 	int i,j,k;
 	bool at_least_one_foreground_src = false;
+	bool at_least_one_lensed_src = false;
 	for (k=0; k < n_sb; k++) {
 		if (!sb_list[k]->is_lensed) {
 			at_least_one_foreground_src = true;
-		} 
+		} else {
+			at_least_one_lensed_src = true;
+		}
 	}
 
 	/*	
@@ -16835,7 +16838,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 
 	// here, we are adding together SB of foreground sources, but also lensed non-shapelet sources if we're in shapelet mode.
 	// If none of those conditions are true, then we skip everything.
-	if (!at_least_one_foreground_src) {
+	if ((!at_least_one_foreground_src) and ((!allow_lensed_nonshapelet_sources) or (!at_least_one_lensed_src))) {
 		for (img_index=0; img_index < image_npixels_fgmask; img_index++) sbprofile_surface_brightness[img_index] = 0;
 		return;
 	} else {

@@ -13467,13 +13467,22 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if (sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
 		}
 	}
+	bool include_foreground_sb = false; // the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
+
 	bool at_least_one_foreground_src = false;
+	bool at_least_one_lensed_src = false;
+	bool at_least_one_lensed_nonshapelet_src = false;
 	for (int k=0; k < n_sb; k++) {
+		//if ((!sb_list[k]->is_lensed) or ((source_fit_mode != Parameterized_Source) and ((sb_list[k]->sbtype != SHAPELET) or (source_fit_mode != Shapelet_Source)))) {
 		if (!sb_list[k]->is_lensed) {
 			at_least_one_foreground_src = true;
-			break;
+		} else {
+			at_least_one_lensed_src = true;
+			if (sb_list[k]->sbtype!=SHAPELET) at_least_one_lensed_nonshapelet_src = true;
 		}
 	}
+	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb = true;
+	else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true;
 
 #ifdef USE_OPENMP
 		double fspline_wtime0;
@@ -14019,17 +14028,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	//ofstream wtfout("wtf.dat");
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if ((image_pixel_grid->fit_to_data[i][j]) or ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src) and (image_pixel_data->foreground_mask[i][j]))) {
+			if ((image_pixel_grid->fit_to_data[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask[i][j]))) {
 				n_data_pixels++;
 				if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 				if ((image_pixel_grid->fit_to_data[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) {
+					if (include_foreground_sb) {
 						loglike_times_two += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 						//loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
 						foreground_count++;
-					}
-					else {
+					} else {
 						loglike_times_two += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 						//wtfout << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
 					}
@@ -14037,7 +14045,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					count++;
 				} else {
 					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
-					if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) {
+					if (include_foreground_sb) {
 						loglike_times_two += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
 						foreground_count++;
 					}
@@ -14049,7 +14057,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	chisq0 = loglike_times_two;
 
 	int n_tot_pixels;
-	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) n_tot_pixels = image_npixels_fgmask;
+	if (include_foreground_sb) n_tot_pixels = image_npixels_fgmask;
 	else n_tot_pixels = image_pixel_data->n_required_pixels;
 	if (group_id==0) {
 		if (logfile.is_open()) {
@@ -14213,7 +14221,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 	if ((mpi_id==0) and (verbal)) {
 		cout << "number of image pixels included in loglike = " << count << endl;
-		if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) cout << "number of foreground image pixels included in loglike = " << foreground_count << endl;
+		if (include_foreground_sb) cout << "number of foreground image pixels included in loglike = " << foreground_count << endl;
 	}
 
 	chisq_it++;
