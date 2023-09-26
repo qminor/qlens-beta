@@ -8,6 +8,7 @@
 #include "errors.h"
 #include <vector>
 #include <complex>
+#include <functional>
 #include <stdio.h>
 
 #ifdef USE_MKL
