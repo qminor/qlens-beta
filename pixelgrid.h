@@ -19,6 +19,21 @@ struct InterpolationCells {
 	SourcePixelGrid *pixel[3];
 };
 
+struct PtsWgts {
+	int indx;
+	double wgt;
+	PtsWgts() {}
+	PtsWgts(const int indx_in, const double wgt_in) {
+		indx = indx_in;
+		wgt = wgt_in;
+	}
+	PtsWgts& assign(const int indx_in, const double wgt_in) {
+		indx = indx_in;
+		wgt = wgt_in;
+		return *this;
+	}
+};
+
 class SourcePixelGrid
 {
 	friend class QLens;
@@ -171,15 +186,22 @@ class SourcePixelGrid
 	void plot_corner_coordinates(void);
 };
 
-class DelaunayGrid
+class DelaunayGrid : public Sort
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
 	QLens *lens;
 	ImagePixelGrid *image_pixel_grid;
+	//int herg;
 
 	static int nthreads;
-	static lensvector **interpolation_pts[3];
+	static const int nmax_pts_interp = 40;
+	static lensvector **interpolation_pts[nmax_pts_interp];
+	static double *interpolation_wgts[nmax_pts_interp];
+	static int *interpolation_indx[nmax_pts_interp];
+	static int *triangles_in_envelope[nmax_pts_interp];
+	static lensvector **polygon_vertices[nmax_pts_interp+2]; // the polygon referred to here is the part of the Voronoi cell contained in the Bower-Watson envelope for each vertex in the envelope.
+	static lensvector *new_circumcenter[nmax_pts_interp];
 
 	//static double* srcgrid_zfactors; // kappa ratio used for modeling source points at different redshifts
 	//static double** srcgrid_betafactors; // kappa ratio used for modeling source points at different redshifts
@@ -206,7 +228,10 @@ class DelaunayGrid
 	bool activate_unmapped_source_pixels;
 
 	private:
-	vector<int>* shared_triangles;
+	double** voronoi_boundary_x;
+	double** voronoi_boundary_y;
+	int** shared_triangles;
+	int* n_shared_triangles;
 	// Used for calculating areas and finding whether points are inside a given cell
 	//lensvector dt1, dt2, dt3;
 	//double prod1, prod2, prod3;
@@ -225,10 +250,16 @@ class DelaunayGrid
 	int find_closest_vertex(const int tri_number, const lensvector& pt);
 	double sum_edge_sqrlengths(const double min_sb);
 	double find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
+	void find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
+	void find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	double interpolate_surface_brightness(lensvector &input_pt);
-	bool assign_source_mapping_flags(lensvector &input_pt, vector<int>& mapped_delaunay_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
+	double interpolate_surface_brightness_nn(lensvector &input_pt); // natural neighbor interpolation
+
+	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
+	void find_interpolation_weights_3pt(lensvector& input_pt, const int trinum, int& npts, const int thread);
+	void find_interpolation_weights_nn(lensvector &input_pt, const int trinum, int& npts, const int thread); // natural neighbor interpolation
 	void record_srcpixel_mappings();
-	void calculate_Lmatrix(const int img_index, vector<int>& mapped_delaunay_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
+	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
@@ -294,7 +325,8 @@ class ImagePixelGrid : public Sort
 	long int ntot_subpixels;
 
 	vector<SourcePixelGrid*> **mapped_cartesian_srcpixels; // since the Cartesian grid uses recursion (if adaptive_subgrid is on), a pointer to each mapped source pixel is needed
-	vector<int> **mapped_delaunay_srcpixels; // for the Delaunay grid, it only needs to record the index of each mapped source pixel (no pointer needed)
+	vector<PtsWgts> **mapped_delaunay_srcpixels; // for the Delaunay grid, it only needs to record the index of each mapped source pixel (no pointer needed)
+	int ***n_mapped_srcpixels; // will store how many source pixels map to a given (sub)pixel for Lmatrix
 	RayTracingMethod ray_tracing_method;
 	SourceFitMode source_fit_mode;
 	double xmin, xmax, ymin, ymax;

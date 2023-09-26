@@ -1962,13 +1962,14 @@ void QLens::process_commands(bool read_file)
 						"assume the same dimensions that are set by the 'grid' command.\n";
 				else if (words[1]=="raytrace_method")
 					cout << "raytrace_method <method>\n\n"
-						"Set the method for ray tracing image pixels to source pixels (using the 'sbmap' commands.\n"
+						"Set method for ray tracing image pixels to source pixels (for either cartesian or delaunay grids).\n"
 						"Available methods are:\n\n"
-						"interpolate -- interpolate surface brightness using linear interpolation in the three nearest\n"
+						"interpolate_3pt -- interpolate surface brightness using linear interpolation in the three nearest\n"
 						"                 source pixels.\n"
-						"direct -- surface brightness of nearest source pixel is used.\n"
+						"interpolate_nn -- interpolate surface brightness using natural neighbors interpolation (for Delaunay\n"
+						"                 source mode only.)\n"
 						"overlap -- after ray-tracing a pixel to the source plane, find the overlap area with all source\n"
-						"           pixels it overlaps with and weight the surface brightness accordingly.\n";
+						"           pixels it overlaps with and weight the surface brightness accordingly (cartesian only).\n";
 				else if (words[1]=="img_npixels")
 					cout << "img_npixels <npixels_x> <npixels_y>\n\n"
 						"Set the number of pixels, along x and y, for plotting image surface brightness maps (using 'sbmap\n"
@@ -2134,7 +2135,7 @@ void QLens::process_commands(bool read_file)
 					cout << "srcgrid: (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
 					if (auto_sourcegrid) cout << " (auto_srcgrid on)";
 					cout << endl;
-					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "overlap (pixel overlap area)\n" : ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) ? "inerpolate (linear 3-point interpolation)\n" : ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) ? "direct (nearest source pixel used)\n" : "unknown\n");
+					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "overlap (pixel overlap area)\n" : ((ray_tracing_method==Interpolate) and (!natural_neighbor_interpolation)) ? "interpolate_3pt (linear 3-point interpolation)\n" : ((ray_tracing_method==Interpolate) and (natural_neighbor_interpolation)) ? "interpolate_nn (natural neighbors interpolation)\n" : "unknown\n");
 					cout << "simulate_pixel_noise = " << display_switch(simulate_pixel_noise) << endl;
 					cout << "psf_width: (" << psf_width_x << "," << psf_width_y << ")\n";
 					cout << "psf_threshold = " << psf_threshold << endl;
@@ -6911,6 +6912,14 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="sbprofile") source_fit_mode = Parameterized_Source;
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
 						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
+						if ((ray_tracing_method == Interpolate) and (natural_neighbor_interpolation) and (source_fit_mode == Cartesian_Source)) {
+							natural_neighbor_interpolation = false;
+							if (mpi_id==0) cout << "NOTE: Natural neighbor interpolation is not available for Cartesian source; switching to 3-point interpolation" << endl;
+						}
+						if ((ray_tracing_method == Area_Overlap) and (source_fit_mode == Delaunay_Source)) {
+							ray_tracing_method = Interpolate;
+							if (mpi_id==0) cout << "NOTE: Overlap method not available for delaunay source; switching to 3-point interpolation" << endl;
+						}
 					} else Complain("invalid number of arguments; can only specify fit source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
 				}
 				else if (words[1]=="findimg")
@@ -9217,6 +9226,7 @@ void QLens::process_commands(bool read_file)
 				}
 				psf_filename = "";
 				if (psf_spline.is_splined()) psf_spline.unspline();
+				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 			}
 			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
 			{
@@ -12825,11 +12835,16 @@ void QLens::process_commands(bool read_file)
 					//image_pixel_grid = NULL;
 				//}
 				if (split_imgpixels != old_setting) {
+					if (psf_supersampling) {
+						psf_supersampling = false;
+						if (mpi_id==0) cout << "NOTE: Turning off PSF supersampling" << endl;
+					}
 					if (image_pixel_grid != NULL) {
 						image_pixel_grid->delete_ray_tracing_arrays();
 						image_pixel_grid->setup_ray_tracing_arrays();
 						if (islens()) image_pixel_grid->calculate_sourcepts_and_areas(true);
 					}
+					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -13004,15 +13019,22 @@ void QLens::process_commands(bool read_file)
 			if (nwords==1) {
 				if (mpi_id==0) {
 					if (ray_tracing_method==Area_Overlap) cout << "Ray tracing method: overlap (pixel overlap area)" << endl;
-					else if ((ray_tracing_method==Interpolate) and (interpolate_sb_3pt)) cout << "Ray tracing method: interpolate (linear 3-point interpolation)" << endl;
-					else if ((ray_tracing_method==Interpolate) and (!interpolate_sb_3pt)) cout << "Ray tracing method: direct (nearest source pixel used)" << endl;
+					else if ((ray_tracing_method==Interpolate) and (!natural_neighbor_interpolation)) cout << "Ray tracing method: interpolate_3pt (linear 3-point interpolation)" << endl;
+					else if ((ray_tracing_method==Interpolate) and (natural_neighbor_interpolation)) cout << "Ray tracing method: interpolate_nn (natural neighbors interpolation)" << endl;
 					else cout << "Unknown ray tracing method" << endl;
 				}
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
-				if (setword=="overlap") ray_tracing_method = Area_Overlap;
-				else if (setword=="interpolate") { ray_tracing_method = Interpolate; interpolate_sb_3pt = true; }
-				else if (setword=="direct") { ray_tracing_method = Interpolate; interpolate_sb_3pt = false; }
+				if (setword=="overlap") {
+					if (source_fit_mode != Cartesian_Source) Complain("Overlap method is only available for cartesian source grid");
+					ray_tracing_method = Area_Overlap;
+				}
+				else if (setword=="interpolate_3pt") { ray_tracing_method = Interpolate; natural_neighbor_interpolation = false; }
+				else if (setword=="interpolate_nn") {
+					if (source_fit_mode != Delaunay_Source) Complain("Natural neighbor interpolation is only allowed for Delaunay source grid");
+					ray_tracing_method = Interpolate;
+					natural_neighbor_interpolation = true;
+				}
 				else Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
 		}

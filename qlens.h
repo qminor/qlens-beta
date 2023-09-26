@@ -683,7 +683,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	RegularizationMethod regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
-	bool interpolate_sb_3pt;
+	bool natural_neighbor_interpolation;
 	bool parallel_mumps, show_mumps_info;
 
 	int n_image_pixels_x, n_image_pixels_y; // note that this is the TOTAL number of pixels in the image, as opposed to image_npixels which gives the # of pixels being fit to

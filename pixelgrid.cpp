@@ -52,7 +52,15 @@ lensvector **SourcePixelGrid::interpolation_pts[3];
 //int *SourcePixelGrid::n_interpolation_pts = NULL;
 
 int DelaunayGrid::nthreads = 0;
-lensvector **DelaunayGrid::interpolation_pts[3] = { NULL, NULL, NULL};
+const int DelaunayGrid::nmax_pts_interp; // maximum number of allowed interpolation points; this number is initialized in pixelgrid.h
+
+lensvector **DelaunayGrid::interpolation_pts[nmax_pts_interp];
+double *DelaunayGrid::interpolation_wgts[nmax_pts_interp];
+int *DelaunayGrid::interpolation_indx[nmax_pts_interp];
+int *DelaunayGrid::triangles_in_envelope[nmax_pts_interp];
+lensvector **DelaunayGrid::polygon_vertices[nmax_pts_interp+2];
+lensvector *DelaunayGrid::new_circumcenter[nmax_pts_interp];
+
 bool DelaunayGrid::zero_outside_border = false;
 //ImagePixelGrid* DelaunayGrid::image_pixel_grid = NULL;
 
@@ -2084,17 +2092,17 @@ void SourcePixelGrid::calculate_Lmatrix_interpolate(const int img_index, vector<
 		interpolation_pts[i][thread] = &mapped_cartesian_srcpixels[3*ii+i]->center_pt;
 	}
 
-	if (lens->interpolate_sb_3pt) {
+	//if (lens->interpolate_sb_3pt) {
 		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
 		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_center_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
 		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_center_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
 		lens->Lmatrix_rows[img_index].push_back(weight*(input_center_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_center_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
 		if (d==0) warn("d is zero!!!");
-	} else {
-		lens->Lmatrix_rows[img_index].push_back(weight);
-		lens->Lmatrix_rows[img_index].push_back(0);
-		lens->Lmatrix_rows[img_index].push_back(0);
-	}
+	//} else {
+		//lens->Lmatrix_rows[img_index].push_back(weight);
+		//lens->Lmatrix_rows[img_index].push_back(0);
+		//lens->Lmatrix_rows[img_index].push_back(0);
+	//}
 
 	index += 3;
 }
@@ -3189,21 +3197,41 @@ void SourcePixelGrid::clear_subgrids()
 
 void DelaunayGrid::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
-	if (interpolation_pts[0] != NULL) {
+	if ((nthreads != 0) and (interpolation_pts[0] != NULL)) {
 		if (!reallocate) return;
 		else deallocate_multithreaded_variables();
 	}
 	nthreads = threads;
 	int i;
-	for (i=0; i < 3; i++) interpolation_pts[i] = new lensvector*[nthreads];
+	for (i=0; i < nmax_pts_interp; i++) {
+		interpolation_pts[i] = new lensvector*[nthreads];
+		interpolation_wgts[i] = new double[nthreads];
+		interpolation_indx[i] = new int[nthreads];
+		triangles_in_envelope[i] = new int[nthreads];
+		new_circumcenter[i] = new lensvector[nthreads];
+	}
+	for (i=0; i < nmax_pts_interp+2; i++) {
+		polygon_vertices[i] = new lensvector*[nthreads];
+	}
 }
 
 void DelaunayGrid::deallocate_multithreaded_variables()
 {
 	if (interpolation_pts[0] != NULL) {
 		int i;
-		for (i=0; i < 3; i++) delete[] interpolation_pts[i];
-		for (i=0; i < 3; i++) interpolation_pts[i] = NULL;
+		for (i=0; i < nmax_pts_interp; i++) {
+			delete[] interpolation_pts[i];
+			delete[] interpolation_wgts[i];
+			delete[] interpolation_indx[i];
+			delete[] triangles_in_envelope[i];
+			delete[] new_circumcenter[i];
+			interpolation_pts[i] = NULL;
+			interpolation_wgts[i] = NULL;
+			interpolation_indx[i] = NULL;
+		}
+		for (i=0; i < nmax_pts_interp+2; i++) {
+			delete[] polygon_vertices[i];
+		}
 	}
 }
 
@@ -3217,6 +3245,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		threads = omp_get_num_threads();
 	}
 #endif
+	//herg = 0;
 	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
 	lens = lens_in;
 	if ((lens != NULL) and (lens->image_pixel_grid != NULL)) image_pixel_grid = lens->image_pixel_grid;
@@ -3281,7 +3310,11 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		img_index_ij = NULL;
 	}
 
-	shared_triangles = new vector<int>[n_srcpts];
+	vector<int>* shared_triangles_unsorted = new vector<int>[n_srcpts];
+	n_shared_triangles = new int[n_srcpts];
+	shared_triangles = new int*[n_srcpts];
+	voronoi_boundary_x = new double*[n_srcpts];
+	voronoi_boundary_y = new double*[n_srcpts];
 
 	Delaunay *delaunay_triangles = new Delaunay(srcpts_x, srcpts_y, n_srcpts);
 	delaunay_triangles->Process();
@@ -3290,13 +3323,85 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 	delaunay_triangles->store_triangles(triangle);
 	avg_area = 0;
 	for (n=0; n < n_triangles; n++) {
-		shared_triangles[triangle[n].vertex_index[0]].push_back(n);
-		shared_triangles[triangle[n].vertex_index[1]].push_back(n);
-		shared_triangles[triangle[n].vertex_index[2]].push_back(n);
+		shared_triangles_unsorted[triangle[n].vertex_index[0]].push_back(n);
+		shared_triangles_unsorted[triangle[n].vertex_index[1]].push_back(n);
+		shared_triangles_unsorted[triangle[n].vertex_index[2]].push_back(n);
 		avg_area += triangle[n].area;
 	}
 	avg_area /= n_triangles;
+	int n_boundary_pts;
+	Triangle *triptr;
+	int i;
+	//lensvector midpoint;
+	for (n=0; n < n_srcpts; n++) {
+		n_boundary_pts = shared_triangles_unsorted[n].size();
+		voronoi_boundary_x[n] = new double[n_boundary_pts];
+		voronoi_boundary_y[n] = new double[n_boundary_pts];
+		shared_triangles[n] = new int[n_boundary_pts];
+		double *angles = new double[n_boundary_pts];
+		//double *midpt_angles = new double[n_boundary_pts];
+		for (i=0; i < n_boundary_pts; i++) {
+			shared_triangles[n][i] = shared_triangles_unsorted[n][i];
+			triptr = &triangle[shared_triangles_unsorted[n][i]];
+			voronoi_boundary_x[n][i] = triptr->circumcenter[0];
+			voronoi_boundary_y[n][i] = triptr->circumcenter[1];
+			double comp1,comp2,angle;
+			comp1 = voronoi_boundary_x[n][i] - srcpts[n][0];
+			comp2 = voronoi_boundary_y[n][i] - srcpts[n][1];
+			//cout << "COMPS: " << comp1 << " " << comp2 << endl;
+			if (comp1==0) {
+				if (comp2 > 0) angle = M_HALFPI;
+				else if (comp2==0) angle = 0.0;
+				else angle = -M_HALFPI;
+			} else {
+				angle = atan(abs(comp2/comp1));
+				if (comp1 < 0) {
+					if (comp2 < 0)
+						angle = angle - M_PI;
+					else
+						angle = M_PI - angle;
+				} else if (comp2 < 0) {
+					angle = -angle;
+				}
+			}
+			while (angle >= M_2PI) angle -= M_2PI;
+			while (angle < 0) angle += M_2PI;
+			angles[i] = angle;
 
+			/*
+			midpoint = 0.33333333333333*(triptr->vertex[0] + triptr->vertex[1] + triptr->vertex[2]);
+			comp1 = midpoint[0] - srcpts[n][0];
+			comp2 = midpoint[1] - srcpts[n][1];
+			//cout << "COMPS: " << comp1 << " " << comp2 << endl;
+			if (comp1==0) {
+				if (comp2 > 0) angle = M_HALFPI;
+				else if (comp2==0) angle = 0.0;
+				else angle = -M_HALFPI;
+			} else {
+				angle = atan(abs(comp2/comp1));
+				if (comp1 < 0) {
+					if (comp2 < 0)
+						angle = angle - M_PI;
+					else
+						angle = M_PI - angle;
+				} else if (comp2 < 0) {
+					angle = -angle;
+				}
+			}
+			while (angle >= M_2PI) angle -= M_2PI;
+			while (angle < 0) angle += M_2PI;
+			midpt_angles[i] = angle;
+			*/
+		}
+		n_shared_triangles[n] = n_boundary_pts;
+		//sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]); // I don't think sorting by circumcenters will work well, because circumcenters may lie outside the triangles and orders might get reversed (actually probably not, because Delaunay --> triangles are only in their own circumcenters)
+		sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]);
+		//sort(n_boundary_pts,midpt_angles,shared_triangles[n]);
+		delete[] angles;
+		//delete[] midpt_angles;
+	}
+
+	delete[] shared_triangles_unsorted;
 	delete delaunay_triangles;
 }
 
@@ -3323,7 +3428,7 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 		pty_p.input(x,yp);
 		pty_m.input(x,ym);
 
-		for (j=0; j < shared_triangles[i].size(); j++) {
+		for (j=0; j < n_shared_triangles[i]; j++) {
 			if ((!foundxp) and (test_if_inside(shared_triangles[i][j],ptx_p)==true)) {
 				adj_triangles[0][i] = shared_triangles[i][j];
 				foundxp = true;
@@ -3350,7 +3455,7 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 
 int DelaunayGrid::search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle)
 {
-	if (shared_triangles[initial_srcpixel].size()==0) die("something is really wrong! This vertex doesn't share any triangle sides (vertex %i, ntot=%i)",initial_srcpixel,n_srcpts);
+	if (n_shared_triangles[initial_srcpixel]==0) die("something is really wrong! This vertex doesn't share any triangle sides (vertex %i, ntot=%i)",initial_srcpixel,n_srcpts);
 	int n, triangle_num = shared_triangles[initial_srcpixel][0]; // there might be a better way to discern which shared triangle to start with, but we can optimize this later
 	if ((pt[0]==srcpts[initial_srcpixel][0]) and (pt[1]==srcpts[initial_srcpixel][1])) {
 		inside_triangle = true;
@@ -3566,7 +3671,667 @@ void DelaunayGrid::update_surface_brightness(int& index)
 	}
 }
 
-bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>& mapped_delaunay_srcpixels_ij, const int img_pixel_i, const int img_pixel_j, const int thread)
+bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels_ij, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread)
+{
+	int trinum,kmin;
+	bool inside_triangle, on_vertex;
+	find_containing_triangle(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+	Triangle *triptr = &triangle[trinum];
+
+	if (!inside_triangle) {
+		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+		if ((zero_outside_border) and (!on_vertex)) {
+			n_mapped_srcpixels = 0;
+			return true;
+		}
+		PtsWgts pt(triptr->vertex_index[kmin],1);
+		mapped_delaunay_srcpixels_ij.push_back(pt);
+		maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
+		n_mapped_srcpixels = 1;
+	} else {
+		if (lens->natural_neighbor_interpolation) {
+			find_interpolation_weights_nn(input_pt, trinum, n_mapped_srcpixels, thread);
+		} else {
+			find_interpolation_weights_3pt(input_pt, trinum, n_mapped_srcpixels, thread);
+		}
+		PtsWgts pt;
+		for (int i=0; i < n_mapped_srcpixels; i++) {
+			maps_to_image_pixel[interpolation_indx[i][thread]] = true;
+			mapped_delaunay_srcpixels_ij.push_back(pt.assign(interpolation_indx[i][thread],interpolation_wgts[i][thread]));
+		}
+	}
+	return true;
+}
+
+void DelaunayGrid::calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_subpixels, int& index, lensvector &input_pt, const int& subpixel_indx, const double weight, const int& thread)
+{
+	int i;
+	for (i=0; i < subpixel_indx; i++) mapped_delaunay_srcpixels += (*n_mapped_subpixels++);
+	for (i=0; i < (*n_mapped_subpixels); i++) {
+		lens->Lmatrix_index_rows[img_index].push_back(mapped_delaunay_srcpixels->indx);
+		lens->Lmatrix_rows[img_index].push_back(weight*mapped_delaunay_srcpixels->wgt);
+		mapped_delaunay_srcpixels++;
+	}
+	index += (*n_mapped_subpixels);
+}
+
+double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread)
+{
+	int trinum;
+	bool inside_triangle;
+	bool on_vertex = false;
+	int kmin;
+	find_containing_triangle(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+	Triangle *triptr = &triangle[trinum];
+
+	if (!inside_triangle) {
+		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+		if ((zero_outside_border) and (!on_vertex)) {
+			return 0;
+		}
+		return *triptr->sb[kmin];
+	}
+	int npts;
+	double sb_interp = 0;
+	if (lens->natural_neighbor_interpolation) {
+		find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+	} else {
+		find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+	}
+	for (int i=0; i < npts; i++) {
+		sb_interp += surface_brightness[interpolation_indx[i][thread]]*interpolation_wgts[i][thread];
+	}
+	return sb_interp;
+}
+
+double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
+{
+	bool inside_triangle;
+	bool on_vertex;
+	int trinum,kmin;
+	find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+	if (!inside_triangle) {
+		if ((zero_outside_border) and (!on_vertex)) {
+			return 0;
+		} else {
+			return *triangle[trinum].sb[kmin];
+		}
+	}
+
+	int npts;
+	double sb_interp = 0;
+	if (lens->natural_neighbor_interpolation) {
+		find_interpolation_weights_nn(input_pt, trinum, npts, 0);
+	} else {
+		find_interpolation_weights_3pt(input_pt, trinum, npts, 0);
+	}
+	for (int i=0; i < npts; i++) {
+		sb_interp += surface_brightness[interpolation_indx[i][0]]*interpolation_wgts[i][0];
+	}
+	return sb_interp;
+}
+
+void DelaunayGrid::find_interpolation_weights_3pt(lensvector& input_pt, const int trinum, int& npts, const int thread)
+{
+	Triangle *triptr = &triangle[trinum];
+	interpolation_indx[0][thread] = triptr->vertex_index[0];
+	interpolation_indx[1][thread] = triptr->vertex_index[1];
+	interpolation_indx[2][thread] = triptr->vertex_index[2];
+	interpolation_pts[0][thread] = &srcpts[triptr->vertex_index[0]];
+	interpolation_pts[1][thread] = &srcpts[triptr->vertex_index[1]];
+	interpolation_pts[2][thread] = &srcpts[triptr->vertex_index[2]];
+	double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
+	if (d==0) {
+		// in this case the points are all the same
+		interpolation_wgts[0][thread] = 1.0;
+		npts = 1;
+	} else {
+		interpolation_wgts[0][thread] = (input_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d;
+		interpolation_wgts[1][thread] = (input_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d;
+		interpolation_wgts[2][thread] = (input_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d;
+		npts = 3;
+	}
+}
+
+void DelaunayGrid::find_interpolation_weights_nn(lensvector &input_pt, const int trinum, int& npts, const int thread) // natural neighbor interpolation
+{
+	npts = 0;
+	const int nmax_tri = 20;
+	Triangle* adjacent_triangles[nmax_tri];
+	int n_adjacent_triangles;
+
+	double area_initial, area_leftover, wgt;
+	int ntri_in_envelope = 1;
+	Triangle *triptr = &triangle[trinum];
+	triangles_in_envelope[0][thread] = trinum;
+	int k,l,m;
+
+	// recursive lambda function for finding triangles that belong inside the Bowyer-Watson envelope (this will be called below)
+	function<void(Triangle*, const int, const int, int &, int &)> find_triangles_in_envelope = [&](Triangle *neighbor_ptr, const int trinum, const int neighbor_num, int &npt, int &ntri) 
+	{
+		int idx;
+		Triangle *neighbor_ptr2;
+		int l, l_new_vertex, l_left, l_right, neighbor_num2;
+		double distsq;
+		for (l=0; l < 3; l++) {
+			if (neighbor_ptr->neighbor_index[l]==trinum) {
+				l_new_vertex = l;
+				break;
+			}
+		}
+		l_left = l_new_vertex-1;
+		if (l_left==-1) l_left = 2;
+		l_right = l_new_vertex+1;
+		if (l_right==3) l_right = 0;
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_right];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &triangle[neighbor_num2];
+			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri);
+			}
+		}
+		triangles_in_envelope[ntri++][thread] = neighbor_num;
+		interpolation_indx[npt][thread] = neighbor_ptr->vertex_index[l_new_vertex];
+		npt++;
+		if (npt > nmax_pts_interp) die("exceeded max number of points (%i versus %i)",npt,nmax_pts_interp);
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &triangle[neighbor_num2];
+			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri);
+			}
+		}
+	};
+
+	Triangle *neighbor_ptr;
+	double distsq;
+	int kleft,neighbor_num;
+	for (k=0; k < 3; k++) {
+		interpolation_indx[npts][thread] = triptr->vertex_index[k];
+		npts++;
+		if (npts > nmax_pts_interp) die("exceeded max number of points");
+		kleft = k-1;
+		if (kleft==-1) kleft = 2;
+		neighbor_num = triptr->neighbor_index[kleft];
+		if (neighbor_num != -1) {
+			neighbor_ptr = &triangle[neighbor_num];
+			distsq = SQR(input_pt[0]-neighbor_ptr->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr->circumcenter[1]);
+			if (distsq < neighbor_ptr->circumcircle_radsq) {
+				find_triangles_in_envelope(neighbor_ptr,trinum,neighbor_num,npts,ntri_in_envelope);
+			}
+		}
+	}
+
+	/*
+	if (herg==301) {
+		for (k=0; k < npts; k++) {
+			idx = interpolation_indx[k][thread];
+			//sb[k] = &surface_brightness[interpolation_indx[k][thread]];
+			interpolation_pts[k][thread] = &srcpts[idx];
+		}
+	
+		cout << "# npts=" << npts << endl;
+		cout << "# srcpts=" << n_srcpts << endl;
+		for (k=0; k < npts; k++)  {
+			cout << "Point "  << k << ": " << interpolation_indx[k][thread] << endl;
+		}
+		ofstream triout("inttri.dat");
+		for (m=0; m < ntri_in_envelope; m++) {
+			neighbor_ptr = &triangle[triangles_in_envelope[m][thread]];
+			for (k=0; k < 3; k++) {
+				triout << neighbor_ptr->vertex[k][0] << " " << neighbor_ptr->vertex[k][1] << endl;
+			}
+			triout << neighbor_ptr->vertex[0][0] << " " << neighbor_ptr->vertex[0][1] << endl << endl;
+		}
+		ofstream envout("intenv.dat");
+		envout << "# npts=" << npts << endl;
+		for (k=0; k < npts; k++)  {
+			envout << (*interpolation_pts[k][thread])[0] << " " << (*interpolation_pts[k][thread])[1] << " k=" << k << endl;
+		}
+		envout << (*interpolation_pts[0][thread])[0] << " " << (*interpolation_pts[0][thread])[1] << " k=" << k << endl;
+
+		ofstream newccircout("newccircs.dat");
+		for (k=0; k < npts; k++) {
+			newccircout << new_circumcenter[k][0] << " " << new_circumcenter[k][1] << endl;
+		}
+
+		ofstream ccircout("ccircs.dat");
+		ccircout << triptr->circumcenter[0] << " " << triptr->circumcenter[1] << endl;
+		for (k=0; k < ntri_in_envelope; k++) {
+				ccircout << triangle[triangles_in_envelope[k][thread]].circumcenter[0] << " " << triangle[triangles_in_envelope[k][thread]].circumcenter[1] << endl;
+		}
+	}
+	*/
+
+
+
+	/*
+	int tricheck=0;
+	for (k=0; k < n_triangles; k++) {
+		neighbor_ptr = &triangle[k];
+		distsq = SQR(input_pt[0]-neighbor_ptr->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr->circumcenter[1]);
+		if (distsq < neighbor_ptr->circumcircle_radsq) {
+			tricheck++;
+			//cout << "WITHIN CIRCUMCIRCLE FOR TRIANGLE " << k << endl;
+		}
+		//cout << endl;
+	}
+	//cout << "Within circumcenter of " << tricheck << " triangles" << endl;
+	if (tricheck != ntri_in_envelope) {
+		cout << "WARNING! number of triangles in envelope (" << ntri_in_envelope << ") does not match number triangles whose circumcircles enclose the interpolating point (" << tricheck << ")" << endl;
+		die();
+	}
+	//else cout << "YAY! number of triangles in envelope (" << ntri_in_envelope << ") matched # triangles whose circumcircles enclose interpolating point (" << tricheck << ")" << endl;
+		//}
+*/
+
+	int idx,kright;
+	double a0,a1,c0,c1,det_inv,asq,csq,ctr0,ctr1;
+	for (k=0; k < npts; k++) {
+		idx = interpolation_indx[k][thread];
+		interpolation_pts[k][thread] = &srcpts[idx];
+	}
+	for (k=0; k < npts; k++) {
+		kright = k+1;
+		if (kright==npts) kright = 0;
+		a0 = (*interpolation_pts[k][thread])[0]-input_pt[0];
+		a1 = (*interpolation_pts[k][thread])[1]-input_pt[1];
+		c0 = (*interpolation_pts[kright][thread])[0]-input_pt[0];
+		c1 = (*interpolation_pts[kright][thread])[1]-input_pt[1];
+		det_inv = 0.5/(a0*c1-c0*a1);
+		asq = a0*a0 + a1*a1;
+		csq = c0*c0 + c1*c1;
+		ctr0 = det_inv*(asq*c1 - csq*a1);
+		ctr1 = det_inv*(csq*a0 - asq*c0);
+		new_circumcenter[k][thread][0] = ctr0 + input_pt[0];
+		new_circumcenter[k][thread][1] = ctr1 + input_pt[1];
+	}
+
+	//cout << "Triangle circumcenters:" << endl;
+	//for (k=0; k < ntri_in_envelope; k++) {
+		//cout << triangle[triangles_in_envelope[k][thread]].circumcenter[0] << " " << triangle[triangles_in_envelope[k][thread]].circumcenter[1] << endl;
+	//}
+	//cout << endl;
+
+	lensvector midpt_left, midpt_right;
+	double totwgt = 0;
+	bool first_iteration, fix_mmin, fix_mmax;
+	bool mmin_in_envelope, mmax_in_envelope, mmin_in_envelope_prev, mmax_in_envelope_prev;
+	int n_polygon_vertices, shared_tri_idx_min, shared_tri_idx_max, mmin_adjacent, mmax_adjacent, mmax, iter;
+	for (k=0; k < npts; k++) {
+		iter = 0;
+		idx = interpolation_indx[k][thread];
+		//sb[k] = &surface_brightness[interpolation_indx[k][thread]];
+		//interpolation_pts[k][thread] = &srcpts[idx];
+		//cout << "pp" << k << ": idx=" << idx << " " << (*interpolation_pts[k][thread])[0] << " " << (*interpolation_pts[k][thread])[1] << endl;
+		//cout << "Finding shared triangles for (" << (*interpolation_pts[k])[0] << "," << (*interpolation_pts[k])[1] << ")" << endl;
+		mmin_adjacent = 0;
+		mmax_adjacent = n_shared_triangles[idx]-1;
+		first_iteration = true;
+		mmin_in_envelope_prev = false;
+		mmax_in_envelope_prev = false;
+		fix_mmin = false;
+		fix_mmax = false;
+
+		//for (m=0; m < ntri_in_envelope; m++) {
+			//if (shared_tri_idx_min==triangles_in_envelope[m][thread]) mmin_in_envelope = true;
+			//if (shared_tri_idx_max==triangles_in_envelope[m][thread]) mmax_in_envelope = true;
+		//}
+
+		iter = 0;
+		//if (herg==301) cout << "Point " << k << ":" << endl;
+		do {
+			mmin_in_envelope = false;
+			mmax_in_envelope = false;
+			shared_tri_idx_min = shared_triangles[idx][mmin_adjacent];
+			shared_tri_idx_max = shared_triangles[idx][mmax_adjacent];
+			for (m=0; m < ntri_in_envelope; m++) {
+				if (shared_tri_idx_min==triangles_in_envelope[m][thread]) mmin_in_envelope = true;
+				if (shared_tri_idx_max==triangles_in_envelope[m][thread]) mmax_in_envelope = true;
+			}
+			//if (herg==301) cout << "iter=" << iter << ": mmin=" << mmin_adjacent << " mmax=" << mmax_adjacent << " min_in_env=" << mmin_in_envelope << " max_in_env=" << mmax_in_envelope << " nshared=" << n_shared_triangles[idx] << endl;
+			if ((mmin_adjacent >= mmax_adjacent) and ((!mmin_in_envelope) and (!mmax_in_envelope) and (!mmin_in_envelope_prev) and (!mmax_in_envelope_prev))) die("shit, there are no shared triangles in envelope!");
+			if ((mmin_adjacent <= mmax_adjacent) and ((!first_iteration) and (mmin_in_envelope) and (mmax_in_envelope) and (mmin_in_envelope_prev) and (mmax_in_envelope_prev))) {
+				// All the triangles are shared in this case
+				mmin_adjacent = 0;
+				mmax_adjacent = n_shared_triangles[idx]-1;
+				break;
+			}
+			if (!fix_mmin) {
+				if (!mmin_in_envelope_prev) {
+					if (!mmin_in_envelope) {
+						mmin_adjacent++;
+						if (mmin_adjacent==n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+					else if ((first_iteration) and (mmin_in_envelope)) {
+						mmin_adjacent--;
+						if (mmin_adjacent==-1) mmin_adjacent = n_shared_triangles[idx]-1;
+					} else {
+						fix_mmin = true;
+					}
+				} else {
+					if (mmin_in_envelope) {
+						mmin_adjacent--;
+						if (mmin_adjacent==-1) mmin_adjacent = n_shared_triangles[idx]-1;
+					} else {
+						mmin_adjacent++;
+						if (mmin_adjacent==n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+				}
+			}
+
+			if (!fix_mmax) {
+				if (!mmax_in_envelope_prev) {
+					if (!mmax_in_envelope) {
+						mmax_adjacent--;
+						if (mmax_adjacent==-1) mmax_adjacent = n_shared_triangles[idx]-1;
+					}
+					else if ((first_iteration) and (mmax_in_envelope)) {
+						mmax_adjacent++;
+						if (mmax_adjacent==n_shared_triangles[idx]) mmax_adjacent = 0;
+					} else {
+						fix_mmax = true;
+					}
+				} else {
+					if (mmax_in_envelope) {
+						mmax_adjacent++;
+						if (mmax_adjacent==n_shared_triangles[idx]) mmax_adjacent = 0;
+					} else {
+						mmax_adjacent--;
+						if (mmax_adjacent==-1) mmax_adjacent = n_shared_triangles[idx]-1;
+					}
+				}
+			}
+			mmin_in_envelope_prev = mmin_in_envelope;
+			mmax_in_envelope_prev = mmax_in_envelope;
+			if (first_iteration) first_iteration = false;
+			iter++;
+			if (iter > 100) {
+				die("Too many iterations finding ordered list of shared triangles within envelope)");
+			}
+		} while ((!fix_mmin) or (!fix_mmax));
+		//if (herg==301) cout << "final iter=" << iter << ": mmin=" << mmin_adjacent << " mmax=" << mmax_adjacent << " nshared=" << n_shared_triangles[idx] << endl << endl;
+		if (mmax_adjacent >= mmin_adjacent) n_adjacent_triangles = mmax_adjacent-mmin_adjacent+1;
+		else {
+			n_adjacent_triangles = n_shared_triangles[idx]-mmin_adjacent+mmax_adjacent+1;
+		}
+		if (n_adjacent_triangles > nmax_tri) die("number of adjacent triangles exceeded maximum allowed number (%i vs %i)",n_adjacent_triangles,nmax_tri);
+		//cout << "Found " << n_adjacent_triangles << " adjacent triangles" << endl;
+		//adjacent_triangles[k] = new Triangle*[n_adjacent_triangles];
+		mmax = (mmax_adjacent >= mmin_adjacent) ? mmax_adjacent : n_shared_triangles[idx]-1;
+		l=0;
+		for (m=mmin_adjacent; m <= mmax; m++) {
+			adjacent_triangles[l++] = &triangle[shared_triangles[idx][m]];
+		}
+		if (mmax_adjacent < mmin_adjacent) {
+			for (m=0; m <= mmax_adjacent; m++) {
+				adjacent_triangles[l++] = &triangle[shared_triangles[idx][m]];
+			}
+		}
+		if (l != n_adjacent_triangles) die("number of adjacent triangles didn't add up right (l=%i)",l);
+
+		kleft = k-1;
+		kright = k+1;
+		if (kleft==-1) kleft = npts-1;
+		if (kright==npts) kright = 0;
+		midpt_left = ((*interpolation_pts[k][thread]) + (*interpolation_pts[kleft][thread]))/2;
+		midpt_right = ((*interpolation_pts[kright][thread]) + (*interpolation_pts[k][thread]))/2;
+		n_polygon_vertices = n_adjacent_triangles+2;
+		polygon_vertices[0][thread] = &midpt_left;
+		polygon_vertices[n_polygon_vertices-1][thread] = &midpt_right;
+		l=0;
+		for (m=n_adjacent_triangles-1; m >= 0; m--) {
+			polygon_vertices[l+1][thread] = &(adjacent_triangles[m]->circumcenter);
+			l++;
+		}
+
+		area_initial = 0;
+		for (m=0; m < n_polygon_vertices-1; m++) {
+			area_initial += (*polygon_vertices[m][thread])[0]*(*polygon_vertices[m+1][thread])[1] - (*polygon_vertices[m+1][thread])[0]*(*polygon_vertices[m][thread])[1];
+		}
+		area_initial *= -0.5;
+		/*
+		if (herg==301) {
+		stringstream pstr;
+		pstr << k;
+		string pstring;
+		pstr >> pstring;
+		ofstream pgonout(("pgon" + pstring + ".dat").c_str());
+		//cout << "Polygon vertices for point " << k << ": area0=" << area_initial << " area_f=" << area_leftover << " area_dif=" << wgt << endl;
+		for (m=0; m < n_polygon_vertices; m++) {
+			pgonout << (*polygon_vertices[m][thread])[0] << " " << (*polygon_vertices[m][thread])[1] << endl;
+		}
+		*/
+
+		//Now we construct the polygons generated by including the new input point in the grid, creating six new Delaunay triangles
+		n_polygon_vertices = 4;
+		polygon_vertices[1][thread] = &new_circumcenter[kleft][thread];
+		polygon_vertices[2][thread] = &new_circumcenter[k][thread];
+		polygon_vertices[3][thread] = &midpt_right;
+
+		area_leftover = 0;
+		for (m=0; m < n_polygon_vertices-1; m++) {
+			area_leftover += (*polygon_vertices[m][thread])[0]*(*polygon_vertices[m+1][thread])[1] - (*polygon_vertices[m+1][thread])[0]*(*polygon_vertices[m][thread])[1];
+		}
+		area_leftover *= -0.5;
+		wgt = abs(area_initial - area_leftover);
+
+		interpolation_wgts[k][thread] = wgt;
+		totwgt += wgt;
+	}
+	for (k=0; k < npts; k++) {
+		interpolation_wgts[k][thread] /= totwgt;
+	}
+
+	//if ((hergerr > 0) and (herg==hergerr)) {
+	/*
+	if (herg==301) {
+	double sb_interp = 0;
+	for (k=0; k < npts; k++) {
+		sb_interp += surface_brightness[interpolation_indx[k][thread]]*interpolation_wgts[k][thread];
+	}
+	cout << "SB_INTERP: " << sb_interp << endl;
+	cout << "SBVALS: " << endl;
+	for (k=0; k < npts; k++) {
+		cout << (*interpolation_pts[k][thread])[0] << " " << (*interpolation_pts[k][thread])[1] << " " << surface_brightness[interpolation_indx[k][thread]] << " " << interpolation_wgts[k][thread] << endl;
+	}
+	cout << endl;
+	ofstream ptout("intpt.dat");
+	ofstream tri0out("inttri0.dat");
+	ofstream tri1out("inttri1.dat");
+	ofstream tri2out("inttri2.dat");
+	ofstream circout("circs.dat");
+	ofstream newcircout("newcircs.dat");
+	ofstream vout("vcells.dat");
+	ofstream nvout("nvcells.dat");
+	ofstream ntout("newtri.dat");
+	ptout << input_pt[0] << " " << input_pt[1] << endl << endl;
+	ptout.close();
+
+	ofstream triout("inttri.dat");
+	for (m=0; m < ntri_in_envelope; m++) {
+		neighbor_ptr = &triangle[triangles_in_envelope[m][thread]];
+		for (k=0; k < 3; k++) {
+			triout << neighbor_ptr->vertex[k][0] << " " << neighbor_ptr->vertex[k][1] << endl;
+		}
+		triout << neighbor_ptr->vertex[0][0] << " " << neighbor_ptr->vertex[0][1] << endl << endl;
+	}
+	ofstream envout("intenv.dat");
+	for (k=0; k < npts; k++) 
+		envout << (*interpolation_pts[k][thread])[0] << " " << (*interpolation_pts[k][thread])[1] << endl;
+	envout << (*interpolation_pts[0][thread])[0] << " " << (*interpolation_pts[0][thread])[1] << endl;
+
+	ofstream newccircout("newccircs.dat");
+	for (k=0; k < npts; k++) {
+		newccircout << new_circumcenter[k][thread][0] << " " << new_circumcenter[k][thread][1] << endl;
+	}
+
+	//for (m=0; m < n_srcpts; m++) {
+	for (k=0; k < npts; k++) {
+		m = interpolation_indx[k][thread];
+		for (int j=0; j < n_shared_triangles[m]; j++) {
+			vout << voronoi_boundary_x[m][j] << " " << voronoi_boundary_y[m][j] << endl;
+		}
+		vout << voronoi_boundary_x[m][0] << " " << voronoi_boundary_y[m][0] << endl << endl;
+	}
+	double xc, yc, r;
+	int i, n_circpts = 600;
+	double tstep = M_2PI/(n_circpts-1);
+	double x,y,t;
+
+		xc = triptr->circumcenter[0];
+		yc = triptr->circumcenter[1];
+		r = sqrt(SQR(triptr->vertex[0][0] - xc) + SQR(triptr->vertex[0][1] - yc));
+		for (i=0, t=0; i < n_circpts; i++, t += tstep) {
+			x = xc + r*cos(t);
+			y = yc + r*sin(t);
+			circout << x << " " << y << endl;
+		}
+		circout << endl;
+
+	for (k=0; k < 3; k++) {
+		if (triptr->neighbor_index[k] != -1) {
+			xc = triangle[triptr->neighbor_index[k]].circumcenter[0];
+			yc = triangle[triptr->neighbor_index[k]].circumcenter[1];
+			r = sqrt(SQR(triangle[triptr->neighbor_index[k]].vertex[0][0] - xc) + SQR(triangle[triptr->neighbor_index[k]].vertex[0][1] - yc));
+			for (i=0, t=0; i < n_circpts; i++, t += tstep) {
+				x = xc + r*cos(t);
+				y = yc + r*sin(t);
+				circout << x << " " << y << endl;
+			}
+			circout << endl;
+		}
+	}
+
+	for (k=0; k < npts; k++) {
+			xc = new_circumcenter[k][thread][0];
+			yc = new_circumcenter[k][thread][1];
+			r = sqrt(SQR(input_pt[0] - xc) + SQR(input_pt[1] - yc));
+			for (i=0, t=0; i < n_circpts; i++, t += tstep) {
+				x = xc + r*cos(t);
+				y = yc + r*sin(t);
+				newcircout << x << " " << y << endl;
+			}
+			newcircout << endl;
+	}
+
+
+	if (triptr->neighbor_index[0] != -1) {
+		for (k=0; k < 3; k++) {
+			tri0out << triangle[triptr->neighbor_index[0]].vertex[k][0] << " " << triangle[triptr->neighbor_index[0]].vertex[k][1] << endl;
+		}
+		tri0out << triangle[triptr->neighbor_index[0]].vertex[0][0] << " " << triangle[triptr->neighbor_index[0]].vertex[0][1] << endl;
+	}
+
+	if (triptr->neighbor_index[1] != -1) {
+		for (k=0; k < 3; k++) {
+			tri1out << triangle[triptr->neighbor_index[1]].vertex[k][0] << " " << triangle[triptr->neighbor_index[1]].vertex[k][1] << endl;
+		}
+		tri1out << triangle[triptr->neighbor_index[1]].vertex[0][0] << " " << triangle[triptr->neighbor_index[1]].vertex[0][1] << endl;
+	}
+
+	if (triptr->neighbor_index[2] != -1) {
+		for (k=0; k < 3; k++) {
+			tri2out << triangle[triptr->neighbor_index[2]].vertex[k][0] << " " << triangle[triptr->neighbor_index[2]].vertex[k][1] << endl;
+		}
+		tri2out << triangle[triptr->neighbor_index[2]].vertex[0][0] << " " << triangle[triptr->neighbor_index[2]].vertex[0][1] << endl;
+	}
+
+	vector<int>* shared_triangles_mod = new vector<int>[n_srcpts+1];
+	double **voronoi_boundary_mod_x = new double*[n_srcpts+1];
+	double **voronoi_boundary_mod_y = new double*[n_srcpts+1];
+
+	double *srcpts_mod_x = new double[n_srcpts+1];
+	double *srcpts_mod_y = new double[n_srcpts+1];
+	for (i=0; i < n_srcpts; i++) {
+		srcpts_mod_x[i] = srcpts[i][0];
+		srcpts_mod_y[i] = srcpts[i][1];
+	}
+	srcpts_mod_x[n_srcpts] = input_pt[0];
+	srcpts_mod_y[n_srcpts] = input_pt[1];
+	Delaunay *delaunay_triangles_mod = new Delaunay(srcpts_mod_x, srcpts_mod_y, n_srcpts+1);
+	delaunay_triangles_mod->Process();
+	int n_triangles_mod = delaunay_triangles_mod->TriNum();
+	Triangle *triangle_mod = new Triangle[n_triangles_mod];
+	delaunay_triangles_mod->store_triangles(triangle_mod);
+	for (int n=0; n < n_triangles_mod; n++) {
+		shared_triangles_mod[triangle_mod[n].vertex_index[0]].push_back(n);
+		shared_triangles_mod[triangle_mod[n].vertex_index[1]].push_back(n);
+		shared_triangles_mod[triangle_mod[n].vertex_index[2]].push_back(n);
+	}
+	int n_boundary_mod_pts;
+	for (int n=0; n < n_srcpts+1; n++) {
+		n_boundary_mod_pts = shared_triangles_mod[n].size();
+		voronoi_boundary_mod_x[n] = new double[n_boundary_mod_pts];
+		voronoi_boundary_mod_y[n] = new double[n_boundary_mod_pts];
+		double *angles = new double[n_boundary_mod_pts];
+		for (i=0; i < n_boundary_mod_pts; i++) {
+			triptr = &triangle_mod[shared_triangles_mod[n][i]];
+			voronoi_boundary_mod_x[n][i] = triptr->circumcenter[0];
+			voronoi_boundary_mod_y[n][i] = triptr->circumcenter[1];
+			double comp1,comp2,angle;
+			comp1 = voronoi_boundary_mod_x[n][i] - srcpts_mod_x[n];
+			comp2 = voronoi_boundary_mod_y[n][i] - srcpts_mod_y[n];
+			//cout << "COMPS: " << comp1 << " " << comp2 << endl;
+			if (comp1==0) {
+				if (comp2 > 0) angle = M_HALFPI;
+				else if (comp2==0) angle = 0.0;
+				else angle = -M_HALFPI;
+			} else {
+				angle = atan(abs(comp2/comp1));
+				if (comp1 < 0) {
+					if (comp2 < 0)
+						angle = angle - M_PI;
+					else
+						angle = M_PI - angle;
+				} else if (comp2 < 0) {
+					angle = -angle;
+				}
+			}
+			while (angle >= M_2PI) angle -= M_2PI;
+			while (angle < 0) angle += M_2PI;
+			angles[i] = angle;
+		}
+		sort(n_boundary_mod_pts,angles,voronoi_boundary_mod_x[n],voronoi_boundary_mod_y[n]);
+		delete[] angles;
+	}
+	for (k=0; k < npts; k++) {
+		m = interpolation_indx[k][thread];
+	//for (m=0; m < n_srcpts; m++) {
+		for (int j=0; j < shared_triangles_mod[m].size(); j++) {
+			nvout << voronoi_boundary_mod_x[m][j] << " " << voronoi_boundary_mod_y[m][j] << endl;
+		}
+		nvout << voronoi_boundary_mod_x[m][0] << " " << voronoi_boundary_mod_y[m][0] << endl << endl;
+	}
+	m = n_srcpts;
+	for (int j=0; j < shared_triangles_mod[m].size(); j++) {
+		nvout << voronoi_boundary_mod_x[m][j] << " " << voronoi_boundary_mod_y[m][j] << endl;
+	}
+	nvout << voronoi_boundary_mod_x[m][0] << " " << voronoi_boundary_mod_y[m][0] << endl << endl;
+
+	for (int j=0; j < shared_triangles_mod[m].size(); j++) {
+		triptr = &triangle_mod[shared_triangles_mod[m][j]];
+		ntout << triptr->vertex[0][0] << " " << triptr->vertex[0][1] << endl;
+		ntout << triptr->vertex[1][0] << " " << triptr->vertex[1][1] << endl;
+		ntout << triptr->vertex[2][0] << " " << triptr->vertex[2][1] << endl;
+		ntout << triptr->vertex[0][0] << " " << triptr->vertex[0][1] << endl << endl;
+	}
+
+	delete delaunay_triangles_mod;
+
+	//}
+
+	//die();
+	}
+	*/
+	//herg++;
+
+	//for (int i=0; i < npts; i++) delete[] adjacent_triangles[i];
+}
+
+void DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
 {
 	int i,j,k,maxk,n;
 	i = img_pixel_i;
@@ -3599,14 +4364,11 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 		}
 	}
 	//cout << "searching for point (" << input_pt[0] << "," << input_pt[1] << "), starting with pixel " << n << " (" << srcpts[n][0] << " " << srcpts[n][1] << ")" << endl;
-	bool inside_triangle;
-	bool on_vertex = false;
-	int trinum;
+	on_vertex = false;
 	trinum = search_grid(n,input_pt,inside_triangle);
 	//cout << "...found in triangle " << trinum << endl;
 	Triangle *triptr = &triangle[trinum];
 	double sqrdist, sqrdistmin=1e30;
-	int kmin;
 	for (k=0; k < 3; k++) {
 		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
@@ -3615,188 +4377,15 @@ bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<int>
 		inside_triangle = false;
 		on_vertex = true;
 	}
-
-	if (!inside_triangle) {
-		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		if ((zero_outside_border) and (!on_vertex)) {
-			mapped_delaunay_srcpixels_ij.push_back(-1);
-			mapped_delaunay_srcpixels_ij.push_back(-1);
-			mapped_delaunay_srcpixels_ij.push_back(-1);
-			return true;
-			/*
-			double sqrlenmax = 1e30;
-			for (k=0; k < 3; k++) {
-				if (k != kmin) {
-					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
-					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
-				}
-			}
-
-			if (sqrdistmin > sqrlenmax) {
-				mapped_delaunay_srcpixels_ij.push_back(-1);
-				mapped_delaunay_srcpixels_ij.push_back(-1);
-				mapped_delaunay_srcpixels_ij.push_back(-1);
-				return true;
-			}
-			*/
-		}
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[kmin]);
-		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "one point!" << triptr->vertex_index[kmin] << " n=" << n << " " << input_pt[0] << " " << input_pt[1] << endl;
-		//cout << img_pixel_i << " " << img_pixel_j << " one point!" << triptr->vertex_index[kmin] << endl;
-		maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
-		//outfile << img_pixel_i << " " << img_pixel_j << " " << triptr->vertex_index[kmin] << endl;
-	} else {
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[0]);
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[1]);
-		mapped_delaunay_srcpixels_ij.push_back(triptr->vertex_index[2]);
-		//outfile << img_pixel_i << " " << img_pixel_j << " " << triptr->vertex_index[0] << endl;
-		//outfile << img_pixel_i << " " << img_pixel_j << " " << triptr->vertex_index[1] << endl;
-		//outfile << img_pixel_i << " " << img_pixel_j << " " << triptr->vertex_index[2] << endl;
-		maps_to_image_pixel[triptr->vertex_index[0]] = true;
-		maps_to_image_pixel[triptr->vertex_index[1]] = true;
-		maps_to_image_pixel[triptr->vertex_index[2]] = true;
-		//if ((img_pixel_i==21) and (img_pixel_j==65)) cout << "three points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << " n=" << n << " " << input_pt[0] << " " << input_pt[1] << endl;
-		//cout << img_pixel_i << " " << img_pixel_j << " three points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
-	}
-	return true;
 }
 
-void DelaunayGrid::calculate_Lmatrix(const int img_index, vector<int>& mapped_delaunay_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread)
+void DelaunayGrid::find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
 {
-	int vertex_index;
-	bool novertex = false;
-	for (int i=0; i < 3; i++) {
-		vertex_index = mapped_delaunay_srcpixels[3*ii+i];
-		if (vertex_index == -1) {
-			novertex = true;
-			break;
-		}
-		lens->Lmatrix_index_rows[img_index].push_back(vertex_index);
-		interpolation_pts[i][thread] = &srcpts[vertex_index];
-	}
-	if (novertex) {
-		lens->Lmatrix_index_rows[img_index].push_back(0);
-		lens->Lmatrix_index_rows[img_index].push_back(0);
-		lens->Lmatrix_index_rows[img_index].push_back(0);
-		lens->Lmatrix_rows[img_index].push_back(0);
-		lens->Lmatrix_rows[img_index].push_back(0);
-		lens->Lmatrix_rows[img_index].push_back(0);
-	} else {
-		double d = ((*interpolation_pts[0][thread])[0]-(*interpolation_pts[1][thread])[0])*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) - ((*interpolation_pts[1][thread])[0]-(*interpolation_pts[2][thread])[0])*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]);
-		if (d==0) {
-			// in this case the points are all the same
-			lens->Lmatrix_rows[img_index].push_back(weight);
-			lens->Lmatrix_rows[img_index].push_back(0);
-			lens->Lmatrix_rows[img_index].push_back(0);
-		} else {
-			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[1][thread])[1]-(*interpolation_pts[2][thread])[1]) + input_pt[1]*((*interpolation_pts[2][thread])[0]-(*interpolation_pts[1][thread])[0]) + (*interpolation_pts[1][thread])[0]*(*interpolation_pts[2][thread])[1] - (*interpolation_pts[1][thread])[1]*(*interpolation_pts[2][thread])[0])/d);
-			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[2][thread])[1]-(*interpolation_pts[0][thread])[1]) + input_pt[1]*((*interpolation_pts[0][thread])[0]-(*interpolation_pts[2][thread])[0]) + (*interpolation_pts[0][thread])[1]*(*interpolation_pts[2][thread])[0] - (*interpolation_pts[0][thread])[0]*(*interpolation_pts[2][thread])[1])/d);
-			lens->Lmatrix_rows[img_index].push_back(weight*(input_pt[0]*((*interpolation_pts[0][thread])[1]-(*interpolation_pts[1][thread])[1]) + input_pt[1]*((*interpolation_pts[1][thread])[0]-(*interpolation_pts[0][thread])[0]) + (*interpolation_pts[0][thread])[0]*(*interpolation_pts[1][thread])[1] - (*interpolation_pts[0][thread])[1]*(*interpolation_pts[1][thread])[0])/d);
-		}
-	}
-
-	index += 3;
-}
-
-double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread)
-{
-	lensvector *pts[3];
-	double *sb[3];
-
-	int i,j,k,maxk,n;
-	i = img_pixel_i;
-	j = img_pixel_j;
-	if (i < img_imin) i = img_imin;
-	else if (i > img_imax) i = img_imax;
-	if (j < img_jmin) j = img_jmin;
-	else if (j > img_jmax) j = img_jmax;
-	maxk = imax(img_imax-img_imin,img_jmax-img_jmin);
-	n=img_index_ij[i][j];
-	k=0;
-	while (n==-1) {
-		// looking for a (ray-traced) pixel within the mask, since the closest pixel doesn't seem to be
-		k++;
-		if ((j-k >= img_jmin) and (n=img_index_ij[i][j-k]) >= 0) break;
-		if ((j+k <= img_jmax) and (n=img_index_ij[i][j+k]) >= 0) break;
-		if (i-k >= img_imin) {
-			if ((n=img_index_ij[i-k][j]) >= 0) break;
-			if ((j-k >= img_jmin) and (n=img_index_ij[i-k][j-k]) >= 0) break;
-			if ((j+k <= img_jmax) and (n=img_index_ij[i-k][j+k]) >= 0) break;
-		}
-		if (i+k <= img_imax) {
-			if ((n=img_index_ij[i+k][j]) >= 0) break;
-			if ((j-k >= img_jmin) and (n=img_index_ij[i+k][j-k]) >= 0) break;
-			if ((j+k <= img_jmax) and (n=img_index_ij[i+k][j+k]) >= 0) break;
-		}
-		if (k > maxk) {
-			warn("could not find a good starting vertex for searching Delaunay grid; starting with vertex 0");
-			n=0; // in this case, can't find a good vertex to start with, so we just start with the first one
-		}
-	}
-
-	bool inside_triangle;
-	bool on_vertex = false;
-	int trinum = search_grid(n,input_pt,inside_triangle);
+	// this version does not use information from lensing to find a starting triangle during the search; it just starts with triangle zero
+	on_vertex = false;
+	trinum = search_grid(0,input_pt,inside_triangle);
 	Triangle *triptr = &triangle[trinum];
 	double sqrdist, sqrdistmin=1e30;
-	int kmin;
-	for (k=0; k < 3; k++) {
-		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
-		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
-	}
-	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
-		inside_triangle = false;
-		on_vertex = true;
-	}
-	if (!inside_triangle) {
-		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-		if ((zero_outside_border) and (!on_vertex)) {
-			return 0;
-			/*
-			double sqrlenmax = 1e30;
-			for (k=0; k < 3; k++) {
-				if (k != kmin) {
-					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
-					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
-				}
-			}
-
-			if (sqrdistmin > sqrlenmax) return 0;
-			*/
-		}
-		return *triptr->sb[kmin];
-	}
-	sb[0] = triptr->sb[0];
-	sb[1] = triptr->sb[1];
-	sb[2] = triptr->sb[2];
-	pts[0] = &triptr->vertex[0];
-	pts[1] = &triptr->vertex[1];
-	pts[2] = &triptr->vertex[2];
-	//if ((img_pixel_i==25) and (img_pixel_j==62)) cout << "three SB points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
-	//cout << img_pixel_i << " " << img_pixel_j << " three SB points!" << " " << triptr->vertex_index[0] << " " << triptr->vertex_index[1] << " " << triptr->vertex_index[2] << endl;
-
-	double d, total_sb = 0;
-	d = ((*pts[0])[0]-(*pts[1])[0])*((*pts[1])[1]-(*pts[2])[1]) - ((*pts[1])[0]-(*pts[2])[0])*((*pts[0])[1]-(*pts[1])[1]);
-	total_sb += (*sb[0])*(input_pt[0]*((*pts[1])[1]-(*pts[2])[1]) + input_pt[1]*((*pts[2])[0]-(*pts[1])[0]) + (*pts[1])[0]*(*pts[2])[1] - (*pts[1])[1]*(*pts[2])[0]);
-	total_sb += (*sb[1])*(input_pt[0]*((*pts[2])[1]-(*pts[0])[1]) + input_pt[1]*((*pts[0])[0]-(*pts[2])[0]) + (*pts[0])[1]*(*pts[2])[0] - (*pts[0])[0]*(*pts[2])[1]);
-	total_sb += (*sb[2])*(input_pt[0]*((*pts[0])[1]-(*pts[1])[1]) + input_pt[1]*((*pts[1])[0]-(*pts[0])[0]) + (*pts[0])[0]*(*pts[1])[1] - (*pts[0])[1]*(*pts[1])[0]);
-	total_sb /= d;
-	return total_sb;
-}
-
-double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
-{
-	lensvector *pts[3];
-	double *sb[3];
-	bool inside_triangle;
-	bool on_vertex = false;
-	int trinum = search_grid(0,input_pt,inside_triangle);
-	Triangle *triptr = &triangle[trinum];
-	// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
-	double sqrdist, sqrdistmin=1e30;
-	int kmin;
 	for (int k=0; k < 3; k++) {
 		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
@@ -3805,37 +4394,6 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 		inside_triangle = false;
 		on_vertex = true;
 	}
-	if (!inside_triangle) {
-		if ((zero_outside_border) and (!on_vertex)) {
-			return 0;
-			/*
-			double sqrlenmax = 1e30;
-			for (int k=0; k < 3; k++) {
-				if (k != kmin) {
-					sqrdist = SQR(triptr->vertex[kmin][0]-triptr->vertex[k][0]) + SQR(triptr->vertex[kmin][1]-triptr->vertex[k][1]);
-					if (sqrdist < sqrlenmax) sqrlenmax = sqrdist;
-				}
-			}
-
-			if (sqrdistmin > sqrlenmax) return 0;
-			*/
-		}
-		return *triptr->sb[kmin];
-	}
-	sb[0] = triptr->sb[0];
-	sb[1] = triptr->sb[1];
-	sb[2] = triptr->sb[2];
-	pts[0] = &triptr->vertex[0];
-	pts[1] = &triptr->vertex[1];
-	pts[2] = &triptr->vertex[2];
-
-	double d, total_sb = 0;
-	d = ((*pts[0])[0]-(*pts[1])[0])*((*pts[1])[1]-(*pts[2])[1]) - ((*pts[1])[0]-(*pts[2])[0])*((*pts[0])[1]-(*pts[1])[1]);
-	total_sb += (*sb[0])*(input_pt[0]*((*pts[1])[1]-(*pts[2])[1]) + input_pt[1]*((*pts[2])[0]-(*pts[1])[0]) + (*pts[1])[0]*(*pts[2])[1] - (*pts[1])[1]*(*pts[2])[0]);
-	total_sb += (*sb[1])*(input_pt[0]*((*pts[2])[1]-(*pts[0])[1]) + input_pt[1]*((*pts[0])[0]-(*pts[2])[0]) + (*pts[0])[1]*(*pts[2])[0] - (*pts[0])[0]*(*pts[2])[1]);
-	total_sb += (*sb[2])*(input_pt[0]*((*pts[0])[1]-(*pts[1])[1]) + input_pt[1]*((*pts[1])[0]-(*pts[0])[0]) + (*pts[0])[0]*(*pts[1])[1] - (*pts[0])[1]*(*pts[1])[0]);
-	total_sb /= d;
-	return total_sb;
 }
 
 int DelaunayGrid::assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels)
@@ -3936,7 +4494,7 @@ void DelaunayGrid::generate_hmatrices()
 				add_hmatrix_entry(lens,l,i,vertex_i2,avg_length*dpt1/(dpt*dpt12));
 			} else {
 				minlength=1e30;
-				for (k=0; k < shared_triangles[i].size(); k++) {
+				for (k=0; k < n_shared_triangles[i]; k++) {
 					triptr = &triangle[shared_triangles[i][k]];
 					length = sqrt(triptr->area);
 					if (length < minlength) minlength = length;
@@ -4027,7 +4585,7 @@ void DelaunayGrid::generate_gmatrices()
 				//add_gmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 			} else {
 				minlength=1e30;
-				for (k=0; k < shared_triangles[i].size(); k++) {
+				for (k=0; k < n_shared_triangles[i]; k++) {
 					triptr = &triangle[shared_triangles[i][k]];
 					length = sqrt(triptr->area);
 					if (length < minlength) minlength = length;
@@ -4336,6 +4894,14 @@ void DelaunayGrid::plot_surface_brightness(string root, const double xmin, const
 		for (i=0; i < n_srcpts; i++) {
 			srcout << srcpts[i][0] << " " << srcpts[i][1] << endl;
 		}
+		string voronoi_filename = root + "_voronoi.dat";
+		ofstream vout; lens->open_output_file(vout,voronoi_filename);
+		for (i=0; i < n_srcpts; i++) {
+			for (j=0; j < n_shared_triangles[i]; j++) {
+				vout << voronoi_boundary_x[i][j] << " " << voronoi_boundary_y[i][j] << endl;
+			}
+			vout << voronoi_boundary_x[i][0] << " " << voronoi_boundary_y[i][0] << endl << endl;
+		}
 	}
 
 	if (plot_fits) {
@@ -4400,6 +4966,14 @@ DelaunayGrid::~DelaunayGrid()
 	delete[] maps_to_image_pixel;
 	delete[] active_pixel;
 	delete[] active_index;
+	delete[] n_shared_triangles;
+	for (int i=0; i < n_srcpts; i++) {
+		delete[] voronoi_boundary_x[i];
+		delete[] voronoi_boundary_y[i];
+		delete[] shared_triangles[i];
+	}
+	delete[] voronoi_boundary_x;
+	delete[] voronoi_boundary_y;
 	delete[] shared_triangles;
 	delete[] imggrid_ivals;
 	delete[] imggrid_jvals;
@@ -8103,7 +8677,8 @@ void ImagePixelGrid::setup_pixel_arrays()
 	pixel_index = new int*[x_N];
 	pixel_index_fgmask = new int*[x_N];
 	mapped_cartesian_srcpixels = new vector<SourcePixelGrid*>*[x_N];
-	mapped_delaunay_srcpixels = new vector<int>*[x_N];
+	mapped_delaunay_srcpixels = new vector<PtsWgts>*[x_N];
+	n_mapped_srcpixels = new int**[x_N];
 	surface_brightness = new double*[x_N];
 	foreground_surface_brightness = new double*[x_N];
 	noise_map = new double*[x_N];
@@ -8139,7 +8714,8 @@ void ImagePixelGrid::setup_pixel_arrays()
 		source_plane_triangle1_area[i] = new double[y_N];
 		source_plane_triangle2_area[i] = new double[y_N];
 		mapped_cartesian_srcpixels[i] = new vector<SourcePixelGrid*>[y_N];
-		mapped_delaunay_srcpixels[i] = new vector<int>[y_N];
+		mapped_delaunay_srcpixels[i] = new vector<PtsWgts>[y_N];
+		n_mapped_srcpixels[i] = new int*[y_N];
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		subpixel_center_pts[i] = new lensvector*[y_N];
 		subpixel_center_sourcepts[i] = new lensvector*[y_N];
@@ -8160,6 +8736,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_surface_brightness[i][j] = new double[max_nsplit*max_nsplit];
 			subpixel_sbweights[i][j] = new double[max_nsplit*max_nsplit];
+			n_mapped_srcpixels[i][j] = new int[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 		}
 	}
@@ -8201,7 +8778,7 @@ void ImagePixelGrid::set_null_ray_tracing_arrays()
 
 void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 {
-	int i,j,n,n_cell,n_corner;
+	int i,j,k,n,n_cell,n_corner;
 
 	if ((!fit_to_data) or (lens->image_pixel_data == NULL)) {
 		ntot_cells = x_N*y_N;
@@ -8330,10 +8907,14 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 	//}
 	//if (lens->mpi_id==0) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+			}
 		}
 	}
 	int nsplit = (lens->split_high_mag_imgpixels) ? 1 : lens->default_imgpixel_nsplit;
@@ -9012,16 +9593,20 @@ bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 		warn("Number of data pixels does not match specified number of image pixels; cannot activate fit window");
 		return false;
 	}
-	int i,j;
+	int i,j,k;
 	if (fit_to_data==NULL) {
 		fit_to_data = new bool*[x_N];
 		for (i=0; i < x_N; i++) fit_to_data[i] = new bool[y_N];
 	}
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			fit_to_data[i][j] = pixel_data.in_mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+			}
 		}
 	}
 	//double mask_min_r = 1e30;
@@ -9044,16 +9629,20 @@ bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 
 void ImagePixelGrid::include_all_pixels()
 {
-	int i,j;
+	int i,j,k;
 	if (fit_to_data==NULL) {
 		fit_to_data = new bool*[x_N];
 		for (i=0; i < x_N; i++) fit_to_data[i] = new bool[y_N];
 	}
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			fit_to_data[i][j] = true;
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+			}
 		}
 	}
 	if (lens) setup_ray_tracing_arrays();
@@ -9076,16 +9665,20 @@ void ImagePixelGrid::activate_extended_mask()
 
 void ImagePixelGrid::activate_foreground_mask()
 {
-	int i,j;
+	int i,j,k;
 	if (fit_to_data==NULL) {
 		fit_to_data = new bool*[x_N];
 		for (i=0; i < x_N; i++) fit_to_data[i] = new bool[y_N];
 	}
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->foreground_mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+			}
 		}
 	}
 	if (lens) setup_ray_tracing_arrays();
@@ -9093,13 +9686,17 @@ void ImagePixelGrid::activate_foreground_mask()
 
 void ImagePixelGrid::deactivate_extended_mask()
 {
-	int i,j;
+	int i,j,k;
 	//int n=0, m=0;
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			fit_to_data[i][j] = lens->image_pixel_data->in_mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+			}
 
 			//if (fit_to_data[i][j]) n++;
 			//if (lens->image_pixel_data->extended_mask[i][j]) m++;
@@ -9739,14 +10336,20 @@ int ImagePixelGrid::count_nonzero_source_pixel_mappings_delaunay()
 
 void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 {
-	int i,j;
+	int i,j,k;
 	n_active_pixels = 0;
 	n_high_sn_pixels = 0;
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
+	int *ptr;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if (delaunay) mapped_delaunay_srcpixels[i][j].clear();
 			else mapped_cartesian_srcpixels[i][j].clear();
 			maps_to_source_pixel[i][j] = false;
+			ptr = n_mapped_srcpixels[i][j];
+			for (k=0; k < nsubpix; k++) {
+				(*ptr++) = 0;
+			}
 		}
 	}
 	if ((!delaunay) and (ray_tracing_method == Area_Overlap)) // Delaunay grid does not support overlap ray tracing
@@ -9801,7 +10404,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 							maps_to_something = false;
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++)
 							{
-								if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],i,j,thread)==true))) {
+								if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][subcell_index],i,j,thread)==true))) {
 									maps_to_something = true;
 									subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
 								} else if ((!delaunay) and (source_pixel_grid->assign_source_mapping_flags_interpolate(subpixel_center_sourcepts[i][j][subcell_index],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
@@ -9828,7 +10431,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
-							if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],i,j,thread)==true))) {
+							if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][0],i,j,thread)==true))) {
 								maps_to_source_pixel[i][j] = true;
 								#pragma omp atomic
 								n_active_pixels++;
@@ -10886,12 +11489,14 @@ ImagePixelGrid::~ImagePixelGrid()
 			delete[] subpixel_center_sourcepts[i][j];
 			delete[] subpixel_surface_brightness[i][j];
 			delete[] subpixel_sbweights[i][j];
+			delete[] n_mapped_srcpixels[i][j];
 		}
 		delete[] subpixel_maps_to_srcpixel[i];
 		delete[] subpixel_center_pts[i];
 		delete[] subpixel_center_sourcepts[i];
 		delete[] subpixel_surface_brightness[i];
 		delete[] subpixel_sbweights[i];
+		delete[] n_mapped_srcpixels[i];
 	}
 	int max_subpixel_nx = x_N*max_nsplit;
 	for (int i=0; i < max_subpixel_nx; i++) {
@@ -10915,6 +11520,7 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] subpixel_center_sourcepts;
 	delete[] subpixel_surface_brightness;
 	delete[] subpixel_sbweights;
+	delete[] n_mapped_srcpixels;
 	delete[] nsplits;
 	delete[] twist_status;
 	delete[] twist_pts;
@@ -11258,12 +11864,22 @@ void QLens::clear_pixel_matrices()
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
-	for (int i=0; i < image_pixel_grid->x_N; i++) {
-		for (int j=0; j < image_pixel_grid->y_N; j++) {
+	/*
+	// I don't think this is necessary, so commented out...these will be cleared when pixel mappings are assigned
+	int nsubpix = INTSQR(default_imgpixel_nsplit);
+	int i,j,k;
+	int *ptr;
+	for (i=0; i < image_pixel_grid->x_N; i++) {
+		for (j=0; j < image_pixel_grid->y_N; j++) {
 			image_pixel_grid->mapped_cartesian_srcpixels[i][j].clear();
 			image_pixel_grid->mapped_delaunay_srcpixels[i][j].clear();
+			ptr = image_pixel_grid->n_mapped_srcpixels[i][j];
+			for (k=0; k < nsubpix; k++) {
+				(*ptr++) = 0;
+			}
 		}
 	}
+	*/
 	if ((n_image_prior) and (source_fit_mode==Cartesian_Source)) {
 		if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 		source_pixel_n_images = NULL;
@@ -11349,7 +11965,7 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 					if (delaunay) {
 						if (delaunay_srcgrid != NULL) {
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-								delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+								delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
 							}
 						}
 					} else {
@@ -11367,7 +11983,7 @@ void QLens::assign_Lmatrix(const bool delaunay, const bool verbal)
 					j = active_image_pixel_j[img_index];
 					if (delaunay) {
 						if (delaunay_srcgrid != NULL) {
-							delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+							delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
 						}
 					} else {
 						source_pixel_grid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
@@ -11444,7 +12060,7 @@ void QLens::assign_Lmatrix_supersampled(const bool delaunay, const bool verbal)
 			center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 			if (delaunay) {
 				if (delaunay_srcgrid != NULL) { // this might be the case if we're only doing point sources but happen to be in delaunay source mode
-						delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
+						delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
 				}
 			} else {
 				source_pixel_grid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);

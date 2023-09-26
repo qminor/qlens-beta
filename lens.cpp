@@ -902,7 +902,7 @@ QLens::QLens() : UCMC()
 	shapelet_max_scale = 1.0;
 	delaunay_mode = 1;
 	ray_tracing_method = Interpolate;
-	interpolate_sb_3pt = true; // if false, will not use 3-point interpolation even when ray tracing method is set to "interpolate"
+	natural_neighbor_interpolation = true; // if false, uses 3-point interpolation
 #ifdef USE_MUMPS
 	inversion_method = MUMPS;
 #else
@@ -1339,7 +1339,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	shapelet_window_scaling = lens_in->shapelet_window_scaling;
 	shapelet_max_scale = lens_in->shapelet_max_scale;
 	delaunay_mode = lens_in->delaunay_mode;
-	interpolate_sb_3pt = lens_in->interpolate_sb_3pt;
+	natural_neighbor_interpolation = lens_in->natural_neighbor_interpolation;
 
 	regularization_method = lens_in->regularization_method;
 	regularization_parameter = lens_in->regularization_parameter;
