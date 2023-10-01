@@ -3333,16 +3333,20 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 	int n_boundary_pts;
 	Triangle *triptr;
 	int i;
-	//lensvector midpoint;
+	lensvector midpoint;
+	//int** tricheck = new int*[n_srcpts];
 	for (n=0; n < n_srcpts; n++) {
 		n_boundary_pts = shared_triangles_unsorted[n].size();
 		voronoi_boundary_x[n] = new double[n_boundary_pts];
 		voronoi_boundary_y[n] = new double[n_boundary_pts];
 		shared_triangles[n] = new int[n_boundary_pts];
+		shared_triangles[n] = new int[n_boundary_pts];
+		//tricheck[n] = new int[n_boundary_pts];
 		double *angles = new double[n_boundary_pts];
-		//double *midpt_angles = new double[n_boundary_pts];
+		double *midpt_angles = new double[n_boundary_pts];
 		for (i=0; i < n_boundary_pts; i++) {
 			shared_triangles[n][i] = shared_triangles_unsorted[n][i];
+			//tricheck[n][i] = shared_triangles_unsorted[n][i];
 			triptr = &triangle[shared_triangles_unsorted[n][i]];
 			voronoi_boundary_x[n][i] = triptr->circumcenter[0];
 			voronoi_boundary_y[n][i] = triptr->circumcenter[1];
@@ -3369,7 +3373,6 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 			while (angle < 0) angle += M_2PI;
 			angles[i] = angle;
 
-			/*
 			midpoint = 0.33333333333333*(triptr->vertex[0] + triptr->vertex[1] + triptr->vertex[2]);
 			comp1 = midpoint[0] - srcpts[n][0];
 			comp2 = midpoint[1] - srcpts[n][1];
@@ -3392,15 +3395,19 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 			while (angle >= M_2PI) angle -= M_2PI;
 			while (angle < 0) angle += M_2PI;
 			midpt_angles[i] = angle;
-			*/
 		}
 		n_shared_triangles[n] = n_boundary_pts;
-		//sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]); // I don't think sorting by circumcenters will work well, because circumcenters may lie outside the triangles and orders might get reversed (actually probably not, because Delaunay --> triangles are only in their own circumcenters)
-		sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]);
-		//sort(n_boundary_pts,midpt_angles,shared_triangles[n]);
+		//sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]); // I don't think sorting by circumcenters will work well, because circumcenters may lie outside the triangles and orders might get reversed 
+		sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n]);
+		sort(n_boundary_pts,midpt_angles,shared_triangles[n]);
+		//for (i=0; i < n_boundary_pts; i++) {
+			//if (tricheck[n][i] != shared_triangles[n][i]) die("FUCKIN HELL");
+		//}
+		//delete[] tricheck[n];
 		delete[] angles;
-		//delete[] midpt_angles;
+		delete[] midpt_angles;
 	}
+	//delete[] tricheck;
 
 	delete[] shared_triangles_unsorted;
 	delete delaunay_triangles;
@@ -3737,7 +3744,7 @@ double DelaunayGrid::find_lensed_surface_brightness(lensvector &input_pt, const 
 	return sb_interp;
 }
 
-double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
+double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt, const int thread)
 {
 	bool inside_triangle;
 	bool on_vertex;
@@ -3754,12 +3761,12 @@ double DelaunayGrid::interpolate_surface_brightness(lensvector &input_pt)
 	int npts;
 	double sb_interp = 0;
 	if (lens->natural_neighbor_interpolation) {
-		find_interpolation_weights_nn(input_pt, trinum, npts, 0);
+		find_interpolation_weights_nn(input_pt, trinum, npts, thread);
 	} else {
-		find_interpolation_weights_3pt(input_pt, trinum, npts, 0);
+		find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
 	}
 	for (int i=0; i < npts; i++) {
-		sb_interp += surface_brightness[interpolation_indx[i][0]]*interpolation_wgts[i][0];
+		sb_interp += surface_brightness[interpolation_indx[i][thread]]*interpolation_wgts[i][thread];
 	}
 	return sb_interp;
 }
@@ -14775,7 +14782,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 			for (k=0; k < nsubpix; k++) {
 				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
 				sb = 0;
-				if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k]);
+				if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
 				else if (source_fit_mode==Cartesian_Source) sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
 				else if (at_least_one_lensed_src) {
 					for (m=0; m < n_sb; m++) {
@@ -14794,7 +14801,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 			}
 		}
 	}
-	for (int n=0; n < npix_in_mask; n++) {
+	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?

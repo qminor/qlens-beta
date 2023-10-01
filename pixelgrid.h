@@ -252,7 +252,7 @@ class DelaunayGrid : public Sort
 	double find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
 	void find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	void find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
-	double interpolate_surface_brightness(lensvector &input_pt);
+	double interpolate_surface_brightness(lensvector &input_pt, const int thread = 0);
 	double interpolate_surface_brightness_nn(lensvector &input_pt); // natural neighbor interpolation
 
 	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
