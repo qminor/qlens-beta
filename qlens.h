@@ -529,13 +529,18 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
 	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
-	bool use_matern_scale_parameter;
-	double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3)
+	bool use_second_covariance_kernel;
+	double kernel2_correlation_length, kernel2_correlation_length_upper_limit, kernel2_correlation_length_lower_limit;
+	double kernel2_amplitude_ratio, kernel2_amplitude_ratio_upper_limit, kernel2_amplitude_ratio_lower_limit;
+	bool use_matern_scale_parameter; // ELIMINATE THIS FEATURE?
+	double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3) (ELIMINATE THIS FEATURE?)
 	double matern_approx_source_size;
 	bool vary_regularization_parameter;
 	bool vary_correlation_length;
 	bool vary_matern_scale;
 	bool vary_matern_index;
+	bool vary_kernel2_amplitude_ratio;
+	bool vary_kernel2_correlation_length;
 	bool optimize_regparam;
 	//bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
@@ -544,10 +549,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	// the following parameters are used for luminosity-weighted regularization
 	bool use_lum_weighted_regularization;
+	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
 	//double regparam_lhi, regparam_lum_index; 
 	double *lum_weight_factor;
+	double *lum_weight_factor2; // for second covariance kernel
 	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;

@@ -2956,7 +2956,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	}
 }
 
-bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting)
+bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool allow_lum_weighting)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2970,14 +2970,17 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 	if (source_fit_mode==Delaunay_Source) {
 		if ((kernel_type==0) and (use_matern_scale_parameter)) {
 			matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
-		//wtime0 = omp_get_wtime();
+			//wtime0 = omp_get_wtime();
 			//cout << "approx source size=" << matern_approx_source_size << endl;
 			set_corrlength_for_given_matscale();
-		//wtime = omp_get_wtime() - wtime0;
-		//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
+			//wtime = omp_get_wtime() - wtime0;
+			//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 		}
-		double *lumfac = ((include_lum_weighting) and (use_lum_weighted_regularization)) ? lum_weight_factor : NULL;
+		double *lumfac = ((allow_lum_weighting) and (use_lum_weighted_regularization)) ? lum_weight_factor : NULL;
 		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,lumfac);
+		if ((allow_lum_weighting) and (use_second_covariance_kernel)) {
+			delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel2_correlation_length,kernel_type,matern_index,lum_weight_factor2,true,kernel2_amplitude_ratio); // uses exponential kernel
+		}
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
@@ -4597,7 +4600,7 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *lumfac)
+void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *lumfac, const bool add_to_covmatrix, const double amplitude)
 {
 	bool lum_weighting = (lumfac==NULL) ? false : true;
 	double corrlength;
@@ -4618,12 +4621,14 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
 		if (lum_weighting) wi = exp(-lumfac[i]);
-		//if (lum_weighting) wi = 1-exp(-lumfac[i]);
-		//if (lum_weighting) wi = lumfac[i];
 		else wi=1.0;
-		*(covptr++) = wi*wi + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
+		fac = wi*wi;
+		if (amplitude > 0) fac *= amplitude;
+		if (!add_to_covmatrix) *covptr = 0;
+		*(covptr++) += fac + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		for (j=i+1; j < n_srcpts; j++) {
+			if (!add_to_covmatrix) *covptr = 0;
 			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
 			corrlength = input_corr_length;
 			double xsig = 0.5;
@@ -4637,6 +4642,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			} else {
 				fac = 1.0;
 			}
+			if (amplitude > 0) fac *= amplitude;
 			if (kernel_type==0) {
 				x = sqrt(2*matern_index*sqrdist)/corrlength;
 				if (x==0) {
@@ -4645,14 +4651,11 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 					cout << "j: " << j << " sj_x=" << srcpts[j][0] << " sj_y=" << srcpts[j][1] << endl;
 					die();
 				}
-				*(covptr++) = fac*matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
-				//double blurgh = matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
-				//cout << "blurgh=" << blurgh << endl;
-				//*(covptr++) = fac; 
+				*(covptr++) += fac*matern_fac*pow(x,matern_index)*modified_bessel_function(x,matern_index); // Matern kernel
 			} else if (kernel_type==1) {
-				*(covptr++) = fac*exp(-sqrt(sqrdist)/corrlength); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
+				*(covptr++) += fac*exp(-sqrt(sqrdist)/corrlength); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
 			} else {
-				*(covptr++) = fac*exp(-sqrdist/(2*corrlength*corrlength)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
+				*(covptr++) += fac*exp(-sqrdist/(2*corrlength*corrlength)); // Gaussian kernel (limit of Matern kernel as matern_index goes to infinity)
 			}
 		}
 	}
@@ -11731,6 +11734,9 @@ void QLens::initialize_pixel_matrices(bool verbal)
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
+	if (use_second_covariance_kernel) {
+		lum_weight_factor2 = new double[source_npixels];
+	}
 
 	if (use_noise_map) {
 		int ii,i,j;
@@ -11802,6 +11808,10 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
+	if (use_second_covariance_kernel) {
+		lum_weight_factor2 = new double[source_npixels];
+	}
+
 	if (use_noise_map) {
 		int ii,i,j;
 		for (ii=0; ii < image_npixels; ii++) {
@@ -11830,6 +11840,7 @@ void QLens::clear_pixel_matrices()
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
+	if (lum_weight_factor2 != NULL) delete[] lum_weight_factor2;
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
@@ -11850,6 +11861,7 @@ void QLens::clear_pixel_matrices()
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
 	lum_weight_factor = NULL;
+	lum_weight_factor2 = NULL;
 	//lumreg_pixel_weights = NULL;
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
@@ -13446,15 +13458,13 @@ void QLens::generate_supersampled_PSF_matrix()
 
 }
 
-bool QLens::create_regularization_matrix(const bool include_lum_weighting, const bool use_sbweights)
+bool QLens::create_regularization_matrix(const bool allow_lum_weighting, const bool use_sbweights)
 {
 	RegularizationMethod reg_method = regularization_method;
-	if ((use_lum_weighted_regularization) and (!include_lum_weighting)) reg_method = Curvature;
+	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (!allow_lum_weighting)) reg_method = Curvature;
 	if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
 	if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
-	if (include_lum_weighting) calculate_lumreg_srcpixel_weights(use_sbweights);
-
-	int i,j;
+	if (allow_lum_weighting) calculate_lumreg_srcpixel_weights(use_sbweights);
 
 	dense_Rmatrix = false; // assume sparse unless a dense regularization is chosen
 	bool covariance_kernel_regularization = false;
@@ -13472,19 +13482,19 @@ bool QLens::create_regularization_matrix(const bool include_lum_weighting, const
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(0,include_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(0,allow_lum_weighting);
 			break;
 		case Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(1,include_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(1,allow_lum_weighting);
 			break;
 		case Squared_Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(2,include_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(2,allow_lum_weighting);
 			break;
 		default:
 			die("Regularization method not recognized");
@@ -14608,7 +14618,7 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		wtime_opt0 = omp_get_wtime();
 	}
 #endif
-	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
+	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (!pre_srcgrid)) {
 		if (!get_lumreg_from_sbweights) {
 			if (!use_covariance_matrix) {
 				// This means we started with a non-covmatrix based regularization (e.g. curvature) to get the initial luminosity.
@@ -14815,7 +14825,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 
 void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 {
-	double lumfac, max_sb=-1e30;
+	double lumfac, lumfac2, max_sb=-1e30;
 	int i;
 	if (use_sbweights) find_srcpixel_weights();
 	for (i=0; i < source_npixels; i++) {
@@ -14823,13 +14833,28 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 	}
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
-			//if (regparam_lum_index==0) lumfac = 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			if (regparam_lum_index==0) lumfac = 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? pow(1-source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-			else lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
-			//else lumfac = (source_pixel_vector[i] > 0) ? pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 0;
-			lum_weight_factor[i] = regparam_lsc*lumfac;
+			if (regparam_lum_index==0) {
+				lumfac = 1;
+				lum_weight_factor[i] = regparam_lsc*lumfac;
+			} else {
+				if (lum_weight_function==0) {
+					lumfac = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+					lum_weight_factor[i] = pow(regparam_lsc,regparam_lum_index)*lumfac;
+				} else if (lum_weight_function==1) {
+					lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+					lum_weight_factor[i] = regparam_lsc*lumfac;
+				} else {
+					lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
+					lum_weight_factor[i] = regparam_lsc*lumfac;
+				}
+			}
+		}
+	}
+	if (use_second_covariance_kernel) {
+		for (i=0; i < source_npixels; i++) {
+			//if (regparam_lum_index==0) lumfac2 = 1;
+			lumfac2 = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,2) : 1;
+			lum_weight_factor2[i] = pow(regparam_lsc,2)*lumfac2;
 		}
 	}
 }

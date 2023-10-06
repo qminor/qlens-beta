@@ -12035,7 +12035,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!optimize_regparam) and (!get_lumreg_from_sbweights)) Complain("lum_weighted_regularization requires 'optimize_regparam' or 'lumreg_from_sbweights' to be set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
-					if (vary_regparam_lsc) {
+					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
 						vary_regparam_lsc = false;
 					}
@@ -12052,6 +12052,17 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="lumweight_func")
+		{
+			int lfunc;
+			if (nwords == 2) {
+				if (!(ws[1] >> lfunc)) Complain("invalid lumweight_func value");
+				if ((lfunc < 0) or (lfunc > 2)) Complain("lumweight_func must be either 0, 1, or 2");
+				lum_weight_function = lfunc;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumweight_func = " << lum_weight_function << endl;
+			} else Complain("must specify either zero or one argument (lumweight_func value)");
+		}
 		else if (words[0]=="lum_weighted_srcpixel_clustering")
 		{
 			if (nwords==1) {
@@ -12061,10 +12072,6 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("lum_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("luminosity-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
 				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
-					if (vary_regparam_lsc) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
-						vary_regparam_lsc = false;
-					}
 					if (vary_alpha_clus) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
 						vary_alpha_clus = false;
@@ -12114,7 +12121,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lsc can be varied");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lsc,setword);
 				update_parameter_list();
@@ -12374,6 +12381,91 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				set_switch(vary_matern_scale,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="use_two_kernels")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use double-kernel covariance matrix: " << display_switch(use_second_covariance_kernel) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_two_kernels' command; must specify 'on' or 'off'");
+				//if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
+				//if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("beta_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(use_second_covariance_kernel,setword);
+				if ((vary_regparam_lsc) and (!use_lum_weighted_regularization)) {
+					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
+					vary_regparam_lsc = false;
+				}
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="corrlength2")
+		{
+			double corrlength, corrlength_ul, corrlength_ll;
+			if (nwords == 4) {
+				if (!(ws[1] >> corrlength_ll)) Complain("invalid kernel_2 correlation length lower limit");
+				if (!(ws[2] >> corrlength)) Complain("invalid kernel_2 correlation length value");
+				if (!(ws[3] >> corrlength_ul)) Complain("invalid kernel_2 correlation length upper limit");
+				if ((corrlength < corrlength_ll) or (corrlength > corrlength_ul)) Complain("initial kernel_2 correlation length should lie within specified prior limits");
+				kernel2_correlation_length = corrlength;
+				kernel2_correlation_length_lower_limit = corrlength_ll;
+				kernel2_correlation_length_upper_limit = corrlength_ul;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> corrlength)) Complain("invalid kernel_2 correlation length value");
+				kernel2_correlation_length = corrlength;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "kernel_2 correlation length = " << kernel2_correlation_length << endl;
+			} else Complain("must specify either zero or one argument (second kernel correlation length value)");
+		}
+		else if (words[0]=="vary_corrlength2")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary kernel_2 correlation length: " << display_switch(vary_kernel2_correlation_length) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
+				if (setword=="on") {
+					if (regularization_method==None) Complain("regularization method must be chosen before corrlength2 can be varied (see 'fit regularization')");
+					if (source_fit_mode != Delaunay_Source) Complain("corrlength2 can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+					if (use_matern_scale_parameter) Complain("corrlength2 can only be varied if 'use_matern_scale' is set to 'off'");
+					if (vary_matern_scale) {
+						if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
+						vary_matern_scale = false;
+					}
+				}
+				set_switch(vary_kernel2_correlation_length,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="kernel_amp_ratio")
+		{
+			double kernel_amp_ratio, kernel_amp_ratio_ul, kernel_amp_ratio_ll;
+			if (nwords == 4) {
+				if (!(ws[1] >> kernel_amp_ratio_ll)) Complain("invalid kernel correlation length lower limit");
+				if (!(ws[2] >> kernel_amp_ratio)) Complain("invalid kernel correlation length value");
+				if (!(ws[3] >> kernel_amp_ratio_ul)) Complain("invalid kernel correlation length upper limit");
+				if ((kernel_amp_ratio < kernel_amp_ratio_ll) or (kernel_amp_ratio > kernel_amp_ratio_ul)) Complain("initial kernel correlation length should lie within specified prior limits");
+				kernel2_amplitude_ratio = kernel_amp_ratio;
+				kernel2_amplitude_ratio_lower_limit = kernel_amp_ratio_ll;
+				kernel2_amplitude_ratio_upper_limit = kernel_amp_ratio_ul;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> kernel_amp_ratio)) Complain("invalid kernel amplitude ratio value");
+				kernel2_amplitude_ratio = kernel_amp_ratio;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "kernel2 amplitude ratio = " << kernel2_amplitude_ratio << endl;
+			} else Complain("must specify either zero or one argument (second kernel aplitude ratio)");
+		}
+		else if (words[0]=="vary_kernel_amp_ratio")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary kernel_2 amplitude ratio: " << display_switch(vary_kernel2_amplitude_ratio) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
+				if (setword=="on") {
+					if (regularization_method==None) Complain("regularization method must be chosen before kernel_amp_ratio can be varied (see 'fit regularization')");
+					if (source_fit_mode != Delaunay_Source) Complain("kernel_amp_ratio can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				}
+				set_switch(vary_kernel2_amplitude_ratio,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
