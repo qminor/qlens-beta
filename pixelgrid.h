@@ -124,6 +124,7 @@ class SourcePixelGrid
 	inline bool check_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	inline double find_triangle1_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
 	inline double find_triangle2_overlap(lensvector **input_corner_pts, lensvector *twist_pt, int& twist_status, const int& thread);
+
 	void generate_gmatrices();
 	void generate_hmatrices();
 
@@ -264,6 +265,7 @@ class DelaunayGrid : public Sort
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
+	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts);
 	void generate_gmatrices();
 	void generate_hmatrices();
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
@@ -387,7 +389,7 @@ class ImagePixelGrid : public Sort
 	void assign_required_data_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
 
 	void find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax);
-	double find_approx_source_size();
+	double find_approx_source_size(double& xcavg, double& ycavg);
 	void find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
 	void fill_surface_brightness_vector();
 	void plot_grid(string filename, bool show_inactive_pixels);

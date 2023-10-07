@@ -2964,20 +2964,25 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 	}
 #endif
 	int ntot = source_npixels*(source_npixels+1)/2;
+	double xc_approx, yc_approx, sig;
 	covmatrix_packed.input(ntot);
 	covmatrix_factored.input(ntot);
 	Rmatrix_packed.input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
-		if ((kernel_type==0) and (use_matern_scale_parameter)) {
-			matern_approx_source_size = image_pixel_grid->find_approx_source_size()/3;
-			//wtime0 = omp_get_wtime();
-			//cout << "approx source size=" << matern_approx_source_size << endl;
-			set_corrlength_for_given_matscale();
-			//wtime = omp_get_wtime() - wtime0;
-			//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
+		if ((use_distance_weighted_regularization) or ((kernel_type==0) and (use_matern_scale_parameter))) {
+			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
+			//cout << "approx source size=" << sig << endl;
+			if (use_matern_scale_parameter) {
+				matern_approx_source_size = sig/3;
+				//wtime0 = omp_get_wtime();
+				set_corrlength_for_given_matscale();
+				//wtime = omp_get_wtime() - wtime0;
+				//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
+			}
+			if (use_distance_weighted_regularization) calculate_distreg_srcpixel_weights(xc_approx,yc_approx,sig);
 		}
-		double *lumfac = ((allow_lum_weighting) and (use_lum_weighted_regularization)) ? lum_weight_factor : NULL;
-		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,lumfac);
+		double *wgtfac = ((use_distance_weighted_regularization) or ((allow_lum_weighting) and (use_lum_weighted_regularization))) ? lum_weight_factor : NULL;
+		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,wgtfac);
 		if ((allow_lum_weighting) and (use_second_covariance_kernel)) {
 			delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel2_correlation_length,kernel_type,matern_index,lum_weight_factor2,true,kernel2_amplitude_ratio); // uses exponential kernel
 		}
@@ -4415,6 +4420,14 @@ int DelaunayGrid::assign_active_indices_and_count_source_pixels(const bool activ
 	return source_pixel_i;
 }
 
+void DelaunayGrid::calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts)
+{
+	if (nsrcpts != n_srcpts) die("wrong number of source points!");
+	for (int i=0; i < n_srcpts; i++) {
+		dists[i] = sqrt(SQR(srcpts[i][0]-xc)+SQR(srcpts[i][1]-yc))/sig;
+	}
+}
+
 void DelaunayGrid::generate_hmatrices()
 {
 	// NOTE: for the moment, we are assuming all the source pixels are 'active', i.e. will be used in the inversion
@@ -4600,9 +4613,9 @@ void DelaunayGrid::generate_gmatrices()
 	}
 }
 
-void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *lumfac, const bool add_to_covmatrix, const double amplitude)
+void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const double input_corr_length, const int kernel_type, const double matern_index, double *wgtfac, const bool add_to_covmatrix, const double amplitude)
 {
-	bool lum_weighting = (lumfac==NULL) ? false : true;
+	bool extra_weighting = (wgtfac==NULL) ? false : true;
 	double corrlength;
 	int i,j;
 	double sqrdist,x,matern_fac;
@@ -4620,7 +4633,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
-		if (lum_weighting) wi = exp(-lumfac[i]);
+		if (extra_weighting) wi = exp(-wgtfac[i]);
 		else wi=1.0;
 		fac = wi*wi;
 		if (amplitude > 0) fac *= amplitude;
@@ -4632,12 +4645,12 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			sqrdist = SQR(srcpts[i][0]-srcpts[j][0]) + SQR(srcpts[i][1]-srcpts[j][1]);
 			corrlength = input_corr_length;
 			double xsig = 0.5;
-			if (lum_weighting) {
-				wj = exp(-lumfac[j]);
-				//wj = 1-exp(-lumfac[j]);
-				//wj = lumfac[j];
+			if (extra_weighting) {
+				wj = exp(-wgtfac[j]);
+				//wj = 1-exp(-wgtfac[j]);
+				//wj = wgtfac[j];
 				fac = wi*wj;
-				//double wj = pow(lumfac[j],lens->regparam_lum_index);
+				//double wj = pow(wgtfac[j],lens->regparam_lum_index);
 				//cout << wi << " " << wj << endl;
 			} else {
 				fac = 1.0;
@@ -9894,13 +9907,13 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
-double ImagePixelGrid::find_approx_source_size()
+double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 {
 	//string sp_filename = "wtf_spt.dat";
 	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
 	//sourcepts_file << setiosflags(ios::scientific);
 
-	double xcavg, ycavg, sig;
+	double sig;
 	double totsurf;
 	double area, min_area = 1e30, max_area = -1e30;
 	double xcmin, ycmin, sb;
@@ -11730,7 +11743,7 @@ void QLens::initialize_pixel_matrices(bool verbal)
 	imgpixel_covinv_vector = new double[image_npixels];
 	source_pixel_vector = new double[source_n_amps];
 	point_image_surface_brightness = new double[image_npixels];
-	if (use_lum_weighted_regularization) {
+	if ((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) {
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
@@ -11804,7 +11817,7 @@ void QLens::initialize_pixel_matrices_shapelets(bool verbal)
 	if (source_n_amps <= 0) die("no shapelet amplitudes found");
 	source_pixel_vector = new double[source_n_amps];
 	imgpixel_covinv_vector = new double[image_npixels];
-	if (use_lum_weighted_regularization) {
+	if ((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) {
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
@@ -14833,16 +14846,18 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 	}
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
-			if (regparam_lum_index==0) {
-				lumfac = 1;
-				lum_weight_factor[i] = regparam_lsc*lumfac;
-			} else {
-				if (lum_weight_function==0) {
+			if (lum_weight_function==0) {
+				if (source_pixel_vector[i]==max_sb) lum_weight_factor[i] = 0;
+				else {
 					lumfac = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
 					lum_weight_factor[i] = pow(regparam_lsc,regparam_lum_index)*lumfac;
-				} else if (lum_weight_function==1) {
-					lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-					lum_weight_factor[i] = regparam_lsc*lumfac;
+				}
+			} else if (lum_weight_function==1) {
+				lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
+				lum_weight_factor[i] = regparam_lsc*lumfac;
+			} else {
+				if (regparam_lum_index==0) {
+					lum_weight_factor[i] = regparam_lsc;
 				} else {
 					lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
 					lum_weight_factor[i] = regparam_lsc*lumfac;
@@ -14857,6 +14872,21 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 			lum_weight_factor2[i] = pow(regparam_lsc,2)*lumfac2;
 		}
 	}
+}
+
+void QLens::calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig)
+{
+	double *scaled_dists = new double[source_npixels];
+	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
+	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels);
+	for (int i=0; i < source_npixels; i++) {
+		//if (lum_weight_function==0) {
+			lum_weight_factor[i] = pow(scaled_dists[i]*regparam_lsc,regparam_lum_index);
+		//} else {
+			//lum_weight_factor[i] = pow(1-pow(scaled_dists[i]*regparam_lsc,1.0/regparam_lum_index),regparam_lum_index);
+		//}
+	}
+	delete[] scaled_dists;
 }
 
 void QLens::find_srcpixel_weights()

@@ -922,6 +922,7 @@ QLens::QLens() : UCMC()
 	vary_regularization_parameter = false;
 
 	use_lum_weighted_regularization = false;
+	use_distance_weighted_regularization = false;
 	lum_weight_function = 0;
 	use_lum_weighted_srcpixel_clustering = false;
 	get_lumreg_from_sbweights = false;
@@ -1360,6 +1361,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	vary_regularization_parameter = lens_in->vary_regularization_parameter;
 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
+	use_distance_weighted_regularization = lens_in->use_distance_weighted_regularization;
 	lum_weight_function = lens_in->lum_weight_function;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
 	get_lumreg_from_sbweights = lens_in->get_lumreg_from_sbweights;
@@ -7105,10 +7107,10 @@ double QLens::update_model(const double* params)
 		if (vary_srcgrid_size_scale) srcgrid_size_scale = params[index++];
 		if (vary_magnification_threshold) pixel_magnification_threshold = params[index++];
 	}
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (regularization_method != None)) {
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (regularization_method != None)) {
 		if (vary_regparam_lsc) regparam_lsc = params[index++];
 		//if (vary_regparam_lhi) regparam_lhi = params[index++];
-		if ((use_lum_weighted_regularization) and (vary_regparam_lum_index)) regparam_lum_index = params[index++];
+		if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index)) regparam_lum_index = params[index++];
 	}
 
 	if (use_lum_weighted_srcpixel_clustering) {
@@ -8074,7 +8076,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
 		stepsizes[index++] = 0.33*regularization_parameter;
 	}
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (regularization_method != None)) {
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (regularization_method != None)) {
 		if (vary_regparam_lsc) stepsizes[index++] = 0.33*regparam_lsc;
 		//if (vary_regparam_lhi) stepsizes[index++] = 0.33*regparam_lhi;
 		if (vary_regparam_lum_index) stepsizes[index++] = 0.33;
@@ -8125,9 +8127,9 @@ void QLens::set_default_plimits()
 	if (vary_srcpt_yshift) index++;
 	if (vary_srcflux) index++;
 	if ((vary_regularization_parameter) and (regularization_method != None)) index++;
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
@@ -8169,9 +8171,9 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (vary_srcpt_yshift) nparams++;
 	if (vary_srcflux) nparams++;
 	if ((vary_regularization_parameter) and (regularization_method != None)) nparams++;
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) nparams++;
-	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
 
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) nparams++;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) nparams++;
@@ -8243,9 +8245,9 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (vary_srcpt_yshift) fitparams[index++] = srcpt_yshift;
 	if (vary_srcflux) fitparams[index++] = source_flux;
 	if ((vary_regularization_parameter) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) fitparams[index++] = regparam_lhi;
-	if ((use_lum_weighted_regularization) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
+	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;

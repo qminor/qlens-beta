@@ -2161,6 +2161,7 @@ void QLens::process_commands(bool read_file)
 					cout << "regparam = " << regularization_parameter << endl;
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
+					cout << "dist_weighted_regularization: " << display_switch(use_distance_weighted_regularization) << endl;
 					cout << "regparam_lsc = " << regparam_lsc << endl;
 					cout << "vary_regparam_lsc: " << display_switch(vary_regparam_lsc) << endl;
 					//cout << "regparam_lhi = " << regparam_lhi << endl;
@@ -12034,6 +12035,10 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
 				if ((setword=="on") and (!optimize_regparam) and (!get_lumreg_from_sbweights)) Complain("lum_weighted_regularization requires 'optimize_regparam' or 'lumreg_from_sbweights' to be set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="on") and (use_distance_weighted_regularization)) {
+					use_distance_weighted_regularization = false;
+					if (mpi_id==0) cout << "NOTE: setting 'dist_weighted_regularization' to 'off'" << endl;
+				}
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
 					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
@@ -12062,6 +12067,32 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "lumweight_func = " << lum_weight_function << endl;
 			} else Complain("must specify either zero or one argument (lumweight_func value)");
+		}
+		else if (words[0]=="dist_weighted_regularization")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use distance-weighted regularization: " << display_switch(use_distance_weighted_regularization) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'dist_weighted_regularization' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before luminosity weighting can be used (see 'fit regularization')");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="on") and (use_lum_weighted_regularization)) {
+					use_lum_weighted_regularization = false;
+					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
+				}
+				if ((setword=="off") and (use_distance_weighted_regularization)) {
+					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
+						vary_regparam_lsc = false;
+					}
+					if (vary_regparam_lum_index) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
+						vary_regparam_lum_index = false;
+					}
+				}
+				set_switch(use_distance_weighted_regularization,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="lum_weighted_srcpixel_clustering")
 		{
