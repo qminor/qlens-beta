@@ -14881,7 +14881,7 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc, const double yc,
 	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels);
 	for (int i=0; i < source_npixels; i++) {
 		//if (lum_weight_function==0) {
-			lum_weight_factor[i] = pow(scaled_dists[i]*regparam_lsc,regparam_lum_index);
+			lum_weight_factor[i] = pow(scaled_dists[i]/regparam_lsc,regparam_lum_index);
 		//} else {
 			//lum_weight_factor[i] = pow(1-pow(scaled_dists[i]*regparam_lsc,1.0/regparam_lum_index),regparam_lum_index);
 		//}

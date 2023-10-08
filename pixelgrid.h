@@ -196,7 +196,7 @@ class DelaunayGrid : public Sort
 	//int herg;
 
 	static int nthreads;
-	static const int nmax_pts_interp = 40;
+	static const int nmax_pts_interp = 60;
 	static lensvector **interpolation_pts[nmax_pts_interp];
 	static double *interpolation_wgts[nmax_pts_interp];
 	static int *interpolation_indx[nmax_pts_interp];
