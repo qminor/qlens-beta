@@ -923,6 +923,17 @@ QLens::QLens() : UCMC()
 
 	use_lum_weighted_regularization = false;
 	use_distance_weighted_regularization = false;
+	auto_lumreg_center = true;
+	lensed_lumreg_center = false;
+	lumreg_xcenter = 0.0;
+	lumreg_ycenter = 0.0;
+	vary_lumreg_xcenter = false;
+	vary_lumreg_ycenter = false;
+	lumreg_xcenter_lower_limit = 1e30;
+	lumreg_xcenter_upper_limit = 1e30;
+	lumreg_ycenter_lower_limit = 1e30;
+	lumreg_ycenter_upper_limit = 1e30;
+
 	lum_weight_function = 0;
 	use_lum_weighted_srcpixel_clustering = false;
 	get_lumreg_from_sbweights = false;
@@ -947,6 +958,8 @@ QLens::QLens() : UCMC()
 	regparam_lum_index_lower_limit = 1e30; // These must be specified by user
 	regparam_lum_index_upper_limit = 1e30; // These must be specified by user
 	vary_regparam_lum_index = false;
+
+	regparam_lo = 0.0;
 
 	kernel_correlation_length = 0.1;
 	kernel_correlation_length_lower_limit = 1e30;
@@ -1362,6 +1375,17 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
 	use_distance_weighted_regularization = lens_in->use_distance_weighted_regularization;
+	auto_lumreg_center = lens_in->auto_lumreg_center;
+	lensed_lumreg_center = lens_in->lensed_lumreg_center;
+	lumreg_xcenter = lens_in->lumreg_xcenter;
+	lumreg_ycenter = lens_in->lumreg_ycenter;
+	vary_lumreg_xcenter = lens_in->vary_lumreg_xcenter;
+	vary_lumreg_ycenter = lens_in->vary_lumreg_ycenter;
+	lumreg_xcenter_lower_limit = lens_in->lumreg_xcenter_lower_limit;
+	lumreg_xcenter_upper_limit = lens_in->lumreg_xcenter_upper_limit;
+	lumreg_ycenter_lower_limit = lens_in->lumreg_ycenter_lower_limit;
+	lumreg_ycenter_upper_limit = lens_in->lumreg_ycenter_upper_limit;
+
 	lum_weight_function = lens_in->lum_weight_function;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
 	get_lumreg_from_sbweights = lens_in->get_lumreg_from_sbweights;
@@ -1386,6 +1410,9 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	regparam_lum_index_lower_limit = lens_in->regparam_lum_index_lower_limit; // These must be specified by user
 	regparam_lum_index_upper_limit = lens_in->regparam_lum_index_upper_limit; // These must be specified by user
 	vary_regparam_lum_index = lens_in->vary_regparam_lum_index;
+
+	regparam_lo = lens_in->regparam_lo;
+
 
 	kernel_correlation_length = lens_in->kernel_correlation_length;
 	kernel_correlation_length_upper_limit = lens_in->kernel_correlation_length_upper_limit;
@@ -7111,6 +7138,10 @@ double QLens::update_model(const double* params)
 		if (vary_regparam_lsc) regparam_lsc = params[index++];
 		//if (vary_regparam_lhi) regparam_lhi = params[index++];
 		if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index)) regparam_lum_index = params[index++];
+		if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
+			if (vary_lumreg_xcenter) lumreg_xcenter = params[index++];
+			if (vary_lumreg_ycenter) lumreg_ycenter = params[index++];
+		}
 	}
 
 	if (use_lum_weighted_srcpixel_clustering) {
@@ -8080,6 +8111,10 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 		if (vary_regparam_lsc) stepsizes[index++] = 0.33*regparam_lsc;
 		//if (vary_regparam_lhi) stepsizes[index++] = 0.33*regparam_lhi;
 		if (vary_regparam_lum_index) stepsizes[index++] = 0.33;
+		if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
+			if (vary_lumreg_xcenter) stepsizes[index++] = 0.1;
+			if (vary_lumreg_ycenter) stepsizes[index++] = 0.1;
+		}
 	}
 
 	if (use_lum_weighted_srcpixel_clustering) {
@@ -8130,6 +8165,11 @@ void QLens::set_default_plimits()
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
+		if (vary_lumreg_xcenter) index++;
+		if (vary_lumreg_ycenter) index++;
+	}
+
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
@@ -8174,6 +8214,10 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) nparams++;
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
+	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
+		if (vary_lumreg_xcenter) nparams++;
+		if (vary_lumreg_ycenter) nparams++;
+	}
 
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) nparams++;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) nparams++;
@@ -8248,6 +8292,10 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) fitparams[index++] = regparam_lhi;
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
+	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
+		if (vary_lumreg_xcenter) fitparams[index++] = lumreg_xcenter;
+		if (vary_lumreg_ycenter) fitparams[index++] = lumreg_ycenter;
+	}
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
@@ -8368,6 +8416,24 @@ bool QLens::setup_limits()
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
+	if ((vary_lumreg_xcenter) and (regularization_method != None)) {
+		if ((lumreg_xcenter_lower_limit==1e30) or (lumreg_xcenter_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_xcenter before doing fit"); return false; }
+		lower_limits[index] = lumreg_xcenter_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = lumreg_xcenter_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if ((vary_lumreg_ycenter) and (regularization_method != None)) {
+		if ((lumreg_ycenter_lower_limit==1e30) or (lumreg_ycenter_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_ycenter before doing fit"); return false; }
+		lower_limits[index] = lumreg_ycenter_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = lumreg_ycenter_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+
+
 
 	if (vary_alpha_clus) {
 		if ((alpha_clus_lower_limit==1e30) or (alpha_clus_upper_limit==1e30)) { warn("lower/upper limits must be set for alpha_clus before doing fit"); return false; }
@@ -8624,7 +8690,16 @@ void QLens::get_parameter_names()
 		latex_parameter_names.push_back("\\gamma");
 		latex_parameter_subscripts.push_back("reg");
 	}
-
+	if ((vary_lumreg_xcenter) and (regularization_method != None)) {
+		fit_parameter_names.push_back("lumreg_xcenter");
+		latex_parameter_names.push_back("x");
+		latex_parameter_subscripts.push_back("c,\\lambda");
+	}
+	if ((vary_lumreg_ycenter) and (regularization_method != None)) {
+		fit_parameter_names.push_back("lumreg_ycenter");
+		latex_parameter_names.push_back("y");
+		latex_parameter_subscripts.push_back("c,\\lambda");
+	}
 	if (vary_alpha_clus) {
 		fit_parameter_names.push_back("alpha_clus");
 		latex_parameter_names.push_back("\\alpha");
@@ -9373,6 +9448,8 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			if (vary_regparam_lsc) cout << "regparam_lsc=" << fitmodel->regparam_lsc << endl;
 			//if (vary_regparam_lhi) cout << "regparam_lhi=" << fitmodel->regparam_lhi << endl;
 			if (vary_regparam_lum_index) cout << "regparam_lum_index=" << fitmodel->regparam_lum_index << endl;
+			if (vary_lumreg_xcenter) cout << "lumreg_xcenter=" << fitmodel->lumreg_xcenter << endl;
+			if (vary_lumreg_ycenter) cout << "lumreg_ycenter=" << fitmodel->lumreg_ycenter << endl;
 		}
 		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
 		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
@@ -12118,6 +12195,24 @@ void QLens::print_fit_model()
 				else cout << "regparam_lum_index: [" << regparam_lum_index_lower_limit << ":" << regparam_lum_index << ":" << regparam_lum_index_upper_limit << "]\n";
 			}
 		}
+		if (vary_lumreg_xcenter) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "lumreg_xcenter: " << lumreg_xcenter << endl;
+			} else {
+				if ((lumreg_xcenter_lower_limit==1e30) or (lumreg_xcenter_upper_limit==1e30)) cout << "\nlumreg_xcenter: lower/upper limits not given (these must be set by 'lumreg_xcenter' command before fit)\n";
+				else cout << "lumreg_xcenter: [" << lumreg_xcenter_lower_limit << ":" << lumreg_xcenter << ":" << lumreg_xcenter_upper_limit << "]\n";
+			}
+		}
+		if (vary_lumreg_ycenter) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "lumreg_ycenter: " << lumreg_ycenter << endl;
+			} else {
+				if ((lumreg_ycenter_lower_limit==1e30) or (lumreg_ycenter_upper_limit==1e30)) cout << "\nlumreg_ycenter: lower/upper limits not given (these must be set by 'lumreg_ycenter' command before fit)\n";
+				else cout << "lumreg_ycenter: [" << lumreg_ycenter_lower_limit << ":" << lumreg_ycenter << ":" << lumreg_ycenter_upper_limit << "]\n";
+			}
+		}
+
+
 
 		if (vary_alpha_clus) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
@@ -13844,7 +13939,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		initialize_pixel_matrices(verbal);
 		bool include_lum_weighting = (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (get_lumreg_from_sbweights)) ? true : false;
 		if ((regularization_method != None) and (delaunay_srcgrid != NULL)) {
-			if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
+			if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
 		}
 		if ((mpi_id==0) and (verbal)) {
 			cout << "Number of active image pixels: " << image_npixels << endl;
@@ -13919,7 +14014,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 			initialize_pixel_matrices(verbal);
 			if (regularization_method != None) {
-				if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
+				if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
 			}
 			if (inversion_method==DENSE) {
 				convert_Lmatrix_to_dense();

@@ -2956,7 +2956,7 @@ void QLens::generate_Rmatrix_from_gmatrices()
 	}
 }
 
-bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool allow_lum_weighting)
+bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool allow_lum_weighting, const bool verbal)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2971,7 +2971,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 	if (source_fit_mode==Delaunay_Source) {
 		if ((use_distance_weighted_regularization) or ((kernel_type==0) and (use_matern_scale_parameter))) {
 			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
-			//cout << "approx source size=" << sig << endl;
+			if ((verbal) and (mpi_id==0)) cout << "approx source size=" << sig << ", src_xc_approx=" << xc_approx << " src_yc_approx=" << yc_approx << endl;
 			if (use_matern_scale_parameter) {
 				matern_approx_source_size = sig/3;
 				//wtime0 = omp_get_wtime();
@@ -2979,7 +2979,9 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 				//wtime = omp_get_wtime() - wtime0;
 				//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 			}
-			if (use_distance_weighted_regularization) calculate_distreg_srcpixel_weights(xc_approx,yc_approx,sig);
+			if (use_distance_weighted_regularization) {
+				calculate_distreg_srcpixel_weights(xc_approx,yc_approx,sig,verbal);
+			}
 		}
 		double *wgtfac = ((use_distance_weighted_regularization) or ((allow_lum_weighting) and (use_lum_weighted_regularization))) ? lum_weight_factor : NULL;
 		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,wgtfac);
@@ -4629,11 +4631,15 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	indx[0] = 0;
 	for (i=1; i < n_srcpts; i++) indx[i] = indx[i-1] + n_srcpts-i+1; // allows us to find first nonzero column with packed storage
 
+	//double regparam_lo = lens->regparam_lo;
 	double wi, wj, fac;
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
-		if (extra_weighting) wi = exp(-wgtfac[i]);
+		if (extra_weighting) {
+			wi = exp(-wgtfac[i]);
+			//wi = (1-regparam_lo)*exp(-wgtfac[i])+regparam_lo;
+		}
 		else wi=1.0;
 		fac = wi*wi;
 		if (amplitude > 0) fac *= amplitude;
@@ -4647,6 +4653,7 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			double xsig = 0.5;
 			if (extra_weighting) {
 				wj = exp(-wgtfac[j]);
+				//wj = (1-regparam_lo)*exp(-wgtfac[j])+regparam_lo;
 				//wj = 1-exp(-wgtfac[j]);
 				//wj = wgtfac[j];
 				fac = wi*wj;
@@ -9909,6 +9916,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 
 double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 {
+	static const int nmax_srcsize_it = 8;
 	//string sp_filename = "wtf_spt.dat";
 	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
 	//sourcepts_file << setiosflags(ios::scientific);
@@ -9921,7 +9929,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 	int i,j,k,nsp;
 	double rsq, rsqavg;
 	sig = 1e30;
-	int npts=0, npts_old, iter=0;
+	int npts=10000000, npts_old, iter=0;
 	//ofstream wtf("wtf.dat");
 	do {
 		// will use 3-sigma clipping to estimate center and dispersion of source
@@ -10000,8 +10008,8 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 		sig = sqrt(abs(rsqavg));
 		//cout << "Iteration " << iter << ": sig=" << sig << ", xc=" << xcavg << ", yc=" << ycavg << ", npts=" << npts << endl;
 		iter++;
-	} while ((iter < 6) and (npts != npts_old));
-	if (iter >= 6) warn("exceeded max iterations for 3-sigma clipping to determine approx source size");
+	} while ((iter < nmax_srcsize_it) and (npts < npts_old));
+	if (iter >= nmax_srcsize_it) warn("exceeded max iterations for 3-sigma clipping to determine approx source size");
 	return sig;
 }
 
@@ -10479,6 +10487,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 	bool supersampling = lens->psf_supersampling;
 	imggrid_zfactors = lens->reference_zfactors;
 	imggrid_betafactors = lens->default_zsrc_beta_factors;
+	double noise;
 #ifdef USE_OPENMP
 	double wtime0, wtime;
 	if (lens->show_wtime) {
@@ -10519,7 +10528,10 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								if (!lens->sb_list[k]->zoom_subgridding) {
 									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
 								}
-								else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise_map[i][j]);
+								else {
+									noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
+								}
 							}
 						}
 					}
@@ -10545,7 +10557,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 					int nsubpix,subcell_index;
 					lensvector *center_srcpt, *center_pt;
 					//#pragma omp for private(i,j,ii,jj,nsplit,u0,w0,sb) schedule(dynamic)
-					#pragma omp for private(i,j,nsubpix,subcell_index,center_pt,center_srcpt,subpixel_xlength,subpixel_ylength,corner1,corner2,corner3,corner4,sb) schedule(dynamic)
+					#pragma omp for private(i,j,nsubpix,subcell_index,center_pt,center_srcpt,subpixel_xlength,subpixel_ylength,corner1,corner2,corner3,corner4,sb,noise) schedule(dynamic)
 					for (j=0; j < y_N; j++) {
 						for (i=0; i < x_N; i++) {
 							//surface_brightness[i][j] = 0;
@@ -10586,7 +10598,10 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 									if (!lens->sb_list[k]->zoom_subgridding) {
 										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
 									}
-									else surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise_map[i][j]);
+									else {
+										noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
+									}
 								}
 							}
 						}
@@ -10619,7 +10634,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 
 			int nsubpix,subcell_index;
 			lensvector *center_srcpt, *center_pt;
-			#pragma omp for private(i,j,sb,subcell_index,nsubpix,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4) schedule(dynamic)
+			#pragma omp for private(i,j,sb,subcell_index,nsubpix,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,noise) schedule(dynamic)
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
 					if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
@@ -10646,7 +10661,8 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										corner3[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
 										corner4[0] = center_pt[subcell_index][0] + subpixel_xlength/2;
 										corner4[1] = center_pt[subcell_index][1] + subpixel_ylength/2;
-										sb = lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4,noise_map[i][j]);
+										noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+										sb = lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4,noise);
 									}
 								}
 								if (supersampling) subpixel_surface_brightness[i][j][subcell_index] += sb;
@@ -10667,7 +10683,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 #else
 			thread = 0;
 #endif
-			#pragma omp for private(i,j) schedule(dynamic)
+			#pragma omp for private(i,j,noise) schedule(dynamic)
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
 					for (int k=0; k < lens->n_sb; k++) {
@@ -10675,7 +10691,8 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 							if (!foreground_only) {
 								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
 								else {
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_sourcepts[i][j],corner_sourcepts[i][j],corner_sourcepts[i+1][j],corner_sourcepts[i][j+1],corner_sourcepts[i+1][j+1],noise_map[i][j]);
+									noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_sourcepts[i][j],corner_sourcepts[i][j],corner_sourcepts[i+1][j],corner_sourcepts[i][j+1],corner_sourcepts[i+1][j+1],noise);
 								}
 							}
 						}
@@ -10684,7 +10701,8 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
 							}
 							else {
-								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise_map[i][j]);
+								noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
 
 							}
 						}
@@ -13471,7 +13489,7 @@ void QLens::generate_supersampled_PSF_matrix()
 
 }
 
-bool QLens::create_regularization_matrix(const bool allow_lum_weighting, const bool use_sbweights)
+bool QLens::create_regularization_matrix(const bool allow_lum_weighting, const bool use_sbweights, const bool verbal)
 {
 	RegularizationMethod reg_method = regularization_method;
 	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (!allow_lum_weighting)) reg_method = Curvature;
@@ -13495,19 +13513,19 @@ bool QLens::create_regularization_matrix(const bool allow_lum_weighting, const b
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(0,allow_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(0,allow_lum_weighting,verbal);
 			break;
 		case Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(1,allow_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(1,allow_lum_weighting,verbal);
 			break;
 		case Squared_Exponential_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
 			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(2,allow_lum_weighting);
+			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(2,allow_lum_weighting,verbal);
 			break;
 		default:
 			die("Regularization method not recognized");
@@ -14874,17 +14892,33 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 	}
 }
 
-void QLens::calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig)
+void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double yc_in, const double sig, const bool verbal)
 {
+	double xc, yc;
+	if (auto_lumreg_center) {
+		xc = xc_in; yc = yc_in;
+	} else {
+		if (lensed_lumreg_center) {
+			lensvector xl;
+			xl[0] = lumreg_xcenter;
+			xl[1] = lumreg_ycenter;
+			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
+			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
+		} else {
+			xc = lumreg_xcenter; yc = lumreg_ycenter;
+		}
+	}
 	double *scaled_dists = new double[source_npixels];
 	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
 	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels);
+	//double regparam_sc = 3.0;
 	for (int i=0; i < source_npixels; i++) {
-		//if (lum_weight_function==0) {
+		if (lum_weight_function==0) {
 			lum_weight_factor[i] = regparam_lsc*pow(scaled_dists[i],regparam_lum_index);
-		//} else {
-			//lum_weight_factor[i] = pow(1-pow(scaled_dists[i]*regparam_lsc,1.0/regparam_lum_index),regparam_lum_index);
-		//}
+		} else {
+			die("lumweight_func greater than 0 not supported in dist-weighted regularization");
+			//lum_weight_factor[i] = regparam_lsc*regparam_sc/M_HALFPI*atan(pow(scaled_dists[i],regparam_lum_index)*M_HALFPI/regparam_sc); // how to modify so it doesn't regularize so aggressively at large distances?
+		}
 	}
 	delete[] scaled_dists;
 }
@@ -16842,6 +16876,7 @@ void QLens::calculate_image_pixel_surface_brightness_dense(const bool calculate_
 			if (image_surface_brightness[i] > maxsb) maxsb=image_surface_brightness[i];
 	}
 
+	/*
 	if (calculate_foreground) {
 		bool at_least_one_foreground_src = false;
 		for (k=0; k < n_sb; k++) {
@@ -16857,6 +16892,10 @@ void QLens::calculate_image_pixel_surface_brightness_dense(const bool calculate_
 			for (int img_index=0; img_index < image_npixels_fgmask; img_index++) sbprofile_surface_brightness[img_index] = 0;
 		}
 	}
+	if (!calculate_foreground) {
+		for (int img_index=0; img_index < image_npixels_fgmask; img_index++) sbprofile_surface_brightness[img_index] = 0;
+	}
+	*/
 }
 
 void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources)
@@ -16926,8 +16965,9 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 		lensvector corner1, corner2, corner3, corner4;
 		lensvector corner1_src, corner2_src, corner3_src, corner4_src;
 		double subpixel_xlength, subpixel_ylength;
+		double noise;
 		int subcell_index;
-		#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subcell_index) schedule(dynamic)
+		#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,corner1_src,corner2_src,corner3_src,corner4_src,subcell_index,noise) schedule(dynamic)
 		for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
 			sbprofile_surface_brightness[img_index] = 0;
 
@@ -16965,7 +17005,9 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 					//cout << "CHECK: " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][0] << " " << center_pt[0] << " and " << image_pixel_grid->subpixel_center_pts[i][j][subcell_index][1] << " " << center_pt[1] << endl;
 					for (int k=0; k < n_sb; k++) {
 						if ((!sb_list[k]->is_lensed) and ((source_fit_mode != Shapelet_Source) or (sb_list[k]->sbtype != SHAPELET))) {
-							if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+							if (!sb_list[k]->zoom_subgridding) {
+								sb += sb_list[k]->surface_brightness(center_pt[0],center_pt[1]);
+							}
 							else {
 								corner1[0] = center_pt[0] - subpixel_xlength/2;
 								corner1[1] = center_pt[1] - subpixel_ylength/2;
@@ -16975,7 +17017,8 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 								corner3[1] = center_pt[1] + subpixel_ylength/2;
 								corner4[0] = center_pt[0] + subpixel_xlength/2;
 								corner4[1] = center_pt[1] + subpixel_ylength/2;
-								sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4,image_pixel_grid->noise_map[i][j]);
+								noise = (use_noise_map) ? image_pixel_grid->noise_map[i][j] : background_pixel_noise;
+								sb += sb_list[k]->surface_brightness_zoom(center_pt,corner1,corner2,corner3,corner4,noise);
 							}
 						}
 						else if ((allow_lensed_nonshapelet_sources) and (sb_list[k]->is_lensed) and (sb_list[k]->sbtype != SHAPELET) and (image_pixel_data->extended_mask[i][j])) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
@@ -17013,6 +17056,10 @@ void QLens::calculate_foreground_pixel_surface_brightness(const bool allow_lense
 #endif
 
 	}
+	//for (int img_index=0; img_index < image_npixels_fgmask; img_index++) {
+		//cout << sbprofile_surface_brightness[img_index] << endl;
+	//}
+	//die();
 	PSF_convolution_pixel_vector(true,false);
 }
 

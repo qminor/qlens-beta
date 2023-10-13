@@ -12089,6 +12089,14 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
 						vary_regparam_lum_index = false;
 					}
+					if (vary_lumreg_xcenter) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_xcenter' to 'off'" << endl;
+						vary_lumreg_xcenter = false;
+					}
+					if (vary_lumreg_ycenter) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_ycenter' to 'off'" << endl;
+						vary_lumreg_ycenter = false;
+					}
 				}
 				set_switch(use_distance_weighted_regularization,setword);
 				update_parameter_list();
@@ -12158,35 +12166,36 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		/*
-		else if (words[0]=="regparam_lhi")
+		else if (words[0]=="regparam_lo")
 		{
-			double reg_lhi, reg_lhi_upper, reg_lhi_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> reg_lhi_lower)) Complain("invalid regparam_lhi lower limit");
-				if (!(ws[2] >> reg_lhi)) Complain("invalid regparam_lhi value");
-				if (!(ws[3] >> reg_lhi_upper)) Complain("invalid regparam_lhi upper limit");
-				if ((reg_lhi < reg_lhi_lower) or (reg_lhi > reg_lhi_upper)) Complain("initial regparam_lhi should lie within specified prior limits");
-				regparam_lhi = reg_lhi;
-				regparam_lhi_lower_limit = reg_lhi_lower;
-				regparam_lhi_upper_limit = reg_lhi_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> reg_lhi)) Complain("invalid regparam_lhi value");
-				regparam_lhi = reg_lhi;
+			double reg_lo, reg_lo_upper, reg_lo_lower;
+			//if (nwords == 4) {
+				//if (!(ws[1] >> reg_lo_lower)) Complain("invalid regparam_lo lower limit");
+				//if (!(ws[2] >> reg_lo)) Complain("invalid regparam_lo value");
+				//if (!(ws[3] >> reg_lo_upper)) Complain("invalid regparam_lo upper limit");
+				//if ((reg_lo < reg_lo_lower) or (reg_lo > reg_lo_upper)) Complain("initial regparam_lo should lie within specified prior limits");
+				//regparam_lo = reg_lo;
+				//regparam_lo_lower_limit = reg_lo_lower;
+				//regparam_lo_upper_limit = reg_lo_upper;
+			//} else if (nwords == 2) {
+			if (nwords == 2) {
+				if (!(ws[1] >> reg_lo)) Complain("invalid regparam_lo value");
+				regparam_lo = reg_lo;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_lhi = " << regparam_lhi << endl;
-			} else Complain("must specify either zero or one argument (regparam_lhi value)");
+				if (mpi_id==0) cout << "regparam_lo = " << regparam_lo << endl;
+			} else Complain("must specify either zero or one argument (regparam_lo value)");
 		}
-		else if (words[0]=="vary_regparam_lhi")
+		/*
+		else if (words[0]=="vary_regparam_lo")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
+				if (mpi_id==0) cout << "Vary regparam_lo: " << display_switch(vary_regparam_lo) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lhi' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lhi can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lhi can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lhi can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_regparam_lhi,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lo' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lo can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lo can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_lo,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12220,6 +12229,88 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lum_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="auto_lumreg_center")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Find center of distance-weighted regularization from centroid of ray-traced points: " << display_switch(auto_lumreg_center) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_lumreg_center' command; must specify 'on' or 'off'");
+				set_switch(auto_lumreg_center,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lensed_lumreg_center")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Make lumreg_xcenter, lumreg_ycenter coordinates in the image plane: " << display_switch(lensed_lumreg_center) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lensed_lumreg_center' command; must specify 'on' or 'off'");
+				set_switch(lensed_lumreg_center,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_xcenter")
+		{
+			double regxc;
+			double regxc_upper, regxc_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> regxc_lower)) Complain("invalid lumreg_xcenter lower limit");
+				if (!(ws[2] >> regxc)) Complain("invalid lumreg_xcenter value");
+				if (!(ws[3] >> regxc_upper)) Complain("invalid lumreg_xcenter upper limit");
+				if ((regxc < regxc_lower) or (regxc > regxc_upper)) Complain("initial lumreg_xcenter should lie within specified prior limits");
+				lumreg_xcenter = regxc;
+				lumreg_xcenter_lower_limit = regxc_lower;
+				lumreg_xcenter_upper_limit = regxc_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> regxc)) Complain("invalid lumreg_xcenter value");
+				lumreg_xcenter = regxc;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_xcenter = " << lumreg_xcenter << endl;
+			} else Complain("must specify either zero or one argument (lumreg_xcenter value)");
+		}
+		else if (words[0]=="vary_lumreg_xcenter")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary lumreg_xcenter: " << display_switch(vary_lumreg_xcenter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_lumreg_xcenter' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_xcenter can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_xcenter can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_xcenter can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_lumreg_xcenter,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_ycenter")
+		{
+			double regyc;
+			double regyc_upper, regyc_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> regyc_lower)) Complain("invalid lumreg_ycenter lower limit");
+				if (!(ws[2] >> regyc)) Complain("invalid lumreg_ycenter value");
+				if (!(ws[3] >> regyc_upper)) Complain("invalid lumreg_ycenter upper limit");
+				if ((regyc < regyc_lower) or (regyc > regyc_upper)) Complain("initial lumreg_ycenter should lie within specified prior limits");
+				lumreg_ycenter = regyc;
+				lumreg_ycenter_lower_limit = regyc_lower;
+				lumreg_ycenter_upper_limit = regyc_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> regyc)) Complain("invalid lumreg_ycenter value");
+				lumreg_ycenter = regyc;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_ycenter = " << lumreg_ycenter << endl;
+			} else Complain("must specify either zero or one argument (lumreg_ycenter value)");
+		}
+		else if (words[0]=="vary_lumreg_ycenter")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary lumreg_ycenter: " << display_switch(vary_lumreg_ycenter) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_lumreg_ycenter' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_ycenter can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_ycenter can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_ycenter can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_lumreg_ycenter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

@@ -547,12 +547,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
 
-	// the following parameters are used for luminosity-weighted regularization
+	// the following parameters are used for luminosity- or distance-weighted regularization
 	bool use_lum_weighted_regularization;
 	bool use_distance_weighted_regularization;
+	bool auto_lumreg_center; // if set to true, uses (SB-weighted) centroid of ray-traced points; if false, center coordinates are parameters than can be varied
+	bool lensed_lumreg_center; // if true, make lumreg_xcenter and lumreg_ycenter coordinates in the image plane, which are lensed to the source plane
+	double lumreg_xcenter, lumreg_ycenter;
+	bool vary_lumreg_xcenter, vary_lumreg_ycenter;
+	double lumreg_xcenter_lower_limit, lumreg_xcenter_upper_limit;
+	double lumreg_ycenter_lower_limit, lumreg_ycenter_upper_limit;
+
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
+	double regparam_lo;
 	//double regparam_lhi, regparam_lum_index; 
 	double *lum_weight_factor;
 	double *lum_weight_factor2; // for second covariance kernel
@@ -876,7 +884,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
 	//double chisq_regparam_lumreg_dense();
 	void calculate_lumreg_srcpixel_weights(const bool use_sbweights);
-	void calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig);
+	void calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig, const bool verbal = false);
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
@@ -984,11 +992,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	bool create_regularization_matrix(const bool include_lum_weighting = false, const bool use_sbweights = false);
+	bool create_regularization_matrix(const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
 	void generate_Rmatrix_from_gmatrices();
 	void generate_Rmatrix_from_hmatrices();
 	void generate_Rmatrix_norm();
-	bool generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting);
+	bool generate_Rmatrix_from_covariance_kernel(const int kernel_type, const bool include_lum_weighting, const bool verbal = false);
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
