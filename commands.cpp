@@ -12097,6 +12097,14 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_ycenter' to 'off'" << endl;
 						vary_lumreg_ycenter = false;
 					}
+					if (vary_lumreg_e1) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_e1' to 'off'" << endl;
+						vary_lumreg_e1 = false;
+					}
+					if (vary_lumreg_e2) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_e2' to 'off'" << endl;
+						vary_lumreg_e2 = false;
+					}
 				}
 				set_switch(use_distance_weighted_regularization,setword);
 				update_parameter_list();
@@ -12311,6 +12319,70 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_ycenter can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_ycenter can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_lumreg_ycenter,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_e1")
+		{
+			double rege1;
+			double rege1_upper, rege1_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> rege1_lower)) Complain("invalid lumreg_e1 lower limit");
+				if (!(ws[2] >> rege1)) Complain("invalid lumreg_e1 value");
+				if (!(ws[3] >> rege1_upper)) Complain("invalid lumreg_e1 upper limit");
+				if ((rege1 < rege1_lower) or (rege1 > rege1_upper)) Complain("initial lumreg_e1 should lie within specified prior limits");
+				lumreg_e1 = rege1;
+				lumreg_e1_lower_limit = rege1_lower;
+				lumreg_e1_upper_limit = rege1_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> rege1)) Complain("invalid lumreg_e1 value");
+				lumreg_e1 = rege1;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_e1 = " << lumreg_e1 << endl;
+			} else Complain("must specify either zero or one argument (lumreg_e1 value)");
+		}
+		else if (words[0]=="vary_lumreg_e1")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary lumreg_e1: " << display_switch(vary_lumreg_e1) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_lumreg_e1' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_e1 can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_e1 can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_e1 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_lumreg_e1,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_e2")
+		{
+			double rege2;
+			double rege2_upper, rege2_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> rege2_lower)) Complain("invalid lumreg_e2 lower limit");
+				if (!(ws[2] >> rege2)) Complain("invalid lumreg_e2 value");
+				if (!(ws[3] >> rege2_upper)) Complain("invalid lumreg_e2 upper limit");
+				if ((rege2 < rege2_lower) or (rege2 > rege2_upper)) Complain("initial lumreg_e2 should lie within specified prior limits");
+				lumreg_e2 = rege2;
+				lumreg_e2_lower_limit = rege2_lower;
+				lumreg_e2_upper_limit = rege2_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> rege2)) Complain("invalid lumreg_e2 value");
+				lumreg_e2 = rege2;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_e2 = " << lumreg_e2 << endl;
+			} else Complain("must specify either zero or one argument (lumreg_e2 value)");
+		}
+		else if (words[0]=="vary_lumreg_e2")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary lumreg_e2: " << display_switch(vary_lumreg_e2) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_lumreg_e2' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_e2 can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_e2 can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_e2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_lumreg_e2,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -14440,8 +14512,8 @@ void QLens::process_commands(bool read_file)
 					if (image_pixel_grid != NULL) delete image_pixel_grid;
 					image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*image_pixel_data),true);
 					image_pixel_grid->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile
-					vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
-					PSF_convolution_pixel_vector(image_surface_brightness,false);
+					vectorize_image_pixel_surface_brightness(true); // note that in this case, the image pixel vector also contains the foreground
+					PSF_convolution_pixel_vector(false);
 					store_image_pixel_surface_brightness();
 					clear_pixel_matrices();
 					mockdata_t.set_lens(this);

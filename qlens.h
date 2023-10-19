@@ -556,6 +556,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_lumreg_xcenter, vary_lumreg_ycenter;
 	double lumreg_xcenter_lower_limit, lumreg_xcenter_upper_limit;
 	double lumreg_ycenter_lower_limit, lumreg_ycenter_upper_limit;
+	double lumreg_e1, lumreg_e2;
+	bool vary_lumreg_e1, vary_lumreg_e2;
+	double lumreg_e1_lower_limit, lumreg_e1_upper_limit;
+	double lumreg_e2_lower_limit, lumreg_e2_upper_limit;
 
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;

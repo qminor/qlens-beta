@@ -196,7 +196,7 @@ class DelaunayGrid : public Sort
 	//int herg;
 
 	static int nthreads;
-	static const int nmax_pts_interp = 60;
+	static const int nmax_pts_interp = 80;
 	static lensvector **interpolation_pts[nmax_pts_interp];
 	static double *interpolation_wgts[nmax_pts_interp];
 	static int *interpolation_indx[nmax_pts_interp];
@@ -265,7 +265,7 @@ class DelaunayGrid : public Sort
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
-	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts);
+	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts, const double e1 = 0, const double e2 = 0);
 	void generate_gmatrices();
 	void generate_hmatrices();
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);

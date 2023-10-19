@@ -3410,9 +3410,6 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, c
 		//sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]); // I don't think sorting by circumcenters will work well, because circumcenters may lie outside the triangles and orders might get reversed 
 		sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n]);
 		sort(n_boundary_pts,midpt_angles,shared_triangles[n]);
-		//for (i=0; i < n_boundary_pts; i++) {
-			//if (tricheck[n][i] != shared_triangles[n][i]) die("FUCKIN HELL");
-		//}
 		//delete[] tricheck[n];
 		delete[] angles;
 		delete[] midpt_angles;
@@ -4422,11 +4419,42 @@ int DelaunayGrid::assign_active_indices_and_count_source_pixels(const bool activ
 	return source_pixel_i;
 }
 
-void DelaunayGrid::calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts)
+void DelaunayGrid::calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts, const double e1, const double e2)
 {
 	if (nsrcpts != n_srcpts) die("wrong number of source points!");
+
+	double angle;
+	if (e1==0) {
+		if (e2 > 0) angle = M_HALFPI;
+		else if (e2==0) angle = 0.0;
+		else angle = -M_HALFPI;
+	} else {
+		angle = atan(abs(e2/e1));
+		if (e1 < 0) {
+			if (e2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (e2 < 0) {
+			angle = -angle;
+		}
+	}
+	angle = 0.5*angle;
+	double q = 1 - sqrt(e1*e1 + e2*e2);
+	if (q < 0.01) q = 0.01; // in case e1, e2 too large and you get a negative q
+
+	double costh, sinth;
+	costh=cos(angle);
+	sinth=sin(angle);
+	double xval, yval, xprime, yprime, xsqval, ysqval;
 	for (int i=0; i < n_srcpts; i++) {
-		dists[i] = sqrt(SQR(srcpts[i][0]-xc)+SQR(srcpts[i][1]-yc))/sig;
+		xval = srcpts[i][0]-xc;
+		yval = srcpts[i][1]-yc;
+		xprime = xval*costh + yval*sinth;
+		yprime = -xval*sinth + yval*costh;
+
+		dists[i] = sqrt(q*xprime*xprime+yprime*yprime/q)/sig;
+		//dists[i] = sqrt(SQR(srcpts[i][0]-xc)+SQR(srcpts[i][1]-yc))/sig;
 	}
 }
 
@@ -8761,6 +8789,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_sbweights[i][j] = new double[max_nsplit*max_nsplit];
 			n_mapped_srcpixels[i][j] = new int[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
+			nsplits[i][j] = 1.0;
 		}
 	}
 	int max_subpixel_nx = x_N*max_nsplit;
@@ -9735,14 +9764,13 @@ void ImagePixelGrid::set_nsplits(ImagePixelData *pixel_data, const int default_n
 	int i,j,ii,jj,nsplit,subcell_index;
 	double u0,w0;
 
-int II, JJ;
 	//int ii_check, jj_check;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (split_pixels) {
 				if ((fit_to_data) and (pixel_data)) {
 					if (pixel_data->in_mask[i][j]) nsplit = default_nsplit;
-					else nsplit = emask_nsplit; // so extended mask pixels don't get split (make this customizable by user?)
+					else nsplit = emask_nsplit;
 				} else {
 					nsplit = default_nsplit;
 				}
@@ -10665,7 +10693,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										sb = lens->sb_list[k]->surface_brightness_zoom(center_pt[subcell_index],corner1,corner2,corner3,corner4,noise);
 									}
 								}
-								if (supersampling) subpixel_surface_brightness[i][j][subcell_index] += sb;
+								if (supersampling) subpixel_surface_brightness[i][j][subcell_index] = sb;
 								sbtot += sb;
 							}
 						}
@@ -12974,7 +13002,6 @@ void QLens::PSF_convolution_pixel_vector(const bool foreground, const bool verba
 		double *img_zvec = new double[nzvec];
 #endif
 
-
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -13093,13 +13120,13 @@ void QLens::PSF_convolution_pixel_vector(const bool foreground, const bool verba
 			} else {
 				if (supersampled_psf_matrix == NULL) {
 					if (verbal) warn("could not find input supersampled PSF matrix");
-					average_supersampled_image_surface_brightness();
+					average_supersampled_image_surface_brightness(); 
 					return;
 				}
 			}
 		} else {
 			if ((psf_width_x==0) and (psf_width_y==0)) {
-				if (psf_supersampling) average_supersampled_image_surface_brightness();
+				if (psf_supersampling) average_supersampled_image_surface_brightness(); // no PSF to convolve
 				return;
 			}
 			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) {
@@ -14910,14 +14937,12 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 	}
 	double *scaled_dists = new double[source_npixels];
 	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
-	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels);
-	//double regparam_sc = 3.0;
+	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels,lumreg_e1,lumreg_e2);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
 			lum_weight_factor[i] = regparam_lsc*pow(scaled_dists[i],regparam_lum_index);
 		} else {
 			die("lumweight_func greater than 0 not supported in dist-weighted regularization");
-			//lum_weight_factor[i] = regparam_lsc*regparam_sc/M_HALFPI*atan(pow(scaled_dists[i],regparam_lum_index)*M_HALFPI/regparam_sc); // how to modify so it doesn't regularize so aggressively at large distances?
 		}
 	}
 	delete[] scaled_dists;
@@ -15010,10 +15035,10 @@ void QLens::load_pixel_sbweights()
 
 double QLens::chisq_regparam(const double logreg)
 {
-	double cov_inverse, chisq; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	double cov_inverse, cov_inverse_bg, chisq; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (!use_noise_map) {
-		if (background_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
-		else cov_inverse = 1.0/SQR(background_pixel_noise);
+		if (background_pixel_noise==0) cov_inverse_bg = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		else cov_inverse_bg = 1.0/SQR(background_pixel_noise);
 	}
 
 	regularization_parameter = pow(10,logreg);
@@ -15045,6 +15070,7 @@ double QLens::chisq_regparam(const double logreg)
 	#pragma omp parallel for private(temp_img,i,j,cov_inverse) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
 		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
+		else cov_inverse = cov_inverse_bg;
 		temp_img = 0;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			temp_img += Lmatrix[j]*source_pixel_vector[Lmatrix_index[j]];
@@ -15074,9 +15100,9 @@ double QLens::chisq_regparam(const double logreg)
 
 double QLens::chisq_regparam_dense(const double logreg)
 {
-	double chisq, logdet, cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
-	if (background_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
-	else cov_inverse = 1.0/SQR(background_pixel_noise);
+	double chisq, logdet, cov_inverse, cov_inverse_bg; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
+	if (background_pixel_noise==0) cov_inverse_bg = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+	else cov_inverse_bg = 1.0/SQR(background_pixel_noise);
 
 	regularization_parameter = pow(10,logreg);
 	int i,j;
@@ -15168,10 +15194,14 @@ double QLens::chisq_regparam_dense(const double logreg)
 	double *tempsrcptr = source_pixel_vector;
 	double *tempsrc_end = source_pixel_vector + source_n_amps;
 
-	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr) schedule(static) reduction(+:Ed_times_two)
+	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr,cov_inverse) schedule(static) reduction(+:Ed_times_two)
 	for (i=0; i < image_npixels; i++) {
 		temp_img = 0;
-		if (use_noise_map) cov_inverse = imgpixel_covinv_vector[i];
+		if (use_noise_map) {
+			cov_inverse = imgpixel_covinv_vector[i];
+		} else {
+			cov_inverse = cov_inverse_bg;
+		}
 		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
 			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
 			Lmatptr = (Lmatrix_dense.pointer())[i];
@@ -17081,6 +17111,7 @@ void QLens::store_image_pixel_surface_brightness()
 		i = active_image_pixel_i[img_index];
 		j = active_image_pixel_j[img_index];
 		image_pixel_grid->surface_brightness[i][j] = image_surface_brightness[img_index];
+		//cout << image_surface_brightness[img_index] << endl;;
 	}
 }
 
@@ -17122,7 +17153,7 @@ void QLens::vectorize_image_pixel_surface_brightness(bool use_mask)
 			}
 		} else {
 			image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
-			if (psf_supersampling) image_n_subpixels = image_npixels*default_imgpixel_nsplit;
+			if (psf_supersampling) image_n_subpixels = image_npixels*default_imgpixel_nsplit*default_imgpixel_nsplit;
 		}
 		active_image_pixel_i = new int[image_npixels];
 		active_image_pixel_j = new int[image_npixels];

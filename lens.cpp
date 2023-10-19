@@ -934,6 +934,15 @@ QLens::QLens() : UCMC()
 	lumreg_ycenter_lower_limit = 1e30;
 	lumreg_ycenter_upper_limit = 1e30;
 
+	lumreg_e1 = 0.0;
+	lumreg_e2 = 0.0;
+	vary_lumreg_e1 = false;
+	vary_lumreg_e2 = false;
+	lumreg_e1_lower_limit = 1e30;
+	lumreg_e1_upper_limit = 1e30;
+	lumreg_e2_lower_limit = 1e30;
+	lumreg_e2_upper_limit = 1e30;
+
 	lum_weight_function = 0;
 	use_lum_weighted_srcpixel_clustering = false;
 	get_lumreg_from_sbweights = false;
@@ -1385,6 +1394,15 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	lumreg_xcenter_upper_limit = lens_in->lumreg_xcenter_upper_limit;
 	lumreg_ycenter_lower_limit = lens_in->lumreg_ycenter_lower_limit;
 	lumreg_ycenter_upper_limit = lens_in->lumreg_ycenter_upper_limit;
+
+	lumreg_e1 = lens_in->lumreg_e1;
+	lumreg_e2 = lens_in->lumreg_e2;
+	vary_lumreg_e1 = lens_in->vary_lumreg_e1;
+	vary_lumreg_e2 = lens_in->vary_lumreg_e2;
+	lumreg_e1_lower_limit = lens_in->lumreg_e1_lower_limit;
+	lumreg_e1_upper_limit = lens_in->lumreg_e1_upper_limit;
+	lumreg_e2_lower_limit = lens_in->lumreg_e2_lower_limit;
+	lumreg_e2_upper_limit = lens_in->lumreg_e2_upper_limit;
 
 	lum_weight_function = lens_in->lum_weight_function;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
@@ -7138,9 +7156,13 @@ double QLens::update_model(const double* params)
 		if (vary_regparam_lsc) regparam_lsc = params[index++];
 		//if (vary_regparam_lhi) regparam_lhi = params[index++];
 		if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index)) regparam_lum_index = params[index++];
-		if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
-			if (vary_lumreg_xcenter) lumreg_xcenter = params[index++];
-			if (vary_lumreg_ycenter) lumreg_ycenter = params[index++];
+		if (use_distance_weighted_regularization) {
+			if (!auto_lumreg_center) {
+				if (vary_lumreg_xcenter) lumreg_xcenter = params[index++];
+				if (vary_lumreg_ycenter) lumreg_ycenter = params[index++];
+			}
+			if (vary_lumreg_e1) lumreg_e1 = params[index++];
+			if (vary_lumreg_e2) lumreg_e2 = params[index++];
 		}
 	}
 
@@ -8111,9 +8133,13 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 		if (vary_regparam_lsc) stepsizes[index++] = 0.33*regparam_lsc;
 		//if (vary_regparam_lhi) stepsizes[index++] = 0.33*regparam_lhi;
 		if (vary_regparam_lum_index) stepsizes[index++] = 0.33;
-		if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
-			if (vary_lumreg_xcenter) stepsizes[index++] = 0.1;
-			if (vary_lumreg_ycenter) stepsizes[index++] = 0.1;
+		if (use_distance_weighted_regularization) {
+			if (!auto_lumreg_center) {
+				if (vary_lumreg_xcenter) stepsizes[index++] = 0.1;
+				if (vary_lumreg_ycenter) stepsizes[index++] = 0.1;
+			}
+			if (vary_lumreg_e1) stepsizes[index++] = 0.1;
+			if (vary_lumreg_e2) stepsizes[index++] = 0.1;
 		}
 	}
 
@@ -8165,9 +8191,13 @@ void QLens::set_default_plimits()
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
-		if (vary_lumreg_xcenter) index++;
-		if (vary_lumreg_ycenter) index++;
+	if (use_distance_weighted_regularization) {
+		if (!auto_lumreg_center) {
+			if (vary_lumreg_xcenter) index++;
+			if (vary_lumreg_ycenter) index++;
+		}
+		if (vary_lumreg_e1) index++;
+		if (vary_lumreg_e2) index++;
 	}
 
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
@@ -8214,9 +8244,13 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) nparams++;
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
-	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
-		if (vary_lumreg_xcenter) nparams++;
-		if (vary_lumreg_ycenter) nparams++;
+	if (use_distance_weighted_regularization) {
+		if (!auto_lumreg_center) {
+			if (vary_lumreg_xcenter) nparams++;
+			if (vary_lumreg_ycenter) nparams++;
+		}
+		if (vary_lumreg_e1) nparams++;
+		if (vary_lumreg_e2) nparams++;
 	}
 
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) nparams++;
@@ -8292,9 +8326,13 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
 	//if ((use_lum_weighted_regularization) and (vary_regparam_lhi) and (regularization_method != None)) fitparams[index++] = regparam_lhi;
 	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
-	if ((use_distance_weighted_regularization) and (!auto_lumreg_center)) {
-		if (vary_lumreg_xcenter) fitparams[index++] = lumreg_xcenter;
-		if (vary_lumreg_ycenter) fitparams[index++] = lumreg_ycenter;
+	if (use_distance_weighted_regularization) {
+		if (!auto_lumreg_center) {
+			if (vary_lumreg_xcenter) fitparams[index++] = lumreg_xcenter;
+			if (vary_lumreg_ycenter) fitparams[index++] = lumreg_ycenter;
+		}
+		if (vary_lumreg_e1) fitparams[index++] = lumreg_e1;
+		if (vary_lumreg_e2) fitparams[index++] = lumreg_e2;
 	}
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) fitparams[index++] = beta_clus;
@@ -8432,6 +8470,23 @@ bool QLens::setup_limits()
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
+	if ((vary_lumreg_e1) and (regularization_method != None)) {
+		if ((lumreg_e1_lower_limit==1e30) or (lumreg_e1_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_e1 before doing fit"); return false; }
+		lower_limits[index] = lumreg_e1_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = lumreg_e1_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if ((vary_lumreg_e2) and (regularization_method != None)) {
+		if ((lumreg_e2_lower_limit==1e30) or (lumreg_e2_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_e2 before doing fit"); return false; }
+		lower_limits[index] = lumreg_e2_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = lumreg_e2_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+
 
 
 
@@ -8700,6 +8755,17 @@ void QLens::get_parameter_names()
 		latex_parameter_names.push_back("y");
 		latex_parameter_subscripts.push_back("c,\\lambda");
 	}
+	if ((vary_lumreg_e1) and (regularization_method != None)) {
+		fit_parameter_names.push_back("lumreg_e1");
+		latex_parameter_names.push_back("e");
+		latex_parameter_subscripts.push_back("1,\\lambda");
+	}
+	if ((vary_lumreg_e2) and (regularization_method != None)) {
+		fit_parameter_names.push_back("lumreg_e2");
+		latex_parameter_names.push_back("e");
+		latex_parameter_subscripts.push_back("2,\\lambda");
+	}
+
 	if (vary_alpha_clus) {
 		fit_parameter_names.push_back("alpha_clus");
 		latex_parameter_names.push_back("\\alpha");
@@ -9450,6 +9516,8 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			if (vary_regparam_lum_index) cout << "regparam_lum_index=" << fitmodel->regparam_lum_index << endl;
 			if (vary_lumreg_xcenter) cout << "lumreg_xcenter=" << fitmodel->lumreg_xcenter << endl;
 			if (vary_lumreg_ycenter) cout << "lumreg_ycenter=" << fitmodel->lumreg_ycenter << endl;
+			if (vary_lumreg_e1) cout << "lumreg_e1=" << fitmodel->lumreg_e1 << endl;
+			if (vary_lumreg_e2) cout << "lumreg_e2=" << fitmodel->lumreg_e2 << endl;
 		}
 		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
 		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
@@ -12211,6 +12279,22 @@ void QLens::print_fit_model()
 				else cout << "lumreg_ycenter: [" << lumreg_ycenter_lower_limit << ":" << lumreg_ycenter << ":" << lumreg_ycenter_upper_limit << "]\n";
 			}
 		}
+		if (vary_lumreg_e1) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "lumreg_e1: " << lumreg_e1 << endl;
+			} else {
+				if ((lumreg_e1_lower_limit==1e30) or (lumreg_e1_upper_limit==1e30)) cout << "\nlumreg_e1: lower/upper limits not given (these must be set by 'lumreg_e1' command before fit)\n";
+				else cout << "lumreg_e1: [" << lumreg_e1_lower_limit << ":" << lumreg_e1 << ":" << lumreg_e1_upper_limit << "]\n";
+			}
+		}
+		if (vary_lumreg_e2) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "lumreg_e2: " << lumreg_e2 << endl;
+			} else {
+				if ((lumreg_e2_lower_limit==1e30) or (lumreg_e2_upper_limit==1e30)) cout << "\nlumreg_e2: lower/upper limits not given (these must be set by 'lumreg_e2' command before fit)\n";
+				else cout << "lumreg_e2: [" << lumreg_e2_lower_limit << ":" << lumreg_e2 << ":" << lumreg_e2_upper_limit << "]\n";
+			}
+		}
 
 
 
@@ -13291,14 +13375,14 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	}
 
 	//bool old_split_imgpixels = split_imgpixels;
-	bool at_least_one_lensed_src = false;
+	bool at_least_one_lensed_src_object = false;
 	bool at_least_one_foreground_src = false;
 	for (int k=0; k < n_sb; k++) {
-		if (sb_list[k]->is_lensed) at_least_one_lensed_src = true;
+		if (sb_list[k]->is_lensed) at_least_one_lensed_src_object = true;
 		if (!sb_list[k]->is_lensed) at_least_one_foreground_src = true;
 	}
 	if (source_fit_mode==Cartesian_Source) {
-		at_least_one_lensed_src = true;
+		at_least_one_lensed_src_object = true;
 		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
 		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
 		if (assign_pixel_mappings(verbose)==false) {
@@ -13308,15 +13392,15 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		}
 	} else if (source_fit_mode==Delaunay_Source) {
 		if (delaunay_srcgrid != NULL) {
-			at_least_one_lensed_src = true;
+			at_least_one_lensed_src_object = true;
 			image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrid);
 			delaunay_srcgrid->set_image_pixel_grid(image_pixel_grid);
 		}
 		//if (split_imgpixels) split_imgpixels = false;
 	}
 
-	if ((at_least_one_lensed_src) or (n_sb > 0)) {
-		if ((!plot_foreground_only) and (at_least_one_lensed_src)) {
+	if ((at_least_one_lensed_src_object) or (n_sb > 0)) {
+		if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
 			image_pixel_grid->find_surface_brightness(false,true);
 			if ((!omit_foreground) and (at_least_one_foreground_src)) {
 				assign_foreground_mappings(use_data);
@@ -13329,7 +13413,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	}
 
 	vectorize_image_pixel_surface_brightness(true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
-	if ((at_least_one_lensed_src) or (n_sb > 0)) {
+	if ((at_least_one_lensed_src_object) or (n_sb > 0)) {
 		PSF_convolution_pixel_vector(false,verbose);
 		store_image_pixel_surface_brightness();
 	}
@@ -13641,7 +13725,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if (sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
 		}
 	}
-	bool include_foreground_sb = false; // the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
+
+	// the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
+	// Note that if only parameterized sources are used, a separate foreground sb array is not needed
+	bool include_foreground_sb_array = false;
 
 	bool at_least_one_foreground_src = false;
 	bool at_least_one_lensed_src = false;
@@ -13655,8 +13742,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if (sb_list[k]->sbtype!=SHAPELET) at_least_one_lensed_nonshapelet_src = true;
 		}
 	}
-	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb = true;
-	else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true;
+	if (source_fit_mode != Parameterized_Source) { // if using only parameterized sources, any foreground sources are added to the image_surface_brightness array
+		if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb_array = true;
+		else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb_array = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
+	}
 
 #ifdef USE_OPENMP
 		double fspline_wtime0;
@@ -14070,7 +14159,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	} else if (source_fit_mode == Parameterized_Source) {
 		bool foreground_only = (nlens==0) ? true : false;
 		image_pixel_grid->find_surface_brightness(foreground_only);
-		vectorize_image_pixel_surface_brightness();
+		vectorize_image_pixel_surface_brightness(true);
 		PSF_convolution_pixel_vector(false,verbal);
 		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 		if (n_sourcepts_fit > 0) {
@@ -14199,27 +14288,34 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	int img_index;
 	int count=0, foreground_count=0;
 	int n_data_pixels=0;
+	double blargh;
 	//ofstream wtfout("wtf.dat");
 	for (i=0; i < image_pixel_data->npixels_x; i++) {
 		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if ((image_pixel_grid->fit_to_data[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask[i][j]))) {
+			if ((image_pixel_grid->fit_to_data[i][j]) or ((include_foreground_sb_array) and (image_pixel_data->foreground_mask[i][j]))) {
 				n_data_pixels++;
 				if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 				if ((image_pixel_grid->fit_to_data[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 					img_index = image_pixel_grid->pixel_index[i][j];
-					if (include_foreground_sb) {
+					if (include_foreground_sb_array) {
+						//loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 						loglike_times_two += SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+						//blargh = SQR(image_surface_brightness[img_index] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+						//cout << i << " " << j << " " << image_pixel_grid->center_pts[i][j][0] << " " << image_pixel_grid->center_pts[i][j][1] << " " << blargh << " " << loglike_times_two << " " << image_surface_brightness[img_index] << " " << image_pixel_grid->foreground_surface_brightness[i][j] << endl;
+						if (loglike_times_two*0.0 != 0.0) die("FUCK");
 						//loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
 						foreground_count++;
 					} else {
 						loglike_times_two += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+						//blargh = SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+						//cout << blargh << " " << loglike_times_two << " (NO FGSB)" << endl;
 						//wtfout << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
 					}
 					//else loglike_times_two += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
 					count++;
 				} else {
 					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
-					if (include_foreground_sb) {
+					if (include_foreground_sb_array) {
 						loglike_times_two += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
 						foreground_count++;
 					}
@@ -14231,7 +14327,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	chisq0 = loglike_times_two;
 
 	int n_tot_pixels;
-	if (include_foreground_sb) n_tot_pixels = image_npixels_fgmask;
+	if (include_foreground_sb_array) n_tot_pixels = image_npixels_fgmask;
 	else n_tot_pixels = image_pixel_data->n_required_pixels;
 	if (group_id==0) {
 		if (logfile.is_open()) {
@@ -14395,7 +14491,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 	if ((mpi_id==0) and (verbal)) {
 		cout << "number of image pixels included in loglike = " << count << endl;
-		if (include_foreground_sb) cout << "number of foreground image pixels included in loglike = " << foreground_count << endl;
+		if (include_foreground_sb_array) cout << "number of foreground image pixels included in loglike = " << foreground_count << endl;
 	}
 
 	chisq_it++;
