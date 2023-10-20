@@ -945,6 +945,7 @@ QLens::QLens() : UCMC()
 
 	lum_weight_function = 0;
 	use_lum_weighted_srcpixel_clustering = false;
+	use_dist_weighted_srcpixel_clustering = false;
 	get_lumreg_from_sbweights = false;
 	alpha_clus = 0.5;
 	alpha_clus_lower_limit = 1e30; // These must be specified by user
@@ -1366,7 +1367,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	if (n_sbweights > 0) {
 		saved_sbweights = new double[n_sbweights];
 		for (int i=0; i < n_sbweights; i++) saved_sbweights[i] = lens_in->saved_sbweights[i];
-	}
+	} else saved_sbweights = NULL;
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;
 	auto_shapelet_center = lens_in->auto_shapelet_center;
@@ -1406,6 +1407,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	lum_weight_function = lens_in->lum_weight_function;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
+	use_dist_weighted_srcpixel_clustering = lens_in->use_dist_weighted_srcpixel_clustering;
 	get_lumreg_from_sbweights = lens_in->get_lumreg_from_sbweights;
 	alpha_clus = lens_in->alpha_clus;
 	alpha_clus_lower_limit = lens_in->alpha_clus_lower_limit;
@@ -7166,7 +7168,7 @@ double QLens::update_model(const double* params)
 		}
 	}
 
-	if (use_lum_weighted_srcpixel_clustering) {
+	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) alpha_clus = params[index++];
 		if (vary_beta_clus) beta_clus = params[index++];
 	}
@@ -8143,7 +8145,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 		}
 	}
 
-	if (use_lum_weighted_srcpixel_clustering) {
+	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) stepsizes[index++] = 0.33*alpha_clus;
 		if (vary_beta_clus) stepsizes[index++] = 0.33*beta_clus;
 	}
@@ -8200,8 +8202,8 @@ void QLens::set_default_plimits()
 		if (vary_lumreg_e2) index++;
 	}
 
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
 	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
@@ -8253,8 +8255,8 @@ void QLens::get_n_fit_parameters(int &nparams)
 		if (vary_lumreg_e2) nparams++;
 	}
 
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) nparams++;
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) nparams++;
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) nparams++;
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) nparams++;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
 	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
@@ -8334,8 +8336,8 @@ bool QLens::setup_fit_parameters(bool include_limits)
 		if (vary_lumreg_e1) fitparams[index++] = lumreg_e1;
 		if (vary_lumreg_e2) fitparams[index++] = lumreg_e2;
 	}
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
-	if ((use_lum_weighted_srcpixel_clustering) and (vary_beta_clus)) fitparams[index++] = beta_clus;
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
+	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
 	if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_scale;
 	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_index;
@@ -13048,7 +13050,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 						srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][1];
 						ivals[npix] = i;
 						jvals[npix] = j;
-						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grid->subpixel_sbweights[i][j][nsubpix-1-k];
+						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grid->subpixel_weights[i][j][nsubpix-1-k];
 						npix++;
 					}
 				} else {
@@ -13090,6 +13092,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			for (i=0; i < npix; i++) weights[i] = 1;
 		} else {
 			for (i=0; i < npix; i++) {
+				//cout << "wfactor " << i << ": " << wfactors[i] << endl;
 				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
 				if (weights[i] < min_weight) min_weight = weights[i];
 			}
@@ -13997,7 +14000,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		assign_foreground_mappings();
 
-		if (use_saved_sbweights) load_pixel_sbweights();
+		if (use_dist_weighted_srcpixel_clustering) calculate_subpixel_distweights();
+		else if (use_saved_sbweights) load_pixel_sbweights();
 		if (nlens > 0) {
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
@@ -14005,7 +14009,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				srcgrid_wtime0 = omp_get_wtime();
 			}
 #endif
-			bool use_weighted_clustering = ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights)) ? true : false;
+			bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
 			create_sourcegrid_from_imggrid_delaunay(use_weighted_clustering,verbal);
 #ifdef USE_OPENMP
 			if (show_wtime) {
@@ -15291,6 +15295,7 @@ QLens::~QLens()
 	if (delaunay_srcgrid != NULL) delete delaunay_srcgrid;
 	if (image_pixel_grid != NULL) delete image_pixel_grid;
 	if (group_leader != NULL) delete[] group_leader;
+	if (saved_sbweights != NULL) delete[] saved_sbweights;
 	//if (psf_zvec != NULL) delete[] psf_zvec;
 #ifdef USE_FFTW
 	//if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // not necessary to cleanup unless we need to redo the FFT arrays

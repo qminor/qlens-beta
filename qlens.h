@@ -576,6 +576,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
+	bool use_dist_weighted_srcpixel_clustering;
 	double alpha_clus, beta_clus;
 	bool vary_alpha_clus, vary_beta_clus;
 	double alpha_clus_lower_limit, alpha_clus_upper_limit;
@@ -880,6 +881,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const bool dense_Fmatrix);
 	void calculate_subpixel_sbweights(const bool save_sbweights = false, const bool verbal = false);
+	void calculate_subpixel_distweights();
 	void find_srcpixel_weights();
 	void load_pixel_sbweights();
 	double chisq_regparam_dense(const double logreg);
@@ -889,6 +891,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double chisq_regparam_lumreg_dense();
 	void calculate_lumreg_srcpixel_weights(const bool use_sbweights);
 	void calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig, const bool verbal = false);
+	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
 	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);

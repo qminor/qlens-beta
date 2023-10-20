@@ -12110,6 +12110,31 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="dist_weighted_srcpixel_clustering")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use distance-weighted source pixel clustering: " << display_switch(use_dist_weighted_srcpixel_clustering) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'dist_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("dist_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("distance-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
+				if ((setword=="on") and (use_lum_weighted_srcpixel_clustering)) Complain("dist_weighted_srcpixel_clustering and lum_weighted_srcpixel_clustering cannot both be on"); 
+				if ((setword=="off") and (use_dist_weighted_srcpixel_clustering)) {
+					if (vary_alpha_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
+						vary_alpha_clus = false;
+					}
+					if (vary_beta_clus) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
+						vary_beta_clus = false;
+					}
+				}
+				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
+				set_switch(use_dist_weighted_srcpixel_clustering,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			if ((use_dist_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+		}
 		else if (words[0]=="lum_weighted_srcpixel_clustering")
 		{
 			if (nwords==1) {
@@ -12118,6 +12143,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("lum_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("luminosity-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
+				if ((setword=="on") and (use_dist_weighted_srcpixel_clustering)) Complain("dist_weighted_srcpixel_clustering and lum_weighted_srcpixel_clustering cannot both be on"); 
 				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
 					if (vary_alpha_clus) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
@@ -12411,7 +12437,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Vary alpha_clus: " << display_switch(vary_alpha_clus) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_alpha_clus' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before alpha_clus can be varied");
+				if ((setword=="on") and ((!use_lum_weighted_srcpixel_clustering) and (!use_dist_weighted_srcpixel_clustering))) Complain("dist_weighted_srcpixel_clustering or lum_weighted_srcpixel_clustering must be set to 'on' before alpha_clus can be varied");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("alpha_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
 				set_switch(vary_alpha_clus,setword);
 				update_parameter_list();
@@ -12442,7 +12468,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Vary beta_clus: " << display_switch(vary_beta_clus) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_beta_clus' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
+				if ((setword=="on") and ((!use_lum_weighted_srcpixel_clustering) and (!use_dist_weighted_srcpixel_clustering))) Complain("dist_weighted_srcpixel_clustering or lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("beta_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
 				set_switch(vary_beta_clus,setword);
 				update_parameter_list();

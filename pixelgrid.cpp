@@ -4419,45 +4419,6 @@ int DelaunayGrid::assign_active_indices_and_count_source_pixels(const bool activ
 	return source_pixel_i;
 }
 
-void DelaunayGrid::calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, const int nsrcpts, const double e1, const double e2)
-{
-	if (nsrcpts != n_srcpts) die("wrong number of source points!");
-
-	double angle;
-	if (e1==0) {
-		if (e2 > 0) angle = M_HALFPI;
-		else if (e2==0) angle = 0.0;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(e2/e1));
-		if (e1 < 0) {
-			if (e2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (e2 < 0) {
-			angle = -angle;
-		}
-	}
-	angle = 0.5*angle;
-	double q = 1 - sqrt(e1*e1 + e2*e2);
-	if (q < 0.01) q = 0.01; // in case e1, e2 too large and you get a negative q
-
-	double costh, sinth;
-	costh=cos(angle);
-	sinth=sin(angle);
-	double xval, yval, xprime, yprime, xsqval, ysqval;
-	for (int i=0; i < n_srcpts; i++) {
-		xval = srcpts[i][0]-xc;
-		yval = srcpts[i][1]-yc;
-		xprime = xval*costh + yval*sinth;
-		yprime = -xval*sinth + yval*costh;
-
-		dists[i] = sqrt(q*xprime*xprime+yprime*yprime/q)/sig;
-		//dists[i] = sqrt(SQR(srcpts[i][0]-xc)+SQR(srcpts[i][1]-yc))/sig;
-	}
-}
-
 void DelaunayGrid::generate_hmatrices()
 {
 	// NOTE: for the moment, we are assuming all the source pixels are 'active', i.e. will be used in the inversion
@@ -8742,7 +8703,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	subpixel_center_pts = new lensvector**[x_N];
 	subpixel_center_sourcepts = new lensvector**[x_N];
 	subpixel_surface_brightness = new double**[x_N];
-	subpixel_sbweights = new double**[x_N];
+	subpixel_weights = new double**[x_N];
 	subpixel_index = new int*[x_N*max_nsplit];
 	twist_pts = new lensvector*[x_N];
 	twist_status = new int*[x_N];
@@ -8771,7 +8732,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_center_pts[i] = new lensvector*[y_N];
 		subpixel_center_sourcepts[i] = new lensvector*[y_N];
 		subpixel_surface_brightness[i] = new double*[y_N];
-		subpixel_sbweights[i] = new double*[y_N];
+		subpixel_weights[i] = new double*[y_N];
 		nsplits[i] = new int[y_N];
 		twist_pts[i] = new lensvector[y_N];
 		twist_status[i] = new int[y_N];
@@ -8786,7 +8747,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_surface_brightness[i][j] = new double[max_nsplit*max_nsplit];
-			subpixel_sbweights[i][j] = new double[max_nsplit*max_nsplit];
+			subpixel_weights[i][j] = new double[max_nsplit*max_nsplit];
 			n_mapped_srcpixels[i][j] = new int[max_nsplit*max_nsplit];
 			for (k=0; k < max_nsplit*max_nsplit; k++) subpixel_maps_to_srcpixel[i][j][k] = false;
 			nsplits[i][j] = 1.0;
@@ -11550,14 +11511,14 @@ ImagePixelGrid::~ImagePixelGrid()
 			delete[] subpixel_center_pts[i][j];
 			delete[] subpixel_center_sourcepts[i][j];
 			delete[] subpixel_surface_brightness[i][j];
-			delete[] subpixel_sbweights[i][j];
+			delete[] subpixel_weights[i][j];
 			delete[] n_mapped_srcpixels[i][j];
 		}
 		delete[] subpixel_maps_to_srcpixel[i];
 		delete[] subpixel_center_pts[i];
 		delete[] subpixel_center_sourcepts[i];
 		delete[] subpixel_surface_brightness[i];
-		delete[] subpixel_sbweights[i];
+		delete[] subpixel_weights[i];
 		delete[] n_mapped_srcpixels[i];
 	}
 	int max_subpixel_nx = x_N*max_nsplit;
@@ -11581,7 +11542,7 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] subpixel_center_pts;
 	delete[] subpixel_center_sourcepts;
 	delete[] subpixel_surface_brightness;
-	delete[] subpixel_sbweights;
+	delete[] subpixel_weights;
 	delete[] n_mapped_srcpixels;
 	delete[] nsplits;
 	delete[] twist_status;
@@ -14812,19 +14773,19 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 	if (save_sbweights) {
 		n_sbweights = 0;
 		if (saved_sbweights != NULL) delete[] saved_sbweights;
-		for (int n=0; n < npix_in_mask; n++) {
+		for (n=0; n < npix_in_mask; n++) {
 			i = pixptr_i[n];
 			j = pixptr_j[n];
 			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 			n_sbweights += nsubpix;
 		}
-		cout << "Saving " << n_sbweights << " sbweights" << endl;
+		if (mpi_id==0) cout << "Saving " << n_sbweights << " sbweights" << endl;
 		saved_sbweights = new double[n_sbweights];
 		l=0;
 	}
 
 	bool at_least_one_lensed_src = false;
-	for (int k=0; k < n_sb; k++) {
+	for (k=0; k < n_sb; k++) {
 		if (sb_list[k]->is_lensed) {
 			at_least_one_lensed_src = true;
 			break;
@@ -14848,7 +14809,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 			j = pixptr_j[n];
 			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 			for (k=0; k < nsubpix; k++) {
-				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
+				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)...did I already accomplish this? (check)
 				sb = 0;
 				if (source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
 				else if (source_fit_mode==Cartesian_Source) sb += source_pixel_grid->find_lensed_surface_brightness_interpolate(image_pixel_grid->subpixel_center_sourcepts[i][j][k],thread);
@@ -14865,7 +14826,7 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 					#pragma omp critical
 					max_sb = sb;
 				}
-				image_pixel_grid->subpixel_sbweights[i][j][k] = sb;
+				image_pixel_grid->subpixel_weights[i][j][k] = sb;
 			}
 		}
 	}
@@ -14873,12 +14834,78 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
-		for (int k=0; k < nsubpix; k++) {
-			image_pixel_grid->subpixel_sbweights[i][j][k] /= max_sb;
-			if (save_sbweights) saved_sbweights[l++] = image_pixel_grid->subpixel_sbweights[i][j][k];
+		for (k=0; k < nsubpix; k++) {
+			image_pixel_grid->subpixel_weights[i][j][k] /= max_sb;
+			if (save_sbweights) saved_sbweights[l++] = image_pixel_grid->subpixel_weights[i][j][k];
 		}
 	}
 	if ((save_sbweights) and (mpi_id==0)) cout << "Pixel sb-weights saved" << endl;
+}
+
+void QLens::calculate_subpixel_distweights()
+{
+	double xc, yc, xc_approx, yc_approx, sig;
+	sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
+	if (auto_lumreg_center) {
+		xc = xc_approx;
+		yc = yc_approx;
+	} else {
+		if (lensed_lumreg_center) {
+			lensvector xl;
+			xl[0] = lumreg_xcenter;
+			xl[1] = lumreg_ycenter;
+			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
+			//if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
+		} else {
+			xc = lumreg_xcenter; yc = lumreg_ycenter;
+		}
+	}
+
+	int npix_in_mask;
+	int *pixptr_i, *pixptr_j;
+	if (include_extended_mask_in_inversion) {
+		npix_in_mask = image_pixel_grid->ntot_cells_emask;
+		pixptr_i = image_pixel_grid->emask_pixels_i;
+		pixptr_j = image_pixel_grid->emask_pixels_j;
+	} else {
+		npix_in_mask = image_pixel_grid->ntot_cells;
+		pixptr_i = image_pixel_grid->masked_pixels_i;
+		pixptr_j = image_pixel_grid->masked_pixels_j;
+	}
+	int i,j,k,n,l,nsubpix,n_weights;
+
+	n_weights = 0;
+	if (saved_sbweights != NULL) delete[] saved_sbweights;
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		n_weights += nsubpix;
+	}
+	double *scaled_dists = new double[n_weights];
+	lensvector **srcpts = new lensvector*[n_weights];
+	l=0;
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		for (k=0; k < nsubpix; k++) {
+			srcpts[l++] = &image_pixel_grid->subpixel_center_sourcepts[i][j][k];
+		}
+	}
+	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,n_weights,lumreg_e1,lumreg_e2);
+
+	l=0;
+	for (n=0; n < npix_in_mask; n++) {
+		i = pixptr_i[n];
+		j = pixptr_j[n];
+		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		for (k=0; k < nsubpix; k++) {
+			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(scaled_dists[l++],regparam_lum_index));
+			//cout << "WEIGHT " << (l-1) << ": " << image_pixel_grid->subpixel_weights[i][j][k] << " " << scaled_dists[l-1] << " " << (*srcpts[l-1])[0] << " " << (*srcpts[l-1])[1] << " " << xc << " " << yc << " " << sig << endl;
+		}
+	}
+	delete[] scaled_dists;
+	delete[] srcpts;
 }
 
 void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
@@ -14936,8 +14963,10 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 		}
 	}
 	double *scaled_dists = new double[source_npixels];
+	lensvector **srcpts = new lensvector*[source_npixels];
+	for (int i=0; i < source_npixels; i++) srcpts[i] = &(delaunay_srcgrid->srcpts[i]);
 	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
-	delaunay_srcgrid->calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,source_npixels,lumreg_e1,lumreg_e2);
+	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,source_npixels,lumreg_e1,lumreg_e2);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
 			lum_weight_factor[i] = regparam_lsc*pow(scaled_dists[i],regparam_lum_index);
@@ -14946,6 +14975,44 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 		}
 	}
 	delete[] scaled_dists;
+	delete[] srcpts;
+}
+
+void QLens::calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1, const double e2)
+{
+	double angle;
+	if (e1==0) {
+		if (e2 > 0) angle = M_HALFPI;
+		else if (e2==0) angle = 0.0;
+		else angle = -M_HALFPI;
+	} else {
+		angle = atan(abs(e2/e1));
+		if (e1 < 0) {
+			if (e2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (e2 < 0) {
+			angle = -angle;
+		}
+	}
+	angle = 0.5*angle;
+	double q = 1 - sqrt(e1*e1 + e2*e2);
+	if (q < 0.01) q = 0.01; // in case e1, e2 too large and you get a negative q
+
+	double costh, sinth;
+	costh=cos(angle);
+	sinth=sin(angle);
+	double xval, yval, xprime, yprime;
+	for (int i=0; i < nsrcpts; i++) {
+		xval = (*srcpts[i])[0]-xc;
+		yval = (*srcpts[i])[1]-yc;
+		xprime = xval*costh + yval*sinth;
+		yprime = -xval*sinth + yval*costh;
+
+		dists[i] = sqrt(q*xprime*xprime+yprime*yprime/q)/sig;
+		//cout << "HUH? " << xval << " " << yval << " " << xprime << " " << yprime << " " << dists[i] << endl;
+	}
 }
 
 void QLens::find_srcpixel_weights()
@@ -14986,7 +15053,7 @@ void QLens::find_srcpixel_weights()
 			indx = delaunay_srcgrid->find_closest_vertex(trinum,*pt);
 			#pragma omp critical
 			{
-				srcpixel_weights[indx] += image_pixel_grid->subpixel_sbweights[i][j][k];
+				srcpixel_weights[indx] += image_pixel_grid->subpixel_weights[i][j][k];
 				srcpixel_nimgpts[indx]++;
 			}
 		}
@@ -15028,7 +15095,7 @@ void QLens::load_pixel_sbweights()
 		j = pixptr_j[n];
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
-			image_pixel_grid->subpixel_sbweights[i][j][k] = saved_sbweights[l++];
+			image_pixel_grid->subpixel_weights[i][j][k] = saved_sbweights[l++];
 		}
 	}
 }
