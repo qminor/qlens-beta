@@ -2970,7 +2970,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 	Rmatrix_packed.input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
 		if ((use_distance_weighted_regularization) or ((kernel_type==0) and (use_matern_scale_parameter))) {
-			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
+			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx,verbal);
 			if ((verbal) and (mpi_id==0)) cout << "approx source size=" << sig << ", src_xc_approx=" << xc_approx << " src_yc_approx=" << yc_approx << endl;
 			if (use_matern_scale_parameter) {
 				matern_approx_source_size = sig/3;
@@ -9903,7 +9903,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
-double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
+double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, const bool verbal)
 {
 	static const int nmax_srcsize_it = 8;
 	//string sp_filename = "wtf_spt.dat";
@@ -9920,6 +9920,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 	sig = 1e30;
 	int npts=10000000, npts_old, iter=0;
 	//ofstream wtf("wtf.dat");
+	if ((verbal) and (lens->n_sourcepts_fit > 0) and (lens->include_imgfluxes_in_inversion)) warn("estimated approx extended source size may be biased due to point source when 'invert_imgflux' is on");
 	do {
 		// will use 3-sigma clipping to estimate center and dispersion of source
 		npts_old = npts;
@@ -9930,33 +9931,37 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg)
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
 				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-				if (((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
-					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
-					// You repeat this code three times in this function! Store things in arrays and GET RID OF THE REDUNDANCIES!!!! IT'S UGLY.
-					if (!lens->split_imgpixels) {
-						xsavg = center_sourcepts[i][j][0];
-						ysavg = center_sourcepts[i][j][1];
-					} else {
-						xsavg=ysavg=0;
-						nsp = INTSQR(nsplits[i][j]);
-						for (k=0; k < nsp; k++) {
-							xsavg += subpixel_center_sourcepts[i][j][k][0];
-							ysavg += subpixel_center_sourcepts[i][j][k][1];
+				if ((fit_to_data==NULL) or (lens->image_pixel_data->in_mask[i][j])) {
+					sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+					if ((lens->n_sourcepts_fit > 0) and (!lens->include_imgfluxes_in_inversion)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
+					if (abs(sb) > 5*noise_map[i][j]) {
+						//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+						//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+						// You repeat this code three times in this function! Store things in arrays and GET RID OF THE REDUNDANCIES!!!! IT'S UGLY.
+						if (!lens->split_imgpixels) {
+							xsavg = center_sourcepts[i][j][0];
+							ysavg = center_sourcepts[i][j][1];
+						} else {
+							xsavg=ysavg=0;
+							nsp = INTSQR(nsplits[i][j]);
+							for (k=0; k < nsp; k++) {
+								xsavg += subpixel_center_sourcepts[i][j][k][0];
+								ysavg += subpixel_center_sourcepts[i][j][k][1];
+							}
+							xsavg /= nsp;
+							ysavg /= nsp;
 						}
-						xsavg /= nsp;
-						ysavg /= nsp;
+						//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
+						area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
+						rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+						if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+							xcavg += area*abs(sb)*xsavg;
+							ycavg += area*abs(sb)*ysavg;
+							totsurf += area*abs(sb);
+							npts++;
+						}
+						//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 					}
-					//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
-					area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
-					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
-						xcavg += area*abs(sb)*xsavg;
-						ycavg += area*abs(sb)*ysavg;
-						totsurf += area*abs(sb);
-						npts++;
-					}
-					//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
 				}
 			}
 		}
@@ -14271,7 +14276,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
 					if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
 					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
-					if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
+					//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
 				}
 #ifdef USE_MKL
 				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(covinv); // hack to get the cov_inverse in there
@@ -14950,7 +14955,14 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 {
 	double xc, yc;
 	if (auto_lumreg_center) {
-		xc = xc_in; yc = yc_in;
+		if (lumreg_center_from_ptsource) {
+			if (n_sourcepts_fit==0) die("no source points have been defined");
+			xc = sourcepts_fit[0][0];
+			yc = sourcepts_fit[0][1];
+		} else {
+			xc = xc_in;
+			yc = yc_in;
+		}
 	} else {
 		if (lensed_lumreg_center) {
 			lensvector xl;

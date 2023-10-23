@@ -924,6 +924,7 @@ QLens::QLens() : UCMC()
 	use_lum_weighted_regularization = false;
 	use_distance_weighted_regularization = false;
 	auto_lumreg_center = true;
+	lumreg_center_from_ptsource = false;
 	lensed_lumreg_center = false;
 	lumreg_xcenter = 0.0;
 	lumreg_ycenter = 0.0;
@@ -1386,6 +1387,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
 	use_distance_weighted_regularization = lens_in->use_distance_weighted_regularization;
 	auto_lumreg_center = lens_in->auto_lumreg_center;
+	lumreg_center_from_ptsource = lens_in->lumreg_center_from_ptsource;
 	lensed_lumreg_center = lens_in->lensed_lumreg_center;
 	lumreg_xcenter = lens_in->lumreg_xcenter;
 	lumreg_ycenter = lens_in->lumreg_ycenter;
@@ -14030,6 +14032,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 		initialize_pixel_matrices(verbal);
+
+		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
+			for (i=0; i < n_sourcepts_fit; i++) {
+				image_pixel_grid->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
+			}
+		}
+
 		bool include_lum_weighting = (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (get_lumreg_from_sbweights)) ? true : false;
 		if ((regularization_method != None) and (delaunay_srcgrid != NULL)) {
 			if (create_regularization_matrix(include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
@@ -14051,13 +14061,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			calculate_foreground_pixel_surface_brightness(true);
 			store_foreground_pixel_surface_brightness();
 		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
-			}
-		}
-
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);

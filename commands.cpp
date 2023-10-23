@@ -12116,7 +12116,6 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use distance-weighted source pixel clustering: " << display_switch(use_dist_weighted_srcpixel_clustering) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'dist_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("dist_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("distance-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
 				if ((setword=="on") and (use_lum_weighted_srcpixel_clustering)) Complain("dist_weighted_srcpixel_clustering and lum_weighted_srcpixel_clustering cannot both be on"); 
 				if ((setword=="off") and (use_dist_weighted_srcpixel_clustering)) {
@@ -12275,6 +12274,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(auto_lumreg_center,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="lumreg_center_from_ptsource")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Find center of distance-weighted regularization from position of point source: " << display_switch(lumreg_center_from_ptsource) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lumreg_center_from_ptsource' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (!auto_lumreg_center)) Complain("'auto_lumreg_center' must be set to 'on' before turning on lumreg_center_from_ptsource");
+				set_switch(lumreg_center_from_ptsource,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="lensed_lumreg_center")
 		{
 			if (nwords==1) {
@@ -12312,6 +12321,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_xcenter can be varied (see 'fit regularization')");
 				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_xcenter can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_xcenter can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="on") and (auto_lumreg_center)) Complain("cannot vary lumreg_xcenter if auto_lumreg_center is set to 'on'");
 				set_switch(vary_lumreg_xcenter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12344,6 +12354,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_ycenter can be varied (see 'fit regularization')");
 				if ((setword=="on") and (!use_distance_weighted_regularization)) Complain("dist_weighted_regularization must be set to 'on' before lumreg_ycenter can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_ycenter can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="on") and (auto_lumreg_center)) Complain("cannot vary lumreg_ycenter if auto_lumreg_center is set to 'on'");
 				set_switch(vary_lumreg_ycenter,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");

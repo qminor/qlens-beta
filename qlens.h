@@ -551,6 +551,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_lum_weighted_regularization;
 	bool use_distance_weighted_regularization;
 	bool auto_lumreg_center; // if set to true, uses (SB-weighted) centroid of ray-traced points; if false, center coordinates are parameters than can be varied
+	bool lumreg_center_from_ptsource; // if true, automatically sets lumreg_center to position of source point (auto_lumreg_center must also be set to 'on')
 	bool lensed_lumreg_center; // if true, make lumreg_xcenter and lumreg_ycenter coordinates in the image plane, which are lensed to the source plane
 	double lumreg_xcenter, lumreg_ycenter;
 	bool vary_lumreg_xcenter, vary_lumreg_ycenter;
