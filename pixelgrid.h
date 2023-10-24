@@ -293,6 +293,7 @@ class ImagePixelGrid : public Sort
 	lensvector **center_sourcepts;
 	lensvector ***subpixel_center_pts;
 	lensvector ***subpixel_center_sourcepts;
+	lensvector ***shifted_subpixel_sourcepts;
 	double ***subpixel_surface_brightness;
 	double ***subpixel_weights;
 	int **subpixel_index;

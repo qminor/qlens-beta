@@ -8702,6 +8702,8 @@ void ImagePixelGrid::setup_pixel_arrays()
 	subpixel_maps_to_srcpixel = new bool**[x_N];
 	subpixel_center_pts = new lensvector**[x_N];
 	subpixel_center_sourcepts = new lensvector**[x_N];
+	if (lens->shifted_srcpixel_clustering) shifted_subpixel_sourcepts = new lensvector**[x_N];
+	else shifted_subpixel_sourcepts = NULL;
 	subpixel_surface_brightness = new double**[x_N];
 	subpixel_weights = new double**[x_N];
 	subpixel_index = new int*[x_N*max_nsplit];
@@ -8731,6 +8733,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_maps_to_srcpixel[i] = new bool*[y_N];
 		subpixel_center_pts[i] = new lensvector*[y_N];
 		subpixel_center_sourcepts[i] = new lensvector*[y_N];
+		if (lens->shifted_srcpixel_clustering) shifted_subpixel_sourcepts[i] = new lensvector*[y_N];
 		subpixel_surface_brightness[i] = new double*[y_N];
 		subpixel_weights[i] = new double*[y_N];
 		nsplits[i] = new int[y_N];
@@ -8746,6 +8749,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 			subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_center_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
+			if (lens->shifted_srcpixel_clustering) shifted_subpixel_sourcepts[i][j] = new lensvector[max_nsplit*max_nsplit];
 			subpixel_surface_brightness[i][j] = new double[max_nsplit*max_nsplit];
 			subpixel_weights[i][j] = new double[max_nsplit*max_nsplit];
 			n_mapped_srcpixels[i][j] = new int[max_nsplit*max_nsplit];
@@ -8993,7 +8997,6 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 
 	if (defx_subpixel_centers != NULL) delete[] defx_subpixel_centers;
 	if (defy_subpixel_centers != NULL) delete[] defy_subpixel_centers;
-
 	defx_subpixel_centers = new double[ntot_subpixels];
 	defy_subpixel_centers = new double[ntot_subpixels];
 }
@@ -9295,7 +9298,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
 		}
 	}
-	MPI_Comm_free(&sub_comm);
+	if ((!lens->split_imgpixels) or (!lens->shifted_srcpixel_clustering)) MPI_Comm_free(&sub_comm);
 #endif
 	if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
 		for (n=0; n < ntot_cells_emask; n++) {
@@ -9317,6 +9320,55 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			subpixel_center_sourcepts[i][j][k][0] = defx_subpixel_centers[n];
 			subpixel_center_sourcepts[i][j][k][1] = defy_subpixel_centers[n];
 			//cout << "SRCPT: " << subpixel_center_sourcepts[i][j][k][0] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+		}
+
+		if (lens->shifted_srcpixel_clustering) {
+			//cout << "XSHIFT=" << lens->subpixel_xshift << " YSHIFT=" << lens->subpixel_yshift << endl;
+			// Now we shifted the source pixels and ray trace them; this will be used to define the Delaunay source grid
+			#pragma omp parallel
+			{
+				int thread;
+#ifdef USE_OPENMP
+				thread = omp_get_thread_num();
+#else
+				thread = 0;
+#endif
+				lensvector shifted_pt;
+				int n_subcell;
+				#pragma omp for private(i,j,k,n_subcell) schedule(dynamic)
+				for (n_subcell=mpi_start3; n_subcell < mpi_end3; n_subcell++) {
+					j = extended_mask_subcell_j[n_subcell];
+					i = extended_mask_subcell_i[n_subcell];
+					k = extended_mask_subcell_index[n_subcell];
+					shifted_pt[0] = subpixel_center_pts[i][j][k][0] + lens->subpixel_xshift;
+					shifted_pt[1] = subpixel_center_pts[i][j][k][1] + lens->subpixel_yshift;
+					lens->find_sourcept(shifted_pt,defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
+				}
+			}
+#ifdef USE_MPI
+			if (lens->group_np > 1) {
+				int id, chunk, start;
+				for (id=0; id < lens->group_np; id++) {
+					chunk = ntot_subpixels / lens->group_np;
+					start = id*chunk;
+					if (id == lens->group_np-1) chunk += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
+					MPI_Bcast(defx_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+					MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+				}
+			}
+			MPI_Comm_free(&sub_comm);
+#endif
+			for (n=0; n < ntot_subpixels; n++) {
+				j = extended_mask_subcell_j[n];
+				i = extended_mask_subcell_i[n];
+				k = extended_mask_subcell_index[n];
+				//cout << "CHECKING2: " << defy_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+				//if (subpixel_center_sourcepts[i][j][k][0] != defx_subpixel_centers[n]) cout << "wrong defx: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][0] << endl;
+				//if (subpixel_center_sourcepts[i][j][k][1] != defy_subpixel_centers[n]) cout << "wrong defy: " << defx_subpixel_centers[n] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+				shifted_subpixel_sourcepts[i][j][k][0] = defx_subpixel_centers[n];
+				shifted_subpixel_sourcepts[i][j][k][1] = defy_subpixel_centers[n];
+				//cout << "SRCPT: " << subpixel_center_sourcepts[i][j][k][0] << " " << subpixel_center_sourcepts[i][j][k][1] << endl;
+			}
 		}
 	}
 }
@@ -11525,6 +11577,12 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] subpixel_surface_brightness[i];
 		delete[] subpixel_weights[i];
 		delete[] n_mapped_srcpixels[i];
+		if (shifted_subpixel_sourcepts != NULL) {
+			for (int j=0; j < y_N; j++) {
+				delete[] shifted_subpixel_sourcepts[i][j];
+			}
+			delete[] shifted_subpixel_sourcepts[i];
+		}
 	}
 	int max_subpixel_nx = x_N*max_nsplit;
 	for (int i=0; i < max_subpixel_nx; i++) {
@@ -11546,6 +11604,7 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] subpixel_maps_to_srcpixel;
 	delete[] subpixel_center_pts;
 	delete[] subpixel_center_sourcepts;
+	if (shifted_subpixel_sourcepts != NULL) delete[] shifted_subpixel_sourcepts;
 	delete[] subpixel_surface_brightness;
 	delete[] subpixel_weights;
 	delete[] n_mapped_srcpixels;

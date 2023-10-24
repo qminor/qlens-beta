@@ -620,6 +620,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
+	bool shifted_srcpixel_clustering;
+	bool vary_subpixel_xshift, vary_subpixel_yshift;
+	double subpixel_xshift, subpixel_yshift;
+	double subpixel_xshift_lower_limit, subpixel_xshift_upper_limit;
+	double subpixel_yshift_lower_limit, subpixel_yshift_upper_limit;
+
 	bool use_random_delaunay_srcgrid;
 	bool reinitialize_random_grid;
 	int random_seed;

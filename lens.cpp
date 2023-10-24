@@ -1086,6 +1086,17 @@ QLens::QLens() : UCMC()
 	delaunay_high_sn_mode = false;
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
+
+	shifted_srcpixel_clustering = false;
+	subpixel_xshift = 0;
+	subpixel_xshift_lower_limit = 1e30;
+	subpixel_xshift_upper_limit = 1e30;
+	vary_subpixel_xshift = false;
+	subpixel_yshift = 0;
+	subpixel_yshift_lower_limit = 1e30;
+	subpixel_yshift_upper_limit = 1e30;
+	vary_subpixel_yshift = false;
+
 	clustering_random_initialization = false;
 	weight_initial_centroids = false;
 	use_random_delaunay_srcgrid = false;
@@ -1435,7 +1446,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	regparam_lo = lens_in->regparam_lo;
 
-
 	kernel_correlation_length = lens_in->kernel_correlation_length;
 	kernel_correlation_length_upper_limit = lens_in->kernel_correlation_length_upper_limit;
 	kernel_correlation_length_lower_limit = lens_in->kernel_correlation_length_lower_limit;
@@ -1571,6 +1581,17 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	delaunay_high_sn_mode = lens_in->delaunay_high_sn_mode;
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
+	shifted_srcpixel_clustering = lens_in->shifted_srcpixel_clustering;
+
+	subpixel_xshift = lens_in->subpixel_xshift;
+	subpixel_xshift_lower_limit = lens_in->subpixel_xshift_lower_limit;
+	subpixel_xshift_upper_limit = lens_in->subpixel_xshift_upper_limit;
+	vary_subpixel_xshift = lens_in->vary_subpixel_xshift;
+	subpixel_yshift = lens_in->subpixel_yshift;
+	subpixel_yshift_lower_limit = lens_in->subpixel_yshift_lower_limit;
+	subpixel_yshift_upper_limit = lens_in->subpixel_yshift_upper_limit;
+	vary_subpixel_yshift = lens_in->vary_subpixel_yshift;
+
 	clustering_random_initialization = lens_in->clustering_random_initialization;
 	weight_initial_centroids = lens_in->weight_initial_centroids;
 	use_random_delaunay_srcgrid = lens_in->use_random_delaunay_srcgrid;
@@ -7170,6 +7191,8 @@ double QLens::update_model(const double* params)
 		}
 	}
 
+	if (vary_subpixel_xshift) subpixel_xshift = params[index++];
+	if (vary_subpixel_yshift) subpixel_yshift = params[index++];
 	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) alpha_clus = params[index++];
 		if (vary_beta_clus) beta_clus = params[index++];
@@ -8147,6 +8170,8 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 		}
 	}
 
+	if (vary_subpixel_xshift) stepsizes[index++] = 0.001;
+	if (vary_subpixel_yshift) stepsizes[index++] = 0.001;
 	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) stepsizes[index++] = 0.33*alpha_clus;
 		if (vary_beta_clus) stepsizes[index++] = 0.33*beta_clus;
@@ -8204,6 +8229,8 @@ void QLens::set_default_plimits()
 		if (vary_lumreg_e2) index++;
 	}
 
+	if (vary_subpixel_xshift) index++;
+	if (vary_subpixel_yshift) index++;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
@@ -8257,6 +8284,8 @@ void QLens::get_n_fit_parameters(int &nparams)
 		if (vary_lumreg_e2) nparams++;
 	}
 
+	if (vary_subpixel_xshift) nparams++;
+	if (vary_subpixel_yshift) nparams++;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) nparams++;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) nparams++;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
@@ -8338,6 +8367,8 @@ bool QLens::setup_fit_parameters(bool include_limits)
 		if (vary_lumreg_e1) fitparams[index++] = lumreg_e1;
 		if (vary_lumreg_e2) fitparams[index++] = lumreg_e2;
 	}
+	if (vary_subpixel_xshift) fitparams[index++] = subpixel_xshift;
+	if (vary_subpixel_yshift) fitparams[index++] = subpixel_yshift;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
@@ -8491,8 +8522,20 @@ bool QLens::setup_limits()
 		index++;
 	}
 
-
-
+	if (vary_subpixel_xshift) {
+		lower_limits[index] = subpixel_xshift_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = subpixel_xshift_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if (vary_subpixel_yshift) {
+		lower_limits[index] = subpixel_yshift_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = subpixel_yshift_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
 
 	if (vary_alpha_clus) {
 		if ((alpha_clus_lower_limit==1e30) or (alpha_clus_upper_limit==1e30)) { warn("lower/upper limits must be set for alpha_clus before doing fit"); return false; }
@@ -8770,6 +8813,17 @@ void QLens::get_parameter_names()
 		latex_parameter_subscripts.push_back("2,\\lambda");
 	}
 
+	if (vary_subpixel_xshift) {
+		fit_parameter_names.push_back("subpixel_xshift");
+		latex_parameter_names.push_back("\\delta x");
+		latex_parameter_subscripts.push_back("pix");
+	}
+	if (vary_subpixel_yshift) {
+		fit_parameter_names.push_back("subpixel_yshift");
+		latex_parameter_names.push_back("\\delta y");
+		latex_parameter_subscripts.push_back("pix");
+	}
+
 	if (vary_alpha_clus) {
 		fit_parameter_names.push_back("alpha_clus");
 		latex_parameter_names.push_back("\\alpha");
@@ -9006,6 +9060,9 @@ bool QLens::get_sourcept_parameter_numbers(const int sp_i, int& pi, int& pf)
 
 void QLens::fit_set_optimizations()
 {
+	if ((lensmodel_fit_parameters==0) and (!shifted_srcpixel_clustering)) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change and we're not shifting ray-tracing points
+	else redo_lensing_calculations_before_inversion = true;
+
 	temp_auto_store_cc_points = auto_store_cc_points;
 	temp_include_time_delays = include_time_delays;
 
@@ -9019,6 +9076,7 @@ void QLens::fit_set_optimizations()
 
 void QLens::fit_restore_defaults()
 {
+	if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 	auto_store_cc_points = temp_auto_store_cc_points;
 	include_time_delays = temp_include_time_delays;
 	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
@@ -9523,6 +9581,8 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			if (vary_lumreg_e1) cout << "lumreg_e1=" << fitmodel->lumreg_e1 << endl;
 			if (vary_lumreg_e2) cout << "lumreg_e2=" << fitmodel->lumreg_e2 << endl;
 		}
+		if (vary_subpixel_xshift) cout << "subpixel x-shift = " << fitmodel->subpixel_xshift << endl;
+		if (vary_subpixel_yshift) cout << "subpixel y-shift = " << fitmodel->subpixel_yshift << endl;
 		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
 		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
 		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "correlation length = " << fitmodel->kernel_correlation_length << endl;
@@ -12300,7 +12360,22 @@ void QLens::print_fit_model()
 			}
 		}
 
-
+		if (vary_subpixel_xshift) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Subpixel x-shift: " << subpixel_xshift << endl;
+			} else {
+				if ((subpixel_xshift_lower_limit==1e30) or (subpixel_xshift_upper_limit==1e30)) cout << "\nSubpixel x-shift: lower/upper limits not given (these must be set before fit)\n";
+				else cout << "Subpixel x-shift: [" << subpixel_xshift_lower_limit << ":" << subpixel_xshift << ":" << subpixel_xshift_upper_limit << "]\n";
+			}
+		}
+		if (vary_subpixel_yshift) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "Subpixel y-shift: " << subpixel_yshift << endl;
+			} else {
+				if ((subpixel_yshift_lower_limit==1e30) or (subpixel_yshift_upper_limit==1e30)) cout << "\nSubpixel y-shift: lower/upper limits not given (these must be set before fit)\n";
+				else cout << "Subpixel y-shift: [" << subpixel_yshift_lower_limit << ":" << subpixel_yshift << ":" << subpixel_yshift_upper_limit << "]\n";
+			}
+		}
 
 		if (vary_alpha_clus) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
@@ -13048,8 +13123,13 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 				if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
 					for (int k=0; k < nsubpix; k++) {
-						srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][0];
-						srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][1];
+						if (!shifted_srcpixel_clustering) {
+							srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][0];
+							srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix-1-k][1];
+						} else {
+							srcpts_x[npix] = image_pixel_grid->shifted_subpixel_sourcepts[i][j][nsubpix-1-k][0];
+							srcpts_y[npix] = image_pixel_grid->shifted_subpixel_sourcepts[i][j][nsubpix-1-k][1];
+						}
 						ivals[npix] = i;
 						jvals[npix] = j;
 						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grid->subpixel_weights[i][j][nsubpix-1-k];

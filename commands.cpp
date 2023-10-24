@@ -7490,9 +7490,6 @@ void QLens::process_commands(bool read_file)
 						old_error_setting = calculate_parameter_errors;
 						calculate_parameter_errors = false;
 					}
-					int np;
-					get_n_fit_parameters(np);
-					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
 					if (fitmethod==POWELL) chi_square_fit_powell();
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex();
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
@@ -7500,7 +7497,6 @@ void QLens::process_commands(bool read_file)
 					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
-					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
 					if ((adopt_bestfit) and (adopt_model(bestfitparams)==false)) Complain("could not adopt best-fit model");
 					if (make_imgdata) {
@@ -7536,10 +7532,8 @@ void QLens::process_commands(bool read_file)
 					if (nwords > 2) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
 					int np;
 					get_n_fit_parameters(np);
-					if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change
 					if ((temp_show_wtime) and (!show_wtime)) show_wtime = true;
 					chisq_single_evaluation(init_fitmodel,show_total_wtime,showdiag,true,show_lensinfo);
-					if (!redo_lensing_calculations_before_inversion) redo_lensing_calculations_before_inversion = true;
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 					if ((temp_show_wtime) and (!old_show_wtime)) show_wtime = false;
 				}
@@ -11669,7 +11663,7 @@ void QLens::process_commands(bool read_file)
  				srcpt_xshift_lower_limit = xsh_ll;
  				srcpt_xshift_upper_limit = xsh_ul;
  			} else if (nwords == 2) {
-				if (!(ws[1] >> xsh)) Complain("invalid firstlevel source srcpt_xshift");
+				if (!(ws[1] >> xsh)) Complain("invalid srcpt_xshift");
 				srcpt_xshift = xsh;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "srcpt_xshift = " << srcpt_xshift << endl;
@@ -11687,7 +11681,7 @@ void QLens::process_commands(bool read_file)
  				srcpt_yshift_lower_limit = ysh_ll;
  				srcpt_yshift_upper_limit = ysh_ul;
  			} else if (nwords == 2) {
-				if (!(ws[1] >> ysh)) Complain("invalid firstlevel source srcpt_yshift");
+				if (!(ws[1] >> ysh)) Complain("invalid srcpt_yshift");
 				srcpt_yshift = ysh;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "srcpt_yshift = " << srcpt_yshift << endl;
@@ -13083,6 +13077,73 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+		}
+		else if (words[0]=="shifted_srcpixel_clustering")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use shifted subpixels for defining adaptive source grid (with clustering algorithm): " << display_switch(shifted_srcpixel_clustering) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'shifted_srcpixel_clustering' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (use_srcpixel_clustering==false)) Complain("'use_srcpixel_clustering' must be turned on to use shifted source pixel clustering");
+				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use shifted source pixel clustering");
+				set_switch(shifted_srcpixel_clustering,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="vary_subpixel_xshift")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary subpixel x-shift (for defining adaptive source grid): " << display_switch(vary_subpixel_xshift) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_subpixel_xshift' command; must specify 'on' or 'off'");
+				set_switch(vary_subpixel_xshift,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="vary_subpixel_yshift")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary subpixel y-shift (for defining adaptive source grid): " << display_switch(vary_subpixel_yshift) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_subpixel_yshift' command; must specify 'on' or 'off'");
+				set_switch(vary_subpixel_yshift,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="subpixel_xshift")
+		{
+			double xsh, xsh_ll, xsh_ul;
+ 			if (nwords == 4) {
+ 				if (!(ws[1] >> xsh_ll)) Complain("invalid source subpixel_xshift lower limit");
+ 				if (!(ws[2] >> xsh)) Complain("invalid source subpixel_xshift value");
+ 				if (!(ws[3] >> xsh_ul)) Complain("invalid source subpixel_xshift upper limit");
+ 				if ((xsh < xsh_ll) or (xsh > xsh_ul)) Complain("initial source subpixel_xshift should lie within specified prior limits");
+ 				subpixel_xshift = xsh;
+ 				subpixel_xshift_lower_limit = xsh_ll;
+ 				subpixel_xshift_upper_limit = xsh_ul;
+ 			} else if (nwords == 2) {
+				if (!(ws[1] >> xsh)) Complain("invalid source subpixel_xshift");
+				subpixel_xshift = xsh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "subpixel_xshift = " << subpixel_xshift << endl;
+			} else Complain("must specify one argument (subpixel_xshift)");
+		}
+		else if (words[0]=="subpixel_yshift")
+		{
+			double ysh, ysh_ll, ysh_ul;
+ 			if (nwords == 4) {
+ 				if (!(ws[1] >> ysh_ll)) Complain("invalid source subpixel_yshift lower limit");
+ 				if (!(ws[2] >> ysh)) Complain("invalid source subpixel_yshift value");
+ 				if (!(ws[3] >> ysh_ul)) Complain("invalid source subpixel_yshift upper limit");
+ 				if ((ysh < ysh_ll) or (ysh > ysh_ul)) Complain("initial source subpixel_yshift should lie within specified prior limits");
+ 				subpixel_yshift = ysh;
+ 				subpixel_yshift_lower_limit = ysh_ll;
+ 				subpixel_yshift_upper_limit = ysh_ul;
+ 			} else if (nwords == 2) {
+				if (!(ws[1] >> ysh)) Complain("invalid source subpixel_yshift");
+				subpixel_yshift = ysh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "subpixel_yshift = " << subpixel_yshift << endl;
+			} else Complain("must specify one argument (subpixel_yshift)");
 		}
 		else if (words[0]=="use_saved_sbweights")
 		{
