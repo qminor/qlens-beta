@@ -14959,12 +14959,13 @@ void QLens::calculate_subpixel_distweights()
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,n_weights,lumreg_e1,lumreg_e2);
 
 	l=0;
+	double scaled_rcsq = SQR(lumreg_rc/sig);
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
-			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + lumreg_rc*lumreg_rc),regparam_lum_index));
+			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + scaled_rcsq),regparam_lum_index));
 			//cout << "WEIGHT " << (l-1) << ": " << image_pixel_grid->subpixel_weights[i][j][k] << " " << scaled_dists[l-1] << " " << (*srcpts[l-1])[0] << " " << (*srcpts[l-1])[1] << " " << xc << " " << yc << " " << sig << endl;
 		}
 	}
@@ -15039,9 +15040,10 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 	for (int i=0; i < source_npixels; i++) srcpts[i] = &(delaunay_srcgrid->srcpts[i]);
 	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,source_npixels,lumreg_e1,lumreg_e2);
+	double scaled_rcsq = SQR(lumreg_rc/sig);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
-			lum_weight_factor[i] = exp(-regparam_lsc*pow(sqrt(SQR(scaled_dists[i]) + lumreg_rc*lumreg_rc),regparam_lum_index));
+			lum_weight_factor[i] = exp(-regparam_lsc*pow(sqrt(SQR(scaled_dists[i]) + scaled_rcsq),regparam_lum_index));
 			//lum_weight_factor[i] = (exp(-regparam_lsc*pow(scaled_dists[i],regparam_lum_index)) + lumreg_rc*exp(-regparam_lsc2*pow(scaled_dists[i],regparam_lum_index2)))/(1+lumreg_rc);
 		} else {
 			die("lumweight_func greater than 0 not supported in dist-weighted regularization");
