@@ -12193,40 +12193,6 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="regparam_lo")
-		{
-			double reg_lo, reg_lo_upper, reg_lo_lower;
-			//if (nwords == 4) {
-				//if (!(ws[1] >> reg_lo_lower)) Complain("invalid regparam_lo lower limit");
-				//if (!(ws[2] >> reg_lo)) Complain("invalid regparam_lo value");
-				//if (!(ws[3] >> reg_lo_upper)) Complain("invalid regparam_lo upper limit");
-				//if ((reg_lo < reg_lo_lower) or (reg_lo > reg_lo_upper)) Complain("initial regparam_lo should lie within specified prior limits");
-				//regparam_lo = reg_lo;
-				//regparam_lo_lower_limit = reg_lo_lower;
-				//regparam_lo_upper_limit = reg_lo_upper;
-			//} else if (nwords == 2) {
-			if (nwords == 2) {
-				if (!(ws[1] >> reg_lo)) Complain("invalid regparam_lo value");
-				regparam_lo = reg_lo;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_lo = " << regparam_lo << endl;
-			} else Complain("must specify either zero or one argument (regparam_lo value)");
-		}
-		/*
-		else if (words[0]=="vary_regparam_lo")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary regparam_lo: " << display_switch(vary_regparam_lo) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lo' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lo can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization)) Complain("lum_weighted_regularization must be set to 'on' before regparam_lo can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lo can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_regparam_lo,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		*/
 		else if (words[0]=="regparam_lum_index")
 		{
 			double reg_index;
@@ -12256,6 +12222,100 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lum_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_rc")
+		{
+			double lrrc, lrrc_upper, lrrc_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> lrrc_lower)) Complain("invalid lumreg_rc lower limit");
+				if (!(ws[2] >> lrrc)) Complain("invalid lumreg_rc value");
+				if (!(ws[3] >> lrrc_upper)) Complain("invalid lumreg_rc upper limit");
+				if ((lrrc < lrrc_lower) or (lrrc > lrrc_upper)) Complain("initial lumreg_rc should lie within specified prior limits");
+				lumreg_rc = lrrc;
+				lumreg_rc_lower_limit = lrrc_lower;
+				lumreg_rc_upper_limit = lrrc_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> lrrc)) Complain("invalid lumreg_rc value");
+				lumreg_rc = lrrc;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_rc = " << lumreg_rc << endl;
+			} else Complain("must specify either zero or one argument (lumreg_rc value)");
+		}
+		else if (words[0]=="vary_lumreg_rc")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary lumreg_rc: " << display_switch(vary_lumreg_rc) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_lumreg_rc' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before lumreg_rc can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before lumreg_rc can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("lumreg_rc can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_lumreg_rc,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_lsc2")
+		{
+			double reg_lsc2, reg_lsc2_upper, reg_lsc2_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> reg_lsc2_lower)) Complain("invalid regparam_lsc2 lower limit");
+				if (!(ws[2] >> reg_lsc2)) Complain("invalid regparam_lsc2 value");
+				if (!(ws[3] >> reg_lsc2_upper)) Complain("invalid regparam_lsc2 upper limit");
+				if ((reg_lsc2 < reg_lsc2_lower) or (reg_lsc2 > reg_lsc2_upper)) Complain("initial regparam_lsc2 should lie within specified prior limits");
+				regparam_lsc2 = reg_lsc2;
+				regparam_lsc2_lower_limit = reg_lsc2_lower;
+				regparam_lsc2_upper_limit = reg_lsc2_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> reg_lsc2)) Complain("invalid regparam_lsc2 value");
+				regparam_lsc2 = reg_lsc2;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_lsc2 = " << regparam_lsc2 << endl;
+			} else Complain("must specify either zero or one argument (regparam_lsc2 value)");
+		}
+		else if (words[0]=="vary_regparam_lsc2")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary regparam_lsc2: " << display_switch(vary_regparam_lsc2) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc2' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc2 can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc2 can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_lsc2,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="regparam_lum_index2")
+		{
+			double reg_index2;
+			double reg_index2_upper, reg_index2_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> reg_index2_lower)) Complain("invalid regparam_lum_index2 lower limit");
+				if (!(ws[2] >> reg_index2)) Complain("invalid regparam_lum_index2 value");
+				if (!(ws[3] >> reg_index2_upper)) Complain("invalid regparam_lum_index2 upper limit");
+				if ((reg_index2 < reg_index2_lower) or (reg_index2 > reg_index2_upper)) Complain("initial regparam_lum_index2 should lie within specified prior limits");
+				regparam_lum_index2 = reg_index2;
+				regparam_lum_index2_lower_limit = reg_index2_lower;
+				regparam_lum_index2_upper_limit = reg_index2_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> reg_index2)) Complain("invalid regparam_lum_index2 value");
+				regparam_lum_index2 = reg_index2;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "regparam_lum_index2 = " << regparam_lum_index2 << endl;
+			} else Complain("must specify either zero or one argument (regparam_lum_index2 value)");
+		}
+		else if (words[0]=="vary_regparam_lum_index2")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary regparam_lum_index2: " << display_switch(vary_regparam_lum_index2) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lum_index2' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lum_index2 can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before regparam_lum_index2 can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_regparam_lum_index2,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12618,10 +12678,6 @@ void QLens::process_commands(bool read_file)
 				//if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
 				//if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("beta_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
 				set_switch(use_second_covariance_kernel,setword);
-				if ((vary_regparam_lsc) and (!use_lum_weighted_regularization)) {
-					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
-					vary_regparam_lsc = false;
-				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

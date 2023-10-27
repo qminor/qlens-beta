@@ -565,16 +565,22 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
-	double regparam_lo;
+	double lumreg_rc;
+	double regparam_lsc2, regparam_lum_index2; 
 	//double regparam_lhi, regparam_lum_index; 
 	double *lum_weight_factor;
 	double *lum_weight_factor2; // for second covariance kernel
 	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
+	bool vary_lumreg_rc;
+	bool vary_regparam_lsc2, vary_regparam_lum_index2;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;
 	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
 	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
+	double lumreg_rc_lower_limit, lumreg_rc_upper_limit;
+	double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
+	double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	bool use_dist_weighted_srcpixel_clustering;

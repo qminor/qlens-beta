@@ -2985,9 +2985,9 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 		}
 		double *wgtfac = ((use_distance_weighted_regularization) or ((allow_lum_weighting) and (use_lum_weighted_regularization))) ? lum_weight_factor : NULL;
 		delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,wgtfac);
-		if ((allow_lum_weighting) and (use_second_covariance_kernel)) {
-			delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel2_correlation_length,kernel_type,matern_index,lum_weight_factor2,true,kernel2_amplitude_ratio); // uses exponential kernel
-		}
+		//if (((allow_lum_weighting) or (use_distance_weighted_regularization)) and (use_second_covariance_kernel)) {
+			//delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel2_correlation_length,kernel_type,matern_index,lum_weight_factor2,true,kernel2_amplitude_ratio); // uses exponential kernel
+		//}
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
@@ -4620,20 +4620,21 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 	indx[0] = 0;
 	for (i=1; i < n_srcpts; i++) indx[i] = indx[i-1] + n_srcpts-i+1; // allows us to find first nonzero column with packed storage
 
-	//double regparam_lo = lens->regparam_lo;
+	//double lumreg_rc = lens->lumreg_rc;
 	double wi, wj, fac;
 	#pragma omp parallel for private(i,j,sqrdist,x,covptr,corrlength,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_srcpts; i++) {
 		covptr = cov_matrix_packed+indx[i];
 		if (extra_weighting) {
-			wi = exp(-wgtfac[i]);
-			//wi = (1-regparam_lo)*exp(-wgtfac[i])+regparam_lo;
+			//wi = exp(-wgtfac[i]);
+			wi = wgtfac[i];
+			//wi = (1-lumreg_rc)*wgtfac[i]+lumreg_rc;
 		}
 		else wi=1.0;
 		fac = wi*wi;
-		if (amplitude > 0) fac *= amplitude;
-		if (!add_to_covmatrix) *covptr = 0;
-		*(covptr++) += fac + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
+		if (amplitude >= 0) fac *= amplitude;
+		if (!add_to_covmatrix) *covptr = epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
+		*(covptr++) += fac;
 		//*(covptr++) = 1.0 + epsilon; // adding epsilon to diagonal reduces numerical error during inversion by increasing the smallest eigenvalues
 		for (j=i+1; j < n_srcpts; j++) {
 			if (!add_to_covmatrix) *covptr = 0;
@@ -4641,17 +4642,16 @@ void DelaunayGrid::generate_covariance_matrix(double *cov_matrix_packed, const d
 			corrlength = input_corr_length;
 			double xsig = 0.5;
 			if (extra_weighting) {
-				wj = exp(-wgtfac[j]);
-				//wj = (1-regparam_lo)*exp(-wgtfac[j])+regparam_lo;
-				//wj = 1-exp(-wgtfac[j]);
-				//wj = wgtfac[j];
+				//wj = exp(-wgtfac[j]);
+				wj = wgtfac[j];
+				//wj = (1-lumreg_rc)*wgtfac[j]+lumreg_rc;
 				fac = wi*wj;
 				//double wj = pow(wgtfac[j],lens->regparam_lum_index);
 				//cout << wi << " " << wj << endl;
 			} else {
 				fac = 1.0;
 			}
-			if (amplitude > 0) fac *= amplitude;
+			if (amplitude >= 0) fac *= amplitude;
 			if (kernel_type==0) {
 				x = sqrt(2*matern_index*sqrdist)/corrlength;
 				if (x==0) {
@@ -13544,7 +13544,7 @@ void QLens::generate_supersampled_PSF_matrix()
 bool QLens::create_regularization_matrix(const bool allow_lum_weighting, const bool use_sbweights, const bool verbal)
 {
 	RegularizationMethod reg_method = regularization_method;
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (!allow_lum_weighting)) reg_method = Curvature;
+	if ((use_lum_weighted_regularization) and (!allow_lum_weighting)) reg_method = Curvature;
 	if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
 	if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 	if (allow_lum_weighting) calculate_lumreg_srcpixel_weights(use_sbweights);
@@ -14701,7 +14701,7 @@ bool QLens::optimize_regularization_parameter(const bool dense_Fmatrix, const bo
 		wtime_opt0 = omp_get_wtime();
 	}
 #endif
-	if (((use_lum_weighted_regularization) or (use_second_covariance_kernel)) and (!pre_srcgrid)) {
+	if ((use_lum_weighted_regularization) and (!pre_srcgrid)) {
 		if (!get_lumreg_from_sbweights) {
 			if (!use_covariance_matrix) {
 				// This means we started with a non-covmatrix based regularization (e.g. curvature) to get the initial luminosity.
@@ -14964,7 +14964,7 @@ void QLens::calculate_subpixel_distweights()
 		j = pixptr_j[n];
 		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
-			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(scaled_dists[l++],regparam_lum_index));
+			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + lumreg_rc*lumreg_rc),regparam_lum_index));
 			//cout << "WEIGHT " << (l-1) << ": " << image_pixel_grid->subpixel_weights[i][j][k] << " " << scaled_dists[l-1] << " " << (*srcpts[l-1])[0] << " " << (*srcpts[l-1])[1] << " " << xc << " " << yc << " " << sig << endl;
 		}
 	}
@@ -14983,20 +14983,20 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 	if (use_lum_weighted_regularization) {
 		for (i=0; i < source_npixels; i++) {
 			if (lum_weight_function==0) {
-				if (source_pixel_vector[i]==max_sb) lum_weight_factor[i] = 0;
+				if (source_pixel_vector[i]==max_sb) lum_weight_factor[i] = 1;
 				else {
 					lumfac = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-					lum_weight_factor[i] = pow(regparam_lsc,regparam_lum_index)*lumfac;
+					lum_weight_factor[i] = exp(-pow(regparam_lsc,regparam_lum_index)*lumfac);
 				}
 			} else if (lum_weight_function==1) {
 				lumfac = (source_pixel_vector[i] > 0) ? 1 - pow(source_pixel_vector[i]/max_sb,regparam_lum_index) : 1;
-				lum_weight_factor[i] = regparam_lsc*lumfac;
+				lum_weight_factor[i] = exp(-regparam_lsc*lumfac);
 			} else {
 				if (regparam_lum_index==0) {
-					lum_weight_factor[i] = regparam_lsc;
+					lum_weight_factor[i] = exp(-regparam_lsc);
 				} else {
 					lumfac = (source_pixel_vector[i] > 0) ? pow(1-pow(source_pixel_vector[i]/max_sb,1.0/regparam_lum_index),regparam_lum_index) : 1;
-					lum_weight_factor[i] = regparam_lsc*lumfac;
+					lum_weight_factor[i] = exp(-regparam_lsc*lumfac);
 				}
 			}
 		}
@@ -15005,7 +15005,8 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 		for (i=0; i < source_npixels; i++) {
 			//if (regparam_lum_index==0) lumfac2 = 1;
 			lumfac2 = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,2) : 1;
-			lum_weight_factor2[i] = pow(regparam_lsc,2)*lumfac2;
+			//lum_weight_factor2[i] = exp(-pow(regparam_lsc,2)*lumfac2);
+			lum_weight_factor2[i] = 1.0;
 		}
 	}
 }
@@ -15040,11 +15041,25 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,source_npixels,lumreg_e1,lumreg_e2);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
-			lum_weight_factor[i] = regparam_lsc*pow(scaled_dists[i],regparam_lum_index);
+			lum_weight_factor[i] = exp(-regparam_lsc*pow(sqrt(SQR(scaled_dists[i]) + lumreg_rc*lumreg_rc),regparam_lum_index));
+			//lum_weight_factor[i] = (exp(-regparam_lsc*pow(scaled_dists[i],regparam_lum_index)) + lumreg_rc*exp(-regparam_lsc2*pow(scaled_dists[i],regparam_lum_index2)))/(1+lumreg_rc);
 		} else {
 			die("lumweight_func greater than 0 not supported in dist-weighted regularization");
 		}
 	}
+
+	if (use_second_covariance_kernel) {
+		for (int i=0; i < source_npixels; i++) {
+			if (lum_weight_function==0) {
+				//lum_weight_factor2[i] = exp(-regparam_lsc2*pow(scaled_dists[i],regparam_lum_index2));
+				lum_weight_factor2[i] = 1.0;
+			} else {
+				die("lumweight_func greater than 0 not supported in dist-weighted regularization");
+			}
+		}
+	}
+
+
 	delete[] scaled_dists;
 	delete[] srcpts;
 }
