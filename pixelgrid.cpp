@@ -2980,6 +2980,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int kernel_type, const
 				//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 			}
 			if (use_distance_weighted_regularization) {
+				if (fix_lumreg_sig) sig = lumreg_sig;
 				calculate_distreg_srcpixel_weights(xc_approx,yc_approx,sig,verbal);
 			}
 		}
@@ -14910,6 +14911,7 @@ void QLens::calculate_subpixel_distweights()
 {
 	double xc, yc, xc_approx, yc_approx, sig;
 	sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
+	if (fix_lumreg_sig) sig = lumreg_sig;
 	if (auto_lumreg_center) {
 		xc = xc_approx;
 		yc = yc_approx;

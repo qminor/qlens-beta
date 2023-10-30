@@ -12347,6 +12347,25 @@ void QLens::process_commands(bool read_file)
 				set_switch(lensed_lumreg_center,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="fix_lumreg_sig")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Fix lumreg sigma value instead of estimating from ray-traced points: " << display_switch(fix_lumreg_sig) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'fix_lumreg_sig' command; must specify 'on' or 'off'");
+				set_switch(fix_lumreg_sig,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="lumreg_sig")
+		{
+			double lrsig;
+			if (nwords == 2) {
+				if (!(ws[1] >> lrsig)) Complain("invalid lumreg_sig value");
+				lumreg_sig = lrsig;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "lumreg_sig = " << lumreg_sig << endl;
+			} else Complain("must specify either zero or one argument (lumreg_sig value)");
+		}
 		else if (words[0]=="lumreg_xcenter")
 		{
 			double regxc;
