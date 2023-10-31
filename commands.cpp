@@ -12347,6 +12347,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(lensed_lumreg_center,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="lensed_lumreg_rc")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Define lumreg_rc in image plane instead of source plane: " << display_switch(lensed_lumreg_rc) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'lensed_lumreg_rc' command; must specify 'on' or 'off'");
+				set_switch(lensed_lumreg_rc,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="fix_lumreg_sig")
 		{
 			if (nwords==1) {

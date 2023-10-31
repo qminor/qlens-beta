@@ -14909,7 +14909,8 @@ void QLens::calculate_subpixel_sbweights(const bool save_sbweights, const bool v
 
 void QLens::calculate_subpixel_distweights()
 {
-	double xc, yc, xc_approx, yc_approx, sig;
+	double xc, yc, xc_approx, yc_approx, sig, rc;
+	rc = lumreg_rc;
 	sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
 	if (fix_lumreg_sig) sig = lumreg_sig;
 	if (auto_lumreg_center) {
@@ -14922,6 +14923,22 @@ void QLens::calculate_subpixel_distweights()
 			xl[1] = lumreg_ycenter;
 			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
 			//if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
+			if (lensed_lumreg_rc) {
+				int i, phi_nn = 24;
+				double phi, phi_step = M_2PI/(phi_nn-1);
+				double xc2, yc2;
+				rc = 0;
+				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
+					xl[0] = lumreg_xcenter + lumreg_rc*cos(phi);
+					xl[1] = lumreg_ycenter + lumreg_rc*sin(phi);
+					find_sourcept(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
+					rc += SQR(xc2-xc)+SQR(yc2-yc);
+				}
+				rc = sqrt(rc/phi_nn);
+			}
+			// this is all repeated in function calculate_distreg_srcpixel_weights(...), which is not great...find a way to consolidate?
+			//if ((verbal) and (mpi_id==0)) cout << "estimated lumreg_rc mapped to source plane: " << rc << endl;
+
 		} else {
 			xc = lumreg_xcenter; yc = lumreg_ycenter;
 		}
@@ -14961,7 +14978,7 @@ void QLens::calculate_subpixel_distweights()
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,n_weights,lumreg_e1,lumreg_e2);
 
 	l=0;
-	double scaled_rcsq = SQR(lumreg_rc/sig);
+	double scaled_rcsq = SQR(rc/sig);
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
@@ -15016,7 +15033,8 @@ void QLens::calculate_lumreg_srcpixel_weights(const bool use_sbweights)
 
 void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double yc_in, const double sig, const bool verbal)
 {
-	double xc, yc;
+	double xc, yc, rc;
+	rc = lumreg_rc;
 	if (auto_lumreg_center) {
 		if (lumreg_center_from_ptsource) {
 			if (n_sourcepts_fit==0) die("no source points have been defined");
@@ -15033,6 +15051,20 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 			xl[1] = lumreg_ycenter;
 			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
 			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
+			if (lensed_lumreg_rc) {
+				int i, phi_nn = 24;
+				double phi, phi_step = M_2PI/(phi_nn-1);
+				double xc2, yc2;
+				rc = 0;
+				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
+					xl[0] = lumreg_xcenter + lumreg_rc*cos(phi);
+					xl[1] = lumreg_ycenter + lumreg_rc*sin(phi);
+					find_sourcept(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
+					rc += SQR(xc2-xc)+SQR(yc2-yc);
+				}
+				rc = sqrt(rc/phi_nn);
+			}
+			if ((verbal) and (mpi_id==0)) cout << "estimated lumreg_rc mapped to source plane: " << rc << endl;
 		} else {
 			xc = lumreg_xcenter; yc = lumreg_ycenter;
 		}
@@ -15042,7 +15074,7 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 	for (int i=0; i < source_npixels; i++) srcpts[i] = &(delaunay_srcgrid->srcpts[i]);
 	if (delaunay_srcgrid == NULL) die("Delaunay source grid has not been created");
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,source_npixels,lumreg_e1,lumreg_e2);
-	double scaled_rcsq = SQR(lumreg_rc/sig);
+	double scaled_rcsq = SQR(rc/sig);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
 			lum_weight_factor[i] = exp(-regparam_lsc*pow(sqrt(SQR(scaled_dists[i]) + scaled_rcsq),regparam_lum_index));

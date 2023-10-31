@@ -926,6 +926,7 @@ QLens::QLens() : UCMC()
 	auto_lumreg_center = true;
 	lumreg_center_from_ptsource = false;
 	lensed_lumreg_center = false;
+	lensed_lumreg_rc = false;
 	fix_lumreg_sig = false;
 	lumreg_sig = 1.0;
 	lumreg_xcenter = 0.0;
@@ -1413,6 +1414,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	auto_lumreg_center = lens_in->auto_lumreg_center;
 	lumreg_center_from_ptsource = lens_in->lumreg_center_from_ptsource;
 	lensed_lumreg_center = lens_in->lensed_lumreg_center;
+	lensed_lumreg_rc = lens_in->lensed_lumreg_rc;
 	fix_lumreg_sig = lens_in->fix_lumreg_sig;
 	lumreg_sig = lens_in->lumreg_sig;
 	lumreg_xcenter = lens_in->lumreg_xcenter;
