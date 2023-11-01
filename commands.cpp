@@ -9142,43 +9142,66 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="loadpsf")
 			{
 				string filename;
-				bool sup = false;
+				bool load_supersampled_psf = false;
 				bool cubic_spline = false;
+				bool specify_pixsize = false;
+				bool downsample = false;
+				int downsample_fac = 1;
+				double psize = -1;
 				vector<string> args;
+				int pos;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-spline") cubic_spline = true;
 						else if (args[i]=="-supersampled") {
 							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to load supersampled PSF");
-							else sup = true;
-						}
-						else Complain("argument '" << args[i] << "' not recognized");
+							else load_supersampled_psf = true;
+						} else if ((pos = args[i].find("-pxsize=")) != string::npos) {
+							string sizestring = args[i].substr(pos+8);
+							stringstream sizestr;
+							sizestr << sizestring;
+							if (!(sizestr >> psize)) Complain("incorrect format for pixel noise");
+							if (psize < 0) Complain("pixel size value cannot be negative");
+							specify_pixsize = true;
+						} else if ((pos = args[i].find("-downsample=")) != string::npos) {
+							string sizestring = args[i].substr(pos+12);
+							stringstream sizestr;
+							sizestr << sizestring;
+							if (!(sizestr >> downsample_fac)) Complain("incorrect format for pixel noise");
+							if (downsample_fac <= 0) Complain("pixel size value cannot be negative or zero");
+							downsample = true;
+						} else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
-				if ((cubic_spline) and (sup)) Complain("cannot spline supersampled PSF matrix");
+				if ((cubic_spline) and (load_supersampled_psf)) Complain("cannot spline supersampled PSF matrix");
 				if (nwords==2) {
 					Complain("filename for PSF in FITS format is required (e.g. 'sbmap loadpsf file.fits')");
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-				if (!load_psf_fits(filename,sup,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
-				if (!sup) {
+				if (!load_psf_fits(filename,load_supersampled_psf,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
+				if (!load_supersampled_psf) {
 					if (psf_spline.is_splined()) psf_spline.unspline();
 					if (cubic_spline) {
-						// this code snippet is ugly and gets repeated in a few places. Consolodate and maybe rewrite!
 						double pixel_xlength, pixel_ylength;
-						if (image_pixel_grid != NULL) {
-							pixel_xlength = image_pixel_grid->pixel_xlength;
-							pixel_ylength = image_pixel_grid->pixel_ylength;
+						if (specify_pixsize) {
+							pixel_xlength = psize;
+							pixel_ylength = psize;
 						} else {
-							pixel_xlength = grid_xlength / n_image_pixels_x;
-							pixel_ylength = grid_ylength / n_image_pixels_y;
+							// this code snippet is ugly and gets repeated in a few places. Consolodate and maybe rewrite!
+							if (image_pixel_grid != NULL) {
+								pixel_xlength = image_pixel_grid->pixel_xlength;
+								pixel_ylength = image_pixel_grid->pixel_ylength;
+							} else {
+								pixel_xlength = grid_xlength / n_image_pixels_x;
+								pixel_ylength = grid_ylength / n_image_pixels_y;
+							}
 						}
 						if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
 					}
 					if (psf_supersampling) {
-						generate_supersampled_PSF_matrix();
+						generate_supersampled_PSF_matrix(downsample,downsample_fac);
 						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 					}
 				}

@@ -970,7 +970,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double **psf_matrix;
 	Spline2D psf_spline;
 	double **supersampled_psf_matrix;
-	void generate_supersampled_PSF_matrix();
+	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
 	bool load_psf_fits(string fits_filename, const bool supersampled, const bool verbal);
 	bool save_psf_fits(string fits_filename, const bool supersampled = false);
 	int psf_npixels_x, psf_npixels_y;

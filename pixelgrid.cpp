@@ -5948,6 +5948,7 @@ bool QLens::load_psf_fits(string fits_filename, const bool supersampled, const b
 
 	if (status) fits_report_error(stderr, status); // print any error message
 	if (image_load_status) psf_filename = fits_filename;
+
 	return image_load_status;
 #endif
 }
@@ -12295,6 +12296,7 @@ void QLens::PSF_convolution_Lmatrix(bool verbal)
 		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
 	}
 #endif
+	if (psf_supersampling) die("PSF supersampling has not been implemented with sparse Lmatrix");
 	if (use_input_psf_matrix) {
 		if (psf_matrix == NULL) return;
 	}
@@ -12543,10 +12545,12 @@ bool QLens::setup_convolution_FFT(const bool verbal)
 		npix = image_n_subpixels;
 		pixel_map_ii = active_image_subpixel_ii;
 		pixel_map_jj = active_image_subpixel_jj;
+		//cout << "PSF_NX=" << psf_nx << " PSF_NY=" << psf_ny << " npix=" << image_n_subpixels << endl;
 	}
 
 	if (use_input_psf_matrix) {
-		if (psf_matrix == NULL) return false;
+		if ((!psf_supersampling) and (psf_matrix == NULL)) return false;
+		if ((psf_supersampling) and (supersampled_psf_matrix == NULL)) return false;
 	} else {
 		if ((psf_width_x==0) and (psf_width_y==0)) return false;
 		else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) {
@@ -12851,7 +12855,8 @@ void QLens::PSF_convolution_Lmatrix_dense(const bool verbal)
 #endif
 		} else {
 			if (use_input_psf_matrix) {
-				if (psf_matrix == NULL) return;
+				if ((!psf_supersampling) and (psf_matrix == NULL)) return;
+				if ((psf_supersampling) and (supersampled_psf_matrix == NULL)) return;
 			}
 			else if (generate_PSF_matrix(image_pixel_grid->pixel_xlength,image_pixel_grid->pixel_ylength,psf_supersampling)==false) return;
 
@@ -13484,17 +13489,13 @@ double QLens::interpolate_PSF_matrix(const double x, const double y)
 	return psfint;
 }
 
-void QLens::generate_supersampled_PSF_matrix()
+void QLens::generate_supersampled_PSF_matrix(const bool downsample, const int downsample_fac)
 {
 	int i,j;
 	if (supersampled_psf_matrix != NULL) {
 		for (i=0; i < supersampled_psf_npixels_x; i++) delete[] supersampled_psf_matrix[i];
 		delete[] supersampled_psf_matrix;
 	}
-	int nx = psf_npixels_x * default_imgpixel_nsplit;
-	int ny = psf_npixels_y * default_imgpixel_nsplit;
-	supersampled_psf_matrix = new double*[nx];
-	for (i=0; i < nx; i++) supersampled_psf_matrix[i] = new double[ny];
 
 	double pixel_xlength, pixel_ylength;
 	if (image_pixel_grid != NULL) {
@@ -13505,28 +13506,64 @@ void QLens::generate_supersampled_PSF_matrix()
 		pixel_ylength = grid_ylength / n_image_pixels_y;
 	}
 
+	int nx, ny;
 	double x, xmax, xstep, y, ymax, ystep;
 	xstep = pixel_xlength / default_imgpixel_nsplit;
-	//double xstep_check = (psf_npixels_x*pixel_xlength) / nx;
-	xmax = ((psf_npixels_x * pixel_xlength)-xstep) / 2;
 	ystep = pixel_ylength / default_imgpixel_nsplit;
-	ymax = ((psf_npixels_y * pixel_ylength)-ystep) / 2;
+
+	if ((psf_spline.is_splined()) and (downsample)) {
+		int psf0_nx, psf0_ny;
+		psf0_nx = (int) (((psf_spline.xmax()-psf_spline.xmin())/pixel_xlength) + 1.000001);
+		psf0_ny = (int) (((psf_spline.ymax()-psf_spline.ymin())/pixel_ylength) + 1.000001);
+		nx = psf0_nx * default_imgpixel_nsplit;
+		ny = psf0_ny * default_imgpixel_nsplit;
+		cout << "NX=" << nx << " NY=" << ny << endl;
+		double check_nx = psf_npixels_x * default_imgpixel_nsplit;
+		double check_ny = psf_npixels_y * default_imgpixel_nsplit;
+		xmax = ((psf0_nx * pixel_xlength)-xstep) / 2;
+		ymax = ((psf0_ny * pixel_ylength)-ystep) / 2;
+		cout << "CHECK: " << check_nx << " " << check_ny << endl;
+		cout << "ARGH: " << ((psf_spline.ymax()-psf_spline.ymin())/pixel_ylength) << endl;
+	} else {
+		nx = psf_npixels_x * default_imgpixel_nsplit;
+		ny = psf_npixels_y * default_imgpixel_nsplit;
+		xmax = ((psf_npixels_x * pixel_xlength)-xstep) / 2;
+		ymax = ((psf_npixels_y * pixel_ylength)-ystep) / 2;
+	}
+	supersampled_psf_matrix = new double*[nx];
+	for (i=0; i < nx; i++) supersampled_psf_matrix[i] = new double[ny];
+
+	//double xstep_check = (psf_npixels_x*pixel_xlength) / nx;
 	//cout << "CHECK xstep, ystep: " << xstep << " " << ystep << " (xmax=" << xmax << ", ymax=" << ymax << ", nx=" << nx << ", ny=" << ny << ")" << endl;
+
+	double xs, ys, subpixel_xstep, subpixel_ystep, psf_sum, dx, dy;
+	int ii, jj, downsample_npix;
+	if (downsample) {
+		downsample_npix = downsample_fac*downsample_fac;
+		subpixel_xstep = xstep / downsample_fac;
+		subpixel_ystep = ystep / downsample_fac;
+		dx = (subpixel_xstep - xstep) / 2; // these should be negative, since you're going from pixel center to a subpixel center
+		dy = (subpixel_ystep - ystep) / 2; // these should be negative, since you're going from pixel center to a subpixel center
+		cout << "DOWNSAMPLE DX=" << dx << " DY=" << dy << endl;
+	}
+	cout << "xmax=" << xmax << " xmax_est=" << (-xmax+(nx-1)*xstep) << endl;
+	cout << "ymax=" << ymax << " ymax_est=" << (-ymax+(ny-1)*ystep) << endl;
+
 	double normalization = 0;
-	int ii,jj;
 	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
 		for (j=0, y=-ymax; j < ny; j++, y += ystep) {
-			//if (psf_spline.is_splined()) {
-			supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
-			//} else {
-				//ii = i / default_imgpixel_nsplit;
-				//jj = j / default_imgpixel_nsplit;
-				//supersampled_psf_matrix[i][j] = psf_matrix[ii][jj]; // equivalent to zeroth order interpolation
-				//supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
-			//}
+			if (!downsample) {
+				supersampled_psf_matrix[i][j] = interpolate_PSF_matrix(x,y);
+			} else {
+				psf_sum = 0;
+				for (ii=0, xs=x+dx; ii < downsample_fac; ii++, xs += subpixel_xstep) {
+					for (jj=0, ys=y+dy; jj < downsample_fac; jj++, ys += subpixel_ystep) {
+						psf_sum += interpolate_PSF_matrix(xs,ys);
+					}
+				}
+				supersampled_psf_matrix[i][j] = psf_sum / downsample_npix;
+			}
 			normalization += supersampled_psf_matrix[i][j];
-			//cout << "x=" << x << ", y=" << y << " psfint=" << supersampled_psf_matrix[i][j] << endl;
-			//cout << "i=" << i << ", j=" << j << ", ii=" << ii << ", jj=" << jj << endl;
 		}
 	}
 	x -= xstep;
