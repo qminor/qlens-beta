@@ -1122,6 +1122,7 @@ QLens::QLens() : UCMC()
 	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
 	split_high_mag_imgpixels = false;
+	delaunay_from_pixel_centers = false;
 	psf_supersampling = false;
 	imgpixel_lomag_threshold = 0;
 	imgpixel_himag_threshold = 0;
@@ -1627,6 +1628,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
 	split_imgpixels = lens_in->split_imgpixels;
 	split_high_mag_imgpixels = lens_in->split_high_mag_imgpixels;
+	delaunay_from_pixel_centers = lens_in->delaunay_from_pixel_centers;
 	psf_supersampling = lens_in->psf_supersampling;
 	imgpixel_lomag_threshold = lens_in->imgpixel_lomag_threshold;
 	imgpixel_himag_threshold = lens_in->imgpixel_himag_threshold;
@@ -11449,10 +11451,15 @@ bool QLens::output_coolest_files(const string filename)
 	Json::Value pixels_psf;
 	pixels_psf["field_of_view_x"] = Json::Value(Json::arrayValue);
 	pixels_psf["field_of_view_x"].append(0);
-	pixels_psf["field_of_view_x"].append( data_pixel_size*psf_npixels_x );
 	pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
 	pixels_psf["field_of_view_y"].append(0);
-	pixels_psf["field_of_view_y"].append( data_pixel_size*psf_npixels_y );
+	if (psf_supersampling) {
+		pixels_psf["field_of_view_x"].append(data_pixel_size*supersampled_psf_npixels_x/default_imgpixel_nsplit);
+		pixels_psf["field_of_view_y"].append(data_pixel_size*supersampled_psf_npixels_y/default_imgpixel_nsplit);
+	} else {
+		pixels_psf["field_of_view_x"].append(data_pixel_size*psf_npixels_x);
+		pixels_psf["field_of_view_y"].append(data_pixel_size*psf_npixels_y);
+	}
 	pixels_psf["num_pix_x"] = (psf_supersampling ? supersampled_psf_npixels_x : psf_npixels_x);
 	pixels_psf["num_pix_y"] = (psf_supersampling ? supersampled_psf_npixels_y : psf_npixels_y);
 	pixels_psf["fits_file"] = Json::Value();
@@ -13202,7 +13209,7 @@ void QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		if (include_in_delaunay_grid[n]) {
-			if (!split_imgpixels) {
+			if ((!split_imgpixels) or ((delaunay_from_pixel_centers) and (!use_srcpixel_clustering) and (!use_weighted_srcpixel_clustering))) {
 				srcpts_x[npix] = image_pixel_grid->center_sourcepts[i][j][0];
 				srcpts_y[npix] = image_pixel_grid->center_sourcepts[i][j][1];
 			} else {

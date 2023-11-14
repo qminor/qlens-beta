@@ -13546,8 +13546,8 @@ void QLens::generate_supersampled_PSF_matrix(const bool downsample, const int do
 		dy = (subpixel_ystep - ystep) / 2; // these should be negative, since you're going from pixel center to a subpixel center
 		cout << "DOWNSAMPLE DX=" << dx << " DY=" << dy << endl;
 	}
-	cout << "xmax=" << xmax << " xmax_est=" << (-xmax+(nx-1)*xstep) << endl;
-	cout << "ymax=" << ymax << " ymax_est=" << (-ymax+(ny-1)*ystep) << endl;
+	//cout << "xmax=" << xmax << " xmax_est=" << (-xmax+(nx-1)*xstep) << endl;
+	//cout << "ymax=" << ymax << " ymax_est=" << (-ymax+(ny-1)*ystep) << endl;
 
 	double normalization = 0;
 	for (i=0, x=-xmax; i < nx; i++, x += xstep) {
@@ -15088,7 +15088,7 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 			xl[1] = lumreg_ycenter;
 			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
 			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
-			if (lensed_lumreg_rc) {
+			if ((lensed_lumreg_rc) and (lumreg_rc > 0)) {
 				int i, phi_nn = 24;
 				double phi, phi_step = M_2PI/(phi_nn-1);
 				double xc2, yc2;
@@ -15100,8 +15100,8 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}
 				rc = sqrt(rc/phi_nn);
+				if ((verbal) and (mpi_id==0)) cout << "estimated lumreg_rc mapped to source plane: " << rc << endl;
 			}
-			if ((verbal) and (mpi_id==0)) cout << "estimated lumreg_rc mapped to source plane: " << rc << endl;
 		} else {
 			xc = lumreg_xcenter; yc = lumreg_ycenter;
 		}

@@ -13373,6 +13373,17 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="delaunay_from_pixel_centers")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Define Delaunay grid from pixel centers even if 'split_imgpixels' is turned on: " << display_switch(delaunay_from_pixel_centers) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_from_pixel_centers' command; must specify 'on' or 'off'");
+				if (use_srcpixel_clustering) Complain("use_srcpixel_clustering must be turned off for this option");
+				if (use_lum_weighted_srcpixel_clustering) Complain("lum_weighted_srcpixel_clustering must be turned off for this option");
+				set_switch(delaunay_from_pixel_centers,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="imgpixel_nsplit")
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
