@@ -2322,6 +2322,7 @@ void Shear::set_angle_from_components(const double &shear1, const double &shear2
 
 Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, QLens* cosmo_in, const bool sine)
 {
+	sine_term = sine;
 	setup_lens_properties(0,m_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
@@ -2354,7 +2355,6 @@ void Multipole::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = MULTIPOLE;
 	kappa_multipole = false; // default; specifies it is a multipole in the potential
-	sine_term = false; // default
 	string sine_command = "cos";
 	subclass_label = "m";
 	stringstream mstr;

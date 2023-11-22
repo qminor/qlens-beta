@@ -902,6 +902,7 @@ class Multipole : public LensProfile
 
 	Multipole()
 	{
+		sine_term = false; // default
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
