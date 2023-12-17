@@ -216,7 +216,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
 	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
-	void print_parameters();
+	void print_parameters(const double zs = -1);
 	void print_vary_parameters();
 	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
 	virtual void print_source_command(std::ofstream& scriptout, const bool use_limits);

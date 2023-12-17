@@ -2188,12 +2188,29 @@ void SB_Profile::plot_sb_profile(double rmin, double rmax, int steps, ofstream &
 	}
 }
 
-void SB_Profile::print_parameters()
+void SB_Profile::print_parameters(const double zs)
 {
 	cout << model_name;
-	if (sbtype==SHAPELET) cout << "(n_shapelets=" << (*indxptr) << ")";
-	if (!is_lensed) cout << "(unlensed)";
-	if (zoom_subgridding) cout << "(zoom)";
+	bool parenthesis = false;
+	string divider = "(";
+	if (zs > 0) {
+		stringstream zstr;
+		zstr << zs;
+		string zstring;
+		zstr >> zstring;
+		cout << "(zs=" << zstring;
+		parenthesis = true;
+	} else {
+		if (!is_lensed) {
+			cout << "(unlensed";
+			parenthesis = true;
+		}
+	}
+	if (parenthesis) divider = ",";
+	
+	if (sbtype==SHAPELET) { cout << divider << "n_shapelets=" << (*indxptr); parenthesis = true; }
+	if (zoom_subgridding) { cout << divider << "zoom"; parenthesis = true; }
+	if (parenthesis) cout << ")";
 	cout << ": ";
 	for (int i=0; i < n_params; i++) {
 		cout << paramnames[i] << "=";

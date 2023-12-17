@@ -1787,7 +1787,7 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 	//cout << Grid::cc_neighbor_splittings << endl;
 	//double *Grid::grid_zfactors;
 	//double **Grid::grid_betafactors;
-	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << zfactors[0][0] << endl;
+	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << ptsrc_zfactors[0][0] << endl;
 
 	// parameters for creating the recursive grid
 	//cout << Grid::rmin << endl;
@@ -1949,14 +1949,14 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 	}
 
 	for (int i=min_dataset; i <= max_dataset; i++) {
-		if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
-			create_grid(false,zfactors[i],beta_factors[i]);
+		if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
+			create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
 
 		source[0] = srcpts[i][0];
 		source[1] = srcpts[i][1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].copy_imageset(source,ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
 	}
 	reset_grid();
 	delete[] srcpts;

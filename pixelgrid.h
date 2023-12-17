@@ -110,9 +110,9 @@ class SourcePixelGrid
 	void print_indices();
 
 	public:
-	SourcePixelGrid(QLens* lens_in, double x_min, double x_max, double y_min, double y_max);
+	SourcePixelGrid(QLens* lens_in, const double x_min, const double x_max, const double y_min, const double y_max);
 	SourcePixelGrid(QLens* lens_in, SourcePixelGrid* input_pixel_grid);
-	SourcePixelGrid(QLens* lens_in, string pixel_data_fileroot, const double& minarea_in);
+	SourcePixelGrid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
 	static void set_splitting(int rs0, int ts0, double min_cs);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
@@ -153,7 +153,7 @@ class SourcePixelGrid
 	void find_nearest_two_cells(SourcePixelGrid* &cellptr1, SourcePixelGrid* &cellptr2, const int& side);
 	SourcePixelGrid* find_corner_cell(const int i, const int j);
 
-	void assign_surface_brightness_from_analytic_source();
+	void assign_surface_brightness_from_analytic_source(const int zsrc_i);
 	void assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid, const bool add_sb = false);
 	void update_surface_brightness(int& index);
 	void fill_surface_brightness_vector();
@@ -193,7 +193,6 @@ class DelaunayGrid : public Sort
 	friend class ImagePixelGrid;
 	QLens *lens;
 	ImagePixelGrid *image_pixel_grid;
-	//int herg;
 
 	static int nthreads;
 	static const int nmax_pts_interp = 80;
@@ -203,9 +202,6 @@ class DelaunayGrid : public Sort
 	static int *triangles_in_envelope[nmax_pts_interp];
 	static lensvector **polygon_vertices[nmax_pts_interp+2]; // the polygon referred to here is the part of the Voronoi cell contained in the Bower-Watson envelope for each vertex in the envelope.
 	static lensvector *new_circumcenter[nmax_pts_interp];
-
-	//static double* srcgrid_zfactors; // kappa ratio used for modeling source points at different redshifts
-	//static double** srcgrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	public:
 	static bool zero_outside_border;
@@ -224,6 +220,7 @@ class DelaunayGrid : public Sort
 	Triangle *triangle;
 	double avg_area;
 	double srcpixel_xmin, srcpixel_xmax, srcpixel_ymin, srcpixel_ymax;
+	double srcgrid_xmin, srcgrid_xmax, srcgrid_ymin, srcgrid_ymax; // for plotting
 	int img_imin, img_imax, img_jmin, img_jmax;
 
 	bool activate_unmapped_source_pixels;
@@ -238,14 +235,14 @@ class DelaunayGrid : public Sort
 	//double prod1, prod2, prod3;
 
 	public:
-	DelaunayGrid(QLens* lens_in, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0);
+	DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	int search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(int &tri_number, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(const int tri_number, const lensvector& pt);
 	void record_adjacent_triangles_xy();
-	void assign_surface_brightness_from_analytic_source();
+	void assign_surface_brightness_from_analytic_source(const int zsrc_i);
 	void fill_surface_brightness_vector();
 	void update_surface_brightness(int& index);
 	int find_closest_vertex(const int tri_number, const lensvector& pt);
@@ -263,7 +260,7 @@ class DelaunayGrid : public Sort
 	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
-	void plot_surface_brightness(string root, const double xmin, const double xmax, const double ymin, const double ymax, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
+	void plot_surface_brightness(string root, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices();
 	void generate_hmatrices();
@@ -279,7 +276,6 @@ class DelaunayGrid : public Sort
 
 class ImagePixelGrid : public Sort
 {
-	// the image pixel grid is simpler because its cells will never be split. So there is no recursion in this grid
 	friend class QLens;
 	friend class SourcePixelGrid;
 	friend class DelaunayGrid;
@@ -293,7 +289,6 @@ class ImagePixelGrid : public Sort
 	lensvector **center_sourcepts;
 	lensvector ***subpixel_center_pts;
 	lensvector ***subpixel_center_sourcepts;
-	lensvector ***shifted_subpixel_sourcepts;
 	double ***subpixel_surface_brightness;
 	double ***subpixel_weights;
 	int **subpixel_index;
@@ -304,6 +299,8 @@ class ImagePixelGrid : public Sort
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 	bool **fit_to_data;
+	bool **mask;
+	bool **emask;
 	double pixel_area, triangle_area; // half of pixel area
 	double min_srcplane_area;
 	double max_sb;
@@ -313,6 +310,19 @@ class ImagePixelGrid : public Sort
 	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
 	int **pixel_index_fgmask;
+
+	int *active_image_pixel_i;
+	int *active_image_pixel_j;
+	int *active_image_pixel_i_ss;
+	int *active_image_pixel_j_ss;
+	int *active_image_subpixel_ii;
+	int *active_image_subpixel_jj;
+	int *active_image_subpixel_ss;
+	int *image_pixel_i_from_subcell_ii;
+	int *image_pixel_j_from_subcell_jj;
+	int *active_image_pixel_i_fgmask;
+	int *active_image_pixel_j_fgmask;
+
 	int **twist_status;
 	lensvector **twist_pts;
 	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
@@ -338,8 +348,9 @@ class ImagePixelGrid : public Sort
 	int xy_N; // gives x_N*y_N if the entire pixel grid is used
 	double pixel_xlength, pixel_ylength;
 	inline bool test_if_between(const double& p, const double& a, const double& b);
-	static double* imggrid_zfactors;
-	static double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
+	int src_redshift_index; // each ImagePixelGrid object is associated with a specific redshift
+	double* imggrid_zfactors;
+	double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
 	static int nthreads;
 	static const int max_iterations, max_step_length;
@@ -355,9 +366,9 @@ class ImagePixelGrid : public Sort
 	double max_component(const lensvector&);
 
 	public:
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, int src_redshift_index = -1);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 
@@ -368,7 +379,7 @@ class ImagePixelGrid : public Sort
 	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false);
+	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0);
 	void include_all_pixels();
 	void activate_extended_mask();
 	void activate_foreground_mask();
@@ -380,13 +391,13 @@ class ImagePixelGrid : public Sort
 	void delete_ray_tracing_arrays();
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
 	void ray_trace_pixels();
-	void set_nsplits(ImagePixelData *pixel_data, const int default_nsplit, const int emask_nsplit, const bool split_pixels);
+	void set_nsplits(const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void setup_noise_map(QLens* lens_in);
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations(const bool verbal = false);
 	void redo_lensing_calculations_corners();
-	void assign_required_data_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
+	void assign_mask_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
 
 	void find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax);
 	double find_approx_source_size(double& xcavg, double& ycavg, const bool verbal = false);
@@ -428,20 +439,21 @@ struct ImagePixelData : public Sort
 	friend class QLens;
 	QLens *lens;
 	int npixels_x, npixels_y;
-	int n_required_pixels;
 	double **surface_brightness;
 	double **noise_map;
 	double **covinv_map; // this is simply 1/SQR(noise_map)
 	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
-	bool **in_mask;
-	bool **extended_mask;
+	int n_masks;
+	int *n_mask_pixels;
+	int *extended_mask_n_neighbors;
+	bool ***in_mask;
+	bool ***extended_mask;
 	bool **foreground_mask;
 	double *xvals, *yvals, *pixel_xcvals, *pixel_ycvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
 	double pixel_size;
-	double global_max_sb;
-	double emask_rmax;
+	double emask_rmax; // used only when splining Fourier mode integrals for non-elliptical structure
 	string data_fits_filename;
 	string noise_map_fits_filename;
 	ostream* isophote_fit_out;
@@ -451,8 +463,11 @@ struct ImagePixelData : public Sort
 		noise_map = NULL;
 		covinv_map = NULL;
 		high_sn_pixel = NULL;
+		n_masks = 0;
+		n_mask_pixels = NULL;
 		in_mask = NULL;
 		extended_mask = NULL;
+		extended_mask_n_neighbors = NULL;
 		foreground_mask = NULL;
 		xvals = NULL;
 		yvals = NULL;
@@ -490,40 +505,41 @@ struct ImagePixelData : public Sort
 	}
 	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool load_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
-	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false);
-	void copy_mask(ImagePixelData* data);
-	void set_no_required_data_pixels();
+	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
+	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0);
+	bool copy_mask(ImagePixelData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();
-	double find_max_sb();
-	double find_avg_sb(const double sb_threshold);
-	void set_all_required_data_pixels();
-	void set_foreground_mask_to_primary_mask();
-	void invert_mask();
-	bool inside_mask(const double x, const double y);
-	void assign_mask_windows(const double sb_noise_threshold, const int threshold_size = 0);
-	void unset_low_signal_pixels(const double sb_threshold, const bool use_fit);
-	void set_positive_radial_gradient_pixels();
-	void set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors);
-	void set_required_data_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false);
-	void set_required_data_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false);
-	void reset_extended_mask();
-	void set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false);
-	void set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
-	void activate_partner_image_pixels();
+	double find_max_sb(const int mask_k = 0);
+	double find_avg_sb(const double sb_threshold, const int mask_k = 0);
+	bool create_new_mask();
+	bool set_no_mask_pixels(const int mask_k = 0);
+	bool set_all_mask_pixels(const int mask_k = 0);
+	bool set_foreground_mask_to_primary_mask(const int mask_k = 0);
+	bool invert_mask(const int mask_k = 0);
+	bool inside_mask(const double x, const double y, const int mask_k = 0);
+	bool assign_mask_windows(const double sb_noise_threshold, const int threshold_size = 0, const int mask_k = 0);
+	bool unset_low_signal_pixels(const double sb_threshold, const bool use_fit, const int mask_k = 0);
+	bool set_positive_radial_gradient_pixels(const int mask_k = 0);
+	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0);
+	bool set_mask_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false, const int mask_k = 0);
+	bool set_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false, const int mask_k = 0);
+	bool reset_extended_mask(const int mask_k = 0);
+	bool set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false, const int mask_k = 0);
+	bool set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false, const int mask_k = 0);
+	bool activate_partner_image_pixels(const int mask_k = 0);
 	void find_extended_mask_rmax();
 	void set_foreground_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false);
 
-	long int get_size_of_extended_mask();
+	long int get_size_of_extended_mask(const int mask_k = 0);
 	long int get_size_of_foreground_mask();
-	bool test_if_in_fit_region(const double& x, const double& y);
+	bool test_if_in_fit_region(const double& x, const double& y, const int mask_k = 0);
 	void set_lens(QLens* lensptr) {
 		lens = lensptr;
 		pixel_size = lens->data_pixel_size;
 	}
 
-	void estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb);
-	void add_point_image_from_centroid(ImageData* point_image_data, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double sb_threshold, const double pixel_error);
+	bool estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb, const int mask_k = 0);
+	//void add_point_image_from_centroid(ImageData* point_image_data, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, const double sb_threshold, const double pixel_error);
 	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy);
 	void get_npixels(int& npx, int& npy)
 	{
@@ -544,7 +560,7 @@ struct ImagePixelData : public Sort
 	bool Cholesky_dcmp(double** a, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);
-	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false);
+	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false, const int mask_k = 0);
 };
 
 
