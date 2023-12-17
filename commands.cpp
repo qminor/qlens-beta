@@ -12823,6 +12823,18 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "kernel Matern index = " << matern_index << endl;
 			} else Complain("must specify either zero or one argument (kernel Matern index value)");
 		}
+		else if (words[0]=="vary_matern_index")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary Matern index: " << display_switch(vary_matern_index) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_index' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before matern_index can be varied (see 'fit regularization')");
+				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("matern_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
+				set_switch(vary_matern_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		/*
 		else if (words[0]=="use_matern_scale")
 		{
@@ -12842,18 +12854,6 @@ void QLens::process_commands(bool read_file)
 					update_parameter_list();
 				}
 				set_switch(use_matern_scale_parameter,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="vary_matern_index")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary Matern index: " << display_switch(vary_matern_index) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_index' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before matern_index can be varied (see 'fit regularization')");
-				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("matern_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-				set_switch(vary_matern_index,setword);
-				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="matern_scale")

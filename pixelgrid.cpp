@@ -6419,8 +6419,8 @@ bool ImagePixelData::assign_mask_windows(const double sb_noise_threshold, const 
 
 bool ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit, const int mask_k)
 {
-	if (mask_k >= n_masks) { warn("mask with specified index has not been loaded or created"); return false; }
-	if (lens->n_extended_src_redshifts==0) die("no ext src redshift created");
+	if (mask_k >= n_masks) { warn("mask with specified index has not been loaded or created (mask_i=%i,n_masks=%i)",mask_k,n_masks); return false; }
+	if ((use_fit) and (lens->n_extended_src_redshifts==0)) die("no ext src redshift created");
 	int i,j;
 	int zsrc_i = -1;
 	if (use_fit) {
