@@ -518,7 +518,7 @@ struct ImagePixelData : public Sort
 	bool invert_mask(const int mask_k = 0);
 	bool inside_mask(const double x, const double y, const int mask_k = 0);
 	bool assign_mask_windows(const double sb_noise_threshold, const int threshold_size = 0, const int mask_k = 0);
-	bool unset_low_signal_pixels(const double sb_threshold, const bool use_fit, const int mask_k = 0);
+	bool unset_low_signal_pixels(const double sb_threshold, const int mask_k = 0);
 	bool set_positive_radial_gradient_pixels(const int mask_k = 0);
 	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0);
 	bool set_mask_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false, const int mask_k = 0);

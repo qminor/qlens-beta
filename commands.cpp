@@ -9690,7 +9690,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				double sbthresh;
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
-				if (!image_pixel_data->unset_low_signal_pixels(sbthresh,false,mask_i)) Complain("could not alter mask");
+				if (!image_pixel_data->unset_low_signal_pixels(sbthresh,mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
 			}
 			else if (words[1]=="trim_mask_windows")

@@ -2910,8 +2910,10 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 			if ((pixellated_src) and (j==src_i)) continue;
 			if (pixellated_src_redshift_idx[j] >= znum) pixellated_src_redshift_idx[j]++;
 		}
-		if (n_extended_src_redshifts==1) image_pixel_grids = new ImagePixelGrid*[1];
-		else {
+		if (n_extended_src_redshifts==1) {
+			image_pixel_grids = new ImagePixelGrid*[1];
+			image_pixel_grids[0] = NULL;
+		} else {
 			ImagePixelGrid** new_image_pixel_grid = new ImagePixelGrid*[n_extended_src_redshifts];
 			for (i=0; i < znum; i++) new_image_pixel_grid[i] = image_pixel_grids[i];
 			for (i=znum; i < n_extended_src_redshifts-1; i++) new_image_pixel_grid[i+1] = image_pixel_grids[i];
@@ -9594,10 +9596,10 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 #endif
 		if (fitmodel->load_pixel_grid_from_data()) {
 #ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime = omp_get_wtime() - wtime0;
-			if ((mpi_id==0) and (show_status)) cout << "Wall time for initializing image pixel grid (not part of likelihood evaluation): " << wtime << endl;
-		}
+			if (show_wtime) {
+				wtime = omp_get_wtime() - wtime0;
+				if ((mpi_id==0) and (show_status)) cout << "Wall time for initializing image pixel grid (not part of likelihood evaluation): " << wtime << endl;
+			}
 #endif
 		}
 		if (source_pixel_grid != NULL) {
@@ -14226,7 +14228,11 @@ bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
-	if (n_extended_src_redshifts==0) die("no ext src has been created!");
+	if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
+		if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
+		add_pixellated_source(source_redshift);
+	}
+
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		if (image_pixel_grids[zsrc_i] != NULL) {
 			delete image_pixel_grids[zsrc_i];
@@ -14240,7 +14246,11 @@ bool QLens::load_pixel_grid_from_data()
 void QLens::plot_image_pixel_grid(const int zsrc_i)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return; }
-	if (n_extended_src_redshifts==0) die("no ext src has been created!!");
+	if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
+		if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
+		add_pixellated_source(source_redshift);
+	}
+
 	if (image_pixel_grids[zsrc_i] != NULL) delete image_pixel_grids[zsrc_i];
 	image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, zsrc_i, assigned_mask[zsrc_i]);
 	image_pixel_grids[zsrc_i]->redo_lensing_calculations();

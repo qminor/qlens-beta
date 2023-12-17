@@ -6417,33 +6417,17 @@ bool ImagePixelData::assign_mask_windows(const double sb_noise_threshold, const 
 	return true;
 }
 
-bool ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const bool use_fit, const int mask_k)
+bool ImagePixelData::unset_low_signal_pixels(const double sb_threshold, const int mask_k)
 {
 	if (mask_k >= n_masks) { warn("mask with specified index has not been loaded or created (mask_i=%i,n_masks=%i)",mask_k,n_masks); return false; }
-	if ((use_fit) and (lens->n_extended_src_redshifts==0)) die("no ext src redshift created");
 	int i,j;
 	int zsrc_i = -1;
-	if (use_fit) {
-		for (i=0; i < lens->n_extended_src_redshifts; i++) {
-			if (lens->assigned_mask[i] == mask_k) zsrc_i = i;
-		}
-		if (zsrc_i < 0) { warn("could not find any source redshifts that have been assigned to the specified mask"); return false; }
-	}
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
-			if (use_fit) {
-				if ((lens->image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j]) and (lens->image_pixel_grids[zsrc_i]->surface_brightness[i][j] < sb_threshold)) {
-					if (in_mask[mask_k][i][j]) {
-						in_mask[mask_k][i][j] = false;
-						n_mask_pixels[mask_k]--;
-					}
-				}
-			} else {
-				if (surface_brightness[i][j] < sb_threshold) {
-					if (in_mask[mask_k][i][j]) {
-						in_mask[mask_k][i][j] = false;
-						n_mask_pixels[mask_k]--;
-					}
+			if (surface_brightness[i][j] < sb_threshold) {
+				if (in_mask[mask_k][i][j]) {
+					in_mask[mask_k][i][j] = false;
+					n_mask_pixels[mask_k]--;
 				}
 			}
 		}
