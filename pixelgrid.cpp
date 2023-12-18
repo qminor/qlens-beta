@@ -2980,10 +2980,8 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 				//wtime = omp_get_wtime() - wtime0;
 				//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
 			//}
-			if (use_distance_weighted_regularization) {
-				if (fix_lumreg_sig) sig = lumreg_sig;
-				calculate_distreg_srcpixel_weights(xc_approx,yc_approx,sig,verbal);
-			}
+			if (fix_lumreg_sig) sig = lumreg_sig;
+			calculate_distreg_srcpixel_weights(zsrc_i,xc_approx,yc_approx,sig,verbal);
 		}
 		double *wgtfac = ((use_distance_weighted_regularization) or ((allow_lum_weighting) and (use_lum_weighted_regularization))) ? lum_weight_factor : NULL;
 		image_pixel_grids[zsrc_i]->delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_correlation_length,kernel_type,matern_index,wgtfac);
@@ -10032,6 +10030,7 @@ void ImagePixelGrid::add_pixel_noise()
 void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax)
 {
 	if (surface_brightness == NULL) die("surface brightness pixel map has not been loaded");
+	if (lens->image_pixel_data == NULL) die("image pixel data must be loaded to find optimal source grid scale");
 	bool use_noise_threshold = true;
 	if (lens->noise_threshold <= 0) use_noise_threshold = false;
 	int i,j,k,nsp;
@@ -10061,7 +10060,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 					if (jh>y_N-1) jh=y_N-1;
 					for (ii=il; ii <= ih; ii++) {
 						for (jj=jl; jj <= jh; jj++) {
-							sbavg += surface_brightness[ii][jj];
+							sbavg += lens->image_pixel_data->surface_brightness[ii][jj];
 							nn++;
 						}
 					}
@@ -10120,6 +10119,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 
 double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, const bool verbal)
 {
+	if (lens->image_pixel_data == NULL) die("need to have image pixel data loaded to find optimal shapelet scale");
 	static const int nmax_srcsize_it = 8;
 	//string sp_filename = "wtf_spt.dat";
 	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
@@ -10147,7 +10147,8 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 			for (j=0; j < y_N; j++) {
 				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
 				if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
-					sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+					if (fit_to_data==NULL) sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+					else sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j];
 					if ((lens->n_sourcepts_fit > 0) and (!lens->include_imgfluxes_in_inversion)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
 					if (abs(sb) > 5*noise_map[i][j]) {
 						//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
@@ -10187,7 +10188,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 		// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
+				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
 					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 					if (!lens->split_imgpixels) {
@@ -10230,6 +10231,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	//ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
 	//sourcepts_file << setiosflags(ios::scientific);
 
+	if (lens->image_pixel_data == NULL) die("need to have image pixel data loaded to find optimal shapelet scale");
 	double xcavg, ycavg;
 	double totsurf;
 	double area, min_area = 1e30, max_area = -1e30;
@@ -10250,7 +10252,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
 				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
-				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
+				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
 					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 					// You repeat this code three times in this function! Store things in arrays and GET RID OF THE REDUNDANCIES!!!! IT'S UGLY.
@@ -10287,7 +10289,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 		// NOTE: the approx. sigma found below will be inflated a bit due to the effect of the PSF (but that's probably ok)
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
+				if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
 					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 					if (!lens->split_imgpixels) {
@@ -10353,7 +10355,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 				if (yd > ymax) ymax = yd;
 					//sourcepts_file << xsavg << " " << ysavg << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << xd << " " << yd << endl;
 				//}
-				if ((mask[i][j]) and (abs(surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
+				if ((mask[i][j]) and (abs(lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
 					ntot++;
 					rsq = SQR(xd) + SQR(yd);
 					if (sqrt(rsq) > 2*sig) {
@@ -10381,7 +10383,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	const double window_size_for_srcarea = 1;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
+			sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j];
 			//if (((fit_to_data==NULL) or (fit_to_data[i][j])) and (abs(sb) > 5*noise_map[i][j])) {
 			if (((fit_to_data==NULL) or (mask[i][j])) and (abs(sb) > 5*noise_map[i][j])) {
 				il = i - window_size_for_srcarea;
@@ -15271,7 +15273,7 @@ void QLens::calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_s
 	}
 }
 
-void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double yc_in, const double sig, const bool verbal)
+void QLens::calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc_in, const double yc_in, const double sig, const bool verbal)
 {
 	double xc, yc, rc;
 	rc = lumreg_rc;
@@ -15289,7 +15291,7 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 			lensvector xl;
 			xl[0] = lumreg_xcenter;
 			xl[1] = lumreg_ycenter;
-			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
+			find_sourcept(xl,xc,yc,0,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i]);
 			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
 			if ((lensed_lumreg_rc) and (lumreg_rc > 0)) {
 				int i, phi_nn = 24;
@@ -15299,7 +15301,7 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
 					xl[0] = lumreg_xcenter + lumreg_rc*cos(phi);
 					xl[1] = lumreg_ycenter + lumreg_rc*sin(phi);
-					find_sourcept(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
+					find_sourcept(xl,xc2,yc2,0,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i]);
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}
 				rc = sqrt(rc/phi_nn);
@@ -15311,8 +15313,8 @@ void QLens::calculate_distreg_srcpixel_weights(const double xc_in, const double 
 	}
 	double *scaled_dists = new double[source_npixels];
 	lensvector **srcpts = new lensvector*[source_npixels];
-	if ((delaunay_srcgrids == NULL) or (delaunay_srcgrids[0] == NULL)) die("Delaunay source grid has not been created");
-	for (int i=0; i < source_npixels; i++) srcpts[i] = &(delaunay_srcgrids[0]->srcpts[i]);
+	if ((delaunay_srcgrids == NULL) or (image_pixel_grids[zsrc_i]->delaunay_srcgrid == NULL)) die("Delaunay source grid has not been created");
+	for (int i=0; i < source_npixels; i++) srcpts[i] = &(image_pixel_grids[zsrc_i]->delaunay_srcgrid->srcpts[i]);
 	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,source_npixels,lumreg_e1,lumreg_e2);
 	double scaled_rcsq = SQR(rc/sig);
 	for (int i=0; i < source_npixels; i++) {

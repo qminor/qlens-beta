@@ -9634,6 +9634,11 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 
 	//fitmodel->lens_list[0]->update_specific_parameter("mstar",3.5e11);
 	//fitparams[0] = 11.67;

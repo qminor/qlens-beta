@@ -917,9 +917,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
 	//double chisq_regparam_lumreg_dense();
 	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights);
-	void calculate_distreg_srcpixel_weights(const double xc, const double yc, const double sig, const bool verbal = false);
+	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc, const double yc, const double sig, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
-	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
+	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void create_regularization_matrix_shapelet(const int zsrc_i);
 	void generate_Rmatrix_shapelet_gradient(const int zsrc_i);
