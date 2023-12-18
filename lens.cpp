@@ -9898,11 +9898,11 @@ double QLens::chi_square_fit_simplex()
 	if (source_fit_mode==Cartesian_Source) {
 		if (fitmodel->source_pixel_grid != NULL) {
 			if (mpi_id==0) fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
-			die("Can't plot image pixel grtid right now (FIX)");
+			//die("Can't plot image pixel grtid right now (FIX)");
 			//if (mpi_id==0) fitmodel->image_pixel_grids->plot_surface_brightness("img_calc");
 		} else warn("source pixel grid was not created during fit");
-	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
-		die("Can't plot image pixel grtid right now (FIX)");
+	//} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
+		//die("Can't plot image pixel grtid right now (FIX)");
 		//if (mpi_id==0) fitmodel->image_pixel_grids->plot_surface_brightness("img_calc");
 	}
 
@@ -9988,11 +9988,11 @@ double QLens::chi_square_fit_powell()
 	if (source_fit_mode==Cartesian_Source) {
 		if (fitmodel->source_pixel_grid != NULL) {
 			if (mpi_id==0) fitmodel->source_pixel_grid->plot_surface_brightness("src_calc");
-			die("Can't plot image pixel grid right now (FIX)");
+			//die("Can't plot image pixel grid right now (FIX)");
 			//if (mpi_id==0) fitmodel->image_pixel_grids->plot_surface_brightness("img_calc");
 		} else warn("source pixel grid was not created during fit");
-	} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
-		die("Can't plot image pixel grid right now (FIX)");
+	//} else if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
+		//die("Can't plot image pixel grid right now (FIX)");
 		//if (mpi_id==0) fitmodel->image_pixel_grids->plot_surface_brightness("img_calc");
 	}
 

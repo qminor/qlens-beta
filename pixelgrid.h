@@ -248,12 +248,12 @@ class DelaunayGrid : public Sort
 	int find_closest_vertex(const int tri_number, const lensvector& pt);
 	double sum_edge_sqrlengths(const double min_sb);
 	double find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
-	void find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
+	bool find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	void find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	double interpolate_surface_brightness(lensvector &input_pt, const int thread = 0);
 	double interpolate_surface_brightness_nn(lensvector &input_pt); // natural neighbor interpolation
 
-	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
+	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
 	void find_interpolation_weights_3pt(lensvector& input_pt, const int trinum, int& npts, const int thread);
 	void find_interpolation_weights_nn(lensvector &input_pt, const int trinum, int& npts, const int thread); // natural neighbor interpolation
 	void record_srcpixel_mappings();

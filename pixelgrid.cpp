@@ -3678,11 +3678,11 @@ void DelaunayGrid::update_surface_brightness(int& index)
 	}
 }
 
-bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels_ij, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread)
+bool DelaunayGrid::assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels_ij, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex)
 {
 	int trinum,kmin;
 	bool inside_triangle, on_vertex;
-	find_containing_triangle(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+	if (!find_containing_triangle(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin)) trouble_with_starting_vertex = true;
 	Triangle *triptr = &triangle[trinum];
 
 	if (!inside_triangle) {
@@ -4338,8 +4338,9 @@ void DelaunayGrid::find_interpolation_weights_nn(lensvector &input_pt, const int
 	//for (int i=0; i < npts; i++) delete[] adjacent_triangles[i];
 }
 
-void DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
+bool DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
 {
+	bool found_good_starting_vertex = true; // until proven otherwise
 	int i,j,k,maxk,n;
 	i = img_pixel_i;
 	j = img_pixel_j;
@@ -4366,7 +4367,7 @@ void DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_
 			if ((j+k <= img_jmax) and (n=img_index_ij[i+k][j+k]) >= 0) break;
 		}
 		if (k > maxk) {
-			warn("could not find a good starting vertex for searching Delaunay grid (tried img_i=%i,img_j=%i); starting with vertex 0",img_pixel_i,img_pixel_j);
+			found_good_starting_vertex = false;
 			n=0; // in this case, can't find a good vertex to start with, so we just start with the first one
 		}
 	}
@@ -4384,6 +4385,7 @@ void DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_
 		inside_triangle = false;
 		on_vertex = true;
 	}
+	return found_good_starting_vertex;
 }
 
 void DelaunayGrid::find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
@@ -10621,6 +10623,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 	}
 	else if (ray_tracing_method == Interpolate)
 	{
+		bool trouble_with_starting_vertex = false;
 		#pragma omp parallel
 		{
 			int thread;
@@ -10640,7 +10643,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 							maps_to_something = false;
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++)
 							{
-								if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][subcell_index],i,j,thread)==true))) {
+								if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][subcell_index],i,j,thread,trouble_with_starting_vertex)==true))) {
 									maps_to_something = true;
 									subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
 								} else if ((!delaunay) and (source_pixel_grid->assign_source_mapping_flags_interpolate(subpixel_center_sourcepts[i][j][subcell_index],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
@@ -10667,7 +10670,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						if ((fit_to_data == NULL) or (fit_to_data[i][j])) {
-							if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][0],i,j,thread)==true))) {
+							if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][0],i,j,thread,trouble_with_starting_vertex)==true))) {
 								maps_to_source_pixel[i][j] = true;
 								#pragma omp atomic
 								n_active_pixels++;
@@ -10691,6 +10694,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 				}
 			}
 		}
+		if (trouble_with_starting_vertex) warn(lens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
 	}
 }
 
