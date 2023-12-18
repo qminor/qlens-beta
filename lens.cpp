@@ -14610,7 +14610,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(0,verbal);
-		else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
+		else create_lensing_matrices_from_Lmatrix(0,dense_Fmatrix,verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
 			tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -14684,6 +14684,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 #endif
 					image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
+					delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 				}
 
 				if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
@@ -14728,7 +14729,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 				bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 				if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(zsrc_i,verbal);
-				else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
+				else create_lensing_matrices_from_Lmatrix(zsrc_i,dense_Fmatrix,verbal);
 #ifdef USE_OPENMP
 				if (show_wtime) {
 					tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -14757,6 +14758,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 #endif
 					image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
+					delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 					clear_sparse_lensing_matrices();
 					clear_pixel_matrices();
 
@@ -14796,7 +14798,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices (with lum weighting)...\n" << flush;
 					bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 					if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(zsrc_i,verbal);
-					else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
+					else create_lensing_matrices_from_Lmatrix(zsrc_i,dense_Fmatrix,verbal);
 #ifdef USE_OPENMP
 					if (show_wtime) {
 						tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -14997,6 +14999,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	int count, foreground_count;
 	int n_data_pixels;
 	double chisq0_zsrc;
+	chisq0 = 0;
 	foreground_count = 0;
 	count = 0;
 

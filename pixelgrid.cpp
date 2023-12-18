@@ -9538,6 +9538,9 @@ void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 	}
 #endif
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) n_active_pixels = 0;
+	//delete_ray_tracing_arrays();
+	//setup_pixel_arrays();
+	//setup_ray_tracing_arrays();
 	calculate_sourcepts_and_areas(true,verbal);
 
 #ifdef USE_OPENMP
@@ -10426,7 +10429,8 @@ void ImagePixelGrid::fill_surface_brightness_vector()
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((maps_to_source_pixel[i][j]) and ((fit_to_data==NULL) or (fit_to_data[i][j]))) {
-				lens->image_surface_brightness[column_j++] = surface_brightness[i][j];
+				//lens->image_surface_brightness[column_j++] = surface_brightness[i][j];
+				lens->image_surface_brightness[column_j++] = lens->image_pixel_data->surface_brightness[i][j];
 			}
 		}
 	}
@@ -11777,8 +11781,6 @@ ImagePixelGrid::~ImagePixelGrid()
 	if (active_image_pixel_i_ss != NULL) delete[] active_image_pixel_i_ss;
 	if (active_image_pixel_j_ss != NULL) delete[] active_image_pixel_j_ss;
 	if (active_image_subpixel_ss != NULL) delete[] active_image_subpixel_ss;
-	if (active_image_subpixel_ii != NULL) delete[] active_image_subpixel_ii;
-	if (active_image_subpixel_jj != NULL) delete[] active_image_subpixel_jj;
 	if (image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_i_from_subcell_ii;
 	if (image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_j_from_subcell_jj;
 	if (active_image_pixel_i_fgmask != NULL) delete[] active_image_pixel_i_fgmask;
@@ -11857,6 +11859,15 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool verbal)
 	image_pixel_grid->active_image_pixel_j = new int[image_npixels];
 
 	if (psf_supersampling) {
+		if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
+		if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
+		if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
+		if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
+		if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
+		if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
+		if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
+
+
 		image_pixel_grid->active_image_pixel_i_ss = new int[image_n_subpixels];
 		image_pixel_grid->active_image_pixel_j_ss = new int[image_n_subpixels];
 		image_pixel_grid->active_image_subpixel_ss = new int[image_n_subpixels];
@@ -13938,9 +13949,9 @@ void QLens::generate_Rmatrix_shapelet_curvature(const int zsrc_i)
 	Rmatrix_nn = Rmatrix_index[source_npixels];
 }
 
-void QLens::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal)
+void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix, const bool verbal)
 {
-	ImagePixelGrid *image_pixel_grid = image_pixel_grids[0];
+	ImagePixelGrid *image_pixel_grid = image_pixel_grids[zsrc_i];
 #ifdef USE_MPI
 	MPI_Comm sub_comm;
 	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
@@ -14878,7 +14889,7 @@ double QLens::calculate_regularization_prior_term()
 				}
 			}
 			loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
-			//cout << "Es_times_two=" << Es_times_two << " Es_check=" << Escheck << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " loglike_reg=" << (loglike_reg + Gmatrix_log_determinant) << endl;
+			//	cout << "regparam=" << regularization_parameter << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 		}
 	} else {
 		for (i=0; i < source_npixels; i++) {
@@ -14888,6 +14899,7 @@ double QLens::calculate_regularization_prior_term()
 			}
 		}
 		loglike_reg = regularization_parameter*Es_times_two - source_npixels*log(regularization_parameter) - Rmatrix_log_determinant;
+		//cout << "regparam=" << regularization_parameter << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 	}
 	//cout << "loglike_reg=" << loglike_reg << endl;
 	//cout << "src_np=" << source_npixels << " lambda=" << regularization_parameter << " Es_times_two=" << Es_times_two << " logdet=" << Rmatrix_log_determinant << endl;

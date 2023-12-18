@@ -1030,7 +1030,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void generate_Rmatrix_from_hmatrices(const int zsrc_i);
 	void generate_Rmatrix_norm();
 	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type, const bool include_lum_weighting, const bool verbal = false);
-	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
+	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix, const bool verbal);
 	void invert_lens_mapping_dense(const int zsrc_i, bool verbal);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);

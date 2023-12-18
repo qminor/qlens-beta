@@ -500,6 +500,7 @@ void DualTreeKMeans<MetricType, MatType, TreeType>::ExtractCentroids(
   {
     const size_t owner = node.Stat().Owner();
 	 if (include_weights) {
+			 //if (node.Stat().TotWeight() < 0.0) std::cout << "FUCK! totweight never initialized" << endl;
 			 //std::cout << "totweight: " << node.Stat().TotWeight() << endl;
 		 newCentroids.col(owner) += node.Stat().Centroid() * node.Stat().TotWeight();
 		 newCounts[owner] += node.Stat().TotWeight();
