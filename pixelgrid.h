@@ -205,6 +205,7 @@ class DelaunayGrid : public Sort
 
 	public:
 	static bool zero_outside_border;
+	bool look_for_starting_point;
 	int n_srcpts;
 	int n_triangles;
 	int img_ni, img_nj;

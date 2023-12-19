@@ -3298,6 +3298,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	img_imax = -30000;
 	img_jmax = -30000;
 
+	look_for_starting_point = false;
 	if ((imggrid_ivals != NULL) and (imggrid_jvals != NULL)) {
 		// imggrid_ivals and imggrid_jvals aid the ray-tracing by locating a source point, which has an image point near the point
 		// being ray-traced; this gives a starting point when searching through the triangles
@@ -4342,34 +4343,38 @@ bool DelaunayGrid::find_containing_triangle(lensvector &input_pt, const int img_
 {
 	bool found_good_starting_vertex = true; // until proven otherwise
 	int i,j,k,maxk,n;
-	i = img_pixel_i;
-	j = img_pixel_j;
-	if (i < img_imin) i = img_imin;
-	else if (i > img_imax) i = img_imax;
-	if (j < img_jmin) j = img_jmin;
-	else if (j > img_jmax) j = img_jmax;
-	maxk = imax(img_imax-img_imin,img_jmax-img_jmin);
-	n=img_index_ij[i][j];
-	k=0;
-	while (n==-1) {
-		// looking for a (ray-traced) pixel within the mask, since the closest pixel doesn't seem to be
-		k++;
-		if ((j-k >= img_jmin) and (n=img_index_ij[i][j-k]) >= 0) break;
-		if ((j+k <= img_jmax) and (n=img_index_ij[i][j+k]) >= 0) break;
-		if (i-k >= img_imin) {
-			if ((n=img_index_ij[i-k][j]) >= 0) break;
-			if ((j-k >= img_jmin) and (n=img_index_ij[i-k][j-k]) >= 0) break;
-			if ((j+k <= img_jmax) and (n=img_index_ij[i-k][j+k]) >= 0) break;
+	if (look_for_starting_point) {
+		i = img_pixel_i;
+		j = img_pixel_j;
+		if (i < img_imin) i = img_imin;
+		else if (i > img_imax) i = img_imax;
+		if (j < img_jmin) j = img_jmin;
+		else if (j > img_jmax) j = img_jmax;
+		maxk = imax(img_imax-img_imin,img_jmax-img_jmin);
+		n=img_index_ij[i][j];
+		k=0;
+		while (n==-1) {
+			// looking for a (ray-traced) pixel within the mask, since the closest pixel doesn't seem to be
+			k++;
+			if ((j-k >= img_jmin) and (n=img_index_ij[i][j-k]) >= 0) break;
+			if ((j+k <= img_jmax) and (n=img_index_ij[i][j+k]) >= 0) break;
+			if (i-k >= img_imin) {
+				if ((n=img_index_ij[i-k][j]) >= 0) break;
+				if ((j-k >= img_jmin) and (n=img_index_ij[i-k][j-k]) >= 0) break;
+				if ((j+k <= img_jmax) and (n=img_index_ij[i-k][j+k]) >= 0) break;
+			}
+			if (i+k <= img_imax) {
+				if ((n=img_index_ij[i+k][j]) >= 0) break;
+				if ((j-k >= img_jmin) and (n=img_index_ij[i+k][j-k]) >= 0) break;
+				if ((j+k <= img_jmax) and (n=img_index_ij[i+k][j+k]) >= 0) break;
+			}
+			if (k > maxk) {
+				found_good_starting_vertex = false;
+				n=0; // in this case, can't find a good vertex to start with, so we just start with the first one
+			}
 		}
-		if (i+k <= img_imax) {
-			if ((n=img_index_ij[i+k][j]) >= 0) break;
-			if ((j-k >= img_jmin) and (n=img_index_ij[i+k][j-k]) >= 0) break;
-			if ((j+k <= img_jmax) and (n=img_index_ij[i+k][j+k]) >= 0) break;
-		}
-		if (k > maxk) {
-			found_good_starting_vertex = false;
-			n=0; // in this case, can't find a good vertex to start with, so we just start with the first one
-		}
+	} else {
+		n = 0;
 	}
 	//cout << "searching for point (" << input_pt[0] << "," << input_pt[1] << "), starting with pixel " << n << " (" << srcpts[n][0] << " " << srcpts[n][1] << ")" << endl;
 	on_vertex = false;
