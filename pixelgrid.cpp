@@ -3298,7 +3298,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	img_imax = -30000;
 	img_jmax = -30000;
 
-	look_for_starting_point = false;
+	look_for_starting_point = false; // the "look_for_starting_point" feature for searching triangles doesn't work well with outside_sb_prior, so stashing it for now.
 	if ((imggrid_ivals != NULL) and (imggrid_jvals != NULL)) {
 		// imggrid_ivals and imggrid_jvals aid the ray-tracing by locating a source point, which has an image point near the point
 		// being ray-traced; this gives a starting point when searching through the triangles
@@ -3804,7 +3804,7 @@ void DelaunayGrid::find_interpolation_weights_3pt(lensvector& input_pt, const in
 void DelaunayGrid::find_interpolation_weights_nn(lensvector &input_pt, const int trinum, int& npts, const int thread) // natural neighbor interpolation
 {
 	npts = 0;
-	const int nmax_tri = 40;
+	const int nmax_tri = 60;
 	Triangle* adjacent_triangles[nmax_tri];
 	int n_adjacent_triangles;
 
