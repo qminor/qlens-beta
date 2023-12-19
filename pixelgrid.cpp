@@ -3298,7 +3298,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	img_imax = -30000;
 	img_jmax = -30000;
 
-	look_for_starting_point = false; // the "look_for_starting_point" feature for searching triangles doesn't work well with outside_sb_prior, so stashing it for now.
+	look_for_starting_point = true; // the "look_for_starting_point" feature for searching triangles doesn't work well with outside_sb_prior, so stashing it for now.
 	if ((imggrid_ivals != NULL) and (imggrid_jvals != NULL)) {
 		// imggrid_ivals and imggrid_jvals aid the ray-tracing by locating a source point, which has an image point near the point
 		// being ray-traced; this gives a starting point when searching through the triangles
@@ -3480,8 +3480,37 @@ int DelaunayGrid::search_grid(const int initial_srcpixel, const lensvector& pt, 
 
 	inside_triangle = false;
 	for (n=0; n < n_triangles; n++) {
-		if (test_if_inside(triangle_num,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle; 'inside_triangle' flag reveals if it's actually inside the triangle or not
+		// NOTE: bear in mind that if the point is outside the grid, there are multiple border triangles that might accept the point as being on "their" side. This is why having a good starting triangle is valuable
+		if (test_if_inside(triangle_num,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle (compared to neighbors); 'inside_triangle' flag reveals if it's actually inside the triangle or not
 	}
+
+	/*
+	bool ins1 = inside_triangle;
+	inside_triangle = false;
+	int triangle_num2 = shared_triangles[0][0];
+	for (n=0; n < n_triangles; n++) {
+		if (test_if_inside(triangle_num2,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle; 'inside_triangle' flag reveals if it's actually inside the triangle or not
+	}
+	bool ins2 = inside_triangle;
+	if (triangle_num != triangle_num2) {
+		cout << "OH SHIT: ti=" << triangle_num << " ti2=" << triangle_num2 << " n=" << n << " ntri=" << n_triangles << " ins1=" << ins1 << " ins2=" << ins2 << endl;
+		bool in1 = test_if_inside(triangle_num,pt,inside_triangle);
+		bool in2 = test_if_inside(triangle_num2,pt,inside_triangle);
+		cout << "found1=" << in1 << " found2=" << in2 << endl;
+		cout << "pt=" << pt[0] << "," << pt[1] << endl;
+		cout << "TRI0:" << endl;
+		cout << triangle[triangle_num].vertex[0][0] << " " << triangle[triangle_num].vertex[0][1] << endl;
+		cout << triangle[triangle_num].vertex[1][0] << " " << triangle[triangle_num].vertex[1][1] << endl;
+		cout << triangle[triangle_num].vertex[2][0] << " " << triangle[triangle_num].vertex[2][1] << endl;
+		cout << "TRI1:" << endl;
+		cout << triangle[triangle_num2].vertex[0][0] << " " << triangle[triangle_num2].vertex[0][1] << endl;
+		cout << triangle[triangle_num2].vertex[1][0] << " " << triangle[triangle_num2].vertex[1][1] << endl;
+		cout << triangle[triangle_num2].vertex[2][0] << " " << triangle[triangle_num2].vertex[2][1] << endl;
+		cout << endl;
+	}
+	*/
+
+
 	if (n > n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
 	return triangle_num;
 }

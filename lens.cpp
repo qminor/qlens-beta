@@ -3747,7 +3747,6 @@ void QLens::remove_pixellated_source(int src_number)
 	int* new_pixellated_src_redshift_idx;
 	if (n_pixellated_src > 1) new_pixellated_src_redshift_idx = new int[n_pixellated_src-1];
 
-	cout << "REMOVING " << src_number << endl;
 	remove_old_extended_src_redshift(pixellated_src_redshift_idx[src_number],true); // removes the pixellated_src redshift from the list if no other sources share that redshift
 	int i,j;
 	for (i=0, j=0; i < n_pixellated_src; i++) {
