@@ -13447,6 +13447,11 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'split_imgpixels' command; must specify 'on' or 'off'");
 				bool old_setting = split_imgpixels;
+				if ((setword=="off") and ((use_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering))) {
+					if (mpi_id==0) cout << "NOTE: turning off source pixel clustering" << endl;
+					use_srcpixel_clustering = false;
+					use_lum_weighted_srcpixel_clustering = false;
+				}
 				set_switch(split_imgpixels,setword);
 				//if (image_pixel_grid) {
 					//delete image_pixel_grid;

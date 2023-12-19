@@ -15107,6 +15107,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 				if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[zsrc_i]] == -1) image_pixel_grids[zsrc_i]->include_all_pixels();
 				else image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+				image_pixel_grids[zsrc_i]->redo_lensing_calculations(false); // This shouldn't be necessary! FIX!!!
 				assign_pixel_mappings(zsrc_i,verbal);
 				initialize_pixel_matrices(zsrc_i,verbal);
 				//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
