@@ -9039,6 +9039,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="sbmap")
 		{
 			int mask_i=0;
+			bool specified_mask = false;
 			for (int i=1; i < nwords; i++) {
 				int pos;
 				if ((pos = words[i].find("mask=")) != string::npos) {
@@ -9048,6 +9049,7 @@ void QLens::process_commands(bool read_file)
 					if (!(mnumstr >> mask_i)) Complain("incorrect format for lens redshift");
 					if (mask_i < 0) Complain("lens redshift cannot be negative");
 					remove_word(i);
+					specified_mask = true;
 					break;
 				}
 			}	
@@ -9550,6 +9552,7 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				if (mask_i >= image_pixel_data->n_masks) Complain("mask index has not been created");
+				if ((!specified_mask) and (image_pixel_data->n_masks > 1)) mask_i = -1; // this will tell the image_pixel_data->plot_surface_brightness function to include all masks
 
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)

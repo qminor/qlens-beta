@@ -8627,17 +8627,32 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 	ofstream pixel_xvals; lens->open_output_file(pixel_xvals,x_filename);
 	ofstream pixel_yvals; lens->open_output_file(pixel_yvals,y_filename);
 	pixel_image_file << setiosflags(ios::scientific);
-	int i,j;
+	int i,j,k;
 	for (int i=0; i <= npixels_x; i++) {
 		pixel_xvals << xvals[i] << endl;
 	}
 	for (int j=0; j <= npixels_y; j++) {
 		pixel_yvals << yvals[j] << endl;
 	}	
+	bool show_sb;
 	if (show_extended_mask) {
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
-				if ((!show_only_mask) or (extended_mask == NULL) or (extended_mask[mask_k][i][j])) {
+				if ((!show_only_mask) or (extended_mask == NULL)) show_sb = true;
+				else if (mask_k >= 0) {
+					if ((extended_mask[mask_k] == NULL) or (extended_mask[mask_k][i][j])) show_sb = true;
+					else show_sb = false;
+				} else {
+					show_sb = false;
+					for (k=0; k < n_masks; k++) {
+						if ((extended_mask[k]==NULL) or (extended_mask[k][i][j])) {
+							show_sb = true;
+							break;
+						}
+					}
+				}
+				if (show_sb) {
+				//if ((!show_only_mask) or (extended_mask == NULL) or (extended_mask[mask_k][i][j])) {
 					pixel_image_file << surface_brightness[i][j];
 				} else {
 					pixel_image_file << "NaN";
@@ -8661,7 +8676,21 @@ void ImagePixelData::plot_surface_brightness(string outfile_root, bool show_only
 	} else {
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
-				if ((!show_only_mask) or (in_mask == NULL) or (in_mask[mask_k] == NULL) or (in_mask[mask_k][i][j])) {
+				if ((!show_only_mask) or (in_mask == NULL)) show_sb = true;
+				else if (mask_k >= 0) {
+					if ((in_mask[mask_k] == NULL) or (in_mask[mask_k][i][j])) show_sb = true;
+					else show_sb = false;
+				} else {
+					show_sb = false;
+					for (k=0; k < n_masks; k++) {
+						if ((in_mask[k]==NULL) or (in_mask[k][i][j])) {
+							show_sb = true;
+							break;
+						}
+					}
+				}
+				//if ((!show_only_mask) or (in_mask == NULL) or (in_mask[mask_k] == NULL) or (in_mask[mask_k][i][j])) {
+				if (show_sb) {
 					pixel_image_file << surface_brightness[i][j];
 				} else {
 					pixel_image_file << "NaN";
