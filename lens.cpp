@@ -2944,9 +2944,9 @@ void QLens::remove_old_extended_src_redshift(const int znum, const bool removing
 	if (removing_pixellated_src) {
 		if ((n_pixsrc_with_znum <= 1) and (n_sbsrc_with_znum==0)) {
 			remove_redshift = true; // the particular source in question might not have been removed yet
-			cout << "removing redshift! znum=" << znum << " npixz=" << n_pixsrc_with_znum << " nsbz=" << n_sbsrc_with_znum << endl;
-		} else {
-			cout << "NOT removing redshift! znum=" << znum << " npixz=" << n_pixsrc_with_znum << " nsbz=" << n_sbsrc_with_znum << endl;
+			//cout << "removing redshift! znum=" << znum << " npixz=" << n_pixsrc_with_znum << " nsbz=" << n_sbsrc_with_znum << endl;
+		//} else {
+			//cout << "NOT removing redshift! znum=" << znum << " npixz=" << n_pixsrc_with_znum << " nsbz=" << n_sbsrc_with_znum << endl;
 		}
 	} else {
 		if ((n_sbsrc_with_znum <= 1) and (n_pixsrc_with_znum==0)) remove_redshift = true; // the particular source in question might not have been removed yet
@@ -13723,8 +13723,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				if (i%data_reduce_factor==icent_offset) {
 					initial_centroids[k++] = srcpts_x[i];
 					initial_centroids[k++] = srcpts_y[i];
-					ivals_centroids[l] = 0;
-					jvals_centroids[l] = 0;
+					ivals_centroids[l] = ivals[i]; // the centroid locations will shift after k-means, but the image-plane pixel ij will still ray-trace to somewhere near the centroid
+					jvals_centroids[l] = jvals[i];
+					//cout << "l=" << l << " ival=" << ivals_centroids[l] << " jval=" << jvals_centroids[l] << endl;
 					l++;
 				}
 			}
@@ -13740,8 +13741,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					if (n%data_reduce_factor==0) {
 						initial_centroids[k++] = srcpts_x[i];
 						initial_centroids[k++] = srcpts_y[i];
-						ivals_centroids[l] = 0;
-						jvals_centroids[l] = 0;
+						ivals_centroids[l] = ivals[i];
+						jvals_centroids[l] = jvals[i];
 						l++;
 					}
 					n++;
@@ -13775,8 +13776,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		for (i=0; i < n_src_centroids; i++) {
 			src_centroids_x[i] = (double) centroids(0,i);
 			src_centroids_y[i] = (double) centroids(1,i);
-			//ivals_centroids[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Doesn't seem to be a bottleneck though
-			//jvals_centroids[i] = 0;
 		}
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
