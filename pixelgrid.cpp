@@ -3257,7 +3257,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	}
 #endif
 	//herg = 0;
-	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
+	//allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
 	lens = lens_in;
 	if ((lens != NULL) and (lens->image_pixel_grids[redshift_indx] != NULL)) image_pixel_grid = lens->image_pixel_grids[redshift_indx];
 	else image_pixel_grid = NULL;
@@ -3268,8 +3268,10 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	maps_to_image_pixel = new bool[n_srcpts];
 	active_pixel = new bool[n_srcpts];
 	active_index = new int[n_srcpts];
-	imggrid_ivals = new int[n_srcpts];
-	imggrid_jvals = new int[n_srcpts];
+	if (ivals_in != NULL) {
+		imggrid_ivals = new int[n_srcpts];
+		imggrid_jvals = new int[n_srcpts];
+	}
 	for (int i=0; i < 4; i++) adj_triangles[i] = new int[n_srcpts];
 	int n;
 	srcpixel_xmin=srcpixel_ymin=1e30;
@@ -3286,8 +3288,10 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 		maps_to_image_pixel[n] = false;
 		active_pixel[n] = true;
 		active_index[n] = -1;
-		imggrid_ivals[n] = ivals_in[n];
-		imggrid_jvals[n] = jvals_in[n];
+		if (ivals_in != NULL) {
+			imggrid_ivals[n] = ivals_in[n];
+			imggrid_jvals[n] = jvals_in[n];
+		}
 		adj_triangles[0][n] = -1; // +x direction
 		adj_triangles[1][n] = -1; // -x direction
 		adj_triangles[2][n] = -1; // +y direction
@@ -3350,7 +3354,6 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 		n_boundary_pts = shared_triangles_unsorted[n].size();
 		voronoi_boundary_x[n] = new double[n_boundary_pts];
 		voronoi_boundary_y[n] = new double[n_boundary_pts];
-		shared_triangles[n] = new int[n_boundary_pts];
 		shared_triangles[n] = new int[n_boundary_pts];
 		//tricheck[n] = new int[n_boundary_pts];
 		double *angles = new double[n_boundary_pts];
@@ -5027,8 +5030,8 @@ DelaunayGrid::~DelaunayGrid()
 	delete[] voronoi_boundary_x;
 	delete[] voronoi_boundary_y;
 	delete[] shared_triangles;
-	delete[] imggrid_ivals;
-	delete[] imggrid_jvals;
+	if (imggrid_ivals != NULL) delete[] imggrid_ivals;
+	if (imggrid_jvals != NULL) delete[] imggrid_jvals;
 	delete[] adj_triangles[0];
 	delete[] adj_triangles[1];
 	delete[] adj_triangles[2];
@@ -9228,8 +9231,8 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		}
 	}
 	if ((verbal) and (lens->mpi_id==0)) {
-		cout << "Number of split image pixels: " << nsplitpix << endl;
-		cout << "Total number of image pixels/subpixels: " << ntot_subpixels << endl;
+		cout << "Number of split image pixels (including emask): " << nsplitpix << endl;
+		cout << "Total number of image pixels/subpixels (including emask): " << ntot_subpixels << endl;
 	}
 
 	if (extended_mask_subcell_i != NULL) delete[] extended_mask_subcell_i;
@@ -9266,7 +9269,7 @@ void ImagePixelGrid::delete_ray_tracing_arrays()
 	if (defx_corners != NULL) delete[] defx_corners;
 	if (defy_corners != NULL) delete[] defy_corners;
 	if (defx_centers != NULL) delete[] defx_centers;
-	if (defx_centers != NULL) delete[] defy_centers;
+	if (defy_centers != NULL) delete[] defy_centers;
 	if (area_tri1 != NULL) delete[] area_tri1;
 	if (area_tri2 != NULL) delete[] area_tri2;
 	if (twistx != NULL) delete[] twistx;
@@ -12168,7 +12171,7 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 	assign_Lmatrix_shapelets(zsrc_i,verbal);
 }
 
-void QLens::clear_pixel_matrices()
+void QLens::clear_pixel_matrices(const int zsrc_i)
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
 	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
@@ -12179,9 +12182,9 @@ void QLens::clear_pixel_matrices()
 	if (lum_weight_factor2 != NULL) delete[] lum_weight_factor2;
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
+	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
 	if (Lmatrix != NULL) delete[] Lmatrix;
-	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	image_surface_brightness = NULL;
 	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
@@ -12189,34 +12192,34 @@ void QLens::clear_pixel_matrices()
 	source_pixel_vector = NULL;
 	lum_weight_factor = NULL;
 	lum_weight_factor2 = NULL;
-	//lumreg_pixel_weights = NULL;
-	ImagePixelGrid *image_pixel_grid;
-	//for (int i=0; i < n_extended_src_redshifts; i++) {
-	for (int i=0; i < 1; i++) { // testing right now...EXTEND TO OTHER SOURCE REDSHIFTS
-		image_pixel_grid = image_pixel_grids[i];
-		if (image_pixel_grid->active_image_pixel_i != NULL) delete[] image_pixel_grid->active_image_pixel_i;
-		if (image_pixel_grid->active_image_pixel_j != NULL) delete[] image_pixel_grid->active_image_pixel_j;
-		if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
-		if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
-		if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
-		if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
-		if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
-		if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
-		if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
-		image_pixel_grid->active_image_pixel_i = NULL;
-		image_pixel_grid->active_image_pixel_j = NULL;
-		image_pixel_grid->active_image_subpixel_ii = NULL;
-		image_pixel_grid->active_image_subpixel_jj = NULL;
-		image_pixel_grid->active_image_pixel_i_ss = NULL;
-		image_pixel_grid->active_image_pixel_j_ss = NULL;
-		image_pixel_grid->active_image_subpixel_ss = NULL;
-		image_pixel_grid->image_pixel_i_from_subcell_ii = NULL;
-		image_pixel_grid->image_pixel_j_from_subcell_jj = NULL;
-	}
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
+	//lumreg_pixel_weights = NULL;
+	ImagePixelGrid *image_pixel_grid = image_pixel_grids[zsrc_i];
+	if (image_pixel_grid->active_image_pixel_i != NULL) delete[] image_pixel_grid->active_image_pixel_i;
+	if (image_pixel_grid->active_image_pixel_j != NULL) delete[] image_pixel_grid->active_image_pixel_j;
+	if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
+	if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
+	if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
+	if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
+	if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
+	if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
+	if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
+	if (image_pixel_grid->active_image_pixel_i_fgmask != NULL) delete[] image_pixel_grid->active_image_pixel_i_fgmask;
+	if (image_pixel_grid->active_image_pixel_j_fgmask != NULL) delete[] image_pixel_grid->active_image_pixel_j_fgmask;
+	image_pixel_grid->active_image_pixel_i = NULL;
+	image_pixel_grid->active_image_pixel_j = NULL;
+	image_pixel_grid->active_image_subpixel_ii = NULL;
+	image_pixel_grid->active_image_subpixel_jj = NULL;
+	image_pixel_grid->active_image_pixel_i_ss = NULL;
+	image_pixel_grid->active_image_pixel_j_ss = NULL;
+	image_pixel_grid->active_image_subpixel_ss = NULL;
+	image_pixel_grid->image_pixel_i_from_subcell_ii = NULL;
+	image_pixel_grid->image_pixel_j_from_subcell_jj = NULL;
+	image_pixel_grid->active_image_pixel_i_fgmask = NULL;
+	image_pixel_grid->active_image_pixel_j_fgmask = NULL;
 	/*
 	// I don't think this is necessary, so commented out...these will be cleared when pixel mappings are assigned
 	int nsubpix = INTSQR(default_imgpixel_nsplit);
@@ -17661,10 +17664,20 @@ void QLens::vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_
 			image_npixels = image_pixel_grid->x_N*image_pixel_grid->y_N;
 			if (psf_supersampling) image_n_subpixels = image_npixels*default_imgpixel_nsplit*default_imgpixel_nsplit;
 		}
+		if (image_pixel_grid->active_image_pixel_i != NULL) delete[] image_pixel_grid->active_image_pixel_i;
+		if (image_pixel_grid->active_image_pixel_j != NULL) delete[] image_pixel_grid->active_image_pixel_j;
 		image_pixel_grid->active_image_pixel_i = new int[image_npixels];
 		image_pixel_grid->active_image_pixel_j = new int[image_npixels];
 		int ii,jj;
 		if (psf_supersampling) {
+			if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
+			if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
+			if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
+			if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
+			if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
+			if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
+			if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
+
 			image_pixel_grid->active_image_pixel_i_ss = new int[image_n_subpixels];
 			image_pixel_grid->active_image_pixel_j_ss = new int[image_n_subpixels];
 			image_pixel_grid->active_image_subpixel_ss = new int[image_n_subpixels];

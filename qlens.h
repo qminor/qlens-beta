@@ -1007,7 +1007,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void initialize_pixel_matrices(const int zsrc_i, bool verbal);
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal);
 	void count_shapelet_npixels(const int zsrc_i);
-	void clear_pixel_matrices();
+	void clear_pixel_matrices(const int zsrc_i);
 	void clear_sparse_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
 	void assign_Lmatrix(const int zsrc_i, const bool delaunay, const bool verbal);

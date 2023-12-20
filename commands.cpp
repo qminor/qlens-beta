@@ -14900,7 +14900,7 @@ void QLens::process_commands(bool read_file)
 					vectorize_image_pixel_surface_brightness(true); // note that in this case, the image pixel vector also contains the foreground
 					PSF_convolution_pixel_vector(0,false);
 					store_image_pixel_surface_brightness(0);
-					clear_pixel_matrices();
+					clear_pixel_matrices(0);
 					mockdata_t.set_lens(this);
 					mockdata_t.load_from_image_grid(image_pixel_grids[0],background_pixel_noise);
 					mockdata_t.copy_mask(image_pixel_data);

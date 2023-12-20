@@ -9633,7 +9633,9 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	//fitmodel->print_lens_list(true);
 	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*loglikeptr)(fitparams.array());
-	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//for (;;) {
+		//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
+	//}
 	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
 	//chisqval = 2 * (this->*loglikeptr)(fitparams.array());
@@ -13793,7 +13795,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
 		DelaunayGrid *srcgrid1, *srcgrid2;
 		srcgrid1 = new DelaunayGrid(this,zsrc_i,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
-		if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
+		//if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
 		if ((delaunay_try_two_grids) and (split_imgpixels) and (delaunay_mode != 5)) {
 			srcgrid2 = new DelaunayGrid(this,zsrc_i,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
 			if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
@@ -14009,7 +14011,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
 			}
 		}
-		clear_pixel_matrices();
+		clear_pixel_matrices(zsrc_i);
 	}
 
 	int i,j,k;
@@ -14650,6 +14652,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
 		}
 #endif
+		clear_pixel_matrices(0);
 	} else if (source_fit_mode == Delaunay_Source) {
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -14692,6 +14695,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 				if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 				if (assign_pixel_mappings(zsrc_i,verbal)==false) {
+					clear_pixel_matrices(zsrc_i);
 					return 2e30;
 				}
 				if ((mpi_id==0) and (verbal)) {
@@ -14710,7 +14714,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 				bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
 				if ((regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
-					if (create_regularization_matrix(zsrc_i,include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
+					if (create_regularization_matrix(zsrc_i,include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); return 2e30; } // in this case, covariance matrix was not positive definite 
 				}
 				if ((mpi_id==0) and (verbal)) {
 					cout << "Number of active image pixels: " << image_npixels << endl;
@@ -14743,7 +14747,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 				if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
 					bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
-					if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_sparse_lensing_matrices(); return 2e30; }
+					if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 				}
 				if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 #ifdef USE_OPENMP
@@ -14763,10 +14767,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 					delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 					clear_sparse_lensing_matrices();
-					clear_pixel_matrices();
+					clear_pixel_matrices(zsrc_i);
 
 					if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings (with lum weighting)...\n";
 					if (assign_pixel_mappings(zsrc_i,verbal)==false) {
+						clear_pixel_matrices(zsrc_i);
 						return 2e30;
 					}
 					if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings (with lum weighting)... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -14779,7 +14784,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 					initialize_pixel_matrices(zsrc_i,verbal);
 					if (regularization_method != None) {
-						if (create_regularization_matrix(zsrc_i,include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite 
+						if (create_regularization_matrix(zsrc_i,include_lum_weighting,get_lumreg_from_sbweights,verbal)==false) { chisq0 = 2e30; clear_pixel_matrices(zsrc_i); return 2e30; } // in this case, covariance matrix was not positive definite 
 					}
 					if (inversion_method==DENSE) {
 						convert_Lmatrix_to_dense();
@@ -14810,7 +14815,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 #endif
 					if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 					if ((optimize_regparam) and (regularization_method != None)) {
-						if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); clear_sparse_lensing_matrices(); return 2e30; }
+						if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 					}
 				}
 
@@ -14835,7 +14840,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					else loglike_times_two += Gmatrix_log_determinant;
 				}
 				clear_sparse_lensing_matrices();
-				clear_pixel_matrices();
+				clear_pixel_matrices(zsrc_i);
 			}
 		}
 
@@ -14938,7 +14943,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				loglike_times_two += Fmatrix_log_determinant;
 			}
 			//cout << "LOGLIKE: " << loglike_times_two << " Flogdet=" << Fmatrix_log_determinant << " chisqreg=" << chisqreg << " sum=" << (Fmatrix_log_determinant+chisqreg) << endl;
-			clear_pixel_matrices();
+			clear_pixel_matrices(zsrc_i);
 		}
 
 #ifdef USE_OPENMP
@@ -15121,7 +15126,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				PSF_convolution_pixel_vector(zsrc_i,false,verbal,true); // no supersampling, no convolution (saves time)
 				store_image_pixel_surface_brightness(zsrc_i);
 				clear_sparse_lensing_matrices();
-				clear_pixel_matrices();
+				clear_pixel_matrices(zsrc_i);
 			}
 		} else if (source_fit_mode==Shapelet_Source) {
 #ifdef USE_OPENMP
@@ -15143,16 +15148,18 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				PSF_convolution_pixel_vector(zsrc_i,false,verbal,true); // no supersampling, no fft convolution (saves time)
 				store_image_pixel_surface_brightness(zsrc_i);
 				//image_pixel_grids[zsrc_i]->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grids[0] (used for the inversion)
-				clear_pixel_matrices();
+				clear_pixel_matrices(zsrc_i);
 			}
 		} else if (source_fit_mode==Parameterized_Source) {
-			clear_pixel_matrices();
-			if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[0]]] == -1) image_pixel_grids[0]->include_all_pixels();
-			else image_pixel_grids[0]->activate_extended_mask(); 
-			image_pixel_grids[0]->find_surface_brightness(false,true);
-			vectorize_image_pixel_surface_brightness(0);
-			PSF_convolution_pixel_vector(0,false,verbal,true); // no supersampling, no convolution (saves time)
-			//store_image_pixel_surface_brightness(0);
+			for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+				if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[zsrc_i]]] == -1) image_pixel_grids[zsrc_i]->include_all_pixels();
+				else image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+				image_pixel_grids[zsrc_i]->find_surface_brightness(false,true);
+				vectorize_image_pixel_surface_brightness(zsrc_i);
+				PSF_convolution_pixel_vector(zsrc_i,false,verbal,true); // no supersampling, no convolution (saves time)
+				store_image_pixel_surface_brightness(zsrc_i);
+				clear_pixel_matrices(zsrc_i);
+			}
 		}
 
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -15225,7 +15232,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	chisq_it++;
 
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) clear_sparse_lensing_matrices();
-	clear_pixel_matrices();
 	return loglike_times_two;
 }
 

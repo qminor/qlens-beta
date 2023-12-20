@@ -409,7 +409,7 @@ bool SPLE_Lens::output_cosmology_info(const int lens_number)
 	double b_kpc, sigma, r_tidal, r_core, mtot, rhalf;
 	b_kpc = b / kpc_to_arcsec;
 	sigma = c * sqrt(b_kpc*(Rs_sun_km/kpc_to_km)*sigma_cr_kpc/2);
-	cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+	cout << "sigma = " << sigma << " km/s  (velocity dispersion)\n";
 	return true;
 }
 
@@ -730,7 +730,7 @@ bool dPIE_Lens::output_cosmology_info(const int lens_number)
 	double sigma, r_tidal, r_core, mtot, rhalf;
 	sigma = 2.07386213e-3*sqrt(b*(1-s/a)*kpc_to_arcsec*sigma_cr); // this is = c*sqrt(b*(1-s/a)*D_s/D_ls/M_4PI), expressed in terms of kpc_to_arcsec and sigma_cr
 	if ((parameter_mode==0) or (parameter_mode==2)) {
-		cout << "sigma = " << sigma << " km/sprime  (velocity dispersion)\n";
+		cout << "sigma = " << sigma << " km/s  (velocity dispersion)\n";
 	}
 	if ((parameter_mode==1) or (parameter_mode==2)) {
 		cout << "b = " << b << " arcsec" << endl;

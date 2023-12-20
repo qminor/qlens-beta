@@ -547,15 +547,19 @@ node.Stat().UpperBound() << " and owner " << node.Stat().Owner() << ".\n";
       for (size_t i = 0; i < node.NumPoints(); ++i)
       {
         const size_t owner = assignments[node.Point(i)];
-		  if (include_weights) {
-			  w = weights[node.Point(i)];
-			  //w = 1.0;
-			  newCentroids.col(owner) += w*dataset.col(node.Point(i));
-			  newCounts[owner] += w;
-			  tw += w;
+		  if (owner > newCentroids.n_cols) {
+			  cerr << "WARNING: encountered invalid centroid index" << endl;
 		  } else {
-			  newCentroids.col(owner) += dataset.col(node.Point(i));
-			  ++newCounts[owner];
+			  if (include_weights) {
+				  w = weights[node.Point(i)];
+				  //w = 1.0;
+				  newCentroids.col(owner) += w*dataset.col(node.Point(i));
+				  newCounts[owner] += w;
+				  tw += w;
+			  } else {
+				  newCentroids.col(owner) += dataset.col(node.Point(i));
+				  ++newCounts[owner];
+			  }
 		  }
 
 /*
