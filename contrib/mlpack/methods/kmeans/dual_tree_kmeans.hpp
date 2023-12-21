@@ -123,7 +123,7 @@ class DualTreeKMeans
                   const double adjustedParentLowerBound = 0.0);
 
   //! Extract the centroids of the clusters.
-  void ExtractCentroids(Tree& node,
+  bool ExtractCentroids(Tree& node,
                         arma::mat& newCentroids,
                         arma::Col<double>& newCounts,
                         const arma::mat& centroids);

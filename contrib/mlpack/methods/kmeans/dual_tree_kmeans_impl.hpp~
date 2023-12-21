@@ -500,7 +500,6 @@ void DualTreeKMeans<MetricType, MatType, TreeType>::ExtractCentroids(
   {
     const size_t owner = node.Stat().Owner();
 	 if (include_weights) {
-			 //if (node.Stat().TotWeight() < 0.0) std::cout << "FUCK! totweight never initialized" << endl;
 			 //std::cout << "totweight: " << node.Stat().TotWeight() << endl;
 		 newCentroids.col(owner) += node.Stat().Centroid() * node.Stat().TotWeight();
 		 newCounts[owner] += node.Stat().TotWeight();
@@ -548,15 +547,20 @@ node.Stat().UpperBound() << " and owner " << node.Stat().Owner() << ".\n";
       for (size_t i = 0; i < node.NumPoints(); ++i)
       {
         const size_t owner = assignments[node.Point(i)];
-		  if (include_weights) {
-			  w = weights[node.Point(i)];
-			  //w = 1.0;
-			  newCentroids.col(owner) += w*dataset.col(node.Point(i));
-			  newCounts[owner] += w;
-			  tw += w;
+		  cout << "OWNER: " << owner << endl;
+		  if (owner > newCentroids.n_cols) {
+			  cerr << "WARNING: encountered invalid centroid index" << endl;
 		  } else {
-			  newCentroids.col(owner) += dataset.col(node.Point(i));
-			  ++newCounts[owner];
+			  if (include_weights) {
+				  w = weights[node.Point(i)];
+				  //w = 1.0;
+				  newCentroids.col(owner) += w*dataset.col(node.Point(i));
+				  newCounts[owner] += w;
+				  tw += w;
+			  } else {
+				  newCentroids.col(owner) += dataset.col(node.Point(i));
+				  ++newCounts[owner];
+			  }
 		  }
 
 /*

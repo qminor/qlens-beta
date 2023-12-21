@@ -171,7 +171,8 @@ double DualTreeKMeans<MetricType, MatType, TreeType>::Iterate(
   // Now we need to extract the clusters.
   newCentroids.zeros(centroids.n_rows, centroids.n_cols);
   counts.zeros(centroids.n_cols);
-  ExtractCentroids(*tree, newCentroids, counts, centroids);
+  bool status = ExtractCentroids(*tree, newCentroids, counts, centroids);
+  if (status==false) return NAN;
 
   // Now, calculate how far the clusters moved, after normalizing them.
   double residual = 0.0;
@@ -473,7 +474,7 @@ template<typename MetricType,
          template<typename TreeMetricType,
                   typename TreeStatType,
                   typename TreeMatType> class TreeType>
-void DualTreeKMeans<MetricType, MatType, TreeType>::ExtractCentroids(
+bool DualTreeKMeans<MetricType, MatType, TreeType>::ExtractCentroids(
     Tree& node,
     arma::mat& newCentroids,
     arma::Col<double>& newCounts,
@@ -491,6 +492,7 @@ void DualTreeKMeans<MetricType, MatType, TreeType>::ExtractCentroids(
 		}
 	   node.Stat().UpdateTotWeight(tw);
 	 }
+	bool status = true;
 
 
 	//std::cout << "Extracting centroids..." << endl;
@@ -547,8 +549,10 @@ node.Stat().UpperBound() << " and owner " << node.Stat().Owner() << ".\n";
       for (size_t i = 0; i < node.NumPoints(); ++i)
       {
         const size_t owner = assignments[node.Point(i)];
+		  //cout << "OWNER(" << i << "): " << owner << endl;
 		  if (owner > newCentroids.n_cols) {
-			  cerr << "WARNING: encountered invalid centroid index" << endl;
+			  //cerr << "WARNING: encountered invalid centroid index" << endl;
+			  status = false;
 		  } else {
 			  if (include_weights) {
 				  w = weights[node.Point(i)];
@@ -590,11 +594,15 @@ assignments[node.Point(i)] << " with ub " << upperBounds[node.Point(i)] <<
 */
       }
     }
+	 if (status==false) return false;
 
     // The node is not entirely owned by a cluster.  Recurse.
-    for (size_t i = 0; i < node.NumChildren(); ++i)
-      ExtractCentroids(node.Child(i), newCentroids, newCounts, centroids);
+    for (size_t i = 0; i < node.NumChildren(); ++i) {
+      status = ExtractCentroids(node.Child(i), newCentroids, newCounts, centroids);
+		if (status==false) return false;
+	 }
   }
+  return status;
 }
 
 template<typename MetricType,

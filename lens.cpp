@@ -13757,28 +13757,49 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		arma::mat dataset(input_data, 2, npix);
 		arma::Col<double> weightvec(weights, npix);
 		arma::mat centroids(initial_centroids, 2, n_src_centroids);
-		delete[] input_data;
-		delete[] initial_centroids;
-		delete[] weights;
 
 		bool guess_initial_clusters;
 		if (!clustering_random_initialization) guess_initial_clusters = true;
 		else guess_initial_clusters = false;
 
+		double *src_centroids_x = new double[n_src_centroids];
+		double *src_centroids_y = new double[n_src_centroids];
+
 		if (!use_dualtree_kmeans) {
 			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
 			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+			for (i=0; i < n_src_centroids; i++) {
+				src_centroids_x[i] = (double) centroids(0,i);
+				src_centroids_y[i] = (double) centroids(1,i);
+			}
+
 		} else {
 			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
-			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+			bool status;
+			status = clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+			if (status==false) {
+				warn("Dual-tree k-means algorithm failed, so using naive k-means instead");
+				// Dual Tree didn't work, so let's use naive k-means instead
+				arma::mat dataset2(input_data, 2, npix);
+				arma::Col<double> weightvec2(weights, npix);
+				arma::mat centroids2(initial_centroids, 2, n_src_centroids);
+				KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus_naive(n_cluster_iterations);
+				clus_naive.Cluster(dataset2, n_src_centroids, centroids2, weightvec2, use_weighted_srcpixel_clustering, guess_initial_clusters);
+				for (i=0; i < n_src_centroids; i++) {
+					src_centroids_x[i] = (double) centroids2(0,i);
+					src_centroids_y[i] = (double) centroids2(1,i);
+				}
+			} else {
+				for (i=0; i < n_src_centroids; i++) {
+					src_centroids_x[i] = (double) centroids(0,i);
+					src_centroids_y[i] = (double) centroids(1,i);
+				}
+			}
 		}
+		delete[] input_data;
+		delete[] initial_centroids;
+		delete[] weights;
 
-		double *src_centroids_x = new double[n_src_centroids];
-		double *src_centroids_y = new double[n_src_centroids];
-		for (i=0; i < n_src_centroids; i++) {
-			src_centroids_x[i] = (double) centroids(0,i);
-			src_centroids_y[i] = (double) centroids(1,i);
-		}
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
 		delaunay_srcgrids[src_i] = new DelaunayGrid(this,zsrc_i,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
