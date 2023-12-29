@@ -16487,7 +16487,6 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 #endif
 	int i,j;
 #ifdef USE_MKL
-	cout << "FUCKING HELL" << endl;
 	if (!use_covariance_matrix) {
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',source_n_amps,Fmatrix_packed.array());
@@ -16509,7 +16508,6 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		//cout << "DETERMINANTS: " << Fmatrix_log_determinant << " " << Gmatrix_log_determinant << " " << (Gmatrix_log_determinant+Rmatrix_log_determinant) << endl;
 	}
 #else
-	cout << "FUCKING HELL2" << endl;
 	if (use_covariance_matrix) {
 		die("Compiling with MKL is currently required for covariance kernel regularization");
 	}

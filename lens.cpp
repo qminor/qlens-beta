@@ -14541,12 +14541,11 @@ bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
-	if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
-		if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
-		add_pixellated_source(source_redshift);
-	}
-
 	if (!use_old_pixelgrids) {
+		if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
+			if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
+			add_pixellated_source(source_redshift);
+		}
 		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			if (image_pixel_grids[zsrc_i] != NULL) {
 				delete image_pixel_grids[zsrc_i];
@@ -14555,6 +14554,7 @@ bool QLens::load_pixel_grid_from_data()
 			loaded_new_grid = true;
 		}
 	} else {
+		if (image_pixel_grid0 != NULL) delete image_pixel_grid0;
 		image_pixel_grid0 = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, -1, 0);
 		loaded_new_grid = true;
 	}
@@ -14617,17 +14617,29 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 #endif
 
 	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
-	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
-		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			image_pixel_grids[zsrc_i]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
+	if (!use_old_pixelgrids) {
+		if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
+			for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+				image_pixel_grids[zsrc_i]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
+			}
 		}
-	}
 
-	if (chisq == 2e30) {
-		// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
-		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			delete image_pixel_grids[zsrc_i];
-			image_pixel_grids[zsrc_i] = NULL;
+		if (chisq == 2e30) {
+			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
+			for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+				delete image_pixel_grids[zsrc_i];
+				image_pixel_grids[zsrc_i] = NULL;
+			}
+		}
+	} else {
+		if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
+				image_pixel_grid0->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
+		}
+
+		if (chisq == 2e30) {
+			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
+			delete image_pixel_grid0;
+			image_pixel_grid0 = NULL;
 		}
 	}
 	return chisq;
@@ -15706,7 +15718,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 		if ((auto_srcgrid_npixels) or (n_image_prior)) source_pixel_grid->calculate_pixel_magnifications();
 		if (auto_srcgrid_npixels) {
 			if ((mpi_id==0) and (verbal_now)) cout << "Assigning pixel mappings...\n";
-			if (assign_pixel_mappings(verbal_now)==false) {
+			if (assign_pixel_mappings(-1,verbal_now)==false) {
 				return 2e30;
 			}
 			double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
@@ -15751,7 +15763,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 		}
 
 		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
-		if (assign_pixel_mappings(verbal)==false) {
+		if (assign_pixel_mappings(-1,verbal)==false) {
 			return 2e30;
 		}
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -16329,7 +16341,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 	chisq_it++;
 
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) clear_sparse_lensing_matrices();
-	clear_pixel_matrices();
+	clear_pixel_matrices(-1);
 	return loglike_times_two;
 }
 
