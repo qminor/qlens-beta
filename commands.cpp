@@ -9476,7 +9476,7 @@ void QLens::process_commands(bool read_file)
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					}
 					else {
-						create_sourcegrid_cartesian(verbal_mode);
+						create_sourcegrid_cartesian(zsrc_i,verbal_mode);
 						source_pixel_grid->assign_surface_brightness_from_analytic_source(zsrc_i);
 						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[zsrc_i] != NULL)) {
 							source_pixel_grid->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[zsrc_i],true);

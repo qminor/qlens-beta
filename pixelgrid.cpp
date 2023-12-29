@@ -11875,7 +11875,7 @@ ImagePixelGrid::~ImagePixelGrid()
 bool QLens::assign_pixel_mappings(const int zsrc_i, const bool verbal)
 {
 	int i, j, ii, jj, subcell_index, nsubpix, image_pixel_index=0, image_subpixel_index=0;
-	if (n_extended_src_redshifts==0) die("no ext src redshift created");
+	if ((zsrc_i >= 0) and (n_extended_src_redshifts==0)) die("no ext src redshift created");
 	ImagePixelGrid *image_pixel_grid;
 	if (zsrc_i < 0) image_pixel_grid = image_pixel_grid0;
 	else image_pixel_grid = image_pixel_grids[zsrc_i];
