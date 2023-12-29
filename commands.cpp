@@ -13381,6 +13381,15 @@ void QLens::process_commands(bool read_file)
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
+		else if (words[0]=="use_old_pixelgrids")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use deprecated pixel grid objects: " << display_switch(use_old_pixelgrids) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_old_pixelgrids' command; must specify 'on' or 'off'");
+				set_switch(use_old_pixelgrids,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="use_saved_sbweights")
 		{
 			if (nwords==1) {

@@ -153,7 +153,7 @@ class SourcePixelGrid
 	void find_nearest_two_cells(SourcePixelGrid* &cellptr1, SourcePixelGrid* &cellptr2, const int& side);
 	SourcePixelGrid* find_corner_cell(const int i, const int j);
 
-	void assign_surface_brightness_from_analytic_source(const int zsrc_i);
+	void assign_surface_brightness_from_analytic_source(const int zsrc_i=-1);
 	void assign_surface_brightness_from_delaunay_grid(DelaunayGrid* delaunay_grid, const bool add_sb = false);
 	void update_surface_brightness(int& index);
 	void fill_surface_brightness_vector();
@@ -243,7 +243,7 @@ class DelaunayGrid : public Sort
 	bool test_if_inside(int &tri_number, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(const int tri_number, const lensvector& pt);
 	void record_adjacent_triangles_xy();
-	void assign_surface_brightness_from_analytic_source(const int zsrc_i);
+	void assign_surface_brightness_from_analytic_source(const int zsrc_i=-1);
 	void fill_surface_brightness_vector();
 	void update_surface_brightness(int& index);
 	int find_closest_vertex(const int tri_number, const lensvector& pt);

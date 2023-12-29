@@ -456,6 +456,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
 	DelaunayGrid **delaunay_srcgrids;
+	DelaunayGrid *delaunay_srcgrid0;
 
 	int n_derived_params;
 	DerivedParam** dparam_list;
@@ -644,6 +645,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
+	bool use_old_pixelgrids;
 
 	bool use_random_delaunay_srcgrid;
 	bool reinitialize_random_grid;
@@ -835,6 +837,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_source_pixel_grid(const char filename[]);
 
 	ImagePixelGrid **image_pixel_grids;
+	ImagePixelGrid *image_pixel_grid0;
 	ImagePixelData *image_pixel_data;
 	int image_npixels, source_npixels, source_n_amps;
 	int image_n_subpixels; // for supersampling
@@ -871,8 +874,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	std::vector<double> *Lmatrix_rows;
 	std::vector<int> *Lmatrix_index_rows;
 
-	bool assign_pixel_mappings(const int zsrc_i, const bool verbal);
-	void assign_foreground_mappings(const int zsrc_i, const bool use_data = true);
+	bool assign_pixel_mappings(const int zsrc_i=-1, const bool verbal=false);
+	void assign_foreground_mappings(const int zsrc_i=-1, const bool use_data = true);
 	double *Dvector;
 	double *Dvector_cov;
 	double *Dvector_cov_copy;
@@ -898,32 +901,32 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 #endif
 
 	void convert_Lmatrix_to_dense();
-	void assign_Lmatrix_shapelets(const int zsrc_i, bool verbal);
-	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal);
-	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool verbal);
+	void assign_Lmatrix_shapelets(const int zsrc_i=-1, bool verbal=false);
+	void PSF_convolution_Lmatrix_dense(const int zsrc_i=-1, const bool verbal=false);
+	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i=-1, const bool verbal=false);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
 	double calculate_regularization_prior_term();
 
-	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
-	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix);
-	void calculate_subpixel_sbweights(const int zsrc_i, const bool save_sbweights = false, const bool verbal = false);
-	void calculate_subpixel_distweights(const int zsrc_i);
-	void find_srcpixel_weights(const int zsrc_i);
-	void load_pixel_sbweights(const int zsrc_i);
+	bool optimize_regularization_parameter(const int zsrc_i=-1, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
+	void setup_regparam_optimization(const int zsrc_i=-1, const bool dense_Fmatrix=false);
+	void calculate_subpixel_sbweights(const int zsrc_i=-1, const bool save_sbweights = false, const bool verbal = false);
+	void calculate_subpixel_distweights(const int zsrc_i=-1);
+	void find_srcpixel_weights(const int zsrc_i=-1);
+	void load_pixel_sbweights(const int zsrc_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
 	//double chisq_regparam_it_lumreg_dense(const double logreg);
 	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
 	//double chisq_regparam_lumreg_dense();
-	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights);
-	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc, const double yc, const double sig, const bool verbal = false);
+	void calculate_lumreg_srcpixel_weights(const int zsrc_i=-1, const bool use_sbweights=false);
+	void calculate_distreg_srcpixel_weights(const int zsrc_i=-1, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void create_regularization_matrix_shapelet(const int zsrc_i);
-	void generate_Rmatrix_shapelet_gradient(const int zsrc_i);
-	void generate_Rmatrix_shapelet_curvature(const int zsrc_i);
+	void create_regularization_matrix_shapelet(const int zsrc_i=-1);
+	void generate_Rmatrix_shapelet_gradient(const int zsrc_i=-1);
+	void generate_Rmatrix_shapelet_curvature(const int zsrc_i=-1);
 	//void set_corrlength_for_given_matscale();
 	//double corrlength_eq_matern_factor(const double log_corr_length);
 
@@ -1004,18 +1007,18 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	double Gmatrix_log_determinant;
-	void initialize_pixel_matrices(const int zsrc_i, bool verbal);
-	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal);
-	void count_shapelet_npixels(const int zsrc_i);
-	void clear_pixel_matrices(const int zsrc_i);
+	void initialize_pixel_matrices(const int zsrc_i=-1, bool verbal=false);
+	void initialize_pixel_matrices_shapelets(const int zsrc_i=-1, bool verbal=false);
+	void count_shapelet_npixels(const int zsrc_i=-1);
+	void clear_pixel_matrices(const int zsrc_i=-1);
 	void clear_sparse_lensing_matrices();
 	double find_surface_brightness(lensvector &pt);
-	void assign_Lmatrix(const int zsrc_i, const bool delaunay, const bool verbal);
-	void assign_Lmatrix_supersampled(const int zsrc_i, const bool delaunay, const bool verbal);
-	void PSF_convolution_Lmatrix(const int zsrc_i, bool verbal = false);
-	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool no_fft = false);
-	void average_supersampled_image_surface_brightness(const int zsrc_i);
-	void average_supersampled_dense_Lmatrix(const int zsrc_i);
+	void assign_Lmatrix(const int zsrc_i=-1, const bool delaunay=true, const bool verbal=false);
+	void assign_Lmatrix_supersampled(const int zsrc_i=-1, const bool delaunay=true, const bool verbal=false);
+	void PSF_convolution_Lmatrix(const int zsrc_i=-1, bool verbal = false);
+	void PSF_convolution_pixel_vector(const int zsrc_i=-1, const bool foreground = false, const bool verbal = false, const bool no_fft = false);
+	void average_supersampled_image_surface_brightness(const int zsrc_i=-1);
+	void average_supersampled_dense_Lmatrix(const int zsrc_i=-1);
 	bool setup_convolution_FFT(const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
@@ -1025,13 +1028,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
-	void generate_Rmatrix_from_gmatrices(const int zsrc_i);
-	void generate_Rmatrix_from_hmatrices(const int zsrc_i);
+	bool create_regularization_matrix(const int zsrc_i=-1, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
+	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1);
+	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1);
 	void generate_Rmatrix_norm();
-	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type, const bool include_lum_weighting, const bool verbal = false);
-	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix, const bool verbal);
-	void invert_lens_mapping_dense(const int zsrc_i, bool verbal);
+	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i=-1, const int kernel_type=0, const bool include_lum_weighting=false, const bool verbal = false);
+	void create_lensing_matrices_from_Lmatrix(const int zsrc_i=-1, const bool dense_Fmatrix=false, const bool verbal=false);
+	void invert_lens_mapping_dense(const int zsrc_i=-1, bool verbal=false);
 	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
 	void convert_Rmatrix_to_dense();
@@ -1039,7 +1042,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
 	void invert_lens_mapping_CG_method(bool verbal);
-	void update_source_amplitudes(const int zsrc_i, const bool verbal);
+	void update_source_amplitudes(const int zsrc_i=-1, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
@@ -1048,28 +1051,31 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness_dense();
-	void calculate_foreground_pixel_surface_brightness(const int zsrc_i, const bool allow_lensed_nonshapelet_sources = true);
+	void calculate_foreground_pixel_surface_brightness(const int zsrc_i=-1, const bool allow_lensed_nonshapelet_sources = true);
 	void add_foreground_to_image_pixel_vector();
-	void store_image_pixel_surface_brightness(const int zsrc_i);
-	void store_foreground_pixel_surface_brightness(const int zsrc_i);
-	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
-	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i);
+	void store_image_pixel_surface_brightness(const int zsrc_i=-1);
+	void store_foreground_pixel_surface_brightness(const int zsrc_i=-1);
+	void vectorize_image_pixel_surface_brightness(const int zsrc_i=-1, bool use_mask = false);
+	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
 	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	double invert_image_surface_brightness_map_old(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal);
-	void plot_image_pixel_grid(const int zsrc_i);
-	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal);
-	bool set_shapelet_imgpixel_nsplit(const int zsrc_i);
+	void plot_image_pixel_grid(const int zsrc_i=-1);
+	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i=-1, const bool verbal=false);
+	bool set_shapelet_imgpixel_nsplit(const int zsrc_i=-1);
 
 	void update_source_amplitudes_from_shapelets();
-	int get_shapelet_nn(const int zsrc_i);
+	int get_shapelet_nn(const int zsrc_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
-	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i, const bool verbal);
+	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i=-1, const bool verbal=false);
+	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
 	void generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
