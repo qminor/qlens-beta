@@ -263,8 +263,10 @@ Cluster(const MatType& data,
         << cNorm << ".\n";
     if (std::isnan(cNorm) || std::isinf(cNorm)) {
 		 //cerr << "cNorm is NAN!" << endl;
-		 return false;
-      //cNorm = 1e-4; // Keep iterating.
+		 //return false;
+      cNorm = 1e-4; // Keep iterating.
+	else if (cNorm == 1.23456789e30) { // failure flag
+		return false;
 	 }
   } while (cNorm > 1e-5 && iteration != maxIterations);
 

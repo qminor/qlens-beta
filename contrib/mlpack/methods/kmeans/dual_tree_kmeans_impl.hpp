@@ -172,7 +172,7 @@ double DualTreeKMeans<MetricType, MatType, TreeType>::Iterate(
   newCentroids.zeros(centroids.n_rows, centroids.n_cols);
   counts.zeros(centroids.n_cols);
   bool status = ExtractCentroids(*tree, newCentroids, counts, centroids);
-  if (status==false) return NAN;
+  if (status==false) return 1.23456789e30; // failure flag
 
   // Now, calculate how far the clusters moved, after normalizing them.
   double residual = 0.0;
