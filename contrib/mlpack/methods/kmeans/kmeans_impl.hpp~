@@ -115,7 +115,7 @@ template<typename MetricType,
          typename EmptyClusterPolicy,
          template<class, class> class LloydStepType,
          typename MatType>
-inline void KMeans<
+inline bool KMeans<
     MetricType,
     InitialPartitionPolicy,
     EmptyClusterPolicy,
@@ -129,7 +129,7 @@ Cluster(const MatType& data,
   arma::mat centroids(data.n_rows, clusters);
   arma::Col<double> weights(data.n_cols);
   weights.ones();
-  Cluster(data, clusters, assignments, centroids, weights, false, initialGuess);
+  return Cluster(data, clusters, assignments, centroids, weights, false, initialGuess);
 }
 
 /**
@@ -141,7 +141,7 @@ template<typename MetricType,
          typename EmptyClusterPolicy,
          template<class, class> class LloydStepType,
          typename MatType>
-void KMeans<
+bool KMeans<
     MetricType,
     InitialPartitionPolicy,
     EmptyClusterPolicy,
@@ -154,7 +154,7 @@ Cluster(const MatType& data,
 {
   arma::Col<double> weights(data.n_cols);
   weights.ones();
-  Cluster(data, clusters, centroids, weights, false, initialGuess);
+  return Cluster(data, clusters, centroids, weights, false, initialGuess);
 }
 
 /**
@@ -166,7 +166,7 @@ template<typename MetricType,
          typename EmptyClusterPolicy,
          template<class, class> class LloydStepType,
          typename MatType>
-void KMeans<
+bool KMeans<
     MetricType,
     InitialPartitionPolicy,
     EmptyClusterPolicy,
@@ -262,8 +262,11 @@ Cluster(const MatType& data,
     Log::Info << "KMeans::Cluster(): iteration " << iteration << ", residual "
         << cNorm << ".\n";
     if (std::isnan(cNorm) || std::isinf(cNorm)) {
-		 cout << "GOT ISNAN!" << endl;
+		 //cerr << "cNorm is NAN!" << endl;
+		 //return false;
       cNorm = 1e-4; // Keep iterating.
+	else if (cNorm == 1.23456789e30) { // failure flag
+		return false;
 	 }
   } while (cNorm > 1e-5 && iteration != maxIterations);
 
@@ -285,6 +288,7 @@ Cluster(const MatType& data,
   }
   Log::Info << lloydStep.DistanceCalculations() << " distance calculations."
       << std::endl;
+	return true;
 }
 
 /**
@@ -296,7 +300,7 @@ template<typename MetricType,
          typename EmptyClusterPolicy,
          template<class, class> class LloydStepType,
          typename MatType>
-void KMeans<
+bool KMeans<
     MetricType,
     InitialPartitionPolicy,
     EmptyClusterPolicy,
@@ -331,8 +335,9 @@ Cluster(const MatType& data,
         centroids.col(i) /= counts[i];
   }
 
-  Cluster(data, clusters, centroids, weights, include_weights,
+  bool status = Cluster(data, clusters, centroids, weights, include_weights,
       initialAssignmentGuess || initialCentroidGuess);
+  if (status==false) return false;
 
   // Calculate final assignments in parallel over the entire dataset.
   assignments.set_size(data.n_cols);
@@ -358,6 +363,7 @@ Cluster(const MatType& data,
     Log::Assert(closestCluster != centroids.n_cols);
     assignments[i] = closestCluster;
   }
+  return true;
 }
 
 template<typename MetricType,
