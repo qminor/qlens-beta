@@ -14077,7 +14077,9 @@ void QLens::create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_
 			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
 		} else {
 			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
-			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+			bool status;
+			status = clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+			if (status==false) warn("Dual-tree k-means algorithm failed");
 		}
 
 		double *src_centroids_x = new double[n_src_centroids];
