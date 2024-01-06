@@ -16,6 +16,8 @@ class Sort
 	void sort(const int n, double arr[], int brr[]);
 	void sort(const int n, const dvector& a, Vector<double>& b) { sort(n,a.array(),b.array()); }
 	void sort(const int n, double arr[], int brr[], int crr[]);
+	void sort(const int n, double arr[], double brr[], double crr[]); // This is why you should use templates. Ugh
+	void sort(const int n, double arr[], double brr[], double crr[], int drr[]); // This is why you should use templates. Ugh
 	void sort(const int n, double arr[], double brr[], double crr[], double drr[], double err[]); // This is why you should use templates. Ugh
 };
 

@@ -64,6 +64,34 @@ for VAR in "$@"; do
 		SET_CBRANGE=1
 	fi
 
+	if [[ $VAR == "cb6" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-6
+		CBMAX=6
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == "cb5" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-5
+		CBMAX=5
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == "cb4" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-4
+		CBMAX=4
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == "cb3" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-3
+		CBMAX=3
+		SET_CBRANGE=1
+	fi
+
 	if [[ $VAR == *'ncont='* ]]; then
 		NCONT=${VAR#ncont=}
 		INCLUDE_CONTOURS=1
@@ -238,7 +266,7 @@ then
 	fi
 elif [[ $COMMAND == "image_grid" ]]
 then
-	PLOTCOMMAND="plot $RANGE 'xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE lc 3 ps $PTSIZE t 'images'"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/xgrid.dat' w lines lw $LINEWIDTH lc 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 3 t 'images'"
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
@@ -539,11 +567,11 @@ then
 elif [[ $COMMAND == "grid" ]]
 then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
-	KEYPLOT="set title ' '\nplot [][1e12:2e12] 'xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
+	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/xgrid.dat' w lines lc 1 lt 1 t 'grid', '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 lt 1 t 'critical curves'"
 
-	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/xgrid.dat' w lines lc 1 t 'grid'"
 	if [[ $TERM != "" ]]; then
-		#KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', 'xgrid.dat' w lines lc 1 t 'grid'"
+		#KEYPLOT="set title ' '; plot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/xgrid.dat' w lines lc 1 t 'grid'"
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
 		else
@@ -717,7 +745,8 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_imgpts" ]]
 then
@@ -956,6 +985,7 @@ else
 fi
 
 echo -en "$PLOTLINE" >$PLOTDIR/$PLOTFILE
+#echo "$PLOTLINE"
 gnuplot -persist $PLOTDIR/$PLOTFILE >/dev/null 2>&1
 
 #if [[ $FILENAME == "" ]]; then

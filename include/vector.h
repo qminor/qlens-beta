@@ -5,7 +5,6 @@
 
 #include <iostream>
 #include "errors.h"
-using namespace std;
 
 template <class T>
 class Vector
@@ -156,8 +155,8 @@ template <class T>
 void Vector<T>::print(void)
 {
 	for (int i=0; i < nn-1; i++)
-		cout << v[i] << "  ";
-	cout << v[nn-1] << endl;
+		std::cout << v[i] << "  ";
+	std::cout << v[nn-1] << std::endl;
 	return;
 }
 

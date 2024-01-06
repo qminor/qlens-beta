@@ -1116,8 +1116,7 @@ ofstream Grid::xgrid;
 
 bool QLens::plot_recursive_grid(const char filename[])
 {
-	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
-	(this->*plot_critical_curves)("crit.dat");
+	plot_critical_curves("crit.dat");
 	if ((grid==NULL) and (create_grid(true,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (mpi_id==0) {
@@ -1613,14 +1612,14 @@ void Grid::grid_search(const int& searchlevel, const int& thread)
 	else if (!singular_pt_inside)
 	{
 		bool cell_maps_around_sourcept = image_test(thread);
+		lensvector imgpos;
 		if (cell==NULL) {
-			lensvector center_of_triangle;
 			for (int i=0; i < 4; i++) {
 				if ((neighbor[i] != NULL) and (neighbor[i]->cell != NULL)) {
-					edge_sourcept_status status = check_subgrid_neighbor_boundaries(i, neighbor[i], center_of_triangle, thread);
+					edge_sourcept_status status = check_subgrid_neighbor_boundaries(i, neighbor[i], imgpos, thread); // imgpos is set to the center of the triangle if source is found in the corresponding ray-traced triangle
 					if (status==SourceInGap) {
-						if (run_newton(center_of_triangle,thread)==true)
-							if (nfound >= max_images) finished_search = true;
+						if ((lens->skip_newtons_method) or (run_newton(imgpos,thread)==true))
+							add_image_to_list(imgpos);
 					} else if (status==SourceInOverlap) {
 						cell_maps_around_sourcept = false; // even if this cell maps around the source, don't search if it overlaps with neighboring subcells
 					}
@@ -1628,11 +1627,29 @@ void Grid::grid_search(const int& searchlevel, const int& thread)
 			}
 		}
 		if (cell_maps_around_sourcept) {
-			if (run_newton(center_imgplane,thread)==true) {
-				if (nfound >= max_images) finished_search = true;
+			imgpos[0] = center_imgplane[0];
+			imgpos[1] = center_imgplane[1];
+			if ((lens->skip_newtons_method) or (run_newton(imgpos,thread)==true)) {
+				add_image_to_list(imgpos);
 			}
 		}
 	}
+}
+void Grid::add_image_to_list(const lensvector& imgpos)
+{
+	images[nfound].pos[0] = imgpos[0];
+	images[nfound].pos[1] = imgpos[1];
+	images[nfound].mag = lens->magnification(imgpos,0,grid_zfactors,grid_betafactors);
+	if (lens->include_time_delays) {
+		double potential = lens->potential(imgpos,grid_zfactors,grid_betafactors);
+		images[nfound].td = 0.5*(SQR(imgpos[0]-lens->source[0])+SQR(imgpos[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+	} else {
+		images[nfound].td = 0;
+	}
+	images[nfound].parity = sign(images[nfound].mag);
+
+	nfound++;
+	if (nfound >= max_images) finished_search = true;
 }
 
 void Grid::subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid)
@@ -1715,17 +1732,7 @@ void Grid::subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const i
 image* Grid::tree_search()
 {
    finished_search = false;
-	if (lens->use_cc_spline) {
-		// With the critical curve/caustic spline (this assumes elliptical symmetry), we know how many images to
-		// expect based on the region the source is located in. We can use this to speed up the image search: if
-		// all the expected images are found, we stop before all the remaining cells are searched unnecessarily.
-		// Also, we can check to see if we actually found all the expected images.
-		grid_search_firstlevel(levels);
-		if (!finished_search)
-			warn(lens->warnings, "could not find all images for source (%g,%g), system type %i", lens->source[0], lens->source[1], lens->system_type);
-	} else {
-		grid_search_firstlevel(levels);
-	}
+	grid_search_firstlevel(levels);
 
    return images;
 }
@@ -1749,16 +1756,6 @@ inline bool Grid::redundancy(const lensvector& xroot, double &sep)
 void QLens::find_images()
 {
 	// called by plot_images(...)
-	if (use_cc_spline) {
-		double r_source, theta_source;
-		r_source = norm(source[0]-grid_xcenter, source[1]-grid_ycenter);
-		theta_source = angle(source[0]-grid_xcenter, source[1]-grid_ycenter);
-		if (r_source < caustic[0].splint(theta_source)) {
-			if (r_source < caustic[1].splint(theta_source)) system_type = Quad;
-			else system_type = Double;
-		} else if (r_source < caustic[1].splint(theta_source)) system_type = Cusp;
-		else system_type = Single;
-	}
 
 	Grid::reset_search_parameters();
 	images_found = grid->tree_search();
@@ -1778,12 +1775,33 @@ void QLens::find_images()
 
 void QLens::output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux, const bool show_labels)
 {
-	if ((use_cc_spline) and (!cc_splined)) {
-		if (spline_critical_curves()==false) return;
-	}
 	if (grid==NULL) {
-		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return;
+		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) {
+			return;
+		}
 	}
+	//cout << Grid::image_pos_accuracy << endl; // default
+	//cout << Grid::theta_offset << endl; // slight offset in the initial angle for creating the grid; obsolete, but keeping it here just in case
+	//cout << Grid::ccroot_t << endl;
+	//cout << Grid::enforce_min_area << endl;
+	//cout << Grid::cc_neighbor_splittings << endl;
+	//double *Grid::grid_zfactors;
+	//double **Grid::grid_betafactors;
+	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << ptsrc_zfactors[0][0] << endl;
+
+	// parameters for creating the recursive grid
+	//cout << Grid::rmin << endl;
+	//cout << Grid::rmax << endl;
+	//cout << Grid::xcenter << endl;
+	//cout << Grid::ycenter << endl;
+	//cout << Grid::grid_q << endl;
+	//cout << Grid::u_split_initial << endl; cout << Grid::w_split_initial << endl;
+	//cout << Grid::levels << endl;
+	//cout << Grid::splitlevels << endl;
+	//cout << Grid::cc_splitlevels << endl;
+	//cout << Grid::min_cell_area << endl;
+
+
 	source[0] = x_source; source[1] = y_source;
 
 	find_images();
@@ -1829,7 +1847,6 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 bool QLens::plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux, const bool show_labels)
 {
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
-	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) return false;
 	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (use_scientific_notation==false) {
@@ -1880,9 +1897,6 @@ bool QLens::plot_images_single_source(const double &x_source, const double &y_so
 
 image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 {
-	if ((use_cc_spline) and (!cc_splined)) {
-		if (spline_critical_curves(verbal)==false) return NULL;
-	}
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return NULL;
 	}
@@ -1897,9 +1911,6 @@ image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal
 // this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
 bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
 {
-	if ((use_cc_spline) and (!cc_splined)) {
-		if (spline_critical_curves(verbal)==false) return false;
-	}
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return false;
 	}
@@ -1917,9 +1928,6 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 	if (n_sourcepts_fit==0) status = false;
 	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
-	if ((use_cc_spline) and (!cc_splined)) {
-		if (spline_critical_curves(verbal)==false) status = false;
-	}
 	vector<ImageSet> image_sets;
 	image_sets.clear();
 	if (!status) return image_sets;
@@ -1935,20 +1943,20 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 
 	if (!analytic_source_flux) srcflux[0] = source_flux;
 	if (use_analytic_bestfit_src) {
-		output_analytic_srcpos(srcpts);
+		find_analytic_srcpos(srcpts);
 	} else {
 		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
 	}
 
 	for (int i=min_dataset; i <= max_dataset; i++) {
-		if ((i == min_dataset) or (zfactors[i] != zfactors[i-1]))
-			create_grid(false,zfactors[i],beta_factors[i]);
+		if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
+			create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
 
 		source[0] = srcpts[i][0];
 		source[1] = srcpts[i][1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,source_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].copy_imageset(source,ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
 	}
 	reset_grid();
 	delete[] srcpts;
@@ -1957,8 +1965,7 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 }
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
-	if ((use_cc_spline) and (!cc_splined) and (spline_critical_curves()==false)) warn(warnings,"could not spline critical curves");
-	if ((this->*plot_critical_curves)("crit.dat")==false) warn(warnings,"no critical curves found");
+	if (plot_critical_curves("crit.dat")==false) warn(warnings,"no critical curves found");
 	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	ifstream sources(sourcefile);
@@ -2018,72 +2025,37 @@ bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verb
 		if (mpi_id==0) {
 			imagedat << "# " << Grid::nfound << " images" << endl;
 
-			if (use_cc_spline) {
-				for (int i = 0; i < Grid::nfound; i++)
-				{
-					if (include_time_delays)
-						imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].td << " " << images_found[i].parity << endl;
-					else
-						imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					if (system_type==Quad) {
-						quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-					else if (system_type==Double) {
-						doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-					else if (system_type==Cusp) {
-						cusps << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-					else if (system_type==Single) {
-						singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-				}
-				if (system_type==Quad) {
-					srcquads << source[0] << " " << source[1] << endl;
-				}
-				else if (system_type==Double) {
-					srcdoubles << source[0] << " " << source[1] << endl;
-				}
-				else if (system_type==Cusp) {
-					srccusps << source[0] << " " << source[1] << endl;
-				}
-				else if (system_type==Single) {
-					srcsingles << source[0] << " " << source[1] << endl;
-				}
-
-			} else {
-				for (int i = 0; i < Grid::nfound; i++)
-				{
-					if (include_time_delays)
-						imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].td << " " << images_found[i].parity << endl;
-					else
-						imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					if (Grid::nfound==5) {
-						quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-					else if (Grid::nfound==3) {
-						// this will count doubles and cusps
-						doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-					else if (Grid::nfound==1) {
-						singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					} else {
-						weird << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-					}
-				}
+			for (int i = 0; i < Grid::nfound; i++)
+			{
+				if (include_time_delays)
+					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].td << " " << images_found[i].parity << endl;
+				else
+					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
 				if (Grid::nfound==5) {
-					srcquads << source[0] << " " << source[1] << endl;
+					quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
 				}
 				else if (Grid::nfound==3) {
-					srcdoubles << source[0] << " " << source[1] << endl;
+					// this will count doubles and cusps
+					doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
 				}
 				else if (Grid::nfound==1) {
-					srcsingles << source[0] << " " << source[1] << endl;
+					singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
 				} else {
-					srcweird << source[0] << " " << source[1] << endl;
+					weird << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
 				}
-
 			}
+			if (Grid::nfound==5) {
+				srcquads << source[0] << " " << source[1] << endl;
+			}
+			else if (Grid::nfound==3) {
+				srcdoubles << source[0] << " " << source[1] << endl;
+			}
+			else if (Grid::nfound==1) {
+				srcsingles << source[0] << " " << source[1] << endl;
+			} else {
+				srcweird << source[0] << " " << source[1] << endl;
+			}
+
 			imagedat << endl;
 		}
 	}
@@ -2107,9 +2079,8 @@ inline void Grid::SolveLinearEqs(lensmatrix& a, lensvector& b)
 
 inline double Grid::max_component(const lensvector& x) { return dmax(fabs(x[0]),fabs(x[1])); }
 
-bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
+bool Grid::run_newton(lensvector& xroot, const int& thread)
 {
-	lensvector xroot = xroot_initial;
 	if ((enforce_min_area) and (image_pos_accuracy > 0.2*sqrt(cell_area))) warn(lens->newton_warnings,"image position accuracy comparable to or larger than cell size");
 	if ((xroot[0]==0) and (xroot[1]==0)) { xroot[0] = xroot[1] = 5e-1*lens->cc_rmin; }	// Avoiding singularity at center
 	if (NewtonsMethod(xroot, newton_check[thread], thread)==false) {
@@ -2141,11 +2112,10 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 	if (((xroot[0]==center_imgplane[0]) and (center_imgplane[0] != 0)) and ((xroot[1]==center_imgplane[1]) and (center_imgplane[1] != 0)))
 		warn(lens->newton_warnings, "Newton's method returned center of grid cell");
 	double mag = lens->magnification(xroot,thread,grid_zfactors,grid_betafactors);
-	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy)) {
+	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy) and (abs(mag) < 1e-3)) {
 		if (lens->newton_warnings==true) {
-			warn(lens->newton_warnings,"Newton's method found probable false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
+			warn(lens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), level %i, cell center (%g,%g), mag %g",xroot[0],xroot[1],lens->source[0],lens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1],mag);
 		}
-		return false;
 	}
 	if (abs(mag) > lens->newton_magnification_threshold) {
 		if (lens->reject_himag_images) {
@@ -2182,53 +2152,6 @@ bool Grid::run_newton(const lensvector& xroot_initial, const int& thread)
 			status = false;
 		}
 		else if (nfound >= max_images) status = false;
-		else {
-			images[nfound].pos[0] = xroot[0];
-			images[nfound].pos[1] = xroot[1];
-			images[nfound].mag = lens->magnification(xroot,0,grid_zfactors,grid_betafactors);
-			if (lens->include_time_delays) {
-				double potential = lens->potential(xroot,grid_zfactors,grid_betafactors);
-				images[nfound].td = 0.5*(SQR(xroot[0]-lens->source[0])+SQR(xroot[1]-lens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
-			} else {
-				images[nfound].td = 0;
-			}
-			images[nfound].parity = sign(images[nfound].mag);
-
-			if (lens->use_cc_spline) {
-				bool found_pos=false, found_neg=false;
-				double rroot, thetaroot, cr0, cr1;
-				rroot = norm(xroot[0]-lens->grid_xcenter,xroot[1]-lens->grid_ycenter);
-				thetaroot = angle(xroot[0]-lens->grid_xcenter,xroot[1]-lens->grid_ycenter);
-				cr0 = lens->ccspline[0].splint(thetaroot);
-				cr1 = lens->ccspline[1].splint(thetaroot);
-
-				int expected_parity;
-				if (rroot < cr0) {
-					nfound_max++; expected_parity = 1;
-				} else if (rroot > cr1) {
-					nfound_pos++; expected_parity = 1;
-				} else {
-					nfound_neg++; expected_parity = -1;
-				}
-
-				if (images[nfound].parity != expected_parity)
-					warn(lens->warnings, "wrong parity found for image from source (%g, %g)", lens->source[0], lens->source[1]);
-				
-				if ((lens->system_type==Single) and (nfound_pos >= 1)) finished_search = true;
-				else
-				{
-					if ((lens->system_type==Double) and (nfound_pos >= 1)) found_pos = true;
-					else if (((lens->system_type==Quad) or (lens->system_type==Cusp)) and (nfound_pos >= 2)) found_pos = true;
-
-					if (((lens->system_type==Double) or (lens->system_type==Cusp)) and (nfound_neg >= 1)) found_neg = true;
-					else if ((lens->system_type==Quad) and (nfound_neg >= 2)) found_neg = true;
-
-					if ((found_pos) and (found_neg)) finished_search = true;
-				}
-			}
-
-			nfound++;
-		}
 	//}
 	return status;
 }

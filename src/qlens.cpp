@@ -14,9 +14,34 @@ using namespace std;
 char *advance(char *p);
 void usage_error(const int mpi_id);
 
+/*
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
+{
+      comm_counter++;
+      printf("%s %i\n", "MPI_Comm_split ", comm_counter);
+      return PMPI_Comm_split(comm, color, key, newcomm);
+}
+
+int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm)
+{
+      comm_counter++;
+      printf("%s %i\n", "MPI_Comm_create ", comm_counter);
+		return PMPI_Comm_create(comm,group,newcomm);
+}
+
+
+int MPI_Comm_free(MPI_Comm *comm)
+{
+      comm_counter--;
+      printf("%s %i\n", "PMPI_Comm_free ", comm_counter);
+      return PMPI_Comm_free(comm);
+}
+*/
+
 int main(int argc, char *argv[])
 {
 	int mpi_id=0, mpi_np=1;
+	//comm_counter = 0;
 
 #ifdef USE_MPI
 	MPI_Init(NULL, NULL);
@@ -37,9 +62,9 @@ int main(int argc, char *argv[])
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
 	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
-	QLens::setup_fft_convolution = false;
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
@@ -224,7 +249,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-		cout << "QLens by Quinn Minor (2022)\n";
+		cout << "QLens by Quinn Minor (2023)\n";
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
@@ -302,4 +327,5 @@ void usage_error(const int mpi_id)
 #endif
 	exit(0);
 }
+
 

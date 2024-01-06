@@ -445,7 +445,8 @@ void McmcEval::input_parameter_transforms(const char *transform_filename)
 
 		if (nwords >= 2) {
 			int param_num;
-			if (!(ws[0] >> param_num)) die("Invalid parameter number");
+			if (words[0]=="last") param_num = numOfParam-1;
+			else if (!(ws[0] >> param_num)) die("Invalid parameter number");
 			if (param_num >= numOfParam) die("Parameter number does not exist");
 			if (transform_name) param_transforms[param_num].transform_param_name(new_name);
 			if (transform_latex_name) param_transforms[param_num].transform_latex_param_name(new_latex_name);
@@ -941,14 +942,17 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 	if (flag&LOG)
 	{
 		fx = log10;
-		gx = (flag&LOGAXIS) ? dummy : pow10;
-		facx = (flag&NOADJ) ? unit : pow10;
+		if (flag&LOGAXIS) gx = dummy;
+		else gx = pow10;
+		if (flag&NOADJ) facx = unit;
+		else facx = pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
 	{
 		fx = dummy;
-		gx = (flag&LOGAXIS) ? pow10 : dummy;
+		if (flag&LOGAXIS) gx = pow10;
+		else gx = dummy;
 		facx = unit;
 		FindHiLow(xhi, xlow, iin);
 	}
@@ -1455,8 +1459,10 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 	if (flag&LOG)
 	{
 		fx = log10;
-		gx = (flag&LOGAXIS) ? dummy : pow10;
-		facx = (flag&NOADJ) ? unit : pow10;
+		if (flag&LOGAXIS) gx = dummy;
+		else gx = pow10;
+		if (flag&NOADJ) facx = unit;
+		else facx = pow10;
 		FindHiLowDerived(xhi, xlow, derived_param, totPts, EVAL_NONEG);
 	}
 	else
@@ -1980,7 +1986,8 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 	{
 		fx = log10;
 		gx = pow10;
-		facx = (flag&NOADJ) ? unit : pow10;
+		if (flag&NOADJ) facx = unit;
+		else facx = pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -2411,7 +2418,8 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 	{
 		fx = log10;
 		gx = pow10;
-		facx = (flag&NOADJX) ? unit : pow10;
+		if (flag&NOADJX) facx = unit;
+		else facx = pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -2426,7 +2434,8 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 	{
 		fy = log10;
 		gy = pow10;
-		facy = (flag&NOADJY) ? unit : pow10;
+		if (flag&NOADJY) facy = unit;
+		else facy = pow10;
 		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
@@ -2980,7 +2989,8 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 	{
 		fx = log10;
 		gx = pow10;
-		facx = (flag&NOADJX) ? unit : pow10;
+		if (flag&NOADJX) facx = unit;
+		else facx = pow10;
 		FindHiLow(xhi, xlow, iin, EVAL_NONEG);
 	}
 	else
@@ -2995,7 +3005,8 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 	{
 		fy = log10;
 		gy = pow10;
-		facy = (flag&NOADJY) ? unit : pow10;
+		if (flag&NOADJY) facy = unit;
+		else facy = pow10;
 		FindHiLow(yhi, ylow, jin, EVAL_NONEG);
 	}
 	else
@@ -3719,11 +3730,15 @@ void FisherEval::input(const char *file_root, const bool silent)
 		cerr << "Error: cannot read data file '" << string(file_root) + ".bf'" << endl;
 		return;
 	}
+	a--; // first number is log-likelihood, not param
+
 	numOfParam = a;
 	if (!silent) cout << "Number of parameters: " << a << endl;
 
 	int i,j;
 	bestfitpt = new double[numOfParam];
+	double garbage;
+	iss >> garbage; // ignore log-likelihood entry
 	for (i=0; i < numOfParam; i++) iss >> bestfitpt[i];
 	pcov = new double*[numOfParam];
 	for (i=0; i < numOfParam; i++) pcov[i] = new double[numOfParam];

@@ -12,13 +12,12 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
-using namespace std;
 
 struct ImagePixelData;
 class LensProfile;
 class QLens;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, SHAPELET, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile : public EllipticityGradient, UCMC, Simplex
 {
@@ -27,6 +26,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class SersicLens;
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
+	friend class SPLE_Lens;
+	friend class dPIE_Lens;
+	friend class NFW;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -52,9 +54,9 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
 	boolvector vary_params;
-	string model_name;
-	vector<string> paramnames;
-	vector<string> latex_paramnames, latex_param_subscripts;
+	std::string model_name;
+	std::vector<std::string> paramnames;
+	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
 	dvector penalty_upper_limits, penalty_lower_limits;
 	dvector stepsizes;
@@ -70,7 +72,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void reset_anchor_lists();
 	void setup_base_source_properties(const int np, const int sbprofile_np, const bool is_elliptical_source, const int pmode_in = 0);
 	void copy_base_source_data(const SB_Profile* sb_in);
-	//bool spawn_lens_model(Alpha* lens_model);
+	//bool spawn_lens_model(SPLE_Lens* lens_model);
 
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
@@ -101,7 +103,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	static bool fourier_use_eccentric_anomaly; // use eccentric anomaly as angle for fourier modes? (preferable, but lensing multiploes must use polar angle)
 	static double zoom_split_factor; 
 	static double zoom_scale; 
-	static double SB_noise;
 	int ellipticity_mode;
 
 	public:
@@ -155,6 +156,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
 	void add_truncation_radius(const double rt_in, const bool vary_rt);
+	bool has_fourier_modes() { return (n_fourier_modes > 0) ? true : false; }
 	bool fourier_mode_exists(const int mval) {
 		bool mode_exists = false;
 		for (int i=0; i < n_fourier_modes; i++) {
@@ -164,6 +166,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	}
 	void set_lensed(const bool isl) {
 		is_lensed = isl;
+		assign_paramnames();
 	}
 	void set_zoom_subgridding(const bool zoom) {
 		zoom_subgridding = zoom;
@@ -190,10 +193,10 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
+	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
 	virtual void get_parameters(double* params);
-	bool get_specific_parameter(const string name_in, double& value);
-	bool update_specific_parameter(const string name_in, const double& value);
+	bool get_specific_parameter(const std::string name_in, double& value);
+	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool update_specific_parameter(const int paramnum, const double& value);
 
 	virtual void update_parameters(const double* params);
@@ -205,19 +208,19 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void copy_parameter_anchors(const SB_Profile* sb_in);
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 
-	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = "."); // for fitting to isophote data
+	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = "."); // for fitting to isophote data
 	double sbprofile_loglike(double *params);
-	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const string fit_output_dir = ".");
+	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = ".");
 	double profile_fit_loglike(double *params);
 	double profile_fit_loglike_bspline(double *params);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
-	void plot_sb_profile(double rmin, double rmax, int steps, ofstream &sbout);
-	void print_parameters();
+	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
+	void print_parameters(const double zs = -1);
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
-	virtual void print_source_command(ofstream& scriptout, const bool use_limits);
-	virtual bool get_special_command_arg(string &arg);
+	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
+	virtual void print_source_command(std::ofstream& scriptout, const bool use_limits);
+	virtual bool get_special_command_arg(std::string &arg);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -240,7 +243,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void update_scale_parameter(const double scale);
 
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
+	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4, const double sb_noise);
 
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
@@ -308,7 +311,6 @@ class Sersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -333,7 +335,6 @@ class CoreSersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -359,7 +360,6 @@ class Cored_Sersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -387,7 +387,82 @@ class DoubleSersic : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
+	double window_rmax();
+	double length_scale();
+};
+
+class SPLE : public SB_Profile
+{
+	friend class SPLE_Lens;
+
+	private:
+	double bs, s, alpha;
+
+	double sb_rsq(const double);
+
+	public:
+	SPLE() : SB_Profile() {}
+	SPLE(const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	SPLE(const SPLE* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double window_rmax();
+	double length_scale();
+};
+
+class dPIE : public SB_Profile
+{
+	friend class dPIE_Lens;
+
+	private:
+	double bs, s, a;
+
+	double sb_rsq(const double);
+
+	public:
+	dPIE() : SB_Profile() {}
+	dPIE(const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	dPIE(const dPIE* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
+	double window_rmax();
+	double length_scale();
+};
+
+class NFW_Source : public SB_Profile
+{
+	friend class NFW;
+
+	private:
+	double s0, rs;
+
+	double sb_rsq(const double);
+	double nfw_function_xsq(const double &xsq);
+
+	public:
+	NFW_Source() : SB_Profile() {}
+	NFW_Source(const double &s0_in, const double &rs_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, QLens* qlens_in);
+	NFW_Source(const NFW_Source* sb_in);
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+
 	double window_rmax();
 	double length_scale();
 };
@@ -433,7 +508,7 @@ class Shapelet : public SB_Profile
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);
 	void update_indxptr(const int newval);
-	bool get_special_command_arg(string &arg);
+	bool get_special_command_arg(std::string &arg);
 
 	double window_rmax();
 	double length_scale();
@@ -459,7 +534,6 @@ class SB_Multipole : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };
@@ -482,7 +556,6 @@ class TopHat : public SB_Profile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void print_parameters();
 	double window_rmax();
 	double length_scale();
 };

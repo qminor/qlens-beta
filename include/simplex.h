@@ -8,8 +8,6 @@
 #include <iostream>
 #include <iomanip>
 
-using namespace std;
-
 class Simplex : public Random
 {
 	bool initialized;

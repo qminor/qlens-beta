@@ -37,7 +37,7 @@ struct EvalParamTransform
 	double gaussian_pos, gaussian_sig;
 	double linear_A, linear_b;
 	bool transform_name, transform_latex_name;
-	string transformed_param_name, transformed_latex_name;
+	std::string transformed_param_name, transformed_latex_name;
 	EvalTransform transform;
 	EvalParamTransform() { transform = EVAL_NONE; transform_name = false; transform_latex_name = false; }
 	void set_none() { transform = EVAL_NONE; }
@@ -46,8 +46,8 @@ struct EvalParamTransform
 	void set_linear(double &A_in, double &b_in) { transform = EVAL_LINEAR_TRANSFORM; linear_A = A_in; linear_b = b_in; }
 	void set_gaussian(double &pos_in, double &sig_in) { transform = EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	void set_inverse_gaussian(double &pos_in, double &sig_in) { transform = INVERSE_EVAL_GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void transform_param_name(string &name_in) { transform_name = true; transformed_param_name = name_in; }
-	void transform_latex_param_name(string &name_in) { transform_latex_name = true; transformed_latex_name = name_in; }
+	void transform_param_name(std::string &name_in) { transform_name = true; transformed_param_name = name_in; }
+	void transform_latex_param_name(std::string &name_in) { transform_latex_name = true; transformed_latex_name = name_in; }
 	void transform_parameter(double& param)
 	{
 		double p = param;
@@ -103,7 +103,7 @@ class McmcEval
 		int numOfFiles;
 		int min_chisq_pt_j, min_chisq_pt_m, min_chisq_pt_jj;
 		double min_chisq_val;
-		vector<string> chain_header;
+		std::vector<std::string> chain_header;
 
 		double rad; // for lensing
 		
@@ -113,11 +113,11 @@ class McmcEval
 		void input_parameter_transforms(const char *transform_filename);
 		void input_prior_weights(const char *prior_weight_filename, double *minvals, double* maxvals);
 
-		void remove_comments(string& instring);
-		void transform_parameter_names(string *paramnames, string *latex_paramnames);
+		void remove_comments(std::string& instring);
+		void transform_parameter_names(std::string *paramnames, std::string *latex_paramnames);
 		void calculate_derived_param();
-		void output_min_chisq_pt(string* paramnames);
-		void output_min_chisq_pt2(string* paramnames);
+		void output_min_chisq_pt(std::string* paramnames);
+		void output_min_chisq_pt2(std::string* paramnames);
 		double output_min_chisq_value(const int p);
 
 		void min_chisq_pt(double*);

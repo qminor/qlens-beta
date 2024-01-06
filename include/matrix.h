@@ -8,7 +8,6 @@
 #include <cmath>
 #include "vector.h"
 #include "errors.h"
-using namespace std;
 
 template <class T>
 class Matrix
@@ -17,16 +16,17 @@ class Matrix
 	int nrows, ncolumns;
 
 public:
-	Matrix() : nrows(0), ncolumns(0) { a = NULL; }
-	Matrix(const int &n) { input(n,n); }
-	Matrix(const int &m, const int &n) { input(m,n); }
-	Matrix(const int &m, const int &n, const char filename[]) { input(m,n,filename); }
-	Matrix(T **inmatrix, const int &m, const int &n) { a = NULL; input(inmatrix, m, n); }
+	Matrix() : nrows(0), ncolumns(0), a(0) {}
+	Matrix(const int &n) : a(0) { input(n,n); }
+	Matrix(const int &m, const int &n) : a(0) { input(m,n); }
+	Matrix(const int &m, const int &n, const char filename[]) : a(0) { input(m,n,filename); }
+	Matrix(T **inmatrix, const int &m, const int &n) : a(0) { input(inmatrix, m, n); }
 	Matrix(const Matrix&); // copy-constructor
 	Matrix& operator = (const Matrix&);
 	Matrix& operator = (const T&);
 	void input(const int&, const int&);
 	void input(T**, const int&, const int&);
+	void input_ptr(T**, const int&, const int&);
 	void input(T**); // this assumes the input dimensions are the same as already set
 	void input(const Matrix&);
 	void input(const int &m, const int &n, const char filename[]);
@@ -105,21 +105,29 @@ Matrix<T>::Matrix(const Matrix<T>& b)
 template <class T>
 void Matrix<T>::input(const Matrix<T>& b)
 {
-	if (a != NULL) {
-		for (int i = 0; i < nrows; i++)
-			delete[] a[i];
-		delete[] a;
-	}
+	if ((a==NULL) or (b.nrows != nrows) or (b.ncolumns != ncolumns)) {
+		if (a != NULL) {
+			for (int i = 0; i < nrows; i++)
+				delete[] a[i];
+			delete[] a;
+		}
 
-	nrows = b.nrows;
-	ncolumns = b.ncolumns;
-	a = new T*[nrows];
-	
-	for (int i = 0; i < nrows; i++)
-	{
-		a[i] = new T[ncolumns];
-		for (int j = 0; j < ncolumns; j++)
-			a[i][j] = b[i][j];
+		nrows = b.nrows;
+		ncolumns = b.ncolumns;
+		a = new T*[nrows];
+		
+		for (int i = 0; i < nrows; i++)
+		{
+			a[i] = new T[ncolumns];
+			for (int j = 0; j < ncolumns; j++)
+				a[i][j] = b[i][j];
+		}
+	} else {
+		for (int i = 0; i < nrows; i++)
+		{
+			for (int j = 0; j < ncolumns; j++)
+				a[i][j] = b[i][j];
+		}
 	}
 	return;
 }
@@ -127,16 +135,18 @@ void Matrix<T>::input(const Matrix<T>& b)
 template <class T>
 void Matrix<T>::input(const int &m, const int &n)
 {
-	if (a != NULL) {
-		for (int i = 0; i < nrows; i++)
-			delete[] a[i];
-		delete[] a;
-	}
+	if ((a==NULL) or (m != nrows) or (n != ncolumns)) {
+		if (a != NULL) {
+			for (int i = 0; i < nrows; i++)
+				delete[] a[i];
+			delete[] a;
+		}
 
-	nrows = m; ncolumns = n;
-	a = new T*[nrows];
-	for (int i = 0; i < nrows; i++) {
-		a[i] = new T[ncolumns];
+		nrows = m; ncolumns = n;
+		a = new T*[nrows];
+		for (int i = 0; i < nrows; i++) {
+			a[i] = new T[ncolumns];
+		}
 	}
 	return;
 }
@@ -149,7 +159,6 @@ void Matrix<T>::input(T **inmatrix, const int &m, const int &n)
 			delete[] a[i];
 		delete[] a;
 	}
-
 	nrows = m; ncolumns = n;
 	a = new T*[nrows];
 	for (int i = 0; i < nrows; i++) {
@@ -158,6 +167,19 @@ void Matrix<T>::input(T **inmatrix, const int &m, const int &n)
 			a[i][j] = inmatrix[i][j];
 		}
 	}
+	return;
+}
+
+template <class T>
+void Matrix<T>::input_ptr(T **inmatrix, const int &m, const int &n)
+{
+	if (a != NULL) {
+		for (int i = 0; i < nrows; i++)
+			delete[] a[i];
+		delete[] a;
+	}
+	nrows = m; ncolumns = n;
+	a = inmatrix; // NOTE: if nrows or ncolumns does not match the inmatrix, you'll get a seg fault!
 	return;
 }
 
@@ -182,7 +204,7 @@ void Matrix<T>::input(const int &m, const int &n, const char filename[])
 		delete[] a;
 	}
 
-	ifstream infile(filename);
+	std::ifstream infile(filename);
 
 	nrows = m; ncolumns = n;
 	a = new T*[nrows];
@@ -198,7 +220,7 @@ void Matrix<T>::input(const int &m, const int &n, const char filename[])
 template <class T>
 void Matrix<T>::open(const char filename[])
 {
-	ifstream infile(filename);
+	std::ifstream infile(filename);
 
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++) {
@@ -221,13 +243,13 @@ double Matrix<T>::bicubic_interpolate(const double &t, const double &u) // can u
 template <class T>
 void Matrix<T>::output(const char filename[])
 {
-	ofstream outfile(filename);
+	std::ofstream outfile(filename);
 
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++) {
 			outfile << a[i][j] << " ";
 		}
-		outfile << endl;
+		outfile << std::endl;
 	}
 	return;
 }
@@ -552,7 +574,7 @@ void Matrix<T>::lu_decomposition(int* indx)
 			vv[imax] = vv[j];
 		}
 		indx[j] = imax;
-		if (a[j][j] == 0) { cout << "Singular matrix!\n"; a[j][j] = TINY; }
+		if (a[j][j] == 0) { std::cout << "Singular matrix!\n"; a[j][j] = TINY; }
 		if (j != nrows-1) {
 			dum = 1.0/(a[j][j]);
 			for (i=j+1; i < nrows; i++) a[i][j] *= dum;
@@ -1000,8 +1022,8 @@ void Matrix<T>::print(void)
 {
 	for (int i = 0; i < nrows; i++) {
 		for (int j = 0; j < ncolumns; j++)
-			cout << a[i][j] << "\t";
-		cout << endl;
+			std::cout << a[i][j] << "\t";
+		std::cout << std::endl;
 	}
 }
 

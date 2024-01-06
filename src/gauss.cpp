@@ -508,11 +508,12 @@ double ClenshawCurtis::AdaptiveQuadCC(double (ClenshawCurtis::*func)(double), do
 
 GaussPatterson::GaussPatterson()
 {
-	pat_points = NULL;
+	//pat_points = NULL;
 	pat_weights = NULL;
 	pat_orders = NULL;
-	pat_funcs = NULL;
-	pat_funcs2 = NULL;
+	//pat_funcs = NULL;
+	//pat_funcs2 = NULL;
+	//pat_funcs_mult = NULL;
 	show_convergence_warning = true;
 	//SetGaussPatterson(1e-6,true);
 }
@@ -523,18 +524,24 @@ void GaussPatterson::SetGaussPatterson(const double tol_in, const bool show_warn
 	pat_tolerance_outer = tol_in;
 	show_convergence_warning = show_warnings;
 	pat_N = 511;
-	if (pat_points != NULL) delete[] pat_points;
-	if (pat_funcs != NULL) delete[] pat_funcs;
-	if (pat_funcs2 != NULL) delete[] pat_funcs2; // useful if doing nested integrals (albeit an ugly solution)
+	//if (pat_points != NULL) delete[] pat_points;
+	//if (pat_funcs != NULL) delete[] pat_funcs;
+	//if (pat_funcs_mult != NULL) {
+		//for (int i=0; i < 6; i++) delete[] pat_funcs_mult[i];
+		//delete[] pat_funcs_mult;
+	//}
+	//if (pat_funcs2 != NULL) delete[] pat_funcs2; // useful if doing nested integrals (albeit an ugly solution)
 	if (pat_orders != NULL) delete[] pat_orders;
 	if (pat_weights != NULL) {
 		for (int i=0; i < 9; i++) delete[] pat_weights[i];
 		delete[] pat_weights;
 	}
 	pat_orders = new int [9];
-	pat_points = new double[511];
-	pat_funcs = new double[511];
-	pat_funcs2 = new double[511];
+	//pat_points = new double[511];
+	//pat_funcs = new double[511];
+	//pat_funcs2 = new double[511];
+	//pat_funcs_mult = new double*[6];
+	//for (int i=0; i < 6; i++) pat_funcs_mult[i] = new double[511];
 	pat_weights = new double*[9];
 	pat_weights[0] = new double[1];
 	pat_weights[1] = new double[3];
@@ -2103,9 +2110,13 @@ void GaussPatterson::set_pat_tolerance_outer(const double tol_in)
 
 GaussPatterson::~GaussPatterson()
 {
-	if (pat_points != NULL) delete[] pat_points;
-	if (pat_funcs != NULL) delete[] pat_funcs;
-	if (pat_funcs2 != NULL) delete[] pat_funcs2;
+	//if (pat_points != NULL) delete[] pat_points;
+	//if (pat_funcs != NULL) delete[] pat_funcs;
+	//if (pat_funcs2 != NULL) delete[] pat_funcs2;
+	//if (pat_funcs_mult != NULL) {
+		//for (int i=0; i < 6; i++) delete[] pat_funcs_mult[i];
+		//delete[] pat_funcs_mult;
+	//}
 	if (pat_orders != NULL) delete[] pat_orders;
 	if (pat_weights != NULL) {
 		for (int i=0; i < 9; i++) {
@@ -2127,7 +2138,7 @@ double GaussPatterson::AdaptiveQuad(double (GaussPatterson::*func)(double), doub
 	double abavg = (a+b)/2, abdif = (b-a)/2;
 	converged = true; // until proven otherwise
 	double *funcptr = pat_funcs;
-	if (outer) funcptr = pat_funcs2;
+	//if (outer) funcptr = pat_funcs2;
 	int order, j;
 	do {
 		result_old = result;

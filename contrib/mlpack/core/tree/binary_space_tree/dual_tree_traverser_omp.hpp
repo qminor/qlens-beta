@@ -46,8 +46,8 @@ class BinarySpaceTree<MetricType, StatisticType, MatType, BoundType,
   void Traverse(BinarySpaceTree& queryNode,
                 BinarySpaceTree& referenceNode);
 
-  //void Traverse(BinarySpaceTree& queryNode,
-                //BinarySpaceTree& referenceNode, typename RuleType::TraversalInfoType& traversalInfo, const size_t level);
+  void Traverse(BinarySpaceTree& queryNode,
+                BinarySpaceTree& referenceNode, typename RuleType::TraversalInfoType& traversalInfo, const size_t level);
 
 
   //! Get the number of prunes.
@@ -88,7 +88,7 @@ class BinarySpaceTree<MetricType, StatisticType, MatType, BoundType,
 
   //! Traversal information, held in the class so that it isn't continually
   //! being reallocated.
-  typename RuleType::TraversalInfoType traversalInfo;
+  //typename RuleType::TraversalInfoType traversalInfo;
 };
 
 } // namespace mlpack

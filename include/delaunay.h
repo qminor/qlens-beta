@@ -15,11 +15,14 @@ const unsigned char BI = 0x10;
 struct Triangle // the final triangulation will be stored in an array of triangle structs
 {
 	lensvector vertex[3];
+	lensvector midpoint[3];
 	lensvector circumcenter;
+	double circumcircle_radsq;
 	double *sb[3]; // pointer to surface brightness values assigned to each vertex
 	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
 	int vertex_index[3];
 	int neighbor_index[3];
+	//int index;
 };
 
 struct triangleBase;
@@ -430,6 +433,7 @@ class Delaunay
 			lensvector side1, side2;
 			for (int i = 0; i < nTris; i++, botPtr++)
 			{
+				double a0, a1, c0, c1, det_inv, asq, csq, ctr0, ctr1;
 				if (botPtr->tri->vertices[0] >= 0 && botPtr->tri->vertices[1] >= 0 && botPtr->tri->vertices[2] >= 0)
 				{
 					triangle->vertex_index[0] = botPtr->tri->vertices[0];
@@ -441,15 +445,35 @@ class Delaunay
 					triangle->vertex[1][1] = y[botPtr->tri->vertices[1]];
 					triangle->vertex[2][0] = x[botPtr->tri->vertices[2]];
 					triangle->vertex[2][1] = y[botPtr->tri->vertices[2]];
-					if (botPtr->sides[0] != NULL) triangle->neighbor_index[0] = botPtr->sides[0]->index; // not sure if sides is *ever* NULL, but just in case...
-					else triangle->neighbor_index[0] = -1;
-					if (botPtr->sides[1] != NULL) triangle->neighbor_index[1] = botPtr->sides[1]->index;
-					else triangle->neighbor_index[1] = -1;
-					if (botPtr->sides[2] != NULL) triangle->neighbor_index[2] = botPtr->sides[2]->index;
-					else triangle->neighbor_index[2] = -1;
+					//triangle->index = botPtr->index;
+					if (botPtr->sides[0] != NULL) {
+						triangle->neighbor_index[0] = botPtr->sides[0]->index; // not sure if sides is *ever* NULL, but just in case...
+						triangle->midpoint[0] = (triangle->vertex[1] + triangle->vertex[2])/2;
+					} else triangle->neighbor_index[0] = -1;
+					if (botPtr->sides[1] != NULL) {
+						triangle->neighbor_index[1] = botPtr->sides[1]->index;
+						triangle->midpoint[1] = (triangle->vertex[0] + triangle->vertex[2])/2;
+					} else triangle->neighbor_index[1] = -1;
+					if (botPtr->sides[2] != NULL) {
+						triangle->neighbor_index[2] = botPtr->sides[2]->index;
+						triangle->midpoint[2] = (triangle->vertex[0] + triangle->vertex[1])/2;
+					} else triangle->neighbor_index[2] = -1;
 					side1 = triangle->vertex[1] - triangle->vertex[0];
 					side2 = triangle->vertex[2] - triangle->vertex[1];
 					triangle->area = side1 ^ side2;
+
+					a0 = x[botPtr->tri->vertices[0]]-x[botPtr->tri->vertices[1]];
+					a1 = y[botPtr->tri->vertices[0]]-y[botPtr->tri->vertices[1]];
+					c0 = x[botPtr->tri->vertices[2]]-x[botPtr->tri->vertices[1]];
+					c1 = y[botPtr->tri->vertices[2]]-y[botPtr->tri->vertices[1]];
+					det_inv = 0.5/(a0*c1-c0*a1);
+					asq = a0*a0 + a1*a1;
+					csq = c0*c0 + c1*c1;
+					ctr0 = det_inv*(asq*c1 - csq*a1);
+					ctr1 = det_inv*(csq*a0 - asq*c0);
+					triangle->circumcenter[0] = ctr0 + x[botPtr->tri->vertices[1]];
+					triangle->circumcenter[1] = ctr1 + y[botPtr->tri->vertices[1]];
+					triangle->circumcircle_radsq = ctr0*ctr0+ctr1*ctr1;
 					triangle++;
 				}
 			}

@@ -13,19 +13,22 @@
 #include <iostream>
 #include <vector>
 #include <complex>
-using namespace std;
 
 class Sersic;
 class DoubleSersic;
 class Cored_Sersic;
+class TopHatLens;
+class SPLE;
+class dPIE;
+class NFW_Source;
 class SB_Profile;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
 enum LensProfileName
 {
 	KSPLINE,
-	ALPHA,
-	PJAFFE,
+	sple_LENS,
+	dpie_LENS,
 	nfw,
 	TRUNCATED_nfw,
 	CORED_nfw,
@@ -40,6 +43,7 @@ enum LensProfileName
 	SHEAR,
 	SHEET,
 	DEFLECTION,
+	TOPHAT_LENS,
 	TABULATED,
 	QTABULATED,
 	TESTMODEL
@@ -55,6 +59,9 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	friend class SB_Profile;
 	friend class Sersic;
 	friend class Cored_Sersic;
+	friend class SPLE;
+	friend class dPIE;
+	friend class ImagePixelGrid;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:
@@ -71,7 +78,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	double sigma_cr, kpc_to_arcsec;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
-	double x_center_lensed, y_center_lensed; // used if lensed_center_coords is set to true
+	double xc_prime, yc_prime; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	double costheta, sintheta;
@@ -81,16 +88,15 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
-	int n_param2;
 	int lensprofile_nparams; // just the parameters that define the kappa profile (rather than the angular structure or center coord's)
 	bool angle_param_exists;
 	int ellipticity_paramnum; // used to keep track of ellipticity parameter (this feature is used only by qtab models)
 	boolvector vary_params;
 	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
-	string model_name;
-	string special_parameter_command;
-	vector<string> paramnames;
-	vector<string> latex_paramnames, latex_param_subscripts;
+	std::string model_name;
+	std::string special_parameter_command;
+	std::vector<std::string> paramnames;
+	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
 	dvector penalty_upper_limits, penalty_lower_limits;
 	dvector stepsizes;
@@ -114,6 +120,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	void set_nparams_and_anchordata(const int &n_params_in, const bool resize = false);
 	void reset_anchor_lists();
+	void set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+
 	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
 	void set_angle(const double &theta_degrees);
@@ -133,13 +141,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
 	void update_ellipticity_meta_parameters();
-	void update_zlens_meta_parameters();
+	void update_cosmology_meta_parameters();
 	virtual void update_meta_parameters()
 	{
-		update_zlens_meta_parameters();
+		update_cosmology_meta_parameters();
 		update_ellipticity_meta_parameters();
 	}
 	void calculate_ellipticity_components();
+	void update_center_from_pixsrc_coords();
 
 	double potential_numerical(const double, const double);
 	double potential_spherical_default(const double x, const double y);
@@ -187,9 +196,10 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
 	double* parameter_anchor_exponent;
-
 	bool* anchor_parameter_to_source;
 	SB_Profile** parameter_anchor_source;
+	bool at_least_one_param_anchored;
+	bool transform_center_coords_to_pixsrc_frame;
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
@@ -206,7 +216,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	int ellipticity_mode;
 	int parameter_mode; // allows for different parametrizations
 	int lens_subclass; // allows for different subclasses of lenses (e.g. multipole order m=0,1,2...); set to -1 if there are no subclasses defined
-	string subclass_label;
+	std::string subclass_label;
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
 	LensProfile() {
@@ -244,17 +254,21 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		anchor_parameter_to_source = NULL;
 		parameter_anchor_source = NULL;
 		parameter_anchor_paramnum = NULL;
+		at_least_one_param_anchored = false;
 		param = NULL;
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
 		zlens = zlens_current = 0;
+		zsrc_ref = 0;
 		zfac = 1.0;
+		sigma_cr = 0;
 		fourier_integrals_splined = false;
 		fourier_integral_left_cos_spline = NULL;
 		fourier_integral_left_sin_spline = NULL;
 		fourier_integral_right_cos_spline = NULL;
 		fourier_integral_right_sin_spline = NULL;
 		use_concentration_prior = false;
+		qlens = NULL;
 	}
 	void setup_cosmology(QLens* lens_in, const double zlens_in, const double zsrc_in);
 
@@ -269,6 +283,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
+	bool setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc);
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void remove_fourier_modes();
@@ -283,7 +298,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool vary_parameters(const boolvector& vary_params_in);
 	void set_limits(const dvector& lower, const dvector& upper);
 	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
-	bool set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
+	bool set_limits_specific_parameter(const std::string name_in, const double& lower, const double& upper);
 	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
 	void shift_angle_90();
 	void shift_angle_minus_90();
@@ -297,11 +312,12 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
 
 	virtual void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary = NULL, vector<string> *latex_subscripts_vary = NULL);
+	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
+	virtual double get_parameter(const int i);
 	virtual void get_parameters(double* params);
-	bool get_specific_parameter(const string name_in, double& value);
+	bool get_specific_parameter(const std::string name_in, double& value);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
-	bool update_specific_parameter(const string name_in, const double& value);
+	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool update_specific_parameter(const int paramnum, const double& value);
 	void update_parameters(const double* params);
 	void update_fit_parameters(const double* fitparams, int &index, bool& status);
@@ -320,14 +336,14 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void unanchor_parameter(LensProfile* param_anchor_lens);
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 	void print_parameters();
-	string mkstring_doub(const double db);
-	string mkstring_int(const int i);
-	string get_parameters_string();
+	std::string mkstring_doub(const double db);
+	std::string mkstring_int(const int i);
+	std::string get_parameters_string();
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space);
-	virtual void print_lens_command(ofstream& scriptout, const bool use_limits);
-	void output_lens_command_nofit(string& command);
-	virtual void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
+	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
+	virtual void print_lens_command(std::ofstream& scriptout, const bool use_limits);
+	void output_lens_command_nofit(std::string& command);
+	virtual void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
 	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -351,7 +367,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	virtual double kappa_avg_r(const double r);
 	//void plot_kappa_profile(double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
-	void plot_kappa_profile(double rmin, double rmax, int steps, ofstream& kout, ofstream& kdout);
+	void plot_kappa_profile(double rmin, double rmax, int steps, std::ofstream& kout, std::ofstream& kdout);
 	void plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals);
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
 	bool has_kapavg_profile();
@@ -369,7 +385,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	public:
 	bool isspherical() { return (q==1.0); }
-	string get_model_name() { return model_name; }
+	std::string get_model_name() { return model_name; }
 	LensProfileName get_lenstype() { return lenstype; }
 	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
 	void get_center_coords(lensvector &center) { center[0]=x_center; center[1]=y_center; }
@@ -389,12 +405,13 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_perturber(bool ispert) { perturber = ispert; }
 	void set_lensed_center(bool lensed_xcyc) {
 		lensed_center_coords = lensed_xcyc;
-		x_center_lensed = x_center;
-		y_center_lensed = y_center;
+		xc_prime = x_center;
+		yc_prime = y_center;
 		set_center_if_lensed_coords();
 		assign_paramnames();
 		assign_param_pointers();
 	}
+	bool output_plates(const int n_plates);
 };
 
 struct LensIntegral : public Romberg
@@ -409,50 +426,80 @@ struct LensIntegral : public Romberg
 	double *gausspoints, *gaussweights;
 	double *pat_points, **pat_weights;
 	double *pat_funcs;
+	double **pat_funcs_mult;
 	double *cc_points, **cc_weights;
 	double *cc_funcs;
+	double **cc_funcs_mult;
+	int n_mult;
 
 	LensIntegral()
 	{
 		cosamps=sinamps=NULL;
+		n_mult = 0;
 	}
-	LensIntegral(LensProfile *profile_in, const double xval_in, const double yval_in, const double q = 1) : xval(xval_in), yval(yval_in)
+	LensIntegral(LensProfile *profile_in, const double xval_in, const double yval_in, const double q = 1, const int n_mult_in = 0) : xval(xval_in), yval(yval_in)
 	{
 		cosamps=sinamps=NULL;
-		initialize(profile_in,q);
+		initialize(profile_in,q,n_mult_in);
 	}
-	void initialize(LensProfile *profile_in, const double q = 1)
+	void initialize(LensProfile *profile_in, const double q = 1, const int n_mult_in = 0)
 	{
+		n_mult = n_mult_in;
 		profile = profile_in;
 		xsqval = xval*xval;
 		ysqval = yval*yval;
 		epsilon = 1 - q*q;
-		if (q != 1.0) fsqinv = 1.0/SQR(profile->f_major_axis);
-		else fsqinv = 1.0; // even if the lens model itself is not spherical, we can still get the spherical calculations if needed by setting f=1 here
-		phi0 = 0;
 		emode = profile->ellipticity_mode;
+		fsqinv = (emode==0) ? 1 : (emode==1) ? q : (emode==2) ? q : q*q/((1+q*q)/2); 
+		phi0 = 0;
 		gausspoints = profile->points;
 		gaussweights = profile->weights;
 		if (profile->integral_method==Gauss_Patterson_Quadrature) {
 			pat_points = profile->pat_points;
 			pat_weights = profile->pat_weights;
-			pat_funcs = new double[511];
+			if (n_mult > 0) {
+				pat_funcs_mult = new double*[511];
+				for (int i=0; i < 511; i++) pat_funcs_mult[i] = new double[n_mult];
+			} else {
+				pat_funcs = new double[511];
+			}
+
 		} else if (profile->integral_method==Fejer_Quadrature) {
 			cc_points = profile->cc_points;
 			cc_weights = profile->cc_weights;
-			cc_funcs = new double[profile->cc_N];
+			if (n_mult > 0) {
+				cc_funcs_mult = new double*[profile->cc_N];
+				for (int i=0; i < profile->cc_N; i++) cc_funcs_mult[i] = new double[n_mult];
+			} else {
+				cc_funcs = new double[profile->cc_N];
+			}
 		}
 	}
 	~LensIntegral() {
 		if (profile->integral_method==Gauss_Patterson_Quadrature) {
-			delete[] pat_funcs;
+			if (n_mult > 0) {
+				for (int i=0; i < 511; i++) delete[] pat_funcs_mult[i];
+				delete[] pat_funcs_mult;
+			} else {
+				delete[] pat_funcs;
+			}
 		} else if (profile->integral_method==Fejer_Quadrature) {
-			delete[] cc_funcs;
+			if (n_mult > 0) {
+				for (int i=0; i < profile->cc_N; i++) delete[] cc_funcs_mult[i];
+				delete[] cc_funcs_mult;
+			} else {
+				delete[] cc_funcs;
+			}
 		}
 	}
 	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
-	double PattersonIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
+	double PattersonIntegrate(double (LensIntegral::*func)(const double), const double a, const double b, bool &converged);
 	double FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
+
+	// Functions for doing multiple integrals simulataneously
+	void GaussIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs);
+	void PattersonIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
+	void FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
 
 	double i_integrand_prime(const double w);
 	double j_integrand_prime(const double w);
@@ -464,12 +511,22 @@ struct LensIntegral : public Romberg
 	double j_integral(const int nval, bool &converged);
 	double k_integral(const int nval, bool &converged);
 
-	double j_integrand_egrad(const double w);
-	double k_integrand_egrad(const double w);
-	double j_integral_egrad(const int nval_in, bool &converged);
-	double k_integral_egrad(const int nval_in, bool &converged);
-	double jprime_integral_egrad(const int nval_in, bool &converged);
-	double jprime_integrand_egrad(const double w);
+	double i_integrand_egrad(const double w);
+	//double j_integrand_egrad(const double w);
+	//double k_integrand_egrad(const double w);
+	//double jprime_integrand_egrad(const double w);
+
+	double i_integral_egrad(bool &converged);
+	//double j_integral_egrad(const int nval_in, bool &converged);
+	//double k_integral_egrad(const int nval_in, bool &converged);
+	//double jprime_integral_egrad(const int nval_in, bool &converged);
+
+	void j_integrand_egrad_mult(const double w, double* jint);
+	void k_integrand_egrad_mult(const double w, double* kint);
+	void jprime_integrand_egrad_mult(const double w, double* jint);
+	void j_integral_egrad_mult(double *jint, bool &converged);
+	void k_integral_egrad_mult(double *kint, bool &converged);
+	void jprime_integral_egrad_mult(double *jint, bool &converged);
 
 	void calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged);
 	double fourier_kappa_perturbation(const double r);
@@ -479,13 +536,14 @@ struct LensIntegral : public Romberg
 
 };
 
-class Alpha : public LensProfile
+class SPLE_Lens : public LensProfile
 {
 	private:
-	double alpha, bprime, sprime;
-	// Note that the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
+	double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
+	// Note that in emode=1, the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
 	double b, s;
 	double qsq, ssq; // used in lensing calculations
+	double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
 	static const double euler_mascheroni;
 	static const double def_tolerance;
 
@@ -504,23 +562,26 @@ class Alpha : public LensProfile
 	void hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess);
 	double potential_elliptical_nocore(const double x, const double y);
 	double potential_spherical_rsq_nocore(const double rsq);
-	complex<double> deflection_angular_factor(const double &phi);
+	std::complex<double> deflection_angular_factor(const double &phi);
 	double rho3d_r_integrand_analytic(const double r);
 
-	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
-	Alpha()
+	SPLE_Lens(const int parameter_mode_in = 0)
 	{
 		set_null_ptrs_and_values();
-		setup_lens_properties();
+		setup_lens_properties(parameter_mode_in);
 	}
-	Alpha(const double zlens_in, const double zsrc_in, const double &b_in, const double &alpha_in, const double &s_in, const double &q_in, const double &theta_degrees,
-			const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* qlens_in);
-	Alpha(const Alpha* lens_in);
-	void initialize_parameters(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	Alpha(const double &bb, const double &aa, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in) : Alpha() { initialize_parameters(bb,aa,ss,q_in,theta_degrees,xc_in,yc_in); }
+	SPLE_Lens(const double zlens_in, const double zsrc_in, const double &b_in, const double &slope_in, const double &s_in, const double &q_in, const double &theta_degrees,
+			const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
+	SPLE_Lens(const SPLE_Lens* lens_in);
+	void initialize_parameters(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	SPLE_Lens(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in=0) : SPLE_Lens(parameter_mode_in) {
+		initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
+	}
+	SPLE_Lens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -535,7 +596,7 @@ class Alpha : public LensProfile
 	bool output_cosmology_info(const int lens_number);
 };
 
-class PseudoJaffe : public LensProfile
+class dPIE_Lens : public LensProfile
 {
 	private:
 	double b, s, a; // a is the truncation radius
@@ -555,21 +616,22 @@ class PseudoJaffe : public LensProfile
 	double potential_spherical_rsq(const double rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
-	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
 	bool calculate_tidal_radius;
 	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
 
-	PseudoJaffe()
+	dPIE_Lens()
 	{
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
-	PseudoJaffe(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
+	dPIE_Lens(const double zlens_in, const double zsrc_in, const double &b_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	PseudoJaffe(const PseudoJaffe* lens_in);
+	dPIE_Lens(const dPIE_Lens* lens_in);
+	dPIE_Lens(dPIE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -618,6 +680,7 @@ class NFW : public LensProfile
 	NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* qlens_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	NFW(const NFW* lens_in);
+	NFW(NFW_Source* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -802,6 +865,7 @@ class Shear : public LensProfile
 	}
 	Shear(const Shear* lens_in);
 	static bool use_shear_component_params; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
+	static bool angle_points_towards_perturber; // direction of hypothetical perturber differs from shear angle by 90 degrees
 
 	void assign_paramnames();
 	void assign_param_pointers();
@@ -842,6 +906,7 @@ class Multipole : public LensProfile
 
 	Multipole()
 	{
+		sine_term = false; // default
 		set_null_ptrs_and_values();
 		setup_lens_properties();
 	}
@@ -942,7 +1007,7 @@ class CoreCusp : public LensProfile
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
-	void get_auxiliary_parameter(string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
+	void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
 
 	public:
 	bool calculate_tidal_radius;
@@ -1214,6 +1279,42 @@ class Deflection : public LensProfile
 	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
 };
 
+class TopHatLens : public LensProfile
+{
+	private:
+	double kap0, xi0;
+
+	double kappa_rsq(const double);
+	double kappa_rsq_deriv(const double);
+
+	double kapavg_spherical_rsq(const double rsq);
+	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
+	void set_model_specific_integration_pointers();
+
+	public:
+	TopHatLens()
+	{
+		set_null_ptrs_and_values();
+		setup_lens_properties();
+	}
+	TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens*);
+	void initialize_parameters(const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
+	TopHatLens(const TopHatLens* lens_in);
+
+	void deflection_analytic(const double, const double, lensvector&);
+	void hessian_analytic(const double, const double, lensmatrix&);
+	double potential_analytic(const double x, const double y);
+
+	void assign_paramnames();
+	void assign_param_pointers();
+	void update_meta_parameters();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	//bool calculate_total_scaled_mass(double& total_mass);
+};
+
+
+
 class Tabulated_Model : public LensProfile
 {
 	private:
@@ -1223,7 +1324,7 @@ class Tabulated_Model : public LensProfile
 	double grid_logrlength;
 	double *grid_logrvals, *grid_phivals;
 	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
-	string original_lens_command; // used for saving commands to reproduce this model
+	std::string original_lens_command; // used for saving commands to reproduce this model
 	double original_kscale, original_rscale;
 	bool loaded_from_file;
 
@@ -1237,18 +1338,18 @@ class Tabulated_Model : public LensProfile
 		setup_lens_properties();
 	}
 	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, QLens*);
-	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, QLens*);
+	Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, std::ifstream& tabfile, const std::string& tab_filename, QLens*);
 
 	Tabulated_Model(const Tabulated_Model* lens_in);
 	~Tabulated_Model();
-	void output_tables(const string tabfile_root);
+	void output_tables(const std::string tabfile_root);
 
 	void assign_paramnames();
 	void assign_param_pointers();
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void print_lens_command(ofstream& scriptout, const bool use_limits);
+	void print_lens_command(std::ofstream& scriptout, const bool use_limits);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);
@@ -1283,11 +1384,11 @@ class QTabulated_Model : public LensProfile
 		setup_lens_properties();
 	}
 	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin, const int q_N, QLens*);
-	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, QLens*);
+	QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, std::ifstream& tabfile, QLens*);
 
 	QTabulated_Model(const QTabulated_Model* lens_in);
 	~QTabulated_Model();
-	void output_tables(const string tabfile_root);
+	void output_tables(const std::string tabfile_root);
 
 	void assign_paramnames();
 	void assign_param_pointers();

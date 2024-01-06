@@ -14,6 +14,8 @@ public:
 	lensvector(const double &x, const double &y) : v(new double[2]) { v[0] = x; v[1] = y; }
 	lensvector(const lensvector& b) : v(new double[2]) { v[0] = b[0]; v[1] = b[1]; }
 	void input(const double &x, const double &y) { v[0] = x; v[1] = y; }
+	double* array(void) { return v; }
+	double* array(void) const { return v; }
 	double& xval() { return v[0]; }
 	double& yval() { return v[1]; }
 	void set_xval(const double xv) { v[0] = xv; }

@@ -13,6 +13,7 @@
 #include "simplex.h"
 #include "mcmchdr.h"
 #include "cosmo.h"
+#include "stdio.h"
 #ifdef USE_MUMPS
 #include "dmumps_c.h"
 #endif
@@ -24,7 +25,6 @@
 #include <fstream>
 #include <complex>
 #define USE_COMM_WORLD -987654
-
 
 #ifdef USE_FFTW
 #ifdef USE_MKL
@@ -42,7 +42,7 @@
 #include "mpi.h"
 #endif
 
-using namespace std;
+using std::string;
 
 enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
 enum inside_cell { Inside, Outside, Edge };
@@ -50,6 +50,7 @@ enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
+enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
 enum RayTracingMethod {
 	Interpolate,
 	Area_Overlap
@@ -104,7 +105,7 @@ struct ImageSet {
 	lensvector src;
 	double zsrc, srcflux;
 	int n_images;
-	vector<image> images;
+	std::vector<image> images;
 
 	ImageSet() { }
 	ImageSet(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
@@ -128,37 +129,37 @@ struct ImageSet {
 	}
 	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
-	void print_to_file(bool include_time_delays, bool show_labels, ofstream* srcfile, ofstream* imgfile) {
-		cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
-		if (srcflux != -1) cout << "\tsrc_flux";
-		cout << endl;
-		cout << src[0] << "\t" << src[1] << "\t" << n_images << "\t";
-		if (srcflux != -1) cout << "\t" << srcflux;
-		cout << endl << endl;
+	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile) {
+		std::cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
+		if (srcflux != -1) std::cout << "\tsrc_flux";
+		std::cout << std::endl;
+		std::cout << src[0] << "\t" << src[1] << "\t" << n_images << "\t";
+		if (srcflux != -1) std::cout << "\t" << srcflux;
+		std::cout << std::endl << std::endl;
 
-		if (srcfile != NULL) (*srcfile) << src[0] << " " << src[1] << endl;
-		//cout << "# " << n_images << " images" << endl;
+		if (srcfile != NULL) (*srcfile) << src[0] << " " << src[1] << std::endl;
+		//std::cout << "# " << n_images << " images" << std::endl;
 		if (show_labels) {
-			cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
-			if (srcflux != -1.0) cout << "\tflux\t";
-			if (include_time_delays) cout << "\ttime_delay (days)";
-			cout << endl;
+			std::cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
+			if (srcflux != -1.0) std::cout << "\tflux\t";
+			if (include_time_delays) std::cout << "\ttime_delay (days)";
+			std::cout << std::endl;
 		}
 		if (include_time_delays) {
 			for (int i = 0; i < n_images; i++) {
-				if (srcflux == -1.0) cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << endl;
-				else cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << "\t" << images[i].td << endl;
-				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << endl;
+				if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << std::endl;
+				else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << "\t" << images[i].td << std::endl;
+				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
 			}
 		} else {
 			for (int i = 0; i < n_images; i++) {
-				if (srcflux == -1.0) cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << endl;
-				else cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << endl;
-				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << endl;
+				if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << std::endl;
+				else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << std::endl;
+				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
 			}
 		}
 
-		cout << endl;
+		std::cout << std::endl;
 	}
 	void reset() {
 		//if (n_images != 0) delete[] images;
@@ -173,7 +174,7 @@ struct ImageSet {
 struct ImageDataSet {
 	double zsrc;
 	int n_images;
-	vector<image_data> images;
+	std::vector<image_data> images;
 
 	void set_n_images(const int nimg) {
 		n_images = nimg;
@@ -200,6 +201,8 @@ class Grid : public Brent
 	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
 	Grid* parent_cell;
 
+	public:
+	// Instead of all these static variables, have a class Grid versus GridCell, where Grid is the parent that contains all these as non-static variables
 	static double* grid_zfactors; // kappa ratio used for modeling source points at different redshifts
 	static double** grid_betafactors; // kappa ratio used for modeling source points at different redshifts
 	static const int u_split, w_split;
@@ -225,7 +228,9 @@ class Grid : public Brent
 
 	// all functions in class Grid are contained in imgsrch.cpp
 	bool image_test(const int& thread);
-	bool run_newton(const lensvector& xroot_initial, const int& thread);
+	void add_image_to_list(const lensvector& imgpos);
+
+	bool run_newton(lensvector& xroot, const int& thread);
 	inside_cell test_if_inside_sourceplane_cell(lensvector* point, const int& thread);
 	bool test_if_sourcept_inside_triangle(lensvector* point1, lensvector* point2, lensvector* point3, const int& thread);
 	bool test_if_inside_cell(const lensvector& point, const int& thread);
@@ -326,7 +331,7 @@ public:
 	static void set_enforce_min_area(const bool& setting) { enforce_min_area = setting; }
 
 	// for plotting the grid to a file:
-	static ofstream xgrid;
+	static std::ofstream xgrid;
 	void plot_corner_coordinates();
 	void get_usplit_initial(int &setting) { setting = u_split_initial; }
 	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
@@ -391,7 +396,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double raw_chisq;
 	int chisq_it;
 	bool chisq_diagnostic;
-	ofstream logfile;
+	std::ofstream logfile;
 
 	public:
 	int mpi_id, mpi_np, mpi_ngroups, group_id, group_num, group_np;
@@ -408,6 +413,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool simplex_show_bestfit;
 	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq, simplex_minchisq_anneal;
 	int n_livepts; // for nested sampling
+	bool multinest_constant_eff_mode;
+	double multinest_target_efficiency;
 	int polychord_nrepeats;
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings
@@ -419,7 +426,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool n_image_prior;
 	double n_images_at_sbmax, pixel_avg_n_image;
 	int auxiliary_srcgrid_npixels;
-	double sbmin, sbmax;
+	//double sbmin, sbmax;
 	double n_image_threshold;
 	double max_pixel_sb;
 	bool outside_sb_prior;
@@ -429,11 +436,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool concentration_prior;
 	double einstein_radius_low_threshold;
 	double einstein_radius_high_threshold;
-	int extended_mask_n_neighbors;
 	bool include_extended_mask_in_inversion;
 	bool zero_sb_extended_mask_prior;
 	bool include_noise_term_in_loglike;
-	double loglike_reference_noise;
 	double high_sn_frac;
 	bool subhalo_prior;
 	bool use_custom_prior;
@@ -442,10 +447,16 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	int nlens;
 	LensProfile** lens_list;
-	vector<LensProfile*> lens_list_vec;
+	std::vector<LensProfile*> lens_list_vec;
 
 	int n_sb;
 	SB_Profile** sb_list;
+	int* sbprofile_redshift_idx;
+
+	int n_pixellated_src;
+	int* pixellated_src_redshift_idx;
+	DelaunayGrid **delaunay_srcgrids;
+	DelaunayGrid *delaunay_srcgrid0;
 
 	int n_derived_params;
 	DerivedParam** dparam_list;
@@ -460,10 +471,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double **default_zsrc_beta_factors;
 	bool user_changed_zsource;
 	bool auto_zsource_scaling;
-	double *source_redshifts; // used for modeling source points
-	vector<int> source_redshift_groups;
-	double **zfactors;
-	double ***beta_factors;
+	double *ptsrc_redshifts; // used for modeling source points
+	std::vector<int> ptsrc_redshift_groups;
+	double **ptsrc_zfactors;
+	double ***ptsrc_beta_factors;
+
+	int n_extended_src_redshifts;
+	double *extended_src_redshifts; // used for modeling extended sources 
+	int *assigned_mask;
+	//int *extended_zsrc_group_size;
+	//bool **extended_zsrc_group_is_pixellated; // tells if source is pixellated (true) or analytic (false)
+	//int **extended_zsrc_group_src_index;
+	double **extended_src_zfactors;
+	double ***extended_src_beta_factors;
+
 	double *lens_redshifts;
 	int *lens_redshift_idx;
 	int *zlens_group_size;
@@ -491,6 +512,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sourcegrid_limit_xmin, sourcegrid_limit_xmax, sourcegrid_limit_ymin, sourcegrid_limit_ymax;
 	bool enforce_min_cell_area;
 	bool cc_neighbor_splittings;
+	bool skip_newtons_method;
 	double min_cell_area; // area of the smallest allowed cell area
 	int usplit_initial, wsplit_initial;
 	int splitlevels, cc_splitlevels;
@@ -505,53 +527,91 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
 	int lensmodel_fit_parameters, srcmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
-	vector<string> fit_parameter_names, transformed_parameter_names;
-	vector<string> latex_parameter_names, transformed_latex_parameter_names;
+	std::vector<string> fit_parameter_names, transformed_parameter_names;
+	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
 	//lensvector *sourcepts_fit;
 	//bool *vary_sourcepts_x;
 	//bool *vary_sourcepts_y;
 	//lensvector *sourcepts_lower_limit;
 	//lensvector *sourcepts_upper_limit;
-	vector<lensvector> sourcepts_fit;
-	vector<lensvector> sourcepts_lower_limit;
-	vector<lensvector> sourcepts_upper_limit;
+	std::vector<int> sourcept_srcnum; // keeps track of which index a source point has in source_redshifts, zfactors etc.
+	std::vector<lensvector> sourcepts_fit;
+	std::vector<lensvector> sourcepts_lower_limit;
+	std::vector<lensvector> sourcepts_upper_limit;
 
-	vector<vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
-	vector<bool> vary_sourcepts_x;
-	vector<bool> vary_sourcepts_y;
+	std::vector<std::vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
+	std::vector<bool> vary_sourcepts_x;
+	std::vector<bool> vary_sourcepts_y;
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
 	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
-	bool use_matern_scale_parameter;
-	double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3)
+	bool use_second_covariance_kernel;
+	double kernel2_correlation_length, kernel2_correlation_length_upper_limit, kernel2_correlation_length_lower_limit;
+	double kernel2_amplitude_ratio, kernel2_amplitude_ratio_upper_limit, kernel2_amplitude_ratio_lower_limit;
+	//bool use_matern_scale_parameter; // ELIMINATE THIS FEATURE?
+	//double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3) (ELIMINATE THIS FEATURE?)
 	double matern_approx_source_size;
 	bool vary_regularization_parameter;
 	bool vary_correlation_length;
-	bool vary_matern_scale;
+	//bool vary_matern_scale;
 	bool vary_matern_index;
+	bool vary_kernel2_amplitude_ratio;
+	bool vary_kernel2_correlation_length;
 	bool optimize_regparam;
-	bool optimize_regparam_lhi;
+	//bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
 
-	// the following parameters are used for luminosity-weighted regularization
+	// the following parameters are used for luminosity- or distance-weighted regularization
 	bool use_lum_weighted_regularization;
-	//double regparam_lhi, regparam_llo, regparam_lum_index; 
-	double regparam_lhi, regparam_lum_index; 
-	double *lumreg_pixel_weights;
-	int lumreg_it;
-	//bool vary_regparam_lhi, vary_regparam_llo, vary_regparam_lum_index;
-	bool vary_regparam_lhi, vary_regparam_lum_index;
-	double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
-	//double regparam_llo_lower_limit, regparam_llo_upper_limit;
+	bool use_distance_weighted_regularization;
+	bool auto_lumreg_center; // if set to true, uses (SB-weighted) centroid of ray-traced points; if false, center coordinates are parameters than can be varied
+	bool lumreg_center_from_ptsource; // if true, automatically sets lumreg_center to position of source point (auto_lumreg_center must also be set to 'on')
+	bool lensed_lumreg_center; // if true, make lumreg_xcenter and lumreg_ycenter coordinates in the image plane, which are lensed to the source plane
+	bool lensed_lumreg_rc; // if true, then lumreg_rc is a distance in the image plane at the position of the (lensed) lumreg center, which is then mapped to rc in source plane
+	bool fix_lumreg_sig;
+	double lumreg_sig;
+	double lumreg_xcenter, lumreg_ycenter;
+	bool vary_lumreg_xcenter, vary_lumreg_ycenter;
+	double lumreg_xcenter_lower_limit, lumreg_xcenter_upper_limit;
+	double lumreg_ycenter_lower_limit, lumreg_ycenter_upper_limit;
+	double lumreg_e1, lumreg_e2;
+	bool vary_lumreg_e1, vary_lumreg_e2;
+	double lumreg_e1_lower_limit, lumreg_e1_upper_limit;
+	double lumreg_e2_lower_limit, lumreg_e2_upper_limit;
+
+	int lum_weight_function;
+	bool get_lumreg_from_sbweights;
+	double regparam_lsc, regparam_lum_index; 
+	double lumreg_rc;
+	double regparam_lsc2, regparam_lum_index2; 
+	//double regparam_lhi, regparam_lum_index; 
+	double *lum_weight_factor;
+	double *lum_weight_factor2; // for second covariance kernel
+	//double *lumreg_pixel_weights;
+	bool vary_regparam_lsc, vary_regparam_lum_index;
+	bool vary_lumreg_rc;
+	bool vary_regparam_lsc2, vary_regparam_lum_index2;
+	//bool vary_regparam_lhi, vary_regparam_lum_index;
+	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
+	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
+	double lumreg_rc_lower_limit, lumreg_rc_upper_limit;
+	double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
+	double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
+	bool use_dist_weighted_srcpixel_clustering;
 	double alpha_clus, beta_clus;
 	bool vary_alpha_clus, vary_beta_clus;
 	double alpha_clus_lower_limit, alpha_clus_upper_limit;
 	double beta_clus_lower_limit, beta_clus_upper_limit;
+
+	bool save_sbweights_during_inversion;
+	bool use_saved_sbweights;
+	double *saved_sbweights;
+	int n_sbweights;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
@@ -564,8 +624,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImageData *image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
-	double chisqtol_lumreg;
-	int lumreg_max_it, lumreg_max_it_final;
+	//double chisqtol_lumreg;
+	//int lumreg_max_it, lumreg_max_it_final;
+	int lumreg_max_it;
 	int n_repeats;
 	bool display_chisq_status;
 	int n_visible_images;
@@ -579,17 +640,19 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool calculate_parameter_errors;
 	bool adaptive_subgrid;
 	bool use_average_magnification_for_subgridding;
+	bool redo_lensing_calculations_before_inversion;
 	int delaunay_mode;
+	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
+	bool use_old_pixelgrids;
+
 	bool use_random_delaunay_srcgrid;
 	bool reinitialize_random_grid;
 	int random_seed;
 	int n_ranchisq;
-	double random_grid_length_factor;
-	bool interpolate_random_sourcepts;
 	bool clustering_random_initialization;
-	bool clustering_imgplane_rand_init;
+	bool weight_initial_centroids;
 	bool use_dualtree_kmeans;
 	int n_src_clusters;
 	int n_cluster_iterations;
@@ -606,27 +669,28 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
 	bool split_imgpixels;
 	bool split_high_mag_imgpixels;
+	bool delaunay_from_pixel_centers;
+	bool psf_supersampling;
 	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
 	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
 
 	bool fits_format;
 	double data_pixel_size;
 	bool add_simulated_image_data(const lensvector &sourcept);
-	bool add_image_data_from_sourcepts();
-	bool add_image_data_from_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
+	bool add_image_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
 	bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
 	void write_image_data(string filename);
 	bool load_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
-	bool plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
+	bool plot_srcpts_from_image_data(int dataset_number, std::ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	void remove_image_data(int image_set);
-	vector<ImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
+	std::vector<ImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
 
 	bool load_weak_lensing_data(string filename);
 	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
 	void add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude);
 
-	bool read_data_line(ifstream& infile, vector<string>& datawords, int &n_datawords);
+	bool read_data_line(std::ifstream& infile, std::vector<string>& datawords, int &n_datawords);
 	bool datastring_convert(const string& instring, int& outvar);
 	bool datastring_convert(const string& instring, double& outvar);
 	void clear_image_data();
@@ -666,10 +730,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
-	enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel } regularization_method;
+	RegularizationMethod regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	RayTracingMethod ray_tracing_method;
-	bool interpolate_sb_3pt;
+	bool natural_neighbor_interpolation;
 	bool parallel_mumps, show_mumps_info;
 
 	int n_image_pixels_x, n_image_pixels_y; // note that this is the TOTAL number of pixels in the image, as opposed to image_npixels which gives the # of pixels being fit to
@@ -681,7 +745,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double srcpt_yshift, srcpt_yshift_lower_limit, srcpt_yshift_upper_limit;
 	double srcgrid_size_scale, srcgrid_size_scale_lower_limit, srcgrid_size_scale_upper_limit;
 	bool vary_pixel_fraction, vary_srcpt_xshift, vary_srcpt_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
-	double psf_width_x, psf_width_y, data_pixel_noise, sim_pixel_noise;
+	string psf_filename;
+	double psf_width_x, psf_width_y, background_pixel_noise;
+	bool simulate_pixel_noise;
 	double sb_threshold; // for creating centroid images from pixel maps
 	double noise_threshold; // for automatic source grid sizing
 
@@ -690,12 +756,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static const int max_cc_search_iterations;
 	static double rmin_frac;
 	static const double default_rmin_frac;
-	int cc_thetasteps;
-	double cc_rmin, cc_rmax;
-	double source_plane_rscale;
-	Spline *ccspline;
-	Spline *caustic;
-	bool cc_splined;
+	double cc_rmin, cc_rmax, cc_thetasteps;
+	//double source_plane_rscale;
 	bool effectively_spherical;
 	double newton_magnification_threshold;
 	bool reject_himag_images;
@@ -720,6 +782,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double subhalo_perturbation_radius_equation(const double r);
 	double perturbation_radius_equation_nosub(const double r);
 
+	bool multithread_perturber_deflections; // provides speedup for large number of perturbers
 	// needed for calculating the subhalo perturbation radius and scale for perturber subgridding
 	bool use_perturber_flags;
 	int perturber_lens_number;
@@ -743,21 +806,21 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void fit_los_despali();
 
 	struct critical_curve {
-		vector<lensvector> cc_pts;
-		vector<lensvector> caustic_pts;
-		vector<double> length_of_cell; // just to make sure the critical curves are being separated out properly
+		std::vector<lensvector> cc_pts;
+		std::vector<lensvector> caustic_pts;
+		std::vector<double> length_of_cell; // just to make sure the critical curves are being separated out properly
 	};
 
-	vector<lensvector> critical_curve_pts;
-	vector<lensvector> caustic_pts;
-	vector<double> length_of_cc_cell;
-	vector<critical_curve> sorted_critical_curve;
-	vector<int> npoints_sorted_critical_curve;
+	std::vector<lensvector> critical_curve_pts;
+	std::vector<lensvector> caustic_pts;
+	std::vector<double> length_of_cc_cell;
+	std::vector<critical_curve> sorted_critical_curve;
+	std::vector<int> npoints_sorted_critical_curve;
 	int n_critical_curves;
 	void sort_critical_curves();
 	bool sorted_critical_curves;
 	static bool auto_store_cc_points;
-	vector<lensvector> singular_pts;
+	std::vector<lensvector> singular_pts;
 	int n_singular_points;
 
 	Vector<dvector> find_critical_curves(bool&);
@@ -766,31 +829,39 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double source_plane_r(const double r);
 	bool find_optimal_gridsize();
 
-	bool use_cc_spline; // critical curves can be splined when (approximate) elliptical symmetry is present
-	bool auto_ccspline;
-
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
 	int shapelet_scale_mode;
 	double shapelet_max_scale;
 	double shapelet_window_scaling;
 	SourcePixelGrid *source_pixel_grid;
-	DelaunayGrid *delaunay_srcgrid;
 	void plot_source_pixel_grid(const char filename[]);
 
-	ImagePixelGrid *image_pixel_grid;
+	ImagePixelGrid **image_pixel_grids;
+	ImagePixelGrid *image_pixel_grid0;
 	ImagePixelData *image_pixel_data;
 	int image_npixels, source_npixels, source_n_amps;
-	int *active_image_pixel_i;
-	int *active_image_pixel_j;
+	int image_n_subpixels; // for supersampling
+	//int *active_image_pixel_i;
+	//int *active_image_pixel_j;
+	//int *active_image_pixel_i_ss;
+	//int *active_image_pixel_j_ss;
+	//int *active_image_subpixel_ii;
+	//int *active_image_subpixel_jj;
+	//int *active_image_subpixel_ss;
+	//int *image_pixel_i_from_subcell_ii;
+	//int *image_pixel_j_from_subcell_jj;
 	int image_npixels_fgmask;
-	int *active_image_pixel_i_fgmask;
-	int *active_image_pixel_j_fgmask;
+	//int *active_image_pixel_i_fgmask;
+	//int *active_image_pixel_j_fgmask;
+
 	double *image_surface_brightness;
+	double *image_surface_brightness_supersampled;
+	double *imgpixel_covinv_vector;
 	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
 	//double *sbprofile_surface_brightness_fgmask;
-	double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
+	//double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
 	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
@@ -800,11 +871,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int Lmatrix_n_elements;
 	double *Lmatrix;
 	int *Lmatrix_index;
-	vector<double> *Lmatrix_rows;
-	vector<int> *Lmatrix_index_rows;
+	std::vector<double> *Lmatrix_rows;
+	std::vector<int> *Lmatrix_index_rows;
 
-	bool assign_pixel_mappings(bool verbal);
-	void assign_foreground_mappings(const bool use_data = true);
+	bool assign_pixel_mappings(const int zsrc_i, const bool verbal=false);
+	void assign_foreground_mappings(const int zsrc_i, const bool use_data = true);
 	double *Dvector;
 	double *Dvector_cov;
 	double *Dvector_cov_copy;
@@ -812,14 +883,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *Fmatrix;
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
+	bool use_noise_map;
 	bool dense_Rmatrix;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
+	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
+	bool penalize_defective_covmatrix;
 	double *Rmatrix;
 	int *Rmatrix_index;
 	double *Rmatrix_diag_temp;
-	vector<double> *Rmatrix_rows;
-	vector<int> *Rmatrix_index_rows;
+	std::vector<double> *Rmatrix_rows;
+	std::vector<int> *Rmatrix_index_rows;
 	int *Rmatrix_row_nn;
 	int Rmatrix_nn;
 #ifdef USE_MUMPS
@@ -827,33 +901,34 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 #endif
 
 	void convert_Lmatrix_to_dense();
-	void assign_Lmatrix_shapelets(bool verbal);
-	//void get_zeroth_order_shapelet_vector(bool verbal); // used if shapelet amp00 is varied as a nonlinear parameter
-	void PSF_convolution_Lmatrix_dense(const bool verbal);
-	void PSF_convolution_Lmatrix_dense_emask(const bool verbal);
-	void create_lensing_matrices_from_Lmatrix_dense(const bool verbal);
+	void assign_Lmatrix_shapelets(const int zsrc_, bool verbal=false);
+	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
+	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix();
-	double calculate_regularization_term(const bool use_lum_weighting);
+	double calculate_regularization_prior_term();
 
-	void invert_lens_mapping_dense(bool verbal);
-	void optimize_regularization_parameter(const bool dense_Fmatrix, const bool verbal, const bool pre_srcgrid = false);
-	void chisq_regparam_single_eval(const double regparam, const bool dense_Fmatrix);
-	void setup_regparam_optimization(const bool dense_Fmatrix);
-	void calculate_pixel_sbweights();
+	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
+	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix=false);
+	void calculate_subpixel_sbweights(const int zsrc_i, const bool save_sbweights = false, const bool verbal = false);
+	void calculate_subpixel_distweights(const int zsrc_i=-1);
+	void find_srcpixel_weights(const int zsrc_i=-1);
+	void load_pixel_sbweights(const int zsrc_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	double chisq_regparam_it_lumreg_dense(const double logreg);
-	double chisq_regparam_it_lumreg_dense_final(const bool verbal);
-	double chisq_regparam_lumreg_dense();
-	void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
+	//double chisq_regparam_it_lumreg_dense(const double logreg);
+	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
+	//double chisq_regparam_lumreg_dense();
+	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights=false);
+	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
+	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
+	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void calculate_image_pixel_surface_brightness_dense(const bool calculate_foreground = true);
-	void create_regularization_matrix_shapelet();
-	void generate_Rmatrix_shapelet_gradient();
-	void generate_Rmatrix_shapelet_curvature();
-	void set_corrlength_for_given_matscale();
-	double corrlength_eq_matern_factor(const double log_corr_length);
+	void create_regularization_matrix_shapelet(const int zsrc_i=-1);
+	void generate_Rmatrix_shapelet_gradient(const int zsrc_i=-1);
+	void generate_Rmatrix_shapelet_curvature(const int zsrc_i=-1);
+	//void set_corrlength_for_given_matscale();
+	//double corrlength_eq_matern_factor(const double log_corr_length);
 
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	//bool Cholesky_dcmp_upper(double** a, double &logdet, int n);
@@ -872,6 +947,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void repack_matrix_upper(dvector& packed_matrix);
 
 	dmatrix Lmatrix_dense;
+	dmatrix Lmatrix_supersampled;
 	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
 	dvector Gmatrix_stacked;
 	dvector Gmatrix_stacked_copy;
@@ -888,30 +964,33 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *gmatrix[4];
 	int *gmatrix_index[4];
 	int *gmatrix_row_index[4];
-	vector<double> *gmatrix_rows[4];
-	vector<int> *gmatrix_index_rows[4];
+	std::vector<double> *gmatrix_rows[4];
+	std::vector<int> *gmatrix_index_rows[4];
 	int *gmatrix_row_nn[4];
 	int gmatrix_nn[4];
 
 	double *hmatrix[2];
 	int *hmatrix_index[2];
 	int *hmatrix_row_index[2];
-	vector<double> *hmatrix_rows[2];
-	vector<int> *hmatrix_index_rows[2];
+	std::vector<double> *hmatrix_rows[2];
+	std::vector<int> *hmatrix_index_rows[2];
 	int *hmatrix_row_nn[2];
 	int hmatrix_nn[2];
 
 	bool use_input_psf_matrix;
 	bool use_input_psf_ptsrc_matrix;
-	double **psf_matrix, **foreground_psf_matrix;
+	bool ignore_foreground_in_chisq;
+	double **psf_matrix;
 	Spline2D psf_spline;
-	bool load_psf_fits(string fits_filename, const bool verbal);
-	void setup_foreground_PSF_matrix();
+	double **supersampled_psf_matrix;
+	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
+	bool load_psf_fits(string fits_filename, const bool supersampled, const bool verbal);
+	bool save_psf_fits(string fits_filename, const bool supersampled = false);
 	int psf_npixels_x, psf_npixels_y;
-	int foreground_psf_npixels_x, foreground_psf_npixels_y;
-	double psf_threshold, psf_ptsrc_threshold, foreground_psf_threshold;
+	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
+	double psf_threshold, psf_ptsrc_threshold;
 	int psf_ptsrc_nsplit; // allows for subpixel PSF
-	static bool setup_fft_convolution;
+	/*
 	static double *psf_zvec; // for convolutions using FFT
 	static int fft_imin, fft_jmin, fft_ni, fft_nj;
 #ifdef USE_FFTW
@@ -925,94 +1004,86 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static fftw_plan *fftplans_Lmatrix;
 	static fftw_plan *fftplans_Lmatrix_inverse;
 #endif
-	static bool setup_fft_convolution_emask;
-	static double *psf_zvec_emask; // for convolutions using FFT
-	static int fft_imin_emask, fft_jmin_emask, fft_ni_emask, fft_nj_emask;
-#ifdef USE_FFTW
-	static complex<double> *psf_transform_emask;
-	static complex<double> **Lmatrix_transform_emask;
-	static double **Lmatrix_imgs_rvec_emask;
-	//static double *img_rvec_emask;
-	//static complex<double> *img_transform_emask;
-	//static fftw_plan fftplan_emask;
-	//static fftw_plan fftplan_inverse_emask;
-	static fftw_plan *fftplans_Lmatrix_emask;
-	static fftw_plan *fftplans_Lmatrix_inverse_emask;
-#endif
-
-	//double **Lmatrix_imgs_zvec; // has dimensions (src_npixels,imgpixels*2)
+*/
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	double Gmatrix_log_determinant;
-	void initialize_pixel_matrices(bool verbal);
-	void initialize_pixel_matrices_shapelets(bool verbal);
-	void count_shapelet_npixels();
-	void clear_pixel_matrices();
-	void clear_lensing_matrices();
-	double find_surface_brightness(lensvector &pt);
-	void assign_Lmatrix(const bool delaunay, const bool verbal);
-	void PSF_convolution_Lmatrix(bool verbal = false);
-	//void PSF_convolution_image_pixel_vector(bool verbal = false);
-	void PSF_convolution_pixel_vector(double *surface_brightness_vector, const bool foreground = false, const bool verbal = false);
-	bool setup_convolution_FFT(const bool verbal);
-	bool setup_convolution_FFT_emask(const bool verbal);
+	void initialize_pixel_matrices(const int zsrc_i, bool verbal=false);
+	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
+	void count_shapelet_npixels(const int zsrc_i=-1);
+	void clear_pixel_matrices(const int zsrc_i=-1);
+	void clear_sparse_lensing_matrices();
+	double find_sbprofile_surface_brightness(lensvector &pt);
+	void assign_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
+	void assign_Lmatrix_supersampled(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
+	void PSF_convolution_Lmatrix(const int zsrc_i, bool verbal = false);
+	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool no_fft = false);
+	void average_supersampled_image_surface_brightness(const int zsrc_i=-1);
+	void average_supersampled_dense_Lmatrix(const int zsrc_i=-1);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
-	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength);
+	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y);
 
-	void create_regularization_matrix(void);
-	void generate_Rmatrix_from_gmatrices();
-	void generate_Rmatrix_from_hmatrices();
+	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
+	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1);
+	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1);
 	void generate_Rmatrix_norm();
-	void generate_Rmatrix_from_covariance_kernel(const int kernel_type);
-	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool verbal);
-	void invert_lens_mapping_MUMPS(bool verbal, bool use_copy = false);
-	void invert_lens_mapping_UMFPACK(bool verbal, bool use_copy = false);
+	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool verbal = false);
+	double find_approx_source_size(const int zsrc_i, double& xc_approx, double& yc_approx, const bool verbal);
+
+	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false);
+	void invert_lens_mapping_dense(const int zsrc_i, bool verbal=false);
+	void invert_lens_mapping_MUMPS(const int zsrc_i, bool verbal, bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(const int zsrc_i, bool verbal, bool use_copy = false);
 	void convert_Rmatrix_to_dense();
 	void Rmatrix_determinant_MKL();
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
-	void invert_lens_mapping_CG_method(bool verbal);
-	void update_source_amplitudes();
+	void invert_lens_mapping_CG_method(const int zsrc_i, bool verbal);
+	void update_source_amplitudes(const int zsrc_i, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
 
-	double image_pixel_chi_square();
+	//double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
-	void calculate_image_pixel_surface_brightness(const bool calculate_foreground = true);
-	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
+	void calculate_image_pixel_surface_brightness();
+	void calculate_image_pixel_surface_brightness_dense();
+	void calculate_foreground_pixel_surface_brightness(const int zsrc_i, const bool allow_lensed_nonshapelet_sources = true);
 	void add_foreground_to_image_pixel_vector();
-	void store_image_pixel_surface_brightness();
-	void store_foreground_pixel_surface_brightness();
-	void vectorize_image_pixel_surface_brightness(bool use_mask = false);
-	void plot_image_pixel_surface_brightness(string outfile_root);
-	double invert_image_surface_brightness_map(double& chisq0, bool verbal);
+	void store_image_pixel_surface_brightness(const int zsrc_i=-1);
+	void store_foreground_pixel_surface_brightness(const int zsrc_i=-1);
+	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
+	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
+	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	double invert_image_surface_brightness_map_old(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
-	void load_pixel_grid_from_data();
-	double invert_surface_brightness_map_from_data(double& chisq0, bool verbal);
-	void plot_image_pixel_grid();
-	bool find_shapelet_scaling_parameters(const bool verbal);
-	bool set_shapelet_imgpixel_nsplit();
+	bool load_pixel_grid_from_data();
+	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal);
+	void plot_image_pixel_grid(const int zsrc_i=-1);
+	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal=false);
+	bool set_shapelet_imgpixel_nsplit(const int zsrc_i=-1);
 
 	void update_source_amplitudes_from_shapelets();
-	int get_shapelet_nn();
+	int get_shapelet_nn(const int zsrc_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_nimg_prior_npixels = false);
-	bool create_sourcegrid_delaunay(const bool use_mask, const bool verbal);
-	void create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const bool verbal);
+	bool create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
+	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
+	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i, const bool verbal=false);
+	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
 	void generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal);
 	void load_source_surface_brightness_grid(string source_inputfile);
-	bool load_image_surface_brightness_grid(string image_pixel_filename_root);
+	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, const int reduce_factor, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, int specific_zsrc_i = -1, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -1111,24 +1182,22 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude_i,0,zfacs,betafacs); }
 	*/
 
-	bool test_for_elliptical_symmetry();
-	bool test_for_singularity();
 	void record_singular_points(double *zfacs);
 
 	// the following functions and objects are contained in commands.cpp
 	char *buffer;
 	int nullflag, buffer_length;
 	string line;
-	vector<string> lines;
-	ifstream infile_list[10];
-	ifstream *infile; // used to read commands from an input file
+	std::vector<string> lines;
+	std::ifstream infile_list[10];
+	std::ifstream *infile; // used to read commands from an input file
 	int n_infiles;
 	bool verbal_mode;
 	bool quit_after_error;
 	int nwords;
-	vector<string> words;
-	stringstream* ws;
-	stringstream datastream;
+	std::vector<string> words;
+	std::stringstream* ws;
+	std::stringstream datastream;
 	bool read_from_file;
 	bool paused_while_reading_file;
 	bool quit_after_reading_file;
@@ -1136,15 +1205,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
 	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double& xiref, bool& linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots);
-	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
+	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const std::vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
 	void run_plotter(string plotcommand, string extra_command = "");
-	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "");
-	void run_plotter_range(string plotcommand, string range, string extra_command = "");
+	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "", string extra_command2 = "");
+	void run_plotter_range(string plotcommand, string range, string extra_command = "", string extra_command2 = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);
-	void remove_equal_sign_datafile(vector<string>& datawords, int& n_datawords);
+	void remove_equal_sign_datafile(std::vector<string>& datawords, int& n_datawords);
 
 	void set_show_wtime(bool show_wt) { show_wtime = show_wt; }
 	void set_verbal_mode(bool echo) { verbal_mode = echo; }
@@ -1154,7 +1223,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void extract_word_starts_with(const char initial_character, int starting_word, int ending_word, string& extracted_word);
 	void extract_word_starts_with(const char initial_character, int starting_word, string& extracted_word) { extract_word_starts_with(initial_character,starting_word,1000,extracted_word); }
-	bool extract_word_starts_with(const char initial_character, int starting_word, int ending_word, vector<string>& extracted_words);
+	bool extract_word_starts_with(const char initial_character, int starting_word, int ending_word, std::vector<string>& extracted_words);
 	void set_quit_after_error(bool arg) { quit_after_error = arg; }
 	void set_plot_title(int starting_word, string& temp_title);
 
@@ -1166,17 +1235,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_recursive_grid(const char filename[]);
 	void output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false);
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false, string imgheader = "", string srcheader = "") {
-		ofstream imgfile; open_output_file(imgfile,"imgs.dat");
-		ofstream srcfile; open_output_file(srcfile,"srcs.dat");
-		if (!imgheader.empty()) imgfile << "\"" << imgheader << "\"" << endl;
-		if (!srcheader.empty()) srcfile << "\"" << srcheader << "\"" << endl;
+		std::ofstream imgfile; open_output_file(imgfile,"imgs.dat");
+		std::ofstream srcfile; open_output_file(srcfile,"srcs.dat");
+		if (!imgheader.empty()) imgfile << "\"" << imgheader << "\"" << std::endl;
+		if (!srcheader.empty()) srcfile << "\"" << srcheader << "\"" << std::endl;
 		return plot_images_single_source(x_source,y_source,verbal,imgfile,srcfile,flux,show_labels);
 	}
-	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, ofstream& imgfile, ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
+	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, std::ofstream& imgfile, std::ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
-	vector<ImageSet> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
+	std::vector<ImageSet> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
@@ -1191,6 +1260,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	void update_lens_redshift_data();
+	int add_new_extended_src_redshift(const double zs, const int src_i, const bool pixellated_src);
+	void remove_old_extended_src_redshift(const int znum, const bool removing_pixellated_src);
+	bool assign_mask(const int znum, const int mask_i);
+	void print_mask_assignments();
+
 	void add_new_lens_entry(const double zl);
 	void set_primary_lens();
 	void print_beta_matrices();
@@ -1201,10 +1275,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void recalculate_beta_factors();
 	void set_sci_notation(const bool scinot) {
 		use_scientific_notation = scinot;
-		if (use_scientific_notation) cout << setiosflags(ios::scientific);
+		if (use_scientific_notation) std::cout << std::setiosflags(std::ios::scientific);
 		else {
-			cout << resetiosflags(ios::scientific);
-			cout.unsetf(ios_base::floatfield);
+			std::cout << std::resetiosflags(std::ios::scientific);
+			std::cout.unsetf(std::ios_base::floatfield);
 		}
 	}
 	bool get_sci_notation() { return use_scientific_notation; }
@@ -1220,9 +1294,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	bool register_lens_vary_parameters(const int lensnumber);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
+	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y);
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
-	void reassign_lensparam_pointers_and_names();
+	bool update_lens_centers_from_pixsrc_coords();
+
+	void reassign_lensparam_pointers_and_names(const bool reset_plimits = true);
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
@@ -1235,14 +1312,18 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
-	void add_source_object(SB_ProfileName name, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
-	void add_source_object(const char *splinefile, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
-	void add_multipole_source(int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
+	void add_source_object(SB_ProfileName name, const bool is_lensed, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
+	void add_source_object(const char *splinefile, const bool is_lensed, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void add_multipole_source(const bool is_lensed, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
+	void add_shapelet_source(const bool is_lensed, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);
+
+	void add_pixellated_source(const double zsrc);
+	void remove_pixellated_source(int src_number);
+	void print_pixellated_source_list();
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
@@ -1258,12 +1339,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void reset_grid();
 	void remove_lens(int lensnumber);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
+	void toggle_major_axis_along_y_src(bool major_axis_along_y);
 	void create_output_directory();
-	void open_output_file(ofstream &outfile, string filename_in);
-	void open_output_file(ofstream &outfile, char* filechar_in);
+	void open_output_file(std::ofstream &outfile, string filename_in);
+	void open_output_file(std::ofstream &outfile, char* filechar_in);
 
 	private:
-	bool temp_auto_ccspline, temp_auto_store_cc_points, temp_include_time_delays;
+	bool temp_auto_store_cc_points, temp_include_time_delays;
 	void fit_set_optimizations();
 	void fit_restore_defaults();
 	double zfac_re; // used by einstein_radius_root(...)
@@ -1283,17 +1365,21 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
 	bool output_scaled_percentiles_from_chain(const double pct_scaling);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
-	bool output_scaled_percentiles_from_egrad_fits(const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
+	bool output_scaled_percentiles_from_egrad_fits(const int srcnum, const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
+	bool output_egrad_values_and_knots(const int srcnum,const string suffix);
+
+	bool output_coolest_files(const string filename);
 
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	double chisq_single_evaluation(bool showdiag, bool show_status);
+	double chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool showdiag, bool show_status, bool show_lensinfo = false);
 	bool setup_fit_parameters(bool include_limits);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
+	bool get_sourcept_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 	bool output_parameter_values();
@@ -1316,7 +1402,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
 	bool adopt_model(dvector &fitparams);
-	bool use_bestfit() { return adopt_model(bestfitparams); }
 
 	bool include_central_image;
 	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;
@@ -1329,20 +1414,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double srcflux_lower_limit, srcflux_upper_limit;
 	bool include_imgfluxes_in_inversion;
 
-	bool spline_critical_curves(bool verbal);
-	bool spline_critical_curves() { return spline_critical_curves(true); }
-	void automatically_determine_ccspline_mode();
-	bool plot_splined_critical_curves(string filename = "");
-	bool plot_sorted_critical_curves(string filename = "");
-	bool (QLens::*plot_critical_curves)(string filename);
-	bool plotcrit(string filename) { return (this->*plot_critical_curves)(filename); }
+	bool spline_critical_curves(bool verbal = true);
+	bool plot_critical_curves(string filename = "");
 	bool plotcrit_exclude_subhalo(string filename, int exclude_lensnum)
 	{
 		bool worked = false;
 		double mvir;
 		if (lens_list[exclude_lensnum]->get_specific_parameter("mvir",mvir)==true) {
 			lens_list[exclude_lensnum]->update_specific_parameter("mvir",1e-3);
-			worked = (this->*plot_critical_curves)(filename);
+			worked = plot_critical_curves(filename);
 			lens_list[exclude_lensnum]->update_specific_parameter("mvir",mvir);
 		}
 		return worked;
@@ -1365,11 +1445,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double einstein_radius_root(const double r);
 	double get_einstein_radius_prior(const bool verbal);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
-	void plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename);
+	//void plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename);
 	void print_lensing_info_at_point(const double x, const double y);
-	bool make_random_sources(int nsources, const char *outfile);
-	bool total_cross_section(double&);
-	double total_cross_section_integrand(const double);
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
@@ -1378,11 +1455,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double chisq_flux();
 	double chisq_time_delays();
+	double chisq_time_delays_from_model_imgs();
 	double chisq_weak_lensing();
 	bool output_weak_lensing_chivals(string filename);
 	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
-	void output_analytic_srcpos(lensvector *beta_i);
+	void find_analytic_srcpos(lensvector *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
 
 	static bool respline_at_end;
@@ -1392,7 +1470,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool autospline_deflection(int steps);
 	bool unspline_deflection();
 	bool isspherical();
-	bool islens() { return (nlens > 0); }
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
 	void set_grid_from_pixels();
 
@@ -1402,7 +1479,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void autogrid(double rmin, double rmax);
 	void autogrid();
 	bool get_deflection_spline_info(double &xmax, double &ymax, int &nsteps);
-	void delete_ccspline();
 	void set_Gauss_NN(const int& nn);
 	void set_integral_tolerance(const double& acc);
 	void set_integral_convergence_warnings(const bool warn);
@@ -1412,16 +1488,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 		use_analytic_bestfit_src = setting;
 		update_parameter_list();
 	}
-	bool get_analytic_bestfit_src() { return use_analytic_bestfit_src; }
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }
 	void set_newton_warnings(bool setting) { newton_warnings = setting; }
 	void get_newton_warnings(bool &setting) { setting = newton_warnings; }
-	void set_ccspline_mode(bool setting) { use_cc_spline = setting; plot_critical_curves = (setting==true) ? &QLens::plot_splined_critical_curves : &QLens::plot_sorted_critical_curves; }
-	void get_ccspline_mode(bool &setting) { setting = use_cc_spline; }
-	void set_auto_ccspline_mode(bool setting) { auto_ccspline = setting; }
-	void get_auto_ccspline_mode(bool &setting) { setting = auto_ccspline; }
 	void set_galsubgrid_mode(bool setting) { subgrid_around_perturbers = setting; }
 	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_perturbers; }
 	void set_auto_store_cc_points(bool setting) { auto_store_cc_points = setting; }
@@ -1468,11 +1539,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	}
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 
-	double crit0_interpolate(double theta) { return ccspline[0].splint(theta); }
-	double crit1_interpolate(double theta) { return ccspline[1].splint(theta); }
-	double caust0_interpolate(double theta);
-	double caust1_interpolate(double theta);
-
 	//double make_perturber_population(const double number_density, const double rmax, const double a, const double b);
 	//void plot_perturber_deflection_vs_area();
 
@@ -1503,6 +1569,7 @@ struct ImageData
 	double *sigma_pos, *sigma_f, *sigma_t;
 	bool *use_in_chisq;
 	double max_distsqr; // maximum squared distance between any pair of images
+	double max_tdsqr; // max squared difference between any pair of time delays
 	ImageData() { n_images = 0; }
 	void input(const int &nn);
 	void input(const ImageData& imgs_in);
@@ -1510,7 +1577,7 @@ struct ImageData
 	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
 	void add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
 	void print_list(bool print_errors, bool use_sci);
-	void write_to_file(ofstream &outfile);
+	void write_to_file(std::ofstream &outfile);
 	bool set_use_in_chisq(int image_i, bool use_in_chisq_in);
 	~ImageData();
 };
@@ -1647,14 +1714,14 @@ struct DerivedParam
 
 		if (funcparam != -1e30) {
 			if (funcparam2==-1) {
-				stringstream paramstr;
+				std::stringstream paramstr;
 				string paramstring;
 				paramstr << funcparam;
 				paramstr >> paramstring;
 				name += "(" + paramstring + ")";
 				latex_name += "(" + paramstring + ")";
 			} else {
-				stringstream paramstr, paramstr2;
+				std::stringstream paramstr, paramstr2;
 				string paramstring, paramstring2;
 				paramstr << funcparam;
 				paramstr >> paramstring;
@@ -1710,7 +1777,7 @@ struct DerivedParam
 					chisq_out = lens_in->raw_chisq;
 					lens_in->clear_raw_chisq();
 				} else {
-					chisq_out = lens_in->chisq_single_evaluation(false,false);
+					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
 				}
 			}
 			return chisq_out;
@@ -1724,40 +1791,40 @@ struct DerivedParam
 		double dpar = get_derived_param(lens_in);
 		//cout << name << ": ";
 		if (derived_param_type == KappaR) {
-			if (lensnum_param==-1) cout << "Total kappa within r = " << funcparam << unitstring << endl;
-			else cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
+			if (lensnum_param==-1) std::cout << "Total kappa within r = " << funcparam << unitstring << std::endl;
+			else std::cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == LambdaR) {
-			cout << "One minus average kappa at r = " << funcparam << unitstring << endl;
+			std::cout << "One minus average kappa at r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == DKappaR) {
-			if (lensnum_param==-1) cout << "Derivative of total kappa within r = " << funcparam << unitstring << endl;
-			else cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << endl;
+			if (lensnum_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
+			else std::cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Mass2dR) {
-			cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << endl;
+			std::cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Mass3dR) {
-			cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << endl;
+			std::cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Einstein) {
-			cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+			std::cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << std::endl;
 		} else if (derived_param_type == Einstein_Mass) {
-			cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << endl;
+			std::cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << std::endl;
 		} else if (derived_param_type == Kappa_Re) {
-			cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << endl;
+			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
 		} else if (derived_param_type == LensParam) {
-			cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << endl;
+			std::cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << std::endl;
 		} else if (derived_param_type == AvgLogSlope) {
-			cout << "Average log-slope of kappa from lens " << lensnum_param << " between r1=" << funcparam << " and r2=" << funcparam2 << endl;
+			std::cout << "Average log-slope of kappa from lens " << lensnum_param << " between r1=" << funcparam << " and r2=" << funcparam2 << std::endl;
 		} else if (derived_param_type == Perturbation_Radius) {
-			cout << "Critical curve perturbation radius of lens " << lensnum_param << endl;
+			std::cout << "Critical curve perturbation radius of lens " << lensnum_param << std::endl;
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
-			cout << "Relative critical curve perturbation radius of lens " << lensnum_param << endl;
+			std::cout << "Relative critical curve perturbation radius of lens " << lensnum_param << std::endl;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			cout << "Projected mass within perturbation radius of lens " << lensnum_param << endl;
+			std::cout << "Projected mass within perturbation radius of lens " << lensnum_param << std::endl;
 		} else if (derived_param_type == Robust_Perturbation_Density) {
-			cout << "Average projected density within perturbation radius of lens " << lensnum_param << endl;
+			std::cout << "Average projected density within perturbation radius of lens " << lensnum_param << std::endl;
 		} else if (derived_param_type == Chi_Square) {
-			cout << "Raw chi-square value for given set of parameters" << endl;
+			std::cout << "Raw chi-square value for given set of parameters" << std::endl;
 		} else die("no user defined function yet");
-		cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << endl;
-		cout << "   " << name << " = " << dpar << endl;
+		std::cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << std::endl;
+		std::cout << "   " << name << " = " << dpar << std::endl;
 	}
 	void rename(const string new_name, const string new_latex_name)
 	{
@@ -1836,8 +1903,8 @@ struct ParamSettings
 			}
 		}
 	}
-	void update_params(const int nparams_in, vector<string>& names, double* stepsizes_in);
-	void insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in);
+	void update_params(const int nparams_in, std::vector<string>& names, double* stepsizes_in);
+	void insert_params(const int pi, const int pf, std::vector<string>& names, double* stepsizes_in);
 	bool remove_params(const int pi, const int pf);
 	void add_dparam(string dparam_name);
 	void remove_dparam(int dparam_number);
@@ -2112,16 +2179,22 @@ struct ParamSettings
 	}
 	void transform_parameters(double *params)
 	{
+		double *new_params = new double[nparams];
 		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==LOG_TRANSFORM) params[i] = log(params[i])/M_LN10;
+			if (transforms[i]->transform==NONE) new_params[i] = params[i];
+			else if (transforms[i]->transform==LOG_TRANSFORM) new_params[i] = log(params[i])/M_LN10;
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
+				new_params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				params[i] = transforms[i]->a * params[i] + transforms[i]->b;
+				new_params[i] = transforms[i]->a * params[i] + transforms[i]->b;
 			} else if (transforms[i]->transform==RATIO) {
-				params[i] = params[i]/params[transforms[i]->ratio_paramnum];
+				new_params[i] = params[i]/params[transforms[i]->ratio_paramnum];
 			}
 		}
+		for (int i=0; i < nparams; i++) {
+			params[i] = new_params[i];
+		}
+		delete[] new_params;
 	}
 	void transform_limits(double *lower, double *upper)
 	{
@@ -2161,6 +2234,7 @@ struct ParamSettings
 	}
 	void inverse_transform_parameters(double *params, double *transformed_params)
 	{
+		bool apply_ratio_transform_afterwards = false;
 		for (int i=0; i < nparams; i++) {
 			if (transforms[i]->transform==NONE) transformed_params[i] = params[i];
 			else if (transforms[i]->transform==LOG_TRANSFORM) transformed_params[i] = pow(10.0,params[i]);
@@ -2169,7 +2243,14 @@ struct ParamSettings
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
 				transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
 			} else if (transforms[i]->transform==RATIO) {
-				transformed_params[i] = params[i]*params[transforms[i]->ratio_paramnum];
+				if (transforms[i]->ratio_paramnum < i) {
+					transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
+				} else apply_ratio_transform_afterwards = true;
+			}
+		}
+		if (apply_ratio_transform_afterwards) {
+			for (int i=0; i < nparams; i++) {
+				if (transforms[i]->transform==RATIO) transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
 			}
 		}
 	}
@@ -2462,25 +2543,25 @@ inline void QLens::deflection(const double& x, const double& y, lensvector& def_
 		int i,j;
 		def_tot[0] = 0;
 		def_tot[1] = 0;
-		//cout << "n_redshifts=" << n_lens_redshifts << endl;
+		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
 		for (i=0; i < n_lens_redshifts; i++) {
-			//cout << "redshift " << i << ":\n";
+			//std::cout << "redshift " << i << ":\n";
 			(*def_i)[i][0] = 0;
 			(*def_i)[i][1] = 0;
 			(*x_i)[0] = x;
 			(*x_i)[1] = y;
 			for (j=0; j < i; j++) {
-				//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 				(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 				(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 			}
 			for (j=0; j < zlens_group_size[i]; j++) {
 				lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-				//cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << endl;
+				//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
 			}
-			//cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << endl;
+			//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
 			def_tot[0] += (*def_i)[i][0];
@@ -2506,13 +2587,13 @@ inline void QLens::custom_deflection(const double& x, const double& y, lensvecto
 	double beta;
 	if (zlens1 > zlens2) {
 		beta = calculate_beta_factor(zlens2,zlens1,1);
-		//cout << "BETA! " << beta << endl;
+		//std::cout << "BETA! " << beta << std::endl;
 		lens_list[2]->deflection(pos[0],pos[1],def);
 		def_tot[0] += def[0];
 		def_tot[1] += def[1];
 		pos_prime[0] = pos[0] - beta*def_tot[0];
 		pos_prime[1] = pos[1] - beta*def_tot[1];
-		//cout << "Lens 0,1 xprime=" << pos_prime[0] << " " << pos_prime[1] << endl;
+		//std::cout << "Lens 0,1 xprime=" << pos_prime[0] << " " << pos_prime[1] << std::endl;
 		lens_list[0]->deflection(pos_prime[0],pos_prime[1],def);
 		def_tot[0] += def[0];
 		def_tot[1] += def[1];
@@ -2521,20 +2602,20 @@ inline void QLens::custom_deflection(const double& x, const double& y, lensvecto
 		def_tot[1] += def[1];
 	} else if (zlens1 < zlens2) {
 		beta = calculate_beta_factor(zlens1,zlens2,1);
-		//cout << "BETA! " << beta << endl;
+		//std::cout << "BETA! " << beta << std::endl;
 		lens_list[0]->deflection(pos[0],pos[1],def);
-		//cout << "lens 0 def=" << def[0] << " " << def[1] << endl;
+		//std::cout << "lens 0 def=" << def[0] << " " << def[1] << std::endl;
 		def_tot[0] += def[0];
 		def_tot[1] += def[1];
 		lens_list[1]->deflection(pos[0],pos[1],def);
-		//cout << "lens 1 def=" << def[0] << " " << def[1] << endl;
+		//std::cout << "lens 1 def=" << def[0] << " " << def[1] << std::endl;
 		def_tot[0] += def[0];
 		def_tot[1] += def[1];
 		pos_prime[0] = pos[0] - beta*def_tot[0];
 		pos_prime[1] = pos[1] - beta*def_tot[1];
-		//cout << "Lens 2 xprime=" << pos_prime[0] << " " << pos_prime[1] << endl;
+		//std::cout << "Lens 2 xprime=" << pos_prime[0] << " " << pos_prime[1] << std::endl;
 		lens_list[2]->deflection(pos_prime[0],pos_prime[1],def);
-		//cout << "lens 2 def=" << def[0] << " " << def[1] << endl;
+		//std::cout << "lens 2 def=" << def[0] << " " << def[1] << std::endl;
 		def_tot[0] += def[0];
 		def_tot[1] += def[1];
 	} else {
@@ -2560,15 +2641,15 @@ inline void QLens::deflection(const double& x, const double& y, double& def_tot_
 		int i,j;
 		def_tot_x = 0;
 		def_tot_y = 0;
-		//cout << "n_redshifts=" << n_lens_redshifts << endl;
+		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
 		for (i=0; i < n_lens_redshifts; i++) {
-			//cout << "redshift " << i << ":\n";
+			//std::cout << "redshift " << i << ":\n";
 			(*def_i)[i][0] = 0;
 			(*def_i)[i][1] = 0;
 			(*x_i)[0] = x;
 			(*x_i)[1] = y;
 			for (j=0; j < i; j++) {
-				//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 				(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 				(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 			}
@@ -2610,16 +2691,16 @@ inline void QLens::deflection_exclude(const double& x, const double& y, bool* ex
 		}
 	}
 
-	//cout << "n_redshifts=" << n_lens_redshifts << endl;
+	//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
 	for (i=0; i < n_lens_redshifts; i++) {
-		//cout << "redshift " << i << ":\n";
+		//std::cout << "redshift " << i << ":\n";
 		if ((!skip_lens_plane) or (skip_i != i)) {
 			(*def_i)[i][0] = 0;
 			(*def_i)[i][1] = 0;
 			(*x_i)[0] = x;
 			(*x_i)[1] = y;
 			for (j=0; j < i; j++) {
-				//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 				if ((!skip_lens_plane) or (skip_i != j)) {
 					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
@@ -2656,15 +2737,15 @@ inline void QLens::map_to_lens_plane(const int& redshift_i, const double& x, con
 	lensvector **def_i = &defs_subtot[thread];
 
 	int i,j;
-	//cout << "n_redshifts=" << n_lens_redshifts << endl;
+	//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
 	for (i=0; i <= redshift_i; i++) {
-		//cout << "redshift " << i << ":\n";
+		//std::cout << "redshift " << i << ":\n";
 		(*def_i)[i][0] = 0;
 		(*def_i)[i][1] = 0;
 		(*x_i)[0] = x;
 		(*x_i)[1] = y;
 		for (j=0; j < i; j++) {
-			//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+			//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 			(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 			(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 		}
@@ -2712,7 +2793,7 @@ inline void QLens::hessian(const double& x, const double& y, lensmatrix& hess_to
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
@@ -2807,7 +2888,7 @@ inline void QLens::hessian_weak(const double& x, const double& y, lensmatrix& he
 /*
 inline void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
 {
-	//cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << endl;
+	//std::cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << std::endl;
 	double x = xvec[0], y = xvec[1];
 	lensmatrix *jac = &jacs[thread];
 	lensvector *def_tot = &defs[thread];
@@ -2843,7 +2924,7 @@ inline void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
@@ -3011,7 +3092,7 @@ inline void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, 
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
 					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
 					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
@@ -3256,7 +3337,7 @@ inline void QLens::hessian_exclude(const double& x, const double& y, bool* exclu
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
 					if ((!skip_lens_plane) or (skip_i != j)) {
 						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
@@ -3269,7 +3350,7 @@ inline void QLens::hessian_exclude(const double& x, const double& y, bool* exclu
 					if (exclude[zlens_group_lens_indx[i][j]]) ;
 					else {
 						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
-						//cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << endl;
+						//std::cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << std::endl;
 						(*hess_i)[i][0][0] += (*hess)[0][0];
 						(*hess_i)[i][1][1] += (*hess)[1][1];
 						(*hess_i)[i][0][1] += (*hess)[0][1];
@@ -3290,14 +3371,14 @@ inline void QLens::hessian_exclude(const double& x, const double& y, bool* exclu
 				(*hess_i)[i][0][1] *= zfacs[i];
 				(*hess_i)[i][1][0] *= zfacs[i];
 
-				//cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				//std::cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
 				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
 				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
 				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
 				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
 				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
 				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-				//cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				//std::cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
 
 				hess_tot += (*hess_i)[i];
 			}
@@ -3465,7 +3546,7 @@ inline void QLens::hessian_exclude(const double& x, const double& y, const int& 
 				(*x_i)[0] = x;
 				(*x_i)[1] = y;
 				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
 					if ((!skip_lens_plane) or (skip_i != j)) {
 						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
 						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
@@ -3478,7 +3559,7 @@ inline void QLens::hessian_exclude(const double& x, const double& y, const int& 
 					if (zlens_group_lens_indx[i][j] == exclude_i) ;
 					else {
 						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
-						//cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << endl;
+						//std::cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << std::endl;
 						(*hess_i)[i][0][0] += (*hess)[0][0];
 						(*hess_i)[i][1][1] += (*hess)[1][1];
 						(*hess_i)[i][0][1] += (*hess)[0][1];
@@ -3499,14 +3580,14 @@ inline void QLens::hessian_exclude(const double& x, const double& y, const int& 
 				(*hess_i)[i][0][1] *= zfacs[i];
 				(*hess_i)[i][1][0] *= zfacs[i];
 
-				//cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				//std::cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
 				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
 				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
 				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
 				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
 				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
 				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-				//cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << endl;
+				//std::cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
 
 				hess_tot += (*hess_i)[i];
 			}
@@ -3615,6 +3696,7 @@ inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, do
 		}
 		kappa *= zfacs[0];
 	} else {
+		
 		lensmatrix *jac = &jacs[0];
 		hessian_exclude(x[0],x[1],exclude_i,(*jac),0,zfacs,betafacs);
 		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
@@ -3624,5 +3706,9 @@ inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, do
 
 */
 
+//static int comm_counter;
+//int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm);
+//int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
+//int MPI_Comm_free(MPI_Comm *comm);
 
 #endif // QLENS_H

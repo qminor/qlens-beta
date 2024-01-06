@@ -114,7 +114,7 @@ class KMeans
    * @param initialGuess If true, then it is assumed that assignments has a list
    *      of initial cluster assignments.
    */
-  void Cluster(const MatType& data,
+  bool Cluster(const MatType& data,
                const size_t clusters,
                arma::Row<size_t>& assignments,
                const bool initialGuess = false);
@@ -132,7 +132,7 @@ class KMeans
    * @param initialGuess If true, then it is assumed that centroids contains the
    *      initial cluster centroids.
    */
-  void Cluster(const MatType& data,
+  bool Cluster(const MatType& data,
                size_t clusters,
                arma::mat& centroids,
                const bool initialGuess = false);
@@ -150,7 +150,7 @@ class KMeans
    * @param initialGuess If true, then it is assumed that centroids contains the
    *      initial cluster centroids.
    */
-  void Cluster(const MatType& data,
+  bool Cluster(const MatType& data,
                size_t clusters,
                arma::mat& centroids,
                arma::Col<double>& weights,
@@ -209,7 +209,7 @@ class KMeans
    * @param initialCentroidGuess If true, then it is assumed that centroids
    *      contains the initial centroids of each cluster.
    */
-  void Cluster(const MatType& data,
+  bool Cluster(const MatType& data,
                const size_t clusters,
                arma::Row<size_t>& assignments,
                arma::mat& centroids,
