@@ -71,10 +71,24 @@ for VAR in "$@"; do
 		SET_CBRANGE=1
 	fi
 
+	if [[ $VAR == "cb5" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-5
+		CBMAX=5
+		SET_CBRANGE=1
+	fi
+
 	if [[ $VAR == "cb4" ]]; then
 		# natural colorbar settings for normalized residuals
 		CBMIN=-4
 		CBMAX=4
+		SET_CBRANGE=1
+	fi
+
+	if [[ $VAR == "cb3" ]]; then
+		# natural colorbar settings for normalized residuals
+		CBMIN=-3
+		CBMAX=3
 		SET_CBRANGE=1
 	fi
 
@@ -971,6 +985,7 @@ else
 fi
 
 echo -en "$PLOTLINE" >$PLOTDIR/$PLOTFILE
+#echo "$PLOTLINE"
 gnuplot -persist $PLOTDIR/$PLOTFILE >/dev/null 2>&1
 
 #if [[ $FILENAME == "" ]]; then

@@ -2204,8 +2204,8 @@ void Shear::assign_param_pointers()
 		param[2] = &x_center;
 		param[3] = &y_center;
 	} else {
-		param[2] = &x_center_lensed;
-		param[3] = &y_center_lensed;
+		param[2] = &xc_prime;
+		param[3] = &yc_prime;
 	}
 	param[4] = &zlens;
 }
@@ -2415,8 +2415,8 @@ void Multipole::assign_param_pointers()
 		param[3] = &x_center;
 		param[4] = &y_center;
 	} else {
-		param[3] = &x_center_lensed;
-		param[4] = &y_center_lensed;
+		param[3] = &xc_prime;
+		param[4] = &yc_prime;
 	}
 	param[5] = &zlens;
 }
@@ -2756,8 +2756,8 @@ void PointMass::assign_param_pointers()
 		param[1] = &x_center;
 		param[2] = &y_center;
 	} else {
-		param[1] = &x_center_lensed;
-		param[2] = &y_center_lensed;
+		param[1] = &xc_prime;
+		param[2] = &yc_prime;
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
@@ -3882,8 +3882,8 @@ void MassSheet::assign_param_pointers()
 		param[1] = &x_center;
 		param[2] = &y_center;
 	} else {
-		param[1] = &x_center_lensed;
-		param[2] = &y_center_lensed;
+		param[1] = &xc_prime;
+		param[2] = &yc_prime;
 	}
 	param[3] = &zlens;
 	ellipticity_paramnum = -1; // no ellipticity parameter here
@@ -4314,8 +4314,8 @@ void Tabulated_Model::assign_param_pointers()
 		param[3] = &x_center;
 		param[4] = &y_center;
 	} else {
-		param[3] = &x_center_lensed;
-		param[4] = &y_center_lensed;
+		param[3] = &xc_prime;
+		param[4] = &yc_prime;
 	}
 }
 
@@ -5029,8 +5029,8 @@ void QTabulated_Model::assign_param_pointers()
 		param[4] = &x_center;
 		param[5] = &y_center;
 	} else {
-		param[4] = &x_center_lensed;
-		param[5] = &y_center_lensed;
+		param[4] = &xc_prime;
+		param[5] = &yc_prime;
 	}
 }
 

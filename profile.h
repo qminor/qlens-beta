@@ -61,6 +61,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	friend class Cored_Sersic;
 	friend class SPLE;
 	friend class dPIE;
+	friend class ImagePixelGrid;
 
 	// the following private declarations are specific to LensProfile and not derived classes
 	private:
@@ -77,7 +78,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	double sigma_cr, kpc_to_arcsec;
 	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
-	double x_center_lensed, y_center_lensed; // used if lensed_center_coords is set to true
+	double xc_prime, yc_prime; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	double costheta, sintheta;
@@ -147,6 +148,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 		update_ellipticity_meta_parameters();
 	}
 	void calculate_ellipticity_components();
+	void update_center_from_pixsrc_coords();
 
 	double potential_numerical(const double, const double);
 	double potential_spherical_default(const double x, const double y);
@@ -197,6 +199,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	bool* anchor_parameter_to_source;
 	SB_Profile** parameter_anchor_source;
 	bool at_least_one_param_anchored;
+	bool transform_center_coords_to_pixsrc_frame;
 
 	bool anchor_special_parameter;
 	LensProfile* special_anchor_lens;
@@ -280,6 +283,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
+	bool setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc);
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void remove_fourier_modes();
@@ -401,8 +405,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void set_perturber(bool ispert) { perturber = ispert; }
 	void set_lensed_center(bool lensed_xcyc) {
 		lensed_center_coords = lensed_xcyc;
-		x_center_lensed = x_center;
-		y_center_lensed = y_center;
+		xc_prime = x_center;
+		yc_prime = y_center;
 		set_center_if_lensed_coords();
 		assign_paramnames();
 		assign_param_pointers();

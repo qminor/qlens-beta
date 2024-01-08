@@ -2423,7 +2423,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data) {
 					n_image_pixels_x = image_pixel_data->npixels_x;
 					n_image_pixels_y = image_pixel_data->npixels_y;
-					if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
+					if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 				} else Complain("image pixel data has not been loaded");
 			} else if (nwords == 3) {
 				int npx, npy;
@@ -2431,7 +2431,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> npy)) Complain("invalid number of pixels");
 				n_image_pixels_x = npx;
 				n_image_pixels_y = npy;
-				if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
+				if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 			} else Complain("two arguments required to set 'img_npixels' (npixels_x, npixels_y), or else use '-data' argument");
 		}
 		else if (words[0]=="src_npixels")
@@ -2567,6 +2567,7 @@ void QLens::process_commands(bool read_file)
 			bool vary_zl = false;
 			int pmode = default_parameter_mode;
 			bool is_perturber = false;
+			bool transform_to_pixsrc_frame = false;
 
 			const int nmax_anchor = 100;
 			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per lens can't exceed 100 (which will never happen!)
@@ -2579,6 +2580,13 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 				}
 			}
+			for (int i=nwords-1; i > 1; i--) {
+				if (words[i]=="-transform_to_pixsrc_frame") {
+					transform_to_pixsrc_frame = true;
+					remove_word(i);
+				}
+			}
+
 			for (int i=nwords-1; i > 1; i--) {
 				int pos;
 				if ((pos = words[i].find("egrad=")) != string::npos) {
@@ -3102,6 +3110,7 @@ void QLens::process_commands(bool read_file)
 							if (fgrad) lens_list[nlens-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3215,6 +3224,7 @@ void QLens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3335,6 +3345,7 @@ void QLens::process_commands(bool read_file)
 								lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -3469,6 +3480,7 @@ void QLens::process_commands(bool read_file)
 								if (!concentration_prior) concentration_prior = true; // this tells qlens that at least one of the lenses has a c(M,z) prior
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3626,6 +3638,7 @@ void QLens::process_commands(bool read_file)
 								if (((vary_parameters) and (vary_flags[1])) or (no_cmed_anchoring)) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3747,6 +3760,7 @@ void QLens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[1])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for c
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3839,6 +3853,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -3931,6 +3946,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4030,6 +4046,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4122,6 +4139,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4252,6 +4270,7 @@ void QLens::process_commands(bool read_file)
 								if ((vary_parameters) and (vary_flags[3])) lens_list[nlens-1]->unassign_special_anchored_parameter(); // we're only setting the initial value for a
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4331,6 +4350,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -4430,6 +4450,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4535,6 +4556,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -4639,6 +4661,7 @@ void QLens::process_commands(bool read_file)
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
+							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
@@ -5586,7 +5609,7 @@ void QLens::process_commands(bool read_file)
 					update_specific_parameters = true;
 					for (int i=0; i < n_updates; i++)
 						if (sb_list[src_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in source " << src_number);
-					if ((sb_list[src_number]->sbtype==SHAPELET) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays(); // shapelet number of amp's may have changed, so redo FFT convolution setup
+					if ((sb_list[src_number]->sbtype==SHAPELET) and (fft_convolution)) cleanup_FFT_convolution_arrays(); // shapelet number of amp's may have changed, so redo FFT convolution setup
 				}
 			}
 			else if ((nwords > 1) and (words[1]=="changevary"))
@@ -5898,7 +5921,7 @@ void QLens::process_commands(bool read_file)
 
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
-						if (setup_fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
+						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
 						add_shapelet_source(is_lensed, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
@@ -7062,7 +7085,7 @@ void QLens::process_commands(bool read_file)
 					if (nlens==0) Complain("No lens model has been specified");
 					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
 					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
-					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
+					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
 					double* srcflux = new double[n_sourcepts_fit];
 					lensvector *srcpts = new lensvector[n_sourcepts_fit];
@@ -7136,7 +7159,7 @@ void QLens::process_commands(bool read_file)
 						reset_grid();
 						create_grid(false,ptsrc_zfactors[dataset],default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					}
-					if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves and caustics");
+					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
 					double* srcflux = new double[n_sourcepts_fit];
 					lensvector *srcpts = new lensvector[n_sourcepts_fit];
@@ -7291,7 +7314,7 @@ void QLens::process_commands(bool read_file)
 						else show_multiple = true;
 					}
 					// If showing multiple sources, plot critical curves using zsrc
-					if ((show_multiple) and (show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
+					if ((show_multiple) and (show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (!show_multiple) {
 						reset_grid();
 						int zgroup = -1;
@@ -7299,7 +7322,7 @@ void QLens::process_commands(bool read_file)
 						create_grid(false,ptsrc_zfactors[dataset],ptsrc_beta_factors[dataset],zgroup);
 						if (show_grid) plot_recursive_grid("xgrid.dat");
 						// Plot critical curves corresponding to the particular source redshift being plotted
-						if ((show_cc) and (plotcrit("crit.dat")==false)) Complain("could not plot critical curves");
+						if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
 						reset_grid();
 						create_grid(false,ptsrc_zfactors[min_dataset],ptsrc_beta_factors[min_dataset]);
@@ -8365,7 +8388,7 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 			else if (nwords == 2) {
-				if (!islens()) Complain("no lens models have been specified");
+				if (nlens==0) Complain("no lens models have been specified");
 				if (words[1]=="off") {
 					if (unspline_deflection()==false) Complain("deflection field spline has not been created");
 				} else {
@@ -8378,7 +8401,7 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 			else if (nwords == 4) {
-				if (!islens()) Complain("no lens models have been specified");
+				if (nlens==0) Complain("no lens models have been specified");
 				int splinesteps;
 				double xmax, ymax;
 				if (!(ws[1] >> splinesteps)) Complain("invalid number of spline steps");
@@ -8392,24 +8415,24 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plotcrit")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			string range1, range2;
 			extract_word_starts_with('[',2,2,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',3,3,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			if (nwords == 3) {
 				if (terminal == TEXT) Complain("only one filename is required for text plotting of critical curves");
-				if (plotcrit("crit.dat")==true) {
+				if (plot_critical_curves("crit.dat")==true) {
 					run_plotter_file("crit",words[1],range1);
 					if (plot_srcplane) run_plotter_file("caust",words[2],range2);
 				} else Complain("No critical curves found");
 			} else if (nwords == 2) {
 				if (terminal == TEXT) {
-					if (plotcrit(words[1].c_str())==false) Complain("No critical curves found");
+					if (plot_critical_curves(words[1].c_str())==false) Complain("No critical curves found");
 				}
 				else Complain("two filenames must be specified for plotting of critical curves in postscript/PDF mode");
 			} else if (nwords == 1) {
-				if (plotcrit("crit.dat")==true) {
+				if (plot_critical_curves("crit.dat")==true) {
 					run_plotter("crit");
 					if (plot_srcplane) run_plotter("caust");
 				} else Complain("No critical curves found");
@@ -8446,7 +8469,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="plotkappa")
 		{
 			if (terminal != TEXT) Complain("only text plotting supported for plotkappa (switch to 'term text')");
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			int lens_number = -1;
 			bool plot_percentiles_from_chain = false;
 			for (int i=2; i < nwords; i++) {
@@ -8590,7 +8613,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="plotmass")
 		{
 			if (terminal != TEXT) Complain("only text plotting supported for plotmass");
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			if (nwords == 5) {
 				double rmin, rmax;
 				int steps;
@@ -8617,7 +8640,7 @@ void QLens::process_commands(bool read_file)
 		//}
 		else if (words[0]=="findimg")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			bool use_imgpt = false;
 			vector<string> args;
 			if (extract_word_starts_with('-',3,nwords-1,args)==true)
@@ -8668,7 +8691,7 @@ void QLens::process_commands(bool read_file)
 					else Complain("argument '" << args[i] << "' not recognized");
 				}
 			}
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			string range1, range2;
 			extract_word_starts_with('[',3,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -8693,7 +8716,7 @@ void QLens::process_commands(bool read_file)
 					xsource_in = x_in;
 					ysource_in = y_in;
 				}
-				if ((show_cc) and (plotcrit("crit.dat")==false)) warn("could not plot critical curves");
+				if ((show_cc) and (plot_critical_curves("crit.dat")==false)) warn("could not plot critical curves");
 				if (set_title) plot_title = temp_title;
 				if (plot_images_single_source(xsource_in, ysource_in, verbal_mode)==true) {
 					if (nwords==5) {
@@ -8733,7 +8756,7 @@ void QLens::process_commands(bool read_file)
 		{
 			bool plot_contours = false;
 			int n_contours = 24;
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			int pos;
 			if ((nwords > 1) and (pos = words[nwords-1].find("-contour=")) != string::npos) {
 				string ncontstring = words[nwords-1].substr(pos+9);
@@ -8765,7 +8788,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plotlogpot")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			if (nwords < 3) {
 				if ((nwords==2) and (terminal==TEXT)) {
 					plot_logpot_map(n_image_pixels_x,n_image_pixels_y,words[1]);
@@ -8782,8 +8805,8 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="plotlogmag")
 		{
 			if (nwords < 3) {
-				if (!islens()) Complain("must specify lens model first");
-				if ((!show_cc) or (plotcrit("crit.dat")==true)) {
+				if (nlens==0) Complain("must specify lens model first");
+				if ((!show_cc) or (plot_critical_curves("crit.dat")==true)) {
 					if ((nwords==2) and (terminal==TEXT)) {
 						plot_logmag_map(n_image_pixels_x,n_image_pixels_y,words[1]);
 					} else {
@@ -8807,7 +8830,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="einstein")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			if (nwords==1) {
 				double re, reav, re_kpc, reav_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
 				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],reav);
@@ -8914,7 +8937,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="findimgs")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			if (nwords == 1)
 				plot_images("sourcexy.in", "images.dat", verbal_mode);	// default source file
 			else if (nwords == 2)
@@ -8925,7 +8948,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="plotimgs")
 		{
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			string range1, range2;
 			extract_word_starts_with('[',1,3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',1,4,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -9055,8 +9078,9 @@ void QLens::process_commands(bool read_file)
 			}	
 
 			if (nwords==1) {
-				if (source_pixel_grid == NULL) cout << "No source surface brightness map has been loaded\n";
-				else cout << "Source surface brightness map is loaded with pixel dimension (" << source_pixel_grid->u_N << "," << source_pixel_grid->w_N << ")\n";
+				// this needs to be updated to show info about all image pixel grids (at different redshifts) as well as all pixellated sources
+				//if (source_pixel_grid == NULL) cout << "No source surface brightness map has been loaded\n";
+				//else cout << "Source surface brightness map is loaded with pixel dimension (" << source_pixel_grid->u_N << "," << source_pixel_grid->w_N << ")\n";
 				if ((image_pixel_grids == NULL) or (image_pixel_grids[0] == NULL)) cout << "No image surface brightness map has been loaded\n";
 				else cout << "Image surface brightness map is loaded with pixel dimension (" << image_pixel_grids[0]->x_N << "," << image_pixel_grids[0]->y_N << ")\n";
 			}
@@ -9276,9 +9300,12 @@ void QLens::process_commands(bool read_file)
 							pixel_ylength = psize;
 						} else {
 							// this code snippet is ugly and gets repeated in a few places. Consolodate and maybe rewrite!
-							if ((image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
+							if ((!use_old_pixelgrids) and (image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
 								pixel_xlength = image_pixel_grids[0]->pixel_xlength;
 								pixel_ylength = image_pixel_grids[0]->pixel_ylength;
+							} else if ((use_old_pixelgrids) and (image_pixel_grid0 != NULL)) {
+								pixel_xlength = image_pixel_grid0->pixel_xlength;
+								pixel_ylength = image_pixel_grid0->pixel_ylength;
 							} else {
 								pixel_xlength = grid_xlength / n_image_pixels_x;
 								pixel_ylength = grid_ylength / n_image_pixels_y;
@@ -9291,7 +9318,7 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 					}
 				}
-				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+				if (fft_convolution) cleanup_FFT_convolution_arrays();
 			}
 			else if (words[1]=="savepsf")
 			{
@@ -9328,7 +9355,7 @@ void QLens::process_commands(bool read_file)
 				}
 				psf_filename = "";
 				if (psf_spline.is_splined()) psf_spline.unspline();
-				if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+				if (fft_convolution) cleanup_FFT_convolution_arrays();
 			}
 			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
 			{
@@ -9338,9 +9365,12 @@ void QLens::process_commands(bool read_file)
 				if (words[1]=="mkpsf") mkpsf = true;	
 				else if (words[1]=="spline_psf") cubic_spline = true;
 				double pixel_xlength, pixel_ylength;
-				if ((image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
+				if ((!use_old_pixelgrids) and (image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
 					pixel_xlength = image_pixel_grids[0]->pixel_xlength;
 					pixel_ylength = image_pixel_grids[0]->pixel_ylength;
+				} else if ((use_old_pixelgrids) and (image_pixel_grid0 != NULL)) {
+					pixel_xlength = image_pixel_grid0->pixel_xlength;
+					pixel_ylength = image_pixel_grid0->pixel_ylength;
 				} else {
 					pixel_xlength = grid_xlength / n_image_pixels_x;
 					pixel_ylength = grid_ylength / n_image_pixels_y;
@@ -9365,7 +9395,7 @@ void QLens::process_commands(bool read_file)
 					if (generated_supersampled_psf) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 				}
 				if ((mkpsf) or (generated_supersampled_psf)) {
-					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
 			}
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
@@ -9507,7 +9537,7 @@ void QLens::process_commands(bool read_file)
 								delaunay_srcgrids[zsrc_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
 							}
 						}
-						if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
+						if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
 							if (make_delaunay_from_sbprofile) run_plotter_range("srcpixel_delaunay",range);
 							else run_plotter_range("srcpixel","",range);
 						} else {
@@ -9947,7 +9977,9 @@ void QLens::process_commands(bool read_file)
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
 						else if (args[i]=="-nres") { plot_residual = true; normalize_residuals = true; }
 						else if (args[i]=="-nres6") { plot_residual = true; normalize_residuals = true; cbstring = "cb6"; }
+						else if (args[i]=="-nres5") { plot_residual = true; normalize_residuals = true; cbstring = "cb5"; }
 						else if (args[i]=="-nres4") { plot_residual = true; normalize_residuals = true; cbstring = "cb4"; }
+						else if (args[i]=="-nres3") { plot_residual = true; normalize_residuals = true; cbstring = "cb3"; }
 						//else if (args[i]=="-resns") { plot_residual = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
 						//else if (args[i]=="-nresns") { plot_residual = true; normalize_residuals = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
 						else if (args[i]=="-norm") normalize_residuals = true;
@@ -9958,7 +9990,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-fgmask") show_foreground_mask = true;
 						else if (args[i]=="-emask") show_extended_mask = true;
 						else if (args[i]=="-fits") plot_fits = true;
-						else if ((args[i]=="-nosrc") or (args[i]=="-nosrcplot")) omit_source_plot = true;
+						else if ((args[i]=="-showsrc") or (args[i]=="-showsrcplot")) omit_source_plot = false;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-mkdata") offload_to_data = true;
@@ -9997,7 +10029,7 @@ void QLens::process_commands(bool read_file)
 				ncontstr2 >> ncontstring2;
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
-				if (!islens()) {
+				if (nlens==0) {
 					if ((n_sb==0) and (n_sourcepts_fit==0)) {
 						Complain("must specify lens/source model first");
 					} else {
@@ -10068,7 +10100,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((include_extended_mask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing extended mask by default, since include_emask_in_chisq = true" << endl;
 				if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
-				if ((!show_cc) or (plot_fits) or ((foundcc = plotcrit("crit.dat"))==true)) {
+				if ((!show_cc) or (plot_fits) or ((foundcc = plot_critical_curves("crit.dat"))==true)) {
 					string contstring;
 					if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
 					if (set_title) plot_title = temp_title;
@@ -10121,10 +10153,10 @@ void QLens::process_commands(bool read_file)
 						}
 						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
 							if (show_cc) {
-								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range1,contstring,cbstring);
-								else run_plotter_file("imgpixel",words[2],range1,contstring,cbstring);
+								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
+								else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
 							} else {
-								run_plotter_file("imgpixel_nocc",words[2],range1,contstring,cbstring);
+								run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
 							}
 						}
 					} else if (nwords == 4) {
@@ -10248,6 +10280,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				}
+				if (src_i < 0) Complain("specified pixellated source number does not exist");
 
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -10291,7 +10324,8 @@ void QLens::process_commands(bool read_file)
 
 						}
 					}
-					if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
+					if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
+					if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
 						if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range1);
 						else run_plotter_range("srcpixel",range1);
 					} else {
@@ -10309,8 +10343,13 @@ void QLens::process_commands(bool read_file)
 						if (terminal==TEXT) {
 							if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
 						} else {
-							if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
-							if ((islens()) and (show_cc) and (plotcrit("crit.dat")==true)) {
+							if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
+							else if (source_fit_mode==Delaunay_Source) {
+								if (delaunay_srcgrids[src_i] != NULL) {
+									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
+								} else Complain("Delaunay grid has not been created");
+							}
+							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
 								if (source_fit_mode==Delaunay_Source) run_plotter_file("srcpixel_delaunay",words[2],range1);
 								else run_plotter_file("srcpixel",words[2],range1);
 							} else {
@@ -10320,6 +10359,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
+				reset_grid();
 				if ((zoom_in) and (!delaunay)) srcgrid_size_scale = old_srcgrid_scale;
 				if (omit_caustics) show_cc = old_caustics_setting;
 				if (set_title) plot_title = "";
@@ -10348,7 +10388,7 @@ void QLens::process_commands(bool read_file)
 					old_regopt = optimize_regparam;
 					optimize_regparam = true;
 				}
-				if (!islens()) {
+				if (nlens==0) {
 					if ((n_sb==0) and (n_sourcepts_fit==0)) {
 						Complain("must specify lens/source model first");
 					} else {
@@ -10379,7 +10419,7 @@ void QLens::process_commands(bool read_file)
 			{
 				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				if (use_saved_sbweights) Complain("cannot save sbweights if 'use_saved_sbweights' is also set to 'on'");
-				if (!islens()) {
+				if (nlens==0) {
 					if ((n_sb==0) and (n_sourcepts_fit==0)) {
 						Complain("must specify lens/source model first");
 					} else {
@@ -10402,7 +10442,7 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="plot_imgpixels")
 			{
-				if (!islens()) Complain("must specify lens model first");
+				if (nlens==0) Complain("must specify lens model first");
 				plot_image_pixel_grid(0);
 			}
 			else Complain("command not recognized");
@@ -10411,7 +10451,7 @@ void QLens::process_commands(bool read_file)
 		{
 			if (mpi_id==0) {
 				if (nwords != 3) Complain("two arguments are required; must specify coordinates (x,y) to display lensing information");
-				if (!islens()) Complain("must specify lens model first");
+				if (nlens==0) Complain("must specify lens model first");
 				double x, y;
 				if (!(ws[1] >> x)) Complain("invalid x-coordinate");
 				if (!(ws[2] >> y)) Complain("invalid y-coordinate");
@@ -10421,7 +10461,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="plotlensinfo")
 		{
 			int pert_resid = -1; // if set to a positive number, then the residuals are plotted after subtracting perturbed - smooth model
-			if (!islens()) Complain("must specify lens model first");
+			if (nlens==0) Complain("must specify lens model first");
 			string file_root;
 			if (nwords == 1) {
  				// if the fit label hasn't been set, probably we're not doing a fit anyway, so pick a more generic name
@@ -11831,8 +11871,9 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use FFT to calculate PSF convolutions: " << display_switch(fft_convolution) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'fft_convolution' command; must specify 'on' or 'off'");
+				bool old_setting = fft_convolution;
 				set_switch(fft_convolution,setword);
-				if ((!fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+				if ((!fft_convolution) and (old_setting==true)) cleanup_FFT_convolution_arrays();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="pixel_fraction")
@@ -13476,11 +13517,11 @@ void QLens::process_commands(bool read_file)
 							if (image_pixel_grids[i] != NULL) {
 								image_pixel_grids[i]->delete_ray_tracing_arrays();
 								image_pixel_grids[i]->setup_ray_tracing_arrays();
-								if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+								if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 							}
 						}
 					}
-					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -13494,7 +13535,7 @@ void QLens::process_commands(bool read_file)
 				bool ss_orig = psf_supersampling;
 				set_switch(psf_supersampling,setword);
 				if (psf_supersampling != ss_orig) {
-					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
 				if ((psf_supersampling) and (use_input_psf_matrix)) {
 					generate_supersampled_PSF_matrix();
@@ -13518,7 +13559,7 @@ void QLens::process_commands(bool read_file)
 						if (image_pixel_grids[i] != NULL) {
 							image_pixel_grids[i]->delete_ray_tracing_arrays();
 							image_pixel_grids[i]->setup_ray_tracing_arrays();
-							if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+							if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 						}
 					}
 				}
@@ -13558,7 +13599,7 @@ void QLens::process_commands(bool read_file)
 							if (image_pixel_grids[i] != NULL) {
 								image_pixel_grids[i]->delete_ray_tracing_arrays();
 								image_pixel_grids[i]->setup_ray_tracing_arrays();
-								if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+								if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 							}
 						}
 					}
@@ -13566,7 +13607,7 @@ void QLens::process_commands(bool read_file)
 						generate_supersampled_PSF_matrix();
 						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
 					}
-					if ((fft_convolution) and (setup_fft_convolution)) cleanup_FFT_convolution_arrays();
+					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of image pixel splittings = " << default_imgpixel_nsplit << endl;
@@ -13595,7 +13636,7 @@ void QLens::process_commands(bool read_file)
 						if (image_pixel_grids[i] != NULL) {
 							image_pixel_grids[i]->delete_ray_tracing_arrays();
 							image_pixel_grids[i]->setup_ray_tracing_arrays();
-							if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+							if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 						}
 					}
 				}
@@ -13616,7 +13657,7 @@ void QLens::process_commands(bool read_file)
 						if (image_pixel_grids[i] != NULL) {
 							image_pixel_grids[i]->delete_ray_tracing_arrays();
 							image_pixel_grids[i]->setup_ray_tracing_arrays();
-							if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+							if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 						}
 					}
 				}
@@ -13637,7 +13678,7 @@ void QLens::process_commands(bool read_file)
 						if (image_pixel_grids[i] != NULL) {
 							image_pixel_grids[i]->delete_ray_tracing_arrays();
 							image_pixel_grids[i]->setup_ray_tracing_arrays();
-							if (islens()) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+							if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
 						}
 					}
 				}
@@ -14902,7 +14943,10 @@ void QLens::process_commands(bool read_file)
 					IsophoteData isodata_mock_t;
 					ImagePixelData mockdata_t;
 
-					if (n_extended_src_redshifts==0) Complain("no extended src redshift has been created");
+					if (n_extended_src_redshifts==0) {
+						load_pixel_grid_from_data();
+					}
+					if (image_pixel_grids==NULL) Complain("image pixel grids could not be generated from given data and masks");
 					if (image_pixel_grids[0] != NULL) delete image_pixel_grids[0];
 					image_pixel_grids[0] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*image_pixel_data),true);
 					image_pixel_grids[0]->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile

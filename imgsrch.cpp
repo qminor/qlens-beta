@@ -1116,7 +1116,7 @@ ofstream Grid::xgrid;
 
 bool QLens::plot_recursive_grid(const char filename[])
 {
-	(this->*plot_critical_curves)("crit.dat");
+	plot_critical_curves("crit.dat");
 	if ((grid==NULL) and (create_grid(true,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	if (mpi_id==0) {
@@ -1965,7 +1965,7 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 }
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
 {
-	if ((this->*plot_critical_curves)("crit.dat")==false) warn(warnings,"no critical curves found");
+	if (plot_critical_curves("crit.dat")==false) warn(warnings,"no critical curves found");
 	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
 	ifstream sources(sourcefile);

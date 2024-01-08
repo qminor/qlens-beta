@@ -57,6 +57,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	lensprofile_nparams = lensprofile_np;
 	center_anchored = false;
 	anchor_special_parameter = false;
+	transform_center_coords_to_pixsrc_frame = false;
 	if (is_elliptical_lens) {
 		ellipticity_mode = default_ellipticity_mode;
 	} else {
@@ -115,6 +116,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	kpc_to_arcsec = lens_in->kpc_to_arcsec;
 
 	center_anchored = lens_in->center_anchored;
+	transform_center_coords_to_pixsrc_frame = lens_in->transform_center_coords_to_pixsrc_frame;
 	anchor_special_parameter = lens_in->anchor_special_parameter;
 	center_anchor_lens = lens_in->center_anchor_lens;
 	n_params = lens_in->n_params;
@@ -155,9 +157,9 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	if (angle_param_exists) set_angle_radians(lens_in->theta);
 	x_center = lens_in->x_center;
 	y_center = lens_in->y_center;
-	if (lensed_center_coords) {
-		x_center_lensed = lens_in->x_center_lensed;
-		y_center_lensed = lens_in->y_center_lensed;
+	if ((lensed_center_coords) or (transform_center_coords_to_pixsrc_frame)) {
+		xc_prime = lens_in->xc_prime;
+		yc_prime = lens_in->yc_prime;
 	}
 	n_fourier_modes = lens_in->n_fourier_modes;
 	if (n_fourier_modes > 0) {
@@ -449,6 +451,19 @@ void LensProfile::delete_center_anchor()
 void LensProfile::delete_special_parameter_anchor()
 {
 	if (anchor_special_parameter) anchor_special_parameter = false;
+}
+
+bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc)
+{
+	if (qlens == NULL) return false;
+	if (ellipticity_mode == -1) die("can only transform center coords for elliptical lens");
+	if (!transform_center_coords_to_pixsrc_frame) transform_center_coords_to_pixsrc_frame = true;
+	assign_param_pointers();
+	assign_paramnames();
+	xc_prime = dxc;
+	yc_prime = dyc;
+	update_center_from_pixsrc_coords();
+	return true;
 }
 
 void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
@@ -1044,13 +1059,21 @@ void LensProfile::set_geometric_paramnames(int qi)
 			paramnames[qi] = "theta"; latex_paramnames[qi] = "\\theta"; latex_param_subscripts[qi] = ""; qi++;
 		}
 		if (!center_anchored) {
-			paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c";
+			if (!transform_center_coords_to_pixsrc_frame) {
+				paramnames[qi] = "xc"; latex_paramnames[qi] = "x"; latex_param_subscripts[qi] = "c";
+			} else {
+				paramnames[qi] = "delta_xc"; latex_paramnames[qi] = "\\Delta x"; latex_param_subscripts[qi] = "c";
+			}
 			if (lensed_center_coords) {
 				paramnames[qi] += "_l";
 				latex_param_subscripts[qi] += ",l";
 			}
 			qi++;
-			paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c";
+			if (!transform_center_coords_to_pixsrc_frame) {
+				paramnames[qi] = "yc"; latex_paramnames[qi] = "y"; latex_param_subscripts[qi] = "c";
+			} else {
+				paramnames[qi] = "delta_yc"; latex_paramnames[qi] = "\\Delta y"; latex_param_subscripts[qi] = "c";
+			}
 			if (lensed_center_coords) {
 				paramnames[qi] += "_l";
 				latex_param_subscripts[qi] += ",l";
@@ -1100,12 +1123,12 @@ void LensProfile::set_geometric_param_pointers(int qi)
 			angle_param[qi++] = true;
 			angle_param_exists = true;
 		}
-		if (!lensed_center_coords) {
+		if ((!lensed_center_coords) and (!transform_center_coords_to_pixsrc_frame)) {
 			param[qi++] = &x_center;
 			param[qi++] = &y_center;
 		} else {
-			param[qi++] = &x_center_lensed;
-			param[qi++] = &y_center_lensed;
+			param[qi++] = &xc_prime;
+			param[qi++] = &yc_prime;
 		}
 	} else {
 		angle_param_exists = true;
@@ -1130,12 +1153,12 @@ void LensProfile::set_geometric_parameters(const double &par1_in, const double &
 		set_ellipticity_parameter(par1_in);
 		theta = degrees_to_radians(par2_in);
 	}
-	if (!lensed_center_coords) {
+	if ((!lensed_center_coords) and (!transform_center_coords_to_pixsrc_frame)) {
 		x_center = xc_in;
 		y_center = yc_in;
 	} else {
-		x_center_lensed = xc_in;
-		y_center_lensed = yc_in;
+		xc_prime = xc_in;
+		yc_prime = yc_in;
 		set_center_if_lensed_coords();
 	}
 	update_ellipticity_meta_parameters();
@@ -1146,7 +1169,7 @@ void LensProfile::set_center_if_lensed_coords()
 	if (lensed_center_coords) {
 		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
 		lensvector xl;
-		qlens->map_to_lens_plane(qlens->lens_redshift_idx[lens_number],x_center_lensed,y_center_lensed,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+		qlens->map_to_lens_plane(qlens->lens_redshift_idx[lens_number],xc_prime,yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 		x_center = xl[0];
 		y_center = xl[1];
 	}
@@ -1659,6 +1682,8 @@ void LensProfile::update_ellipticity_meta_parameters()
 		set_angle_from_components(epsilon1,epsilon2);
 	}
 
+	//if (transform_center_coords_to_pixsrc_frame) update_center_from_pixsrc_coords();
+
 	if (!ellipticity_gradient) {
 		if (ellipticity_mode==0) {
 			epsilon = 1 - q;
@@ -1693,6 +1718,15 @@ void LensProfile::update_ellipticity_meta_parameters()
 		}
 	}
 }
+
+void LensProfile::update_center_from_pixsrc_coords()
+{
+	double sig, xcs, ycs;
+	sig = qlens->find_approx_source_size(0,xcs,ycs,false);
+	x_center = xcs + xc_prime*sig;
+	y_center = ycs + yc_prime*sig;
+}
+
 
 void LensProfile::update_angle_meta_params()
 {
@@ -4094,8 +4128,9 @@ void LensProfile::print_parameters()
 		if (i != n_params-2) cout << ", ";
 	}
 	//if (!lensed_center_coords) cout << "xc=" << x_center << ", yc=" << y_center;
-	//else cout << "xc_l=" << x_center_lensed << ", yc_l=" << y_center_lensed << " (xc=" << x_center << ",yc=" << y_center << ")";
+	//else cout << "xc_l=" << xc_prime << ", yc_l=" << yc_prime << " (xc=" << x_center << ",yc=" << y_center << ")";
 	if (center_anchored) cout << " (center anchored to lens " << center_anchor_lens->lens_number << ")";
+	if (transform_center_coords_to_pixsrc_frame) cout << " (xc=" << x_center << ", yc=" << y_center << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != 3) and (ellipticity_mode != -1)) {
 		cout << " (";
 		if (ellipticity_gradient) cout << "egrad=on, ";
@@ -4261,7 +4296,7 @@ void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
 		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
 		else {
 			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
-			else scriptout << x_center_lensed << " " << y_center_lensed << " z=" << zlens << " -lensed_center" << endl;
+			else scriptout << xc_prime << " " << yc_prime << " z=" << zlens << " -lensed_center" << endl;
 		}
 	} else {
 		for (int i=0; i < n_params-1; i++) {

@@ -65,7 +65,6 @@ int main(int argc, char *argv[])
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
-	QLens::setup_fft_convolution = false;
 
 	bool read_from_file = false;
 	bool verbal_mode = true;

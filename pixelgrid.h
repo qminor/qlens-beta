@@ -281,6 +281,7 @@ class ImagePixelGrid : public Sort
 	friend class SourcePixelGrid;
 	friend class DelaunayGrid;
 	friend class ImagePixelData;
+	friend class LensProfile;
 	QLens *lens;
 	SourcePixelGrid *source_pixel_grid;
 	DelaunayGrid *delaunay_srcgrid;
@@ -311,6 +312,7 @@ class ImagePixelGrid : public Sort
 	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
 	int **pixel_index_fgmask;
+	int Lmatrix_src_npixels;
 
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
@@ -323,6 +325,21 @@ class ImagePixelGrid : public Sort
 	int *image_pixel_j_from_subcell_jj;
 	int *active_image_pixel_i_fgmask;
 	int *active_image_pixel_j_fgmask;
+
+	double *psf_zvec; // for convolutions using FFT
+	int fft_imin, fft_jmin, fft_ni, fft_nj;
+#ifdef USE_FFTW
+	complex<double> *psf_transform;
+	complex<double> **Lmatrix_transform;
+	double **Lmatrix_imgs_rvec;
+	double *single_img_rvec;
+	complex<double> *img_transform;
+	fftw_plan fftplan;
+	fftw_plan fftplan_inverse;
+	fftw_plan *fftplans_Lmatrix;
+	fftw_plan *fftplans_Lmatrix_inverse;
+#endif
+	bool fft_convolution_is_setup;
 
 	int **twist_status;
 	lensvector **twist_pts;
@@ -369,7 +386,7 @@ class ImagePixelGrid : public Sort
 	public:
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, int src_redshift_index = -1);
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const bool ignore_mask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 
@@ -394,6 +411,8 @@ class ImagePixelGrid : public Sort
 	void ray_trace_pixels();
 	void set_nsplits(const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void setup_noise_map(QLens* lens_in);
+	bool setup_FFT_convolution(const bool supersampling, const bool verbal);
+	void cleanup_FFT_convolution_arrays();
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations(const bool verbal = false);
