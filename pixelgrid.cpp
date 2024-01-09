@@ -8961,6 +8961,7 @@ void ImagePixelGrid::setup_noise_map(QLens* lens_in)
 
 void ImagePixelGrid::setup_pixel_arrays()
 {
+	// This function is called by the constructor only. All arrays that are not initialized are set to null at the end of the function
 	xy_N = x_N*y_N;
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) n_active_pixels = 0;
 	else n_active_pixels = xy_N;
@@ -9045,6 +9046,25 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_index[i] = new int[max_subpixel_ny];
 	}
 	set_null_ray_tracing_arrays();
+
+	extended_mask_subcell_i = NULL;
+	extended_mask_subcell_j = NULL;
+	extended_mask_subcell_index = NULL;
+	defx_subpixel_centers = NULL;
+	defy_subpixel_centers = NULL;
+
+	active_image_pixel_i = NULL;
+	active_image_pixel_j = NULL;
+	active_image_subpixel_ii = NULL;
+	active_image_subpixel_jj = NULL;
+	active_image_pixel_i_ss = NULL;
+	active_image_pixel_j_ss = NULL;
+	active_image_subpixel_ss = NULL;
+	image_pixel_i_from_subcell_ii = NULL;
+	image_pixel_j_from_subcell_jj = NULL;
+	active_image_pixel_i_fgmask = NULL;
+	active_image_pixel_j_fgmask= NULL;
+
 	fft_convolution_is_setup = false;
 }
 

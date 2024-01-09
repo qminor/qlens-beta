@@ -13149,6 +13149,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="emask_n_neighbors")
 		{
+			// This command should be made obsolete. Should just do this with 'set_neighbor_pixels' command together with an -emask option, and an option to reset emask to be same as regular mask. IMPLEMENT THIS!!
 			if (image_pixel_data==NULL) Complain("must load image pixel data before setting emask_n_neighbors");
 			int mask_i=0;
 			for (int i=1; i < nwords; i++) {

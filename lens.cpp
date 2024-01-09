@@ -16273,9 +16273,9 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 			clear_sparse_lensing_matrices();
 			clear_pixel_matrices();
-			if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
+			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
 			//if (extended_mask_n_neighbors == -1) image_pixel_grid0->include_all_pixels();
-			else image_pixel_grid0->activate_extended_mask(); 
+			image_pixel_grid0->activate_extended_mask(); 
 			assign_pixel_mappings(-1,verbal);
 			initialize_pixel_matrices(-1,verbal);
 			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
@@ -16297,8 +16297,8 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 			}
 #endif
 			clear_pixel_matrices(-1);
-			if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
-			else image_pixel_grid0->activate_extended_mask(); 
+			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
+			image_pixel_grid0->activate_extended_mask(); 
 
 			image_pixel_grid0->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness(-1);
@@ -16312,8 +16312,8 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 			image_pixel_grid0->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grid0 (used for the inversion)
 		} else if (source_fit_mode==Parameterized_Source) {
 			clear_pixel_matrices();
-			if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
-			else image_pixel_grid0->activate_extended_mask(); 
+			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
+			image_pixel_grid0->activate_extended_mask(); 
 			image_pixel_grid0->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness(-1);
 			PSF_convolution_pixel_vector(-1,false,verbal);
