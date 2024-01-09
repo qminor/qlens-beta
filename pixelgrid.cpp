@@ -5025,8 +5025,8 @@ void DelaunayGrid::plot_surface_brightness(string root, const double grid_scalef
 		if (status) fits_report_error(stderr, status); // print any error message
 		for (i=0; i < npts_x; i++) delete[] sbvals[i];
 		delete[] sbvals;
-	}
 #endif
+	}
 
 }
 
@@ -9069,24 +9069,14 @@ void ImagePixelGrid::set_null_ray_tracing_arrays()
 	masked_pixel_corner_j = NULL;
 	masked_pixel_corner = NULL;
 	masked_pixel_corner_up = NULL;
-	extended_mask_subcell_i = NULL;
-	extended_mask_subcell_j = NULL;
-	extended_mask_subcell_index = NULL;
-	defx_subpixel_centers = NULL;
-	defy_subpixel_centers = NULL;
+	if (lens->split_imgpixels) {
+		extended_mask_subcell_i = NULL;
+		extended_mask_subcell_j = NULL;
+		extended_mask_subcell_index = NULL;
+		defx_subpixel_centers = NULL;
+		defy_subpixel_centers = NULL;
+	}
 	ncvals = NULL;
-
-	active_image_pixel_i = NULL;
-	active_image_pixel_j = NULL;
-	active_image_subpixel_ii = NULL;
-	active_image_subpixel_jj = NULL;
-	active_image_pixel_i_ss = NULL;
-	active_image_pixel_j_ss = NULL;
-	active_image_subpixel_ss = NULL;
-	image_pixel_i_from_subcell_ii = NULL;
-	image_pixel_j_from_subcell_jj = NULL;
-	active_image_pixel_i_fgmask = NULL;
-	active_image_pixel_j_fgmask= NULL;
 }
 
 void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)

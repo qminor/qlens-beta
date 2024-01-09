@@ -15120,6 +15120,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 				}
 
+
 				if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 				bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
 				if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(zsrc_i,verbal);
@@ -15477,12 +15478,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 	bool sb_outside_window = false;
 	if (outside_sb_prior) {
+		for (;;) {
 		bool supersampling_orig = psf_supersampling;
 		psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 			for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-				if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[zsrc_i]] == -1) image_pixel_grids[zsrc_i]->include_all_pixels();
-				else image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+				image_pixel_grids[zsrc_i]->activate_extended_mask(); 
 				image_pixel_grids[zsrc_i]->redo_lensing_calculations(false); // This shouldn't be necessary! FIX!!!
 				assign_pixel_mappings(zsrc_i,verbal);
 				initialize_pixel_matrices(zsrc_i,verbal);
@@ -15525,8 +15526,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 		} else if (source_fit_mode==Parameterized_Source) {
 			for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-				if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[zsrc_i]]] == -1) image_pixel_grids[zsrc_i]->include_all_pixels();
-				else image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+				//if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[zsrc_i]]] == -1) image_pixel_grids[zsrc_i]->include_all_pixels();
+				image_pixel_grids[zsrc_i]->activate_extended_mask(); 
 				image_pixel_grids[zsrc_i]->find_surface_brightness(false,true);
 				vectorize_image_pixel_surface_brightness(zsrc_i);
 				PSF_convolution_pixel_vector(zsrc_i,false,verbal,true); // no supersampling, no convolution (saves time)
@@ -15579,6 +15580,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i]);
 			psf_supersampling = supersampling_orig;
+		}
 		}
 	}
 
