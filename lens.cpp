@@ -15478,7 +15478,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 	bool sb_outside_window = false;
 	if (outside_sb_prior) {
-		for (;;) {
 		bool supersampling_orig = psf_supersampling;
 		psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
@@ -15580,7 +15579,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i]);
 			psf_supersampling = supersampling_orig;
-		}
 		}
 	}
 
