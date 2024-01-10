@@ -1723,8 +1723,8 @@ void LensProfile::update_center_from_pixsrc_coords()
 {
 	double sig, xcs, ycs;
 	sig = qlens->find_approx_source_size(0,xcs,ycs,false);
-	x_center = xcs + xc_prime*sig;
-	y_center = ycs + yc_prime*sig;
+	x_center = xcs + xc_prime;
+	y_center = ycs + yc_prime;
 }
 
 
