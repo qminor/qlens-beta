@@ -977,11 +977,12 @@ inline ElemType CellBound<MetricType, ElemType>::Diameter() const
 }
 
 //! Serialize the bound object.
+/*
 template<typename MetricType, typename ElemType>
 template<typename Archive>
 void CellBound<MetricType, ElemType>::serialize(
     Archive& ar,
-    const uint32_t /* version */)
+    const uint32_t )
 {
   ar(CEREAL_POINTER_ARRAY(bounds, dim));
   ar(CEREAL_NVP(minWidth));
@@ -992,6 +993,7 @@ void CellBound<MetricType, ElemType>::serialize(
   ar(CEREAL_NVP(hiAddress));
   ar(CEREAL_NVP(metric));
 }
+*/
 
 } // namespace mlpack
 

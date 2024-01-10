@@ -366,6 +366,7 @@ Cluster(const MatType& data,
   return true;
 }
 
+/*
 template<typename MetricType,
          typename InitialPartitionPolicy,
          typename EmptyClusterPolicy,
@@ -376,12 +377,13 @@ void KMeans<MetricType,
             InitialPartitionPolicy,
             EmptyClusterPolicy,
             LloydStepType,
-            MatType>::serialize(Archive& ar, const uint32_t /* version */)
+            MatType>::serialize(Archive& ar, const uint32_t )
 {
   ar(CEREAL_NVP(maxIterations));
   ar(CEREAL_NVP(metric));
   ar(CEREAL_NVP(partitioner));
   ar(CEREAL_NVP(emptyClusterAction));
 }
+*/
 
 } // namespace mlpack

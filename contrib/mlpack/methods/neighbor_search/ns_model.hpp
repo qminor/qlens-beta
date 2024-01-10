@@ -156,11 +156,11 @@ class NSWrapper : public NSWrapperBase
                       arma::mat& distances);
 
   //! Serialize the NeighborSearch model.
-  template<typename Archive>
-  void serialize(Archive& ar, const uint32_t /* version */)
-  {
-    ar(CEREAL_NVP(ns));
-  }
+  //template<typename Archive>
+  //void serialize(Archive& ar, const uint32_t /* version */)
+  //{
+    //ar(CEREAL_NVP(ns));
+  //}
 
  protected:
   // Convenience typedef for the neighbor search type held by this class.
@@ -239,11 +239,11 @@ class LeafSizeNSWrapper :
                       const double /* rho */);
 
   //! Serialize the NeighborSearch model.
-  template<typename Archive>
-  void serialize(Archive& ar, const uint32_t /* version */)
-  {
-    ar(CEREAL_NVP(ns));
-  }
+  //template<typename Archive>
+  //void serialize(Archive& ar, const uint32_t /* version */)
+  //{
+    //ar(CEREAL_NVP(ns));
+  //}
 
  protected:
   using NSWrapper<SortPolicy,
@@ -310,11 +310,11 @@ class SpillNSWrapper :
                       const double rho);
 
   //! Serialize the NeighborSearch model.
-  template<typename Archive>
-  void serialize(Archive& ar, const uint32_t /* version */)
-  {
-    ar(CEREAL_NVP(ns));
-  }
+  //template<typename Archive>
+  //void serialize(Archive& ar, const uint32_t /* version */)
+  //{
+    //ar(CEREAL_NVP(ns));
+  //}
 
  protected:
   using NSWrapper<
