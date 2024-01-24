@@ -229,6 +229,7 @@ class DelaunayGrid : public Sort
 	private:
 	double** voronoi_boundary_x;
 	double** voronoi_boundary_y;
+	double *voronoi_length;
 	int** shared_triangles;
 	int* n_shared_triangles;
 	// Used for calculating areas and finding whether points are inside a given cell
@@ -263,7 +264,7 @@ class DelaunayGrid : public Sort
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
-	void generate_gmatrices();
+	void generate_gmatrices(const bool interpolate);
 	void generate_hmatrices();
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 	double modified_bessel_function(const double x, const double nu);
@@ -431,7 +432,7 @@ class ImagePixelGrid : public Sort
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false);
 	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_residuals = false, bool show_noise_thresh = false, bool plot_log = false);
-	void plot_sourcepts(string outfile_root);
+	void plot_sourcepts(string outfile_root, const bool show_subpixels = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise();
@@ -526,7 +527,7 @@ struct ImagePixelData : public Sort
 	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
-	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0);
+	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const int reduce_nx=-1, const int reduce_ny=-1);
 	bool copy_mask(ImagePixelData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();
 	double find_max_sb(const int mask_k = 0);

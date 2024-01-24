@@ -50,7 +50,7 @@ enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
-enum RegularizationMethod { None, Norm, Gradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
+enum RegularizationMethod { None, Norm, Gradient, SmoothGradient, Curvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
 enum RayTracingMethod {
 	Interpolate,
 	Area_Overlap
@@ -1029,7 +1029,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double interpolate_PSF_matrix(const double x, const double y);
 
 	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
-	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1);
+	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false);
 	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1);
 	void generate_Rmatrix_norm();
 	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool verbal = false);

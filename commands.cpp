@@ -6781,6 +6781,7 @@ void QLens::process_commands(bool read_file)
 							if (regularization_method==None) cout << "Regularization method: none" << endl;
 							else if (regularization_method==Norm) cout << "Regularization method: norm" << endl;
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
+							else if (regularization_method==SmoothGradient) cout << "Regularization method: sgradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
 							else if (regularization_method==Matern_Kernel) cout << "Regularization method: Matern kernel" << endl;
 							else if (regularization_method==Exponential_Kernel) cout << "Regularization method: exponential kernel" << endl;
@@ -6799,6 +6800,7 @@ void QLens::process_commands(bool read_file)
 						}
 						else if (setword=="norm") regularization_method = Norm;
 						else if (setword=="gradient") regularization_method = Gradient;
+						else if (setword=="sgradient") regularization_method = SmoothGradient;
 						else if (setword=="curvature") regularization_method = Curvature;
 						else if (setword=="matern_kernel") regularization_method = Matern_Kernel;
 						else if (setword=="exp_kernel") regularization_method = Exponential_Kernel;
@@ -9193,12 +9195,27 @@ void QLens::process_commands(bool read_file)
 			{
 				bool foreground_mask = false;
 				bool emask = false;
+				int reduce_npx = -1, reduce_npy = -1;
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-fg") foreground_mask = true;
 						else if (args[i]=="-emask") emask = true;
+						else if (args[i].find("-reduce=")==0) {
+							string astr = args[i].substr(8);
+							int pos, lnum, pnum;
+							if ((pos = astr.find(",")) != string::npos) {
+								string npxstring, npystring;
+								npxstring = astr.substr(0,pos);
+								npystring = astr.substr(pos+1);
+								stringstream npxstr, npystr;
+								npxstr << npxstring;
+								if (!(npxstr >> reduce_npx)) Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
+								npystr << npystring;
+								if (!(npystr >> reduce_npy)) Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
+							} else Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
+						}
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
@@ -9208,7 +9225,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap savemask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i)==false) Complain("mask could not be saved");
+				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i,reduce_npx,reduce_npy)==false) Complain("mask could not be saved");
 			}
 			else if (words[1]=="load_noisemap")
 			{
@@ -10203,6 +10220,7 @@ void QLens::process_commands(bool read_file)
 				bool plot_fits = false;
 				bool omit_caustics = false;
 				bool old_caustics_setting = show_cc;
+				bool show_raytraced_pts = false; // if true, show all raytraced points (subpixels, if splitting is on) instead of source pixels
 				string temp_title;
 				int zsrc_i = 0;
 				for (int i=1; i < nwords-1; i++) {
@@ -10250,6 +10268,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
 						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
+						else if (args[i]=="-show_raytraced_pts") show_raytraced_pts = true;
 						else if ((args[i]=="-nocaust") or (args[i]=="-nocc")) { omit_caustics = true; show_cc = false; }
 						//else if (args[i]=="-nomask") use_mask = false;
 						//else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
@@ -10323,6 +10342,7 @@ void QLens::process_commands(bool read_file)
 							} else Complain("Delaunay grid has not been created");
 
 						}
+						if (show_raytraced_pts) image_pixel_grids[zsrc_i]->plot_sourcepts("src_pixel",true); // this will overwrite the source point file to show all ray-traced points
 					}
 					if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
 					if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {

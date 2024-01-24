@@ -2794,7 +2794,7 @@ void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i)
 	}
 }
 
-void QLens::generate_Rmatrix_from_gmatrices(const int zsrc_i)
+void QLens::generate_Rmatrix_from_gmatrices(const int zsrc_i, const bool interpolate)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2836,8 +2836,8 @@ void QLens::generate_Rmatrix_from_gmatrices(const int zsrc_i)
 		}
 	}
 	if (source_fit_mode==Delaunay_Source) {
-		if (zsrc_i < 0) image_pixel_grid0->delaunay_srcgrid->generate_gmatrices();
-		else image_pixel_grids[zsrc_i]->delaunay_srcgrid->generate_gmatrices();
+		if (zsrc_i < 0) image_pixel_grid0->delaunay_srcgrid->generate_gmatrices(interpolate);
+		else image_pixel_grids[zsrc_i]->delaunay_srcgrid->generate_gmatrices(interpolate);
 	}
 	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->generate_gmatrices();
 	else die("gmatrix not supported for sources other than Delaunay or Cartesian");
@@ -3357,6 +3357,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	shared_triangles = new int*[n_srcpts];
 	voronoi_boundary_x = new double*[n_srcpts];
 	voronoi_boundary_y = new double*[n_srcpts];
+	voronoi_length = new double[n_srcpts];
 
 	Delaunay *delaunay_triangles = new Delaunay(srcpts_x, srcpts_y, n_srcpts);
 	delaunay_triangles->Process();
@@ -3376,6 +3377,8 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	int i;
 	lensvector midpoint;
 	//int** tricheck = new int*[n_srcpts];
+	lensvector vec1,vec2;
+	//double totarea = 0;
 	for (n=0; n < n_srcpts; n++) {
 		n_boundary_pts = shared_triangles_unsorted[n].size();
 		voronoi_boundary_x[n] = new double[n_boundary_pts];
@@ -3443,7 +3446,19 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 		//delete[] tricheck[n];
 		delete[] angles;
 		delete[] midpt_angles;
+		vec2[0] = voronoi_boundary_x[n][0] - srcpts[n][0];
+		vec2[1] = voronoi_boundary_y[n][0] - srcpts[n][1];
+		voronoi_length[n] = 0;
+		for (i=0; i < n_boundary_pts-1; i++) {
+			vec1 = vec2;
+			vec2[0] = voronoi_boundary_x[n][i+1] - srcpts[n][0];
+			vec2[1] = voronoi_boundary_y[n][i+1] - srcpts[n][1];
+			voronoi_length[n] += abs((vec1[0]*vec2[1] - vec1[1]*vec2[0])/2); // this is actually the area of the voronoi cell, but we'll square root it to get length afterwards
+		}
+		//totarea += voronoi_length[n];
+		voronoi_length[n] = sqrt(voronoi_length[n]);
 	}
+	//cout << "TOTAL AREA: " << totarea << endl;
 	//delete[] tricheck;
 
 	delete[] shared_triangles_unsorted;
@@ -4578,10 +4593,10 @@ void DelaunayGrid::generate_hmatrices()
 	}
 }
 
-void DelaunayGrid::generate_gmatrices()
+void DelaunayGrid::generate_gmatrices(const bool interpolate)
 {
 	// NOTE: for the moment, we are assuming all the source pixels are 'active', i.e. will be used in the inversion
-	record_adjacent_triangles_xy();
+	if (!interpolate) record_adjacent_triangles_xy();
 
 	auto add_gmatrix_entry = [](QLens *lens, const int l, const int i, const int j, const double entry)
 	{
@@ -4603,67 +4618,103 @@ void DelaunayGrid::generate_gmatrices()
 
 
 	int i,k,l;
-	int vertex_i1, vertex_i2, trinum;
-	Triangle* triptr;
-	bool found_i1, found_i2;
-	double length, minlength;
-	double x1, y1, x2, y2, dpt, dpt1, dpt2, dpt12;
-	lensvector pt;
-	for (i=0; i < n_srcpts; i++) {
-		for (l=0; l < 4; l++) {
-			vertex_i1 = -1;
-			vertex_i2 = -1;
-			if ((trinum = adj_triangles[l][i]) != -1) {
-				triptr = &triangle[trinum];
-				found_i1 = false;
-				found_i2 = false;
-				if ((k = triptr->vertex_index[0]) != i) { vertex_i1 = k; found_i1 = true; }
-				if ((k = triptr->vertex_index[1]) != i) {
-					if (!found_i1) {
-						vertex_i1 = k;
-						found_i1 = true;
-					} else {
+	if (interpolate) {
+		int npts;
+		bool inside_triangle;
+		bool on_vertex;
+		int trinum,kmin;
+		double x,y,xp,xm,yp,ym;
+		lensvector interp_pt[4];
+		for (i=0; i < n_srcpts; i++) {
+			x = srcpts[i][0];
+			y = srcpts[i][1];
+			xp = x + voronoi_length[i];
+			xm = x - voronoi_length[i];
+			yp = y + voronoi_length[i];
+			ym = y - voronoi_length[i];
+			interp_pt[0].input(xp,y);
+			interp_pt[1].input(xm,y);
+			interp_pt[2].input(x,yp);
+			interp_pt[3].input(x,ym);
+			for (l=0; l < 4; l++) {
+				add_gmatrix_entry(lens,l,i,i,1.0);
+				find_containing_triangle(interp_pt[l],trinum,inside_triangle,on_vertex,kmin);
+				if (!inside_triangle) {
+					if (!on_vertex) continue; // assume SB = 0 outside grid
+				}
+				if (lens->natural_neighbor_interpolation) {
+					find_interpolation_weights_nn(interp_pt[l], trinum, npts, 0);
+				} else {
+					find_interpolation_weights_3pt(interp_pt[l], trinum, npts, 0);
+				}
+				for (k=0; k < npts; k++) {
+					add_gmatrix_entry(lens,l,i,interpolation_indx[k][0],-interpolation_wgts[k][0]);
+				}
+			}
+		}
+	} else {
+		int vertex_i1, vertex_i2, trinum;
+		Triangle* triptr;
+		bool found_i1, found_i2;
+		double length, minlength;
+		double x1, y1, x2, y2, dpt, dpt1, dpt2, dpt12;
+		lensvector pt;
+		for (i=0; i < n_srcpts; i++) {
+			for (l=0; l < 4; l++) {
+				vertex_i1 = -1;
+				vertex_i2 = -1;
+				if ((trinum = adj_triangles[l][i]) != -1) {
+					triptr = &triangle[trinum];
+					found_i1 = false;
+					found_i2 = false;
+					if ((k = triptr->vertex_index[0]) != i) { vertex_i1 = k; found_i1 = true; }
+					if ((k = triptr->vertex_index[1]) != i) {
+						if (!found_i1) {
+							vertex_i1 = k;
+							found_i1 = true;
+						} else {
+							vertex_i2 = k;
+							found_i2 = true;
+						}
+					}
+					if (!found_i1) die("WHAT?! couldn't find more than one vertex that isn't the one in question");
+					if ((!found_i2) and ((k = triptr->vertex_index[2]) != i)) {
 						vertex_i2 = k;
 						found_i2 = true;
 					}
+					if (!found_i2) die("WHAT?! couldn't find both vertices that aren't the one in question");
 				}
-				if (!found_i1) die("WHAT?! couldn't find more than one vertex that isn't the one in question");
-				if ((!found_i2) and ((k = triptr->vertex_index[2]) != i)) {
-					vertex_i2 = k;
-					found_i2 = true;
-				}
-				if (!found_i2) die("WHAT?! couldn't find both vertices that aren't the one in question");
-			}
-			if (vertex_i1 != -1) {
-				x1 = srcpts[vertex_i1][0];
-				y1 = srcpts[vertex_i1][1];
-				x2 = srcpts[vertex_i2][0];
-				y2 = srcpts[vertex_i2][1];
-				if (l < 2) {
-					pt[1] = srcpts[i][1];
-					pt[0] = ((x2-x1)/(y2-y1))*(pt[1]-y1) + x1;
-					dpt = abs(pt[0]-srcpts[i][0]);
+				if (vertex_i1 != -1) {
+					x1 = srcpts[vertex_i1][0];
+					y1 = srcpts[vertex_i1][1];
+					x2 = srcpts[vertex_i2][0];
+					y2 = srcpts[vertex_i2][1];
+					if (l < 2) {
+						pt[1] = srcpts[i][1];
+						pt[0] = ((x2-x1)/(y2-y1))*(pt[1]-y1) + x1;
+						dpt = abs(pt[0]-srcpts[i][0]);
+					} else {
+						pt[0] = srcpts[i][0];
+						pt[1] = ((y2-y1)/(x2-x1))*(pt[0]-x1) + y1;
+						dpt = abs(pt[1]-srcpts[i][1]);
+					}
+					dpt12 = sqrt(SQR(x2-x1) + SQR(y2-y1));
+					dpt1 = sqrt(SQR(pt[0]-x1)+SQR(pt[1]-y1));
+					dpt2 = sqrt(SQR(pt[0]-x2)+SQR(pt[1]-y2));
+					add_gmatrix_entry(lens,l,i,i,1.0);
+					add_gmatrix_entry(lens,l,i,vertex_i1,-dpt2/(dpt12));
+					add_gmatrix_entry(lens,l,i,vertex_i2,-dpt1/(dpt12));
+					//add_gmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 				} else {
-					pt[0] = srcpts[i][0];
-					pt[1] = ((y2-y1)/(x2-x1))*(pt[0]-x1) + y1;
-					dpt = abs(pt[1]-srcpts[i][1]);
+					minlength=1e30;
+					for (k=0; k < n_shared_triangles[i]; k++) {
+						triptr = &triangle[shared_triangles[i][k]];
+						length = sqrt(triptr->area);
+						if (length < minlength) minlength = length;
+					}
+					add_gmatrix_entry(lens,l,i,i,1.0);
+					//add_gmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 				}
-				dpt12 = sqrt(SQR(x2-x1) + SQR(y2-y1));
-				dpt1 = sqrt(SQR(pt[0]-x1)+SQR(pt[1]-y1));
-				dpt2 = sqrt(SQR(pt[0]-x2)+SQR(pt[1]-y2));
-				add_gmatrix_entry(lens,l,i,i,1.0);
-				add_gmatrix_entry(lens,l,i,vertex_i1,-dpt2/(dpt12));
-				add_gmatrix_entry(lens,l,i,vertex_i2,-dpt1/(dpt12));
-				//add_gmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
-			} else {
-				minlength=1e30;
-				for (k=0; k < n_shared_triangles[i]; k++) {
-					triptr = &triangle[shared_triangles[i][k]];
-					length = sqrt(triptr->area);
-					if (length < minlength) minlength = length;
-				}
-				add_gmatrix_entry(lens,l,i,i,1.0);
-				//add_gmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 			}
 		}
 	}
@@ -5789,7 +5840,7 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 	if (n_masks==0) { warn("no mask arrays have been initialized, indicating image data has not been loaded"); return false; }
 	if (mask_k > n_masks) die("cannot add mask whose index is greater than the number of masks; to add a new mask, set index = n_masks");
 	bool image_load_status = false;
-	int i,j,k,kk;
+	int i,j,iprime,jprime,k,kk;
 
 	fitsfile *fptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
@@ -5798,6 +5849,8 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 	double *pixels;
 	int n_maskpixels = 0;
 	bool new_mask = false;
+	int offset_x=0;
+	int offset_y=0;
 
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
@@ -5809,7 +5862,16 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 				kk=0;
 				long fpixel[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-				if ((naxes[0] != npixels_x) or (naxes[1] != npixels_y)) { cout << "Error: number of pixels in mask file does not match number of pixels in loaded data\n"; return false; }
+				if ((naxes[0] != npixels_x) or (naxes[1] != npixels_y)) {
+					if ((naxes[0] < npixels_x) and (naxes[1] < npixels_y)) {
+						offset_x = ((npixels_x-naxes[0])/2);
+						offset_y = ((npixels_y-naxes[1])/2);
+						warn("number of pixels in mask file is less than umber of pixels in load data; padding the mask image accordingly");
+					} else {
+						cout << "Error: number of pixels in mask file is greater than the number of pixels in loaded data (along x and/or y)\n";
+						return false;
+					}
+				}
 				if (mask_k==n_masks) {
 					new_mask = true;
 					bool ***new_masks = new bool**[n_masks+1];
@@ -5827,6 +5889,10 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 					for (i=0; i < npixels_x; i++) {
 						new_masks[n_masks][i] = new bool[npixels_y];
 						new_extended_masks[n_masks][i] = new bool[npixels_y];
+						for (j=0; j < npixels_y; j++) {
+							new_masks[n_masks][i][j] = false;
+							new_extended_masks[n_masks][i][j] = false;
+						}
 					}
 					delete[] in_mask;
 					delete[] extended_mask;
@@ -5844,46 +5910,48 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 					if (fits_read_pix(fptr, TDOUBLE, fpixel, naxes[0], NULL, pixels, NULL, &status) )  // read row of pixels
 						break; // jump out of loop on error
 
+					jprime = j + offset_y;
 					for (i=0; i < naxes[0]; i++) {
+						iprime = i + offset_x;
 						if (foreground) {
 							if (pixels[i] == 0.0) {
-								if (!add_mask_pixels) foreground_mask[i][j] = false;
-								else if (foreground_mask[i][j]==true) n_maskpixels++;
+								if (!add_mask_pixels) foreground_mask[iprime][jprime] = false;
+								else if (foreground_mask[iprime][jprime]==true) n_maskpixels++;
 							}
 							else {
-								foreground_mask[i][j] = true;
+								foreground_mask[iprime][jprime] = true;
 								n_maskpixels++;
-								//cout << pixels[i] << endl;
+								//cout << pixels[iprime] << endl;
 							}
 							if (new_mask) {
-								in_mask[mask_k][i][j] = true; // if new mask was created, then mask contains all the pixels by default
-								extended_mask[mask_k][i][j] = true; // if new mask was created, then extended mask contains all the pixels by default
+								in_mask[mask_k][iprime][jprime] = true; // if new mask was created, then mask contains all the pixels by default
+								extended_mask[mask_k][iprime][jprime] = true; // if new mask was created, then extended mask contains all the pixels by default
 							}
 						} else if (emask) {
 							if (pixels[i] == 0.0) {
-								if (!add_mask_pixels) extended_mask[mask_k][i][j] = false;
-								else if (extended_mask[mask_k][i][j]==true) n_maskpixels++;
+								if (!add_mask_pixels) extended_mask[mask_k][iprime][jprime] = false;
+								else if (extended_mask[mask_k][iprime][jprime]==true) n_maskpixels++;
 							}
 							else {
-								extended_mask[mask_k][i][j] = true;
+								extended_mask[mask_k][iprime][jprime] = true;
 								n_maskpixels++;
-								//cout << pixels[i] << endl;
+								//cout << pixels[iprime] << endl;
 							}
 							if (new_mask) {
-								in_mask[mask_k][i][j] = true; // if new mask was created, then mask contains all the pixels by default
+								in_mask[mask_k][iprime][jprime] = true; // if new mask was created, then mask contains all the pixels by default
 							}
 						} else {
 							if (pixels[i] == 0.0) {
-								if (!add_mask_pixels) in_mask[mask_k][i][j] = false;
-								else if (in_mask[mask_k][i][j]==true) n_maskpixels++;
+								if (!add_mask_pixels) in_mask[mask_k][iprime][jprime] = false;
+								else if (in_mask[mask_k][iprime][jprime]==true) n_maskpixels++;
 							}
 							else {
-								in_mask[mask_k][i][j] = true;
-								if (!extended_mask[mask_k][i][j]) extended_mask[mask_k][i][j] = true; // the extended mask MUST contain all the primary mask pixels
+								in_mask[mask_k][iprime][jprime] = true;
+								if (!extended_mask[mask_k][iprime][jprime]) extended_mask[mask_k][iprime][jprime] = true; // the extended mask MUST contain all the primary mask pixels
 								n_maskpixels++;
-							//cout << pixels[i] << endl;
+							//cout << pixels[iprime] << endl;
 							}
-							if (new_mask) extended_mask[mask_k][i][j] = true; // if new mask was created, then extended mask contains all the pixels by default
+							if (new_mask) extended_mask[mask_k][iprime][jprime] = true; // if new mask was created, then extended mask contains all the pixels by default
 						}
 					}
 				}
@@ -5920,17 +5988,31 @@ bool ImagePixelData::copy_mask(ImagePixelData* data, const int mask_k)
 }
 
 
-bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground, const bool emask, const int mask_k)
+bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground, const bool emask, const int mask_k, const int reduce_nx, const int reduce_ny)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
 #else
 	if (mask_k >= n_masks) { warn("mask with given index has not been created"); return false; }
-	int i,j,kk;
+	int i,j,iprime,jprime,kk;
 	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
 	int bitpix = -64, naxis = 2;
-	long naxes[2] = {npixels_x,npixels_y};
+	int offset_x=0, offset_y=0;
+	int npix_x=npixels_x, npix_y=npixels_y;
+	if (reduce_nx > 0) {
+		if (reduce_nx > npixels_x) { warn("cannot reduce number of max pixels; reduced nx must be smaller than current number of pixels along x"); return false; }
+		npix_x = reduce_nx;
+		offset_x = (npixels_x-reduce_nx)/2;
+		offset_x--;
+	}
+	if (reduce_ny > 0) {
+		if (reduce_ny > npixels_y) { warn("cannot reduce number of max pixels; reduced nx must be smaller than current number of pixels along x"); return false; }
+		npix_y = reduce_ny;
+		offset_y = (npixels_y-reduce_ny)/2;
+		offset_y--;
+	}
+	long naxes[2] = {npix_x,npix_y};
 	double *pixels;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
 
@@ -5944,19 +6026,21 @@ bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground,
 				kk=0;
 				long fpixel[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-				pixels = new double[npixels_x];
+				pixels = new double[npix_x];
 
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
-					for (i=0; i < npixels_x; i++) {
+					jprime = j + offset_y;
+					for (i=0; i < npix_x; i++) {
+						iprime = i + offset_x;
 						if (foreground) {
-							if (foreground_mask[i][j]) pixels[i] = 1.0;
+							if (foreground_mask[iprime][jprime]) pixels[i] = 1.0;
 							else pixels[i] = 0.0;
 						} else if (emask) {
-							if (extended_mask[mask_k][i][j]) pixels[i] = 1.0;
+							if (extended_mask[mask_k][iprime][jprime]) pixels[i] = 1.0;
 							else pixels[i] = 0.0;
 						} else {
-							if (in_mask[mask_k][i][j]) pixels[i] = 1.0;
+							if (in_mask[mask_k][iprime][jprime]) pixels[i] = 1.0;
 							else pixels[i] = 0.0;
 						}
 					}
@@ -9812,24 +9896,32 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 		}
 		pixel_image_file << endl;
 	}
-	plot_sourcepts(outfile_root);
+	//plot_sourcepts(outfile_root);
 	return tot_residuals;
 }
 
-void ImagePixelGrid::plot_sourcepts(string outfile_root)
+void ImagePixelGrid::plot_sourcepts(string outfile_root, const bool show_subpixels)
 {
-	string sp_filename = outfile_root + "_spt.dat";
+	string sp_filename = outfile_root + "_srcpts.dat";
 
 	ofstream sourcepts_file; lens->open_output_file(sourcepts_file,sp_filename);
 	sourcepts_file << setiosflags(ios::scientific);
 	int i,j;
 	double residual;
 
+	int k,nsp;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			//if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
-			if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (mask) and (mask[i][j]))) {
-				sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
+			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
+			//if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (mask) and (mask[i][j]))) {
+				if ((!lens->split_imgpixels) or (!show_subpixels)) {
+					sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
+				} else {
+					nsp = INTSQR(nsplits[i][j]);
+					for (k=0; k < nsp; k++) {
+						sourcepts_file << subpixel_center_sourcepts[i][j][k][0] << " " << subpixel_center_sourcepts[i][j][k][1] << " " << subpixel_center_pts[i][j][k][0] << " " << subpixel_center_pts[i][j][k][1] << endl;
+					}
+				}
 			}
 		}
 	}
@@ -13937,6 +14029,8 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_lum_
 			generate_Rmatrix_norm(); break;
 		case Gradient:
 			generate_Rmatrix_from_gmatrices(zsrc_i); break;
+		case SmoothGradient:
+			generate_Rmatrix_from_gmatrices(zsrc_i,true); break;
 		case Curvature:
 			generate_Rmatrix_from_hmatrices(zsrc_i); break;
 		case Matern_Kernel:
