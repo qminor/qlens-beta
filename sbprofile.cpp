@@ -1439,11 +1439,11 @@ double SB_Profile::surface_brightness(double x, double y)
 		double sbderiv, h = 1e-5;
 
 		if (fourier_use_eccentric_anomaly) {
-			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (xisq <= h) sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq))/(h);
 			else sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*xisq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 		} else {
+			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (rsq <= h) sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq))/(h);
 			else sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))

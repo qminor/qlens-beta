@@ -2626,7 +2626,7 @@ void SourcePixelGrid::generate_hmatrices()
 	}
 }
 
-void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i)
+void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i, const bool interpolate)
 {
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -2668,8 +2668,8 @@ void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i)
 		}
 	}
 	if (source_fit_mode==Delaunay_Source) {
-		if (zsrc_i < 0) image_pixel_grid0->delaunay_srcgrid->generate_hmatrices();
-		else image_pixel_grids[zsrc_i]->delaunay_srcgrid->generate_hmatrices();
+		if (zsrc_i < 0) image_pixel_grid0->delaunay_srcgrid->generate_hmatrices(interpolate);
+		else image_pixel_grids[zsrc_i]->delaunay_srcgrid->generate_hmatrices(interpolate);
 	}
 	else if (source_fit_mode==Cartesian_Source) source_pixel_grid->generate_hmatrices();
 	else die("hmatrix not supported for sources other than Delaunay or Cartesian");
@@ -4499,7 +4499,7 @@ int DelaunayGrid::assign_active_indices_and_count_source_pixels(const bool activ
 	return source_pixel_i;
 }
 
-void DelaunayGrid::generate_hmatrices()
+void DelaunayGrid::generate_hmatrices(const bool interpolate)
 {
 	// NOTE: for the moment, we are assuming all the source pixels are 'active', i.e. will be used in the inversion
 	record_adjacent_triangles_xy();
@@ -4522,72 +4522,110 @@ void DelaunayGrid::generate_hmatrices()
 		}
 	};
 
-
 	int i,j,k,l;
-	int vertex_i1, vertex_i2, trinum;
-	Triangle* triptr;
-	bool found_i1, found_i2;
-	double x1, y1, x2, y2, dpt, dpt1, dpt2, dpt12;
-	double length, minlength, avg_length;
-	avg_length = sqrt(avg_area);
-	lensvector pt;
-	for (i=0; i < n_srcpts; i++) {
-		for (j=0; j < 4; j++) {
-			if (j > 1) l = 1;
-			else l = 0;
-			vertex_i1 = -1;
-			vertex_i2 = -1;
-			if ((trinum = adj_triangles[j][i]) != -1) {
-				triptr = &triangle[trinum];
-				found_i1 = false;
-				found_i2 = false;
-				if ((k = triptr->vertex_index[0]) != i) { vertex_i1 = k; found_i1 = true; }
-				if ((k = triptr->vertex_index[1]) != i) {
-					if (!found_i1) {
-						vertex_i1 = k;
-						found_i1 = true;
-					} else {
+	if (interpolate) {
+		int npts;
+		bool inside_triangle;
+		bool on_vertex;
+		int trinum,kmin;
+		double x,y,xp,xm,yp,ym;
+		lensvector interp_pt[4];
+		for (i=0; i < n_srcpts; i++) {
+			x = srcpts[i][0];
+			y = srcpts[i][1];
+			xp = x + voronoi_length[i]/2;
+			xm = x - voronoi_length[i]/2;
+			yp = y + voronoi_length[i]/2;
+			ym = y - voronoi_length[i]/2;
+			interp_pt[0].input(xp,y);
+			interp_pt[1].input(xm,y);
+			interp_pt[2].input(x,yp);
+			interp_pt[3].input(x,ym);
+			add_hmatrix_entry(lens,0,i,i,-2.0);
+			add_hmatrix_entry(lens,1,i,i,-2.0);
+			for (j=0; j < 4; j++) {
+				if (j > 1) l = 1;
+				else l = 0;
+				find_containing_triangle(interp_pt[j],trinum,inside_triangle,on_vertex,kmin);
+				if (!inside_triangle) {
+					if (!on_vertex) continue; // assume SB = 0 outside grid
+				}
+				if (lens->natural_neighbor_interpolation) {
+					find_interpolation_weights_nn(interp_pt[j], trinum, npts, 0);
+				} else {
+					find_interpolation_weights_3pt(interp_pt[j], trinum, npts, 0);
+				}
+				for (k=0; k < npts; k++) {
+					add_hmatrix_entry(lens,l,i,interpolation_indx[k][0],interpolation_wgts[k][0]); 
+				}
+			}
+		}
+	} else {
+		int vertex_i1, vertex_i2, trinum;
+		Triangle* triptr;
+		bool found_i1, found_i2;
+		double x1, y1, x2, y2, dpt, dpt1, dpt2, dpt12;
+		double length, minlength, avg_length;
+		avg_length = sqrt(avg_area);
+		lensvector pt;
+		for (i=0; i < n_srcpts; i++) {
+			for (j=0; j < 4; j++) {
+				if (j > 1) l = 1;
+				else l = 0;
+				vertex_i1 = -1;
+				vertex_i2 = -1;
+				if ((trinum = adj_triangles[j][i]) != -1) {
+					triptr = &triangle[trinum];
+					found_i1 = false;
+					found_i2 = false;
+					if ((k = triptr->vertex_index[0]) != i) { vertex_i1 = k; found_i1 = true; }
+					if ((k = triptr->vertex_index[1]) != i) {
+						if (!found_i1) {
+							vertex_i1 = k;
+							found_i1 = true;
+						} else {
+							vertex_i2 = k;
+							found_i2 = true;
+						}
+					}
+					if (!found_i1) die("WHAT?! couldn't find more than one vertex that isn't the one in question");
+					if ((!found_i2) and ((k = triptr->vertex_index[2]) != i)) {
 						vertex_i2 = k;
 						found_i2 = true;
 					}
+					if (!found_i2) die("WHAT?! couldn't find both vertices that aren't the one in question");
 				}
-				if (!found_i1) die("WHAT?! couldn't find more than one vertex that isn't the one in question");
-				if ((!found_i2) and ((k = triptr->vertex_index[2]) != i)) {
-					vertex_i2 = k;
-					found_i2 = true;
-				}
-				if (!found_i2) die("WHAT?! couldn't find both vertices that aren't the one in question");
-			}
-			if (vertex_i1 != -1) {
-				x1 = srcpts[vertex_i1][0];
-				y1 = srcpts[vertex_i1][1];
-				x2 = srcpts[vertex_i2][0];
-				y2 = srcpts[vertex_i2][1];
-				if (j < 2) {
-					pt[1] = srcpts[i][1];
-					pt[0] = ((x2-x1)/(y2-y1))*(pt[1]-y1) + x1;
-					dpt = abs(pt[0]-srcpts[i][0]);
+				if (vertex_i1 != -1) {
+					x1 = srcpts[vertex_i1][0];
+					y1 = srcpts[vertex_i1][1];
+					x2 = srcpts[vertex_i2][0];
+					y2 = srcpts[vertex_i2][1];
+					if (j < 2) {
+						pt[1] = srcpts[i][1];
+						pt[0] = ((x2-x1)/(y2-y1))*(pt[1]-y1) + x1;
+						dpt = abs(pt[0]-srcpts[i][0]);
+					} else {
+						pt[0] = srcpts[i][0];
+						pt[1] = ((y2-y1)/(x2-x1))*(pt[0]-x1) + y1;
+						dpt = abs(pt[1]-srcpts[i][1]);
+					}
+					dpt12 = sqrt(SQR(x2-x1) + SQR(y2-y1));
+					dpt1 = sqrt(SQR(pt[0]-x1)+SQR(pt[1]-y1));
+					dpt2 = sqrt(SQR(pt[0]-x2)+SQR(pt[1]-y2));
+					// we scale hmatrix by the average triangle length so the regularization parameter is dimensionless
+					add_hmatrix_entry(lens,l,i,i,-avg_length/dpt);
+					add_hmatrix_entry(lens,l,i,vertex_i1,avg_length*dpt2/(dpt*dpt12));
+					add_hmatrix_entry(lens,l,i,vertex_i2,avg_length*dpt1/(dpt*dpt12));
 				} else {
-					pt[0] = srcpts[i][0];
-					pt[1] = ((y2-y1)/(x2-x1))*(pt[0]-x1) + y1;
-					dpt = abs(pt[1]-srcpts[i][1]);
+					minlength=1e30;
+					for (k=0; k < n_shared_triangles[i]; k++) {
+						triptr = &triangle[shared_triangles[i][k]];
+						length = sqrt(triptr->area);
+						if (length < minlength) minlength = length;
+					}
+					add_hmatrix_entry(lens,l,i,i,-avg_length/minlength);
+					//add_hmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 				}
-				dpt12 = sqrt(SQR(x2-x1) + SQR(y2-y1));
-				dpt1 = sqrt(SQR(pt[0]-x1)+SQR(pt[1]-y1));
-				dpt2 = sqrt(SQR(pt[0]-x2)+SQR(pt[1]-y2));
-				// we scale hmatrix by the average triangle length so the regularization parameter is dimensionless
-				add_hmatrix_entry(lens,l,i,i,-avg_length/dpt);
-				add_hmatrix_entry(lens,l,i,vertex_i1,avg_length*dpt2/(dpt*dpt12));
-				add_hmatrix_entry(lens,l,i,vertex_i2,avg_length*dpt1/(dpt*dpt12));
-			} else {
-				minlength=1e30;
-				for (k=0; k < n_shared_triangles[i]; k++) {
-					triptr = &triangle[shared_triangles[i][k]];
-					length = sqrt(triptr->area);
-					if (length < minlength) minlength = length;
-				}
-				add_hmatrix_entry(lens,l,i,i,-avg_length/minlength);
-				//add_hmatrix_entry(lens,l,i,i,sqrt(1/2.0)/2);
 			}
 		}
 	}
@@ -8977,10 +9015,14 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	setup_pixel_arrays();
 
 	src_redshift_index = src_redshift_index_in;
-	if (src_redshift_index == -1) {
+	//cout << "src_i=" << src_redshift_index << " n_src_redshifts=" << lens->n_extended_src_redshifts << endl;
+	if ((src_redshift_index == -1) or (lens->n_lens_redshifts==0)) {
 		imggrid_zfactors = lens->reference_zfactors;
 		imggrid_betafactors = lens->default_zsrc_beta_factors;
 	} else {
+		if (src_redshift_index >= lens->n_extended_src_redshifts) die("invalid extended source redshift index (%i)",src_redshift_index);
+		if (lens->extended_src_zfactors == NULL) die("extended_src_zfactors is NULL");
+		if (lens->extended_src_beta_factors == NULL) die("extended_src_beta_factors is NULL");
 		imggrid_zfactors = lens->extended_src_zfactors[src_redshift_index];
 		imggrid_betafactors = lens->extended_src_beta_factors[src_redshift_index];
 	}
@@ -9912,8 +9954,8 @@ void ImagePixelGrid::plot_sourcepts(string outfile_root, const bool show_subpixe
 	int k,nsp;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
-			//if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (mask) and (mask[i][j]))) {
+			//if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
+			if ((fit_to_data==NULL) or ((!lens->zero_sb_extended_mask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_extended_mask_prior) and (mask) and (mask[i][j]))) {
 				if ((!lens->split_imgpixels) or (!show_subpixels)) {
 					sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
 				} else {
@@ -14033,6 +14075,8 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_lum_
 			generate_Rmatrix_from_gmatrices(zsrc_i,true); break;
 		case Curvature:
 			generate_Rmatrix_from_hmatrices(zsrc_i); break;
+		case SmoothCurvature:
+			generate_Rmatrix_from_hmatrices(zsrc_i,true); break;
 		case Matern_Kernel:
 			dense_Rmatrix = true;
 			covariance_kernel_regularization = true;
@@ -14795,10 +14839,9 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 		int img_index_fgmask;
 		double sb_adj;
 		double covinv = cov_inverse;
-		//#pragma omp for private(i,j,pix_i,pix_j,img_index_fgmask,row,sb_adj) schedule(static)
-		#pragma omp master
-		{
-			// Parallelizing this part is causing problems, and I don't know why!!!
+		//#pragma omp master
+			// Parallelizing this part was causing problems previously, and I don't know why!!!
+		#pragma omp for private(i,j,pix_i,pix_j,img_index_fgmask,row,sb_adj,covinv) schedule(static)
 		for (i=0; i < source_n_amps; i++) {
 			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
@@ -14821,7 +14864,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 				Ltrans[i][j] = Lmatrix_dense[j][i];
 #endif
 			}
-		}
 		}
 
 #ifdef USE_OPENMP

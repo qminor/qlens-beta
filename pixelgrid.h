@@ -195,7 +195,7 @@ class DelaunayGrid : public Sort
 	ImagePixelGrid *image_pixel_grid;
 
 	static int nthreads;
-	static const int nmax_pts_interp = 80;
+	static const int nmax_pts_interp = 120;
 	static lensvector **interpolation_pts[nmax_pts_interp];
 	static double *interpolation_wgts[nmax_pts_interp];
 	static int *interpolation_indx[nmax_pts_interp];
@@ -265,7 +265,7 @@ class DelaunayGrid : public Sort
 	void plot_surface_brightness(string root, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices(const bool interpolate);
-	void generate_hmatrices();
+	void generate_hmatrices(const bool interpolate);
 	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 	double modified_bessel_function(const double x, const double nu);
 	void beschb(const double x, double& gam1, double& gam2, double& gampl, double& gammi);

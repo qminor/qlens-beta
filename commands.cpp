@@ -1108,7 +1108,12 @@ void QLens::process_commands(bool read_file)
 							"none -- no regularization\n"
 							"norm -- regularization matrix built from (squared) surface brightness of each pixel\n"
 							"gradient -- regularization matrix built from the derivative between neighboring pixels\n"
-							"curvature -- regularization matrix built from the curvature between neighboring pixels (default)\n\n";
+							"curvature -- regularization matrix built from the curvature between neighboring pixels (default)\n"
+							"sgradient -- gradient regularization using natural neighbor interpolation (Delaunay only)\n"
+							"scurvature -- curvature regularization using natural neighbor interpolationl (Delaunay only)\n"
+							"exp_kernel -- regularization using exponential covariance kernel (Delaunay only)\n"
+							"sqexp_kernel -- regularization using squared exponential covariance kernel (Delaunay only)\n"
+							"matern_kernel -- regularization using Matern covariance kernel (Delaunay only)\n\n";
 					else Complain("unknown fit command");
 				}
 				else if (words[1]=="imgdata") {
@@ -6783,6 +6788,7 @@ void QLens::process_commands(bool read_file)
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
 							else if (regularization_method==SmoothGradient) cout << "Regularization method: sgradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
+							else if (regularization_method==SmoothCurvature) cout << "Regularization method: scurvature" << endl;
 							else if (regularization_method==Matern_Kernel) cout << "Regularization method: Matern kernel" << endl;
 							else if (regularization_method==Exponential_Kernel) cout << "Regularization method: exponential kernel" << endl;
 							else if (regularization_method==Squared_Exponential_Kernel) cout << "Regularization method: squared exponential kernel" << endl;
@@ -6802,6 +6808,7 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="sgradient") regularization_method = SmoothGradient;
 						else if (setword=="curvature") regularization_method = Curvature;
+						else if (setword=="scurvature") regularization_method = SmoothCurvature;
 						else if (setword=="matern_kernel") regularization_method = Matern_Kernel;
 						else if (setword=="exp_kernel") regularization_method = Exponential_Kernel;
 						else if (setword=="sqexp_kernel") regularization_method = Squared_Exponential_Kernel;
@@ -12053,7 +12060,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="multinest_constant_eff_mode")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use image plane chi-square function: " << display_switch(multinest_constant_eff_mode) << endl;
+				if (mpi_id==0) cout << "Constant efficiency mode: " << display_switch(multinest_constant_eff_mode) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_constant_eff_mode' command; must specify 'on' or 'off'");
 				set_switch(multinest_constant_eff_mode,setword);

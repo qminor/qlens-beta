@@ -1036,6 +1036,7 @@ QLens::QLens() : UCMC()
 	noise_threshold = 0; // when optimizing the source pixel grid size, image pixels whose surface brightness < noise_threshold*pixel_noise are ignored
 	n_image_pixels_x = 200;
 	n_image_pixels_y = 200;
+	source_npixels = 0;
 	srcgrid_npixels_x = 50;
 	srcgrid_npixels_y = 50;
 	auto_srcgrid_npixels = true;
@@ -2614,6 +2615,53 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			ptsrc_zfactors = new_zfactors;
 			ptsrc_beta_factors = new_beta_factors;
 		}
+
+		double **new_extsrc_zfactors;
+		double ***new_extsrc_beta_factors;
+		if (n_extended_src_redshifts > 0) {
+			new_extsrc_zfactors = new double*[n_extended_src_redshifts];
+			new_extsrc_beta_factors = new double**[n_extended_src_redshifts];
+			for (i=0; i < n_extended_src_redshifts; i++) {
+				new_extsrc_zfactors[i] = new double[n_lens_redshifts+1];
+				for (j=0; j < znum; j++) {
+					new_extsrc_zfactors[i][j] = extended_src_zfactors[i][j];
+				}
+				new_extsrc_zfactors[i][znum] = kappa_ratio(zl,extended_src_redshifts[i],reference_source_redshift);
+				for (j=znum; j < n_lens_redshifts; j++) {
+					new_extsrc_zfactors[i][j+1] = extended_src_zfactors[i][j];
+				}
+
+				if (n_lens_redshifts > 0) {
+					new_extsrc_beta_factors[i] = new double*[n_lens_redshifts];
+					for (j=1; j < n_lens_redshifts+1; j++) {
+						new_extsrc_beta_factors[i][j-1] = new double[j];
+						if (include_recursive_lensing) {
+							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+						} else {
+							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = 0;
+						}
+					}
+				} else new_extsrc_beta_factors[i] = NULL;
+			}
+			if (extended_src_zfactors != NULL) {
+				for (i=0; i < n_extended_src_redshifts; i++) delete[] extended_src_zfactors[i];
+				delete[] extended_src_zfactors;
+			}
+			if (extended_src_beta_factors != NULL) {
+				for (i=0; i < n_extended_src_redshifts; i++) {
+					if (extended_src_beta_factors[i] != NULL) {
+						for (j=0; j < n_lens_redshifts-1; j++) {
+							delete[] extended_src_beta_factors[i][j];
+						}
+						if (n_lens_redshifts > 1) delete[] extended_src_beta_factors[i];
+					}
+				}
+				delete[] extended_src_beta_factors;
+			}
+			extended_src_zfactors = new_extsrc_zfactors;
+			extended_src_beta_factors = new_extsrc_beta_factors;
+		}
+
 		n_lens_redshifts++;
 		//for (i=0; i < n_lens_redshifts; i++) {
 			//cout << i << " " << lens_redshifts[i] << " " << reference_zfactors[i] << endl;
@@ -3512,7 +3560,8 @@ void QLens::add_source_object(SB_ProfileName name, const bool is_lensed, const d
 			die("Surface brightness profile type not recognized");
 	}
 	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
-	double zsrc = (is_lensed) ? zsrc_in : -1;
+	//double zsrc = (is_lensed) ? zsrc_in : -1;
+	double zsrc = zsrc_in;
 	add_new_extended_src_redshift(zsrc,n_sb,false);
 	n_sb++;
 	sb_list = newlist;
@@ -14603,7 +14652,7 @@ bool QLens::load_pixel_grid_from_data()
 		}
 	} else {
 		if (image_pixel_grid0 != NULL) delete image_pixel_grid0;
-		image_pixel_grid0 = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, false, -1, 0);
+		image_pixel_grid0 = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, -1, 0);
 		loaded_new_grid = true;
 	}
 	return loaded_new_grid;
@@ -15462,7 +15511,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				if (use_covariance_matrix) cout << "logdet(Gmatrix)=" << Gmatrix_log_determinant;
 				else cout << "logdet(Fmatrix)=" << Fmatrix_log_determinant;
 			}
-			if (regularization_method != None) cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant << endl;
+			if ((source_npixels > 0) and (regularization_method != None)) cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant << endl;
 		}
 	}
 
@@ -17142,7 +17191,7 @@ QLens::~QLens()
 		delete[] extended_src_redshifts;
 		delete[] assigned_mask;
 		for (i=0; i < n_extended_src_redshifts; i++) {
-			delete[] extended_src_zfactors[i];
+			if (n_lens_redshifts > 0) delete[] extended_src_zfactors[i];
 			if (image_pixel_grids[i] != NULL) delete image_pixel_grids[i];
 		}
 		delete[] extended_src_zfactors;
