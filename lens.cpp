@@ -912,15 +912,7 @@ QLens::QLens() : UCMC()
 	delaunay_mode = 1;
 	ray_tracing_method = Interpolate;
 	natural_neighbor_interpolation = true; // if false, uses 3-point interpolation
-#ifdef USE_MUMPS
-	inversion_method = MUMPS;
-#else
-#ifdef USE_UMFPACK
-	inversion_method = UMFPACK;
-#else
-	inversion_method = CG_Method;
-#endif
-#endif
+	inversion_method = DENSE;
 	parallel_mumps = false;
 	show_mumps_info = false;
 
@@ -3341,7 +3333,7 @@ void QLens::remove_lens(int lensnumber)
 	update_parameter_list();
 	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 	for (int i=n_derived_params-1; i >= 0; i--) {
-		if (dparam_list[i]->lensnum_param==lensnumber) {
+		if (dparam_list[i]->int_param==lensnumber) {
 			if (mpi_id==0) cout << "Removing derived param " << i << endl;
 			remove_derived_param(i);
 		}
@@ -3840,6 +3832,24 @@ void QLens::print_pixellated_source_list()
 	cout << endl;
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
+
+void QLens::find_pixellated_source_qs_phi_s(const int npix, double& qs, double& phi_s)
+{
+	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
+		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+			image_pixel_grids[zsrc_i]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
+		}
+	}
+
+
+	if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
+		delaunay_srcgrids[0]->find_qs_phi(npix,qs,phi_s);
+	} else {
+		qs = 0;
+		phi_s = 0;
+	}
+}
+
 
 void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
 {
@@ -8844,7 +8854,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	if (vary_wl_shear_factor_parameter) nparams++;
 }
 
-bool QLens::setup_fit_parameters(bool include_limits)
+bool QLens::setup_fit_parameters()
 {
 	//if (source_fit_mode==Point_Source) {
 		//if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
@@ -8937,7 +8947,12 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	transformed_latex_parameter_names.resize(n_fit_parameters);
 	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
-	if (include_limits) return setup_limits();
+	//cout << "SETTING UP FIT PARAMS" << endl;
+	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
+	//if (include_limits) {
+		//cout << "GONNA SET LIMITS" << endl;
+		//return setup_limits();
+	//}
 	return true;
 }
 
@@ -9452,7 +9467,7 @@ void QLens::get_parameter_names()
 bool QLens::lookup_parameter_value(const string pname, double& pval)
 {
 	bool found_param = false;
-	setup_fit_parameters(false);
+	setup_fit_parameters();
 	int i;
 	for (i=0; i < n_fit_parameters; i++) {
 		if (transformed_parameter_names[i]==pname) {
@@ -9474,7 +9489,7 @@ bool QLens::lookup_parameter_value(const string pname, double& pval)
 void QLens::create_parameter_value_string(string &pvals)
 {
 	pvals = "";
-	setup_fit_parameters(false);
+	setup_fit_parameters();
 	int i;
 	for (i=0; i < n_fit_parameters; i++) {
 		stringstream pvalstr;
@@ -9498,7 +9513,7 @@ void QLens::create_parameter_value_string(string &pvals)
 
 bool QLens::output_parameter_values()
 {
-	if (setup_fit_parameters(false)==false) return false;
+	if (setup_fit_parameters()==false) return false;
 	if (mpi_id==0) {
 		for (int i=0; i < n_fit_parameters; i++) {
 			cout << i << ". " << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
@@ -9510,7 +9525,7 @@ bool QLens::output_parameter_values()
 
 bool QLens::update_parameter_value(const int param_num, const double param_val)
 {
-	if (setup_fit_parameters(false)==false) return false;
+	if (setup_fit_parameters()==false) return false;
 	if (param_num >= n_fit_parameters) return false;
 	double newparams[n_fit_parameters];
 	double new_transformed_params[n_fit_parameters];
@@ -9525,7 +9540,7 @@ bool QLens::update_parameter_value(const int param_num, const double param_val)
 
 bool QLens::output_parameter_prior_ranges()
 {
-	if (setup_fit_parameters(true)==false) return false;
+	if (setup_fit_parameters()==false) return false;
 	int max_length=0;
 	for (int i=0; i < n_fit_parameters; i++) {
 		if (transformed_parameter_names[i].length() > max_length) max_length = transformed_parameter_names[i].length();
@@ -9631,7 +9646,7 @@ void QLens::fit_restore_defaults()
 
 double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool show_diagnostics, bool show_status, bool show_lensinfo)
 {
-	if (setup_fit_parameters(false)==false) return -1e30;
+	if (setup_fit_parameters()==false) return -1e30;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
 #ifdef USE_OPENMP
@@ -9753,7 +9768,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 
 void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
 {
-	if (setup_fit_parameters(false)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
 	if (!initialize_fitmodel(false)) {
@@ -9828,7 +9843,7 @@ void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, cons
 
 void QLens::plot_chisq_1d(const int param, const int n, const double ip, const double fp, string filename)
 {
-	if (setup_fit_parameters(false)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if (fit_output_dir != ".") create_output_directory();
 	if (!initialize_fitmodel(false)) {
@@ -9871,7 +9886,7 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 double QLens::chi_square_fit_simplex()
 {
 	fitmethod = SIMPLEX;
-	if (setup_fit_parameters(false)==false) return 0.0;
+	if (setup_fit_parameters()==false) return 0.0;
 	fit_set_optimizations();
 	if (!initialize_fitmodel(false)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
@@ -9984,7 +9999,7 @@ double QLens::chi_square_fit_simplex()
 double QLens::chi_square_fit_powell()
 {
 	fitmethod = POWELL;
-	if (setup_fit_parameters(false)==false) return 0.0;
+	if (setup_fit_parameters()==false) return 0.0;
 	fit_set_optimizations();
 	if (!initialize_fitmodel(true)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
@@ -10270,7 +10285,7 @@ double QLens::loglike_deriv(const dvector &params, const int index, const double
 void QLens::nested_sampling()
 {
 	fitmethod = NESTED_SAMPLING;
-	if (setup_fit_parameters(true)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
@@ -10399,7 +10414,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 {
 	fitmethod = MULTINEST;
 #ifdef USE_MULTINEST
-	if (setup_fit_parameters(true)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
@@ -10708,7 +10723,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 {
 	fitmethod = POLYCHORD;
 #ifdef USE_POLYCHORD
-	if (setup_fit_parameters(true)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
@@ -10951,7 +10966,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 void QLens::chi_square_twalk()
 {
-	if (setup_fit_parameters(true)==false) return;
+	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
@@ -11195,7 +11210,7 @@ bool QLens::add_dparams_to_chain()
 	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	pnumfile.close();
 
-	if (setup_fit_parameters(true)==false) return false;
+	if (setup_fit_parameters()==false) return false;
 	fit_set_optimizations();
 	if (!initialize_fitmodel(true)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");

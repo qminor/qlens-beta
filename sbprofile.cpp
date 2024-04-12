@@ -9,7 +9,7 @@
 #include <iomanip>
 using namespace std;
 
-bool SB_Profile::orient_major_axis_north = false; // At the moment, this setting cannot be changed; it should probably be removed altogether
+bool SB_Profile::orient_major_axis_north = false;
 bool SB_Profile::use_sb_ellipticity_components = false;
 int SB_Profile::default_ellipticity_mode = 1;
 bool SB_Profile::use_fmode_scaled_amplitudes = false;

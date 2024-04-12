@@ -5001,7 +5001,7 @@ double DelaunayGrid::chebev(const double a, const double b, double* c, const int
 	return y*d-dd+0.5*c[0];
 }
 
-void DelaunayGrid::plot_surface_brightness(string root, const double grid_scalefac, const int npix, const bool interpolate_sb, const bool plot_fits)
+void DelaunayGrid::plot_surface_brightness(string root, const int npix, const bool interpolate_sb, const bool plot_fits)
 {
 	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
 	int i, j, npts_x, npts_y;
@@ -5117,6 +5117,85 @@ void DelaunayGrid::plot_surface_brightness(string root, const double grid_scalef
 #endif
 	}
 
+}
+
+double DelaunayGrid::find_moment(const int p, const int q, const int npix)
+{
+	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
+	int i, j, k, npts_x, npts_y;
+	xlength = srcgrid_xmax-srcgrid_xmin;
+	ylength = srcgrid_ymax-srcgrid_ymin;
+	npts_x = (int) npix*sqrt(xlength/ylength);
+	npts_y = (int) npts_x*ylength/xlength;
+	pixel_xlength = xlength/npts_x;
+	pixel_ylength = ylength/npts_y;
+
+	double sb,xp,yq,moment=0;
+	lensvector pt;
+	double y0 = srcgrid_ymin + pixel_ylength/2;
+	#pragma omp parallel
+	{
+		int thread;
+#ifdef USE_OPENMP
+		thread = omp_get_thread_num();
+#else
+		thread = 0;
+#endif
+		#pragma omp for private(i,j,k,x,y,xp,yq,sb,pt) schedule(static)
+		for (j=0; j < npts_y; j++) {
+			y = y0 + j*pixel_ylength;
+			pt[1] = y;
+			for (k=0,yq=1;k<q;k++) yq *= y;
+			for (i=0, x=srcgrid_xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
+				pt[0] = x;
+				for (k=0,xp=1;k<p;k++) xp *= x;
+				sb = interpolate_surface_brightness(pt,thread);
+				#pragma omp atomic
+				moment += sb*xp*yq;
+			}
+		}
+	}
+	return moment;
+}
+
+void DelaunayGrid::find_qs_phi(const int npix, double &qs, double &phi_s)
+{
+	double M00, M10, M01, M20, M02, M11, xavg, yavg;
+#ifdef USE_OPENMP
+	double wtime0, wtime;
+	if (lens->show_wtime) {
+		wtime0 = omp_get_wtime();
+	}
+#endif
+	M00 = find_moment(0,0,npix);
+	M10 = find_moment(1,0,npix);
+	M01 = find_moment(0,1,npix);
+	xavg = M10/M00;
+	yavg = M01/M00;
+	//cout << "xavg=" << xavg << " yavg=" << yavg << endl;
+	M20 = find_moment(2,0,npix);
+	M02 = find_moment(0,2,npix);
+	M11 = find_moment(1,1,npix);
+	double mu20,mu02,mu11,desc,lam1,lam2;
+	mu20 = M20/M00 - xavg*xavg;
+	mu02 = M02/M00 - yavg*yavg;
+	mu11 = M11/M00 - xavg*yavg;
+	//cout << "mu20=" << mu20 << " mu02=" << mu02 << " mu11=" << mu11 << endl;
+	desc = sqrt(4*mu11*mu11 + SQR(mu20-mu02));
+	lam1 = mu20 + mu02 + desc;
+	lam2 = mu20 + mu02 - desc;
+	qs = sqrt(lam2/lam1);
+	if (mu20==mu02) phi_s = 0;
+	else {
+		phi_s = atan(2*mu11/(mu20-mu02))/2;
+		if (mu02 > mu20) phi_s += M_HALFPI;
+	}
+#ifdef USE_OPENMP
+		if (lens->show_wtime) {
+			wtime = omp_get_wtime() - wtime0;
+			if (lens->mpi_id==0) cout << "Wall time for finding qs, phi_s for adaptive source grid: " << wtime << endl;
+		}
+#endif
 }
 
 void DelaunayGrid::get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals)

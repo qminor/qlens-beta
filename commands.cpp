@@ -1091,6 +1091,8 @@ void QLens::process_commands(bool read_file)
 							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
 							"sigma_perturb -- The average projected density within r_perturb (see above) of perturbing lens [lens#]\n"
 							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
+							"qs -- axis ratio derived from moments of source pixel covariance matrix; [param1] gives # of points sampled\n" 
+							"phi_s -- orientation derived from moments of source pixel covariance matrix; [param1] gives # of points sampled\n" 
 							"\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
@@ -8065,6 +8067,16 @@ void QLens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Robust_Perturbation_Density,0.0,lensnum,-1,use_kpc);
+							} else if (words[3]=="qs") {
+								double npix;
+								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
+								add_derived_param(Adaptive_Grid_qs,-1,npix,-1,false);
+							} else if (words[3]=="phi_s") {
+								double npix;
+								if (nwords != 5) Complain("derived parameter phi_s requires only one arguments (pixel number)");
+								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
+								add_derived_param(Adaptive_Grid_phi_s,-1,npix,-1,false);
 							} else if (words[3]=="raw_chisq") {
 								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
 								add_derived_param(Chi_Square,0.0,-1,-1,use_kpc);
@@ -10345,7 +10357,7 @@ void QLens::process_commands(bool read_file)
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 						else if (source_fit_mode==Delaunay_Source) {
 							if (delaunay_srcgrids[src_i] != NULL) {
-								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
+								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate);
 							} else Complain("Delaunay grid has not been created");
 
 						}
@@ -10363,7 +10375,7 @@ void QLens::process_commands(bool read_file)
 					if (plot_fits) {
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->output_fits_file(words[2]);
 						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],delaunay_grid_scale,set_npix,interpolate,plot_fits);
+							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],set_npix,interpolate,plot_fits);
 						}
 					} else {
 						if (set_title) plot_title = temp_title;
@@ -10373,7 +10385,7 @@ void QLens::process_commands(bool read_file)
 							if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 							else if (source_fit_mode==Delaunay_Source) {
 								if (delaunay_srcgrids[src_i] != NULL) {
-									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
+									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate);
 								} else Complain("Delaunay grid has not been created");
 							}
 							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -14066,6 +14078,12 @@ void QLens::process_commands(bool read_file)
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
+			if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
+				double qs,phi_s;
+				delaunay_srcgrids[0]->find_qs_phi(200,qs,phi_s);
+				double phi_s_deg = phi_s*180.0/M_PI;
+				cout << "qs=" << qs << " phi_s=" << phi_s_deg << " degrees" << endl;
+			}
 			//generate_supersampled_PSF_matrix();
 			/*
 			int iter = 20;

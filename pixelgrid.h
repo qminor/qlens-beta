@@ -262,7 +262,10 @@ class DelaunayGrid : public Sort
 	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
-	void plot_surface_brightness(string root, const double grid_scalefac = 1, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
+	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
+	double find_moment(const int p, const int q, const int npix);
+	void find_qs_phi(const int npix, double &qs, double &phi_s);
+
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices(const bool interpolate);
 	void generate_hmatrices(const bool interpolate);

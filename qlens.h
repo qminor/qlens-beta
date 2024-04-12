@@ -70,6 +70,8 @@ enum DerivedParamType {
 	Relative_Perturbation_Radius,
 	Robust_Perturbation_Mass,
 	Robust_Perturbation_Density,
+	Adaptive_Grid_qs,
+	Adaptive_Grid_phi_s,
 	Chi_Square,
 	UserDefined
 };
@@ -80,6 +82,7 @@ class SourcePixelGrid;
 class DelaunayGrid;
 class ImagePixelGrid;
 class Defspline;	// ...
+class DelaunayGrid;
 struct ImageData;
 struct WeakLensingData;
 struct ImagePixelData;
@@ -1324,6 +1327,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_pixellated_source(const double zsrc);
 	void remove_pixellated_source(int src_number);
 	void print_pixellated_source_list();
+	void find_pixellated_source_qs_phi_s(const int npix, double& qs, double& phi_s);
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
@@ -1373,7 +1377,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
 	double chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool showdiag, bool show_status, bool show_lensinfo = false);
-	bool setup_fit_parameters(bool include_limits);
+	bool setup_fit_parameters();
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
@@ -1666,14 +1670,14 @@ struct DerivedParam
 	double funcparam; // if funcparam == -1, then there is no parameter required
 	double funcparam2;
 	bool use_kpc_units;
-	int lensnum_param;
+	int int_param;
 	string name, latex_name;
 	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1, bool usekpc = false) // if lensnum == -1, then it uses *all* the lenses (if possible)
 	{
 		derived_param_type = type_in;
 		funcparam = param;
 		funcparam2 = param2;
-		lensnum_param = lensnum;
+		int_param = lensnum;
 		use_kpc_units = usekpc;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
@@ -1710,6 +1714,12 @@ struct DerivedParam
 		} else if (derived_param_type == Chi_Square) {
 			name = "raw_chisq"; latex_name = "\\chi^2";
 			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Adaptive_Grid_qs) {
+			name = "qs"; latex_name = "q_{s}";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Adaptive_Grid_phi_s) {
+			name = "phi_s"; latex_name = "\\phi_{s}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else die("no user defined function yet");
 
 		if (funcparam != -1e30) {
@@ -1734,40 +1744,71 @@ struct DerivedParam
 	}
 	double get_derived_param(QLens* lens_in)
 	{
-		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,lensnum_param,use_kpc_units);
+		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == LambdaR) return (1 - lens_in->total_dkappa(funcparam,-1,use_kpc_units));
-		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,lensnum_param,use_kpc_units);
-		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,lensnum_param,use_kpc_units);
-		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,lensnum_param,use_kpc_units);
-		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
-		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(lensnum_param,funcparam,funcparam2,use_kpc_units);
+		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,int_param,use_kpc_units);
+		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,int_param,use_kpc_units);
+		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,int_param,use_kpc_units);
+		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,int_param);
+		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
-			double re = lens_in->einstein_radius_single_lens(funcparam,lensnum_param);
-			return lens_in->mass2d_r(re,lensnum_param,false);
+			double re = lens_in->einstein_radius_single_lens(funcparam,int_param);
+			return lens_in->mass2d_r(re,int_param,false);
 		} else if (derived_param_type == Kappa_Re) {
 			double reav=0;
 			lens_in->einstein_radius_of_primary_lens(lens_in->reference_zfactors[lens_in->lens_redshift_idx[lens_in->primary_lens_number]],reav);
 			if (reav <= 0) return 0.0;
 			else return lens_in->total_kappa(reav,-1,false);
 		} else if (derived_param_type == LensParam) {
-			return lens_in->get_lens_parameter_using_default_pmode(funcparam,lensnum_param);
+			return lens_in->get_lens_parameter_using_default_pmode(funcparam,int_param);
 		}
 		else if (derived_param_type == Relative_Perturbation_Radius) {
 			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled,true);
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled,true);
 			return rmax;
 		} else if (derived_param_type == Perturbation_Radius) {
 			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return rmax;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
 			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return menc;
 		} else if (derived_param_type == Robust_Perturbation_Density) {
 			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(lensnum_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
+			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return avgsig;
+		} else if (derived_param_type == Adaptive_Grid_qs) {
+			QLens* lensptr;
+			if (lens_in->raw_chisq==-1e30) {
+				if (lens_in->lens_parent != NULL) {
+					// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+					//std::cout << "BBBB" << std::endl;
+					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
+					lensptr = lens_in;
+					//std::cout << "chisq=" <<  lens_in->raw_chisq << std::endl;
+					lens_in->clear_raw_chisq();
+				} else {
+					//std::cout << "AAAA" << std::endl;
+					double chisq0;
+					lens_in->invert_surface_brightness_map_from_data(chisq0, false);
+					//lens_in->chisq_single_evaluation(true,false,false,false);
+					lensptr = lens_in;
+				}
+			//} else {
+				//std::cout << "FUCK" << std::endl;
+			}
+			double qs,phi_s;
+			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
+			lensptr->find_pixellated_source_qs_phi_s(int_param,qs,phi_s);
+			//std::cout << "qs=" << qs << std::endl;
+			return qs;
+		} else if (derived_param_type == Adaptive_Grid_phi_s) {
+			double qs,phi_s,phi_s_deg;
+			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
+			lens_in->find_pixellated_source_qs_phi_s(int_param,qs,phi_s);
+			phi_s_deg = phi_s*180.0/M_PI;
+			return phi_s_deg;
 		} else if (derived_param_type == Chi_Square) {
 			double chisq_out;
 			if (lens_in->raw_chisq==-1e30) {
@@ -1791,35 +1832,39 @@ struct DerivedParam
 		double dpar = get_derived_param(lens_in);
 		//cout << name << ": ";
 		if (derived_param_type == KappaR) {
-			if (lensnum_param==-1) std::cout << "Total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << std::endl;
+			if (int_param==-1) std::cout << "Total kappa within r = " << funcparam << unitstring << std::endl;
+			else std::cout << "kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == LambdaR) {
 			std::cout << "One minus average kappa at r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == DKappaR) {
-			if (lensnum_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "Derivative of kappa for lens " << lensnum_param << " within r = " << funcparam << unitstring << std::endl;
+			if (int_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
+			else std::cout << "Derivative of kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Mass2dR) {
-			std::cout << "Projected (2D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << std::endl;
+			std::cout << "Projected (2D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Mass3dR) {
-			std::cout << "Deprojected (3D) mass of lens " << lensnum_param << " enclosed within r = " << funcparam << unitstring << std::endl;
+			std::cout << "Deprojected (3D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Einstein) {
-			std::cout << "Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << std::endl;
+			std::cout << "Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
 		} else if (derived_param_type == Einstein_Mass) {
-			std::cout << "Projected mass within Einstein radius of lens " << lensnum_param << " for source redshift zsrc = " << funcparam << std::endl;
+			std::cout << "Projected mass within Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
 		} else if (derived_param_type == Kappa_Re) {
 			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
 		} else if (derived_param_type == LensParam) {
-			std::cout << "Parameter " << ((int) funcparam) << " of lens " << lensnum_param << " using default pmode=" << lens_in->default_parameter_mode << std::endl;
+			std::cout << "Parameter " << ((int) funcparam) << " of lens " << int_param << " using default pmode=" << lens_in->default_parameter_mode << std::endl;
 		} else if (derived_param_type == AvgLogSlope) {
-			std::cout << "Average log-slope of kappa from lens " << lensnum_param << " between r1=" << funcparam << " and r2=" << funcparam2 << std::endl;
+			std::cout << "Average log-slope of kappa from lens " << int_param << " between r1=" << funcparam << " and r2=" << funcparam2 << std::endl;
 		} else if (derived_param_type == Perturbation_Radius) {
-			std::cout << "Critical curve perturbation radius of lens " << lensnum_param << std::endl;
+			std::cout << "Critical curve perturbation radius of lens " << int_param << std::endl;
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
-			std::cout << "Relative critical curve perturbation radius of lens " << lensnum_param << std::endl;
+			std::cout << "Relative critical curve perturbation radius of lens " << int_param << std::endl;
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			std::cout << "Projected mass within perturbation radius of lens " << lensnum_param << std::endl;
+			std::cout << "Projected mass within perturbation radius of lens " << int_param << std::endl;
 		} else if (derived_param_type == Robust_Perturbation_Density) {
-			std::cout << "Average projected density within perturbation radius of lens " << lensnum_param << std::endl;
+			std::cout << "Average projected density within perturbation radius of lens " << int_param << std::endl;
+		} else if (derived_param_type == Adaptive_Grid_qs) {
+			std::cout << "Axis ratio derived from moments of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+		} else if (derived_param_type == Adaptive_Grid_phi_s) {
+			std::cout << "Orientation angle derived from moments of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Chi_Square) {
 			std::cout << "Raw chi-square value for given set of parameters" << std::endl;
 		} else die("no user defined function yet");
@@ -2322,11 +2367,21 @@ struct ParamSettings
 	}
 	void add_prior_terms_to_loglike(double *params, double& loglike)
 	{
+		//std::cout << "LOGLIKE00=" << (2*loglike) << std::endl;
+		double dloglike,dloglike_tot=0;
 		for (int i=0; i < nparams; i++) {
 			if (priors[i]->prior!=UNIFORM_PRIOR) {
-				loglike += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
-				if (priors[i]->prior==LOG_PRIOR) loglike += log(params[i]);
-				else if (priors[i]->prior==GAUSS_PRIOR) loglike += SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
+				//std::cout << "PRIOR NORM (param " << i << "): " << (2*log(prior_norms[i])) << std::endl;
+				dloglike_tot += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
+				if (priors[i]->prior==LOG_PRIOR) {
+					dloglike = log(params[i]);
+					dloglike_tot += dloglike;
+				}
+				else if (priors[i]->prior==GAUSS_PRIOR) {
+					dloglike = SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
+					//std::cout << "YO: " << params[i] << " " << priors[i]->gaussian_pos << " " << priors[i]->gaussian_sig << " " << dloglike << std::endl;
+					dloglike_tot += dloglike;
+				}
 				else if (priors[i]->prior==GAUSS2_PRIOR) {
 					int j = priors[i]->gauss_paramnums[1];
 					dvector bvec, cvec;
@@ -2335,10 +2390,14 @@ struct ParamSettings
 					bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
 					bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
 					cvec = priors[i]->inv_covariance_matrix * bvec;
-					loglike += (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
+					dloglike = (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
+					dloglike_tot += dloglike;
 				}
 			}
 		}
+		//std::cout << "DLOGLIKE_TOT*2: " << (2*dloglike_tot) << " LOGLIKE0: " << (2*loglike) << std::endl;
+		loglike += dloglike_tot;
+		//std::cout << "NEW LOGLIKE: " << (2*loglike) << std::endl;
 	}
 	void update_reference_paramnums(int *new_paramnums)
 	{
