@@ -264,7 +264,7 @@ class DelaunayGrid : public Sort
 	//void find_centroid(double& xavg, double& yavg);
 	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
 	double find_moment(const int p, const int q, const int npix);
-	void find_qs_phi(const int npix, double &qs, double &phi_s);
+	void find_source_moments(const int npix, double &qs, double &phi_s, double &xavg, double &yavg);
 
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices(const bool interpolate);

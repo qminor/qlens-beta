@@ -1029,7 +1029,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
 	bool spline_PSF_matrix(const double xstep, const double ystep);
-	double interpolate_PSF_matrix(const double x, const double y);
+	double interpolate_PSF_matrix(const double x, const double y, const bool supersampled);
 
 	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
 	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false);
@@ -1417,6 +1417,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool vary_srcflux;
 	double srcflux_lower_limit, srcflux_upper_limit;
 	bool include_imgfluxes_in_inversion;
+	bool include_srcflux_in_inversion;
 
 	bool spline_critical_curves(bool verbal = true);
 	bool plot_critical_curves(string filename = "");

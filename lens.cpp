@@ -800,7 +800,7 @@ QLens::QLens() : UCMC()
 	psf_threshold = 0.01;
 	psf_ptsrc_threshold = 1e-2;
 	ignore_foreground_in_chisq = false;
-	psf_ptsrc_nsplit = 4; // for subpixel evaluation of point source PSF
+	psf_ptsrc_nsplit = 5; // for subpixel evaluation of point source PSF
 	fft_convolution = false;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
@@ -874,6 +874,7 @@ QLens::QLens() : UCMC()
 	analytic_source_flux = true;
 	source_flux = 1.0;
 	include_imgfluxes_in_inversion = false;
+	include_srcflux_in_inversion = false;
 	vary_srcflux = false;
 	srcflux_lower_limit = 1e30; // These must be specified by user
 	srcflux_upper_limit = 1e30; // These must be specified by user
@@ -1355,6 +1356,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	analytic_source_flux = lens_in->analytic_source_flux;
 	source_flux = lens_in->source_flux;
 	include_imgfluxes_in_inversion = lens_in->include_imgfluxes_in_inversion;
+	include_srcflux_in_inversion = lens_in->include_srcflux_in_inversion;
 	vary_srcflux = lens_in->vary_srcflux;
 	srcflux_lower_limit = lens_in->srcflux_lower_limit;
 	srcflux_upper_limit = lens_in->srcflux_upper_limit;
@@ -3842,8 +3844,9 @@ void QLens::find_pixellated_source_qs_phi_s(const int npix, double& qs, double& 
 	}
 
 
+	double xavg, yavg;
 	if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
-		delaunay_srcgrids[0]->find_qs_phi(npix,qs,phi_s);
+		delaunay_srcgrids[0]->find_source_moments(npix,qs,phi_s,xavg,yavg);
 	} else {
 		qs = 0;
 		phi_s = 0;
@@ -14423,6 +14426,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				is_lensed = true;
 				if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
 				if (!include_imgfluxes_in_inversion) image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
+				//cout << "srcflux=" << source_flux << endl;
 				image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
 			}
 		}
@@ -15054,7 +15058,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			calculate_foreground_pixel_surface_brightness(0,true);
 			store_foreground_pixel_surface_brightness(0);
 		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				image_pixel_grids[0]->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
@@ -15175,7 +15179,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					calculate_foreground_pixel_surface_brightness(zsrc_i,true);
 					store_foreground_pixel_surface_brightness(zsrc_i);
 				}
-				if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+				if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 					// Note that if image fluxes are included as linear parameters, we don't need to add point images to the SB separately because
 					// they will be included in the Lmatrix. Otherwise, we add them using the code below.
 					if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
@@ -15249,7 +15253,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 						calculate_foreground_pixel_surface_brightness(zsrc_i,true);
 						store_foreground_pixel_surface_brightness(zsrc_i);
 					}
-					if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+					if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 						for (i=0; i < n_sourcepts_fit; i++) {
 							image_pixel_grids[zsrc_i]->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
 						}
@@ -15359,7 +15363,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			PSF_convolution_Lmatrix_dense(zsrc_i,verbal);
 			if (zsrc_i==0) {
 				// currently only allowing point sources with first image grid...will extend later
-				if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+				if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 					if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 					for (i=0; i < n_sourcepts_fit; i++) {
 						image_pixel_grids[zsrc_i]->generate_point_images(point_imgs[i], point_image_surface_brightness, false, source_flux);
@@ -15913,7 +15917,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 			calculate_foreground_pixel_surface_brightness(-1,true);
 			store_foreground_pixel_surface_brightness(-1);
 		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
@@ -16005,7 +16009,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 			calculate_foreground_pixel_surface_brightness(-1,true);
 			store_foreground_pixel_surface_brightness(-1);
 		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
@@ -16074,7 +16078,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 				calculate_foreground_pixel_surface_brightness(-1,true);
 				store_foreground_pixel_surface_brightness(-1);
 			}
-			if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+			if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 				for (i=0; i < n_sourcepts_fit; i++) {
 					image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
 				}
@@ -16166,7 +16170,7 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 
 		image_pixel_grid0->fill_surface_brightness_vector(); // note that image_pixel_grid0 just has the data pixel values stored in it
 		PSF_convolution_Lmatrix_dense(verbal);
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion)) {
+		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 			for (i=0; i < n_sourcepts_fit; i++) {
 				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, false, source_flux);
@@ -16225,10 +16229,11 @@ double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool
 	}
 
 	if (n_sourcepts_fit > 0) {
-		if ((include_imgfluxes_in_inversion) and (source_fit_mode != Parameterized_Source)) {
+		if (((include_imgfluxes_in_inversion) or (include_srcflux_in_inversion)) and (source_fit_mode != Parameterized_Source)) {
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
+			//cout << "srcflux=" << source_flux << endl;
 			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, true, -1);
+				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
 			}
 		} else {
 			for (i=0; i < image_npixels; i++) image_surface_brightness[i] += point_image_surface_brightness[i];

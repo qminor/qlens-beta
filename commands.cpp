@@ -1324,7 +1324,6 @@ void QLens::process_commands(bool read_file)
 								"  [-emask/fgmask] plot image (or residuals) using extended/foreground mask\n"
 								"  [-pnoise] add pixel noise to the plot (if not using noise map, can specify 'pnoise=...')\n"
 								"  [-noptsrc] do not include the point source(s) when plotting the lensed images\n"
-								"  [-nosrcplot] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
 								"  [-replot] plots image that was previously found and plotted by the 'sbmap plotimg' command.\n"
 								"     This allows one to tweak plot parameters (range, show_cc etc.) without having to calculate\n"
@@ -10127,6 +10126,8 @@ void QLens::process_commands(bool read_file)
 					range2 = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
 				}
 
+				if ((!use_old_pixelgrids) and (n_extended_src_redshifts==0)) Complain("no extended source redshifts have been created (do 'sbmap invert' to create automatically)");
+
 				bool foundcc = true;
 				bool plotted_src = false;
 				double old_pnoise;
@@ -11271,10 +11272,20 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="invert_imgflux")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Include image flux in inversion: " << display_switch(include_imgfluxes_in_inversion) << endl;
+				if (mpi_id==0) cout << "Include image flux of point images in inversion: " << display_switch(include_imgfluxes_in_inversion) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'invert_imgflux' command; must specify 'on' or 'off'");
 				set_switch(include_imgfluxes_in_inversion,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="invert_srcflux")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include source point flux in inversion: " << display_switch(include_srcflux_in_inversion) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'invert_srcflux' command; must specify 'on' or 'off'");
+				set_switch(include_srcflux_in_inversion,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -14079,8 +14090,8 @@ void QLens::process_commands(bool read_file)
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
 			if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
-				double qs,phi_s;
-				delaunay_srcgrids[0]->find_qs_phi(200,qs,phi_s);
+				double qs,phi_s,xavg,yavg;
+				delaunay_srcgrids[0]->find_source_moments(200,qs,phi_s,xavg,yavg);
 				double phi_s_deg = phi_s*180.0/M_PI;
 				cout << "qs=" << qs << " phi_s=" << phi_s_deg << " degrees" << endl;
 			}
