@@ -72,6 +72,8 @@ enum DerivedParamType {
 	Robust_Perturbation_Density,
 	Adaptive_Grid_qs,
 	Adaptive_Grid_phi_s,
+	Adaptive_Grid_xavg,
+	Adaptive_Grid_yavg,
 	Chi_Square,
 	UserDefined
 };
@@ -548,9 +550,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
 	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
 	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
-	bool use_second_covariance_kernel;
-	double kernel2_correlation_length, kernel2_correlation_length_upper_limit, kernel2_correlation_length_lower_limit;
-	double kernel2_amplitude_ratio, kernel2_amplitude_ratio_upper_limit, kernel2_amplitude_ratio_lower_limit;
+	//bool use_second_covariance_kernel;
+	//double kernel2_correlation_length, kernel2_correlation_length_upper_limit, kernel2_correlation_length_lower_limit;
+	//double kernel2_amplitude_ratio, kernel2_amplitude_ratio_upper_limit, kernel2_amplitude_ratio_lower_limit;
 	//bool use_matern_scale_parameter; // ELIMINATE THIS FEATURE?
 	//double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3) (ELIMINATE THIS FEATURE?)
 	double matern_approx_source_size;
@@ -588,21 +590,21 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
 	double lumreg_rc;
-	double regparam_lsc2, regparam_lum_index2; 
+	//double regparam_lsc2, regparam_lum_index2; 
 	//double regparam_lhi, regparam_lum_index; 
 	double *lum_weight_factor;
-	double *lum_weight_factor2; // for second covariance kernel
+	//double *lum_weight_factor2; // for second covariance kernel
 	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
 	bool vary_lumreg_rc;
-	bool vary_regparam_lsc2, vary_regparam_lum_index2;
+	//bool vary_regparam_lsc2, vary_regparam_lum_index2;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;
 	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
 	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
 	double lumreg_rc_lower_limit, lumreg_rc_upper_limit;
-	double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
-	double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
+	//double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
+	//double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	bool use_dist_weighted_srcpixel_clustering;
@@ -1068,7 +1070,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
 
 	bool load_pixel_grid_from_data();
-	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal);
+	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
 	void plot_image_pixel_grid(const int zsrc_i=-1);
 	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal=false);
 	bool set_shapelet_imgpixel_nsplit(const int zsrc_i=-1);
@@ -1086,7 +1088,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, int specific_zsrc_i = -1, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool verbose = true);
 
 	void plot_Lmatrix();
 	void check_Lmatrix_columns();
@@ -1327,7 +1329,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void add_pixellated_source(const double zsrc);
 	void remove_pixellated_source(int src_number);
 	void print_pixellated_source_list();
-	void find_pixellated_source_qs_phi_s(const int npix, double& qs, double& phi_s);
+	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
@@ -1721,6 +1723,12 @@ struct DerivedParam
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
 			name = "phi_s"; latex_name = "\\phi_{s}";
 			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Adaptive_Grid_xavg) {
+			name = "xavg_s"; latex_name = "x_{avg,s}";
+			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Adaptive_Grid_yavg) {
+			name = "yavg_s"; latex_name = "y_{avg,s}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else die("no user defined function yet");
 
 		if (funcparam != -1e30) {
@@ -1780,36 +1788,50 @@ struct DerivedParam
 			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
 			return avgsig;
 		} else if (derived_param_type == Adaptive_Grid_qs) {
-			QLens* lensptr;
-			if (lens_in->raw_chisq==-1e30) {
-				if (lens_in->lens_parent != NULL) {
-					// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-					//std::cout << "BBBB" << std::endl;
-					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
-					lensptr = lens_in;
-					//std::cout << "chisq=" <<  lens_in->raw_chisq << std::endl;
-					lens_in->clear_raw_chisq();
-				} else {
-					//std::cout << "AAAA" << std::endl;
-					double chisq0;
-					lens_in->invert_surface_brightness_map_from_data(chisq0, false);
-					//lens_in->chisq_single_evaluation(true,false,false,false);
-					lensptr = lens_in;
-				}
-			//} else {
-				//std::cout << "FUCK" << std::endl;
+			if (lens_in->lens_parent != NULL) {
+				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
+			} else if (lens_in->raw_chisq==-1e30) {
+				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
 			}
-			double qs,phi_s;
+			double qs,phi_s,xavg,yavg;
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lensptr->find_pixellated_source_qs_phi_s(int_param,qs,phi_s);
-			//std::cout << "qs=" << qs << std::endl;
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
 			return qs;
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			double qs,phi_s,phi_s_deg;
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_qs_phi_s(int_param,qs,phi_s);
+			if (lens_in->lens_parent != NULL) {
+				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
+			} else if (lens_in->raw_chisq==-1e30) {
+				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
+			}
+			double qs,phi_s,phi_s_deg,xavg,yavg;
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
 			phi_s_deg = phi_s*180.0/M_PI;
 			return phi_s_deg;
+		} else if (derived_param_type == Adaptive_Grid_xavg) {
+			if (lens_in->lens_parent != NULL) {
+				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
+			} else if (lens_in->raw_chisq==-1e30) {
+				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
+			}
+			double qs,phi_s,xavg,yavg;
+			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			return xavg;
+		} else if (derived_param_type == Adaptive_Grid_yavg) {
+			if (lens_in->lens_parent != NULL) {
+				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
+			} else if (lens_in->raw_chisq==-1e30) {
+				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
+			}
+			double qs,phi_s,xavg,yavg;
+			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			return yavg;
 		} else if (derived_param_type == Chi_Square) {
 			double chisq_out;
 			if (lens_in->raw_chisq==-1e30) {
@@ -1817,7 +1839,6 @@ struct DerivedParam
 					// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
 					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
 					chisq_out = lens_in->raw_chisq;
-					lens_in->clear_raw_chisq();
 				} else {
 					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
 				}
@@ -1863,9 +1884,13 @@ struct DerivedParam
 		} else if (derived_param_type == Robust_Perturbation_Density) {
 			std::cout << "Average projected density within perturbation radius of lens " << int_param << std::endl;
 		} else if (derived_param_type == Adaptive_Grid_qs) {
-			std::cout << "Axis ratio derived from moments of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			std::cout << "Axis ratio derived from source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			std::cout << "Orientation angle derived from moments of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			std::cout << "Orientation angle derived of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+		} else if (derived_param_type == Adaptive_Grid_xavg) {
+			std::cout << "Centroid x-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
+		} else if (derived_param_type == Adaptive_Grid_yavg) {
+			std::cout << "Centroid y-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Chi_Square) {
 			std::cout << "Raw chi-square value for given set of parameters" << std::endl;
 		} else die("no user defined function yet");

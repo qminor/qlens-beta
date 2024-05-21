@@ -1091,8 +1091,10 @@ void QLens::process_commands(bool read_file)
 							"mass_perturb -- The projected mass enclosed within r_perturb (see above) of perturbing lens [lens#]\n"
 							"sigma_perturb -- The average projected density within r_perturb (see above) of perturbing lens [lens#]\n"
 							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
-							"qs -- axis ratio derived from moments of source pixel covariance matrix; [param1] gives # of points sampled\n" 
-							"phi_s -- orientation derived from moments of source pixel covariance matrix; [param1] gives # of points sampled\n" 
+							"qs -- axis ratio derived from source pixel covariance matrix; [param1] gives # of points sampled\n" 
+							"phi_s -- orientation derived from source pixel covariance matrix; [param1] gives # of points sampled\n" 
+							"xavg_s -- centroid x-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
+							"yavg_s -- centroid y-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
 							"\n";
 					else if (words[2]=="vary_sourcept")
 						cout << "fit vary_sourcept\n"
@@ -8076,6 +8078,16 @@ void QLens::process_commands(bool read_file)
 								if (nwords != 5) Complain("derived parameter phi_s requires only one arguments (pixel number)");
 								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
 								add_derived_param(Adaptive_Grid_phi_s,-1,npix,-1,false);
+							} else if (words[3]=="xavg_s") {
+								double npix;
+								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
+								add_derived_param(Adaptive_Grid_xavg,-1,npix,-1,false);
+							} else if (words[3]=="yavg_s") {
+								double npix;
+								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
+								add_derived_param(Adaptive_Grid_yavg,-1,npix,-1,false);
 							} else if (words[3]=="raw_chisq") {
 								if (nwords != 4) Complain("no arguments required for derived param raw_chisq");
 								add_derived_param(Chi_Square,0.0,-1,-1,use_kpc);
@@ -9276,11 +9288,17 @@ void QLens::process_commands(bool read_file)
 				if (!image_pixel_data->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
 				use_noise_map = true;
 			}
+			else if (words[1]=="generate_uniform_noisemap")
+			{
+				if (background_pixel_noise <= 0) Complain("bg_pixel_noise should be set to a positive nonzero value to generate uniform noise map");
+				if ((image_pixel_data != NULL)) image_pixel_data->set_uniform_pixel_noise(background_pixel_noise);
+				use_noise_map = true;
+			}
 			else if (words[1]=="unload_noisemap")
 			{
 				string filename;
 				if (nwords != 2) Complain("no arguments are required for 'sbmap unload_noisemap'");
-				if (!use_noise_map) Complain("no noise map has been loaded from FITS file");
+				if (!use_noise_map) Complain("no noise map has been generated or loaded from FITS file");
 				if (image_pixel_data) image_pixel_data->unload_noise_map();
 				use_noise_map = false;
 			}
@@ -9976,6 +9994,7 @@ void QLens::process_commands(bool read_file)
 				bool plot_contours = false;
 				bool add_specific_noise = false;
 				bool add_noise = false;
+				bool show_only_ptimgs = false;
 				bool simulate_noise_setting = simulate_pixel_noise;
 				string cbstring = "";
 				double pnoise = 0;
@@ -10027,6 +10046,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-fits") plot_fits = true;
 						else if ((args[i]=="-showsrc") or (args[i]=="-showsrcplot")) omit_source_plot = false;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
+						else if (args[i]=="-onlyptsrc") show_only_ptimgs = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-mkdata") offload_to_data = true;
 						else if (args[i]=="-pnoise") {
@@ -10079,6 +10099,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				}
+				if ((exclude_ptimgs) and (show_only_ptimgs)) Complain("cannot both exclude point images and show only point images");
 				if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) Complain("No source surface brightness map has been loaded");
 				//if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids == NULL)) Complain("No pixellated soure objects have been created");
 				if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source))) omit_source_plot = true;
@@ -10143,7 +10164,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i)==true)) {
 							if ((subcomp) and (show_cc)) {
 								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							}
@@ -10186,9 +10207,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i);
+							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
 								else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
@@ -10199,11 +10220,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if (terminal==TEXT) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i);
+								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i);
 								if ((plotted_src) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i)==true)) {
 							if ((!replot) and (plotted_src)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
@@ -10406,6 +10427,8 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="invert")
 			{
+				if (!use_noise_map) Complain("Noise map required; either load from fits file or generate uniform noise map from bg_pixel_noise");
+				//use_noise_map = true;
 				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				bool regopt = false; // false means it uses whatever the actual setting is for optimize_regparam
 				bool verbal = true;
@@ -12327,7 +12350,8 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) cout << "NOTE: setting 'dist_weighted_regularization' to 'off'" << endl;
 				}
 				if ((setword=="off") and (use_lum_weighted_regularization)) {
-					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
+					//if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
+					if (vary_regparam_lsc) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
 						vary_regparam_lsc = false;
 					}
@@ -12368,7 +12392,7 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
 				}
 				if ((setword=="off") and (use_distance_weighted_regularization)) {
-					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
+					if (vary_regparam_lsc) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
 						vary_regparam_lsc = false;
 					}
@@ -12480,7 +12504,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc can be varied");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lsc,setword);
 				update_parameter_list();
@@ -12549,6 +12573,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		/*
 		else if (words[0]=="regparam_lsc2")
 		{
 			double reg_lsc2, reg_lsc2_upper, reg_lsc2_lower;
@@ -12574,7 +12599,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc2' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc2 can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc2 can be varied");
+				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc2 can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lsc2,setword);
 				update_parameter_list();
@@ -12612,6 +12637,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		*/
 		else if (words[0]=="auto_lumreg_center")
 		{
 			if (nwords==1) {
@@ -12991,7 +13017,6 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		*/
 		else if (words[0]=="use_two_kernels")
 		{
 			if (nwords==1) {
@@ -13073,6 +13098,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		*/
 		else if (words[0]=="find_cov_inverse")
 		{
 			if (nwords==1) {

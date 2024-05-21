@@ -5119,7 +5119,7 @@ void DelaunayGrid::plot_surface_brightness(string root, const int npix, const bo
 
 }
 
-double DelaunayGrid::find_moment(const int p, const int q, const int npix)
+double DelaunayGrid::find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi)
 {
 	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
 	int i, j, k, npts_x, npts_y;
@@ -5141,12 +5141,23 @@ double DelaunayGrid::find_moment(const int p, const int q, const int npix)
 #else
 		thread = 0;
 #endif
-		#pragma omp for private(i,j,k,x,y,xp,yq,sb,pt) schedule(static)
+		double xp,yp;
+		double cosphi = cos(phi);
+		double sinphi = sin(phi);
+		const double sigfac = 2.5; // sigma clipping factor
+		double sigsqfac = sigfac*sigfac;
+		bool do_sigmaclip = true;
+		if ((a >= 1e30) or (b >= 1e30)) do_sigmaclip = false;
+		#pragma omp for private(i,j,k,x,y,xp,yq,sb,pt,xp,yp) schedule(static)
 		for (j=0; j < npts_y; j++) {
 			y = y0 + j*pixel_ylength;
 			pt[1] = y;
 			for (k=0,yq=1;k<q;k++) yq *= y;
 			for (i=0, x=srcgrid_xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
+				xp = (x-xc)*cosphi + (y-yc)*sinphi;
+				yp = -(x-xc)*sinphi + (y-yc)*cosphi;
+				if ((do_sigmaclip) and ((SQR(xp/a)+SQR(yp/b)) > sigsqfac)) continue; // in this case, the point is outside of the 2*sigma range based on the approximate ellipse from covariance matrix
+
 				pt[0] = x;
 				for (k=0,xp=1;k<p;k++) xp *= x;
 				sb = interpolate_surface_brightness(pt,thread);
@@ -5167,29 +5178,52 @@ void DelaunayGrid::find_source_moments(const int npix, double &qs, double &phi_s
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	M00 = find_moment(0,0,npix);
-	M10 = find_moment(1,0,npix);
-	M01 = find_moment(0,1,npix);
-	xavg = M10/M00;
-	yavg = M01/M00;
-	//cout << "xavg=" << xavg << " yavg=" << yavg << endl;
-	M20 = find_moment(2,0,npix);
-	M02 = find_moment(0,2,npix);
-	M11 = find_moment(1,1,npix);
-	double mu20,mu02,mu11,desc,lam1,lam2;
-	mu20 = M20/M00 - xavg*xavg;
-	mu02 = M02/M00 - yavg*yavg;
-	mu11 = M11/M00 - xavg*yavg;
-	//cout << "mu20=" << mu20 << " mu02=" << mu02 << " mu11=" << mu11 << endl;
-	desc = sqrt(4*mu11*mu11 + SQR(mu20-mu02));
-	lam1 = mu20 + mu02 + desc;
-	lam2 = mu20 + mu02 - desc;
-	qs = sqrt(lam2/lam1);
-	if (mu20==mu02) phi_s = 0;
-	else {
-		phi_s = atan(2*mu11/(mu20-mu02))/2;
-		if (mu02 > mu20) phi_s += M_HALFPI;
-	}
+	const int max_it = 10;
+	const double qstol = 0.01; // fractional tolerance in accuracy of qs
+	int index = 0;
+	double mu20,mu02,mu11,sqrdesc,desc,lam1_times_two,lam2_times_two;
+	double xc,yc,sig_major=1e30,sig_minor=1e30;
+	xc = (srcgrid_xmax+srcgrid_xmin)/2; // initial xc isn't actually getting used
+	yc = (srcgrid_ymax+srcgrid_ymin)/2; // initial yc isn't actually getting used
+
+	phi_s = 0;
+	qs = 0;
+	double qs_old;
+	do {
+		qs_old = qs;
+		M00 = find_moment(0,0,npix,xc,yc,sig_minor,sig_major,phi_s);
+		M10 = find_moment(1,0,npix,xc,yc,sig_minor,sig_major,phi_s);
+		M01 = find_moment(0,1,npix,xc,yc,sig_minor,sig_major,phi_s);
+		xavg = M10/M00;
+		yavg = M01/M00;
+		//cout << "xavg=" << xavg << " yavg=" << yavg << endl;
+		M20 = find_moment(2,0,npix,xc,yc,sig_minor,sig_major,phi_s);
+		M02 = find_moment(0,2,npix,xc,yc,sig_minor,sig_major,phi_s);
+		M11 = find_moment(1,1,npix,xc,yc,sig_minor,sig_major,phi_s);
+		xc = xavg;
+		yc = yavg;
+		mu20 = M20/M00 - xavg*xavg;
+		mu02 = M02/M00 - yavg*yavg;
+		mu11 = M11/M00 - xavg*yavg;
+		//cout << "mu20=" << mu20 << " mu02=" << mu02 << " mu11=" << mu11 << endl;
+		sqrdesc = 4*mu11*mu11 + SQR(mu20-mu02);
+		if (sqrdesc < 0) sqrdesc = 0;
+		desc = sqrt(sqrdesc);
+		lam1_times_two = mu20 + mu02 + desc;
+		lam2_times_two = mu20 + mu02 - desc;
+		if (lam2_times_two <= 0) lam2_times_two = 0;
+		sig_major = sqrt(lam1_times_two/2);
+		sig_minor = sqrt(lam2_times_two/2);
+		qs = sqrt(lam2_times_two/lam1_times_two);
+		if (mu20==mu02) phi_s = 0;
+		else {
+			phi_s = atan(2*mu11/(mu20-mu02))/2;
+			if (mu02 > mu20) phi_s += M_HALFPI;
+		}
+		cout << "b=" << sig_minor << " a=" << sig_major << endl;
+		cout << "qs=" << qs << " phi_s=" << phi_s << endl;
+	} while ((abs(qs-qs_old) > qstol*qs) and (++index < max_it));
+	//} while (index++ < 2);
 #ifdef USE_OPENMP
 		if (lens->show_wtime) {
 			wtime = omp_get_wtime() - wtime0;
@@ -5471,6 +5505,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 	double *pixels;
 	double x, y, xstep, ystep;
 	bool pixel_noise_specified = false;
+	if ((lens != NULL) and (lens->background_pixel_noise > 0)) pixel_noise_specified = true;
 	double pnoise;
 
 	int hdutype;
@@ -5540,6 +5575,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 				pxnoise_str >> pnoise;
 				if (lens != NULL) {
 					lens->background_pixel_noise = pnoise;
+					pixel_noise_specified = true;
 				}
 			} else if (cardstring.find("PSFSIG ") != string::npos) {
 				string psfwidth_string = cardstring.substr(11);
@@ -5681,7 +5717,9 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 						high_sn_pixel[i][j] = true;
 					}
 				}
-				if (pixel_noise_specified) set_uniform_pixel_noise(pnoise);
+				if (pixel_noise_specified) {
+					set_uniform_pixel_noise(pnoise);
+				}
 
 				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
@@ -12313,9 +12351,9 @@ void QLens::initialize_pixel_matrices(const int zsrc_i, bool verbal)
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
-	if (use_second_covariance_kernel) {
-		lum_weight_factor2 = new double[source_npixels];
-	}
+	//if (use_second_covariance_kernel) {
+		//lum_weight_factor2 = new double[source_npixels];
+	//}
 
 	if (use_noise_map) {
 		int ii,i,j;
@@ -12395,9 +12433,9 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 		lum_weight_factor = new double[source_npixels];
 		//lumreg_pixel_weights = new double[source_npixels];
 	}
-	if (use_second_covariance_kernel) {
-		lum_weight_factor2 = new double[source_npixels];
-	}
+	//if (use_second_covariance_kernel) {
+		//lum_weight_factor2 = new double[source_npixels];
+	//}
 
 	if (use_noise_map) {
 		int ii,i,j;
@@ -12429,7 +12467,7 @@ void QLens::clear_pixel_matrices(const int zsrc_i)
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
-	if (lum_weight_factor2 != NULL) delete[] lum_weight_factor2;
+	//if (lum_weight_factor2 != NULL) delete[] lum_weight_factor2;
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
@@ -12441,7 +12479,7 @@ void QLens::clear_pixel_matrices(const int zsrc_i)
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
 	lum_weight_factor = NULL;
-	lum_weight_factor2 = NULL;
+	//lum_weight_factor2 = NULL;
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -14425,7 +14463,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 		pix_j = image_pixel_grid->active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		sbcov = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
-		if (((vary_srcflux) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sbcov -= point_image_surface_brightness[i];
+		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sbcov -= point_image_surface_brightness[i];
 		sbcov *= cov_inverse;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - sbprofile_surface_brightness[i])/cov_inverse;
@@ -14997,7 +15035,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[assigned_mask[zsrc_i]][pix_i][pix_j]) and (!image_pixel_data->in_mask[assigned_mask[zsrc_i]][pix_i][pix_j])) ; 
 				else {
 					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
-					if (((vary_srcflux) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
+					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
 					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
 					//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
 				}
@@ -15462,10 +15500,10 @@ void QLens::setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatr
 		pix_j = image_pixel_grid->active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		img_minus_sbprofile[i] = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
-		if (((vary_srcflux) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
+		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
 	}
 
-	source_pixel_vector_minchisq = new double[source_npixels];
+	source_pixel_vector_minchisq = new double[source_n_amps];
 	//if (use_lum_weighted_regularization) source_pixel_vector_input_lumreg = new double[source_npixels];
 	regopt_chisqmin = 1e30;
 	regopt_logdet = 1e30; // this will be changed during optimization
@@ -15667,7 +15705,7 @@ void QLens::calculate_subpixel_distweights(const int zsrc_i)
 
 void QLens::calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights)
 {
-	double lumfac, lumfac2, max_sb=-1e30;
+	double lumfac, max_sb=-1e30;
 	int i;
 	if (use_sbweights) find_srcpixel_weights(zsrc_i);
 	for (i=0; i < source_npixels; i++) {
@@ -15694,14 +15732,16 @@ void QLens::calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_s
 			}
 		}
 	}
+	/*
 	if (use_second_covariance_kernel) {
 		for (i=0; i < source_npixels; i++) {
 			//if (regparam_lum_index==0) lumfac2 = 1;
 			lumfac2 = (source_pixel_vector[i] > 0) ? pow(1 - source_pixel_vector[i]/max_sb,2) : 1;
 			//lum_weight_factor2[i] = exp(-pow(regparam_lsc,2)*lumfac2);
-			lum_weight_factor2[i] = 1.0;
+			//lum_weight_factor2[i] = 1.0;
 		}
 	}
+	*/
 }
 
 void QLens::calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc_in, const double yc_in, const double sig, const bool verbal)
@@ -15760,6 +15800,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc
 		}
 	}
 
+	/*
 	if (use_second_covariance_kernel) {
 		for (int i=0; i < source_npixels; i++) {
 			if (lum_weight_function==0) {
@@ -15770,6 +15811,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc
 			}
 		}
 	}
+	*/
 
 
 	delete[] scaled_dists;
