@@ -5148,7 +5148,7 @@ double DelaunayGrid::find_moment(const int p, const int q, const int npix, const
 		double sigsqfac = sigfac*sigfac;
 		bool do_sigmaclip = true;
 		if ((a >= 1e30) or (b >= 1e30)) do_sigmaclip = false;
-		#pragma omp for private(i,j,k,x,y,xp,yq,sb,pt,xp,yp) schedule(static)
+		#pragma omp for private(i,j,k,x,y,xp,yp,sb,pt,yq) schedule(static)
 		for (j=0; j < npts_y; j++) {
 			y = y0 + j*pixel_ylength;
 			pt[1] = y;
