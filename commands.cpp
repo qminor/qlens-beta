@@ -2171,6 +2171,7 @@ void QLens::process_commands(bool read_file)
 					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
 					cout << "dist_weighted_regularization: " << display_switch(use_distance_weighted_regularization) << endl;
+					cout << "mag_weighted_regularization: " << display_switch(use_mag_weighted_regularization) << endl;
 					cout << "regparam_lsc = " << regparam_lsc << endl;
 					cout << "vary_regparam_lsc: " << display_switch(vary_regparam_lsc) << endl;
 					//cout << "regparam_lhi = " << regparam_lhi << endl;
@@ -9587,7 +9588,7 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) {
 							if (!make_delaunay_from_sbprofile) source_pixel_grid->plot_surface_brightness("src_pixel");
 							else {
-								delaunay_srcgrids[zsrc_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
+								delaunay_srcgrids[zsrc_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate,false);
 							}
 						}
 						if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -9988,7 +9989,7 @@ void QLens::process_commands(bool read_file)
 				bool offload_to_data = false;
 				bool omit_cc = false;
 				bool old_cc_setting = show_cc;
-				bool subcomp = false;
+				bool subcomp = true;
 				bool show_noise_thresh = false;
 				bool set_title = false;
 				bool plot_contours = false;
@@ -10165,9 +10166,9 @@ void QLens::process_commands(bool read_file)
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
 						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i)==true)) {
-							if ((subcomp) and (show_cc)) {
-								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
-							}
+							//if ((subcomp) and (show_cc)) {
+								//if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
+							//}
 							if (!offload_to_data) {
 								if (!replot) {
 									if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid != NULL)) {
@@ -10183,7 +10184,7 @@ void QLens::process_commands(bool read_file)
 												}
 											}
 											if (delaunay_srcgrids[src_i] != NULL) {
-												delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",1,600);
+												delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",1,600,false);
 												plotted_src = true;
 											}
 										}
@@ -10261,6 +10262,7 @@ void QLens::process_commands(bool read_file)
 				bool plot_fits = false;
 				bool omit_caustics = false;
 				bool old_caustics_setting = show_cc;
+				bool plot_mag = false;
 				bool show_raytraced_pts = false; // if true, show all raytraced points (subpixels, if splitting is on) instead of source pixels
 				string temp_title;
 				int zsrc_i = 0;
@@ -10291,6 +10293,7 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-interp") interpolate = true;
+						else if (args[i]=="-mag") plot_mag = true;
 						else if (args[i]=="-100") set_npix = 100;
 						else if (args[i]=="-200") set_npix = 200;
 						else if (args[i]=="-300") set_npix = 300;
@@ -10379,7 +10382,7 @@ void QLens::process_commands(bool read_file)
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 						else if (source_fit_mode==Delaunay_Source) {
 							if (delaunay_srcgrids[src_i] != NULL) {
-								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate);
+								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate,plot_mag);
 							} else Complain("Delaunay grid has not been created");
 
 						}
@@ -10397,7 +10400,7 @@ void QLens::process_commands(bool read_file)
 					if (plot_fits) {
 						if (source_fit_mode==Cartesian_Source) source_pixel_grid->output_fits_file(words[2]);
 						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],set_npix,interpolate,plot_fits);
+							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],set_npix,interpolate,plot_mag,plot_fits);
 						}
 					} else {
 						if (set_title) plot_title = temp_title;
@@ -10407,7 +10410,7 @@ void QLens::process_commands(bool read_file)
 							if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
 							else if (source_fit_mode==Delaunay_Source) {
 								if (delaunay_srcgrids[src_i] != NULL) {
-									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate);
+									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate,plot_mag);
 								} else Complain("Delaunay grid has not been created");
 							}
 							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -12421,6 +12424,28 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="mag_weighted_regularization")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use magnification-weighted regularization: " << display_switch(use_mag_weighted_regularization) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'mag_weighted_regularization' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				if ((setword=="off") and (use_mag_weighted_regularization)) {
+					if (vary_mag_weight_sc) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_mag_weight_sc' to 'off'" << endl;
+						vary_mag_weight_sc = false;
+					}
+					if (vary_mag_weight_index) {
+						if (mpi_id==0) cout << "NOTE: setting 'vary_mag_weight_index' to 'off'" << endl;
+						vary_mag_weight_index = false;
+					}
+				}
+				set_switch(use_mag_weighted_regularization,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="dist_weighted_srcpixel_clustering")
 		{
 			if (nwords==1) {
@@ -12539,6 +12564,70 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before regparam_lum_index can be varied");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lum_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+
+		else if (words[0]=="mag_weight_index")
+		{
+			double mag_index;
+			double mag_index_upper, mag_index_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> mag_index_lower)) Complain("invalid mag_weight_index lower limit");
+				if (!(ws[2] >> mag_index)) Complain("invalid mag_weight_index value");
+				if (!(ws[3] >> mag_index_upper)) Complain("invalid mag_weight_index upper limit");
+				if ((mag_index < mag_index_lower) or (mag_index > mag_index_upper)) Complain("initial mag_weight_index should lie within specified prior limits");
+				mag_weight_index = mag_index;
+				mag_weight_index_lower_limit = mag_index_lower;
+				mag_weight_index_upper_limit = mag_index_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> mag_index)) Complain("invalid mag_weight_index value");
+				mag_weight_index = mag_index;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "mag_weight_index = " << mag_weight_index << endl;
+			} else Complain("must specify either zero or one argument (mag_weight_index value)");
+		}
+		else if (words[0]=="vary_mag_weight_index")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary mag_weight_index: " << display_switch(vary_mag_weight_index) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_mag_weight_index' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before mag_weight_index can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_mag_weighted_regularization)) Complain("mag_weighted_regularization must be set to 'on' before mag_weight_index can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("mag_weight_index can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_mag_weight_index,setword);
+				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="mag_weight_sc")
+		{
+			double mag_sc, mag_sc_upper, mag_sc_lower;
+			if (nwords == 4) {
+				if (!(ws[1] >> mag_sc_lower)) Complain("invalid mag_weight_sc lower limit");
+				if (!(ws[2] >> mag_sc)) Complain("invalid mag_weight_sc value");
+				if (!(ws[3] >> mag_sc_upper)) Complain("invalid mag_weight_sc upper limit");
+				if ((mag_sc < mag_sc_lower) or (mag_sc > mag_sc_upper)) Complain("initial mag_weight_sc should lie within specified prior limits");
+				mag_weight_sc = mag_sc;
+				mag_weight_sc_lower_limit = mag_sc_lower;
+				mag_weight_sc_upper_limit = mag_sc_upper;
+			} else if (nwords == 2) {
+				if (!(ws[1] >> mag_sc)) Complain("invalid mag_weight_scale value");
+				mag_weight_sc = mag_sc;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "mag_weight_scale = " << mag_weight_sc << endl;
+			} else Complain("must specify either zero or one argument (mag_weight_sc value)");
+		}
+		else if (words[0]=="vary_mag_weight_sc")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Vary mag_weight_sc: " << display_switch(vary_mag_weight_sc) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_mag_weight_sc' command; must specify 'on' or 'off'");
+				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before mag_weight_sc can be varied (see 'fit regularization')");
+				if ((setword=="on") and (!use_mag_weighted_regularization)) Complain("'mag_weighted_regularization' must be set to 'on' before mag_weight_sc can be varied");
+				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("mag_weight_sc can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
+				set_switch(vary_mag_weight_sc,setword);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

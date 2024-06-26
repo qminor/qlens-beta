@@ -45,6 +45,7 @@ class TriRectangleOverlap
 	bool determine_if_overlap(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax);
 	bool determine_if_overlap_rough(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax);
 	bool determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, lensvector& d, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside);
+	bool determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside);
 };
 
 #endif // TRIRECTANGLE_H

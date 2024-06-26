@@ -805,7 +805,7 @@ QLens::QLens() : UCMC()
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	auxiliary_srcgrid_npixels = 20; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
+	auxiliary_srcgrid_npixels = 60; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
 	outside_sb_prior_noise_frac = -1e30; // surface brightness threshold is given as multiple of data pixel noise (negative by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
@@ -925,6 +925,7 @@ QLens::QLens() : UCMC()
 
 	use_lum_weighted_regularization = false;
 	use_distance_weighted_regularization = false;
+	use_mag_weighted_regularization = false;
 	auto_lumreg_center = true;
 	lumreg_center_from_ptsource = false;
 	lensed_lumreg_center = false;
@@ -974,6 +975,15 @@ QLens::QLens() : UCMC()
 	regparam_lum_index_lower_limit = 1e30; // These must be specified by user
 	regparam_lum_index_upper_limit = 1e30; // These must be specified by user
 	vary_regparam_lum_index = false;
+
+	mag_weight_index = 0.3;
+	mag_weight_index_lower_limit = 1e30;
+	mag_weight_index_upper_limit = 1e30;
+	vary_mag_weight_index = false;
+	mag_weight_sc = 1.0;
+	mag_weight_sc_lower_limit = 1e30;
+	mag_weight_sc_upper_limit = 1e30;
+	vary_mag_weight_sc = false;
 
 	lumreg_rc = 0.0;
 	lumreg_rc_lower_limit = 1e30; // These must be specified by user
@@ -1071,8 +1081,8 @@ QLens::QLens() : UCMC()
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
-	lum_weight_factor = NULL;
-	//lum_weight_factor2 = NULL;
+	reg_weight_factor = NULL;
+	//reg_weight_factor2 = NULL;
 	//lumreg_pixel_weights = NULL;
 	source_pixel_n_images = NULL;
 	//active_image_pixel_i = NULL;
@@ -1418,6 +1428,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
 	use_distance_weighted_regularization = lens_in->use_distance_weighted_regularization;
+	use_mag_weighted_regularization = lens_in->use_mag_weighted_regularization;
 	auto_lumreg_center = lens_in->auto_lumreg_center;
 	lumreg_center_from_ptsource = lens_in->lumreg_center_from_ptsource;
 	lensed_lumreg_center = lens_in->lensed_lumreg_center;
@@ -1463,6 +1474,15 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	regparam_lum_index_lower_limit = lens_in->regparam_lum_index_lower_limit; // These must be specified by user
 	regparam_lum_index_upper_limit = lens_in->regparam_lum_index_upper_limit; // These must be specified by user
 	vary_regparam_lum_index = lens_in->vary_regparam_lum_index;
+
+	mag_weight_sc = lens_in->mag_weight_sc;
+	mag_weight_sc_lower_limit = lens_in->mag_weight_sc_lower_limit; // These must be specified by user
+	mag_weight_sc_upper_limit = lens_in->mag_weight_sc_upper_limit; // These must be specified by user
+	vary_mag_weight_sc = lens_in->vary_mag_weight_sc;
+	mag_weight_index = lens_in->mag_weight_index;
+	mag_weight_index_lower_limit = lens_in->mag_weight_index_lower_limit; // These must be specified by user
+	mag_weight_index_upper_limit = lens_in->mag_weight_index_upper_limit; // These must be specified by user
+	vary_mag_weight_index = lens_in->vary_mag_weight_index;
 
 	lumreg_rc = lens_in->lumreg_rc;
 	lumreg_rc_lower_limit = lens_in->lumreg_rc_lower_limit; // These must be specified by user
@@ -1559,8 +1579,8 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
 	source_pixel_vector = NULL;
-	lum_weight_factor = NULL;
-	//lum_weight_factor2 = NULL;
+	reg_weight_factor = NULL;
+	//reg_weight_factor2 = NULL;
 	//lumreg_pixel_weights = NULL;
 	source_pixel_n_images = NULL;
 	//active_image_pixel_i = NULL;
@@ -7749,6 +7769,10 @@ double QLens::update_model(const double* params)
 			if (vary_lumreg_e2) lumreg_e2 = params[index++];
 		}
 	}
+	if ((use_mag_weighted_regularization) and (regularization_method != None)) {
+		if (vary_mag_weight_sc) mag_weight_sc = params[index++];
+		if (vary_mag_weight_index) mag_weight_index = params[index++];
+	}
 
 	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) alpha_clus = params[index++];
@@ -8728,6 +8752,10 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 			if (vary_lumreg_e2) stepsizes[index++] = 0.1;
 		}
 	}
+	if ((use_mag_weighted_regularization) and (regularization_method != None)) {
+		if (vary_mag_weight_sc) stepsizes[index++] = 0.33*mag_weight_sc;
+		if (vary_mag_weight_index) stepsizes[index++] = 0.33;
+	}
 
 	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
 		if (vary_alpha_clus) stepsizes[index++] = 0.33*alpha_clus;
@@ -8788,6 +8816,8 @@ void QLens::set_default_plimits()
 		if (vary_lumreg_e1) index++;
 		if (vary_lumreg_e2) index++;
 	}
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
@@ -8844,6 +8874,8 @@ void QLens::get_n_fit_parameters(int &nparams)
 		if (vary_lumreg_e1) nparams++;
 		if (vary_lumreg_e2) nparams++;
 	}
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) nparams++;
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) nparams++;
 
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) nparams++;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) nparams++;
@@ -8929,6 +8961,9 @@ bool QLens::setup_fit_parameters()
 		if (vary_lumreg_e1) fitparams[index++] = lumreg_e1;
 		if (vary_lumreg_e2) fitparams[index++] = lumreg_e2;
 	}
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) fitparams[index++] = mag_weight_sc;
+	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) fitparams[index++] = mag_weight_index;
+
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
 	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) fitparams[index++] = beta_clus;
 	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
@@ -9105,6 +9140,25 @@ bool QLens::setup_limits()
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
+
+	if ((vary_mag_weight_sc) and (regularization_method != None)) {
+		if ((mag_weight_sc_lower_limit==1e30) or (mag_weight_sc_upper_limit==1e30)) { warn("lower/upper limits must be set for mag_weight_sc (see 'regparam') before doing fit"); return false; }
+		lower_limits[index] = mag_weight_sc_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = mag_weight_sc_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+	if ((vary_mag_weight_index) and (regularization_method != None)) {
+		if ((mag_weight_index_lower_limit==1e30) or (mag_weight_index_upper_limit==1e30)) { warn("lower/upper limits must be set for mag_weight_index before doing fit"); return false; }
+		lower_limits[index] = mag_weight_index_lower_limit;
+		lower_limits_initial[index] = lower_limits[index];
+		upper_limits[index] = mag_weight_index_upper_limit;
+		upper_limits_initial[index] = upper_limits[index];
+		index++;
+	}
+
+
 
 	if (vary_alpha_clus) {
 		if ((alpha_clus_lower_limit==1e30) or (alpha_clus_upper_limit==1e30)) { warn("lower/upper limits must be set for alpha_clus before doing fit"); return false; }
@@ -9391,6 +9445,16 @@ void QLens::get_parameter_names()
 		fit_parameter_names.push_back("lumreg_e2");
 		latex_parameter_names.push_back("e");
 		latex_parameter_subscripts.push_back("2,\\lambda");
+	}
+	if ((vary_mag_weight_sc) and (regularization_method != None)) {
+		fit_parameter_names.push_back("mag_weight_sc");
+		latex_parameter_names.push_back("\\lambda");
+		latex_parameter_subscripts.push_back("\\mu,sc");
+	}
+	if ((vary_mag_weight_index) and (regularization_method != None)) {
+		fit_parameter_names.push_back("mag_weight_index");
+		latex_parameter_names.push_back("\\gamma");
+		latex_parameter_subscripts.push_back("\\mu");
 	}
 
 	if (vary_alpha_clus) {
@@ -10161,6 +10225,8 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			if (vary_lumreg_ycenter) cout << "lumreg_ycenter=" << fitmodel->lumreg_ycenter << endl;
 			if (vary_lumreg_e1) cout << "lumreg_e1=" << fitmodel->lumreg_e1 << endl;
 			if (vary_lumreg_e2) cout << "lumreg_e2=" << fitmodel->lumreg_e2 << endl;
+			if (vary_mag_weight_sc) cout << "mag_weight_sc=" << fitmodel->mag_weight_sc << endl;
+			if (vary_mag_weight_index) cout << "mag_weight_index=" << fitmodel->mag_weight_index << endl;
 		}
 		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
 		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
@@ -12970,6 +13036,23 @@ void QLens::print_fit_model()
 				else cout << "lumreg_e2: [" << lumreg_e2_lower_limit << ":" << lumreg_e2 << ":" << lumreg_e2_upper_limit << "]\n";
 			}
 		}
+		if (vary_mag_weight_sc) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "mag_weight_sc: " << mag_weight_sc << endl;
+			} else {
+				if ((mag_weight_sc_lower_limit==1e30) or (mag_weight_sc_upper_limit==1e30)) cout << "\nmag_weight_sc: lower/upper limits not given (these must be set by 'mag_weight_sc' command before fit)\n";
+				else cout << "mag_weight_sc: [" << mag_weight_sc_lower_limit << ":" << mag_weight_sc << ":" << mag_weight_sc_upper_limit << "]\n";
+			}
+		}
+		if (vary_mag_weight_index) {
+			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
+				cout << "mag_weight_index: " << mag_weight_index << endl;
+			} else {
+				if ((mag_weight_index_lower_limit==1e30) or (mag_weight_index_upper_limit==1e30)) cout << "\nmag_weight_index: lower/upper limits not given (these must be set by 'mag_weight_index' command before fit)\n";
+				else cout << "mag_weight_index: [" << mag_weight_index_lower_limit << ":" << mag_weight_index << ":" << mag_weight_index_upper_limit << "]\n";
+			}
+		}
+
 
 		if (vary_alpha_clus) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
@@ -13519,27 +13602,35 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	if ((!image_grid_already_exists) and (use_image_pixelgrid) and (!at_least_one_lensed_src)) die("there are no analytic sources or current pixel grid available to generate source plot");
 
 	if (use_image_pixelgrid) {
+		if (zsrc_i >= 0) {
+			if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
+			image_pixel_grid = image_pixel_grids[zsrc_i];
+		}
 		if (!image_grid_already_exists) {
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 			xmax += 1e-10;
 			ymax += 1e-10;
-			if (zsrc_i >= 0) {
-				if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
-				image_pixel_grid = image_pixel_grids[zsrc_i];
-			}
 			if (image_pixel_grid != NULL) delete image_pixel_grid;
 			image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
 		}
 
 		int n_imgpixels;
-		if ((auto_sourcegrid) and (source_fit_mode != Delaunay_Source)) {
-			if ((autogrid_from_analytic_source) and (at_least_one_lensed_src)) {
-				find_optimal_sourcegrid_for_analytic_source();
-			}
-			else {
-				image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+		if (auto_sourcegrid) {
+			if (source_fit_mode != Delaunay_Source) {
+				if ((autogrid_from_analytic_source) and (at_least_one_lensed_src)) {
+					find_optimal_sourcegrid_for_analytic_source();
+				}
+				else {
+					image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+				}
+			} else {
+				// Use the ray-traced points to define the source grid
+				sourcegrid_xmin = image_pixel_grid->src_xmin;
+				sourcegrid_xmax = image_pixel_grid->src_xmax;
+				sourcegrid_ymin = image_pixel_grid->src_ymin;
+				sourcegrid_ymax = image_pixel_grid->src_ymax;
 			}
 		}
 		if ((auto_srcgrid_npixels) and (!use_auxiliary_srcgrid)) {
@@ -13588,10 +13679,14 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	}
 	if (source_pixel_grid != NULL) delete source_pixel_grid;
 	source_pixel_grid = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax);
-	if (use_image_pixelgrid) source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+	if (use_image_pixelgrid) {
+		source_pixel_grid->set_image_pixel_grid(image_pixel_grid);
+		image_pixel_grid->set_source_pixel_grid(source_pixel_grid);
+	}
 	if ((mpi_id==0) and (verbal)) {
 		cout << "# of Cartesian source pixels: " << source_pixel_grid->number_of_pixels << endl;
 	}
+
 	if (adaptive_subgrid) {
 		source_pixel_grid->adaptive_subgrid();
 		if ((mpi_id==0) and (verbal)) {
@@ -13768,6 +13863,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	if (delaunay_srcgrids[src_i] != NULL) delete delaunay_srcgrids[src_i];
 
+	bool find_invmag = (zsrc_i==0) ? true : false;
 	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
 		int *iweights_norm;
@@ -13906,7 +14002,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
-		delaunay_srcgrids[src_i] = new DelaunayGrid(this,zsrc_i,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
+		//cout << "Source grid = (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
+		delaunay_srcgrids[src_i] = new DelaunayGrid(this,zsrc_i,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,find_invmag);
 		double edge_sum = delaunay_srcgrids[src_i]->sum_edge_sqrlengths(avg_sb);
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
 		delete[] src_centroids_x;
@@ -13919,10 +14016,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	} else {
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
 		DelaunayGrid *srcgrid1, *srcgrid2;
-		srcgrid1 = new DelaunayGrid(this,zsrc_i,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
+		srcgrid1 = new DelaunayGrid(this,zsrc_i,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag);
 		//if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
 		if ((delaunay_try_two_grids) and (split_imgpixels) and (delaunay_mode != 5)) {
-			srcgrid2 = new DelaunayGrid(this,zsrc_i,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
+			srcgrid2 = new DelaunayGrid(this,zsrc_i,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag);
 			if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
 
 			double edge_sum1 = srcgrid1->sum_edge_sqrlengths(avg_sb);
@@ -17299,8 +17396,8 @@ QLens::~QLens()
 	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
-	if (lum_weight_factor != NULL) delete[] lum_weight_factor;
-	//if (lum_weight_factor2 != NULL) delete[] lum_weight_factor2;
+	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
+	//if (reg_weight_factor2 != NULL) delete[] reg_weight_factor2;
 	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;

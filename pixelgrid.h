@@ -129,7 +129,8 @@ class SourcePixelGrid
 	void generate_hmatrices();
 
 	bool bisection_search_overlap(lensvector **input_corner_pts, const int& thread);
-	void calculate_pixel_magnifications();
+	bool bisection_search_overlap(lensvector &a, lensvector &b, lensvector &c, const int& thread);
+	void calculate_pixel_magnifications(const bool use_emask = false);
 	void adaptive_subgrid();
 	double get_lowest_mag_sourcept(double &xsrc, double &ysrc);
 	void get_highest_mag_sourcept(double &xsrc, double &ysrc);
@@ -145,7 +146,10 @@ class SourcePixelGrid
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector &input_center_pt, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, const int& thread);
 	void calculate_Lmatrix_interpolate(const int img_index, vector<SourcePixelGrid*>& mapped_cartesian_srcpixels, int& Lmatrix_index, lensvector &input_center_pts, const int& ii, const double weight, const int& thread);
 	double find_lensed_surface_brightness_interpolate(lensvector &input_center_pt, const int& thread);
-	double find_local_magnification_interpolate(lensvector &input_center_pt, const int& thread);
+	double find_local_inverse_magnification_interpolate(lensvector &input_center_pt, const int& thread);
+	double find_triangle_weighted_invmag(lensvector& pt1, lensvector& pt2, lensvector& pt3, double& total_overlap, const int thread);
+	void find_triangle_weighted_invmag_subcell(lensvector& pt1, lensvector& pt2, lensvector& pt3, double& total_overlap, double& total_weighted_invmag, const int& thread);
+
 
 	void find_interpolation_cells(lensvector &input_center_pt, const int& thread);
 	SourcePixelGrid* find_nearest_neighbor_cell(lensvector &input_center_pt, const int& side);
@@ -211,6 +215,7 @@ class DelaunayGrid : public Sort
 	int img_ni, img_nj;
 	int **img_index_ij;
 	double *surface_brightness;	
+	double *inv_magnification;
 	lensvector *srcpts;
 	int *adj_triangles[4];
 	int *imggrid_ivals;
@@ -229,6 +234,7 @@ class DelaunayGrid : public Sort
 	private:
 	double** voronoi_boundary_x;
 	double** voronoi_boundary_y;
+	double *voronoi_area;
 	double *voronoi_length;
 	int** shared_triangles;
 	int* n_shared_triangles;
@@ -237,13 +243,15 @@ class DelaunayGrid : public Sort
 	//double prod1, prod2, prod3;
 
 	public:
-	DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0);
+	DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	int search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(int &tri_number, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(const int tri_number, const lensvector& pt);
 	void record_adjacent_triangles_xy();
+	void find_pixel_magnifications();
+
 	void assign_surface_brightness_from_analytic_source(const int zsrc_i=-1);
 	void fill_surface_brightness_vector();
 	void update_surface_brightness(int& index);
@@ -252,7 +260,7 @@ class DelaunayGrid : public Sort
 	double find_lensed_surface_brightness(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
 	bool find_containing_triangle(lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	void find_containing_triangle(lensvector &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
-	double interpolate_surface_brightness(lensvector &input_pt, const int thread = 0);
+	double interpolate_surface_brightness(lensvector &input_pt, const bool interp_mag = false, const int thread = 0);
 	double interpolate_surface_brightness_nn(lensvector &input_pt); // natural neighbor interpolation
 
 	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
@@ -262,7 +270,7 @@ class DelaunayGrid : public Sort
 	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, lensvector &input_pt, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
 	//void find_centroid(double& xavg, double& yavg);
-	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_fits = false);
+	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false, const bool plot_fits = false);
 	double find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi);
 	void find_source_moments(const int npix, double &qs, double &phi_s, double &xavg, double &yavg);
 
@@ -364,6 +372,7 @@ class ImagePixelGrid : public Sort
 	RayTracingMethod ray_tracing_method;
 	SourceFitMode source_fit_mode;
 	double xmin, xmax, ymin, ymax;
+	double src_xmin, src_xmax, src_ymin, src_ymax; // for ray-traced points
 	int x_N, y_N; // gives the number of cells in the x- and y- directions (so the number of corner points in each direction is x_N+1, y_N+1)
 	int n_active_pixels;
 	int n_high_sn_pixels;

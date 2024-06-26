@@ -571,6 +571,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	// the following parameters are used for luminosity- or distance-weighted regularization
 	bool use_lum_weighted_regularization;
 	bool use_distance_weighted_regularization;
+	bool use_mag_weighted_regularization;
 	bool auto_lumreg_center; // if set to true, uses (SB-weighted) centroid of ray-traced points; if false, center coordinates are parameters than can be varied
 	bool lumreg_center_from_ptsource; // if true, automatically sets lumreg_center to position of source point (auto_lumreg_center must also be set to 'on')
 	bool lensed_lumreg_center; // if true, make lumreg_xcenter and lumreg_ycenter coordinates in the image plane, which are lensed to the source plane
@@ -589,13 +590,16 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
 	double regparam_lsc, regparam_lum_index; 
+	double mag_weight_index, mag_weight_sc;
+
 	double lumreg_rc;
 	//double regparam_lsc2, regparam_lum_index2; 
 	//double regparam_lhi, regparam_lum_index; 
-	double *lum_weight_factor;
+	double *reg_weight_factor;
 	//double *lum_weight_factor2; // for second covariance kernel
 	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
+	bool vary_mag_weight_sc, vary_mag_weight_index;
 	bool vary_lumreg_rc;
 	//bool vary_regparam_lsc2, vary_regparam_lum_index2;
 	//bool vary_regparam_lhi, vary_regparam_lum_index;
@@ -603,6 +607,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
 	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
 	double lumreg_rc_lower_limit, lumreg_rc_upper_limit;
+	double mag_weight_sc_lower_limit, mag_weight_sc_upper_limit;
+	double mag_weight_index_lower_limit, mag_weight_index_upper_limit;
+
 	//double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
 	//double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
@@ -927,6 +934,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights=false);
 	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
+	void calculate_mag_srcpixel_weights(const int zsrc_i);
+
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void create_regularization_matrix_shapelet(const int zsrc_i=-1);
