@@ -3434,10 +3434,17 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcp
 	else image_pixel_grid = NULL;
 	if (lens != NULL) {
 		// This is mainly for plotting purposes
-		srcgrid_xmin = lens->sourcegrid_xmin;
-		srcgrid_xmax = lens->sourcegrid_xmax;
-		srcgrid_ymin = lens->sourcegrid_ymin;
-		srcgrid_ymax = lens->sourcegrid_ymax;
+		if (image_pixel_grid != NULL) {
+			srcgrid_xmin = image_pixel_grid->src_xmin;
+			srcgrid_xmax = image_pixel_grid->src_xmax;
+			srcgrid_ymin = image_pixel_grid->src_ymin;
+			srcgrid_ymax = image_pixel_grid->src_ymax;
+		} else {
+			srcgrid_xmin = lens->sourcegrid_xmin;
+			srcgrid_xmax = lens->sourcegrid_xmax;
+			srcgrid_ymin = lens->sourcegrid_ymin;
+			srcgrid_ymax = lens->sourcegrid_ymax;
+		}
 	}
 
 	n_srcpts = n_srcpts_in;
@@ -10695,12 +10702,6 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_xmax += xwidth_adj/2;
 	sourcegrid_ymin -= ywidth_adj/2;
 	sourcegrid_ymax += ywidth_adj/2;
-	if (delaunay_srcgrid != NULL) {
-		delaunay_srcgrid->srcgrid_xmin = sourcegrid_xmin;
-		delaunay_srcgrid->srcgrid_xmax = sourcegrid_xmax;
-		delaunay_srcgrid->srcgrid_ymin = sourcegrid_ymin;
-		delaunay_srcgrid->srcgrid_ymax = sourcegrid_ymax;
-	}
 }
 
 double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, const bool verbal)

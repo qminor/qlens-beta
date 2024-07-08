@@ -14874,12 +14874,6 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 
 	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
 	if (!use_old_pixelgrids) {
-		if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
-			for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-				image_pixel_grids[zsrc_i]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
-			}
-		}
-
 		if (chisq == 2e30) {
 			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
 			for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -14888,10 +14882,6 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 			}
 		}
 	} else {
-		if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
-				image_pixel_grid0->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax); // this will just be for plotting purposes
-		}
-
 		if (chisq == 2e30) {
 			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
 			delete image_pixel_grid0;
