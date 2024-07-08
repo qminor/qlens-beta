@@ -13863,7 +13863,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	if (delaunay_srcgrids[src_i] != NULL) delete delaunay_srcgrids[src_i];
 
-	bool find_invmag = (zsrc_i==0) ? true : false;
+	bool find_invmag = ((use_mag_weighted_regularization) and (zsrc_i==0)) ? true : false;
 	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
 		int *iweights_norm;

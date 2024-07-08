@@ -5461,6 +5461,9 @@ DelaunayGrid::~DelaunayGrid()
 	delete[] active_pixel;
 	delete[] active_index;
 	delete[] n_shared_triangles;
+	delete[] voronoi_area;
+	delete[] voronoi_length;
+	delete[] inv_magnification;
 	for (int i=0; i < n_srcpts; i++) {
 		delete[] voronoi_boundary_x[i];
 		delete[] voronoi_boundary_y[i];
