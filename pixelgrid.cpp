@@ -14462,7 +14462,7 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_lum_
 {
 	RegularizationMethod reg_method = regularization_method;
 	if ((use_lum_weighted_regularization) and (!allow_lum_weighting)) reg_method = Curvature;
-	if (zsrc_i > 0) reg_method = Gradient; // HACK, since we have no way of assigning different correlation length, matern index, etc to different zsrc_i fits
+	if (zsrc_i > 0) reg_method = SmoothGradient; // HACK, since we have no way of assigning different correlation length, matern index, etc to different zsrc_i fits
 	if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
 	if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 	if (allow_lum_weighting) calculate_lumreg_srcpixel_weights(zsrc_i,use_sbweights);
