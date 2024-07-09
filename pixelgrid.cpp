@@ -10704,6 +10704,25 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	sourcegrid_ymax += ywidth_adj/2;
 }
 
+void ImagePixelGrid::set_sourcegrid_params_from_ray_tracing(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double sourcegrid_limit_xmin, const double sourcegrid_limit_xmax, const double sourcegrid_limit_ymin, const double sourcegrid_limit_ymax)
+{
+	if (src_xmin > sourcegrid_limit_xmin) sourcegrid_xmin = src_xmin;
+	else sourcegrid_xmin = sourcegrid_limit_xmin;
+	if (src_xmax < sourcegrid_limit_xmax) sourcegrid_xmax = src_xmax;
+	else sourcegrid_xmax = sourcegrid_limit_xmax;
+	if (src_ymin > sourcegrid_limit_ymin) sourcegrid_ymin = src_ymin;
+	else sourcegrid_ymin = sourcegrid_limit_ymin;
+	if (src_ymax < sourcegrid_limit_ymax) sourcegrid_ymax = src_ymax;
+	else sourcegrid_ymax = sourcegrid_limit_ymax;
+	// Now let's make the box slightly wider just to be safe
+	//double xwidth_adj = 0.1*(sourcegrid_xmax-sourcegrid_xmin);
+	//double ywidth_adj = 0.1*(sourcegrid_ymax-sourcegrid_ymin);
+	//sourcegrid_xmin -= xwidth_adj/2;
+	//sourcegrid_xmax += xwidth_adj/2;
+	//sourcegrid_ymin -= ywidth_adj/2;
+	//sourcegrid_ymax += ywidth_adj/2;
+}
+
 double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, const bool verbal)
 {
 	if (lens->image_pixel_data == NULL) die("need to have image pixel data loaded to find optimal shapelet scale");

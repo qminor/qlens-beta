@@ -17,12 +17,27 @@ TriRectangleOverlap::TriRectangleOverlap()
 	for (int i=0; i < 7; i++) { overlap_pts[i][0] = 0; overlap_pts[i][1] = 0; }
 }
 
-double TriRectangleOverlap::find_overlap_area(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
+double TriRectangleOverlap::find_overlap_area(lensvector& a, lensvector& b, lensvector& c, double xmin, double xmax, double ymin, double ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
 	// 3-2-2
 	// 3   1
 	// 0-0-1
+
+	// this is a bit ugly, but seg faults occur if the rectangle shares any x/y values with the square and this is a quick fix
+	if (a[0]==xmin) xmin -= 1e-10;
+	if (b[0]==xmin) xmin -= 1e-10;
+	if (b[0]==xmin) xmin -= 1e-10;
+	if (a[0]==xmax) xmax += 1e-10;
+	if (b[0]==xmax) xmax += 1e-10;
+	if (b[0]==xmax) xmax += 1e-10;
+
+	if (a[1]==ymin) ymin -= 1e-10;
+	if (b[1]==ymin) ymin -= 1e-10;
+	if (b[1]==ymin) ymin -= 1e-10;
+	if (a[1]==ymax) ymax += 1e-10;
+	if (b[1]==ymax) ymax += 1e-10;
+	if (b[1]==ymax) ymax += 1e-10;
 
 	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c;
 	ab[0] = (*vertex[1])[0] - (*vertex[0])[0];

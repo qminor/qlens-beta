@@ -11449,7 +11449,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 
 	static const int n_characters = 5000;
 	char dataline[n_characters];
-	double *params = new double[n_fit_parameters];
+	double *params = new double[n_tot_parameters];
 
 	string chain_str = fit_output_dir + "/" + fit_output_filename;
 	ifstream chain_file(chain_str.c_str());
@@ -11462,6 +11462,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 		if (dataline[0]=='#') { nline++; continue; }
 		istringstream datastream(dataline);
 		datastream >> weight;
+		// note that we have to go through all the derived parameters before we get to the chisq column, even though we don't actually need the derived parameters here
 		for (i=0; i < n_tot_parameters; i++) {
 			datastream >> params[i];
 		}
@@ -13595,7 +13596,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	if ((auto_sourcegrid) and (!autogrid_from_analytic_source) and (!image_grid_already_exists)) { warn("no image data have been generated from which to automatically set source grid dimensions"); return false; }
 
 	bool at_least_one_lensed_src = false;
-	ImagePixelGrid *image_pixel_grid = image_pixel_grid0;
+	ImagePixelGrid *image_pixel_grid = NULL;
 	for (int k=0; k < n_sb; k++) {
 		if (sb_list[k]->is_lensed) { at_least_one_lensed_src = true; break; }
 	}
@@ -13605,7 +13606,8 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 		if (zsrc_i >= 0) {
 			if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
 			image_pixel_grid = image_pixel_grids[zsrc_i];
-		}
+		} else image_pixel_grid = image_pixel_grid0;
+
 		if (!image_grid_already_exists) {
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -13627,10 +13629,8 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 				}
 			} else {
 				// Use the ray-traced points to define the source grid
-				sourcegrid_xmin = image_pixel_grid->src_xmin;
-				sourcegrid_xmax = image_pixel_grid->src_xmax;
-				sourcegrid_ymin = image_pixel_grid->src_ymin;
-				sourcegrid_ymax = image_pixel_grid->src_ymax;
+				//image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
+				image_pixel_grid->set_sourcegrid_params_from_ray_tracing(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
 			}
 		}
 		if ((auto_srcgrid_npixels) and (!use_auxiliary_srcgrid)) {
