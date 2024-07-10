@@ -13855,7 +13855,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					srcpts2_y[npix] = image_pixel_grids[zsrc_i]->subpixel_center_sourcepts[i][j][subcell_i2][1];
 				}
 			}
-			if (srcpts_x[npix]*0.0 != 0.0) die("nonsense source points!");
+			//if (srcpts_x[npix]*0.0 != 0.0) die("nonsense source points!");
 			if ((!use_srcpixel_clustering) and (!use_weighted_srcpixel_clustering) and (delaunay_mode != 5)) {
 				ivals[npix] = i;
 				jvals[npix] = j;
