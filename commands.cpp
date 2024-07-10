@@ -208,6 +208,7 @@ void QLens::process_commands(bool read_file)
 						"emask_n_neighbors -- expand mask by set # of pixel neighbors for outside_sb_prior, nimg_prior eval.\n"
 						"nimg_prior -- impose penalty if # of images produced at max surface brightness < nimg_threshold\n"
 						"nimg_threshold -- threshold on # of images near max surface brightness (used if nimg_prior is on)\n"
+						"nimg_mag_threshold -- threshold on imgpixel magnification to be counted in findimg source pixel n_imgs\n"
 						"nimg_sb_frac_threshold -- for nimg_prior, include only pixels brighter than threshold times max s.b.\n"
 						"auxgrid_npixels -- # of pixels per side for auxiliary sourcegrid used for point images or nimg_prior\n"
 						"include_emask_in_chisq -- include extended mask pixels in inversion and chi-square\n"
@@ -2181,6 +2182,7 @@ void QLens::process_commands(bool read_file)
 
 					cout << "nimg_prior: " << display_switch(n_image_prior) << endl;
 					cout << "nimg_threshold = " << n_image_threshold << endl;
+					cout << "nimg_mag_threshold = " << srcpixel_nimg_mag_threshold << endl;
 					cout << "nimg_sb_frac_threshold = " << n_image_prior_sb_frac << endl;
 					cout << "subhalo_prior: " << display_switch(subhalo_prior) << endl;
 					cout << "activate_unmapped_srcpixels: " << display_switch(activate_unmapped_source_pixels) << endl;
@@ -10294,19 +10296,19 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-interp") interpolate = true;
 						else if (args[i]=="-mag") plot_mag = true;
-						else if (args[i]=="-100") set_npix = 100;
-						else if (args[i]=="-200") set_npix = 200;
-						else if (args[i]=="-300") set_npix = 300;
-						else if (args[i]=="-400") set_npix = 400;
-						else if (args[i]=="-500") set_npix = 500;
-						else if (args[i]=="-600") set_npix = 600;
-						else if (args[i]=="-700") set_npix = 700;
-						else if (args[i]=="-800") set_npix = 800;
-						else if (args[i]=="-900") set_npix = 900;
-						else if (args[i]=="-1000") set_npix = 1000;
-						else if (args[i]=="-2000") set_npix = 2000;
-						else if (args[i]=="-3000") set_npix = 3000;
-						else if (args[i]=="-4000") set_npix = 4000;
+						else if (args[i]=="-n100") set_npix = 100;
+						else if (args[i]=="-n200") set_npix = 200;
+						else if (args[i]=="-n300") set_npix = 300;
+						else if (args[i]=="-n400") set_npix = 400;
+						else if (args[i]=="-n500") set_npix = 500;
+						else if (args[i]=="-n600") set_npix = 600;
+						else if (args[i]=="-n700") set_npix = 700;
+						else if (args[i]=="-n800") set_npix = 800;
+						else if (args[i]=="-n900") set_npix = 900;
+						else if (args[i]=="-n1000") set_npix = 1000;
+						else if (args[i]=="-n2000") set_npix = 2000;
+						else if (args[i]=="-n3000") set_npix = 3000;
+						else if (args[i]=="-n4000") set_npix = 4000;
 						else if (args[i]=="-fits") plot_fits = 4000;
 						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
@@ -13483,6 +13485,16 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "threshold number of images at max surface brightness = " << n_image_threshold << endl;
 			} else Complain("must specify either zero or one argument for nimg_threshold");
+		}
+		else if (words[0]=="nimg_mag_threshold")
+		{
+			double nimg_mag_thresh;
+			if (nwords == 2) {
+				if (!(ws[1] >> nimg_mag_thresh)) Complain("invalid magnification threshold for calculating number of images of source pixels");
+				srcpixel_nimg_mag_threshold = nimg_mag_thresh;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "threshold pixel magnification for calculating n_images of source pixels = " << srcpixel_nimg_mag_threshold << endl;
+			} else Complain("must specify either zero or one argument for nimg_mag_threshold");
 		}
 		else if (words[0]=="outside_sb_prior")
 		{

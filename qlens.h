@@ -433,6 +433,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int auxiliary_srcgrid_npixels;
 	//double sbmin, sbmax;
 	double n_image_threshold;
+	double srcpixel_nimg_mag_threshold;
 	double max_pixel_sb;
 	bool outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;

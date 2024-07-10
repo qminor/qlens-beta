@@ -1536,8 +1536,7 @@ double LensProfile::kappa_rsq(const double rsq) // this function should be redef
 void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector& def)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
-	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+	double kapavg = (this->*kapavgptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y);
 
 	def[0] = kapavg*(1-epsilon)*x;
 	def[1] = kapavg*(1+epsilon)*y;
@@ -1723,6 +1722,7 @@ void LensProfile::update_center_from_pixsrc_coords()
 {
 	double sig, xcs, ycs;
 	sig = qlens->find_approx_source_size(0,xcs,ycs,false);
+	//cout << "lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << endl;
 	x_center = xcs + xc_prime;
 	y_center = ycs + yc_prime;
 }
@@ -1783,9 +1783,14 @@ double LensProfile::kappa(double x, double y)
 void LensProfile::deflection(double x, double y, lensvector& def)
 {
 	// switch to coordinate system centered on lens profile
+	if (x*0.0 != 0.0) die("x is fucked going into def function");
+	//cout << "CENTER: " << x_center << " " << y_center << endl;
 	x -= x_center;
 	y -= y_center;
+	if (x_center*0.0 != 0.0) die("center is fucked");
+	if (x*0.0 != 0.0) die("x is fucked but not center");
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+	if (x*0.0 != 0.0) die("fucked after rotation");
 	if ((ellipticity_mode==3) and (q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
 	} else {
@@ -2272,10 +2277,12 @@ void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* k
 	}
 }
 
-void LensProfile::deflection_spherical_default(double x, double y, lensvector& def)
+void LensProfile::deflection_spherical_default(const double x, const double y, lensvector& def)
 {
-	double kapavg = x*x+y*y; // r^2 right now
-	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+	//if (x*0.0 != 0.0) die("HARGMF %g %g",x,y);
+	//cout << "defsphere: " << x << " " << y << endl;
+	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
+	//if (kapavg*0.0 != 0.0) die("FUCK %g %g",x,y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;

@@ -213,17 +213,17 @@ class DelaunayGrid : public Sort
 	int n_srcpts;
 	int n_triangles;
 	int img_ni, img_nj;
-	int **img_index_ij;
+	lensvector *srcpts;
+	Triangle *triangle;
 	double *surface_brightness;	
 	double *inv_magnification;
-	lensvector *srcpts;
-	int *adj_triangles[4];
-	int *imggrid_ivals;
-	int *imggrid_jvals;
 	bool *maps_to_image_pixel;
 	bool *active_pixel;
 	int *active_index;
-	Triangle *triangle;
+	int **img_index_ij;
+	int *adj_triangles[4];
+	int *imggrid_ivals;
+	int *imggrid_jvals;
 	double avg_area;
 	double srcpixel_xmin, srcpixel_xmax, srcpixel_ymin, srcpixel_ymax;
 	double srcgrid_xmin, srcgrid_xmax, srcgrid_ymin, srcgrid_ymax; // for plotting
@@ -312,6 +312,7 @@ class ImagePixelGrid : public Sort
 	double **noise_map;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
+	double **pixel_mag; // ratio of sum of source plane triangle areas over the image pixel area
 	bool **fit_to_data;
 	bool **mask;
 	bool **emask;

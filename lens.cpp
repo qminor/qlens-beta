@@ -804,6 +804,7 @@ QLens::QLens() : UCMC()
 	fft_convolution = false;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
+	srcpixel_nimg_mag_threshold = 0.001; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	auxiliary_srcgrid_npixels = 60; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
@@ -1308,6 +1309,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	fft_convolution = lens_in->fft_convolution;
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
+	srcpixel_nimg_mag_threshold = lens_in->srcpixel_nimg_mag_threshold; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
 	auxiliary_srcgrid_npixels = lens_in->auxiliary_srcgrid_npixels;
 	outside_sb_prior = lens_in->outside_sb_prior;
@@ -13853,6 +13855,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					srcpts2_y[npix] = image_pixel_grids[zsrc_i]->subpixel_center_sourcepts[i][j][subcell_i2][1];
 				}
 			}
+			if (srcpts_x[npix]*0.0 != 0.0) die("nonsense source points!");
 			if ((!use_srcpixel_clustering) and (!use_weighted_srcpixel_clustering) and (delaunay_mode != 5)) {
 				ivals[npix] = i;
 				jvals[npix] = j;
