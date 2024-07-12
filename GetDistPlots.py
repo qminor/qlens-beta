@@ -532,7 +532,7 @@ class GetDistPlotter():
 
             return self.legend
 
-    def finish_plot(self, legend_labels=[], legend_loc=None, line_offset=0, legend_ncol=None, no_gap=False, no_extra_legend_space=False, no_tight=False):
+    def finish_plot(self, legend_labels=[], legend_loc=None, line_offset=0, legend_ncol=None, no_gap=False, no_extra_legend_space=False, no_tight=False, leg_fontsize=20):
         has_legend = self.settings.line_labels and len(legend_labels) > 1
         if self.settings.tight_layout and not no_tight:
             if no_gap: tight_layout(h_pad=0, w_pad=0)
@@ -541,7 +541,7 @@ class GetDistPlotter():
         if has_legend:
             if legend_ncol is None: legend_ncol = self.settings.figure_legend_ncol
             if legend_loc is None: legend_loc = self.settings.figure_legend_loc
-            self.extra_artists = [self.add_legend(legend_labels, legend_loc, line_offset, legend_ncol, figure=True)]
+            self.extra_artists = [self.add_legend(legend_labels, legend_loc, line_offset, legend_ncol, figure=True, fontsize=leg_fontsize)]
             if self.settings.tight_layout and not no_extra_legend_space:
                 frac = self.settings.legend_frac_subplot_margin + (len(legend_labels) / legend_ncol) * self.settings.legend_frac_subplot_line
                 if 'upper' in legend_loc: subplots_adjust(top=1 - frac / self.plot_row)
@@ -580,7 +580,7 @@ class GetDistPlotter():
         if share_y: subplots_adjust(wspace=0)
         return plot_col, plot_row
 
-    def plots_2d(self, roots, param1=None, params2=None, param_pairs=None, nx=None, legend_labels=None, legend_ncol=None, filled=False, shaded=True):
+    def plots_2d(self, roots, param1=None, params2=None, param_pairs=None, nx=None, legend_labels=None, legend_ncol=None, filled=False, shaded=True, legend_fontsize=20):
         pairs = []
         if param_pairs is None:
             if param1 is not None:
@@ -599,7 +599,7 @@ class GetDistPlotter():
             subplot(plot_row, plot_col, i + 1)
             self.plot_2d(roots, param_pair=pair, filled=filled, shaded=shaded, add_legend_proxy=i == 0)
 
-        self.finish_plot(self.default_legend_labels(legend_labels, roots), legend_ncol=legend_ncol)
+        self.finish_plot(self.default_legend_labels(legend_labels, roots), legend_ncol=legend_ncol, leg_fontsize=legend_fontsize)
 
         return plot_col, plot_row
 

@@ -1783,14 +1783,16 @@ double LensProfile::kappa(double x, double y)
 void LensProfile::deflection(double x, double y, lensvector& def)
 {
 	// switch to coordinate system centered on lens profile
-	if (x*0.0 != 0.0) die("x is fucked going into def function");
+	//if (x*0.0 != 0.0) die("x is fucked going into def function");
 	//cout << "CENTER: " << x_center << " " << y_center << endl;
+	//if (x_center==1e30) die("x_center has not been set for lens %i",lens_number);
+	//if (y_center==1e30) die("y_center has not been set for lens %i",lens_number);
 	x -= x_center;
 	y -= y_center;
-	if (x_center*0.0 != 0.0) die("center is fucked");
-	if (x*0.0 != 0.0) die("x is fucked but not center");
+	//if (x_center*0.0 != 0.0) die("center is fucked");
+	//if (x*0.0 != 0.0) die("x is fucked but not center");
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
-	if (x*0.0 != 0.0) die("fucked after rotation");
+	//if (x*0.0 != 0.0) die("fucked after rotation");
 	if ((ellipticity_mode==3) and (q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
 	} else {

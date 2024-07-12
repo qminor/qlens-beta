@@ -10119,7 +10119,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 				i = extended_mask_subcell_i[n_subcell];
 				k = extended_mask_subcell_index[n_subcell];
 				lens->find_sourcept(subpixel_center_pts[i][j][k],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
-				if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("SHIT!!!! %g %g %g %g",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
+				if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("nonsense value for deflection (x=%g y=%g defx=%g defy=%g)",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
 			}
 		}
 	}

@@ -2618,11 +2618,13 @@ inline double QLens::potential(const double& x, const double& y, double* zfacs, 
 	// This is not really sensical for multiplane lensing, and time delays need to be treated as in Schneider's textbook. Fix later
 	int i,j;
 	for (i=0; i < n_lens_redshifts; i++) {
-		pot_subtot=0;
-		for (j=0; j < zlens_group_size[i]; j++) {
-			pot_subtot += lens_list[zlens_group_lens_indx[i][j]]->potential(x,y);
+		if (zfacs[i] != 0.0) {
+			pot_subtot=0;
+			for (j=0; j < zlens_group_size[i]; j++) {
+				pot_subtot += lens_list[zlens_group_lens_indx[i][j]]->potential(x,y);
+			}
+			pot += zfacs[i]*pot_subtot;
 		}
-		pot += zfacs[i]*pot_subtot;
 	}
 	return pot;
 }
@@ -2639,28 +2641,33 @@ inline void QLens::deflection(const double& x, const double& y, lensvector& def_
 		def_tot[0] = 0;
 		def_tot[1] = 0;
 		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
+		//for (i=0; i < n_lens_redshifts; i++) {
+			//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): zfac=" << zfacs[i] << std::endl;
+		//}
 		for (i=0; i < n_lens_redshifts; i++) {
-			//std::cout << "redshift " << i << ":\n";
-			(*def_i)[i][0] = 0;
-			(*def_i)[i][1] = 0;
-			(*x_i)[0] = x;
-			(*x_i)[1] = y;
-			for (j=0; j < i; j++) {
-				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-				(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-				(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+			if (zfacs[i] != 0.0) {
+				//std::cout << "redshift " << i << ":\n";
+				(*def_i)[i][0] = 0;
+				(*def_i)[i][1] = 0;
+				(*x_i)[0] = x;
+				(*x_i)[1] = y;
+				for (j=0; j < i; j++) {
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+				}
+				for (j=0; j < zlens_group_size[i]; j++) {
+					lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+					//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
+				//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
+				(*def_i)[i][0] *= zfacs[i];
+				(*def_i)[i][1] *= zfacs[i];
+				def_tot[0] += (*def_i)[i][0];
+				def_tot[1] += (*def_i)[i][1];
 			}
-			for (j=0; j < zlens_group_size[i]; j++) {
-				lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-				//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
-				(*def_i)[i][0] += (*def)[0];
-				(*def_i)[i][1] += (*def)[1];
-			}
-			//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
-			(*def_i)[i][0] *= zfacs[i];
-			(*def_i)[i][1] *= zfacs[i];
-			def_tot[0] += (*def_i)[i][0];
-			def_tot[1] += (*def_i)[i][1];
 		}
 	}
 	else {
@@ -2738,25 +2745,27 @@ inline void QLens::deflection(const double& x, const double& y, double& def_tot_
 		def_tot_y = 0;
 		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
 		for (i=0; i < n_lens_redshifts; i++) {
-			//std::cout << "redshift " << i << ":\n";
-			(*def_i)[i][0] = 0;
-			(*def_i)[i][1] = 0;
-			(*x_i)[0] = x;
-			(*x_i)[1] = y;
-			for (j=0; j < i; j++) {
-				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-				(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-				(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+			if (zfacs[i] != 0.0) {
+				//std::cout << "redshift " << i << ":\n";
+				(*def_i)[i][0] = 0;
+				(*def_i)[i][1] = 0;
+				(*x_i)[0] = x;
+				(*x_i)[1] = y;
+				for (j=0; j < i; j++) {
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+				}
+				for (j=0; j < zlens_group_size[i]; j++) {
+					lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
+				(*def_i)[i][0] *= zfacs[i];
+				(*def_i)[i][1] *= zfacs[i];
+				def_tot_x += (*def_i)[i][0];
+				def_tot_y += (*def_i)[i][1];
 			}
-			for (j=0; j < zlens_group_size[i]; j++) {
-				lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-				(*def_i)[i][0] += (*def)[0];
-				(*def_i)[i][1] += (*def)[1];
-			}
-			(*def_i)[i][0] *= zfacs[i];
-			(*def_i)[i][1] *= zfacs[i];
-			def_tot_x += (*def_i)[i][0];
-			def_tot_y += (*def_i)[i][1];
 		}
 	}
 	else {
@@ -2875,58 +2884,60 @@ inline void QLens::hessian(const double& x, const double& y, lensmatrix& hess_to
 			hess_tot[0][1] = 0;
 			hess_tot[1][0] = 0;
 			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					if (i < n_lens_redshifts-1) {
-						(*def_i)[i][0] += (*def)[0];
-						(*def_i)[i][1] += (*def)[1];
+				if (zfacs[i] != 0.0) {
+					(*hess_i)[i][0][0] = 0;
+					(*hess_i)[i][1][1] = 0;
+					(*hess_i)[i][0][1] = 0;
+					(*hess_i)[i][1][0] = 0;
+					(*A_i)[0][0] = 1;
+					(*A_i)[1][1] = 1;
+					(*A_i)[0][1] = 0;
+					(*A_i)[1][0] = 0;
+					(*def_i)[i][0] = 0;
+					(*def_i)[i][1] = 0;
+					(*x_i)[0] = x;
+					(*x_i)[1] = y;
+					for (j=0; j < i; j++) {
+						//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
+						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
+						(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
+						(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
+						(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
+						(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
 					}
-				}
-				if (i < n_lens_redshifts-1) {
-					(*def_i)[i][0] *= zfacs[i];
-					(*def_i)[i][1] *= zfacs[i];
-				}
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
+					for (j=0; j < zlens_group_size[i]; j++) {
+						lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
+						(*hess_i)[i][0][0] += (*hess)[0][0];
+						(*hess_i)[i][1][1] += (*hess)[1][1];
+						(*hess_i)[i][0][1] += (*hess)[0][1];
+						(*hess_i)[i][1][0] += (*hess)[1][0];
+						if (i < n_lens_redshifts-1) {
+							(*def_i)[i][0] += (*def)[0];
+							(*def_i)[i][1] += (*def)[1];
+						}
+					}
+					if (i < n_lens_redshifts-1) {
+						(*def_i)[i][0] *= zfacs[i];
+						(*def_i)[i][1] *= zfacs[i];
+					}
+					(*hess_i)[i][0][0] *= zfacs[i];
+					(*hess_i)[i][1][1] *= zfacs[i];
+					(*hess_i)[i][0][1] *= zfacs[i];
+					(*hess_i)[i][1][0] *= zfacs[i];
 
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
+					(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
+					(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
+					(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
+					(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
+					(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
+					(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
 
-				hess_tot[0][0] += (*hess_i)[i][0][0];
-				hess_tot[1][1] += (*hess_i)[i][1][1];
-				hess_tot[1][0] += (*hess_i)[i][1][0];
-				hess_tot[0][1] += (*hess_i)[i][0][1];
+					hess_tot[0][0] += (*hess_i)[i][0][0];
+					hess_tot[1][1] += (*hess_i)[i][1][1];
+					hess_tot[1][0] += (*hess_i)[i][1][0];
+					hess_tot[0][1] += (*hess_i)[i][0][1];
+				}
 			}
 		} else {
 			lensmatrix *hess = &hesses_i[thread];

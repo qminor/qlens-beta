@@ -11146,9 +11146,10 @@ bool QLens::adopt_model(dvector &fitparams)
 	if ((n_extended_src_redshifts > 1) and (source_fit_mode != Point_Source)) {
 		if ((image_pixel_grids != NULL) and (image_pixel_grids[0]==NULL)) {
 			load_pixel_grid_from_data();
+
 			image_pixel_grids[0]->redo_lensing_calculations(false);
 		}
-		update_lens_centers_from_pixsrc_coords();
+		update_lens_centers_from_pixsrc_coords();  
 	}
 
 	// Since optimizations sometimes result in angles being out of (-2*pi,2*pi) range, reset them if necessary
@@ -11604,7 +11605,7 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
 	istringstream datastream(dataline);
 	datastream >> weight;
-	for (i=0; i < n_fit_parameters; i++) {
+	for (i=0; i < n_tot_parameters; i++) {
 		datastream >> params[i];
 	}
 	datastream >> chisq;
