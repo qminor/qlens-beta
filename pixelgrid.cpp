@@ -10119,7 +10119,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 				i = extended_mask_subcell_i[n_subcell];
 				k = extended_mask_subcell_index[n_subcell];
 				lens->find_sourcept(subpixel_center_pts[i][j][k],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
-				if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("nonsense value for deflection (x=%g y=%g defx=%g defy=%g)",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
+				//if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("nonsense value for deflection (x=%g y=%g defx=%g defy=%g)",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
 			}
 		}
 	}
@@ -10817,7 +10817,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 				if ((fit_to_data==NULL) or (fit_to_data[i][j])) {
 					if (fit_to_data==NULL) sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 					else sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j];
-					if ((lens->n_sourcepts_fit > 0) and (!lens->include_imgfluxes_in_inversion) and (!lens->include_srcflux_in_inversion)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
+					if ((lens->n_sourcepts_fit > 0) and (!lens->include_imgfluxes_in_inversion) and (!lens->include_srcflux_in_inversion) and (lens->point_image_surface_brightness != NULL)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
 					if (abs(sb) > 5*noise_map[i][j]) {
 						//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 						//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
@@ -11981,6 +11981,7 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 	int idx;
 	for (idx=0; idx < lens->image_npixels; idx++) ptimage_surface_brightness[idx] = 0;
 	for (img_i=img_i0; img_i < img_if; img_i++) {
+		//cout << "Generating point image " << imgs[img_i].pos[0] << " " << imgs[img_i].pos[1] << endl;
 		if ((use_img_fluxes) and (imgs[img_i].flux != -1e30)) {
 			//cout << "USING IMAGE FLUX: " << imgs[img_i].flux << endl;
 			fluxfac = imgs[img_i].flux;

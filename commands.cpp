@@ -5290,7 +5290,6 @@ void QLens::process_commands(bool read_file)
 				}
 			}
 
-
 			if (words[0]=="fit") {
 				//if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
 				vary_parameters = true;

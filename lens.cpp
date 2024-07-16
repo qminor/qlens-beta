@@ -14563,14 +14563,17 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 		int i,j;
 		if ((n_sourcepts_fit > 0) and (!exclude_ptimgs)) {
-			if (use_analytic_bestfit_src) set_analytic_sourcepts(verbose);
-			bool is_lensed;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				is_lensed = true;
-				if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
-				if (!include_imgfluxes_in_inversion) image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
-				//cout << "srcflux=" << source_flux << endl;
-				image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
+			if (zsrc_i==0) {
+				// only implemented this for the first source redshift; extend this later to multiple source redshifts!
+				if (use_analytic_bestfit_src) set_analytic_sourcepts(verbose);
+				bool is_lensed;
+				for (i=0; i < n_sourcepts_fit; i++) {
+					is_lensed = true;
+					if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
+					if (!include_imgfluxes_in_inversion) image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
+					//cout << "srcflux=" << source_flux << endl;
+					image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
+				}
 			}
 		}
 
