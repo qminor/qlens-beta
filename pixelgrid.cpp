@@ -14971,7 +14971,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 		if ((regularization_method != None) and (source_npixels > 0)) {
 			for (src_index1=mpi_start; src_index1 < mpi_end; src_index1++) {
 				if (src_index1 < source_npixels) { // additional source amplitudes are not regularized
-					if (!optimize_regparam) Fmatrix_diags[src_index1] += regularization_parameter*Rmatrix[src_index1];
+					if ((!optimize_regparam) and (zsrc_i==0)) Fmatrix_diags[src_index1] += regularization_parameter*Rmatrix[src_index1];
 					col_i=0;
 					for (j=Rmatrix_index[src_index1]; j < Rmatrix_index[src_index1+1]; j++) {
 						new_entry = true;
@@ -14984,7 +14984,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 							k++;
 						}
 						if (new_entry) {
-							if (!optimize_regparam) {
+							if ((!optimize_regparam) and (zsrc_i==0)) {
 							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was 0, now adding " << (regularization_parameter*Rmatrix[j]) << endl;
 								Fmatrix_rows[src_index1].push_back(regularization_parameter*Rmatrix[j]);
 							} else {
@@ -14995,7 +14995,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 							Fmatrix_row_nn[src_index1]++;
 							col_i++;
 						} else {
-							if (!optimize_regparam) {
+							if ((!optimize_regparam) and (zsrc_i==0)) {
 							//cout << "Fmat row " << src_index1 << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_rows[src_index1][col_index] << ", now adding " << (regularization_parameter*Rmatrix[j]) << endl;
 								Fmatrix_rows[src_index1][col_index] += regularization_parameter*Rmatrix[j];
 							}
@@ -15074,7 +15074,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 			cout << "Fmatrix sparseness = " << sparseness << endl;
 		}
 	} else {
-		if ((regularization_method != None) and (source_npixels > 0) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
+		if ((regularization_method != None) and (source_npixels > 0) and ((!optimize_regparam) and (zsrc_i==0))) add_regularization_term_to_dense_Fmatrix();
 	}
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -15416,7 +15416,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 #endif
 	if (use_covariance_matrix) generate_Gmatrix();
 
-	if ((regularization_method != None) and (source_npixels > 0) and (!optimize_regparam)) add_regularization_term_to_dense_Fmatrix();
+	if ((regularization_method != None) and (source_npixels > 0) and ((!optimize_regparam) and (zsrc_i==0))) add_regularization_term_to_dense_Fmatrix();
 	//double Ftot = 0;
 	//for (i=0; i < ntot_packed; i++) Ftot += Fmatrix_packed[i];
 	//double ltot = 0;

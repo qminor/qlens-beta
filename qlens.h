@@ -1261,7 +1261,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
 	std::vector<ImageSet> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
-	bool plot_images(const char *sourcefile, const char *imagefile, bool verbal);
+	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
@@ -1358,6 +1358,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void toggle_major_axis_along_y_src(bool major_axis_along_y);
 	void create_output_directory();
 	void open_output_file(std::ofstream &outfile, string filename_in);
+	void open_input_file(std::ifstream &infile, string filename_in);
 	void open_output_file(std::ofstream &outfile, char* filechar_in);
 
 	private:

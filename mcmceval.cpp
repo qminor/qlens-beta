@@ -521,13 +521,13 @@ void McmcEval::input_prior_weights(const char *prior_weight_filename, double *mi
 			if (param_num >= numOfParam) die("Parameter number does not exist");
 			if (words[1]=="none") prior_weights[param_num].set_none();
 			else if (words[1]=="log") prior_weights[param_num].set_log(minvals[param_num],maxvals[param_num]);
-			//else if (words[1]=="gaussian") {
-				//if (nwords != 4) die("gaussian requires two additional arguments (mean,sigma)");
-				//double sig, pos;
-				//if (!(ws[2] >> pos)) die("Invalid mean value for Gaussian prior weights");
-				//if (!(ws[3] >> sig)) die("Invalid dispersion value for Gaussian prior weights");
-				//prior_weights[param_num].set_gaussian(pos,sig);
-			//}
+			else if (words[1]=="gaussian") {
+				if (nwords != 4) die("gaussian requires two additional arguments (mean,sigma)");
+				double sig, pos;
+				if (!(ws[2] >> pos)) die("Invalid mean value for Gaussian prior weights");
+				if (!(ws[3] >> sig)) die("Invalid dispersion value for Gaussian prior weights");
+				prior_weights[param_num].set_gaussian(pos,sig);
+			}
 			//else if (words[1]=="inverse_gaussian") {
 				//if (nwords != 4) die("inverse_gaussian requires two additional arguments (mean,sigma)");
 				//double sig, pos;

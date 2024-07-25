@@ -804,7 +804,7 @@ QLens::QLens() : UCMC()
 	fft_convolution = false;
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	srcpixel_nimg_mag_threshold = 0.001; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
+	srcpixel_nimg_mag_threshold = 0.1; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	auxiliary_srcgrid_npixels = 60; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
@@ -6014,13 +6014,13 @@ void QLens::make_source_ellipse(const double xcenter, const double ycenter, cons
 	ofstream source_file; open_output_file(source_file,source_filename);
 
 	double da, dtheta, angle;
-	da = major_axis/(n_subellipses-1);
+	da = major_axis/n_subellipses;
 	dtheta = M_2PI/points_per_ellipse;
 	angle = (M_PI/180)*angle_degrees;
 	double a, theta, x, y;
 
 	int i,j;
-	for (i=1, a=da; i < n_subellipses; i++, a += da)
+	for (i=1, a=da; i <= n_subellipses; i++, a += da)
 	{
 		for (j=0, theta=0; j < points_per_ellipse; j++, theta += dtheta)
 		{
@@ -15055,6 +15055,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 	}
 
+	double regparam_first_srcplane;
 	if (source_fit_mode == Cartesian_Source) {
 		if (auto_sourcegrid) image_pixel_grids[0]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
 		int n_expected_imgpixels;
@@ -15341,7 +15342,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 #endif
 
 				if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-				if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
+				//if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) 
+				if (((optimize_regparam) or (zsrc_i > 0)) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
+					// right now, we don't support more than one regularization parameter as a free parameter, so if there are multiple source planes,
+					// the source planes with zsrc_i > 0 have to optimize the regularization parameter
 					bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
 					if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 				}
@@ -15410,12 +15414,13 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 #endif
 					if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-					if ((optimize_regparam) and (regularization_method != None)) {
+					if (((optimize_regparam) or (zsrc_i > 0)) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
+					//if ((optimize_regparam) and (regularization_method != None)) {
 						if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 					}
 				}
 
-				if ((!optimize_regparam)) {
+				if ((!optimize_regparam) and (zsrc_i==0)) {
 					if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(zsrc_i,verbal);
 					else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(zsrc_i,verbal);
 					else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(zsrc_i,verbal);
@@ -15439,7 +15444,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					else loglike_times_two += Gmatrix_log_determinant;
 				}
 				clear_pixel_matrices(zsrc_i);
+				if (zsrc_i==0) {
+					regparam_first_srcplane = regularization_parameter;
+				}
 			}
+
 		}
 
 		//split_imgpixels = old_split_imgpixels;
@@ -15555,6 +15564,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 #endif
 	}
+	if (n_extended_src_redshifts > 1) regularization_parameter = regparam_first_srcplane; // restore regularization parameter for the first source plane in case it's being varied as a free param
 
 	//if (n_extended_src_redshifts > 1) {
 		//// If there are multiple extended source redshifts, combine the surface brightness from the separate image grids so it's all in the first image pixel grid
@@ -17296,6 +17306,15 @@ void QLens::open_output_file(ofstream &outfile, string filename_in)
 	string filename = fit_output_dir + "/" + filename_in;
 	outfile.open(filename.c_str());
 }
+
+void QLens::open_input_file(ifstream &infile, string filename_in)
+{
+	string filename = fit_output_dir + "/" + filename_in;
+	infile.open(filename.c_str());
+	// should return STATUS! change this
+}
+
+
 
 void QLens::reset_grid()
 {

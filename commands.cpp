@@ -8973,54 +8973,67 @@ void QLens::process_commands(bool read_file)
 		{
 			if (nlens==0) Complain("must specify lens model first");
 			if (nwords == 1)
-				plot_images("sourcexy.in", "images.dat", verbal_mode);	// default source file
+				plot_images("sourcexy.in", "images.dat", false, verbal_mode);	// default source file
 			else if (nwords == 2)
-				plot_images(words[1].c_str(), "images.dat", verbal_mode);
+				plot_images(words[1].c_str(), "images.dat", false, verbal_mode);
 			else if (nwords == 3)
-				plot_images(words[1].c_str(), words[2].c_str(), verbal_mode);
+				plot_images(words[1].c_str(), words[2].c_str(), false, verbal_mode);
 			else Complain("invalid number of arguments to command 'findimgs'");
 		}
 		else if (words[0]=="plotimgs")
 		{
 			if (nlens==0) Complain("must specify lens model first");
+			bool show_multiplicities = false;
+			vector<string> args;
+			if (extract_word_starts_with('-',1,nwords-1,args)==true)
+			{
+				int pos;
+				for (int i=0; i < args.size(); i++) {
+					if (args[i]=="-showmults") show_multiplicities = true;
+					else Complain("argument '" << args[i] << "' not recognized");
+				}
+			}
+			string showmults="";
+			if (show_multiplicities) showmults = "showmults";
+
 			string range1, range2;
 			extract_word_starts_with('[',1,3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',1,4,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			if ((!plot_srcplane) and (range2.empty())) { range2 = range1; range1 = ""; }
 			if (nwords == 1) {
-				if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {	// default source file
-					if (plot_srcplane) run_plotter_range("sources",range1);
-					if (show_cc) run_plotter_range("images",range2);
-					else run_plotter_range("images_nocc",range2);
+				if (plot_images("sourcexy.in", "imgs.dat", show_multiplicities, verbal_mode)==true) {	// default source file
+					if (plot_srcplane) run_plotter_range("sources",range1,showmults);
+					if (show_cc) run_plotter_range("images",range2,showmults);
+					else run_plotter_range("images_nocc",range2,showmults);
 				}
 				else Complain("could not create grid to plot images");
 			} else if ((nwords==2) and (words[1]=="sbmap")) {
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->plot_surface_brightness("img_pixel",true);
-				if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {	// default source file
-					if (show_cc) run_plotter_range("imgpixel_imgpts_plural",range1);
-					else run_plotter_range("imgpixel_imgpts_plural_nocc",range1);
+				if (plot_images("sourcexy.in", "imgs.dat", show_multiplicities, verbal_mode)==true) {	// default source file
+					if (show_cc) run_plotter_range("imgpixel_imgpts_plural",range1,showmults);
+					else run_plotter_range("imgpixel_imgpts_plural_nocc",range1,showmults);
 				} else Complain("could not create grid to plot images");
 			} else if (nwords == 2) {
-				if (plot_images(words[1].c_str(), "imgs.dat", verbal_mode)==true) {
-					if (plot_srcplane) run_plotter_range("sources",range1);
-					if (show_cc) run_plotter_range("images",range2);
-					else run_plotter_range("images_nocc",range2);
+				if (plot_images(words[1].c_str(), "imgs.dat", show_multiplicities, verbal_mode)==true) {
+					if (plot_srcplane) run_plotter_range("sources",range1,showmults);
+					if (show_cc) run_plotter_range("images",range2,showmults);
+					else run_plotter_range("images_nocc",range2,showmults);
 				} else Complain("could not create grid to plot images");
 			} else if (nwords == 3) {
 				if (terminal == TEXT) {
-					plot_images(words[1].c_str(), words[2].c_str(), verbal_mode);
-				} else if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {
+					plot_images(words[1].c_str(), words[2].c_str(), show_multiplicities, verbal_mode);
+				} else if (plot_images("sourcexy.in", "imgs.dat", show_multiplicities, verbal_mode)==true) {
 					if (plot_srcplane) run_plotter_file("sources",words[1],range1);
-					if (show_cc) run_plotter_file("images",words[2],range2);
-					else run_plotter_file("images_nocc",words[2],range2);
+					if (show_cc) run_plotter_file("images",words[2],range2,showmults);
+					else run_plotter_file("images_nocc",words[2],range2,showmults);
 				}
 			} else if (nwords == 4) {
 				if (terminal == TEXT) Complain("only one filename allowed in text mode (image file)");
-				if (plot_images(words[1].c_str(), "imgs.dat", verbal_mode)==true) {
-					if (plot_srcplane) run_plotter_file("sources",words[2],range1);
-					if (show_cc) run_plotter_file("images",words[3],range2);
-					else run_plotter_file("images_nocc",words[3],range2);
+				if (plot_images(words[1].c_str(), "imgs.dat", show_multiplicities, verbal_mode)==true) {
+					if (plot_srcplane) run_plotter_file("sources",words[2],range1,showmults);
+					if (show_cc) run_plotter_file("images",words[3],range2,showmults);
+					else run_plotter_file("images_nocc",words[3],range2,showmults);
 				}
 			} else Complain("invalid number of arguments to command 'plotimgs'");
 		}
@@ -9990,13 +10003,14 @@ void QLens::process_commands(bool read_file)
 				bool offload_to_data = false;
 				bool omit_cc = false;
 				bool old_cc_setting = show_cc;
-				bool subcomp = true;
+				bool subcomp = false;
 				bool show_noise_thresh = false;
 				bool set_title = false;
 				bool plot_contours = false;
 				bool add_specific_noise = false;
 				bool add_noise = false;
 				bool show_only_ptimgs = false;
+				bool include_imgpts = false; // this is to overlay additional lensed points from "mksrcgal" or "mksrctab" command
 				bool simulate_noise_setting = simulate_pixel_noise;
 				string cbstring = "";
 				double pnoise = 0;
@@ -10051,6 +10065,8 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-onlyptsrc") show_only_ptimgs = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-mkdata") offload_to_data = true;
+						else if (args[i]=="-subcomp") subcomp = true;
+						else if (args[i]=="-imgpts") include_imgpts = true;
 						else if (args[i]=="-pnoise") {
 							add_noise = true;
 							simulate_pixel_noise = true;
@@ -10191,19 +10207,34 @@ void QLens::process_commands(bool read_file)
 										}
 									}
 								}
+								if (include_imgpts) {
+									if (plot_images("sourcexy.in", "imgs.dat", false, verbal_mode)==true) {	// default source file
+										//if (show_cc) run_plotter_range("imgpixel_imgpts_plural",range1);
+										//else run_plotter_range("imgpixel_imgpts_plural_nocc",range1,showmults);
+									} else Complain("could not create grid to plot images");
+								}
+
 								if (show_cc) {
 									if ((plot_srcplane) and (plotted_src)) {
-										if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range1);
+										if (source_fit_mode==Delaunay_Source) {
+											if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural",range1);
+											else run_plotter_range("srcpixel_delaunay",range1);
+										}
 										else run_plotter_range("srcpixel",range1);
 									}
 									if (subcomp) run_plotter_range("imgpixel_comp",range2,contstring,cbstring);
+									else if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural",range2,contstring,cbstring);
 									else run_plotter_range("imgpixel",range2,contstring,cbstring);
 								} else {
 									if ((plot_srcplane) and (plotted_src)) {
-										if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay_nocc",range1);
+										if (source_fit_mode==Delaunay_Source) {
+											if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural_nocc",range1);
+											else run_plotter_range("srcpixel_delaunay_nocc",range1);
+										}
 										else run_plotter_range("srcpixel_nocc",range1);
 									}
-									run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
+									if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
+									else run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
 								}
 							}
 						}
@@ -10214,9 +10245,11 @@ void QLens::process_commands(bool read_file)
 						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
+								else if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural",range2,contstring,cbstring);
 								else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
 							} else {
-								run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
+								if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
+								else run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
 							}
 						}
 					} else if (nwords == 4) {
@@ -10230,10 +10263,12 @@ void QLens::process_commands(bool read_file)
 							if ((!replot) and (plotted_src)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
+								else if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural",range2,contstring,cbstring);
 								else run_plotter_file("imgpixel",words[3],range2,contstring,cbstring);
 								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel",words[2],range1,contstring,cbstring);
 							} else {
-								run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
+								if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
+								else run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
 								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel_nocc",words[2],range1);
 							}
 						}
@@ -10264,6 +10299,7 @@ void QLens::process_commands(bool read_file)
 				bool omit_caustics = false;
 				bool old_caustics_setting = show_cc;
 				bool plot_mag = false;
+				bool include_srcpts = false;
 				bool show_raytraced_pts = false; // if true, show all raytraced points (subpixels, if splitting is on) instead of source pixels
 				string temp_title;
 				int zsrc_i = 0;
@@ -10313,6 +10349,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
 						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
+						else if (args[i]=="-srcpts") { include_srcpts = true; }
 						else if (args[i]=="-show_raytraced_pts") show_raytraced_pts = true;
 						else if ((args[i]=="-nocaust") or (args[i]=="-nocc")) { omit_caustics = true; show_cc = false; }
 						//else if (args[i]=="-nomask") use_mask = false;
@@ -10345,6 +10382,10 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				if (src_i < 0) Complain("specified pixellated source number does not exist");
+
+				if (include_srcpts) {
+					if (!plot_images("sourcexy.in", "imgs.dat", false, verbal_mode)==true) Complain("could not create grid to plot images");
+				}
 
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -10391,10 +10432,16 @@ void QLens::process_commands(bool read_file)
 					}
 					if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
 					if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
-						if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range1);
+						if (source_fit_mode==Delaunay_Source) {
+							if (include_srcpts) run_plotter_range("srcpixel_delaunay_srcpts_plural",range1);
+							else run_plotter_range("srcpixel_delaunay",range1);
+						}
 						else run_plotter_range("srcpixel",range1);
 					} else {
-						if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay_nocc",range1);
+						if (source_fit_mode==Delaunay_Source) {
+							if (include_srcpts) run_plotter_range("srcpixel_delaunay_srcpts_plural_nocc",range1);
+							else run_plotter_range("srcpixel_delaunay_nocc",range1);
+						}
 						else run_plotter_range("srcpixel_nocc",range1);
 					}
 				} else if (nwords == 3) {
@@ -10415,10 +10462,16 @@ void QLens::process_commands(bool read_file)
 								} else Complain("Delaunay grid has not been created");
 							}
 							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
-								if (source_fit_mode==Delaunay_Source) run_plotter_file("srcpixel_delaunay",words[2],range1);
+								if (source_fit_mode==Delaunay_Source) {
+									if (include_srcpts) run_plotter_file("srcpixel_delaunay_srcpts_plural",words[2],range1);
+									else run_plotter_file("srcpixel_delaunay",words[2],range1);
+								}
 								else run_plotter_file("srcpixel",words[2],range1);
 							} else {
-								if (source_fit_mode==Delaunay_Source) run_plotter_file("srcpixel_delaunay_nocc",words[2],range1);
+								if (source_fit_mode==Delaunay_Source) {
+									if (include_srcpts) run_plotter_file("srcpixel_delaunay_srcpts_plural_nocc",words[2],range1);
+									else run_plotter_file("srcpixel_delaunay_nocc",words[2],range1);
+								}
 								else run_plotter_file("srcpixel_nocc",words[2],range1);
 							}
 						}
