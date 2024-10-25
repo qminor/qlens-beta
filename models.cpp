@@ -1230,6 +1230,8 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 	}
 
 	if (pmode==4) {
+		tau_s = rt/rs;
+		rs_kpc = rs / kpc_to_arcsec;
 		params[0] = m200;
 		params[1] = rs_kpc;
 		params[2] = tau_s;
@@ -1238,6 +1240,11 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 		params[1] = rs_kpc;
 		params[2] = rt_kpc;
 	} else if (pmode==2) {
+		double rvir_kpc, rs_kpc;
+		// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
+		rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
+		rs_kpc = rvir_kpc / c200;
+		tau200 = rt_kpc/rvir_kpc;
 		params[0] = m200;
 		params[1] = c200;
 		params[2] = tau200;

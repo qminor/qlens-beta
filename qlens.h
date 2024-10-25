@@ -429,12 +429,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool fft_convolution;
 	bool use_mumps_subcomm;
 	bool n_image_prior;
-	double n_images_at_sbmax, pixel_avg_n_image;
 	int auxiliary_srcgrid_npixels;
-	//double sbmin, sbmax;
 	double n_image_threshold;
 	double srcpixel_nimg_mag_threshold;
-	double max_pixel_sb;
 	bool outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double outside_sb_prior_threshold;
@@ -446,7 +443,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool zero_sb_extended_mask_prior;
 	bool include_noise_term_in_loglike;
 	double high_sn_frac;
-	bool subhalo_prior;
 	bool use_custom_prior;
 	bool lens_position_gaussian_transformation;
 	ParamSettings *param_settings;
@@ -463,6 +459,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int* pixellated_src_redshift_idx;
 	DelaunayGrid **delaunay_srcgrids;
 	DelaunayGrid *delaunay_srcgrid0;
+	SourcePixelGrid **cartesian_srcgrids;
+	SourcePixelGrid *cartesian_srcgrid0;
 
 	int n_derived_params;
 	DerivedParam** dparam_list;
@@ -846,8 +844,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int shapelet_scale_mode;
 	double shapelet_max_scale;
 	double shapelet_window_scaling;
-	SourcePixelGrid *source_pixel_grid;
-	void plot_source_pixel_grid(const char filename[]);
+	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
 
 	ImagePixelGrid **image_pixel_grids;
 	ImagePixelGrid *image_pixel_grid0;
@@ -1089,7 +1086,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int get_shapelet_nn(const int zsrc_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
+	bool create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
+	bool create_sourcegrid_cartesian_old(const int zsrc_i, const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i, const bool verbal=false);
 	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
@@ -1375,7 +1373,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous, const bool skip_run);
 	void chi_square_twalk();
-	bool add_dparams_to_chain();
+	bool add_dparams_to_chain(string file_ext);
 	bool adopt_bestfit_point_from_chain();
 	bool adopt_point_from_chain(const unsigned long point_num);
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
@@ -1413,7 +1411,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
-	double get_lens_parameter_using_default_pmode(const int lensnum, const int paramnum);
+	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
 	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
@@ -1448,7 +1446,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_ray_tracing_grid(double xmin, double xmax, double ymin, double ymax, int x_N, int y_N, string filename);
 
 	void make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);
-	void make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle, const int n_subellipses, const int points_per_ellipse, string source_filename);
+	void make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle, const int n_subellipses, const int points_per_ellipse, const bool draw_in_imgplane, string source_filename);
 	void raytrace_image_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
@@ -1780,7 +1778,7 @@ struct DerivedParam
 			if (reav <= 0) return 0.0;
 			else return lens_in->total_kappa(reav,-1,false);
 		} else if (derived_param_type == LensParam) {
-			return lens_in->get_lens_parameter_using_default_pmode(funcparam,int_param);
+			return lens_in->get_lens_parameter_using_pmode((int)funcparam,int_param,(int)funcparam2);
 		}
 		else if (derived_param_type == Relative_Perturbation_Radius) {
 			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
@@ -1883,9 +1881,9 @@ struct DerivedParam
 		} else if (derived_param_type == Kappa_Re) {
 			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
 		} else if (derived_param_type == LensParam) {
-			std::cout << "Parameter " << ((int) funcparam) << " of lens " << int_param << " using default pmode=" << lens_in->default_parameter_mode << std::endl;
+			std::cout << "Parameter " << ((int) funcparam) << " of lens " << int_param << " using pmode=" << ((int) funcparam2) << std::endl;
 		} else if (derived_param_type == AvgLogSlope) {
-			std::cout << "Average log-slope of kappa from lens " << int_param << " between r1=" << funcparam << " and r2=" << funcparam2 << std::endl;
+			std::cout << "Average log-slope of kappa from lens " << int_param << " between r1=" << funcparam << unitstring << " and r2=" << funcparam2 << unitstring << std::endl;
 		} else if (derived_param_type == Perturbation_Radius) {
 			std::cout << "Critical curve perturbation radius of lens " << int_param << std::endl;
 		} else if (derived_param_type == Relative_Perturbation_Radius) {

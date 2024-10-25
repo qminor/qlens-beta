@@ -60,13 +60,16 @@ int main(int argc, char *argv[])
 	bool output_transform_usage = false;
 	bool use_fisher_matrix = false;
 	bool exclude_derived_params = false;
-	bool include_log_evidence = false;
 	bool output_chain_header = false;
 	char mprofile_name[100] = "mprofile.dat";
 	bool show_markers = false;
 	bool print_marker_values = false;
 	bool make_subplot = false;
 	bool add_title = false;
+	bool latex_table_format = false;
+	bool show_prior_ranges = false;
+	bool fixed_precision = false;
+	bool suppress_latex_names = false;
 	string marker_filename = "";
 	int n_markers_allowed = 10000;
 	char param_transform_filename[100] = "";
@@ -76,10 +79,12 @@ int main(int argc, char *argv[])
 	bool smoothing = false;
 	int n_threads=1, n_processes=1;
 	double radius = 0.1;
+	bool file_label_set = false;
 	string file_root, file_label;
 	int nparams, nparams_eff, n_fitparams = -1;
 	int nparams_subset = -1;
 	int nbins=60, nbins_2d=40;
+	int precision = 13; // this is for fixed precision format when outputting parameter percentiles/errors
 	bool silent = false;
 	bool include_shading = true;
 	double threshold = 3e-3;
@@ -88,6 +93,8 @@ int main(int argc, char *argv[])
 	bool show_uncertainties_as_percentiles = false;
 	bool marker_filename_specified = false;
 	bool use_bestfit_markers = false;
+	bool add_dummy_params = false; // this option might be useful if you are making columns in a latex table with parameter values etc.
+	int ndummy = 0;
 	if (argc < 2) {
 		cerr << "Error: must enter at least one argument (file_root)\n";
 		usage_error(mpi_id);
@@ -97,16 +104,6 @@ int main(int argc, char *argv[])
 	// if cut is not assigned by the user, McmcEval will cut the first 10% of points in each chain (unless it's
 	// (it's a nested sampling run, in which case cut = 0 since there is no burn-in phase that case)
 	int cut = -1;
-	stringstream str1;
-	stringstream str2;
-	stringstream str3;
-	str1 << argv[1];
-	if (!(str1 >> file_label)) {
-		cerr << "Error: invalid argument (file_label)\n";
-		usage_error(mpi_id);
-		return 0;
-	}
-	if (file_label=="-T") show_transform_usage();
 	string output_dir = ".";
 	double pct_scaling = 1; // used if one wants to scale the uncertainties by a given factor
 	//string output_dir = "chains_" + file_label;
@@ -114,9 +111,9 @@ int main(int argc, char *argv[])
 	//stat(output_dir.c_str(),&sb);
 	//if (S_ISDIR(sb.st_mode)==false) output_dir = ".";
 
-	string output_file_label = file_label;
+	string output_file_label;
 	int i,j,c;
-	for (i=2; i < argc; i++)   // Process extra command-line arguments
+	for (i=1; i < argc; i++)   // Process extra command-line arguments
 	{
 		if ((*argv[i] == '-') and (isalpha(*(argv[i]+1)))) {
 			while ((c = *++argv[i])) {
@@ -162,7 +159,8 @@ int main(int argc, char *argv[])
 							argv[i] = advance(argv[i]);
 						}
 						break;
-					case 'l': include_log_evidence = true; break;
+					case 'l': latex_table_format = true; break;
+					case 'L': suppress_latex_names = true; break;
 					case 'D': // find posterior in a derived parameter, which is defined in the function DerivedParam(...) in mcmceval.cpp
 						//if (sscanf(argv[i], "D%lf", &radius)==0) usage_error();
 						make_derived_posterior = true;
@@ -241,8 +239,8 @@ int main(int argc, char *argv[])
 						output_percentile = true;
 						argv[i] = advance(argv[i]);
 						break;
-					case 'L':
-						if (sscanf(argv[i], "L:%s", label_addendum)==1) {
+					case 'a':
+						if (sscanf(argv[i], "a:%s", label_addendum)==1) {
 							argv[i] += (1 + strlen(label_addendum));
 							string addstring(label_addendum);
 							output_file_label += "." + addstring;
@@ -251,9 +249,23 @@ int main(int argc, char *argv[])
 						break;
 					case 'q': silent = true; break;
 					case 'r': skip_hist2d = true; break;
+					case 'R': show_prior_ranges = true; break;
 					case 's': make_subplot = true; break;
 					case 't': add_title = true; break;
-					case 'F': include_shading = false; break;
+					//case 'F': include_shading = false; break;
+					case 'F':
+						fixed_precision = true;
+						if (sscanf(argv[i], "F%i", &precision) != 0) {
+							if ((precision < 1) or (precision > 16)) { cerr << "Error: invalid precision (usage: -F#, where # is between 1 and 16)\n"; return 0; }
+							argv[i] = advance(argv[i]);
+						}
+						break;
+					case 'g':
+						add_dummy_params = true;
+						if (sscanf(argv[i], "g%i", &ndummy) != 0) {
+							argv[i] = advance(argv[i]);
+						}
+						break;
 					case 'C':
 						if (sscanf(argv[i], "C%i", &nparams_subset)==0) usage_error(mpi_id);
 						argv[i] = advance(argv[i]);
@@ -262,7 +274,22 @@ int main(int argc, char *argv[])
 					default: usage_error(mpi_id); return 0; break;
 				}
 			}
-		} else { usage_error(mpi_id); return 0; }
+		} else {
+			if (!file_label_set) {
+				stringstream stri;
+				stri << argv[i];
+				if (!(stri >> file_label)) {
+					cerr << "Error: invalid argument (file_label)\n";
+					usage_error(mpi_id);
+					return 0;
+				}
+				file_label_set = true;
+				output_file_label = file_label;
+			} else {
+				usage_error(mpi_id);
+				return 0;
+			}
+		}
 	}
 
 	if (output_transform_usage) show_transform_usage();
@@ -332,6 +359,7 @@ int main(int argc, char *argv[])
 
 	McmcEval Eval;
 	FisherEval FEval;
+	double logev = 1e30;
 
 	if (use_fisher_matrix) {
 		FEval.input(file_root.c_str(),silent);
@@ -341,7 +369,7 @@ int main(int argc, char *argv[])
 	{
 		bool mpi_silent = true;
 		if (mpi_id==0) mpi_silent = silent;
-		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename,include_log_evidence);
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,logev,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename);
 		Eval.get_nparams(nparams);
 	}
 	if ((mpi_id==0) and (output_chain_header)) Eval.OutputChainHeader();
@@ -356,7 +384,8 @@ int main(int argc, char *argv[])
 
 	// Make it so you can turn parameters on/off in this file! This will require revising nparams_eff after the flags are read in
 	string *param_names = new string[nparams];
-	string paramnames_filename = file_root + ".paramnames";
+	string paramnames_filename, dummy;
+	paramnames_filename = file_root + ".paramnames";
 	ifstream paramnames_file(paramnames_filename.c_str());
 	for (i=0; i < nparams; i++) {
 		if (!(paramnames_file >> param_names[i])) die("not all parameter names are given in file '%s'",paramnames_filename.c_str());
@@ -364,7 +393,7 @@ int main(int argc, char *argv[])
 	paramnames_file.close();
 
 	string *latex_param_names = new string[nparams];
-	if ((make_1d_posts) or (make_2d_posts)) {
+	if ((latex_table_format) or (make_1d_posts) or (make_2d_posts)) {
 		string latex_paramnames_filename = file_root + ".latex_paramnames";
 		ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
 		string dummy;
@@ -378,7 +407,26 @@ int main(int argc, char *argv[])
 			while (instream >> dummy) latex_param_names[i] += " " + dummy;
 		}
 		latex_paramnames_file.close();
+	}
 
+	double *prior_minvals = new double[nparams];
+	double *prior_maxvals = new double[nparams];
+	for (i=0; i < nparams; i++) {
+		prior_minvals[i] = -1e30;
+		prior_maxvals[i] = 1e30;
+	}
+	string paramranges_filename = file_root + ".ranges";
+	ifstream paramranges_file(paramranges_filename.c_str());
+	if (paramranges_file.is_open()) {
+		for (i=0; i < nparams; i++) {
+			if (!(paramranges_file >> prior_minvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (!(paramranges_file >> prior_maxvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (prior_minvals[i] > prior_maxvals[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
+		}
+		paramranges_file.close();
+	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+
+	if ((make_1d_posts) or (make_2d_posts)) {
 		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
 
 		if (mpi_id==0) {
@@ -699,8 +747,16 @@ int main(int argc, char *argv[])
 				double *halfpct = new double[nparams];
 				double *lowcl = new double[nparams];
 				double *hicl = new double[nparams];
-				if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
-				else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+				int powers_of_ten;
+				if (!silent) {
+					if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
+					else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+				}
+				if (fixed_precision) {
+					//cout << resetiosflags(ios::scientific);
+					cout << setprecision(precision);
+					cout << fixed;
+				}
 				for (i=0; i < nparams_eff; i++) {
 					if (cl_2sigma) {
 						lowcl[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
@@ -718,7 +774,74 @@ int main(int argc, char *argv[])
 						//cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
 						cout << param_names[i] << ": " << halfpct[i] << " " << lowpct << " " << hipct << endl;
 					} else {
-						cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+						if (!latex_table_format) {
+							cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+						} else {
+							bool show_as_powers = false;
+							bool increase_precision = false; // do this if a number is less than 0.1
+							double half, hierr, lowerr;
+							half = halfpct[i];
+							hierr = hicl[i] - halfpct[i];
+							lowerr = halfpct[i] - lowcl[i];
+							if (half > 1e4) {
+								show_as_powers = true;
+								powers_of_ten = 0;
+								do {
+									half /= 10;
+									hierr /= 10;
+									lowerr /= 10;
+									powers_of_ten++;
+								} while (half > 10);
+							}
+							else if (abs(half) < 0.1) {
+								increase_precision = true;
+								powers_of_ten = -1;
+								double halfdup = abs(half);
+								do {
+									halfdup *= 10;
+									powers_of_ten--;
+								} while (halfdup < 0.1);
+								cout << setprecision(precision-powers_of_ten-1);
+								cout << fixed;
+							}
+							if (!suppress_latex_names) {
+								cout << "$" << latex_param_names[i];
+								if (show_as_powers) cout << "(10^" << powers_of_ten << ")";
+								cout << "$ & ";
+								if (show_prior_ranges) {
+									cout << defaultfloat;
+									if ((prior_minvals[i] > -1e30) and (prior_maxvals[i] < 1e30)) {
+										cout << "$(" << prior_minvals[i] << "," << prior_maxvals[i] << ")$ & ";
+									} else {
+										cout << "... & ";
+									}
+									cout << fixed;
+								}
+							}
+							cout << "$" << half << "_{-" << lowerr << "}^{+" << hierr << "}$ & " << endl;
+							if (increase_precision) {
+								cout << setprecision(precision);
+								cout << fixed;
+							}
+						}
+					}
+				}
+				if (add_dummy_params) {
+					for (int i=0; i < ndummy; i++) {
+						if (!suppress_latex_names) {
+							cout << "dummy" << i << " & ";
+							if (show_prior_ranges) cout << "... & ";
+						}
+						cout << "... & " << endl;
+					}
+				}
+				if (latex_table_format) {
+					if (logev != 1e30) {
+						if (!suppress_latex_names) {
+							cout << "$\\ln\\mathcal{E}$ & "; 
+							if (show_prior_ranges) cout << "... & ";
+						}
+						cout << logev << " & " << endl;
 					}
 				}
 				cout << endl;
@@ -906,6 +1029,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	delete[] prior_minvals;
+	delete[] prior_maxvals;
 	delete[] param_names;
 	delete[] latex_param_names;
 	delete[] markers;
@@ -976,6 +1101,8 @@ void usage_error(const int mpi_id)
 				"  -b        output minimum chi-square point\n"
 				"  -e        output mean parameters with standard errors in each parameter\n"
 				"  -E        output best-fit parameters with errors given by 15.8\% and 84.1\% probability\n"
+				"  -E2        output best-fit parameters with errors given by 2.5\% and 97.5\% probability\n"
+				"  -u        show uncertainties as percentiels, rather than error bars (+/-)\n"
 				"  -p#       output the #'th percentile for each parameter (where # must be between 0 and 1)\n"
 				"  -c        number of initial points to cut from each MCMC chain (if no cut is specified,\n"
 				"                the first 10% of points are cut by default)\n"
@@ -985,7 +1112,7 @@ void usage_error(const int mpi_id)
 				"  -T:<file> transform parameters using an input script. For usage info, enter 'T' with\n"
 				"               no argument.\n"
 				"  -I:<file> define parameter priors for importance sampling using an input script.\n"
-				"  -L:<suffix> Add <suffix> onto the filenames of output python scripts and PDF files.\n"
+				"  -a:<suffix> Add <suffix> onto the filenames of output python scripts and PDF files.\n"
 				"  -q        quiet mode (non-verbose)\n" << endl;
 	}
 #ifdef USE_MPI
